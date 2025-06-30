@@ -1,0 +1,15 @@
+Suppression des modules/pages :
+- BlocsBatimentPage.tsx
+- BlocsBatiment.tsx
+- FieldTypesList.tsx
+- FieldTypesAdminPage.tsx
+- FieldTypeForm.tsx
+- LogicBuilderPage.tsx
+- LogicZone.tsx
+- LogicTreeView.tsx
+- LogicPalette.tsx
+- LogicBlock.tsx
+- FormulaireRemplissageDemoPage.tsx
+- SuperFormBuilderDemo.tsx
+
+Ces fichiers sont supprimés du projet (frontend et backend). La base SQL utilisée est exclusivement 2thier.
