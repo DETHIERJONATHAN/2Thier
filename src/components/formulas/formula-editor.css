@@ -1,0 +1,14 @@
+/* Styles pour l'éditeur de formules */
+
+.formula-drop-zone.drop-target-highlight {
+    border-color: #22c55e !important; /* vert */
+    background-color: #dcfce7 !important; /* vert clair */
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+    transition: all 0.2s ease-in-out;
+}
+
+/* Nous avons supprimé l'animation de transition pour éviter les rechargements inutiles */
+
+/* Styles pour les éléments de formule - sans animation pour éviter les rechargements */
+
+/* Animation fade-in supprimée pour éviter les rechargements */

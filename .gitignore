@@ -1,0 +1,44 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Env files (keep example tracked)
+.env
+.env.*
+!*.example
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+/src/generated/prisma
+
+# Local DB backups
+db-backups/
+
+# Secrets et données sensibles
+# Dossier contenant des clés de service Google
+Google JSON/
+# Exports de base de données potentiellement sensibles
+database-export.*
+# Uploads locaux
+uploads/
+# Fichier d'exemple contenant potentiellement des secrets
+donnees-service-account.txt
