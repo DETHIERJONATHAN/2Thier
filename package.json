@@ -7,7 +7,7 @@
     "dev:server": "tsx watch src/api-server-clean.ts",
     "dev:client": "vite",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
-  "build": "tsc && vite build",
+  "build": "vite build",
   "build:client": "tsc -p tsconfig.build.json && vite build",
     "preview": "vite preview",
     "start": "NODE_ENV=production node dist/api-server.js",

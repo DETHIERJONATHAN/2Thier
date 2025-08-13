@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'path';
+import fs from 'fs';
 import cors from 'cors';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
@@ -29,7 +31,7 @@ logSecurityEvent('SERVER_STARTUP', {
 }, 'info');
 
 const app = express();
-const port = 4000;
+const port = Number(process.env.PORT || 4000);
 
 // 📊 LOGGING SÉCURISÉ DE TOUTES LES REQUÊTES
 app.use(expressWinston.logger({
@@ -89,10 +91,11 @@ app.use(advancedRateLimit);
 app.use(anomalyDetection);
 
 // ⚡ Configuration CORS sécurisée
+const FRONTEND_URL = process.env.FRONTEND_URL;
+const prodOrigins = [FRONTEND_URL || 'https://crm.2thier.be', 'https://www.2thier.be'];
+const devOrigins = [FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000'];
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://crm.2thier.be', 'https://www.2thier.be']
-    : ['http://localhost:5173', 'http://localhost:3000'],
+  origin: process.env.NODE_ENV === 'production' ? prodOrigins : devOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-organization-id'],
@@ -148,6 +151,22 @@ console.log('🔧 [API-SERVER-CLEAN] Configuration des routes...');
 app.use('/api', apiRouter); // Utilise TOUTES les routes existantes !
 console.log('✅ [API-SERVER-CLEAN] Routes configurées');
 
+// 🎯 Production: servir le frontend statique (dist) si présent
+if (process.env.NODE_ENV === 'production') {
+  const distDir = path.resolve(process.cwd(), 'dist');
+  const indexHtml = path.join(distDir, 'index.html');
+  if (fs.existsSync(indexHtml)) {
+    console.log('🗂️ [STATIC] Distribution front détectée, activation du serveur statique');
+    app.use(express.static(distDir));
+    // Fallback SPA: toutes les routes non-API renvoient index.html
+    app.get(/^(?!\/api\/).*/, (_req, res) => {
+      res.sendFile(indexHtml);
+    });
+  } else {
+    console.warn('⚠️ [STATIC] Aucun build front trouvé (dist/index.html manquant)');
+  }
+}
+
 // 📊 LOGGING SÉCURISÉ DES ERREURS
 app.use(expressWinston.errorLogger({
   winstonInstance: securityLogger,
@@ -174,7 +193,8 @@ app.get('/', (req, res) => {
 });
 
 // 🔒 Gestionnaire d'erreurs sécurisé
-app.use((err: any, req: any, res: any, next: any) => {
+import type { ErrorRequestHandler } from 'express';
+const errorHandler: ErrorRequestHandler = (err, req, res) => {
   logSecurityEvent('SERVER_ERROR', {
     error: err.message,
     stack: err.stack,
@@ -189,8 +209,10 @@ app.use((err: any, req: any, res: any, next: any) => {
     ? { error: 'Une erreur interne s\'est produite' }
     : { error: err.message, stack: err.stack };
 
-  res.status(err.status || 500).json(errorResponse);
-});
+  const status = typeof (err as { status?: number }).status === 'number' ? (err as { status?: number }).status! : 500;
+  res.status(status).json(errorResponse);
+};
+app.use(errorHandler);
 
 // Démarrage du serveur
 app.listen(port, () => {
