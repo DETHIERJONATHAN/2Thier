@@ -1,0 +1,19 @@
+/* Styles pour le menu contextuel des nœuds */
+.node-action-menu-button {
+  display: inline-flex;
+  opacity: 0.85; /* légère transparence par défaut */
+  transition: all 0.18s ease;
+  margin-left: 4px;
+  line-height: 1;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.node-action-menu-button:hover {
+  background-color: #f0f0f0;
+  opacity: 1;
+}
+
+.node-action-menu-button:active {
+  background-color: #d9d9d9;
+}

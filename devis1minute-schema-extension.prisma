@@ -1,0 +1,544 @@
+/*
+==============================================================================
+🚀 DEVIS1MINUTE.BE - EXTENSION SCHEMA PRODUCTION-READY
+==============================================================================
+Architecture Modulaire | Scalable | No-Code Ready | Dynamic Configuration
+
+Intégration transparente avec CRM 2thier.be existant
+- Réutilise tous les systèmes : Users, Organizations, Permissions, Modules
+- Extensions JSON dynamiques pour configuration no-code
+- Multi-tenant avec séparation des données
+- API-first pour interfaces séparées (pro.devis1minute.be)
+==============================================================================
+*/
+
+// === 🎯 ENUMS & TYPES ===
+enum CampaignType {
+  GOOGLE_ADS
+  META_ADS
+  TIKTOK_ADS
+  LINKEDIN_ADS
+  MICROSOFT_ADS
+  MANUAL
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum LeadMarketplaceStatus {
+  AVAILABLE
+  PURCHASED
+  EXPIRED
+  RESERVED
+}
+
+enum PartnerType {
+  PRO
+  AGENCY
+  RESELLER
+  INTERNAL
+}
+
+enum TransactionType {
+  PURCHASE
+  CONSUMPTION
+  REFUND
+  BONUS
+  ADJUSTMENT
+}
+
+enum RouteType {
+  INTERNAL
+  MARKETPLACE
+  AUTO_SELL
+  PARTNER_EXCLUSIVE
+}
+
+// === 🎯 LEAD GENERATION & CAMPAIGNS ===
+model Campaign {
+  id              String            @id @default(uuid())
+  organizationId  String
+  name            String
+  description     String?
+  type            CampaignType
+  platform        String            // 'google_ads', 'meta_ads', etc. (plus flexible que enum)
+  status          CampaignStatus    @default(DRAFT)
+  
+  // Budget & Performance
+  dailyBudget     Float
+  totalBudget     Float?
+  targetCPL       Float?
+  actualCPL       Float             @default(0)
+  totalSpent      Float             @default(0)
+  leadsGenerated  Int               @default(0)
+  
+  // Targeting (Dynamic JSON)
+  targeting       Json?             // Ciblage géo, démo, intérêts
+  keywords        String[]          @default([])
+  regions         String[]          @default([])
+  sectors         String[]          @default([])  // 'isolation', 'electricite', 'plomberie'
+  
+  // Content & Creative
+  adContent       Json?             // Textes, images, videos
+  landingPageId   String?           // Référence vers landing page
+  formConfig      Json?             // Configuration formulaire
+  
+  // External Platform IDs
+  externalId      String?           // ID campagne sur plateforme externe
+  
+  // AI & Automation
+  aiOptimization  Boolean           @default(true)
+  autoOptimize    Boolean           @default(false)
+  optimizationRules Json?           // Règles d'optimisation IA
+  
+  // Schedule & Timing
+  startDate       DateTime?
+  endDate         DateTime?
+  schedule        Json?             // Planification horaires/jours
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relations
+  organization    Organization      @relation("OrganizationCampaigns", fields: [organizationId], references: [id], onDelete: Cascade)
+  leads           CampaignLead[]
+  landingPage     LandingPage?      @relation(fields: [landingPageId], references: [id])
+  metrics         CampaignMetric[]
+  
+  @@index([organizationId])
+  @@index([platform, status])
+  @@index([status, startDate])
+  @@index([organizationId, status, platform])
+}
+
+model CampaignMetric {
+  id           String   @id @default(uuid())
+  campaignId   String
+  date         DateTime @db.Date
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  cost         Float    @default(0)
+  leads        Int      @default(0)
+  ctr          Float    @default(0) // Click Through Rate
+  cpl          Float    @default(0) // Cost Per Lead
+  
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  
+  @@unique([campaignId, date])
+  @@index([campaignId, date])
+}
+
+model LandingPage {
+  id              String     @id @default(uuid())
+  organizationId  String
+  name            String
+  slug            String     // URL friendly
+  title           String
+  description     String?
+  content         Json       // Configuration page (no-code)
+  formId          String?    // Référence vers formulaire
+  theme           Json?      // Thème/couleurs
+  isActive        Boolean    @default(true)
+  seoConfig       Json?      // Meta tags, etc.
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  // Relations  
+  organization    Organization @relation("OrganizationLandingPages", fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns       Campaign[]
+  
+  @@unique([organizationId, slug])
+  @@index([organizationId, isActive])
+}
+
+model CampaignLead {
+  id           String   @id @default(uuid())
+  campaignId   String
+  leadId       String
+  cost         Float    // CPL réel pour ce lead
+  clickCost    Float?   // Coût du clic qui a généré ce lead
+  source       String?  // utm_source, etc.
+  medium       String?  // utm_medium
+  content      String?  // utm_content
+  createdAt    DateTime @default(now())
+  
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead         Lead     @relation("CampaignLeads", fields: [leadId], references: [id], onDelete: Cascade)
+  
+  @@unique([campaignId, leadId])
+  @@index([campaignId, createdAt])
+}
+
+// === 🏢 MARKETPLACE & PARTNER MANAGEMENT ===
+model PartnerOrganization {
+  id                String              @id @default(uuid())
+  organizationId    String              @unique
+  partnerType       PartnerType         @default(PRO)
+  
+  // Billing & Credits
+  creditBalance     Float               @default(0)
+  monthlySpent      Float               @default(0)
+  totalSpent        Float               @default(0)
+  creditLimit       Float?              // Limite crédit mensuelle
+  
+  // Performance & Reputation
+  responseRate      Float               @default(0)  // % leads contactés
+  closingRate       Float               @default(0)  // % leads transformés
+  rating            Float               @default(0)  // Note moyenne
+  reviewCount       Int                 @default(0)
+  
+  // Status & Configuration
+  status            String              @default("active") // active, suspended, trial, blocked
+  autoRecharge      Boolean             @default(false)
+  rechargeThreshold Float?              // Seuil auto-recharge
+  rechargeAmount    Float?              // Montant auto-recharge
+  
+  // Preferences & Targeting
+  preferences       Json?               // Préférences leads (secteurs, zones, budgets)
+  maxLeadsPerDay    Int?                // Limite leads/jour
+  maxLeadsPerMonth  Int?                // Limite leads/mois
+  workingHours      Json?               // Horaires de travail
+  
+  // SEO & Public Profile
+  publicProfile     Json?               // Profil public (nom, description, logo)
+  seoSlug          String?             // URL friendly pour vitrine public
+  publicVisible     Boolean             @default(false)
+  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relations
+  organization      Organization        @relation("OrganizationPartner", fields: [organizationId], references: [id], onDelete: Cascade)
+  leadPurchases     LeadPurchase[]
+  subscriptions     Subscription[]
+  transactions      CreditTransaction[]
+  reviews           PartnerReview[]
+  
+  @@index([partnerType, status])
+  @@index([seoSlug])
+}
+
+model LeadMarketplace {
+  id                String                  @id @default(uuid())
+  leadId            String                  @unique
+  price             Float                   // Prix base en crédits
+  exclusivePrice    Float?                  // Prix pour exclusivité
+  maxPartners       Int                     @default(3)
+  currentPartners   Int                     @default(0)
+  status            LeadMarketplaceStatus   @default(AVAILABLE)
+  
+  // Targeting & Visibility
+  targetSectors     String[]                @default([]) // Secteurs visés
+  targetRegions     String[]                @default([]) // Régions visées
+  minRating         Float?                  // Note minimale partenaire
+  
+  // Timing
+  publishedAt       DateTime?
+  expiresAt         DateTime?               // Date d'expiration
+  
+  // AI & Scoring
+  aiScore           Float?                  // Score qualité IA (0-100)
+  urgencyScore      Int                     @default(0) // Score urgence
+  qualityScore      Int                     @default(0) // Score qualité
+  
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  
+  // Relations
+  lead              Lead                    @relation("LeadMarketplace", fields: [leadId], references: [id], onDelete: Cascade)
+  purchases         LeadPurchase[]
+  
+  @@index([status, publishedAt])
+  @@index([targetSectors])
+  @@index([aiScore])
+}
+
+model LeadPurchase {
+  id                   String              @id @default(uuid())
+  marketplaceId        String
+  partnerOrganizationId String
+  
+  // Purchase Details
+  price                Float               // Prix payé
+  isExclusive          Boolean             @default(false)
+  status               String              @default("purchased") // purchased, contacted, won, lost, refunded
+  
+  // Tracking & Performance
+  purchasedAt          DateTime            @default(now())
+  contactedAt          DateTime?           // Quand le pro a contacté le lead
+  statusUpdatedAt      DateTime?           // Dernière mise à jour statut
+  wonAt               DateTime?            // Date signature/victoire
+  
+  // Notes & Communication
+  notes                String?             // Notes internes du pro
+  clientFeedback       String?             // Retour client final
+  rating               Int?                // Note du lead (1-5)
+  
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  
+  // Relations
+  marketplace          LeadMarketplace     @relation(fields: [marketplaceId], references: [id])
+  partner              PartnerOrganization @relation(fields: [partnerOrganizationId], references: [id])
+  
+  @@index([partnerOrganizationId, purchasedAt])
+  @@index([marketplaceId])
+  @@index([status, purchasedAt])
+}
+
+// === 💳 BILLING & SUBSCRIPTIONS ===
+model Subscription {
+  id                   String              @id @default(uuid())
+  partnerOrganizationId String
+  
+  // Plan Details
+  type                 String              // 'monthly_leads', 'credits_pack', 'unlimited'
+  plan                 String              // 'basic', 'premium', 'enterprise'
+  name                 String              // Nom affiché
+  description          String?
+  
+  // Pricing
+  monthlyPrice         Float?              // Prix mensuel
+  pricePerLead         Float?              // Prix par lead
+  includedLeads        Int?                // Leads inclus par mois
+  includedCredits      Float?              // Crédits inclus
+  
+  // Status & Timing
+  isActive             Boolean             @default(true)
+  startDate            DateTime
+  endDate              DateTime?
+  renewalDate          DateTime?           // Prochaine facturation
+  
+  // Configuration
+  autoRenew            Boolean             @default(true)
+  config               Json?               // Configuration spécifique
+  
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  
+  // Relations
+  partner              PartnerOrganization @relation(fields: [partnerOrganizationId], references: [id])
+  
+  @@index([partnerOrganizationId, isActive])
+  @@index([renewalDate])
+}
+
+model CreditTransaction {
+  id                   String              @id @default(uuid())
+  partnerOrganizationId String
+  
+  type                 TransactionType
+  amount               Float               // Montant (positif ou négatif)
+  balance              Float               // Solde après transaction
+  
+  description          String
+  reference            String?             // Référence externe (facture, etc.)
+  relatedId            String?             // ID transaction liée
+  
+  // Payment details
+  paymentMethod        String?             // stripe, manual, etc.
+  paymentId            String?             // ID payment externe
+  
+  createdAt            DateTime            @default(now())
+  
+  // Relations
+  partner              PartnerOrganization @relation(fields: [partnerOrganizationId], references: [id])
+  
+  @@index([partnerOrganizationId, createdAt])
+  @@index([type, createdAt])
+}
+
+// === 📊 LEAD ROUTING & AI ===
+model LeadRoute {
+  id             String      @id @default(uuid())
+  organizationId String
+  leadId         String
+  
+  routeType      RouteType
+  targetType     String?     // 'organization', 'partner', 'marketplace'
+  targetId       String?     // ID de la cible
+  priority       Int         @default(0)
+  
+  // AI & Scoring
+  aiScore        Float?      // Score IA du lead
+  routingReason  String?     // Raison du routing (IA)
+  confidence     Float?      // Confiance IA (0-1)
+  
+  // Status & Timing
+  status         String      @default("pending") // pending, executed, failed
+  routedAt       DateTime    @default(now())
+  executedAt     DateTime?
+  
+  // Metadata
+  metadata       Json?       // Données additionnelles
+  
+  // Relations
+  organization   Organization @relation("OrganizationLeadRoutes", fields: [organizationId], references: [id])
+  lead           Lead         @relation("LeadRoutes", fields: [leadId], references: [id])
+  
+  @@index([leadId])
+  @@index([organizationId, routeType])
+  @@index([status, routedAt])
+}
+
+// === ⭐ REVIEWS & REPUTATION ===
+model PartnerReview {
+  id                   String              @id @default(uuid())
+  partnerOrganizationId String
+  
+  // Review Details
+  rating               Int                 // 1-5 stars
+  title                String?
+  comment              String?
+  
+  // Source
+  source               String              @default("client") // client, admin, google, etc.
+  sourceId             String?             // ID source externe
+  reviewerName         String?
+  reviewerEmail        String?
+  
+  // Status
+  isPublic             Boolean             @default(true)
+  isVerified           Boolean             @default(false)
+  status               String              @default("published") // published, hidden, deleted
+  
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  
+  // Relations
+  partner              PartnerOrganization @relation(fields: [partnerOrganizationId], references: [id])
+  
+  @@index([partnerOrganizationId, isPublic])
+  @@index([rating, createdAt])
+}
+
+// === 🔧 CONFIGURATION & DYNAMIC FORMS ===
+model PublicForm {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  
+  // Form Configuration (No-Code)
+  fields         Json         // Configuration des champs
+  validation     Json?        // Règles de validation
+  styling        Json?        // Style du formulaire
+  logic          Json?        // Logique conditionnelle
+  
+  // Lead Processing
+  leadMapping    Json?        // Mapping champs -> lead
+  autoAssign     Json?        // Règles d'assignation auto
+  notifications  Json?        // Notifications (email, sms)
+  
+  // SEO & Tracking
+  slug           String       // URL friendly
+  metaTags       Json?        // Meta tags SEO
+  trackingCodes  Json?        // Google Analytics, etc.
+  
+  // Status
+  isActive       Boolean      @default(true)
+  isPublic       Boolean      @default(true)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  // Relations
+  organization   Organization @relation("OrganizationPublicForms", fields: [organizationId], references: [id], onDelete: Cascade)
+  submissions    PublicFormSubmission[]
+  
+  @@unique([organizationId, slug])
+  @@index([organizationId, isActive])
+}
+
+model PublicFormSubmission {
+  id         String      @id @default(uuid())
+  formId     String
+  leadId     String?     // Lead généré à partir de cette soumission
+  
+  // Submission Data
+  data       Json        // Données soumises
+  metadata   Json?       // Métadonnées (IP, user agent, etc.)
+  
+  // Source Tracking
+  source     String?     // utm_source
+  medium     String?     // utm_medium
+  campaign   String?     // utm_campaign
+  referrer   String?     // HTTP referrer
+  
+  // Processing Status
+  status     String      @default("new") // new, processed, converted, spam
+  leadScore  Float?      // Score qualité (IA)
+  
+  createdAt  DateTime    @default(now())
+  
+  // Relations
+  form       PublicForm  @relation(fields: [formId], references: [id])
+  lead       Lead?       @relation("PublicFormLeads", fields: [leadId], references: [id])
+  
+  @@index([formId, createdAt])
+  @@index([status, createdAt])
+}
+
+/*
+==============================================================================
+🔗 EXTENSIONS AUX MODÈLES EXISTANTS - À AJOUTER AU SCHEMA PRINCIPAL
+==============================================================================
+*/
+
+/*
+// À ajouter dans le model Lead existant :
+  
+  // === Devis1Minute Extensions ===
+  campaignLeads        CampaignLead[]      @relation("CampaignLeads")
+  marketplace          LeadMarketplace?    @relation("LeadMarketplace")
+  routes               LeadRoute[]         @relation("LeadRoutes")
+  publicFormSubmissions PublicFormSubmission[] @relation("PublicFormLeads")
+  
+  // Marketplace & AI
+  aiScore              Float?              // Score qualité IA (0-100)
+  marketplacePrice     Float?              // Prix suggéré marketplace
+  exclusivityType      String?             // 'exclusive', 'shared', 'open'
+  maxPartners          Int                 @default(3)
+  sourceChannel        String?             // Canal d'acquisition
+  utmSource           String?             // utm_source
+  utmMedium           String?             // utm_medium  
+  utmCampaign         String?             // utm_campaign
+  utmContent          String?             // utm_content
+  
+  // Lead Scoring & Quality
+  qualityScore         Int                 @default(0)
+  urgencyScore         Int                 @default(0)
+  budgetEstimate       Float?              // Budget estimé du projet
+  projectTimeline      String?             // Timeline du projet
+  projectType          String?             // Type de projet
+*/
+
+/*
+// À ajouter dans le model Organization existant :
+
+  // === Devis1Minute Extensions ===
+  campaigns            Campaign[]          @relation("OrganizationCampaigns")
+  landingPages         LandingPage[]       @relation("OrganizationLandingPages") 
+  publicForms          PublicForm[]        @relation("OrganizationPublicForms")
+  partnerProfile       PartnerOrganization? @relation("OrganizationPartner")
+  leadRoutes           LeadRoute[]         @relation("OrganizationLeadRoutes")
+*/
+
+/*
+==============================================================================
+📋 NOUVEAUX MODULES À AJOUTER À LA TABLE MODULE :
+==============================================================================
+
+INSERT INTO "Module" (key, label, feature, icon, route, description, page, "order", active) VALUES
+('lead-generation', 'Lead Generation', 'lead_generation', 'campaign', '/lead-generation', 'Générateur de campagnes publicitaires', 'LeadGenerationPage', 10, true),
+('marketplace', 'Marketplace', 'marketplace', 'shopping', '/marketplace', 'Achat et vente de leads', 'MarketplacePage', 11, true),
+('partner-portal', 'Espace Partenaire', 'partner_portal', 'handshake', '/partner', 'Interface dédiée aux partenaires', 'PartnerPortalPage', 12, true),
+('public-forms', 'Formulaires Publics', 'public_forms', 'form', '/forms', 'Gestion des formulaires de capture', 'PublicFormsPage', 13, true),
+('landing-pages', 'Landing Pages', 'landing_pages', 'layout', '/landing-pages', 'Création de pages de destination', 'LandingPagesPage', 14, true);
+*/

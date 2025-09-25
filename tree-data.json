@@ -1,0 +1,12 @@
+{
+  "name": "Formulaire TBL Test",
+  "description": "Arbre de test pour le système TBL hierarchique",
+  "category": "formulaire",
+  "icon": "📋",
+  "color": "#10b981",
+  "version": "1.0.0",
+  "status": "draft",
+  "settings": {},
+  "metadata": {},
+  "isPublic": false
+}

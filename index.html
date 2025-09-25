@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2Thier CRM - Gestion de Formulaires</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Script de debug pour les icônes -->
+    <script>
+      // Script de debug pour les icônes de la sidebar v3.0 - ULTRA DEBUG
+      console.log('🔍 Script de debug des icônes démarré');
+
+      // Test 1: Debug ULTRA-AVANCÉ des icônes avec recherche multiple
+      setTimeout(() => {
+        console.log('🔍 Test 3: Debug ULTRA-AVANCÉ des icônes de sections');
+        
+        // Recherche par plusieurs sélecteurs
+        const selectors = [
+          '.flex-shrink-0',
+          '[style*="flex"]',
+          'aside span',
+          'nav span',
+          '.sidebar-scrollable span'
+        ];
+        
+        selectors.forEach((selector, index) => {
+          const elements = document.querySelectorAll(selector);
+          console.log(`📋 Sélecteur ${index + 1} "${selector}": ${elements.length} éléments`);
+          
+          elements.forEach((el, i) => {
+            if (el && el.textContent && (el.textContent.includes('👥') || el.textContent.includes('🔍') || el.textContent.includes('⚙️') || el.textContent.includes('📝') || el.textContent.includes('🔧') || el.textContent.includes('🚀') || el.textContent.includes('📁'))) {
+              console.log(`  ✨ Élément ${i + 1} avec émoji:`, {
+                content: el.textContent,
+                classes: el.className,
+                styles: el.getAttribute('style'),
+                computed: window.getComputedStyle(el),
+                parent: el.parentElement?.className
+              });
+            }
+          });
+        });
+        
+        // Recherche par contenu emoji
+        console.log('🔍 Test 4: Recherche directe par contenu emoji');
+        const allElements = document.querySelectorAll('*');
+        let emojiFound = 0;
+        
+        allElements.forEach((el) => {
+          if (el && el.textContent && /[👥🔍⚙️📝🔧🚀📁]/g.test(el.textContent)) {
+            emojiFound++;
+            const computed = window.getComputedStyle(el);
+            console.log(`  🎯 Emoji trouvé ${emojiFound}:`, {
+              tag: el.tagName,
+              content: el.textContent,
+              display: computed.display,
+              visibility: computed.visibility,
+              opacity: computed.opacity,
+              position: computed.position,
+              classes: el.className,
+              innerHTML: el.innerHTML,
+              isVisible: el.offsetWidth > 0 && el.offsetHeight > 0
+            });
+          }
+        });
+        
+        console.log(`📊 Total emojis trouvés: ${emojiFound}`);
+        
+      }, 2000);
+      
+      // Test 2: Diagnostic des logs de génération d'icônes
+      setTimeout(() => {
+        console.log('🔍 Test 5: Vérification console pour logs de génération d\'icônes');
+        console.log('   Cherchez les logs "🎨 [getSectionIcon]" dans la console ci-dessus');
+      }, 3000);
+    </script>
+  </body>
+</html>

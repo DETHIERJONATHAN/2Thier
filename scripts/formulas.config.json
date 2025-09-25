@@ -1,0 +1,18 @@
+[
+  {
+    "key": "prix_kwh_auto",
+    "label": "Prix kWh (auto)",
+    "output": {
+      "matchLabel": "Prix Kw/h",
+      "precision": 4,
+      "format": "number"
+    },
+    "inputs": [
+      { "role": "numerator", "matchLabel": "Facture annuelle électricité" },
+      { "role": "denominator", "matchLabel": "Consommation annuelle électricité" }
+    ],
+    "expression": "{{numerator}} / {{denominator}}",
+    "allowManualOverride": true,
+    "description": "Division facture / consommation pour obtenir le prix kWh"
+  }
+]

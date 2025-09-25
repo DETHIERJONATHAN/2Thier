@@ -1,0 +1,42 @@
+/* Styles pour les onglets des devis */
+.devis-tabs .ant-tabs-content-holder {
+  padding: 0;
+}
+
+.devis-tabs .ant-tabs-tabpane {
+  padding: 0;
+}
+
+.devis-tabs .ant-tabs-tab {
+  margin-right: 8px;
+}
+
+.devis-tabs .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
+  background: #fafafa;
+  border: 1px solid #d9d9d9;
+  transition: all 0.3s;
+}
+
+.devis-tabs .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active {
+  background: #ffffff;
+  border-bottom-color: #ffffff;
+}
+
+/* Responsive grid pour les champs */
+.devis-section .grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .devis-section .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .devis-section .grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+}

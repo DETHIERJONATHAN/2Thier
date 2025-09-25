@@ -1,0 +1,28 @@
+/* Style personnalisé pour la scrollbar de la sidebar */
+.sidebar-scrollable {
+  /* WebKit browsers (Chrome, Safari, Edge) */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 transparent;
+}
+
+.sidebar-scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollable::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.sidebar-scrollable::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+/* Style de survol pour une meilleure UX */
+.sidebar-scrollable::-webkit-scrollbar-thumb:active {
+  background: #718096;
+}

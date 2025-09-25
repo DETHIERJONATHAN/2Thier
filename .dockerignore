@@ -1,0 +1,25 @@
+node_modules
+npm-debug.log
+.DS_Store
+.git
+.gitignore
+.env
+.env.*
+Google JSON/
+**/*.local.*
+.vscode/
+coverage/
+distnode_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+.git
+.gitignore
+.vscode
+.env
+.env.*
+dist
+build
+coverage
+**/.DS_Store
+**/Thumbs.db

@@ -1,0 +1,1507 @@
+#root {
+  max-width: 100%; /* Modifié pour prendre toute la largeur disponible */
+  margin: 0 auto;
+  padding: 0; /* Supprimé le padding pour maximiser l'espace */
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Styles améliorés pour le layout du form builder */
+.form-builder-layout {
+  display: grid;
+  grid-template-columns: 1fr 2fr 3fr; /* Proportions exactes: 1/6, 2/6, 3/6 */
+  gap: 1rem;
+  height: calc(100vh - 60px); /* Ajuster la hauteur en fonction de votre barre de navigation */
+  padding: 1rem;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Styles pour les colonnes du form builder */
+.fields-palette, .form-sections, .advanced-config {
+  overflow-y: auto;
+  background-color: #ffffff; /* plat */
+  border-radius: 0.5rem;
+  box-shadow: none; /* pas d'ombre globale */
+  padding: 1rem;
+  max-height: 100%;
+}
+
+/* Pour s'assurer que les enfants directs du form-builder-layout respectent la grille */
+.form-builder-layout > * {
+  min-width: 0; /* Pour éviter le dépassement de la grille */
+}
+
+/* Ajuster les largeurs relatives des colonnes */
+.fields-palette {
+  width: 100%;
+  min-width: 0; /* Supprimé la largeur minimum pour être vraiment responsive */
+  /* Colonne gauche: 1/6 de l'espace total */
+}
+
+.form-sections {
+  width: 100%;
+  /* Colonne centrale: 2/6 de l'espace total */
+}
+
+.advanced-config {
+  width: 100%;
+  min-width: 0; /* Supprimé la largeur minimum pour être vraiment responsive */
+  /* Colonne droite: 3/6 de l'espace total */
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  contain: paint;
+}
+
+/* S'assurer que tous les composants dans la colonne de droite restent contenus */
+.advanced-config > * {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
+  contain: content;
+}
+
+/* Assurer que les éditeurs de formules et validations restent dans leur conteneur */
+.advanced-config .form-builder-right-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px;
+  contain: content;
+}
+
+/* Empêcher absolument tout débordement des éléments intérieurs */
+.form-builder-right-panel * {
+  max-width: 100% !important;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
+  contain: content;
+}
+
+/* Styles spécifiques pour les éditeurs de formules et séquences */
+.form-builder-right-panel .p-2,
+.form-builder-right-panel .p-3,
+.form-builder-right-panel .flex,
+.form-builder-right-panel input,
+.form-builder-right-panel div {
+  max-width: 100% !important;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  overflow: hidden;
+}
+
+/* Styles pour les éditeurs de formules et validations */
+.form-builder-right-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Styles pour améliorer les éléments de formules */
+.formula-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 2px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.formula-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  transform: translateY(-1px);
+}
+
+/* Amélioration de la visibilité du bouton de suppression */
+.formula-item > button {
+  opacity: 0.85;
+  transition: all 0.2s ease;
+  z-index: 10 !important;
+}
+
+.formula-item:hover > button {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.formula-item > button:active {
+  transform: scale(0.95);
+}
+
+.formula-drop-zone {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 60px;
+  border: 2px dashed #cbd5e0;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background-color: #ffffff;
+  transition: all 0.2s ease-in-out;
+  box-sizing: border-box;
+}
+
+.formula-drop-zone.active {
+  border-color: #4299e1;
+  background-color: rgba(66, 153, 225, 0.1);
+}
+
+/* Effet de succès pour les actions de drag & drop */
+.highlight-success {
+  animation: pulse-success 0.5s ease-in-out;
+  border: 2px solid #4caf50 !important;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.6) !important;
+}
+
+@keyframes pulse-success {
+  0% { background-color: rgba(76, 175, 80, 0.2); }
+  50% { background-color: rgba(76, 175, 80, 0.4); }
+  100% { background-color: rgba(76, 175, 80, 0.2); }
+}
+
+/* Amélioration des boutons de suppression */
+.formula-item-delete {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 20px;
+  height: 20px;
+  background-color: #ef4444;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 1; /* Toujours visible */
+  transition: all 0.2s ease-in-out;
+  z-index: 10;
+  border: 1px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.formula-item-delete:hover {
+  background-color: #dc2626;
+  transform: scale(1.15);
+}
+
+.formula-item-delete:active {
+  background-color: #b91c1c;
+  transform: scale(0.95);
+}
+
+.formula-item:hover .formula-item-delete {
+  opacity: 1;
+}
+
+/* Styles pour les champs dans les formules */
+.formula-item[class*="bg-blue"] {
+  border-left: 3px solid #1d4ed8;
+}
+
+.formula-item[class*="bg-yellow"] {
+  border-left: 3px solid #ca8a04;
+}
+
+.formula-item[class*="bg-green"] {
+  border-left: 3px solid #15803d;
+}
+
+/* Styles pour la palette d'opérateurs dans les formules */
+.formula-operators-palette {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.operator-category {
+  margin-bottom: 0.5rem;
+}
+
+.operator-category-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin-bottom: 0.25rem;
+}
+
+.operator-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.operator-item {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.operator-item.arithmetic {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.operator-item.arithmetic:hover {
+  background-color: #fde68a;
+}
+
+.operator-item.comparison {
+  background-color: #e0e7ff;
+  color: #4338ca;
+}
+
+.operator-item.comparison:hover {
+  background-color: #c7d2fe;
+}
+
+.operator-item.logical {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.operator-item.logical:hover {
+  background-color: #a7f3d0;
+}
+
+.operator-item.function {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.operator-item.function:hover {
+  background-color: #bfdbfe;
+}
+
+.operator-item.value {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.operator-item.value:hover {
+  background-color: #e5e7eb;
+}
+
+/* Styles responsives pour différentes tailles d'écran */
+@media (max-width: 1200px) {
+  .form-builder-layout {
+    grid-template-columns: 1fr 2fr 3fr; /* Maintien des proportions 1:2:3 */
+  }
+}
+
+@media (max-width: 768px) {
+  .form-builder-layout {
+    grid-template-columns: 1fr; /* Empile les colonnes sur les petits écrans */
+    grid-template-rows: auto auto auto; /* Définit les hauteurs des rangées */
+  }
+  
+  .fields-palette, .form-sections, .advanced-config {
+    max-height: none; /* Permet à chaque section de s'étendre en hauteur */
+    margin-bottom: 1rem;
+  }
+}
+
+/* 🔧 ENHANCED (optionnel): Activer ces styles renforcés en ajoutant .form-builder-enhanced sur un parent */
+.form-builder-enhanced .form-builder-layout {
+  display: grid !important;
+  grid-template-columns: minmax(200px, 1fr) minmax(300px, 2fr) minmax(300px, 3fr) !important;
+  gap: 1rem !important;
+  height: calc(100vh - 60px) !important;
+  padding: 1rem !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible !important; /* Changé de hidden à visible */
+}
+
+.form-builder-enhanced .fields-palette,
+.form-builder-enhanced .form-sections,
+.form-builder-enhanced .advanced-config {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  overflow-y: auto !important;
+  background-color: #f8f9fa !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  padding: 1rem !important;
+  max-height: 100% !important;
+  min-height: 300px !important; /* Hauteur minimum */
+}
+
+.form-builder-enhanced .form-sections,
+.form-builder-enhanced .advanced-config {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+/* === REFONTE COMPLÈTE DES 3 COLONNES DU FORMULAIRE === */
+.formulaire-layout {
+  width: 100%;
+  height: calc(100vh - 60px);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff; /* plat */
+}
+
+.formulaire-columns {
+  display: grid;
+  grid-template-columns: 320px 1fr 400px;
+  gap: 1.5rem;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: none; /* plat */
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+/* === PALETTE DE CHAMPS (COLONNE GAUCHE) === */
+.palette-column {
+  border-left: 4px solid transparent; /* neutralisé */
+  background: #ffffff;
+  position: relative;
+}
+
+.palette-column::before { content: none; }
+
+.fields-palette {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: #1f2937;
+  padding: 1.5rem;
+}
+
+/* (Supprimé: ancien header palette en dégradé pour éviter les doublons) */
+
+/* === SECTIONS FORMULAIRE (COLONNE CENTRALE) === */
+.sections-column {
+  border-left: 4px solid transparent;
+  background: #ffffff;
+  position: relative;
+}
+
+.sections-column::before { content: none; }
+
+/* === CONFIGURATION AVANCÉE (COLONNE DROITE) === */
+.config-column {
+  border-left: 4px solid transparent;
+  background: #ffffff;
+  position: relative;
+}
+
+.config-column::before { content: none; }
+
+.config-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  text-align: center;
+  padding: 2rem;
+}
+
+.config-placeholder::before {
+  content: '⚙️';
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.config-placeholder p {
+  color: #6b7280;
+  font-size: 1rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* (Supprimés: anciens styles drop-zone décoratifs) */
+
+/* === AMÉLIORATION DES ÉLÉMENTS DRAG & DROP === */
+/* (Supprimé: effets hover/3D sur les items triables pour garder un design plat) */
+
+/* === RESPONSIVE === */
+@media (max-width: 1200px) {
+  .formulaire-columns {
+    grid-template-columns: 280px 1fr 350px;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .formulaire-columns {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 1rem;
+    height: auto;
+  }
+  
+  .column {
+    max-height: 400px;
+  }
+}
+
+/* === STYLES POUR LE CONTENU DE LA PALETTE DE CHAMPS === */
+.fields-palette {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: #1f2937;
+}
+
+/* Palette: style plat et sobre par défaut dans le conteneur */
+.fields-palette .palette-list-item { border-block-end: none !important; }
+.fields-palette .palette-field-item {
+  background: #ffffff !important;
+  background-image: none !important;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  padding: 3px 6px !important;
+  min-height: 30px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 4px !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+.fields-palette .palette-field-item::after { content: none !important; display: none !important; }
+.fields-palette .palette-field-item:hover,
+.fields-palette .palette-field-item:active { background: #ffffff !important; box-shadow: none !important; transform: none !important; }
+.fields-palette .palette-field-item.dragging { box-shadow: none !important; transform: none !important; opacity: 1 !important; }
+.fields-palette .palette-field-item .field-icon { font-size: 14px !important; width: 16px !important; height: 16px !important; background: transparent !important; border: none !important; box-shadow: none !important; }
+.fields-palette .palette-field-item .field-label { font-size: 12px !important; font-weight: 600 !important; }
+
+/* Couleur unique par type (bordure + icône + texte) */
+.fields-palette .palette-field-item[data-type="radio"] { border-color: #f59e0b !important; box-shadow: inset 3px 0 0 #f59e0b !important; }
+.fields-palette .palette-field-item[data-type="checkboxes"],
+.fields-palette .palette-field-item[data-type="checkbox"] { border-color: #10b981 !important; box-shadow: inset 3px 0 0 #10b981 !important; }
+.fields-palette .palette-field-item[data-type="select"],
+.fields-palette .palette-field-item[data-type="advanced_select"] { border-color: #6366f1 !important; box-shadow: inset 3px 0 0 #6366f1 !important; }
+.fields-palette .palette-field-item[data-type="text"],
+.fields-palette .palette-field-item[data-type="textarea"] { border-color: #3b82f6 !important; box-shadow: inset 3px 0 0 #3b82f6 !important; }
+.fields-palette .palette-field-item[data-type="number"] { border-color: #06b6d4 !important; box-shadow: inset 3px 0 0 #06b6d4 !important; }
+.fields-palette .palette-field-item[data-type="date"] { border-color: #8b5cf6 !important; box-shadow: inset 3px 0 0 #8b5cf6 !important; }
+/* Types additionnels */
+.fields-palette .palette-field-item[data-type="password"] { border-color: #fb7185 !important; box-shadow: inset 3px 0 0 #fb7185 !important; }
+.fields-palette .palette-field-item[data-type="donnee"] { border-color: #14b8a6 !important; box-shadow: inset 3px 0 0 #14b8a6 !important; }
+.fields-palette .palette-field-item[data-type="produit"] { border-color: #fb923c !important; box-shadow: inset 3px 0 0 #fb923c !important; }
+.fields-palette .palette-field-item[data-type="image_admin"] { border-color: #d946ef !important; box-shadow: inset 3px 0 0 #d946ef !important; }
+.fields-palette .palette-field-item[data-type="image_user"] { border-color: #a855f7 !important; box-shadow: inset 3px 0 0 #a855f7 !important; }
+.fields-palette .palette-field-item[data-type="fichier_user"] { border-color: #94a3b8 !important; box-shadow: inset 3px 0 0 #94a3b8 !important; }
+.fields-palette .palette-field-item[data-type="tableau"] { border-color: #0ea5e9 !important; box-shadow: inset 3px 0 0 #0ea5e9 !important; }
+
+.fields-palette .palette-field-item[data-type="radio"] .field-icon,
+.fields-palette .palette-field-item[data-type="radio"] .field-label { color: #b45309 !important; }
+.fields-palette .palette-field-item[data-type="checkboxes"] .field-icon,
+.fields-palette .palette-field-item[data-type="checkboxes"] .field-label,
+.fields-palette .palette-field-item[data-type="checkbox"] .field-icon,
+.fields-palette .palette-field-item[data-type="checkbox"] .field-label { color: #047857 !important; }
+.fields-palette .palette-field-item[data-type="select"] .field-icon,
+.fields-palette .palette-field-item[data-type="select"] .field-label,
+.fields-palette .palette-field-item[data-type="advanced_select"] .field-icon,
+.fields-palette .palette-field-item[data-type="advanced_select"] .field-label { color: #4f46e5 !important; }
+.fields-palette .palette-field-item[data-type="text"] .field-icon,
+.fields-palette .palette-field-item[data-type="text"] .field-label,
+.fields-palette .palette-field-item[data-type="textarea"] .field-icon,
+.fields-palette .palette-field-item[data-type="textarea"] .field-label { color: #2563eb !important; }
+.fields-palette .palette-field-item[data-type="number"] .field-icon,
+.fields-palette .palette-field-item[data-type="number"] .field-label { color: #0891b2 !important; }
+.fields-palette .palette-field-item[data-type="date"] .field-icon,
+.fields-palette .palette-field-item[data-type="date"] .field-label { color: #7c3aed !important; }
+/* Types additionnels */
+.fields-palette .palette-field-item[data-type="password"] .field-icon,
+.fields-palette .palette-field-item[data-type="password"] .field-label { color: #e11d48 !important; }
+.fields-palette .palette-field-item[data-type="donnee"] .field-icon,
+.fields-palette .palette-field-item[data-type="donnee"] .field-label { color: #0f766e !important; }
+.fields-palette .palette-field-item[data-type="produit"] .field-icon,
+.fields-palette .palette-field-item[data-type="produit"] .field-label { color: #ea580c !important; }
+.fields-palette .palette-field-item[data-type="image_admin"] .field-icon,
+.fields-palette .palette-field-item[data-type="image_admin"] .field-label { color: #c026d3 !important; }
+.fields-palette .palette-field-item[data-type="image_user"] .field-icon,
+.fields-palette .palette-field-item[data-type="image_user"] .field-label { color: #9333ea !important; }
+.fields-palette .palette-field-item[data-type="fichier_user"] .field-icon,
+.fields-palette .palette-field-item[data-type="fichier_user"] .field-label { color: #475569 !important; }
+.fields-palette .palette-field-item[data-type="tableau"] .field-icon,
+.fields-palette .palette-field-item[data-type="tableau"] .field-label { color: #0284c7 !important; }
+
+.palette-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #3b82f6;
+}
+
+.palette-header h3 {
+  color: #3b82f6;
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.palette-header button {
+  background: #3b82f6;
+  border: 1px solid #2563eb;
+  color: white;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.palette-header button:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+  color: #3b82f6;
+  margin-left: 0.5rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.palette-content {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  padding: 0;
+}
+
+/* Coloration subtile par type (contour + pastille icône) */
+.palette-field-item[data-type="radio"] { border-color: #f59e0b; }
+.palette-field-item[data-type="radio"] .field-icon { background: #fff7ed; border-color: #fdba74; color: #d97706; }
+
+.palette-field-item[data-type="checkboxes"],
+.palette-field-item[data-type="checkbox"] { border-color: #10b981; }
+.palette-field-item[data-type="checkboxes"] .field-icon,
+.palette-field-item[data-type="checkbox"] .field-icon { background: #ecfdf5; border-color: #a7f3d0; color: #059669; }
+
+.palette-field-item[data-type="select"] { border-color: #6366f1; }
+.palette-field-item[data-type="select"] .field-icon { background: #eef2ff; border-color: #c7d2fe; color: #4f46e5; }
+
+.palette-field-item[data-type="text"],
+.palette-field-item[data-type="textarea"] { border-color: #3b82f6; }
+.palette-field-item[data-type="text"] .field-icon,
+.palette-field-item[data-type="textarea"] .field-icon { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+
+.palette-field-item[data-type="number"] { border-color: #06b6d4; }
+.palette-field-item[data-type="number"] .field-icon { background: #ecfeff; border-color: #a5f3fc; color: #0891b2; }
+
+.palette-field-item[data-type="date"] { border-color: #8b5cf6; }
+.palette-field-item[data-type="date"] .field-icon { background: #f5f3ff; border-color: #ddd6fe; color: #7c3aed; }
+
+/* États de chargement et d'erreur */
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  color: #dc2626;
+  grid-column: 1 / -1;
+}
+
+.error-message button {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.error-message button:hover {
+  background: #b91c1c;
+}
+
+.loading-skeleton, .empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  padding: 2rem;
+}
+
+.loading-skeleton {
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+}
+
+/* Responsive pour la palette */
+@media (max-width: 768px) {
+  .palette-content {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 0.4rem;
+  }
+  
+  .palette-field-item {
+    padding: 0.5rem 0.25rem;
+    min-height: 50px;
+  }
+  
+  .field-icon {
+    font-size: 1.2rem;
+  }
+  
+  .field-label {
+    font-size: 0.65rem;
+  }
+}
+
+/* === STYLES POUR LE CONTENU DES SECTIONS DE FORMULAIRE === */
+/* Nettoyage: la colonne sections utilise le thème clair compact */
+.form-sections { height: 100%; display: flex; flex-direction: column; color: #1f2937; }
+
+.sections-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.sections-header h3 {
+  color: #0f172a;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+.add-section-btn {
+  background: #1677ff;
+  border: 1px solid #1677ff;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.add-section-btn:hover {
+  filter: brightness(0.95);
+}
+
+.sections-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Styles pour les sections individuelles */
+/* Neutralisé: versions anciennes verre/frosted supprimées (voir styles compacts plus bas) */
+.sortable-section { position: relative; }
+
+/* Neutraliser tout effet hover sur les sections (design plat) */
+.sortable-section:hover { background: inherit !important; border-color: inherit !important; transform: none !important; box-shadow: none !important; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Petit badge compteur de champs dans le titre de section */
+.section-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #0f172a;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+}
+
+.section-drag-handle {
+  color: #64748b;
+  cursor: grab;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.section-drag-handle:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+.section-drag-handle:active {
+  cursor: grabbing;
+}
+
+.section-title-container {
+  flex: 1;
+  margin: 0 0.5rem;
+}
+
+.section-title {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.section-title:hover {
+  background: #f8fafc;
+}
+
+.section-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-control-btn {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #0f172a;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.section-control-btn:hover {
+  background: #f8fafc;
+}
+
+.section-control-btn.danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.section-control-btn.danger:hover {
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+
+/* Zone de dépôt pour les sections - DESIGN MODERNE */
+/* Drop-zone classique allégée */
+.section-drop-zone { background: transparent; border: 1px dashed #e5e7eb; border-radius: 8px; padding: 8px; margin: 6px 0; color: #64748b; text-align: center; }
+
+.section-drop-zone::before { content: none; }
+
+.section-drop-zone.active { border-color: #cbd5e1; background: #f8fafc; color: #475569; }
+
+.section-drop-zone.active::before { content: none; }
+
+/* (bounce supprimé) */
+
+.empty-section {
+  color: #6b7280;
+  font-style: italic;
+  text-align: center;
+  padding: 1.5rem;
+  border: 2px dashed #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+  position: relative;
+}
+
+.empty-section::before {
+  content: '✨';
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 1.5rem;
+  opacity: 0.3;
+}
+
+/* États d'édition */
+.section-name-input {
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  width: 100%;
+}
+
+.section-name-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* === STYLES POUR LA CONFIGURATION AVANCÉE === */
+.advanced-config > aside {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  color: #1f2937 !important;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.advanced-config h2 {
+  color: #1f2937 !important;
+  text-shadow: none !important;
+  margin-bottom: 1rem !important;
+  padding-bottom: 0.75rem !important;
+  border-bottom: 2px solid #e5e7eb !important;
+}
+
+.advanced-config nav {
+  background: #f9fafb !important;
+  border-radius: 8px !important;
+  padding: 0.5rem !important;
+  margin-bottom: 1rem !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.advanced-config nav button {
+  background: transparent !important;
+  color: #6b7280 !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  padding: 0.5rem 0.75rem !important;
+  transition: all 0.2s ease !important;
+  font-weight: 500 !important;
+}
+
+.advanced-config nav button:hover {
+  background: #e5e7eb !important;
+  color: #374151 !important;
+}
+
+.advanced-config nav button.border-blue-600 { background: #1677ff !important; color: white !important; border-color: #1677ff !important; box-shadow: none !important; }
+
+.advanced-config nav button.border-blue-300 {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+  border-color: #93c5fd !important;
+}
+
+/* Styles pour les formulaires dans la config */
+.advanced-config input,
+.advanced-config select,
+.advanced-config textarea {
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  background: white !important;
+  color: #1f2937 !important;
+  transition: all 0.2s ease !important;
+}
+
+.advanced-config input:focus,
+.advanced-config select:focus,
+.advanced-config textarea:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+  outline: none !important;
+}
+
+.advanced-config label {
+  color: #374151 !important;
+  font-weight: 600 !important;
+}
+
+/* Styles pour les sections colorées dans la config */
+.advanced-config .bg-indigo-50 { background: #eef2ff !important; border: 1px solid #c7d2fe !important; border-radius: 8px !important; }
+
+.advanced-config .bg-gray-50 { background: #f9fafb !important; border: 1px solid #e5e7eb !important; border-radius: 8px !important; }
+
+.advanced-config .bg-purple-50 { background: #faf5ff !important; border: 1px solid #d8b4fe !important; border-radius: 8px !important; }
+
+.advanced-config .bg-yellow-50 { background: #fffbeb !important; border: 1px solid #fcd34d !important; border-radius: 8px !important; }
+
+.advanced-config .bg-green-50 { background: #f0fdf4 !important; border: 1px solid #86efac !important; border-radius: 8px !important; }
+
+.advanced-config .bg-pink-50 { background: #fdf2f8 !important; border: 1px solid #f9a8d4 !important; border-radius: 8px !important; }
+
+/* Amélioration des boutons dans la config */
+.advanced-config button {
+  transition: all 0.2s ease !important;
+  border-radius: 8px !important;
+}
+
+.advanced-config button:hover {
+  transform: translateY(-1px) !important;
+}
+
+.advanced-config .btn-primary { background: #1677ff !important; border: 1px solid #1677ff !important; color: white !important; box-shadow: none !important; }
+
+.advanced-config .btn-error { background: #dc2626 !important; border: 1px solid #dc2626 !important; color: white !important; box-shadow: none !important; }
+
+.advanced-config .btn-outline {
+  background: transparent !important;
+  border: 1px solid #d1d5db !important;
+  color: #374151 !important;
+}
+
+.advanced-config .btn-outline:hover {
+  background: #f9fafb !important;
+  border-color: #9ca3af !important;
+}
+
+/* Styles pour les inputs de couleur */
+.advanced-config input[type="color"] {
+  border: 2px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+}
+
+.advanced-config input[type="color"]:hover {
+  border-color: #3b82f6 !important;
+  transform: scale(1.05) !important;
+}
+
+/* Placeholder vide quand aucun champ sélectionné */
+.config-placeholder {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 2px dashed rgba(59, 130, 246, 0.3) !important;
+  border-radius: 12px !important;
+  color: #6b7280 !important;
+  backdrop-filter: blur(10px) !important;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.config-placeholder p {
+  color: #6b7280 !important;
+  font-size: 1.1rem !important;
+  text-shadow: none !important;
+  margin: 0.5rem 0 !important;
+}
+
+/* Animation pour les éléments de configuration */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.advanced-config > aside > section > * {
+  animation: slideIn 0.3s ease-out !important;
+}
+
+/* (Supprimés: styles dupliqués pour sections en colonne centrale) */
+
+/* STYLES POUR LES MINI-CARTES CHAMPS */
+/* Section field items alignés sur la palette (plat, contour, icône/texte de la même couleur par type) */
+.section-palette-item,
+.form-sections .palette-field-item.section-palette-item {
+  background: #ffffff !important;
+  background-image: none !important;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  padding: 3px 6px !important;
+  min-height: 30px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 4px !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+/* Forcer les mêmes styles via le conteneur AntD de la section */
+.section-card ul, .section-card li { list-style: none !important; margin: 0 !important; padding: 0 !important; }
+.section-card .palette-field-item.section-palette-item {
+  background: #ffffff !important;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  padding: 3px 6px !important;
+  min-height: 30px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 4px !important;
+  box-shadow: none !important;
+}
+.section-card .palette-field-item.section-palette-item .field-icon { font-size: 14px !important; width: 16px !important; height: 16px !important; }
+.section-card .palette-field-item.section-palette-item .field-label { font-size: 12px !important; font-weight: 600 !important; }
+/* (Supprimé: ancien masquage/affichage conditionnel des détails de champ) */
+/* Garder ::after neutralisé, mais réactiver ::before pour le liseré gauche */
+.section-palette-item::after { content: none !important; display: none !important; }
+.section-palette-item:hover,
+.section-palette-item:active { background: #ffffff !important; box-shadow: none !important; transform: none !important; }
+.section-palette-item.dragging { box-shadow: none !important; transform: none !important; opacity: 1 !important; }
+.section-palette-item { position: relative !important; overflow: hidden !important; }
+.section-palette-item .field-icon { font-size: 14px !important; width: 16px !important; height: 16px !important; }
+.section-palette-item .field-label { font-size: 12px !important; font-weight: 600 !important; }
+.section-palette-item .drag-handle { padding: 2px !important; background: #f1f5f9 !important; border-radius: 6px !important; color: #64748b !important; cursor: grab !important; }
+.section-palette-item .drag-handle:hover { background: #e2e8f0 !important; color: #3b82f6 !important; }
+.section-palette-item.selected { outline: 2px solid #bfdbfe !important; }
+.section-palette-item .section-field-main { flex: 1 !important; min-width: 0 !important; display: flex !important; flex-direction: column !important; gap: 2px !important; }
+.section-palette-item .section-field-title { display: flex !important; align-items: center !important; gap: 4px !important; }
+.section-palette-item .section-field-sub { color: #64748b !important; font-size: 11px !important; align-items: center !important; gap: 6px !important; }
+.section-palette-item .field-required-asterisk { color: #ef4444 !important; }
+
+/* Liseré gauche (épais) via ::before pour un rendu net comme la palette */
+.section-palette-item::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 6px !important;
+  border-top-left-radius: 6px !important;
+  border-bottom-left-radius: 6px !important;
+}
+
+/* Couleur du liseré gauche par type */
+.section-palette-item[data-type="radio"]::before { background: #f59e0b !important; }
+.section-palette-item[data-type="checkboxes"]::before,
+.section-palette-item[data-type="checkbox"]::before { background: #10b981 !important; }
+.section-palette-item[data-type="select"]::before,
+.section-palette-item[data-type="advanced_select"]::before { background: #6366f1 !important; }
+.section-palette-item[data-type="text"]::before,
+.section-palette-item[data-type="textarea"]::before { background: #3b82f6 !important; }
+.section-palette-item[data-type="number"]::before { background: #06b6d4 !important; }
+.section-palette-item[data-type="date"]::before { background: #8b5cf6 !important; }
+.section-palette-item[data-type="password"]::before { background: #fb7185 !important; }
+.section-palette-item[data-type="donnee"]::before { background: #14b8a6 !important; }
+.section-palette-item[data-type="produit"]::before { background: #fb923c !important; }
+.section-palette-item[data-type="image_admin"]::before { background: #d946ef !important; }
+.section-palette-item[data-type="image_user"]::before { background: #a855f7 !important; }
+.section-palette-item[data-type="fichier_user"]::before { background: #94a3b8 !important; }
+.section-palette-item[data-type="tableau"]::before { background: #0ea5e9 !important; }
+
+/* (Supprimé: masquage des indicateurs/actions au profit d'un affichage permanent) */
+
+/* Enlever toute puce dans les listes de champs */
+.form-sections ul,
+.form-sections li,
+.sections-column ul,
+.sections-column li { list-style: none !important; padding-left: 0 !important; }
+
+/* Neutraliser le fond bleu du drop-target interne pour éviter l'effet "carte bleue" dans la capture */
+.section-drop-target { background: transparent !important; border: 1px dashed transparent !important; padding: 0 !important; margin: 0 !important; }
+.section-drop-target.active { background: transparent !important; border-color: #cbd5e1 !important; }
+
+/* Couleur par type identique à la palette */
+.section-palette-item[data-type="radio"] { border-color: #f59e0b !important; }
+.section-palette-item[data-type="checkboxes"],
+.section-palette-item[data-type="checkbox"] { border-color: #10b981 !important; }
+.section-palette-item[data-type="select"],
+.section-palette-item[data-type="advanced_select"] { border-color: #6366f1 !important; }
+.section-palette-item[data-type="text"],
+.section-palette-item[data-type="textarea"] { border-color: #3b82f6 !important; }
+.section-palette-item[data-type="number"] { border-color: #06b6d4 !important; }
+.section-palette-item[data-type="date"] { border-color: #8b5cf6 !important; }
+.section-palette-item[data-type="password"] { border-color: #fb7185 !important; }
+.section-palette-item[data-type="donnee"] { border-color: #14b8a6 !important; }
+.section-palette-item[data-type="produit"] { border-color: #fb923c !important; }
+.section-palette-item[data-type="image_admin"] { border-color: #d946ef !important; }
+.section-palette-item[data-type="image_user"] { border-color: #a855f7 !important; }
+.section-palette-item[data-type="fichier_user"] { border-color: #94a3b8 !important; }
+.section-palette-item[data-type="tableau"] { border-color: #0ea5e9 !important; }
+
+.section-palette-item[data-type="radio"] .field-icon,
+.section-palette-item[data-type="radio"] .field-label { color: #b45309 !important; }
+.section-palette-item[data-type="checkboxes"] .field-icon,
+.section-palette-item[data-type="checkboxes"] .field-label,
+.section-palette-item[data-type="checkbox"] .field-icon,
+.section-palette-item[data-type="checkbox"] .field-label { color: #047857 !important; }
+.section-palette-item[data-type="select"] .field-icon,
+.section-palette-item[data-type="select"] .field-label,
+.section-palette-item[data-type="advanced_select"] .field-icon,
+.section-palette-item[data-type="advanced_select"] .field-label { color: #4f46e5 !important; }
+.section-palette-item[data-type="text"] .field-icon,
+.section-palette-item[data-type="text"] .field-label,
+.section-palette-item[data-type="textarea"] .field-icon,
+.section-palette-item[data-type="textarea"] .field-label { color: #2563eb !important; }
+.section-palette-item[data-type="number"] .field-icon,
+.section-palette-item[data-type="number"] .field-label { color: #0891b2 !important; }
+.section-palette-item[data-type="date"] .field-icon,
+.section-palette-item[data-type="date"] .field-label { color: #7c3aed !important; }
+.section-palette-item[data-type="password"] .field-icon,
+.section-palette-item[data-type="password"] .field-label { color: #e11d48 !important; }
+.section-palette-item[data-type="donnee"] .field-icon,
+.section-palette-item[data-type="donnee"] .field-label { color: #0f766e !important; }
+.section-palette-item[data-type="produit"] .field-icon,
+.section-palette-item[data-type="produit"] .field-label { color: #ea580c !important; }
+.section-palette-item[data-type="image_admin"] .field-icon,
+.section-palette-item[data-type="image_admin"] .field-label { color: #c026d3 !important; }
+.section-palette-item[data-type="image_user"] .field-icon,
+.section-palette-item[data-type="image_user"] .field-label { color: #9333ea !important; }
+.section-palette-item[data-type="fichier_user"] .field-icon,
+.section-palette-item[data-type="fichier_user"] .field-label { color: #475569 !important; }
+.section-palette-item[data-type="tableau"] .field-icon,
+.section-palette-item[data-type="tableau"] .field-label { color: #0284c7 !important; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Styles pour les en-têtes de section */
+.sections-column h3,
+.font-bold.text-xl.text-gray-800 {
+  color: #1f2937 !important;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+
+.sections-column h3:hover,
+.font-bold.text-xl.text-gray-800:hover {
+  color: #3b82f6 !important;
+}
+
+/* Indicateur pulsant pour les sections actives */
+.w-3.h-3.bg-blue-400.rounded-full.animate-pulse { background: #1677ff !important; box-shadow: none !important; }
+
+/* Amélioration des boutons dans les sections */
+.sections-column button {
+  transition: all 0.2s ease !important;
+  border-radius: 8px !important;
+}
+
+.sections-column button:hover {
+  transform: translateY(-1px) !important;
+}
+
+/* Styles pour les sélecteurs et inputs */
+.sections-column select,
+.sections-column input {
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.sections-column select:focus,
+.sections-column input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+  outline: none !important;
+}
+
+/* (Supprimé: ancien style drop-zone en dégradé pour éviter conflit avec version neutre) */
+
+/* Amélioration du container principal des sections */
+/* Conteneur des sections: plat, clair, sans ombre */
+.form-sections { background: #ffffff !important; border: 1px solid #e5e7eb !important; border-radius: 8px !important; box-shadow: none !important; }
+
+/* Styles pour les messages d'état */
+.empty-section-message {
+  color: #6b7280 !important;
+  font-style: italic !important;
+  text-align: center !important;
+  padding: 1rem !important;
+  background: rgba(243, 244, 246, 0.5) !important;
+  border-radius: 8px !important;
+  margin: 0.5rem 0 !important;
+}
+
+/* Animation pour les nouveaux éléments */
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.field-container[data-new="true"] {
+  animation: slideInFromLeft 0.4s ease-out !important;
+}
+
+/* =====================
+   NORMALISATION MINI-CARTES (PALETTE ↔ SECTIONS)
+   Objectif: une seule source de vérité, même visuel, via variables
+   ===================== */
+
+/* 1) Base commune (carte plate, compacte) */
+.palette-field-item,
+.section-palette-item {
+  position: relative !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  padding: 3px 6px !important;
+  min-height: 30px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 4px !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+/* 2) Bande colorée gauche en ::before (remplace les box-shadow) */
+.palette-field-item::before,
+.section-palette-item::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: var(--stripe-w, 6px) !important;
+  background: var(--ft-color, #e5e7eb) !important;
+  border-top-left-radius: 6px !important;
+  border-bottom-left-radius: 6px !important;
+}
+
+/* 3) Supprimer tout box-shadow par type hérité (évite double-bande) */
+.fields-palette .palette-field-item[data-type],
+.section-palette-item[data-type] { box-shadow: none !important; }
+
+/* 4) Couleur de bordure, icône et label basée sur variables */
+.palette-field-item[data-type],
+.section-palette-item[data-type] { border-color: var(--ft-color, #e5e7eb) !important; }
+.palette-field-item .field-icon,
+.section-palette-item .field-icon,
+.palette-field-item .field-label,
+.section-palette-item .field-label {
+  color: var(--ft-accent, var(--ft-color, #64748b)) !important;
+}
+
+/* 5) Définition des variables par type (une seule fois) */
+.palette-field-item[data-type="radio"],
+.section-palette-item[data-type="radio"] { --ft-color: #f59e0b; --ft-accent: #b45309; }
+.palette-field-item[data-type="checkboxes"],
+.section-palette-item[data-type="checkboxes"],
+.palette-field-item[data-type="checkbox"],
+.section-palette-item[data-type="checkbox"] { --ft-color: #10b981; --ft-accent: #047857; }
+.palette-field-item[data-type="select"],
+.section-palette-item[data-type="select"],
+.palette-field-item[data-type="advanced_select"],
+.section-palette-item[data-type="advanced_select"] { --ft-color: #6366f1; --ft-accent: #4f46e5; }
+.palette-field-item[data-type="text"],
+.section-palette-item[data-type="text"],
+.palette-field-item[data-type="textarea"],
+.section-palette-item[data-type="textarea"] { --ft-color: #3b82f6; --ft-accent: #2563eb; }
+.palette-field-item[data-type="number"],
+.section-palette-item[data-type="number"] { --ft-color: #06b6d4; --ft-accent: #0891b2; }
+.palette-field-item[data-type="date"],
+.section-palette-item[data-type="date"] { --ft-color: #8b5cf6; --ft-accent: #7c3aed; }
+.palette-field-item[data-type="password"],
+.section-palette-item[data-type="password"] { --ft-color: #fb7185; --ft-accent: #e11d48; }
+.palette-field-item[data-type="donnee"],
+.section-palette-item[data-type="donnee"] { --ft-color: #14b8a6; --ft-accent: #0f766e; }
+.palette-field-item[data-type="produit"],
+.section-palette-item[data-type="produit"] { --ft-color: #fb923c; --ft-accent: #ea580c; }
+.palette-field-item[data-type="image_admin"],
+.section-palette-item[data-type="image_admin"] { --ft-color: #d946ef; --ft-accent: #c026d3; }
+.palette-field-item[data-type="image_user"],
+.section-palette-item[data-type="image_user"] { --ft-color: #a855f7; --ft-accent: #9333ea; }
+.palette-field-item[data-type="fichier_user"],
+.section-palette-item[data-type="fichier_user"] { --ft-color: #94a3b8; --ft-accent: #475569; }
+.palette-field-item[data-type="tableau"],
+.section-palette-item[data-type="tableau"] { --ft-color: #0ea5e9; --ft-accent: #0284c7; }
+
+
+/* ===============================
+   COMPACT THEME FOR BUILDER (Scoped)
+   =============================== */
+.form-builder-compact .ant-card-head {
+  min-height: 36px;
+  padding: 0 10px;
+}
+.form-builder-compact .ant-card-head-title {
+  padding: 8px 0;
+  font-size: 13px;
+}
+.form-builder-compact .ant-card-body {
+  padding: 10px;
+}
+.form-builder-compact .ant-typography h5.ant-typography,
+.form-builder-compact .ant-typography h4.ant-typography {
+  margin-bottom: 8px;
+}
+.form-builder-compact .ant-tabs-small > .ant-tabs-nav .ant-tabs-tab {
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+.form-builder-compact .ant-tabs-content-holder {
+  padding-top: 6px;
+}
+.form-builder-compact .ant-form-item {
+  margin-bottom: 12px;
+}
+.form-builder-compact .ant-input,
+.form-builder-compact .ant-select-selector,
+.form-builder-compact .ant-input-number,
+.form-builder-compact .ant-picker,
+.form-builder-compact .ant-tree {
+  border-radius: 6px;
+}
+.form-builder-compact .ant-btn-sm {
+  height: 26px;
+  padding: 0 8px;
+}
+
+/* Palette items: plus compacts */
+.form-builder-compact .palette-content {
+  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.form-builder-compact .palette-field-item {
+  padding: 4px 8px !important;
+  min-height: 34px !important;
+  border-radius: 6px !important;
+  border: 2px solid #e5e7eb !important; /* harmonisé avec sections */
+  box-shadow: none !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  transition: none !important;
+}
+.form-builder-compact .palette-field-item::after { content: none !important; display: none !important; }
+.form-builder-compact .palette-field-item .field-icon {
+  font-size: 12px !important;
+  margin: 0 !important;
+  width: 16px !important;
+  height: 16px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+.form-builder-compact .palette-field-item .field-label {
+  font-size: 11.5px !important;
+  color: #334155 !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+/* AUCUN effet au survol/clic pour la palette */
+.form-builder-compact .palette-field-item:hover,
+.form-builder-compact .palette-field-item:active,
+.form-builder-compact .palette-list-item:hover,
+.form-builder-compact .palette-list-item:active {
+  background: #ffffff !important;
+  background-image: none !important;
+  border-color: inherit !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Affiner la toolbar et les paddings de la liste */
+.form-builder-compact .fields-palette .ant-list-split .ant-list-item { padding: 4px 6px !important; }
+.form-builder-compact .palette-list .ant-list-item { border-block-end: none !important; }
+
+/* Couleurs par type: conserver mais sans hover accentué */
+.form-builder-compact .palette-field-item[data-type="radio"] { border-color: #f59e0b !important; }
+.form-builder-compact .palette-field-item[data-type="checkboxes"]

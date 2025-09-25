@@ -1,0 +1,33 @@
+name: Prisma Migrate (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Taper YES pour confirmer l'application des migrations sur la base"
+        required: true
+        default: "NO"
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "YES" ]; then
+            echo "Confirmation manquante. Abandon." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install deps
+        run: npm ci
+      - name: Prisma generate
+        run: npx prisma generate
+      - name: Apply migrations (deploy)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy

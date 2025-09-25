@@ -1,0 +1,32 @@
+.tree-manager-header .ant-select .ant-select-selector {
+  color: #111; /* texte noir quand fermé */
+}
+
+/* Valeur et placeholder visibles en noir quand fermé */
+.tree-manager-header .ant-select:not(.ant-select-open) .ant-select-selection-item,
+.tree-manager-header .ant-select:not(.ant-select-open) .ant-select-selection-placeholder {
+  color: #111 !important;
+}
+
+.tree-manager-header .ant-select-open .ant-select-selector {
+  background-color: #1f2937; /* gris foncé quand ouvert, cohérent avec dropdown */
+  border-color: #1f2937;
+}
+
+.tree-manager-header .ant-select-open .ant-select-selection-item,
+.tree-manager-header .ant-select-open .ant-select-selection-placeholder {
+  color: #fff !important; /* texte blanc quand ouvert */
+}
+
+.tree-manager-header .ant-select-open .ant-select-selection-search-input {
+  color: #fff !important;
+}
+
+/* Couleur des options dans le dropdown sombre */
+.tree-manager-header .ant-select-dropdown .ant-select-item {
+  color: #fff;
+}
+
+.tree-manager-header .ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  color: #fff;
+}

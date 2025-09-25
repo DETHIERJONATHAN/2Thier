@@ -1,0 +1,295 @@
+/* ==========================================================================
+   COULEURS OFFICIELLES 2THIER - SYSTÈME DE COHÉRENCE VISUELLE
+   ========================================================================== */
+
+:root {
+  /* Couleurs officielles 2Thier extraites du logo */
+  --2thier-orange: #D67D35;
+  --2thier-orange-light: #E89956;
+  --2thier-orange-dark: #B86A2D;
+  --2thier-orange-hover: #E67B3D;
+  --2thier-orange-10: rgba(214, 125, 53, 0.1);
+  --2thier-orange-20: rgba(214, 125, 53, 0.2);
+  --2thier-orange-30: rgba(214, 125, 53, 0.3);
+  
+  /* Couleur teal du logo (pour compléter la palette) */
+  --2thier-teal: #1F3B53;
+  --2thier-teal-light: #2A4E68;
+  --2thier-teal-dark: #18304A;
+}
+
+/* ==========================================================================
+   HEADER - ÉLÉMENTS INTERACTIFS AVEC COULEURS 2THIER
+   ========================================================================== */
+
+/* Boutons et éléments interactifs dans le header */
+.header-2thier-item,
+.ant-btn.header-2thier-item {
+  color: white !important;
+  transition: all 0.2s ease-in-out;
+  border-radius: 6px;
+  padding: 8px;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.header-2thier-item:hover,
+.ant-btn.header-2thier-item:hover {
+  background: transparent !important;
+  color: var(--2thier-orange) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.header-2thier-item:hover svg,
+.ant-btn.header-2thier-item:hover svg,
+.header-2thier-item:hover .anticon,
+.ant-btn.header-2thier-item:hover .anticon {
+  color: var(--2thier-orange) !important;
+}
+
+.header-2thier-item:active,
+.ant-btn.header-2thier-item:active {
+  background: transparent !important;
+  color: var(--2thier-orange-dark) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.header-2thier-item:focus,
+.ant-btn.header-2thier-item:focus {
+  background: transparent !important;
+  color: var(--2thier-orange) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Notifications Bell avec style 2Thier */
+.notifications-2thier-bell {
+  position: relative;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.notifications-2thier-bell:hover {
+  background-color: var(--2thier-orange) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(214, 125, 53, 0.3);
+}
+
+.notifications-2thier-bell .notification-badge {
+  background-color: var(--2thier-orange);
+  border: 2px solid white;
+  animation: pulse-2thier 2s infinite;
+}
+
+@keyframes pulse-2thier {
+  0% { box-shadow: 0 0 0 0 var(--2thier-orange-30); }
+  70% { box-shadow: 0 0 0 10px rgba(214, 125, 53, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 125, 53, 0); }
+}
+
+/* Enlever tous les contours indésirables */
+.ant-btn:focus,
+.ant-btn:active,
+.ant-btn:hover {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+button:focus,
+button:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Profil et menu dropdown avec style 2Thier */
+
+/* Profile Menu avec style 2Thier */
+.profile-2thier-menu {
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.profile-2thier-menu:hover {
+  background-color: var(--2thier-orange) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(214, 125, 53, 0.3);
+}
+
+.profile-2thier-menu:hover .profile-icon,
+.profile-2thier-menu:hover .profile-name {
+  color: white !important;
+}
+
+/* Organization Selector avec style 2Thier */
+.org-selector-2thier {
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.org-selector-2thier:hover {
+  background-color: var(--2thier-orange) !important;
+  border-color: var(--2thier-orange) !important;
+  color: white !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(214, 125, 53, 0.3);
+}
+
+.org-selector-2thier:hover .org-icon,
+.org-selector-2thier:hover .org-name,
+.org-selector-2thier:hover svg {
+  color: white !important;
+}
+
+/* Search Bar avec style 2Thier */
+.search-2thier {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  transition: all 0.2s ease-in-out;
+}
+
+.search-2thier:focus {
+  background-color: white !important;
+  border-color: var(--2thier-orange) !important;
+  color: var(--2thier-teal) !important;
+  box-shadow: 0 0 0 3px var(--2thier-orange-20) !important;
+}
+
+.search-2thier:focus::placeholder {
+  color: #9ca3af !important;
+}
+
+.search-2thier:focus + .search-icon {
+  color: var(--2thier-orange) !important;
+}
+
+/* Dropdown menus avec couleurs 2Thier */
+.dropdown-2thier {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dropdown-2thier-item {
+  padding: 8px 12px;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.dropdown-2thier-item:hover {
+  background-color: var(--2thier-orange-10) !important;
+  color: var(--2thier-orange-dark) !important;
+}
+
+.dropdown-2thier-item:active {
+  background-color: var(--2thier-orange-20) !important;
+}
+
+/* Menu hamburger avec style 2Thier */
+.menu-burger-2thier {
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.menu-burger-2thier:hover svg {
+  color: var(--2thier-orange) !important;
+}
+
+/* Logo et nom d'organisation */
+.logo-2thier-container {
+  color: white !important;
+  font-weight: bold;
+  font-size: 18px;
+  margin-left: 16px;
+  transition: color 0.2s ease-in-out;
+}
+
+.logo-2thier-container:hover {
+  color: var(--2thier-orange) !important;
+}
+
+/* Icône Home Dashboard */
+.home-2thier-icon {
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.home-2thier-icon:hover svg {
+  color: var(--2thier-orange) !important;
+}
+
+/* Logo et nom d'organisation - correction */
+.logo-2thier-container-hover {
+  transition: all 0.2s ease-in-out;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.logo-2thier-container:hover {
+  background-color: var(--2thier-orange-10) !important;
+}
+
+/* HeaderAICoach et HeaderImpersonation styles */
+.header-special-2thier {
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+}
+
+.header-special-2thier:hover {
+  background-color: var(--2thier-orange) !important;
+  color: white !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(214, 125, 53, 0.3);
+}
+
+/* Styles pour les états actifs/sélectionnés */
+.active-2thier {
+  background-color: var(--2thier-orange) !important;
+  color: white !important;
+}
+
+.selected-2thier {
+  background-color: var(--2thier-orange-20) !important;
+  border-color: var(--2thier-orange) !important;
+  color: var(--2thier-orange-dark) !important;
+}
+
+/* Animation d'entrée pour les dropdowns */
+.dropdown-2thier {
+  animation: dropdown-appear 0.2s ease-out;
+}
+
+@keyframes dropdown-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Utilities */
+.text-2thier-orange { color: var(--2thier-orange) !important; }
+.bg-2thier-orange { background-color: var(--2thier-orange) !important; }
+.border-2thier-orange { border-color: var(--2thier-orange) !important; }
+.hover-2thier-orange:hover { background-color: var(--2thier-orange) !important; color: white !important; }

@@ -1,0 +1,262 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #213547;
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #f9fafb; /* Arrière-plan gris clair pour le CRM */
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #f9f9f9;
+  color: #213547;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+button:hover {
+  border-color: #646cff;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* Animations pour les effets de feedback */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.3s ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 1s infinite;
+}
+
+/* Styles globaux pour le CRM */
+.crm-sidebar {
+  background-color: #f3f4f6; /* Correspond à bg-gray-100 de Tailwind */
+  border-right: 1px solid #e5e7eb;
+}
+
+/* Mode sombre optionnel (si nécessaire) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #ffffff;
+    background-color: #242424;
+  }
+  
+  body {
+    background-color: #1a1a1a;
+  }
+  
+  a:hover {
+    color: #747bff;
+  }
+  
+  button {
+    background-color: #1a1a1a;
+    color: #ffffff;
+  }
+  
+  .crm-sidebar {
+    background-color: #374151; /* Correspond à bg-gray-700 en mode sombre */
+    border-right: 1px solid #4b5563;
+  }
+}
+
+/* === Advanced Config: mini-cards AntD-like, unifiées sur tous les onglets === */
+.cfg-advanced-panel .cfg-pane-card {
+  position: relative;
+  background: #ffffff;
+  border: 2px solid #e5e7eb; /* gris-200 */
+  border-radius: 10px;
+  padding: 12px;
+  margin: 8px 0;
+  box-shadow: none; /* plat */
+}
+
+.cfg-advanced-panel .cfg-pane-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px; /* bande gauche marquée */
+  background: var(--cfg-accent, #d9d9d9);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.cfg-advanced-panel .cfg-pane-card h3 {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: var(--cfg-accent, #1677ff);
+}
+
+/* Couleurs par onglet (tokens Ant Design) */
+.cfg-advanced-panel [data-kind="parametres"] { --cfg-accent: #1677ff; } /* blue-6 */
+.cfg-advanced-panel [data-kind="formules"]   { --cfg-accent: #722ed1; } /* purple-6 */
+.cfg-advanced-panel [data-kind="validations"]{ --cfg-accent: #52c41a; } /* green-6 */
+.cfg-advanced-panel [data-kind="dependances"]{ --cfg-accent: #fa8c16; } /* orange-6 */
+
+/* Labels d’onglets compacts et colorés */
+.cfg-advanced-panel .cfg-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.cfg-advanced-panel .cfg-tab-label .cfg-tab-icon { color: var(--cfg-accent, #595959); display: inline-flex; }
+.cfg-advanced-panel .cfg-tab-label .cfg-tab-text { color: #262626; }
+
+/* Pastilles de compte par onglet */
+.cfg-advanced-panel .cfg-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 6px;
+  font-size: 10px;
+  border-radius: 999px;
+  background: var(--cfg-accent, #bfbfbf);
+  color: #ffffff;
+}
+
+/* Fond léger quand l’onglet possède des éléments (varie par type) */
+.cfg-advanced-panel .cfg-tab-label[data-kind="parametres"][data-has="true"] { background: #e6f4ff; }
+.cfg-advanced-panel .cfg-tab-label[data-kind="formules"][data-has="true"]   { background: #f9f0ff; }
+.cfg-advanced-panel .cfg-tab-label[data-kind="validations"][data-has="true"]{ background: #f6ffed; }
+.cfg-advanced-panel .cfg-tab-label[data-kind="dependances"][data-has="true"]{ background: #fff7e6; }
+
+/* Ajustements compacts pour inputs internes (optionnel, visuel uniquement) */
+.cfg-advanced-panel input[type="text"],
+.cfg-advanced-panel select,
+.cfg-advanced-panel .input,
+.cfg-advanced-panel .select,
+.cfg-advanced-panel .textarea {
+  border-radius: 6px;
+}
+
+/* === Compactage et hiérarchie: bande sur carte racine uniquement === */
+/* Bande colorée uniquement pour la carte racine de l’onglet */
+.cfg-advanced-panel .cfg-tab-pane > .cfg-pane-card::before { width: 6px; display: block; }
+/* Désactiver la bande sur les sous-cartes */
+.cfg-advanced-panel .cfg-pane-card .cfg-pane-card::before { display: none; }
+/* Sous-cartes: style plat et compact */
+.cfg-advanced-panel .cfg-pane-card .cfg-pane-card {
+  border-width: 1px;
+  border-color: #eeeeee;
+  padding: 10px;
+  margin: 10px 0;
+  box-shadow: none;
+}
+
+/* Densifier les contrôles de formulaire */
+.cfg-advanced-panel input[type="text"],
+.cfg-advanced-panel input[type="number"],
+.cfg-advanced-panel input[type="color"],
+.cfg-advanced-panel select,
+.cfg-advanced-panel .input,
+.cfg-advanced-panel .select,
+.cfg-advanced-panel .textarea {
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.cfg-advanced-panel .grid { row-gap: 10px; column-gap: 12px; }
+.cfg-advanced-panel label { margin-bottom: 4px; }
+
+/* Épure de l’onglet Formules (pas de double carte/ombre) */
+.cfg-advanced-panel [data-kind="formules"] .bg-white.shadow-sm.rounded-md {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  padding: 0;
+}
+.cfg-advanced-panel [data-kind="formules"] h3 { margin: 0 0 8px; font-size: 13px; }
+.cfg-advanced-panel [data-kind="formules"] .border.rounded-md {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+.cfg-advanced-panel [data-kind="formules"] .mt-4 > button {
+  height: 32px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: none;
+}
+.cfg-advanced-panel [data-kind="formules"] .mt-4 > button:hover { background: #fafafa; }
+
+/* Barre d’outils compacte au-dessus de la drop-zone */
+.cfg-advanced-panel [data-kind="formules"] .formula-toolbar button {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+}
+.cfg-advanced-panel [data-kind="formules"] .formula-toolbar button:hover { background: #f5f5f5; }
+

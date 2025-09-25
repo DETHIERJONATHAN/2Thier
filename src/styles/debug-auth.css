@@ -1,0 +1,100 @@
+/* Debug Auth Component Styles */
+.debug-auth-container {
+  @apply bg-white p-6 rounded-xl shadow-lg border border-gray-200;
+}
+
+.debug-auth-header {
+  @apply text-2xl font-semibold mb-6 text-gray-800 flex items-center gap-3;
+}
+
+.debug-auth-header-icon {
+  @apply text-blue-600;
+}
+
+.debug-auth-sections {
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-6;
+}
+
+.debug-section {
+  @apply border border-gray-200 p-4 rounded-lg bg-gray-50;
+}
+
+.debug-section-title {
+  @apply font-semibold text-gray-700 mb-3 flex items-center gap-2;
+}
+
+.debug-section-content {
+  @apply text-sm font-mono bg-white p-3 rounded border max-h-60 overflow-y-auto;
+}
+
+.debug-loading {
+  @apply text-center text-gray-500 py-8;
+}
+
+.debug-error {
+  @apply text-center text-red-500 py-4 bg-red-50 rounded border border-red-200;
+}
+
+.debug-empty {
+  @apply text-yellow-600 italic;
+}
+
+.debug-count-badge {
+  @apply bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.debug-permission-item {
+  @apply bg-gray-50 p-2 rounded border-l-4 border-blue-400 mb-2;
+}
+
+.debug-permission-action {
+  @apply font-medium text-blue-700;
+}
+
+.debug-permission-resource {
+  @apply text-gray-600 text-xs;
+}
+
+.debug-permission-meta {
+  @apply text-xs text-gray-500 mt-1;
+}
+
+.debug-user-info {
+  @apply bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border;
+}
+
+.debug-modules-grid {
+  @apply grid grid-cols-2 gap-2 mt-2;
+}
+
+.debug-module-badge {
+  @apply bg-green-100 text-green-800 px-2 py-1 rounded text-xs text-center;
+}
+
+.debug-role-badge {
+  @apply bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs;
+}
+
+.debug-json-viewer {
+  @apply bg-gray-900 text-green-400 p-3 rounded text-xs overflow-x-auto;
+}
+
+.debug-toggle-button {
+  @apply bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 transition-colors;
+}
+
+.debug-stats-grid {
+  @apply grid grid-cols-3 gap-4 mb-4;
+}
+
+.debug-stat-card {
+  @apply bg-white p-3 rounded border text-center;
+}
+
+.debug-stat-number {
+  @apply text-2xl font-bold text-blue-600;
+}
+
+.debug-stat-label {
+  @apply text-xs text-gray-600 uppercase tracking-wide;
+}

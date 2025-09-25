@@ -1,0 +1,67 @@
+/* Styles pour l'éditeur de formules */
+
+.formula-drop-zone.drop-target-highlight {
+    border-color: #22c55e !important; /* vert */
+    background-color: #dcfce7 !important; /* vert clair */
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+    transition: all 0.2s ease-in-out;
+}
+
+/* Nous avons supprimé l'animation de transition pour éviter les rechargements inutiles */
+
+/* Dropzone AntD-like (bordure pointillée légère) */
+.formula-drop-zone {
+    border-style: dashed !important;
+    border-color: #d9d9d9 !important;
+    background: linear-gradient(180deg,#ffffff 0%,#fcfcff 100%) !important;
+    position: relative;
+}
+.formula-drop-zone:hover {
+    border-color: #1677ff !important;
+    background: #e6f4ff !important;
+}
+.formula-drop-zone .empty-hint {
+    color: #8c8c8c;
+}
+
+/* Empty state centré et élégant */
+.formula-drop-zone .empty-state{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:100px;
+    text-align:center;
+    color:#8c8c8c;
+}
+.formula-drop-zone .empty-icon{
+    color:#1677ff;
+    margin-bottom:6px;
+}
+.formula-drop-zone .empty-title{
+    font-size:13px;
+    line-height:18px;
+}
+
+/* Sous-zones de dépôt (Expression / ALORS / SINON) harmonisées */
+.formula-subdrop-zone{
+    border: 1px dashed #d9d9d9 !important;
+    background: linear-gradient(180deg,#ffffff 0%,#fcfcff 100%) !important;
+    position: relative;
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.formula-subdrop-zone:hover{
+    border-color:#1677ff !important;
+    background:#e6f4ff !important;
+}
+.formula-subdrop-zone .empty-state{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:100%;
+    min-height:60px;
+    text-align:center;
+    color:#8c8c8c;
+}
+.formula-subdrop-zone .empty-icon{ color:#1677ff; margin-bottom:6px; }
+.formula-subdrop-zone .empty-title{ font-size:12px; line-height:16px; }

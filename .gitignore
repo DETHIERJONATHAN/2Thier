@@ -1,0 +1,107 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Env files (keep example tracked)
+.env
+.env.*
+!*.example
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+/src/generated/prisma
+
+# Local DB backups
+db-backups/
+
+# Secrets et données sensibles
+# Dossier contenant des clés de service Google
+Google JSON/
+# Exports de base de données potentiellement sensibles
+database-export.*
+# Uploads locaux
+uploads/
+# Fichier d'exemple contenant potentiellement des secrets
+donnees-service-account.txt
+
+# Ignorer au niveau racine les scripts/tests/diagnostics privés non indispensables
+# (les fichiers déjà suivis ne seront pas affectés)
+/*test-*
+/*tests-*
+/*debug-*
+/*diagnostic-*
+/*diagnostics-*
+/*analyse-*
+/*analyze-*
+/*audit-*
+/*fix-*
+/*force-*
+/*validate-*
+/*verification-*
+/*verify-*
+/*check-*
+/*cleanup-*
+/*clean-*
+/*import-*
+/*export-*
+/*migrate-*
+/*migration-*
+/*restore-*
+/*backup-*
+/*deploy-*
+/*build-*
+/*create-*
+/*update-*
+/*apply-*
+/*patch-*
+/*list-*
+/*show-*
+/*reset-*
+/*seed-*
+/*start-*
+/*restart-*
+/*stop-*
+/*connect-*
+/*configure-*
+/*generate-*
+/*check_*.sql
+/*list_*.sql
+
+# Backups locaux contenant des secrets (à conserver hors dépôt)
+sauvegarde-critique/
+sauvegarde-prisma/
+backups/
+backup_*/
+
+# Dossiers/artefacts finaux
+/final-deploy/
+/docs/
+
+# Documents Office temporaires
+/*.docx
+/*.xlsx
+/*.pptx
+
+# Scripts PowerShell/Bash à la racine (les scripts sous scripts/ restent suivis)
+/*.ps1
+/*.bat
+/*.sh

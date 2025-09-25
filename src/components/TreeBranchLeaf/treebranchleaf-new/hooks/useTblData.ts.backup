@@ -1,0 +1,296 @@
+import { useEffect, useMemo, useState } from "react";
+import { useAuthenticatedApi } from "../../../../hooks/useAuthenticatedApi"; // Appels API authentifiés
+import { TblNode, TblTab, TblTree } from "../types/types";
+
+// Données mockées pour développement UI (à remplacer par l'appel API)
+const mockTree: TblTree = {
+  id: "tree-tbl-new",
+  name: "Système Multi-secteurs — Devis",
+  variables: [],
+  nodes: [
+    // Branches racines = onglets
+    { id: "tab-general", parentId: null, title: "Mesures générales", type: "GROUP", leafType: null, order: 0, markers: [], children: [
+      {
+        id: 'leaf-type-client', parentId: 'tab-general', title: 'Type de client', subtitle: 'Choisissez le type de client', type: 'LEAF', leafType: 'FIELD', order: 0, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-type-client', fieldType: 'SELECT',
+          selectConfig: { options: [
+            { label: 'Particulier', value: 'particulier' },
+            { label: 'Entreprise', value: 'entreprise' },
+            { label: 'Autre', value: 'autre' },
+          ], defaultValue: 'particulier' }
+        }
+      },
+      {
+        id: 'leaf-budget', parentId: 'tab-general', title: 'Budget global', subtitle: 'Montant disponible pour le projet', type: 'LEAF', leafType: 'FIELD', order: 1, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-budget', fieldType: 'NUMBER', numberConfig: { min: 2000, max: 60000, step: 500, defaultValue: 12000, ui: 'slider' }
+        }
+      },
+      {
+        id: 'leaf-surface', parentId: 'tab-general', title: 'Surface utile (m²)', subtitle: 'Surface estimée disponible (toiture/façades)', type: 'LEAF', leafType: 'FIELD', order: 2, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-surface', fieldType: 'NUMBER', numberConfig: { min: 10, max: 200, step: 5, defaultValue: 40, ui: 'slider' }
+        }
+      },
+      {
+        id: 'leaf-orientation', parentId: 'tab-general', title: 'Orientation', type: 'LEAF', leafType: 'FIELD', order: 3, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-orientation', fieldType: 'SELECT', selectConfig: { options: [
+            { label: 'Sud', value: 'sud' },
+            { label: 'Est', value: 'est' },
+            { label: 'Ouest', value: 'ouest' },
+            { label: 'Nord', value: 'nord' },
+          ], defaultValue: 'sud' }
+        }
+      },
+      {
+        id: 'leaf-inclinaison', parentId: 'tab-general', title: 'Inclinaison', type: 'LEAF', leafType: 'FIELD', order: 4, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-inclinaison', fieldType: 'SELECT', selectConfig: { options: [
+            { label: '15°', value: '15' },
+            { label: '25°', value: '25' },
+            { label: '35°', value: '35' },
+            { label: '45°', value: '45' },
+          ], defaultValue: '35' }
+        }
+      },
+      {
+        id: 'leaf-toiture-type', parentId: 'tab-general', title: 'Type de toiture', type: 'LEAF', leafType: 'FIELD', order: 5, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-toiture', fieldType: 'SELECT', selectConfig: { options: [
+            { label: 'Tuiles', value: 'tuiles' },
+            { label: 'Ardoises', value: 'ardoises' },
+            { label: 'Bac acier', value: 'bacacier' },
+          ], defaultValue: 'tuiles' }
+        }
+      },
+    ] },
+    { id: "tab-pv", parentId: null, title: "Photovoltaïque", type: "GROUP", leafType: null, order: 1, markers: [], children: [
+      {
+        id: 'leaf-pv-model', parentId: 'tab-pv', title: 'Modèle de panneaux', type: 'LEAF', leafType: 'FIELD', order: 0, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-pv-model', fieldType: 'SELECT', selectConfig: { options: [
+            { label: 'Mono 400Wc', value: 'mono400' },
+            { label: 'Mono 450Wc', value: 'mono450' },
+            { label: 'Bi-verre 500Wc', value: 'biverre500' },
+          ], defaultValue: 'mono400' }
+        }
+      },
+      {
+        id: 'leaf-pv-qty', parentId: 'tab-pv', title: 'Quantité', type: 'LEAF', leafType: 'FIELD', order: 1, markers: [],
+        children: [],
+        fieldConfig: {
+          id: 'cfg-pv-qty', fieldType: 'NUMBER', numberConfig: { min: 0, max: 100, step: 1, defaultValue: 10, ui: 'input' }
+        }
+      },
+    ] },
+    { id: "tab-toiture", parentId: null, title: "Toiture", type: "GROUP", leafType: null, order: 2, markers: [], children: [] },
+    { id: "tab-pacAA", parentId: null, title: "PAC Air-Air", type: "GROUP", leafType: null, order: 3, markers: [], children: [] },
+    { id: "tab-pacAE", parentId: null, title: "PAC Air-Eau", type: "GROUP", leafType: null, order: 4, markers: [], children: [] },
+    { id: "tab-thermo", parentId: null, title: "Thermodynamique", type: "GROUP", leafType: null, order: 5, markers: [], children: [] },
+    { id: "tab-eau", parentId: null, title: "Traitement de l'eau", type: "GROUP", leafType: null, order: 6, markers: [], children: [] },
+    { id: "tab-isolation", parentId: null, title: "Isolation murs", type: "GROUP", leafType: null, order: 7, markers: [], children: [] },
+    { id: "tab-docs", parentId: null, title: "Docs & Devis", type: "GROUP", leafType: null, order: 8, markers: [], children: [] },
+  ],
+};
+
+export function useTblData(treeId: string) {
+  const { api } = useAuthenticatedApi();
+  const [tree, setTree] = useState<TblTree | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        // 1) Tenter l'API réelle (structure plate) puis mapper en structure imbriquée TblTree
+        const [treeRes, nodesRes] = await Promise.all([
+          api.get(`/api/treebranchleaf/trees/${treeId}`),
+          api.get(`/api/treebranchleaf/trees/${treeId}/nodes`),
+        ]);
+
+        const apiTree = treeRes.data as { id: string; name: string };
+        const apiNodes = nodesRes.data as Array<{
+          id: string;
+          parentId: string | null;
+          label: string;
+          description?: string | null;
+          type: string; // ex: 'branch', 'leaf_select', ...
+          subType?: string | null; // ex: 'SELECT', 'NUMBER', ...
+          order?: number | null;
+        }>;
+
+        // Mapper nodes API → TblNode imbriqués
+        const nodeMap = new Map<string, TblNode>();
+        const roots: TblNode[] = [];
+
+        const mapType = (t: string): { type: 'GROUP' | 'LEAF'; leafType: TblNode['leafType'] } => {
+          if (t === 'branch') return { type: 'GROUP', leafType: null };
+          // tout le reste = LEAF
+          if (t === 'leaf_option') return { type: 'LEAF', leafType: 'OPTION' };
+          if (t === 'leaf_option_field') return { type: 'LEAF', leafType: 'OPTION_FIELD' };
+          return { type: 'LEAF', leafType: 'FIELD' };
+        };
+
+        const mapFieldConfig = (t: string, subType?: string | null): TblNode['fieldConfig'] => {
+          const s = (subType || '').toUpperCase();
+          if (t === 'leaf_number' || s === 'NUMBER') {
+            return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'NUMBER', numberConfig: { min: 0, max: 100, step: 1, defaultValue: 0, ui: 'input' } };
+          }
+          if (t === 'leaf_select' || s === 'SELECT') {
+            return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'SELECT', selectConfig: { options: [] } };
+          }
+          if (t === 'leaf_checkbox' || s === 'CHECKBOX') {
+            return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'CHECKBOX' };
+          }
+          if (t === 'leaf_date' || s === 'DATE') {
+            return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'DATE' };
+          }
+          // défaut = TEXT
+          return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'TEXT', textConfig: { placeholder: '' } };
+        };
+
+        for (const n of apiNodes) {
+          const { type, leafType } = mapType(n.type);
+          nodeMap.set(n.id, {
+            id: n.id,
+            parentId: n.parentId,
+            title: n.label,
+            subtitle: n.description || undefined,
+            type,
+            leafType,
+            order: typeof n.order === 'number' ? n.order : 0,
+            markers: [],
+            children: [],
+            fieldConfig: type === 'LEAF' ? mapFieldConfig(n.type, n.subType) : null,
+            conditionConfig: null,
+            formulaConfig: null,
+          });
+        }
+
+        // lier children
+        for (const node of nodeMap.values()) {
+          if (node.parentId && nodeMap.has(node.parentId)) {
+            const parent = nodeMap.get(node.parentId)!;
+            parent.children.push(node);
+          }
+        }
+        for (const node of nodeMap.values()) {
+          if (!node.parentId) roots.push(node);
+        }
+
+        // Enrichir les champs SELECT avec des options dérivées des enfants de type OPTION
+        for (const node of nodeMap.values()) {
+          if (node.type === 'LEAF' && node.fieldConfig?.fieldType === 'SELECT') {
+            const childOptions = (node.children || []).filter(c => c.type === 'LEAF' && c.leafType === 'OPTION');
+            if (childOptions.length > 0) {
+              node.fieldConfig.selectConfig = node.fieldConfig.selectConfig || { options: [] };
+              node.fieldConfig.selectConfig.options = childOptions.map((opt) => ({
+                label: opt.title,
+                value: opt.id
+              }));
+            }
+          }
+        }
+
+        const mapped: TblTree = {
+          id: apiTree.id,
+          name: apiTree.name,
+          variables: [],
+          nodes: roots,
+        };
+
+        if (!cancelled) setTree(mapped);
+  } catch {
+        // Si l'arbre demandé n'existe pas, tenter de charger le premier arbre dispo
+        try {
+          const listRes = await api.get(`/api/treebranchleaf/trees`);
+          const trees: Array<{ id: string; name: string }> = listRes.data || [];
+          const fallbackId = trees[0]?.id;
+          if (fallbackId) {
+            const [tRes, nRes] = await Promise.all([
+              api.get(`/api/treebranchleaf/trees/${fallbackId}`),
+              api.get(`/api/treebranchleaf/trees/${fallbackId}/nodes`),
+            ]);
+            const apiTree = tRes.data as { id: string; name: string };
+            const apiNodes = nRes.data as Array<{
+              id: string; parentId: string | null; label: string; description?: string | null; type: string; subType?: string | null; order?: number | null;
+            }>;
+
+            const nodeMap = new Map<string, TblNode>();
+            const mapType = (t: string): { type: 'GROUP' | 'LEAF'; leafType: TblNode['leafType'] } => {
+              if (t === 'branch') return { type: 'GROUP', leafType: null };
+              if (t === 'leaf_option') return { type: 'LEAF', leafType: 'OPTION' };
+              if (t === 'leaf_option_field') return { type: 'LEAF', leafType: 'OPTION_FIELD' };
+              return { type: 'LEAF', leafType: 'FIELD' };
+            };
+            const mapFieldConfig = (t: string, subType?: string | null): TblNode['fieldConfig'] => {
+              const s = (subType || '').toUpperCase();
+              if (t === 'leaf_number' || s === 'NUMBER') return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'NUMBER', numberConfig: { min: 0, max: 100, step: 1, defaultValue: 0, ui: 'input' } };
+              if (t === 'leaf_select' || s === 'SELECT') return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'SELECT', selectConfig: { options: [] } };
+              if (t === 'leaf_checkbox' || s === 'CHECKBOX') return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'CHECKBOX' };
+              if (t === 'leaf_date' || s === 'DATE') return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'DATE' };
+              return { id: `cfg-${Math.random().toString(36).slice(2,8)}`, fieldType: 'TEXT', textConfig: { placeholder: '' } };
+            };
+            for (const n of apiNodes) {
+              const { type, leafType } = mapType(n.type);
+              nodeMap.set(n.id, { id: n.id, parentId: n.parentId, title: n.label, subtitle: n.description || undefined, type, leafType, order: typeof n.order === 'number' ? n.order : 0, markers: [], children: [], fieldConfig: type === 'LEAF' ? mapFieldConfig(n.type, n.subType) : null, conditionConfig: null, formulaConfig: null });
+            }
+            for (const node of nodeMap.values()) {
+              if (node.parentId && nodeMap.has(node.parentId)) nodeMap.get(node.parentId)!.children.push(node);
+            }
+            const rootsTmp: TblNode[] = [];
+            for (const node of nodeMap.values()) if (!node.parentId) rootsTmp.push(node);
+            for (const node of nodeMap.values()) {
+              if (node.type === 'LEAF' && node.fieldConfig?.fieldType === 'SELECT') {
+                const childOptions = (node.children || []).filter(c => c.type === 'LEAF' && c.leafType === 'OPTION');
+                if (childOptions.length > 0) {
+                  node.fieldConfig.selectConfig = node.fieldConfig.selectConfig || { options: [] };
+                  node.fieldConfig.selectConfig.options = childOptions.map((opt) => ({ label: opt.title, value: opt.id }));
+                }
+              }
+            }
+            const mapped: TblTree = { id: apiTree.id, name: apiTree.name, variables: [], nodes: rootsTmp };
+            if (!cancelled) setTree(mapped);
+            if (!cancelled) setError(null);
+          } else {
+            // Aucun arbre disponible → mock
+            await new Promise((r) => setTimeout(r, 150));
+            if (!cancelled) setTree(mockTree);
+            if (!cancelled) setError("Aucun arbre TBL trouvé, mode démo activé");
+          }
+        } catch {
+          // Fallback mock en cas d'erreur réseau/endpoint absent
+          await new Promise((r) => setTimeout(r, 150));
+          if (!cancelled) setTree(mockTree);
+          if (!cancelled) setError("Impossible de charger l'arbre TBL (mode démo activé)");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [treeId, api]);
+
+  const tabs: TblTab[] = useMemo(() => {
+    if (!tree) return [];
+    return tree.nodes
+      .filter((n: TblNode) => n.parentId == null && n.type === "GROUP")
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((n) => ({ key: n.id, label: n.title }));
+  }, [tree]);
+
+  return { tree, tabs, loading, error };
+}

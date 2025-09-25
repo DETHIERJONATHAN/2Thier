@@ -1,0 +1,271 @@
+﻿import React, { useState, useEffect, useMemo } from 'react';
+import { Tag, Button, Segmented, Select } from 'antd';
+import { useAdvancedSelectCache } from '../../hooks/useAdvancedSelectCache';
+import useCRMStore from '../../store';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical, X } from 'lucide-react';
+import './formula-editor.css';
+
+// DÃ©claration pour Ã©tendre Window avec notre propriÃ©tÃ© de dÃ©bogage
+declare global {
+    interface Window {
+        lastDeleteClickTime?: number;
+        __switchPrev?: Record<string, string | undefined>;
+        __condAdvNav?: Record<string, { fieldId?: string; path: string[] }>;
+    }
+}
+
+// Types locaux (compat souple)
+export type BasicItem = {
+    type: 'field' | 'operator' | 'value' | 'function' | 'formula_ref' | 'adv_part' | 'cond' | 'switch';
+    label?: string;
+    value?: unknown;
+    id?: string;
+    refFormulaId?: string;
+    fieldId?: string;
+    part?: 'selection' | 'extra' | 'nodeId';
+    condExpr?: BasicItem[];
+    then?: BasicItem[];
+    else?: BasicItem[];
+    elseBehavior?: 'zero' | 'ignore';
+    // switch
+    switchFieldId?: string;
+    switchPart?: 'selection' | 'extra' | 'nodeId';
+    cases?: { value: string; label?: string; seq: BasicItem[] }[];
+    defaultSeq?: BasicItem[];
+};
+
+type CachedNode = { id: string; label: string; hasChildren?: boolean; nextFieldMeta?: unknown; pathLabels?: string[]; value?: string };
+
+interface SortableFormulaItemProps {
+    id: string;
+    item: BasicItem;
+    formulaId: string | number;
+    onRemove?: () => void;
+    onUpdate?: (next: BasicItem) => void;
+}
+
+const SortableFormulaItem: React.FC<SortableFormulaItemProps> = ({ id, item, formulaId, onRemove, onUpdate }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+    const style: React.CSSProperties = useMemo(() => ({ transform: CSS.Transform.toString(transform), transition }), [transform, transition]);
+
+    const { getTree, ensureTree, fetchFullTree, forceReload } = useAdvancedSelectCache();
+
+    // Ã‰tats UI auxiliaires
+    const [condInsertTargets, setCondInsertTargets] = useState<Record<string, { opt: 'expr' | 'then' | 'else'; formula: 'expr' | 'then' | 'else' }>>({});
+    const [showCascade, setShowCascade] = useState<Record<string, boolean>>({});
+            const [condAdvNav, setCondAdvNav] = useState<Record<string, { fieldId?: string; path: string[] }>>(() => {
+                try { return window.__condAdvNav || {}; } catch { return {}; }
+            });
+
+    // PrÃ©chargement Ã©ventuel de l'arbre quand un champ advanced_select est sÃ©lectionnÃ©
+    useEffect(() => {
+        if (item.type !== 'cond') return;
+        const cid = item.id || 'no-id';
+        const nav = condAdvNav[cid];
+        const fieldId = nav?.fieldId;
+        if (!fieldId) return;
+        try {
+            const store = useCRMStore.getState();
+            let typ: string | undefined;
+            outer: for (const b of store.blocks) for (const s of b.sections) for (const f of s.fields) { if (String(f.id) === String(fieldId)) { typ = f.type; break outer; } }
+            if (typ === 'advanced_select') { fetchFullTree(fieldId); }
+        } catch { /* noop */ }
+    }, [item.type, item.id, condAdvNav, fetchFullTree]);
+
+    // Persister la navigation pour Ã©viter perte d'arborescence lors de rafraÃ®chissements transitoires
+            useEffect(() => {
+                try { window.__condAdvNav = condAdvNav; } catch { /* noop */ }
+            }, [condAdvNav]);
+
+    const getBackgroundColor = () => {
+        if (item.type === 'cond') return 'bg-green-50 border-green-300';
+        if (item.type === 'switch') return 'bg-indigo-50 border-indigo-300';
+        return 'bg-white border-gray-200';
+    };
+
+    const handleRemoveClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const now = Date.now();
+        if (!window.lastDeleteClickTime || now - window.lastDeleteClickTime > 350) {
+            window.lastDeleteClickTime = now;
+            return; // double clic pour confirmer
+        }
+        onRemove?.();
+    };
+
+    const tokenColor = (tok: BasicItem) => {
+        switch (tok.type) {
+            case 'operator': return 'bg-yellow-50 border-yellow-300 text-yellow-700';
+            case 'field': return 'bg-blue-50 border-blue-300 text-blue-700';
+            case 'value': return 'bg-gray-50 border-gray-300 text-gray-700';
+            case 'function': return 'bg-purple-50 border-purple-300 text-purple-700';
+            case 'formula_ref': return 'bg-teal-50 border-teal-300 text-teal-700';
+            case 'adv_part': return 'bg-amber-50 border-amber-300 text-amber-700';
+            case 'cond': return 'bg-green-50 border-green-300 text-green-700';
+            default: return 'bg-white border-gray-200';
+        }
+    };
+
+    const buildFromDataTransfer = (e: React.DragEvent): BasicItem | null => {
+        const t = e.dataTransfer.getData('formula-element-type');
+        if (!t) return null;
+        if (t === 'field') {
+            const fid = e.dataTransfer.getData('field-id') || e.dataTransfer.getData('field-value');
+            const flabel = e.dataTransfer.getData('field-label') || fid;
+            if (!fid) return null;
+            return { type: 'field', value: fid, label: flabel, id: `field-${fid}-${Date.now()}` };
+        }
+        if (t === 'operator') {
+            const v = e.dataTransfer.getData('operator-value');
+            return { type: 'operator', value: v, label: v, id: `op-${Date.now()}` };
+        }
+        if (t === 'function') {
+            const v = e.dataTransfer.getData('function-value');
+            const l = e.dataTransfer.getData('function-label') || v;
+            return { type: 'function', value: v, label: l, id: `func-${Date.now()}` };
+        }
+        if (t === 'value') {
+            const v = e.dataTransfer.getData('value-value');
+            return { type: 'value', value: v, label: v, id: `val-${Date.now()}` };
+        }
+        if (t === 'formula_ref') {
+            const ref = e.dataTransfer.getData('formula-ref-id');
+            if (!ref) return null;
+            return { type: 'formula_ref', refFormulaId: ref, value: ref, label: e.dataTransfer.getData('formula-ref-label') || ref, id: `fref-${ref}-${Date.now()}` };
+        }
+        if (t === 'adv_part') {
+            const fid = e.dataTransfer.getData('adv-field-id');
+            const part = e.dataTransfer.getData('adv-part') as 'selection' | 'extra' | 'nodeId';
+            if (!fid || !part) return null;
+            return { type: 'adv_part', fieldId: fid, part, value: `${fid}.${part}`, label: e.dataTransfer.getData('adv-label') || `${fid}.${part}`, id: `adv-${fid}-${part}-${Date.now()}` };
+        }
+        return null;
+    };
+
+    const buildCondExprToken = (type: string, e: React.DragEvent): BasicItem | null => {
+        // rÃ©utilise buildFromDataTransfer
+        return buildFromDataTransfer(e);
+    };
+
+    const removeCondExpr = (idx: number) => {
+        const next: BasicItem = { ...item, condExpr: [...(item.condExpr || [])] };
+        next.condExpr!.splice(idx, 1);
+        onUpdate?.(next);
+    };
+
+    const makeDropHandler = (target: 'then' | 'else') => (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const created = buildFromDataTransfer(e);
+        if (!created) return;
+        const next: BasicItem = { ...item };
+        if (target === 'then') next.then = [...(next.then || []), created];
+        else next.else = [...(next.else || []), created];
+        onUpdate?.(next);
+    };
+
+    const removeNested = (where: 'then' | 'else', idx: number) => {
+        const next: BasicItem = { ...item };
+        if (where === 'then') { next.then = [...(item.then || [])]; next.then.splice(idx, 1); }
+        else { next.else = [...(item.else || [])]; next.else.splice(idx, 1); }
+        onUpdate?.(next);
+    };
+
+    const switchJustBound = false; // simplifiÃ©
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} className={`flex flex-col gap-1 p-2 rounded-md shadow-sm border ${getBackgroundColor()} text-sm font-medium text-gray-800 relative group ${item.type === 'cond' ? 'w-full' : 'min-w-[140px]'}`}>
+            <div className="flex items-center w-full">
+                <div {...listeners} className="cursor-grab touch-none p-1"><GripVertical size={16} className="text-gray-500" /></div>
+                <span className="mx-2 select-none truncate flex-1">{item.type === 'cond' ? (item.label || 'Condition') : (item.label || (item.value as string))}</span>
+                <button type="button" onClick={handleRemoveClick} onPointerDown={e => e.stopPropagation()} className="ml-2 p-1 rounded-full bg-red-200 text-red-600 opacity-0 group-hover:opacity-100 hover:bg-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 transition-opacity"><X size={14} /></button>
+            </div>
+            {item.type === 'cond' && (
+                <div className="mt-1 space-y-2">
+                    {/* Ligne d'expression conditionnelle */}
+                    <div className="bg-white/90 border border-green-200 rounded p-1 flex flex-col gap-1">
+                        {(() => {
+                            // Validation simple du pattern valeur / opÃ©rateur / valeur ...
+                            const tokens = (item.condExpr || []);
+                            const isValue = (t?: BasicItem) => !!t && ['field', 'value', 'formula_ref', 'adv_part', 'cond', 'function'].includes(t.type);
+                            let complete = false;
+                            if (tokens.length > 0 && tokens[0]?.type === 'function') complete = true; else {
+                                complete = tokens.length >= 3;
+                                if (complete) {
+                                    for (let i = 0; i < tokens.length; i++) {
+                                        if (i % 2 === 0) { if (!isValue(tokens[i])) { complete = false; break; } }
+                                        else { if (tokens[i]?.type !== 'operator') { complete = false; break; } }
+                                    }
+                                }
+                            }
+                            const statusColor = complete ? 'text-green-600' : 'text-red-600';
+                            const statusLabel = complete ? 'OK' : 'Incomplet';
+                            return (
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className={`text-[10px] font-semibold ${statusColor}`}>SI (fonction comme IF) ou (champ/valeur opÃ©rateur champ/valeur) â€¦</span>
+                                    <div className="flex items-center gap-1">
+                                        <Tag color={complete ? 'green' : 'red'} className="text-[10px] py-0 px-1">{statusLabel}</Tag>
+                                        {(tokens.length > 0) && (
+                                            <Button size="small" onClick={() => onUpdate && onUpdate({ ...item, condExpr: [] })}>
+                                                Vider
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        <div className="relative">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500/90 text-white px-2 py-0.5 rounded-full text-[10px] font-semibold pointer-events-none shadow-sm">Expression</div>
+                            <div
+                                className="formula-subdrop-zone min-w-[60px] min-h-[80px] px-2 py-2 rounded-lg flex items-center justify-center flex-wrap gap-1"
+                                id={`cond-expr-${formulaId}-${item.id}`}
+                                data-cond-item-id={item.id}
+                                onDragOver={e => {
+                                    if (item.type !== 'cond') return;
+                                    const t = e.dataTransfer.getData('formula-element-type');
+                                    if (['field', 'operator', 'formula_ref', 'adv_part', 'value', 'function'].includes(t)) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        (e.currentTarget as HTMLDivElement).classList.add('ring', 'ring-blue-300');
+                                    }
+                                }}
+                                onDragLeave={e => { (e.currentTarget as HTMLDivElement).classList.remove('ring', 'ring-blue-300'); }}
+                                onDrop={(e) => {
+                                    if (item.type !== 'cond') return;
+                                    const container = e.currentTarget as HTMLDivElement;
+                                    container.classList.remove('ring', 'ring-blue-300');
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const type = e.dataTransfer.getData('formula-element-type');
+                                    if (!['field', 'operator', 'formula_ref', 'adv_part', 'value', 'function'].includes(type)) return;
+                                    const created = buildCondExprToken(type, e);
+                                    if (!created) return;
+                                    const next: BasicItem = { ...item, condExpr: [...(item.condExpr || []), created] };
+                                    if (onUpdate) { onUpdate(next); }
+                                }}
+                            >
+                                {(item.condExpr || []).length === 0 && (
+                                    <div className="empty-state">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="empty-icon">
+                                            <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+                                            <path d="M18 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8l6 6v6z" />
+                                        </svg>
+                                        <p className="empty-title">DÃ©poser une expression (ex: Champ 1 &gt; Champ 2)</p>
+                                    </div>
+                                )}
+                                {(item.condExpr || []).length > 0 && (
+                                    <div className="flex gap-1 flex-wrap w-full justify-start">
+                                        {(item.condExpr || []).map((tok, idx) => (
+                                            <span key={idx} className={`px-1 py-0.5 rounded border text-[10px] flex items-center gap-1 ${tokenColor(tok)}`}>
+                                                {tok.label || (tok.value as string)}
+                                                <button type="button" className="text-red-500" onClick={() => removeCondExpr(idx)}>Ã—</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <p className="text-[9px] text-gray-500 mt-0.5 leading-snug">Construire l'expression: soit une fonction (IF, etc.) soit valeur (champ / part / formule / nombre) puis opÃ©rateur (+, -, &gt;, =, etc.) puis autre valeur. RÃ©pÃ©ter pour chaÃ®ner: Champ1 &gt; Champ2 &amp;&amp; Champ3 &lt; 10.</p>
+                    </div>
+                    {/* SÃ©lecteurs d'insertion rapide: formules et options */}
