@@ -208,9 +208,9 @@ async function main() {
   const prisma = new PrismaClient();
 
   try {
-    const models = Prisma.dmmf.datamodel.models;
-    const { graph } = buildDependencyGraph(models);
-    const ordered = filterModels(topoSort(graph), options.only);
+  const models = Prisma.dmmf.datamodel.models;
+  const graph = buildDependencyGraph(models);
+  const ordered = filterModels(topoSort(graph), options.only);
 
     if (ordered.length === 0) {
       console.warn("[prisma-import] Aucun modèle sélectionné pour l'import.");
