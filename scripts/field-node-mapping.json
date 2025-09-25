@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "notes": "Mapping explicite champ/options -> nodeIds pour stabiliser la détection des inputs de formules.",
+  "mappings": [
+    {
+      "labelMatch": "Facture annuelle électricité",
+      "nodeRole": "numerator",
+      "preferredNodeId": "" 
+    },
+    {
+      "labelMatch": "Consommation annuelle électricité",
+      "nodeRole": "denominator",
+      "preferredNodeId": ""
+    }
+  ]
+}

@@ -1,0 +1,291 @@
+/* Styles pour l'affichage des emails HTML */
+.email-content {
+  /* Reset et styles de base */
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* 🚀 SUPPRESSION RADICALE: Aucune bordure sur RIEN dans les emails */
+.email-content * {
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Styles spécifiques pour les newsletters */
+.email-content .email-newsletter {
+  width: 100% !important;
+  max-width: 100% !important;
+  background-color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.4;
+  color: #333;
+}
+
+.email-content .email-newsletter table {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 0 !important;
+  border: none !important;
+  background-color: transparent;
+}
+
+.email-content .email-newsletter td {
+  max-width: 100% !important;
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  vertical-align: top;
+}
+
+.email-content .email-newsletter img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  margin: 0 !important;
+}
+
+/* 🚀 AMÉLIORATION: Meilleur rendu pour les emails text/plain convertis */
+.email-content .email-newsletter {
+  padding: 20px;
+  margin: 0 auto;
+  max-width: 800px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Améliorer l'espacement du texte dans les newsletters */
+.email-content .email-newsletter p,
+.email-content .email-newsletter div {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+/* Améliorer l'affichage des titres */
+.email-content .email-newsletter h1,
+.email-content .email-newsletter h2,
+.email-content .email-newsletter h3 {
+  margin: 20px 0 10px 0;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+/* Améliorer l'affichage des liens dans les newsletters */
+.email-content .email-newsletter a {
+  color: #1890ff;
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background-color: rgba(24, 144, 255, 0.1);
+}
+
+.email-content .email-newsletter a:hover {
+  text-decoration: underline;
+  background-color: rgba(24, 144, 255, 0.2);
+}
+
+/* Améliorer l'affichage des listes */
+.email-content .email-newsletter ul,
+.email-content .email-newsletter ol {
+  margin: 12px 0;
+  padding-left: 20px;
+}
+
+.email-content .email-newsletter li {
+  margin: 6px 0;
+  line-height: 1.6;
+}
+
+/* 🚀 NOUVEAU: Reset complet pour les newsletters */
+.email-content .email-newsletter * {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Force la suppression des bordures sur TOUS les éléments dans les newsletters */
+.email-content .email-newsletter table,
+.email-content .email-newsletter td,
+.email-content .email-newsletter th,
+.email-content .email-newsletter tr,
+.email-content .email-newsletter div,
+.email-content .email-newsletter span,
+.email-content .email-newsletter p {
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Garder seulement l'espacement interne des cellules si spécifié */
+.email-content .email-newsletter td[style*="padding"] {
+  padding: inherit !important;
+}
+
+.email-content .email-newsletter div[style*="padding"] {
+  padding: inherit !important;
+}
+
+/* Styles pour les éléments HTML courants dans les emails */
+.email-content h1,
+.email-content h2,
+.email-content h3,
+.email-content h4,
+.email-content h5,
+.email-content h6 {
+  margin: 16px 0 8px 0;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.email-content h1 { font-size: 24px; }
+.email-content h2 { font-size: 20px; }
+.email-content h3 { font-size: 18px; }
+.email-content h4 { font-size: 16px; }
+.email-content h5 { font-size: 14px; }
+.email-content h6 { font-size: 12px; }
+
+.email-content p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.email-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+.email-content a {
+  color: #1890ff;
+  text-decoration: none;
+}
+
+.email-content a:hover {
+  text-decoration: underline;
+}
+
+.email-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  border: none !important;
+}
+
+.email-content table td,
+.email-content table th {
+  border: none !important;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.email-content table th {
+  background-color: #fafafa;
+  font-weight: 600;
+}
+
+.email-content blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background-color: #f6f6f6;
+  border-left: 4px solid #1890ff;
+  font-style: italic;
+}
+
+.email-content ul,
+.email-content ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.email-content li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+
+.email-content code {
+  background-color: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+
+.email-content pre {
+  background-color: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 12px 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Styles pour les signatures d'email */
+.email-content div[style*="font-size: 10px"],
+.email-content div[style*="font-size: 11px"],
+.email-content .email-signature {
+  border-top: 1px solid #e8e8e8;
+  margin-top: 16px;
+  padding-top: 12px;
+  font-size: 12px !important;
+  color: #666666;
+}
+
+/* Gestion des fonts personnalisées des emails */
+.email-content * {
+  max-width: 100%;
+}
+
+/* Correction pour les emails Outlook */
+.email-content .WordSection1 {
+  font-family: inherit !important;
+}
+
+/* Protection contre les styles malveillants */
+.email-content script {
+  display: none !important;
+}
+
+.email-content iframe {
+  display: none !important;
+}
+
+/* Amélioration de la lisibilité */
+.email-content {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Responsive pour mobile */
+@media (max-width: 768px) {
+  .email-content {
+    font-size: 16px;
+    line-height: 1.8;
+  }
+  
+  .email-content table {
+    font-size: 14px;
+  }
+  
+  .email-content .email-newsletter {
+    font-size: 14px !important;
+  }
+}

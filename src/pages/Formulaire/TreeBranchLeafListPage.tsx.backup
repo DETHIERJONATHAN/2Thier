@@ -1,0 +1,713 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Card,
+  Row,
+  Col,
+  Button,
+  Table,
+  Modal,
+  Form,
+  Input,
+  Select,
+  App,
+  Typography,
+  Space,
+  Tag,
+  Divider,
+  Tooltip,
+  Popconfirm,
+  ColorPicker,
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  CopyOutlined,
+  ProjectOutlined,
+  BranchesOutlined,
+  TableOutlined,
+  AppstoreOutlined,
+} from '@ant-design/icons';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+
+const { Title, Text } = Typography;
+const { Option } = Select;
+
+interface TreeBranchLeafTree {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  status: string;
+  createdAt: string;
+  _count?: {
+    Nodes: number;
+    Submissions: number;
+  };
+}
+
+interface CreateTreeForm {
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+}
+
+interface UpdateTreeForm extends CreateTreeForm {
+  status: 'draft' | 'published' | 'archived';
+}
+
+const TreeBranchLeafListPage: React.FC = () => {
+  const { api } = useAuthenticatedApi();
+  const { message } = App.useApp();
+  const navigate = useNavigate();
+  const [trees, setTrees] = useState<TreeBranchLeafTree[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedTree, setSelectedTree] = useState<TreeBranchLeafTree | null>(null);
+  const [form] = Form.useForm<CreateTreeForm>();
+  const [editForm] = Form.useForm();
+  
+  // Hooks
+  const { api } = useAuthenticatedApi();
+  const { message } = App.useApp();
+  const navigate = useNavigate();
+  const navigate = useNavigate();
+  const [trees, setTrees] = useState<TreeBranchLeafTree[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedTree, setSelectedTree] = useState<TreeBranchLeafTree | null>(null);
+  const [form] = Form.useForm<CreateTreeForm>();
+  const [editForm] = Form.useForm();ListPage: React.FC = () => {
+  const { api } = useAuthenticatedApi();
+  const { message } = App.useApp();
+  const navigate = useNavigate();
+  const [trees, setTrees] = useState<TreeBranchLeafTree[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedTree, setSelectedTree] = useState<TreeBranchLeafTree | null>(null);
+  const [form] = Form.useForm<CreateTreeForm>();
+  const [editForm] = Form.useForm();useNavigate } from 'react-router-dom';
+import {
+  Card,
+  Row,
+  Col,
+  Button,
+  Table,
+  Modal,
+  Form,
+  Input,
+  Select,
+  App,
+  Typography,
+  Space,
+  Tag,
+  Divider,
+  Tooltip,
+  Popconfirm,
+  ColorPicker,
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  CopyOutlined,
+  ProjectOutlined,
+  BranchesOutlined,
+  TableOutlined,
+  AppstoreOutlined,
+} from '@ant-design/icons';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+
+const { Title, Text } = Typography;
+const { Option } = Select;
+
+interface TreeBranchLeafTree {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color: string;
+  status: 'draft' | 'published' | 'archived';
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+  _count: {
+    Nodes: number;
+    Submissions: number;
+  };
+  Nodes?: TreeBranchLeafNode[];
+}
+
+interface CreateTreeForm {
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+}
+
+interface UpdateTreeForm extends CreateTreeForm {
+  status: 'draft' | 'published' | 'archived';
+}
+
+const TreeBranchLeafListPage: React.FC = () => {
+  const { api } = useAuthenticatedApi();
+  const { message } = App.useApp();
+  const [trees, setTrees] = useState<TreeBranchLeafTree[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedTree, setSelectedTree] = useState<TreeBranchLeafTree | null>(null);
+  const [form] = Form.useForm<CreateTreeForm>();
+  const [editForm] = Form.useForm();
+
+  // Charger la liste des arbres
+  const fetchTrees = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/api/treebranchleaf-v2/trees');
+      console.log('🔍 [TreeBranchLeaf] Réponse API:', response);
+      console.log('🔍 [TreeBranchLeaf] Type de response:', typeof response);
+      console.log('🔍 [TreeBranchLeaf] Est-ce un array?:', Array.isArray(response));
+      console.log('🔍 [TreeBranchLeaf] Nombre d\'arbres:', response?.length);
+      setTrees(response || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des arbres:', error);
+      message.error('Erreur lors du chargement des arbres');
+    } finally {
+      setLoading(false);
+    }
+  }, [api, message]);
+
+  /*
+  // 🧪 Fonction de test API pour vérifier l'enregistrement en base
+  const testApi = async () => {
+    try {
+      console.log('🧪 [TEST API] Début du test...');
+      
+      // Test 1 : Créer un arbre de test
+      const testTree = {
+        name: `Test API - ${new Date().toLocaleTimeString()}`,
+        description: 'Arbre créé pour tester l\'API TreeBranchLeaf',
+        status: 'draft' as const,
+        config: {
+          theme: 'default',
+          maxDepth: 5,
+          allowDuplicates: false
+        }
+      };
+      
+      console.log('🧪 [TEST API] Création d\'un arbre test:', testTree);
+      const treeResponse = await api.post('/api/treebranchleaf-v2/trees', testTree);
+      console.log('🧪 [TEST API] Réponse création arbre:', treeResponse);
+      
+      if (treeResponse?.id) {
+        message.success(`✅ Arbre créé avec l'ID: ${treeResponse.id}`);
+        
+        // Test 2 : Vérifier la récupération
+        console.log('🧪 [TEST API] Test de récupération...');
+        const getResponse = await api.get(`/api/treebranchleaf-v2/trees/${treeResponse.id}`);
+        console.log('🧪 [TEST API] Arbre récupéré:', getResponse);
+        
+        if (getResponse) {
+          message.success('✅ Récupération réussie');
+          
+          // Recharger les arbres pour voir les changements
+          await fetchTrees();
+          message.success('🎉 Test API complet réussi ! Vérifiez la console et la liste des arbres.');
+        } else {
+          message.error('❌ Erreur lors de la récupération');
+        }
+      } else {
+        message.error('❌ Erreur lors de la création de l\'arbre');
+      }
+      
+    } catch (error) {
+      console.error('🧪 [TEST API] Erreur:', error);
+      message.error(`❌ Erreur API: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+    }
+  };
+  */
+
+  useEffect(() => {
+    fetchTrees();
+  }, [fetchTrees]);
+
+  // Créer un nouvel arbre
+  const handleCreateTree = async (values: CreateTreeForm) => {
+    try {
+      await api.post('/api/treebranchleaf-v2/trees', values);
+      message.success('Arbre créé avec succès');
+      setCreateModalVisible(false);
+      form.resetFields();
+      fetchTrees();
+    } catch (error) {
+      console.error('Erreur lors de la création:', error);
+      message.error('Erreur lors de la création de l\'arbre');
+    }
+  };
+
+  // Mettre à jour un arbre
+  const handleUpdateTree = async (values: UpdateTreeForm) => {
+    if (!selectedTree) return;
+
+    try {
+      await api.put(`/api/treebranchleaf-v2/trees/${selectedTree.id}`, values);
+      message.success('Arbre mis à jour avec succès');
+      setEditModalVisible(false);
+      setSelectedTree(null);
+      editForm.resetFields();
+      fetchTrees();
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour:', error);
+      message.error('Erreur lors de la mise à jour de l\'arbre');
+    }
+  };
+
+  // Supprimer un arbre
+  const handleDeleteTree = async (treeId: string) => {
+    try {
+      await api.delete(`/api/treebranchleaf-v2/trees/${treeId}`);
+      message.success('Arbre supprimé avec succès');
+      fetchTrees();
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      message.error('Erreur lors de la suppression de l\'arbre');
+    }
+  };
+
+  // Dupliquer un arbre
+  const handleDuplicateTree = async (tree: TreeBranchLeafTree) => {
+    try {
+      await api.post('/api/treebranchleaf-v2/trees', {
+        name: `${tree.name} (Copie)`,
+        description: tree.description,
+        icon: tree.icon,
+        color: tree.color,
+      });
+      message.success('Arbre dupliqué avec succès');
+      fetchTrees();
+    } catch (error) {
+      console.error('Erreur lors de la duplication:', error);
+      message.error('Erreur lors de la duplication de l\'arbre');
+    }
+  };
+
+  // Ouvrir le modal d'édition
+  const openEditModal = (tree: TreeBranchLeafTree) => {
+    setSelectedTree(tree);
+    editForm.setFieldsValue({
+      name: tree.name,
+      description: tree.description,
+      icon: tree.icon,
+      color: tree.color,
+      status: tree.status,
+    });
+    setEditModalVisible(true);
+  };
+
+  const columns = [
+    {
+      title: 'Nom',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string, record: TreeBranchLeafTree) => (
+        <Space>
+          <div
+            style={{
+              width: 12,
+              height: 12,
+              backgroundColor: record.color,
+              borderRadius: 2,
+            }}
+          />
+          <span style={{ fontWeight: 500 }}>{text}</span>
+        </Space>
+      ),
+    },
+    {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description',
+      render: (text: string) => (
+        <Text type="secondary" ellipsis style={{ maxWidth: 200 }}>
+          {text || 'Aucune description'}
+        </Text>
+      ),
+    },
+    {
+      title: 'Statut',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => {
+        const statusColors = {
+          draft: 'orange',
+          published: 'green',
+          archived: 'grey',
+        };
+        const statusLabels = {
+          draft: 'Brouillon',
+          published: 'Publié',
+          archived: 'Archivé',
+        };
+        return (
+          <Tag color={statusColors[status as keyof typeof statusColors]}>
+            {statusLabels[status as keyof typeof statusLabels]}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: 'Nœuds',
+      key: 'nodes',
+      render: (_: unknown, record: TreeBranchLeafTree) => (
+        <Space>
+          <BranchesOutlined />
+          <span>{record._count.Nodes}</span>
+        </Space>
+      ),
+    },
+    {
+      title: 'Soumissions',
+      key: 'submissions',
+      render: (_: unknown, record: TreeBranchLeafTree) => (
+        <Space>
+          <TableOutlined />
+          <span>{record._count.Submissions}</span>
+        </Space>
+      ),
+    },
+    {
+      title: 'Dernière modification',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      render: (date: string) => new Date(date).toLocaleDateString('fr-FR'),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_: unknown, record: TreeBranchLeafTree) => (
+        <Space>
+          <Tooltip title="🎯 SYSTÈME 3 COLONNES PARFAIT">
+            <Button
+              type="primary"
+              icon={<AppstoreOutlined />}
+              size="small"
+              style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+              onClick={() => {
+                // Navigation vers votre système 3 colonnes PARFAIT
+                window.location.href = `/formulaire/treebranchleaf/${record.id}`;
+              }}
+            >
+              3 Colonnes
+            </Button>
+          </Tooltip>
+          <Tooltip title="Éditer l'arbre (3 colonnes v2)">
+            <Button
+              type="text"
+              icon={<ProjectOutlined />}
+              onClick={() => {
+                // Navigation vers l'éditeur 3 colonnes v2
+                window.location.href = `/formulaire/treebranchleaf/${record.id}`;
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="Voir les détails">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              onClick={() => {
+                // Navigation vers la vue formulaire (preview)
+                window.open(`/formulaire/treebranchleaf/${record.id}/preview`, '_blank');
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="Modifier les propriétés">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => openEditModal(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Dupliquer">
+            <Button
+              type="text"
+              icon={<CopyOutlined />}
+              onClick={() => handleDuplicateTree(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Supprimer">
+            <Popconfirm
+              title="Supprimer cet arbre ?"
+              description="Cette action est irréversible. Toutes les données associées seront perdues."
+              onConfirm={() => handleDeleteTree(record.id)}
+              okText="Supprimer"
+              cancelText="Annuler"
+              okType="danger"
+            >
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ padding: '24px' }}>
+      {/* En-tête */}
+      <Card style={{ marginBottom: '24px' }}>
+        <Row justify="space-between" align="middle">
+          <Col>
+            <Space direction="vertical" size="small">
+              <Title level={2} style={{ margin: 0 }}>
+                <ProjectOutlined style={{ color: '#10b981', marginRight: 8 }} />
+                TreeBranchLeaf
+              </Title>
+              <Text type="secondary">
+                Système de formulaires arborescents drag & drop avec logique métier avancée
+              </Text>
+            </Space>
+          </Col>
+          <Col>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              size="large"
+              onClick={() => setCreateModalVisible(true)}
+            >
+              Créer un arbre
+            </Button>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Statistiques rapides */}
+      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+        <Col xs={24} sm={8}>
+          <Card>
+            <div style={{ textAlign: 'center' }}>
+              <ProjectOutlined style={{ fontSize: 24, color: '#1890ff', marginBottom: 8 }} />
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 'bold' }}>{trees?.length || 0}</div>
+                <div style={{ color: '#8c8c8c' }}>Arbres créés</div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card>
+            <div style={{ textAlign: 'center' }}>
+              <BranchesOutlined style={{ fontSize: 24, color: '#52c41a', marginBottom: 8 }} />
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 'bold' }}>
+                  {(trees || []).reduce((sum, tree) => sum + tree._count.Nodes, 0)}
+                </div>
+                <div style={{ color: '#8c8c8c' }}>Nœuds totaux</div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card>
+            <div style={{ textAlign: 'center' }}>
+              <TableOutlined style={{ fontSize: 24, color: '#722ed1', marginBottom: 8 }} />
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 'bold' }}>
+                  {(trees || []).reduce((sum, tree) => sum + tree._count.Submissions, 0)}
+                </div>
+                <div style={{ color: '#8c8c8c' }}>Soumissions</div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Tableau des arbres */}
+      <Card>
+        {console.log('🔍 [RENDER] trees state:', trees, 'loading:', loading)}
+        <Table
+          columns={columns}
+          dataSource={trees}
+          rowKey="id"
+          loading={loading}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total) => `Total: ${total} arbres`,
+          }}
+        />
+      </Card>
+
+      {/* Modal de création */}
+      <Modal
+        title="Créer un nouvel arbre TreeBranchLeaf"
+        open={createModalVisible}
+        onCancel={() => {
+          setCreateModalVisible(false);
+          form.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleCreateTree}
+          requiredMark="optional"
+        >
+          <Form.Item
+            label="Nom de l'arbre"
+            name="name"
+            rules={[{ required: true, message: 'Veuillez saisir un nom' }]}
+          >
+            <Input placeholder="Ex: Configuration panneaux solaires" />
+          </Form.Item>
+
+          <Form.Item label="Description" name="description">
+            <Input.TextArea
+              rows={3}
+              placeholder="Description détaillée de cet arbre (optionnel)"
+            />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="Icône" name="icon">
+                <Select placeholder="Choisir une icône" allowClear>
+                  <Option value="ProjectOutlined">🌳 Arbre</Option>
+                  <Option value="BranchesOutlined">🌿 Branches</Option>
+                  <Option value="SettingOutlined">⚙️ Configuration</Option>
+                  <Option value="ApiOutlined">🔌 API</Option>
+                  <Option value="TableOutlined">📊 Tableau</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="Couleur" name="color">
+                <ColorPicker
+                  showText
+                  format="hex"
+                  placeholder="Couleur de l'arbre"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider />
+
+          <Row justify="end" gutter={8}>
+            <Col>
+              <Button onClick={() => {
+                setCreateModalVisible(false);
+                form.resetFields();
+              }}>
+                Annuler
+              </Button>
+            </Col>
+            <Col>
+              <Button type="primary" htmlType="submit">
+                Créer l'arbre
+              </Button>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
+
+      {/* Modal d'édition */}
+      <Modal
+        title="Modifier l'arbre TreeBranchLeaf"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setSelectedTree(null);
+          editForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={handleUpdateTree}
+          requiredMark="optional"
+        >
+          <Form.Item
+            label="Nom de l'arbre"
+            name="name"
+            rules={[{ required: true, message: 'Veuillez saisir un nom' }]}
+          >
+            <Input placeholder="Ex: Configuration panneaux solaires" />
+          </Form.Item>
+
+          <Form.Item label="Description" name="description">
+            <Input.TextArea
+              rows={3}
+              placeholder="Description détaillée de cet arbre (optionnel)"
+            />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item label="Statut" name="status">
+                <Select>
+                  <Option value="draft">Brouillon</Option>
+                  <Option value="published">Publié</Option>
+                  <Option value="archived">Archivé</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="Icône" name="icon">
+                <Select placeholder="Choisir une icône" allowClear>
+                  <Option value="TreeOutlined">🌳 Arbre</Option>
+                  <Option value="BranchesOutlined">🌿 Branches</Option>
+                  <Option value="SettingOutlined">⚙️ Configuration</Option>
+                  <Option value="ApiOutlined">🔌 API</Option>
+                  <Option value="TableOutlined">📊 Tableau</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="Couleur" name="color">
+                <ColorPicker
+                  showText
+                  format="hex"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider />
+
+          <Row justify="end" gutter={8}>
+            <Col>
+              <Button onClick={() => {
+                setEditModalVisible(false);
+                setSelectedTree(null);
+                editForm.resetFields();
+              }}>
+                Annuler
+              </Button>
+            </Col>
+            <Col>
+              <Button type="primary" htmlType="submit">
+                Mettre à jour
+              </Button>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
+    </div>
+  );
+};
+
+export default TreeBranchLeafListPage;

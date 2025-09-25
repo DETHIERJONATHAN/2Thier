@@ -1,0 +1,17 @@
+/* Styles pour la page des permissions */
+.permissions-table .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.permissions-table .ant-table-tbody > tr:hover > td {
+  background: #f0f9ff;
+}
+
+.permissions-table .ant-switch {
+  transition: all 0.2s ease-in-out;
+}
+
+.permissions-table .ant-switch:hover {
+  transform: scale(1.05);
+}

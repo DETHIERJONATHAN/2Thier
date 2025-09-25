@@ -1,0 +1,230 @@
+/* ========================
+   LAYOUT CRM - STYLES PROPRES
+   ======================== */
+
+/* Container principal */
+.crm-layout {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+/* Sidebar stylé */
+.crm-sidebar {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-right: 1px solid rgba(229, 231, 235, 0.8);
+}
+
+.crm-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.crm-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.crm-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+.crm-sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8);
+}
+
+/* Header du sidebar avec logo */
+.crm-sidebar .sidebar-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem;
+  border-radius: 0;
+}
+
+.crm-sidebar .sidebar-header .logo {
+  filter: brightness(0) invert(1);
+}
+
+/* Navigation principale du sidebar */
+.crm-sidebar .nav-main {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+}
+
+.crm-sidebar .nav-main a {
+  position: relative;
+  overflow: hidden;
+}
+
+.crm-sidebar .nav-main a::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.crm-sidebar .nav-main a:hover::before {
+  left: 100%;
+}
+
+/* Sections de modules */
+.crm-sidebar .modules-section {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.crm-sidebar .section-title {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 8px;
+  margin: 0.25rem 0;
+  transition: all 0.3s ease;
+}
+
+.crm-sidebar .section-title:hover {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+  transform: translateX(2px);
+}
+
+/* Éléments de navigation des modules */
+.crm-sidebar .module-nav-item {
+  position: relative;
+  border-radius: 6px;
+  margin: 0.25rem 0;
+  transition: all 0.3s ease;
+}
+
+.crm-sidebar .module-nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+}
+
+.crm-sidebar .module-nav-item:hover::before,
+.crm-sidebar .module-nav-item.active::before {
+  transform: scaleY(1);
+}
+
+.crm-sidebar .module-nav-item.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(29, 78, 216, 0.1) 100%);
+  color: #1d4ed8;
+}
+
+.crm-sidebar .module-nav-item:hover {
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.1) 0%, rgba(107, 114, 128, 0.1) 100%);
+  transform: translateX(4px);
+}
+
+/* Footer utilisateur */
+.crm-sidebar .user-footer {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-top: 1px solid rgba(229, 231, 235, 0.8);
+}
+
+.crm-sidebar .user-avatar {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+/* Header stylé */
+.crm-header {
+  background: linear-gradient(90deg, #ffffff 0%, #f8fafc 100%);
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+}
+
+/* Contenu principal */
+.crm-main-content {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  min-height: calc(100vh - 4rem);
+}
+
+/* Amélioration des cartes et contenus */
+.content-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.content-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Animations de transition */
+.layout-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Icônes animées */
+.icon-bounce {
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0,0,0);
+  }
+  40%, 43% {
+    transform: translate3d(0,-8px,0);
+  }
+  70% {
+    transform: translate3d(0,-4px,0);
+  }
+  90% {
+    transform: translate3d(0,-2px,0);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .crm-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .crm-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  
+  .crm-main-content {
+    margin-left: 0 !important;
+  }
+}
+
+/* Animation de chargement */
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
+}

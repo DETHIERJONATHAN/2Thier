@@ -1,0 +1,2 @@
+# CODEOWNERS - exige la review des owners si la règle de protection l'impose
+* @your-org/maintainers

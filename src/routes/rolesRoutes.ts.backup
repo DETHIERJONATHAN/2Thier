@@ -1,0 +1,287 @@
+import { Router, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { authMiddleware } from '../middlewares/auth.js';
+import type { AuthenticatedRequest } from '../middlewares/auth.js';
+
+const router = Router();
+const prisma = new PrismaClient();
+
+// Appliquer l'authentification à toutes les routes
+router.use(authMiddleware);
+
+// GET /api/roles - Récupérer tous les rôles avec LOGIQUE SUPERADMIN UNIFIÉE
+router.get('/', async (req: AuthenticatedRequest, res) => {
+  console.log('[ROLES] GET /roles - Récupération des rôles');
+  
+  const requestingUser = req.user;
+  const { organizationId } = req.query;
+  
+  console.log(`[ROLES] Requesting user role: ${requestingUser?.role}`);
+  console.log(`[ROLES] Organization ID: ${organizationId || requestingUser?.organizationId}`);
+  
+  try {
+    // LOGIQUE SUPERADMIN UNIFIÉE - MÊME SYSTÈME QUE USERS
+    if (requestingUser?.role === 'super_admin') {
+      console.log('[ROLES] Super admin request - showing ALL roles from ALL organizations.');
+      
+      const allRoles = await prisma.role.findMany({
+        include: {
+          Permission: true,
+          UserOrganizations: {
+            include: {
+              Organization: true,
+              User: true
+            }
+          },
+          Organization: true // Ajout pour avoir l'organisation directe du rôle
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+      
+      console.log(`[ROLES] Found ${allRoles.length} total roles for super admin.`);
+      res.json({ success: true, data: allRoles });
+      return;
+    }
+    
+    // Utilisateur normal: filtré par organisation
+    // Gérer la valeur spéciale "current" du frontend
+    const resolvedOrgId = organizationId === 'current' ? requestingUser?.organizationId : organizationId;
+    const finalOrganizationId = resolvedOrgId || requestingUser?.organizationId;
+    console.log(`[ROLES] Standard request for orgId: ${finalOrganizationId} (original: ${organizationId})`);
+    
+    if (!finalOrganizationId) {
+      console.log('[ROLES] Pas d\'organisation spécifiée');
+      res.status(400).json({ success: false, message: 'Organization ID required' });
+      return;
+    }
+    
+    const roles = await prisma.role.findMany({
+      where: {
+        UserOrganizations: {
+          some: {
+            organizationId: finalOrganizationId as string
+          }
+        }
+      },
+      include: {
+        Permission: true,
+        UserOrganizations: {
+          include: {
+            Organization: true,
+            User: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+    
+    console.log(`[ROLES] Found ${roles.length} roles for org ${finalOrganizationId}.`);
+    res.json({ success: true, data: roles });
+    
+  } catch (error: unknown) {
+    console.error('[ROLES] Error fetching roles:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// GET /api/roles/:id - Récupérer un rôle spécifique
+router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  console.log(`[ROLES] GET /roles/${id} - Récupération du rôle`);
+  
+  if (!req.user) {
+    res.status(401).json({ success: false, message: "Utilisateur non authentifié." });
+    return;
+  }
+
+  try {
+    const role = await prisma.role.findUnique({
+      where: { id },
+      include: {
+        UserOrganizations: {
+          include: {
+            Organization: true,
+            User: true
+          }
+        }
+      }
+    });
+
+    if (!role) {
+      res.status(404).json({ success: false, message: "Rôle non trouvé." });
+      return;
+    }
+
+    // Vérifier les permissions
+    const requestingUser = req.user;
+    if (requestingUser.role !== 'super_admin') {
+      if (!requestingUser.organizationId || role.organizationId !== requestingUser.organizationId) {
+        res.status(403).json({ success: false, message: "Accès refusé à ce rôle." });
+        return;
+      }
+    }
+
+    res.json({ success: true, data: role });
+  } catch (error) {
+    console.error('[ROLES] Error fetching role:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// POST /api/roles - Créer un nouveau rôle
+router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  console.log('[ROLES] POST /roles - Création d\'un rôle');
+  
+  if (!req.user) {
+    res.status(401).json({ success: false, message: "Utilisateur non authentifié." });
+    return;
+  }
+
+  const requestingUser = req.user;
+  const { name, description, organizationId } = req.body;
+
+  if (!name) {
+    res.status(400).json({ success: false, message: "Le nom du rôle est requis." });
+    return;
+  }
+
+  // Vérifier les permissions
+  if (requestingUser.role !== 'super_admin') {
+    const targetOrgId = organizationId || requestingUser.organizationId;
+    if (!requestingUser.organizationId || requestingUser.organizationId !== targetOrgId) {
+      res.status(403).json({ success: false, message: "Accès refusé pour créer ce rôle." });
+      return;
+    }
+  }
+
+  try {
+    const newRole = await prisma.role.create({
+      data: {
+        id: `role_${Date.now()}`,
+        name,
+        label: name, // Le label est obligatoire, on utilise le name
+        description: description || '',
+        organizationId: organizationId || requestingUser.organizationId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      include: {
+        UserOrganizations: {
+          include: {
+            Organization: true,
+            User: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({ success: true, data: newRole });
+  } catch (error) {
+    console.error('[ROLES] Error creating role:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// PUT /api/roles/:id - Mettre à jour un rôle
+router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  console.log(`[ROLES] PUT /roles/${id} - Mise à jour du rôle`);
+  
+  if (!req.user) {
+    res.status(401).json({ success: false, message: "Utilisateur non authentifié." });
+    return;
+  }
+
+  const requestingUser = req.user;
+  const { name, description } = req.body;
+
+  try {
+    // Vérifier que le rôle existe
+    const existingRole = await prisma.role.findUnique({
+      where: { id }
+    });
+
+    if (!existingRole) {
+      res.status(404).json({ success: false, message: "Rôle non trouvé." });
+      return;
+    }
+
+    // Vérifier les permissions
+    if (requestingUser.role !== 'super_admin') {
+      if (!requestingUser.organizationId || existingRole.organizationId !== requestingUser.organizationId) {
+        res.status(403).json({ success: false, message: "Accès refusé pour modifier ce rôle." });
+        return;
+      }
+    }
+
+    const updatedRole = await prisma.role.update({
+      where: { id },
+      data: {
+        name: name || existingRole.name,
+        description: description !== undefined ? description : existingRole.description,
+        updatedAt: new Date()
+      },
+      include: {
+        UserOrganizations: {
+          include: {
+            Organization: true,
+            User: true
+          }
+        }
+      }
+    });
+
+    res.json({ success: true, data: updatedRole });
+  } catch (error) {
+    console.error('[ROLES] Error updating role:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// DELETE /api/roles/:id - Supprimer un rôle
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  console.log(`[ROLES] DELETE /roles/${id} - Suppression du rôle`);
+  
+  if (!req.user) {
+    res.status(401).json({ success: false, message: "Utilisateur non authentifié." });
+    return;
+  }
+
+  const requestingUser = req.user;
+
+  try {
+    // Vérifier que le rôle existe
+    const existingRole = await prisma.role.findUnique({
+      where: { id }
+    });
+
+    if (!existingRole) {
+      res.status(404).json({ success: false, message: "Rôle non trouvé." });
+      return;
+    }
+
+    // Vérifier les permissions
+    if (requestingUser.role !== 'super_admin') {
+      if (!requestingUser.organizationId || existingRole.organizationId !== requestingUser.organizationId) {
+        res.status(403).json({ success: false, message: "Accès refusé pour supprimer ce rôle." });
+        return;
+      }
+    }
+
+    await prisma.role.delete({
+      where: { id }
+    });
+
+    res.json({ success: true, message: 'Rôle supprimé avec succès.' });
+  } catch (error) {
+    console.error('[ROLES] Error deleting role:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+export default router;

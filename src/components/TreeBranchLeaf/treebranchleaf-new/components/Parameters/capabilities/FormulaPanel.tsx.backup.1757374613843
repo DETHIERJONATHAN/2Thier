@@ -1,0 +1,773 @@
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { Card, Typography, message, Space, Button, Tooltip, Modal, Input, Select, Divider } from 'antd';
+import { PlusOutlined, DeleteOutlined, CalculatorOutlined } from '@ant-design/icons';
+import TokenDropZone from '../shared/TokenDropZoneFormula';
+import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
+import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
+
+const { Title, Text } = Typography;
+
+interface FormulaPanelProps {
+  treeId?: string;
+  nodeId: string;
+  value?: Record<string, unknown>;
+  onChange?: (val: Record<string, unknown>) => void;
+  readOnly?: boolean;
+}
+
+type FormulaInstance = { 
+  id: string; 
+  name: string; 
+  tokens: string[]; 
+  enabled?: boolean;
+  description?: string;
+};
+
+const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly }) => {
+  // Authentified API hook (stable)
+  const { api } = useAuthenticatedApi();
+  
+  // Refs pour cleanup et stabilité
+  const mountedRef = useRef<boolean>(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const isInitializing = useRef<boolean>(false);
+  
+  // État local stable
+  const [localTokens, setLocalTokens] = useState<string[]>([]);
+  const [localName, setLocalName] = useState<string>('');
+  const [localDescription, setLocalDescription] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  
+  // État UI
+  const [pickRef, setPickRef] = useState(false);
+  const [nodeCache, setNodeCache] = useState<Record<string, { label: string; type: string }>>({});
+  const [showNumberModal, setShowNumberModal] = useState(false);
+  const [numberInput, setNumberInput] = useState<string>('');
+  const [showTextModal, setShowTextModal] = useState(false);
+  const [textInput, setTextInput] = useState<string>('');
+  const [testValues, setTestValues] = useState<Record<string, string>>({});
+  const [testResult, setTestResult] = useState<string>('');
+  const [testError, setTestError] = useState<string>('');
+  
+  // Multi instances depuis la nouvelle table
+  const [instances, setInstances] = useState<FormulaInstance[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Utilitaire pour normaliser les tokens depuis la base de données
+  const normalizeTokens = useCallback((tokens: unknown): string[] => {
+    if (!tokens) return [];
+    if (Array.isArray(tokens)) {
+      return tokens.map(token => typeof token === 'string' ? token : String(token));
+    }
+    return [];
+  }, []);
+
+  // Cleanup au démontage
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // 🚀 NOUVEAU : Chargement depuis la table dédiée TreeBranchLeafNodeFormula
+  useEffect(() => {
+    if (isInitializing.current || isLoaded || !nodeId) return;
+    
+    console.log('🚀 FormulaPanel: Chargement depuis nouvelle table pour nodeId:', nodeId);
+    isInitializing.current = true;
+
+    (async () => {
+      try {
+        // Charger les formules depuis la table TreeBranchLeafNodeFormula
+        const response = await api.get(`/api/treebranchleaf/nodes/${nodeId}/formulas`) as { formulas: FormulaInstance[] };
+        const formulas = response.formulas || [];
+        
+        console.log('🚀 FormulaPanel: Formules chargées depuis table:', formulas.length);
+        
+        if (formulas.length > 0) {
+          if (!mountedRef.current) {
+            console.log('🚀 FormulaPanel: Component unmounted, stopping processing');
+            return;
+          }
+          
+          const first = formulas[0];
+          setInstances(formulas);
+          setActiveId(first.id);
+          setLocalTokens(normalizeTokens(first.tokens));
+          setLocalName(first.name || '');
+          setLocalDescription(first.description || '');
+          
+          console.log('🚀 FormulaPanel: Chargé', formulas.length, 'formules depuis table');
+          console.log('🚀 FormulaPanel: Formule active:', first);
+        } else {
+          // Créer une formule par défaut si aucune n'existe
+          console.log('🚀 FormulaPanel: Aucune formule trouvée, création d\'une formule par défaut');
+          
+          if (!mountedRef.current) return;
+          
+          const defaultFormula: FormulaInstance = { 
+            id: `temp_${Date.now()}`, 
+            name: 'Nouvelle formule', 
+            tokens: [],
+            description: ''
+          };
+          
+          setInstances([defaultFormula]);
+          setActiveId(defaultFormula.id);
+          setLocalTokens([]);
+          setLocalName('Nouvelle formule');
+          setLocalDescription('');
+        }
+        
+        if (mountedRef.current) {
+          setIsLoaded(true);
+        }
+      } catch (err) {
+        console.error('❌ FormulaPanel: Erreur chargement formules depuis table:', err);
+        
+        // En cas d'erreur, créer une formule par défaut
+        if (mountedRef.current) {
+          const fallbackFormula: FormulaInstance = { 
+            id: `temp_${Date.now()}`, 
+            name: 'Nouvelle formule', 
+            tokens: [],
+            description: ''
+          };
+          
+          setInstances([fallbackFormula]);
+          setActiveId(fallbackFormula.id);
+          setLocalTokens([]);
+          setLocalName('Nouvelle formule');
+          setLocalDescription('');
+          setIsLoaded(true);
+        }
+      } finally {
+        isInitializing.current = false;
+      }
+    })();
+
+    return () => { 
+      mountedRef.current = false; 
+    };
+  }, [api, nodeId, isLoaded, normalizeTokens]);
+
+  // 🚀 NOUVEAU : Sauvegarde dans la table dédiée
+  const saveFormula = useCallback(async (nextTokens: string[], nextName: string, nextDescription?: string) => {
+    if (!mountedRef.current || isSaving || !isLoaded || !activeId) return;
+    
+    console.log('🚀 FormulaPanel: Sauvegarde dans table dédiée', { 
+      activeId, 
+      tokens: nextTokens, 
+      name: nextName,
+      description: nextDescription
+    });
+    
+    // Debounce pour éviter les appels trop fréquents
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (!mountedRef.current || isSaving || !activeId) return;
+      
+      setIsSaving(true);
+      try {
+        const activeFormula = instances.find(f => f.id === activeId);
+        if (!activeFormula) return;
+        
+        // Déterminer s'il faut créer ou mettre à jour
+        const isTemporary = activeId.startsWith('temp_');
+        
+        if (isTemporary) {
+          // Créer une nouvelle formule dans la table TreeBranchLeafNodeFormula
+          const created = await api.post(`/api/treebranchleaf/nodes/${nodeId}/formulas`, {
+            name: nextName,
+            tokens: nextTokens,
+            description: nextDescription || ''
+          }) as FormulaInstance;
+          
+          console.log('✅ FormulaPanel: Nouvelle formule créée:', created.id);
+          
+          // Mettre à jour l'état local avec le vrai ID
+          const updatedInstances = instances.map(f => 
+            f.id === activeId 
+              ? { ...created, tokens: nextTokens, name: nextName, description: nextDescription || '' }
+              : f
+          );
+          
+          setInstances(updatedInstances);
+          setActiveId(created.id);
+          
+        } else {
+          // Mettre à jour la formule existante dans la table TreeBranchLeafNodeFormula
+          await api.put(`/api/treebranchleaf/nodes/${nodeId}/formulas/${activeId}`, {
+            name: nextName,
+            tokens: nextTokens,
+            description: nextDescription || ''
+          });
+          
+          console.log('✅ FormulaPanel: Formule mise à jour:', activeId);
+          
+          // Mettre à jour l'état local
+          const updatedInstances = instances.map(f => 
+            f.id === activeId 
+              ? { ...f, tokens: nextTokens, name: nextName, description: nextDescription || '' }
+              : f
+          );
+          
+          setInstances(updatedInstances);
+        }
+
+        // Notifier le parent
+        if (mountedRef.current) {
+          onChange?.({ 
+            formulas: instances,
+            activeFormula: { tokens: nextTokens, name: nextName, description: nextDescription, id: activeId },
+            totalCount: instances.length
+          });
+        }
+        
+        console.log('✅ FormulaPanel: Sauvegarde terminée');
+      } catch (err) {
+        console.error('❌ FormulaPanel: Erreur sauvegarde', err);
+        if (mountedRef.current) {
+          message.error('Erreur de sauvegarde automatique');
+        }
+      } finally {
+        if (mountedRef.current) {
+          setIsSaving(false);
+        }
+      }
+    }, 500); // Debounce 500ms
+  }, [api, nodeId, activeId, instances, onChange, isSaving, isLoaded]);
+
+  // Gestion des changements de tokens
+  const handleTokensChange = useCallback((nextTokens: string[]) => {
+    if (!mountedRef.current) return;
+    
+    setLocalTokens(nextTokens);
+    saveFormula(nextTokens, localName, localDescription);
+  }, [saveFormula, localName, localDescription]);
+
+  // Gestion des changements de nom
+  const handleNameChange = useCallback((nextName: string) => {
+    if (!mountedRef.current) return;
+    
+    setLocalName(nextName);
+    saveFormula(localTokens, nextName, localDescription);
+  }, [saveFormula, localTokens, localDescription]);
+
+  // Gestion des changements de description
+  const handleDescriptionChange = useCallback((nextDescription: string) => {
+    if (!mountedRef.current) return;
+    
+    setLocalDescription(nextDescription);
+    saveFormula(localTokens, localName, nextDescription);
+  }, [saveFormula, localTokens, localName]);
+
+  // 🚀 NOUVEAU : Ajouter une nouvelle formule
+  const addNewFormula = useCallback(async () => {
+    try {
+      const newFormula: FormulaInstance = {
+        id: `temp_${Date.now()}`,
+        name: `Formule ${instances.length + 1}`,
+        tokens: [],
+        description: ''
+      };
+      
+      const updatedInstances = [...instances, newFormula];
+      setInstances(updatedInstances);
+      setActiveId(newFormula.id);
+      setLocalTokens([]);
+      setLocalName(newFormula.name);
+      setLocalDescription('');
+      
+      console.log('✅ FormulaPanel: Nouvelle formule ajoutée (temporaire):', newFormula.id);
+      message.success('Nouvelle formule ajoutée');
+    } catch (err) {
+      console.error('❌ FormulaPanel: Erreur ajout formule', err);
+      message.error('Impossible d\'ajouter une nouvelle formule');
+    }
+  }, [instances]);
+
+  // 🚀 NOUVEAU : Supprimer une formule
+  const deleteFormula = useCallback(async () => {
+    if (!activeId || isSaving) return; // Protection contre les multi-clics
+    
+    const activeFormula = instances.find(it => it.id === activeId);
+    const isLastFormula = instances.length <= 1;
+    
+    console.log('🗑️ FormulaPanel: deleteFormula appelé', {
+      activeId,
+      activeFormula: activeFormula?.name,
+      instancesCount: instances.length,
+      isLastFormula,
+      nodeId,
+      isSaving
+    });
+    
+    console.log('🗑️ FormulaPanel: Demande de confirmation...');
+    
+    // Utilisation d'une approche plus robuste pour la confirmation
+    const confirmAction = () => new Promise<boolean>((resolve) => {
+      Modal.confirm({
+        title: isLastFormula ? 'Vider cette formule ?' : 'Supprimer cette formule ?',
+        content: isLastFormula 
+          ? 'Cette action videra la formule (impossible de supprimer la dernière).' 
+          : `Supprimer définitivement "${activeFormula?.name || 'cette formule'}" ? Les autres formules seront conservées.`,
+        okText: isLastFormula ? 'Vider' : 'Supprimer',
+        cancelText: 'Annuler',
+        okType: 'danger',
+        onOk: () => {
+          console.log('🗑️ FormulaPanel: Confirmation OK reçue');
+          resolve(true);
+        },
+        onCancel: () => {
+          console.log('🗑️ FormulaPanel: Confirmation annulée');
+          resolve(false);
+        }
+      });
+    });
+
+    try {
+      const confirmed = await confirmAction();
+      if (!confirmed) {
+        console.log('🗑️ FormulaPanel: Confirmation annulee par l\'utilisateur');
+        return;
+      }
+
+      console.log('🗑️ FormulaPanel: Début suppression/vidage', { isLastFormula, activeId });
+      
+      if (isLastFormula) {
+        // Vider la dernière formule (dynamique)
+        console.log('🗑️ FormulaPanel: Vidage de la dernière formule');
+        setLocalTokens([]);
+        setLocalName(activeFormula?.name || 'Formule 1');
+        setLocalDescription('');
+        
+        if (!activeId.startsWith('temp_')) {
+          console.log('🗑️ FormulaPanel: Appel PUT API pour vider...');
+          await api.put(`/api/treebranchleaf/nodes/${nodeId}/formulas/${activeId}`, {
+            name: activeFormula?.name || 'Formule 1',
+            tokens: [],
+            description: ''
+          });
+          console.log('🗑️ FormulaPanel: PUT API réussi');
+        }
+        
+        // Mise à jour dynamique des instances
+        const updatedInstances = instances.map(f => 
+          f.id === activeId 
+            ? { ...f, tokens: [], description: '' }
+            : f
+        );
+        
+        setInstances(updatedInstances);
+        message.success('Formule vidée avec succès');
+        
+      } else {
+        // Supprimer cette formule (totalement dynamique)
+        console.log('🗑️ FormulaPanel: Suppression de la formule', {
+          activeId,
+          isTemp: activeId.startsWith('temp_'),
+          endpoint: `/api/treebranchleaf/nodes/${nodeId}/formulas/${activeId}`
+        });
+        
+        if (!activeId.startsWith('temp_')) {
+          console.log('🗑️ FormulaPanel: Appel DELETE API...');
+          await api.delete(`/api/treebranchleaf/nodes/${nodeId}/formulas/${activeId}`);
+          console.log('🗑️ FormulaPanel: DELETE API réussi');
+        }
+        
+        // Recalcul dynamique de l'état après suppression
+        const remaining = instances.filter(it => it.id !== activeId);
+        
+        if (remaining.length === 0) {
+          // Si plus aucune formule, créer une nouvelle formule vide
+          console.log('🗑️ FormulaPanel: Plus de formules, création automatique d\'une nouvelle');
+          const newTempId = `temp_${Date.now()}`;
+          const newInstance = {
+            id: newTempId,
+            name: 'Nouvelle formule',
+            description: '',
+            tokens: [],
+            nodeId,
+            organizationId: ''
+          };
+          
+          setInstances([newInstance]);
+          setActiveId(newTempId);
+          setLocalTokens([]);
+          setLocalName('Nouvelle formule');
+          setLocalDescription('');
+        } else {
+          // Basculer vers la première formule restante
+          const nextActive = remaining[0];
+          
+          console.log('🗑️ FormulaPanel: Mise à jour état local', {
+            remainingCount: remaining.length,
+            nextActive: nextActive?.name
+          });
+          
+          setInstances(remaining);
+          setActiveId(nextActive.id);
+          setLocalTokens(normalizeTokens(nextActive.tokens));
+          setLocalName(nextActive.name || '');
+          setLocalDescription(nextActive.description || '');
+        }
+        
+        message.success(`Formule "${activeFormula?.name}" supprimée avec succès`);
+      }
+      
+      console.log('✅ FormulaPanel: Suppression/vidage terminé avec succès');
+      
+    } catch (err) {
+      console.error('❌ FormulaPanel: Erreur lors de la suppression', err);
+      message.error('Impossible de supprimer la formule. Veuillez réessayer.');
+    }
+  }, [api, activeId, instances, normalizeTokens, nodeId, isSaving]);
+
+  // Basculer vers une autre formule
+  const switchToFormula = useCallback((formulaId: string) => {
+    const formula = instances.find(f => f.id === formulaId);
+    if (!formula) return;
+    
+    setActiveId(formulaId);
+    setLocalTokens(normalizeTokens(formula.tokens));
+    setLocalName(formula.name || '');
+    setLocalDescription(formula.description || '');
+    
+    console.log('🔄 FormulaPanel: Basculé vers formule:', formulaId, formula.name);
+  }, [instances, normalizeTokens]);
+
+  // Placeholder mémorisé
+  const placeholder = useMemo(() => 'Glissez ici des références (@value.*, @key, #marker)…', []);
+
+  // Gestion sélection via sélecteur
+  const onSelectRef = useCallback((val: NodeTreeSelectorValue) => {
+    const ref = val.ref;
+    handleTokensChange([...localTokens, ref]);
+  }, [localTokens, handleTokensChange]);
+
+  // Actions sur les tokens
+  const appendToken = useCallback((t: string) => {
+    handleTokensChange([...localTokens, t]);
+  }, [localTokens, handleTokensChange]);
+
+  const removeLast = useCallback(() => {
+    if (!localTokens?.length) return;
+    handleTokensChange(localTokens.slice(0, -1));
+  }, [localTokens, handleTokensChange]);
+
+  const clearAll = useCallback(() => {
+    handleTokensChange([]);
+  }, [handleTokensChange]);
+
+  // Aide rendu: extraire id depuis token
+  const extractNodeIdFromRef = useCallback((ref?: string): string | undefined => {
+    if (!ref) return undefined;
+    if (ref.startsWith('@value.')) return ref.slice('@value.'.length);
+    if (ref.startsWith('@select.')) return ref.slice('@select.'.length).split('.')[0];
+    return undefined;
+  }, []);
+
+  // Chargement des nœuds pour le cache
+  const loadNode = useCallback(async (id: string) => {
+    if (!id || nodeCache[id]) return;
+    try {
+      const data = await api.get(`/api/treebranchleaf/nodes/${id}`) as { label?: string; type?: string } | null;
+      if (!data) return;
+      setNodeCache(prev => ({ ...prev, [id]: { label: data.label || id, type: data.type || 'leaf_field' } }));
+    } catch {
+      // noop
+    }
+  }, [api, nodeCache]);
+
+  // Charger les nœuds référencés
+  useEffect(() => {
+    const ids = localTokens.map(extractNodeIdFromRef).filter(Boolean) as string[];
+    ids.forEach(loadNode);
+  }, [localTokens, extractNodeIdFromRef, loadNode]);
+
+  // Ajout de nombre
+  const addNumber = useCallback(() => {
+    if (!numberInput) return;
+    appendToken(numberInput);
+    setNumberInput('');
+    setShowNumberModal(false);
+  }, [numberInput, appendToken]);
+
+  // Ajout de texte
+  const addText = useCallback(() => {
+    if (!textInput) return;
+    appendToken(`"${textInput}"`);
+    setTextInput('');
+    setShowTextModal(false);
+  }, [textInput, appendToken]);
+
+  // Test de formule (simulation)
+  const testFormula = useCallback(() => {
+    try {
+      // Simulation basique du calcul
+      let result = localTokens.join(' ');
+      
+      // Remplacer les références par les valeurs de test
+      Object.entries(testValues).forEach(([ref, value]) => {
+        result = result.replace(new RegExp(ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+      });
+      
+      // Tenter d'évaluer si c'est une expression mathématique simple
+      try {
+        // Nettoyer l'expression pour n'avoir que des nombres et opérateurs
+        const mathExpr = result.replace(/[^0-9+\-*/.() ]/g, '');
+        if (mathExpr && /^[0-9+\-*/.() ]+$/.test(mathExpr)) {
+          const evalResult = Function(`"use strict"; return (${mathExpr})`)();
+          setTestResult(String(evalResult));
+          setTestError('');
+        } else {
+          setTestResult(result);
+          setTestError('');
+        }
+      } catch {
+        setTestResult(result);
+        setTestError('');
+      }
+    } catch (err) {
+      setTestError(`Erreur: ${err}`);
+      setTestResult('');
+    }
+  }, [localTokens, testValues]);
+
+  // Cleanup effect dynamique
+  useEffect(() => {
+    return () => {
+      // Nettoyage automatique des formules temporaires non sauvegardées
+      const tempFormulas = instances.filter(f => f.id.startsWith('temp_') && (!f.tokens || f.tokens.length === 0));
+      if (tempFormulas.length > 0) {
+        console.log('🧹 FormulaPanel: Nettoyage de ' + tempFormulas.length + ' formule(s) temporaire(s) vide(s)');
+      }
+    };
+  }, [instances]);
+
+  // Ne pas afficher tant que pas chargé
+  if (!isLoaded) {
+    return (
+      <Card size="small" bordered>
+        <Title level={5}>🧮 Formule</Title>
+        <Text type="secondary">Chargement...</Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card size="small" bordered>
+      <Space direction="vertical" style={{ width: '100%' }} size="small">{/* En-tête avec sélecteur de formules */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Title level={5} style={{ margin: 0 }}>
+            🧮 Formules ({instances.length})
+          </Title>
+          
+          <Space>
+            {instances.length > 1 && (
+              <Select
+                value={activeId}
+                onChange={switchToFormula}
+                style={{ minWidth: 150 }}
+                size="small"
+              >
+                {instances.map(formula => (
+                  <Select.Option key={formula.id} value={formula.id}>
+                    {formula.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            )}
+            
+            <Tooltip title="Ajouter une nouvelle formule">
+              <Button 
+                icon={<PlusOutlined />} 
+                size="small" 
+                onClick={addNewFormula}
+                disabled={readOnly}
+              />
+            </Tooltip>
+            
+            <Tooltip title="Supprimer/Vider cette formule">
+              <Button 
+                icon={<DeleteOutlined />} 
+                size="small" 
+                danger 
+                onClick={deleteFormula}
+                disabled={readOnly}
+              />
+            </Tooltip>
+          </Space>
+        </div>
+
+        {/* Nom de la formule active */}
+        <Input
+          placeholder="Nom de la formule"
+          value={localName}
+          onChange={(e) => handleNameChange(e.target.value)}
+          disabled={readOnly}
+          size="small"
+        />
+
+        {/* Description de la formule */}
+        <Input.TextArea
+          placeholder="Description (optionnel)"
+          value={localDescription}
+          onChange={(e) => handleDescriptionChange(e.target.value)}
+          disabled={readOnly}
+          rows={2}
+          size="small"
+        />
+
+        {/* Zone de tokens */}
+        <TokenDropZone
+          tokens={localTokens}
+          onChange={handleTokensChange}
+          placeholder={placeholder}
+          disabled={readOnly}
+          nodeCache={nodeCache}
+        />
+
+        {/* Actions sur les tokens */}
+        {!readOnly && (
+          <>
+            <Space wrap>
+              <Button size="small" onClick={() => setPickRef(true)}>
+                📎 Référence
+              </Button>
+              <Button size="small" onClick={() => setShowNumberModal(true)}>
+                🔢 Nombre
+              </Button>
+              <Button size="small" onClick={() => setShowTextModal(true)}>
+                📝 Texte
+              </Button>
+              <Button size="small" onClick={() => appendToken('+')}>+</Button>
+              <Button size="small" onClick={() => appendToken('-')}>-</Button>
+              <Button size="small" onClick={() => appendToken('*')}>×</Button>
+              <Button size="small" onClick={() => appendToken('/')}>/</Button>
+              <Button size="small" onClick={() => appendToken('(')}>(</Button>
+              <Button size="small" onClick={() => appendToken(')')}>)</Button>
+            </Space>
+
+            <Space>
+              <Button size="small" onClick={removeLast} disabled={!localTokens.length}>
+                ↶ Annuler
+              </Button>
+              <Button size="small" onClick={clearAll} disabled={!localTokens.length}>
+                🗑️ Vider
+              </Button>
+            </Space>
+          </>
+        )}
+
+        {/* Section de test */}
+        {localTokens.length > 0 && (
+          <>
+            <Divider style={{ margin: '8px 0' }} />
+            <div>
+              <Text strong>Test rapide :</Text>
+              <Space direction="vertical" style={{ width: '100%', marginTop: 4 }} size="small">
+                {(() => {
+                  // Déduplication des références
+                  const uniqueRefs = [...new Set(localTokens.filter(t => typeof t === 'string' && t.startsWith('@')))];
+                  console.log('🔍 Debug FormulaPanel - localTokens:', localTokens);
+                  console.log('🔍 Debug FormulaPanel - uniqueRefs:', uniqueRefs);
+                  
+                  return uniqueRefs.map(ref => (
+                    <div key={ref} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Text code style={{ minWidth: 100 }}>{ref}</Text>
+                      <Input
+                        size="small"
+                        placeholder="Valeur test"
+                        value={testValues[ref] || ''}
+                        onChange={(e) => setTestValues(prev => ({ ...prev, [ref]: e.target.value }))}
+                        style={{ width: 100 }}
+                      />
+                    </div>
+                  ));
+                })()}
+                
+                <Space>
+                  <Button size="small" icon={<CalculatorOutlined />} onClick={testFormula}>
+                    Calculer
+                  </Button>
+                  {testResult && (
+                    <Text strong style={{ color: '#52c41a' }}>
+                      Résultat: {testResult}
+                    </Text>
+                  )}
+                  {testError && (
+                    <Text type="danger">
+                      {testError}
+                    </Text>
+                  )}
+                </Space>
+              </Space>
+            </div>
+          </>
+        )}
+
+        {/* Sauvegarde en cours */}
+        {isSaving && (
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            💾 Sauvegarde en cours...
+          </Text>
+        )}
+      </Space>
+
+      {/* Sélecteur de référence - Direct sans Modal wrapper */}
+      <NodeTreeSelector
+        nodeId={nodeId}
+        open={pickRef}
+        onClose={() => setPickRef(false)}
+        onSelect={onSelectRef}
+      />
+
+      {/* Modal nombre */}
+      <Modal
+        title="Ajouter un nombre"
+        open={showNumberModal}
+        onOk={addNumber}
+        onCancel={() => setShowNumberModal(false)}
+        okText="Ajouter"
+        cancelText="Annuler"
+      >
+        <Input
+          placeholder="Entrez un nombre"
+          value={numberInput}
+          onChange={(e) => setNumberInput(e.target.value)}
+          type="number"
+          autoFocus
+        />
+      </Modal>
+
+      {/* Modal texte */}
+      <Modal
+        title="Ajouter du texte"
+        open={showTextModal}
+        onOk={addText}
+        onCancel={() => setShowTextModal(false)}
+        okText="Ajouter"
+        cancelText="Annuler"
+      >
+        <Input
+          placeholder="Entrez du texte"
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          autoFocus
+        />
+      </Modal>
+    </Card>
+  );
+};
+
+export default FormulaPanel;

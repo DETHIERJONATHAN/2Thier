@@ -1,0 +1,862 @@
+import { Router } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { authMiddleware } from '../middlewares/auth';
+
+const router = Routrouter.get('/trees/:id', async (req, res) => {
+  try {
+    console.log('🌳 [TreeBranchLeaf] GET /trees/:id - Début');
+    console.log('🌳 [TreeBranchLeaf] Params:', req.params);  
+    console.log('🌳 [TreeBranchLeaf] User:', req.user);
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;;
+const prisma = new PrismaClient();
+
+// Types pour les données de soumission
+interface SubmissionDataItem {
+  nodeId: string;
+  value?: string;
+  calculatedValue?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// =======================================
+// 🌳 ROUTES SYSTÈME TREEBRANCHLEAF
+// =======================================
+
+// Appliquer l'authentification à toutes les routes
+router.use(authMiddleware);
+
+// =======================================
+// 📋 GESTION DES ARBRES
+// =======================================
+
+// Récupérer tous les arbres de l'organisation (admin/superadmin seulement)
+router.get('/trees', async (req, res) => {
+  try {
+    console.log('🌳 [TreeBranchLeaf] GET /trees - Début');
+    console.log('🌳 [TreeBranchLeaf] User:', req.user);
+    const { organizationId } = req.user!;
+
+    const trees = await prisma.treeBranchLeafTree.findMany({
+      where: { organizationId },
+      include: {
+        _count: {
+          select: {
+            Nodes: true,
+            Submissions: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(trees);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error fetching trees:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des arbres' });
+  }
+});
+
+// Créer un nouvel arbre (superadmin seulement)
+router.post('/trees', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { name, description, icon, color } = req.body;
+
+    // Convertir l'objet couleur en string hexadécimale
+    let colorString = '#10b981'; // couleur par défaut
+    if (color) {
+      if (typeof color === 'string') {
+        colorString = color;
+      } else if (color.metaColor && typeof color.metaColor === 'object') {
+        const { r, g, b } = color.metaColor;
+        if (typeof r === 'number' && typeof g === 'number' && typeof b === 'number') {
+          // Convertir RGB en hexadécimal
+          const toHex = (c: number) => {
+            const hex = Math.round(c).toString(16);
+            return hex.length === 1 ? '0' + hex : hex;
+          };
+          colorString = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+      }
+    }
+
+    const tree = await prisma.treeBranchLeafTree.create({
+      data: {
+        organizationId,
+        name,
+        description,
+        icon,
+        color: colorString,
+        category: 'formulaire',
+      },
+    });
+
+    res.json(tree);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error creating tree:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de l\'arbre' });
+  }
+});
+
+// Récupérer un arbre spécifique avec tous ses nœuds
+router.get('/trees/:id', async (req, res) => {
+  try {
+    const { organizationId, role } = req.user!;
+    const { id: treeId } = req.params;
+
+    const tree = await prisma.treeBranchLeafTree.findFirst({
+      where: {
+        id: treeId,
+        organizationId,
+      },
+      include: {
+        Nodes: {
+          include: {
+            Children: {
+              include: {
+                Children: {
+                  include: {
+                    Children: true, // Jusqu'à 4 niveaux de profondeur
+                  },
+                },
+              },
+            },
+            MarkerLinks: {
+              include: {
+                Marker: true,
+              },
+            },
+          },
+          where: {
+            parentId: null, // Seulement les nœuds racines
+          },
+          orderBy: { order: 'asc' },
+        },
+        Markers: {
+          orderBy: { name: 'asc' },
+        },
+        TableData: {
+          orderBy: { name: 'asc' },
+        },
+        APIConnections: {
+          where: { isActive: true },
+          orderBy: { name: 'asc' },
+        },
+      },
+    });
+
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    // Si ce n'est pas le super admin, on ne renvoie que les arbres publiés
+    if (role !== 'super-admin' && tree.status !== 'published') {
+      return res.status(403).json({ error: 'Accès non autorisé à cet arbre' });
+    }
+
+    res.json(tree);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error fetching tree:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération de l\'arbre' });
+  }
+});
+
+// Mettre à jour un arbre (superadmin seulement)
+router.put('/trees/:id', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+    const { name, description, icon, color, status } = req.body;
+
+    const tree = await prisma.treeBranchLeafTree.updateMany({
+      where: {
+        id: treeId,
+        organizationId,
+      },
+      data: {
+        name,
+        description,
+        icon,
+        color,
+        status,
+        updatedAt: new Date(),
+      },
+    });
+
+    if (tree.count === 0) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    res.json({ message: 'Arbre mis à jour avec succès' });
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error updating tree:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de l\'arbre' });
+  }
+});
+
+// Supprimer un arbre (superadmin seulement)
+router.delete('/trees/:id', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+
+    await prisma.treeBranchLeafTree.deleteMany({
+      where: {
+        id: treeId,
+        organizationId,
+      },
+    });
+
+    res.json({ message: 'Arbre supprimé avec succès' });
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error deleting tree:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression de l\'arbre' });
+  }
+});
+
+// =======================================
+// 🌿 GESTION DES NŒUDS (BRANCHES/FEUILLES)
+// =======================================
+
+// Créer un nouveau nœud
+router.post('/trees/:id/nodes', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+    const { 
+      parentId, 
+      type, 
+      subType, 
+      label, 
+      description, 
+      value,
+      order = 0,
+      fieldConfig,
+      conditionConfig,
+      formulaConfig,
+      tableConfig,
+      apiConfig,
+      linkConfig,
+    } = req.body;
+
+    // Vérifier que l'arbre appartient à l'organisation
+    const tree = await prisma.treeBranchLeafTree.findFirst({
+      where: { id: treeId, organizationId },
+    });
+
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    const node = await prisma.treeBranchLeafNode.create({
+      data: {
+        treeId,
+        parentId,
+        type,
+        subType,
+        label,
+        description,
+        value,
+        order,
+        fieldConfig: fieldConfig || {},
+        conditionConfig: conditionConfig || {},
+        formulaConfig: formulaConfig || {},
+        tableConfig: tableConfig || {},
+        apiConfig: apiConfig || {},
+        linkConfig: linkConfig || {},
+      },
+      include: {
+        MarkerLinks: {
+          include: {
+            Marker: true,
+          },
+        },
+      },
+    });
+
+    res.json(node);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error creating node:', error);
+    res.status(500).json({ error: 'Erreur lors de la création du nœud' });
+  }
+});
+
+// Mettre à jour un nœud
+router.put('/nodes/:nodeId', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { nodeId } = req.params;
+    const updateData = req.body;
+
+    // Vérifier que le nœud appartient à un arbre de l'organisation
+    const node = await prisma.treeBranchLeafNode.findFirst({
+      where: {
+        id: nodeId,
+        Tree: {
+          organizationId,
+        },
+      },
+    });
+
+    if (!node) {
+      return res.status(404).json({ error: 'Nœud non trouvé' });
+    }
+
+    const updatedNode = await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        ...updateData,
+        updatedAt: new Date(),
+      },
+      include: {
+        MarkerLinks: {
+          include: {
+            Marker: true,
+          },
+        },
+      },
+    });
+
+    res.json(updatedNode);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error updating node:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du nœud' });
+  }
+});
+
+// Supprimer un nœud
+router.delete('/nodes/:nodeId', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { nodeId } = req.params;
+
+    // Vérifier que le nœud appartient à un arbre de l'organisation
+    const node = await prisma.treeBranchLeafNode.findFirst({
+      where: {
+        id: nodeId,
+        Tree: {
+          organizationId,
+        },
+      },
+    });
+
+    if (!node) {
+      return res.status(404).json({ error: 'Nœud non trouvé' });
+    }
+
+    await prisma.treeBranchLeafNode.delete({
+      where: { id: nodeId },
+    });
+
+    res.json({ message: 'Nœud supprimé avec succès' });
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error deleting node:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression du nœud' });
+  }
+});
+
+// =======================================
+// 🏷️ GESTION DES MARQUEURS
+// =======================================
+
+// Récupérer tous les marqueurs de l'organisation
+router.get('/markers', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+
+    const markers = await prisma.treeBranchLeafMarker.findMany({
+      where: { organizationId },
+      include: {
+        _count: {
+          select: {
+            NodeLinks: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json(markers);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error fetching markers:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des marqueurs' });
+  }
+});
+
+// Créer un nouveau marqueur
+router.post('/markers', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { name, description, color, icon, category, isGlobal, treeId } = req.body;
+
+    const marker = await prisma.treeBranchLeafMarker.create({
+      data: {
+        organizationId,
+        treeId: isGlobal ? null : treeId,
+        name,
+        description,
+        color: color || '#3b82f6',
+        icon,
+        category,
+        isGlobal: isGlobal || false,
+      },
+    });
+
+    res.json(marker);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error creating marker:', error);
+    res.status(500).json({ error: 'Erreur lors de la création du marqueur' });
+  }
+});
+
+// =======================================
+// 📊 DONNÉES DE TABLEAUX
+// =======================================
+
+// Récupérer les données de tableaux d'un arbre
+router.get('/trees/:id/tables', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+
+    const tables = await prisma.treeBranchLeafTableData.findMany({
+      where: {
+        treeId,
+        Tree: {
+          organizationId,
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json(tables);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error fetching table data:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des données de tableaux' });
+  }
+});
+
+// Créer/importer des données de tableau
+router.post('/trees/:id/tables', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+    const { name, description, headers, rows, isImported, importSource } = req.body;
+
+    // Vérifier que l'arbre appartient à l'organisation
+    const tree = await prisma.treeBranchLeafTree.findFirst({
+      where: { id: treeId, organizationId },
+    });
+
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    const tableData = await prisma.treeBranchLeafTableData.create({
+      data: {
+        treeId,
+        name,
+        description,
+        headers: headers || [],
+        rows: rows || [],
+        isImported: isImported || false,
+        importSource,
+      },
+    });
+
+    res.json(tableData);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error creating table data:', error);
+    res.status(500).json({ error: 'Erreur lors de la création des données de tableau' });
+  }
+});
+
+// =======================================
+// 🔌 CONNEXIONS API
+// =======================================
+
+// Récupérer les connexions API d'un arbre
+router.get('/trees/:id/api-connections', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+
+    const connections = await prisma.treeBranchLeafAPIConnection.findMany({
+      where: {
+        treeId,
+        Tree: {
+          organizationId,
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json(connections);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error fetching API connections:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des connexions API' });
+  }
+});
+
+// Créer une nouvelle connexion API
+router.post('/trees/:id/api-connections', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+    const { 
+      name, 
+      url, 
+      method, 
+      headers, 
+      params, 
+      authType, 
+      authConfig, 
+      cacheEnabled, 
+      cacheDuration 
+    } = req.body;
+
+    // Vérifier que l'arbre appartient à l'organisation
+    const tree = await prisma.treeBranchLeafTree.findFirst({
+      where: { id: treeId, organizationId },
+    });
+
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    const connection = await prisma.treeBranchLeafAPIConnection.create({
+      data: {
+        treeId,
+        name,
+        url,
+        method: method || 'GET',
+        headers: headers || {},
+        params: params || {},
+        authType,
+        authConfig: authConfig || {},
+        cacheEnabled: cacheEnabled !== false,
+        cacheDuration: cacheDuration || 3600,
+      },
+    });
+
+    res.json(connection);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error creating API connection:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de la connexion API' });
+  }
+});
+
+// =======================================
+// 📝 SOUMISSIONS UTILISATEURS
+// =======================================
+
+// Récupérer les soumissions d'un arbre (pour admin)
+router.get('/trees/:id/submissions', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: treeId } = req.params;
+
+    const submissions = await prisma.treeBranchLeafSubmission.findMany({
+      where: {
+        treeId,
+        Tree: {
+          organizationId,
+        },
+      },
+      include: {
+        User: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        Lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            company: true,
+          },
+        },
+        Data: {
+          include: {
+            Node: {
+              select: {
+                id: true,
+                label: true,
+                type: true,
+                subType: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(submissions);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error fetching submissions:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des soumissions' });
+  }
+});
+
+// Créer une nouvelle soumission (utilisateurs avec module devis)
+router.post('/trees/:id/submissions', async (req, res) => {
+  try {
+    const { organizationId, id: userId } = req.user!;
+    const { id: treeId } = req.params;
+    const { leadId, sessionId, data } = req.body;
+
+    // Vérifier que l'arbre existe et est publié
+    const tree = await prisma.treeBranchLeafTree.findFirst({
+      where: { 
+        id: treeId, 
+        organizationId,
+        status: 'published',
+      },
+    });
+
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé ou non publié' });
+    }
+
+    const submission = await prisma.treeBranchLeafSubmission.create({
+      data: {
+        treeId,
+        userId,
+        leadId,
+        sessionId,
+        status: 'draft',
+      },
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            company: true,
+          },
+        },
+        Data: {
+          include: {
+            Node: {
+              select: {
+                id: true,
+                label: true,
+                type: true,
+                subType: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Créer les données de soumission si fournies
+    if (data && Array.isArray(data)) {
+      await prisma.treeBranchLeafSubmissionData.createMany({
+        data: data.map((item: SubmissionDataItem) => ({
+          submissionId: submission.id,
+          nodeId: item.nodeId,
+          value: item.value,
+          calculatedValue: item.calculatedValue,
+          metadata: item.metadata || {},
+        })),
+      });
+    }
+
+    res.status(201).json(submission);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error creating submission:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de la soumission' });
+  }
+});
+
+// Mettre à jour une soumission existante
+router.put('/submissions/:id', async (req, res) => {
+  try {
+    const { organizationId } = req.user!;
+    const { id: submissionId } = req.params;
+    const { data } = req.body;
+
+    // Vérifier que la soumission existe et appartient à l'organisation
+    const existingSubmission = await prisma.treeBranchLeafSubmission.findFirst({
+      where: { 
+        id: submissionId,
+        Tree: { organizationId },
+      },
+    });
+
+    if (!existingSubmission) {
+      return res.status(404).json({ error: 'Soumission non trouvée' });
+    }
+
+    // Supprimer les anciennes données
+    await prisma.treeBranchLeafSubmissionData.deleteMany({
+      where: { submissionId },
+    });
+
+    // Créer les nouvelles données
+    if (data && Array.isArray(data)) {
+      await prisma.treeBranchLeafSubmissionData.createMany({
+        data: data.map((item: SubmissionDataItem) => ({
+          submissionId,
+          nodeId: item.nodeId,
+          value: item.value,
+          calculatedValue: item.calculatedValue,
+          metadata: item.metadata || {},
+        })),
+      });
+    }
+
+    // Récupérer la soumission mise à jour
+    const updatedSubmission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            company: true,
+          },
+        },
+        Data: {
+          include: {
+            Node: {
+              select: {
+                id: true,
+                label: true,
+                type: true,
+                subType: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    res.json(updatedSubmission);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error updating submission:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la soumission' });
+  }
+});
+
+// Créer une nouvelle soumission (utilisateurs avec module devis)
+router.post('/trees/:id/submissions', async (req, res) => {
+  try {
+    const { organizationId, id: userId } = req.user!;
+    const { id: treeId } = req.params;
+    const { leadId, sessionId, data } = req.body;
+
+    // Vérifier que l'arbre existe et est publié
+    const tree = await prisma.treeBranchLeafTree.findFirst({
+      where: { 
+        id: treeId, 
+        organizationId,
+        status: 'published',
+      },
+    });
+
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé ou non publié' });
+    }
+
+    const submission = await prisma.treeBranchLeafSubmission.create({
+      data: {
+        treeId,
+        userId,
+        leadId,
+        sessionId,
+        status: 'draft',
+      },
+    });
+
+    // Créer les données de soumission pour chaque nœud
+    if (data && Array.isArray(data)) {
+      await prisma.treeBranchLeafSubmissionData.createMany({
+        data: data.map((item: SubmissionDataItem) => ({
+          submissionId: submission.id,
+          nodeId: item.nodeId,
+          value: item.value,
+          calculatedValue: item.calculatedValue,
+          metadata: item.metadata || {},
+        })),
+      });
+    }
+
+    res.json(submission);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error creating submission:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de la soumission' });
+  }
+});
+
+// Mettre à jour une soumission
+router.put('/submissions/:submissionId', async (req, res) => {
+  try {
+    const { organizationId, id: userId } = req.user!;
+    const { submissionId } = req.params;
+    const { status, data, summary, exportData } = req.body;
+
+    // Vérifier que la soumission appartient à l'utilisateur ou à son organisation
+    const submission = await prisma.treeBranchLeafSubmission.findFirst({
+      where: {
+        id: submissionId,
+        OR: [
+          { userId },
+          { Tree: { organizationId } },
+        ],
+      },
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Soumission non trouvée' });
+    }
+
+    const updatedSubmission = await prisma.treeBranchLeafSubmission.update({
+      where: { id: submissionId },
+      data: {
+        status,
+        summary: summary || submission.summary,
+        exportData: exportData || submission.exportData,
+        completedAt: status === 'completed' ? new Date() : submission.completedAt,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Mettre à jour les données si fournies
+    if (data && Array.isArray(data)) {
+      // Supprimer les anciennes données
+      await prisma.treeBranchLeafSubmissionData.deleteMany({
+        where: { submissionId },
+      });
+
+      // Créer les nouvelles données
+      await prisma.treeBranchLeafSubmissionData.createMany({
+        data: data.map((item: SubmissionDataItem) => ({
+          submissionId,
+          nodeId: item.nodeId,
+          value: item.value,
+          calculatedValue: item.calculatedValue,
+          metadata: item.metadata || {},
+        })),
+      });
+    }
+
+    res.json(updatedSubmission);
+  } catch (error) {
+    console.error('[TREEBRANCHLEAF_API] Error updating submission:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la soumission' });
+  }
+});
+
+export default router;

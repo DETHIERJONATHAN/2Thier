@@ -1,0 +1,57 @@
+{
+  "mail": {
+    "label": "Module Courriels / Gmail intégré",
+    "primaryPages": [
+      "src/pages/MailPage.tsx",
+      "src/pages/GoogleMailPage.tsx",
+      "src/pages/GoogleMailPageFixed.tsx",
+      "src/pages/GoogleMailPageFixed_New.tsx",
+      "src/pages/MailSettingsPage.tsx"
+    ],
+    "relatedServices": [
+      "src/services/GmailService.ts",
+      "src/services/GoogleGmailNotificationService.ts"
+    ],
+    "keywords": ["mail", "email", "gmail", "inbox", "message"]
+  },
+  "leads": {
+    "label": "Module Leads / Prospects",
+    "primaryPages": ["src/pages/LeadsPage.tsx"],
+    "relatedServices": ["src/services/LeadsService.ts"],
+    "keywords": ["lead", "prospect", "crm", "pipeline"]
+  },
+  "agenda": {
+    "label": "Module Agenda / Calendrier",
+    "primaryPages": ["src/pages/CalendarPage.tsx", "src/pages/AgendaWrapper.tsx"],
+    "relatedServices": ["src/services/CalendarService.ts"],
+    "keywords": ["agenda", "calendrier", "calendar", "event"]
+  },
+  "admin": {
+    "label": "Administration & Configuration",
+    "primaryPages": [
+      "src/pages/admin/UsersAdminPage.tsx",
+      "src/pages/admin/UsersAdminPageNew.tsx",
+      "src/pages/admin/RolesAdminPage.tsx",
+      "src/pages/admin/PermissionsAdminPage.tsx",
+      "src/pages/admin/PermissionsAdminPageNew.tsx",
+      "src/pages/admin/OrganizationsAdminPageNew.tsx",
+      "src/pages/admin/ModulesAdminPage.tsx"
+    ],
+    "relatedServices": ["src/services/AdminService.ts"],
+    "keywords": ["admin", "configuration", "roles", "permissions", "organisation"]
+  },
+  "googleWorkspace": {
+    "label": "Intégrations Google Workspace",
+    "primaryPages": [
+      "src/pages/GoogleDrivePage.tsx",
+      "src/pages/GoogleMeetPage.tsx",
+      "src/pages/GoogleVoicePage.tsx",
+      "src/pages/GoogleKeepPage.tsx",
+      "src/pages/GoogleSheetsPage.tsx",
+      "src/pages/GoogleFormsPage.tsx",
+      "src/pages/GoogleGroupsPage.tsx"
+    ],
+    "relatedServices": ["src/services/GoogleWorkspaceService.ts"],
+    "keywords": ["google", "workspace", "drive", "meet", "voice", "sheets", "forms", "groups"]
+  }
+}

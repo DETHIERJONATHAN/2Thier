@@ -1,0 +1,685 @@
+import React, { useCallback, useMemo } from 'react';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
+import { TreeBranchLeafNode } from '../../types';
+import { getNodeIcon } from '../../utils/iconUtils';
+import { TreeBranchLeafRegistry } from '../../core/registry';
+
+interface OptimizedStructureNodeProps {
+  node: TreeBranchLeafNode;
+  isSelected: boolean;
+  isExpanded: boolean;
+  hasChildren: boolean;
+  depth: number;
+  readOnly?: boolean;
+  allNodes?: TreeBranchLeafNode[];
+  onSelect: (node: TreeBranchLeafNode) => void;
+  onToggleExpanded?: (nodeId: string) => void;
+  onDoubleClick?: (node: TreeBranchLeafNode) => void;
+  onEditNode?: (node: TreeBranchLeafNode) => void;
+  onDuplicateNode?: (node: TreeBranchLeafNode) => void;
+  onDeleteNode?: (nodeId: string) => void;
+  onMoveUpNode?: (nodeId: string) => void;
+  onMoveDownNode?: (nodeId: string) => void;
+  onToggleNodeVisibility?: (nodeId: string) => void;
+  onOpenNodeSettings?: (node: TreeBranchLeafNode) => void;
+}
+
+interface NodeLegacyExtras {
+  required: boolean;
+  hasValidation: boolean;
+  exposedKey: string;
+  hidden: boolean;
+}
+
+/**
+ * 🚀 OptimizedStructureNode - Composant optimisé pour les nœuds de structure
+ */
+const OptimizedStructureNode: React.FC<OptimizedStructureNodeProps> = ({
+  node,
+  isSelected,
+  isExpanded,
+  hasChildren,
+  depth,
+  readOnly = false,
+  allNodes = [],
+  onSelect,
+  onToggleExpanded,
+  onDoubleClick,
+  onEditNode,
+  onDuplicateNode,
+  onDeleteNode,
+  onMoveUpNode,
+  onMoveDownNode,
+  onToggleNodeVisibility,
+  onOpenNodeSettings
+}) => {
+  // Détecter si ce champ est dans une section
+  const isFieldInSection = useMemo(() => {
+    try {
+      // Seulement pour les nœuds feuilles (champs)
+      if (!node?.type?.startsWith('leaf_')) return false;
+      if (!allNodes || !Array.isArray(allNodes)) return false;
+      
+      return TreeBranchLeafRegistry.isFieldInSection(node, allNodes);
+    } catch (error) {
+      console.error('Error in isFieldInSection:', error);
+      return false;
+    }
+  }, [node, allNodes]);
+
+  // Configuration spéciale pour les champs dans les sections
+  const sectionConfig = useMemo(() => {
+    try {
+      if (!isFieldInSection || !node) return null;
+      return TreeBranchLeafRegistry.getSectionDisplayConfig(node);
+    } catch (error) {
+      console.error('Error in getSectionDisplayConfig:', error);
+      return null;
+    }
+  }, [isFieldInSection, node]);
+
+  // React.memo pour éviter les re-rendus inutiles
+ * et optimise les performances du drag & drop
+ */
+
+import React, { memo, useCallback, useMemo } from 'react';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
+import type { TreeBranchLeafNode } from '../../types';
+import { TreeBranchLeafRegistry } from '../../core/registry';
+import { NodeActionMenu } from './NodeActionMenu';
+
+// Fonction pour obtenir l'icône selon le type de nœud (même que dans la palette)
+const getNodeIcon = (nodeType: string): string => {
+  // logs réduits
+  
+  // Utiliser le registry pour avoir les MÊMES icônes que dans la palette
+  const nodeTypeConfig = TreeBranchLeafRegistry.getNodeType(nodeType);
+  if (nodeTypeConfig?.emoji) {
+    return nodeTypeConfig.emoji;
+  }
+  
+  // Fallback si pas trouvé dans le registry
+  switch (nodeType) {
+    case 'branch':
+    case 'section':
+    case 'groupe':
+    case 'category':
+      return '🌿'; // Comme dans la palette !
+    
+    // Types de feuilles
+    case 'leaf_option':
+      return '○';
+    case 'leaf_option_field':
+      return '◐';  
+    case 'leaf_field':
+      return '●';
+    
+    // Types de champs (fallback)
+    case 'text':
+    case 'input':
+      return '📝';
+    case 'number':
+    case 'numeric':
+      return '🔢';
+    case 'select':
+    case 'dropdown':
+      return '📋';
+    case 'checkbox':
+    case 'boolean':
+      return '☑️';
+    case 'date':
+      return '📅';
+    case 'email':
+      return '📧';
+    case 'phone':
+      return '📞';
+    case 'textarea':
+      return '📄';
+    case 'file':
+    case 'upload':
+      return '📎';
+    case 'url':
+    case 'link':
+      return '🔗';
+    case 'color':
+      return '🎨';
+    case 'range':
+      return '🎚️';
+    
+    // Par défaut
+    default:
+      return '📄';
+  }
+};
+
+interface OptimizedStructureNodeProps {
+  node: TreeBranchLeafNode;
+  isSelected: boolean;
+  isExpanded: boolean;
+  hasChildren: boolean;
+  depth: number;
+  readOnly?: boolean;
+  allNodes?: TreeBranchLeafNode[]; // Pour détecter les sections parentes
+  onSelect: (node: TreeBranchLeafNode) => void;
+  onToggleExpanded: (nodeId: string) => void;
+  onDoubleClick: (node: TreeBranchLeafNode) => void;
+  // Actions du menu contextuel
+  onEditNode?: (node: TreeBranchLeafNode, newLabel: string) => void;
+  onDuplicateNode?: (node: TreeBranchLeafNode) => void;
+  onDeleteNode?: (node: TreeBranchLeafNode) => void;
+  onMoveUpNode?: (node: TreeBranchLeafNode) => void;
+  onMoveDownNode?: (node: TreeBranchLeafNode) => void;
+  onToggleNodeVisibility?: (node: TreeBranchLeafNode) => void;
+  onOpenNodeSettings?: (node: TreeBranchLeafNode) => void;
+}
+
+const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = ({
+  node,
+  isSelected,
+  isExpanded,
+  hasChildren,
+  depth,
+  readOnly = false,
+  onSelect,
+  onToggleExpanded,
+  onDoubleClick,
+  onEditNode,
+  onDuplicateNode,
+  onDeleteNode,
+  onMoveUpNode,
+  onMoveDownNode,
+  onToggleNodeVisibility,
+  onOpenNodeSettings
+}) => {
+  
+  // =============================================================================
+  // 🎛️ DRAGGABLE - Configuration du drag
+  // =============================================================================
+  
+  const dragData = useMemo(() => {
+    const data = {
+      type: 'node',
+      nodeType: node.type,
+      id: node.id,
+      hasData: Boolean(node.value || node.defaultValue),
+      exposedKey: node.exposedKey
+    };
+    console.log(`🏗️ Drag data préparé pour node ${node.id}:`, data);
+    return data;
+  }, [node.type, node.id, node.value, node.defaultValue, node.exposedKey]);
+
+  const {
+    attributes: dragAttributes,
+    listeners: dragListeners,
+  setNodeRef: setDragRef,
+    isDragging
+  } = useDraggable({
+    id: `node-${node.id}`,
+    data: dragData,
+  disabled: readOnly,
+  // Empêche le drag sur simple clic: il faut bouger la souris d'au moins 8px
+  activationConstraint: { distance: 8 }
+  });
+  
+  // logs réduits
+
+  // =============================================================================
+  // 🎯 DROPPABLE - Trois zones: avant / enfant / après
+  // =============================================================================
+  const { setNodeRef: setDropBeforeRef, isOver: isOverBefore } = useDroppable({
+    id: `drop-${node.id}-before`,
+    data: { type: 'structure', nodeId: node.id, position: 'before', accepts: ['palette-item', 'node'] },
+    disabled: readOnly
+  });
+  const { setNodeRef: setDropChildRef, isOver: isOverChild } = useDroppable({
+    id: `drop-${node.id}-child`,
+    data: { type: 'structure', nodeId: node.id, position: 'child', accepts: ['palette-item', 'node'] },
+    disabled: readOnly
+  });
+  const { setNodeRef: setDropAfterRef, isOver: isOverAfter } = useDroppable({
+    id: `drop-${node.id}-after`,
+    data: { type: 'structure', nodeId: node.id, position: 'after', accepts: ['palette-item', 'node'] },
+    disabled: readOnly
+  });
+
+  // =============================================================================
+  // 🎬 HANDLERS - Gestionnaires d'événements mémorisés
+  // =============================================================================
+  
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect(node);
+    if (onOpenNodeSettings) onOpenNodeSettings(node);
+  }, [node, onSelect, onOpenNodeSettings]);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  console.log(`👆👆 [OptimizedStructureNode] Double-clic sur ${node.label} - toggle expand`);
+    onDoubleClick(node);
+  }, [node, onDoubleClick]);
+
+  const handleToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleExpanded(node.id);
+  }, [node.id, onToggleExpanded]);
+
+  // =============================================================================
+  // 🎨 STYLING - Styles mémorisés
+  // =============================================================================
+  
+  const nodeStyle = useMemo(() => {
+    // 🔍 DEBUG: Log de l'indentation
+  // logs réduits
+  const anyOver = isOverBefore || isOverChild || isOverAfter;
+    
+    const indent = depth * 40; // 🔧 Indentation réduite: 40px par niveau
+    
+    // Style de base
+    const baseStyle = {
+      marginLeft: `${indent}px`,
+      padding: '2px 6px',
+      cursor: readOnly ? 'default' : 'pointer',
+      backgroundColor: isSelected 
+        ? '#e6f3ff' 
+    : anyOver 
+          ? '#f0f8ff' 
+          : 'transparent',
+      border: isSelected ? '1px solid #1890ff' : '1px solid transparent',
+      borderRadius: '4px',
+      opacity: isDragging ? 0.5 : 1,
+      fontSize: '12px',
+      lineHeight: '18px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      gap: '4px',
+      userSelect: 'none',
+      transition: 'all 0.15s ease',
+      margin: '0px 0'
+    };
+
+    // Style spécial pour les champs dans les sections
+    if (isFieldInSection && sectionConfig) {
+      return {
+        ...baseStyle,
+        backgroundColor: isSelected ? '#e6f3ff' : '#fafafa',
+        border: isSelected ? '1px solid #1890ff' : '1px solid #d9d9d9',
+        borderRadius: '6px',
+        padding: '6px 12px',
+        margin: '2px 0',
+        position: 'relative' as const,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+      };
+    }
+
+    return baseStyle;
+  }, [depth, readOnly, isSelected, isDragging, isOverBefore, isOverChild, isOverAfter]);
+
+  // =============================================================================
+  // 🧩 NODE METADATA - Métadonnées du nœud
+  // =============================================================================
+  
+  const nodeType = useMemo(() => TreeBranchLeafRegistry.getNodeType(node.type), [node.type]);
+  
+  // Type d'appoint pour certaines propriétés legacy optionnelles
+  type NodeLegacyExtras = { required?: boolean; hasValidation?: boolean; exposedKey?: string; hidden?: boolean; capabilities?: string[] };
+  const legacy = node as unknown as NodeLegacyExtras;
+
+  const badges = useMemo(() => {
+    const badges = [];
+    if (legacy.required) badges.push('R');
+    if (legacy.hasValidation) badges.push('V');
+    if (legacy.capabilities?.length) badges.push(`C${legacy.capabilities.length}`);
+    if (legacy.exposedKey) badges.push('E');
+    return badges;
+  }, [legacy.required, legacy.hasValidation, legacy.capabilities, legacy.exposedKey]);
+
+  // Badges de capacités actives (émoticônes depuis le registry)
+  const capabilityBadges = useMemo(() => {
+    const caps: { key: string; emoji: string; title: string }[] = [];
+
+    const pushIf = (capKey: string, enabled: boolean | undefined, extraCheck?: boolean) => {
+      if (enabled || extraCheck) {
+        const mod = TreeBranchLeafRegistry.getCapabilityModule(capKey);
+        if (mod?.emoji) caps.push({ key: capKey, emoji: mod.emoji, title: mod.label });
+      }
+    };
+
+    // Déterminer l'état à partir des flags et/ou des configs présentes
+  const isNonEmptyObject = (obj: unknown): boolean => {
+    return !!(obj && typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj as Record<string, unknown>).length > 0);
+  };
+  const hasData = node.hasData || Boolean(node.variables?.length);
+  const hasFormula = node.hasFormula || isNonEmptyObject((node as unknown as { formulaConfig?: unknown }).formulaConfig);
+  const hasCondition = node.hasCondition || isNonEmptyObject((node as unknown as { conditionConfig?: unknown }).conditionConfig);
+  const hasTable = node.hasTable || isNonEmptyObject((node as unknown as { tableConfig?: unknown }).tableConfig);
+  const hasAPI = node.hasAPI || isNonEmptyObject((node as unknown as { apiConfig?: unknown }).apiConfig);
+  const hasLink = node.hasLink || isNonEmptyObject((node as unknown as { linkConfig?: unknown }).linkConfig);
+  const hasMarkers = node.hasMarkers || Boolean(node.markers?.length);
+
+    pushIf('data', !!hasData);
+    pushIf('formula', !!hasFormula);
+    pushIf('condition', !!hasCondition);
+    pushIf('table', !!hasTable);
+    pushIf('api', !!hasAPI);
+    pushIf('link', !!hasLink);
+    pushIf('markers', !!hasMarkers);
+
+    // Si node.capabilities (array) existe, ajouter ce qui manque éventuellement
+    const capsArray: string[] | undefined = legacy.capabilities;
+    if (Array.isArray(capsArray)) {
+      for (const c of capsArray) {
+        if (!caps.find(x => x.key === c)) {
+          const mod = TreeBranchLeafRegistry.getCapabilityModule(c);
+          if (mod?.emoji) caps.push({ key: c, emoji: mod.emoji, title: mod.label });
+        }
+      }
+    }
+
+    return caps;
+  }, [node, legacy.capabilities]);
+
+  const childCount = node.children?.length || 0;
+
+  // =============================================================================
+  // 🎯 RENDER - Rendu optimisé
+  // =============================================================================
+  
+  return (
+    <div className="node-container" style={{ position: 'relative' }}>
+      {/* Zone de drop AVANT (ligne) */}
+    <div
+        ref={setDropBeforeRef}
+        style={{
+      height: '4px',
+      marginLeft: `${depth * 40}px`,
+          borderTop: isOverBefore ? '2px solid #52c41a' : '2px solid transparent',
+          transition: 'border-color 0.1s',
+        }}
+      />
+
+      {/* LIGNE PRINCIPALE DU NŒUD (zone ENFANT) */}
+      <div
+        ref={setDropChildRef}
+        style={{
+          ...nodeStyle,
+          backgroundColor: isOverChild ? '#f0f8ff' : nodeStyle.backgroundColor,
+          border: isOverChild ? '1px dashed #52c41a' : nodeStyle.border,
+          minHeight: '28px',
+          overflow: 'visible',
+        }}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+      >
+      {/* Poignée de déplacement dédiée pour ne pas bloquer la sélection au clic */}
+      {!readOnly && (
+        <span
+          ref={setDragRef}
+          {...dragAttributes}
+          {...dragListeners}
+          title="Glisser pour déplacer"
+          style={{
+            cursor: 'grab',
+            color: '#999',
+            fontSize: '12px',
+            lineHeight: '14px',
+            padding: '0 2px',
+            userSelect: 'none',
+            display: 'inline-flex',
+            alignItems: 'center'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          ⠿
+        </span>
+      )}
+
+      {/* Bouton expand/collapse - Style Windows Explorer */}
+      {hasChildren ? (
+    <span
+          style={{ 
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+      width: '14px',
+      height: '14px',
+      marginRight: '4px',
+            cursor: 'pointer',
+            color: '#666',
+      fontSize: '11px',
+            border: '1px solid #ccc',
+            backgroundColor: '#fff',
+            borderRadius: '2px',
+            hover: {
+              backgroundColor: '#f0f0f0'
+            }
+          }}
+          onClick={handleToggle}
+          title={isExpanded ? 'Réduire' : 'Développer'}
+        >
+          {isExpanded ? '−' : '+'}
+        </span>
+      ) : (
+    <span style={{ width: '18px', display: 'inline-block' }} />
+      )}
+
+      {/* 1. LOGO - Icône du type de nœud */}
+      <span 
+        style={{ 
+          display: 'inline-block',
+          marginRight: '4px',
+          fontSize: '11px',
+          color: nodeType?.color || '#666',
+          position: 'relative'
+        }}
+      >
+        {getNodeIcon(node.type)}
+        {/* Indicateur pour champ dans section */}
+        {isFieldInSection && (
+          <span
+            style={{
+              position: 'absolute',
+              top: '-2px',
+              right: '-4px',
+              fontSize: '8px',
+              color: '#13c2c2'
+            }}
+            title="Champ calculé (section)"
+          >
+            📊
+          </span>
+        )}
+      </span>
+
+      {/* 2. NOM - Label du nœud */}
+      <span style={{ 
+  fontWeight: isSelected ? '500' : '400',
+  color: isDragging ? '#999' : '#333'
+      }}>
+        {/* Indicateurs hiérarchiques visuels (comme Windows Explorer) */}
+        {depth > 0 && (
+          <>
+            {/* Barres de connexion hiérarchique */}
+            <span style={{ 
+              color: '#ddd', 
+              fontSize: '11px', 
+              marginRight: '4px',
+              fontFamily: 'monospace'
+            }}>
+              {'│  '.repeat(depth - 1)}└─
+            </span>
+            {/* Indicateur de niveau */}
+            <span style={{ 
+              color: '#888', 
+              fontSize: '9px', 
+              marginRight: '4px',
+              fontWeight: 'bold',
+              backgroundColor: '#f0f0f0',
+              padding: '0px 4px',
+              borderRadius: '3px'
+            }}>
+              N{depth + 1}
+            </span>
+          </>
+        )}
+        {node.label}
+      </span>
+
+      {/* 3. COMPTEUR - Nombre d'enfants */}
+      {childCount > 0 && (
+        <span style={{ 
+          color: '#999',
+          fontSize: '10px',
+          fontWeight: '500'
+        }}>
+          ({childCount})
+        </span>
+      )}
+
+      {/* 4. ICÔNES OPTIONS - Paramètres activés (compteurs génériques) */}
+      {badges.length > 0 && (
+  <span style={{ marginLeft: '4px', display: 'flex', gap: '2px' }}>
+          {badges.map((badge, index) => (
+            <span
+              key={index}
+              title={`Paramètre: ${badge}`}
+              style={{
+                backgroundColor: '#e6f7ff',
+                color: '#1890ff',
+    fontSize: '9px',
+    padding: '1px 4px',
+                borderRadius: '10px',
+                fontWeight: '500'
+              }}
+            >
+              ⚙️{badge}
+            </span>
+          ))}
+        </span>
+      )}
+
+      {/* 4bis. BADGES CAPACITÉS - Affichage des capacités actives avec emoji */}
+      {capabilityBadges.length > 0 && (
+  <span style={{ marginLeft: '4px', display: 'flex', gap: '4px' }}>
+          {capabilityBadges.map(({ key, emoji, title }) => (
+            <span
+              key={key}
+              title={title}
+              style={{
+                backgroundColor: '#f6ffed',
+                color: '#389e0d',
+    fontSize: '11px',
+    padding: '0px 5px',
+                borderRadius: '12px',
+    lineHeight: '16px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                border: '1px solid #b7eb8f'
+              }}
+            >
+              {emoji}
+            </span>
+          ))}
+        </span>
+      )}
+
+      {/* 5. MENU CONTEXTUEL - Trois petits points */}
+      {(() => {
+  // logs réduits
+        return (
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <NodeActionMenu
+              node={node}
+              onEdit={onEditNode}
+              onDuplicate={onDuplicateNode}
+              onDelete={onDeleteNode}
+              onMoveUp={onMoveUpNode}
+              onMoveDown={onMoveDownNode}
+              onToggleVisibility={onToggleNodeVisibility}
+              onOpenSettings={onOpenNodeSettings}
+              readOnly={readOnly}
+              size="small"
+            />
+          </div>
+        );
+      })()}
+      </div>
+
+      {/* Zone de drop APRÈS (ligne) */}
+    <div
+        ref={setDropAfterRef}
+        style={{
+      height: '4px',
+      marginLeft: `${depth * 40}px`,
+          borderBottom: isOverAfter ? '2px solid #52c41a' : '2px solid transparent',
+          transition: 'border-color 0.1s',
+        }}
+      />
+    </div>
+  );
+};
+
+// =============================================================================
+// 🚀 MEMOIZATION - Comparaison optimisée pour React.memo
+// =============================================================================
+
+const arePropsEqual = (
+  prevProps: OptimizedStructureNodeProps,
+  nextProps: OptimizedStructureNodeProps
+): boolean => {
+  // Comparaisons rapides des propriétés primitives
+  if (
+    prevProps.isSelected !== nextProps.isSelected ||
+    prevProps.isExpanded !== nextProps.isExpanded ||
+    prevProps.hasChildren !== nextProps.hasChildren ||
+    prevProps.depth !== nextProps.depth ||
+    prevProps.readOnly !== nextProps.readOnly
+  ) {
+    return false;
+  }
+
+  // Comparaison des callbacks du menu contextuel (par référence)
+  if (
+    prevProps.onEditNode !== nextProps.onEditNode ||
+    prevProps.onDuplicateNode !== nextProps.onDuplicateNode ||
+    prevProps.onDeleteNode !== nextProps.onDeleteNode ||
+    prevProps.onMoveUpNode !== nextProps.onMoveUpNode ||
+    prevProps.onMoveDownNode !== nextProps.onMoveDownNode ||
+    prevProps.onToggleNodeVisibility !== nextProps.onToggleNodeVisibility ||
+    prevProps.onOpenNodeSettings !== nextProps.onOpenNodeSettings
+  ) {
+    return false;
+  }
+
+  // Comparaison du nœud (par référence d'abord, puis propriétés clés)
+  if (prevProps.node === nextProps.node) return true;
+
+  const prevNode = prevProps.node;
+  const nextNode = nextProps.node;
+
+  // Comparaisons des propriétés importantes du nœud
+  return (
+    prevNode.id === nextNode.id &&
+    prevNode.label === nextNode.label &&
+    prevNode.type === nextNode.type &&
+    prevNode.subType === nextNode.subType &&
+  (prevNode as unknown as NodeLegacyExtras).required === (nextNode as unknown as NodeLegacyExtras).required &&
+  (prevNode as unknown as NodeLegacyExtras).hasValidation === (nextNode as unknown as NodeLegacyExtras).hasValidation &&
+  (prevNode as unknown as NodeLegacyExtras).exposedKey === (nextNode as unknown as NodeLegacyExtras).exposedKey &&
+    prevNode.value === nextNode.value &&
+    prevNode.defaultValue === nextNode.defaultValue &&
+  (prevNode as unknown as NodeLegacyExtras).hidden === (nextNode as unknown as NodeLegacyExtras).hidden && // Ajouté pour la visibilité
+  // Suivi des flags de capacités pour re-rendu précis
+  prevNode.hasData === nextNode.hasData &&
+  prevNode.hasFormula === nextNode.hasFormula &&
+  prevNode.hasCondition === nextNode.hasCondition &&
+  prevNode.hasTable === nextNode.hasTable &&
+  prevNode.hasAPI === nextNode.hasAPI &&
+  prevNode.hasLink === nextNode.hasLink &&
+  prevNode.hasMarkers === nextNode.hasMarkers &&
+    (prevNode.children?.length || 0) === (nextNode.children?.length || 0) &&
+  ((prevNode as unknown as NodeLegacyExtras).capabilities?.length || 0) === ((nextNode as unknown as NodeLegacyExtras).capabilities?.length || 0)
+  );
+};
+
+export const OptimizedStructureNode = memo(OptimizedStructureNodeComponent, arePropsEqual);

@@ -1,0 +1,43 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Assouplissements spécifiques au build client pour réduire le bruit d'erreurs legacy
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    // On tolère temporairement les any implicites côté client pour accélérer la stabilisation
+  // suppressImplicitAnyIndexErrors supprimé en TS5 -> non supporté
+  },
+  // Build minimal : on whiteliste uniquement les zones nécessaires à l'app de base (auth + call module + ai + core components)
+  "include": [
+    "src/main.tsx",
+    "src/App.tsx",
+    "src/index.css",
+    "src/auth/**/*.ts",
+    "src/auth/**/*.tsx",
+    "src/components/**/*.ts",
+    "src/components/**/*.tsx",
+    "src/modules/call/**/*.ts",
+    "src/modules/call/**/*.tsx",
+    "src/hooks/**/*.ts",
+    "src/hooks/**/*.tsx",
+    "src/types/**/*.ts",
+    "src/utils/**/*.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "src/pages/**",
+    "src/api-server*.ts",
+    "src/api/**",
+    "src/routes/**",
+    "src/services/**",
+    "src/middleware/**",
+    "src/middlewares/**",
+    "src/google-auth/**",
+    "src/google-workspace/**",
+    "src/security/**",
+    "scripts/**",
+    "test*",
+    "**/*.d.ts"
+  ]
+}

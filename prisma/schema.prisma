@@ -1,0 +1,1784 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AIRecommendation {
+  id             String       @id
+  leadId         String
+  organizationId String
+  startTime      DateTime
+  endTime        DateTime
+  title          String
+  description    String?
+  confidence     Float        @default(0.8)
+  type           String       @default("ai_slot")
+  status         String       @default("active")
+  data           Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Lead           Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([leadId, status, startTime])
+  @@index([organizationId])
+  @@index([startTime])
+  @@index([status])
+}
+
+model AdCampaign {
+  id                    String                @id
+  organizationId        String
+  platformIntegrationId String
+  externalId            String?
+  name                  String
+  description           String?
+  status                String                @default("draft")
+  budget                Decimal               @default(0) @db.Decimal(10, 2)
+  spent                 Decimal               @default(0) @db.Decimal(10, 2)
+  leads                 Int                   @default(0)
+  costPerLead           Decimal               @default(0) @db.Decimal(10, 2)
+  roi                   Decimal               @default(0) @db.Decimal(5, 2)
+  targetingData         Json                  @default("{}")
+  creativeData          Json                  @default("{}")
+  startDate             DateTime?
+  endDate               DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime
+  Organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  AdPlatformIntegration AdPlatformIntegration @relation(fields: [platformIntegrationId], references: [id], onDelete: Cascade)
+  AdMetrics             AdMetrics[]
+
+  @@index([organizationId])
+  @@index([platformIntegrationId])
+  @@index([status])
+}
+
+model AdMetrics {
+  id           String     @id
+  campaignId   String
+  date         DateTime   @db.Date
+  impressions  Int        @default(0)
+  clicks       Int        @default(0)
+  conversions  Int        @default(0)
+  spend        Decimal    @default(0) @db.Decimal(10, 2)
+  ctr          Decimal    @default(0) @db.Decimal(5, 4)
+  cvr          Decimal    @default(0) @db.Decimal(5, 4)
+  cpc          Decimal    @default(0) @db.Decimal(10, 2)
+  cpl          Decimal    @default(0) @db.Decimal(10, 2)
+  qualityScore Decimal?   @db.Decimal(3, 1)
+  createdAt    DateTime   @default(now())
+  AdCampaign   AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
+  @@index([campaignId])
+  @@index([date])
+}
+
+model AdPlatformIntegration {
+  id             String       @id
+  organizationId String
+  platform       String
+  name           String
+  config         Json         @default("{}")
+  credentials    Json         @default("{}")
+  status         String       @default("disconnected")
+  lastSync       DateTime?
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  AdCampaign     AdCampaign[]
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([platform])
+  @@index([status])
+}
+
+model AnalyticsEvent {
+  id             String       @id
+  organizationId String
+  eventType      String
+  source         String
+  sourceId       String
+  data           Json         @default("{}")
+  value          Decimal?     @db.Decimal(10, 2)
+  timestamp      DateTime     @default(now())
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([eventType])
+  @@index([organizationId])
+  @@index([source])
+  @@index([timestamp])
+}
+
+model AutomationRule {
+  id             String        @id
+  organizationId String?
+  event          String
+  action         String
+  params         Json?
+  active         Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime
+  Organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Block {
+  id             String           @id
+  name           String
+  organizationId String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  Organization   Organization     @relation(fields: [organizationId], references: [id])
+  FormSubmission FormSubmission[]
+  Section        Section[]
+}
+
+model CalendarEvent {
+  id                  String                @id
+  title               String
+  description         String?
+  startDate           DateTime
+  endDate             DateTime?
+  allDay              Boolean               @default(false)
+  type                String
+  status              String?
+  notes               String?
+  location            String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  organizationId      String?
+  ownerId             String?
+  linkedEmailId       String?
+  linkedLeadId        String?
+  linkedClientId      String?
+  linkedProjectId     String?
+  externalCalendarId  String?
+  Organization        Organization?         @relation(fields: [organizationId], references: [id])
+  User                User?                 @relation(fields: [ownerId], references: [id])
+  CalendarParticipant CalendarParticipant[]
+}
+
+model CalendarParticipant {
+  id            String        @id
+  eventId       String
+  userId        String?
+  clientId      String?
+  role          String
+  Lead          Lead?         @relation(fields: [clientId], references: [id])
+  CalendarEvent CalendarEvent @relation(fields: [eventId], references: [id])
+  User          User?         @relation(fields: [userId], references: [id])
+}
+
+model CallStatus {
+  id                String              @id
+  organizationId    String
+  name              String
+  description       String?
+  color             String              @default("#6b7280")
+  icon              String?
+  order             Int                 @default(0)
+  isActive          Boolean             @default(true)
+  isDefault         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  Organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  CallToLeadMapping CallToLeadMapping[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([organizationId, order])
+}
+
+model CallToLeadMapping {
+  id             String       @id
+  organizationId String
+  callStatusId   String
+  leadStatusId   String
+  condition      String       @default("automatic")
+  priority       Int          @default(1)
+  description    String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  CallStatus     CallStatus   @relation(fields: [callStatusId], references: [id], onDelete: Cascade)
+  LeadStatus     LeadStatus   @relation(fields: [leadStatusId], references: [id], onDelete: Cascade)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, callStatusId, leadStatusId])
+  @@index([callStatusId])
+  @@index([leadStatusId])
+  @@index([organizationId])
+  @@index([priority])
+}
+
+model Category {
+  id                  String        @id
+  name                String
+  description         String?
+  icon                String?
+  iconColor           String?
+  order               Int           @default(0)
+  active              Boolean       @default(true)
+  superAdminOnly      Boolean       @default(false)
+  allowedRoles        String[]      @default([])
+  requiredPermissions String[]      @default([])
+  organizationId      String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime
+  Organization        Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Module              Module[]
+
+  @@index([active])
+  @@index([organizationId])
+}
+
+model DeletedEmail {
+  id        String   @id
+  userId    String
+  uid       String?
+  messageId String?
+  folder    String
+  deletedAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, uid, folder])
+  @@index([messageId])
+  @@index([userId, folder])
+}
+
+model EcommerceIntegration {
+  id             String       @id
+  organizationId String
+  platform       String
+  name           String
+  url            String
+  config         Json         @default("{}")
+  credentials    Json         @default("{}")
+  status         String       @default("disconnected")
+  lastSync       DateTime?
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Order          Order[]
+  Product        Product[]
+
+  @@index([organizationId])
+  @@index([platform])
+  @@index([status])
+}
+
+model Email {
+  id          String   @id
+  userId      String
+  from        String
+  to          String
+  subject     String
+  isRead      Boolean  @default(false)
+  folder      String   @default("inbox")
+  contentType String   @default("text/plain")
+  uid         String?
+  createdAt   DateTime @default(now())
+  body        String
+  isStarred   Boolean  @default(false)
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailAccount {
+  id                String       @id
+  emailAddress      String       @unique
+  encryptedPassword String
+  userId            String       @unique
+  organizationId    String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime
+  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model EmailDomain {
+  id             String       @id
+  domain         String       @unique
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model EmailTemplate {
+  id             String       @id
+  organizationId String
+  name           String
+  subject        String?
+  content        String
+  type           String       @default("general")
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([type])
+}
+
+model Field {
+  id                                                 String            @id
+  label                                              String
+  type                                               String
+  width                                              String?
+  required                                           Boolean           @default(false)
+  sectionId                                          String
+  order                                              Int
+  advancedConfig                                     Json?
+  Section                                            Section           @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  FieldCondition                                     FieldCondition[]
+  FieldDependency_FieldDependency_dependsOnIdToField FieldDependency[] @relation("FieldDependency_dependsOnIdToField")
+  FieldDependency_FieldDependency_fieldIdToField     FieldDependency[] @relation("FieldDependency_fieldIdToField")
+  FieldFormula                                       FieldFormula[]
+  FieldModule                                        FieldModule[]
+  FieldOption                                        FieldOption[]
+  FieldOptionNode                                    FieldOptionNode[]
+  FieldValidation                                    FieldValidation[]
+}
+
+model FieldCondition {
+  id         String @id
+  fieldId    String
+  type       String
+  expression String
+  Field      Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+}
+
+model FieldDependency {
+  id                                       String  @id
+  fieldId                                  String
+  dependsOnId                              String
+  condition                                String
+  value                                    String?
+  title                                    String?
+  description                              String?
+  order                                    Int?
+  params                                   Json?
+  name                                     String?
+  sequence                                 Json?
+  Field_FieldDependency_dependsOnIdToField Field   @relation("FieldDependency_dependsOnIdToField", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  Field_FieldDependency_fieldIdToField     Field   @relation("FieldDependency_fieldIdToField", fields: [fieldId], references: [id], onDelete: Cascade)
+}
+
+model FieldFormula {
+  id          String  @id
+  fieldId     String
+  formula     String?
+  title       String?
+  description String?
+  order       Int?
+  name        String?
+  sequence    Json    @default("[]")
+  Field       Field   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+}
+
+model FieldModule {
+  id         String @id
+  fieldId    String
+  moduleType String
+  config     Json
+  Field      Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+}
+
+model FieldOption {
+  id            String          @id
+  label         String
+  value         String
+  fieldId       String
+  order         Int
+  Field         Field           @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  FieldSubField FieldSubField[]
+}
+
+model FieldOptionNode {
+  id                    String            @id
+  label                 String
+  value                 String?
+  parentId              String?
+  fieldId               String
+  order                 Int               @default(0)
+  data                  Json?
+  type                  String            @default("option")
+  active                Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime
+  Field                 Field             @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  FieldOptionNode       FieldOptionNode?  @relation("FieldOptionNodeToFieldOptionNode", fields: [parentId], references: [id], onDelete: Cascade)
+  other_FieldOptionNode FieldOptionNode[] @relation("FieldOptionNodeToFieldOptionNode")
+
+  @@index([fieldId])
+  @@index([fieldId, parentId])
+  @@index([order])
+  @@index([parentId])
+}
+
+model FieldSubField {
+  id                  String                @id
+  label               String
+  type                String
+  optionId            String
+  order               Int
+  FieldOption         FieldOption           @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  FieldSubFieldOption FieldSubFieldOption[]
+}
+
+model FieldSubFieldOption {
+  id            String        @id
+  label         String
+  subFieldId    String
+  order         Int
+  FieldSubField FieldSubField @relation(fields: [subFieldId], references: [id], onDelete: Cascade)
+}
+
+model FieldType {
+  id            String   @id
+  name          String   @unique
+  label         String
+  has_options   Boolean  @default(false)
+  has_subfields Boolean  @default(false)
+  config        Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime
+}
+
+model FieldValidation {
+  id                String  @id
+  fieldId           String
+  type              String
+  comparisonFieldId String?
+  comparisonType    String  @default("static")
+  message           String  @default("Ce champ n'est pas valide.")
+  value             String?
+  Field             Field   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@index([fieldId])
+}
+
+model FormSubmission {
+  id        String   @id
+  blockId   String
+  userId    String?
+  data      Json
+  createdAt DateTime @default(now())
+  Block     Block    @relation(fields: [blockId], references: [id])
+  User      User?    @relation(fields: [userId], references: [id])
+}
+
+model GoogleMailWatch {
+  id             String       @id
+  userId         String       @unique
+  organizationId String
+  historyId      String?
+  expiration     DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model GoogleToken {
+  id                        String                      @id
+  accessToken               String
+  refreshToken              String?
+  tokenType                 String                      @default("Bearer")
+  expiresAt                 DateTime?
+  scope                     String?
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime
+  organizationId            String                      @unique
+  lastRefreshAt             DateTime?
+  refreshCount              Int                         @default(0)
+  Organization              Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  GoogleTokenRefreshHistory GoogleTokenRefreshHistory[]
+
+  @@index([organizationId])
+}
+
+model GoogleTokenRefreshHistory {
+  id           String      @id
+  tokenId      String
+  refreshedAt  DateTime    @default(now())
+  success      Boolean
+  errorMessage String?
+  oldExpiresAt DateTime?
+  newExpiresAt DateTime?
+  GoogleToken  GoogleToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@index([refreshedAt])
+  @@index([tokenId])
+}
+
+model GoogleVoiceCall {
+  id             String       @id
+  organizationId String
+  userId         String?
+  fromNumber     String
+  toNumber       String
+  duration       Int
+  callType       String
+  status         String
+  recordingUrl   String?
+  transcription  String?
+  startTime      DateTime
+  endTime        DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User?        @relation(fields: [userId], references: [id])
+
+  @@index([fromNumber])
+  @@index([organizationId])
+  @@index([startTime])
+  @@index([toNumber])
+  @@index([userId])
+}
+
+model GoogleVoiceConfig {
+  id                   String       @id
+  organizationId       String       @unique
+  encryptedPrivateKey  String
+  encryptedClientEmail String
+  domain               String
+  delegatedUserEmail   String
+  isActive             Boolean      @default(true)
+  lastSync             DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime
+  Organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
+  @@index([organizationId])
+}
+
+model GoogleVoiceSMS {
+  id             String       @id
+  organizationId String
+  userId         String?
+  fromNumber     String
+  toNumber       String
+  message        String
+  direction      String
+  status         String
+  timestamp      DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User?        @relation(fields: [userId], references: [id])
+
+  @@index([fromNumber])
+  @@index([organizationId])
+  @@index([timestamp])
+  @@index([toNumber])
+  @@index([userId])
+}
+
+model GoogleWorkspaceConfig {
+  id                  String       @id
+  clientId            String?
+  clientSecret        String?
+  domain              String?
+  adminEmail          String?
+  serviceAccountEmail String?
+  privateKey          String?
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime
+  calendarEnabled     Boolean      @default(false)
+  docsEnabled         Boolean      @default(false)
+  driveEnabled        Boolean      @default(false)
+  enabled             Boolean      @default(false)
+  gmailEnabled        Boolean      @default(false)
+  meetEnabled         Boolean      @default(false)
+  organizationId      String       @unique
+  sheetsEnabled       Boolean      @default(false)
+  voiceEnabled        Boolean      @default(false)
+  redirectUri         String?
+  Organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
+  @@index([organizationId])
+}
+
+model GoogleWorkspaceUser {
+  id              String    @id
+  userId          String    @unique
+  email           String    @unique
+  isActive        Boolean   @default(true)
+  gmailEnabled    Boolean   @default(false)
+  calendarEnabled Boolean   @default(false)
+  driveEnabled    Boolean   @default(false)
+  meetEnabled     Boolean   @default(false)
+  docsEnabled     Boolean   @default(false)
+  sheetsEnabled   Boolean   @default(false)
+  voiceEnabled    Boolean   @default(false)
+  lastSync        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+  User            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([isActive])
+  @@index([userId])
+}
+
+model Icon {
+  id          String   @id
+  name        String   @unique
+  category    String
+  description String?
+  tags        String[] @default([])
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([active])
+  @@index([category])
+  @@index([name])
+}
+
+model IntegrationsSettings {
+  id             String       @id
+  type           String
+  config         Json?
+  enabled        Boolean      @default(false)
+  organizationId String
+  userId         String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User?        @relation(fields: [userId], references: [id])
+
+  @@unique([organizationId, type])
+}
+
+model Invitation {
+  id                                 String           @id
+  email                              String
+  token                              String           @unique
+  expiresAt                          DateTime
+  organizationId                     String
+  roleId                             String
+  createdAt                          DateTime         @default(now())
+  updatedAt                          DateTime
+  status                             InvitationStatus @default(PENDING)
+  invitedById                        String
+  targetUserId                       String?
+  User_Invitation_invitedByIdToUser  User             @relation("Invitation_invitedByIdToUser", fields: [invitedById], references: [id])
+  Organization                       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Role                               Role             @relation(fields: [roleId], references: [id])
+  User_Invitation_targetUserIdToUser User?            @relation("Invitation_targetUserIdToUser", fields: [targetUserId], references: [id])
+
+  @@unique([email, organizationId])
+  @@index([targetUserId])
+}
+
+model Lead {
+  id                       String                     @id @default(cuid())
+  organizationId           String
+  assignedToId             String?
+  status                   String                     @default("nouveau")
+  data                     Json?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime
+  source                   String?
+  statusId                 String?
+  company                  String?
+  email                    String?
+  firstName                String?
+  lastContactDate          DateTime?
+  lastName                 String?
+  leadNumber               String?                    @unique
+  linkedin                 String?
+  nextFollowUpDate         DateTime?
+  notes                    String?
+  phone                    String?
+  website                  String?
+  sourceId                 String?
+  AIRecommendation         AIRecommendation[]
+  CalendarParticipant      CalendarParticipant[]
+  User                     User?                      @relation(fields: [assignedToId], references: [id])
+  Organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  LeadSource               LeadSource?                @relation(fields: [sourceId], references: [id])
+  LeadStatus               LeadStatus?                @relation(fields: [statusId], references: [id])
+  TechnicalData            TechnicalData[]
+  TelnyxCall               TelnyxCall[]
+  TelnyxMessage            TelnyxMessage[]
+  TimelineEvent            TimelineEvent[]
+  TreeBranchLeafSubmission TreeBranchLeafSubmission[]
+
+  @@index([email])
+  @@index([firstName, lastName])
+  @@index([organizationId, createdAt])
+}
+
+model LeadSource {
+  id             String       @id
+  organizationId String
+  name           String
+  description    String?
+  color          String       @default("#6b7280")
+  icon           String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Lead           Lead[]
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model LeadStatus {
+  id                String              @id
+  organizationId    String
+  name              String
+  color             String
+  order             Int                 @default(0)
+  isDefault         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  CallToLeadMapping CallToLeadMapping[]
+  Lead              Lead[]
+  Organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, order])
+}
+
+model Module {
+  id                       String                     @id
+  key                      String                     @unique
+  label                    String
+  feature                  String                     @unique
+  icon                     String?
+  route                    String?
+  description              String?
+  page                     String?
+  order                    Int?
+  active                   Boolean                    @default(true)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime
+  organizationId           String?
+  categoryId               String?
+  superAdminOnly           Boolean                    @default(false)
+  Category                 Category?                  @relation(fields: [categoryId], references: [id])
+  Organization             Organization?              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  OrganizationModuleStatus OrganizationModuleStatus[]
+  Permission               Permission[]
+
+  @@index([categoryId])
+  @@index([organizationId])
+}
+
+model Notification {
+  id             String             @id
+  organizationId String
+  type           NotificationType
+  data           Json
+  status         NotificationStatus @default(PENDING)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime
+  userId         String?
+  Organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User?              @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model Order {
+  id                     String                @id
+  organizationId         String
+  ecommerceIntegrationId String?
+  externalId             String?
+  orderNumber            String
+  customerName           String
+  customerEmail          String
+  customerPhone          String?
+  billingAddress         Json                  @default("{}")
+  shippingAddress        Json                  @default("{}")
+  totalAmount            Decimal               @default(0) @db.Decimal(10, 2)
+  currency               String                @default("EUR")
+  status                 String                @default("pending")
+  paymentStatus          String                @default("pending")
+  items                  Json                  @default("[]")
+  metadata               Json                  @default("{}")
+  orderDate              DateTime              @default(now())
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime
+  EcommerceIntegration   EcommerceIntegration? @relation(fields: [ecommerceIntegrationId], references: [id])
+  Organization           Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([customerEmail])
+  @@index([orderDate])
+  @@index([organizationId])
+  @@index([paymentStatus])
+  @@index([status])
+}
+
+model Organization {
+  id                          String                        @id
+  name                        String                        @unique
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime
+  features                    String[]                      @default([])
+  status                      String                        @default("active")
+  address                     String?
+  description                 String?
+  phone                       String?
+  website                     String?
+  AIRecommendation            AIRecommendation[]
+  AdCampaign                  AdCampaign[]
+  AdPlatformIntegration       AdPlatformIntegration[]
+  AnalyticsEvent              AnalyticsEvent[]
+  AutomationRule              AutomationRule[]
+  Block                       Block[]
+  CalendarEvent               CalendarEvent[]
+  CallStatus                  CallStatus[]
+  CallToLeadMapping           CallToLeadMapping[]
+  Category                    Category[]
+  EcommerceIntegration        EcommerceIntegration[]
+  EmailAccount                EmailAccount[]
+  EmailDomain                 EmailDomain[]
+  EmailTemplate               EmailTemplate[]
+  GoogleMailWatch             GoogleMailWatch[]
+  GoogleToken                 GoogleToken?
+  GoogleVoiceCall             GoogleVoiceCall[]
+  GoogleVoiceConfig           GoogleVoiceConfig?
+  GoogleVoiceSMS              GoogleVoiceSMS[]
+  GoogleWorkspaceConfig       GoogleWorkspaceConfig?
+  IntegrationsSettings        IntegrationsSettings[]
+  Invitation                  Invitation[]
+  Lead                        Lead[]
+  LeadSource                  LeadSource[]
+  LeadStatus                  LeadStatus[]
+  Module                      Module[]
+  Notification                Notification[]
+  Order                       Order[]
+  OrganizationModuleStatus    OrganizationModuleStatus[]
+  OrganizationRoleStatus      OrganizationRoleStatus[]
+  Permission                  Permission[]
+  Product                     Product[]
+  Role                        Role[]
+  TechnicalData               TechnicalData[]
+  TelnyxCall                  TelnyxCall[]
+  TelnyxConnection            TelnyxConnection[]
+  TelnyxMessage               TelnyxMessage[]
+  TelnyxPhoneNumber           TelnyxPhoneNumber[]
+  TelnyxUserConfig            TelnyxUserConfig[]
+  TimelineEvent               TimelineEvent[]
+  TreeBranchLeafMarker        TreeBranchLeafMarker[]
+  TreeBranchLeafNodeCondition TreeBranchLeafNodeCondition[]
+  TreeBranchLeafNodeFormula   TreeBranchLeafNodeFormula[]
+  TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
+  TreeBranchLeafTree          TreeBranchLeafTree[]
+  UserOrganization            UserOrganization[]
+}
+
+model OrganizationModuleStatus {
+  id             String       @id
+  organizationId String
+  moduleId       String
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Module         Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, moduleId])
+}
+
+model OrganizationRoleStatus {
+  id             String       @id
+  organizationId String
+  roleId         String
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Role           Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, roleId])
+}
+
+model Permission {
+  id             String        @id
+  roleId         String
+  organizationId String?
+  moduleId       String?
+  action         String
+  resource       String
+  allowed        Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
+  Module         Module?       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  Organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Role           Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, organizationId, moduleId, action, resource])
+}
+
+model Product {
+  id                     String                @id
+  organizationId         String
+  ecommerceIntegrationId String?
+  externalId             String?
+  name                   String
+  description            String?
+  category               String?
+  price                  Decimal               @default(0) @db.Decimal(10, 2)
+  currency               String                @default("EUR")
+  stock                  Int?
+  sku                    String?
+  images                 Json                  @default("[]")
+  metadata               Json                  @default("{}")
+  status                 String                @default("active")
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime
+  EcommerceIntegration   EcommerceIntegration? @relation(fields: [ecommerceIntegrationId], references: [id])
+  Organization           Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([category])
+  @@index([organizationId])
+  @@index([sku])
+  @@index([status])
+}
+
+model Role {
+  id                     String                   @id
+  name                   String
+  label                  String
+  description            String?
+  organizationId         String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime
+  isDetached             Boolean                  @default(false)
+  isGlobal               Boolean                  @default(false)
+  templateRoleId         String?
+  Invitation             Invitation[]
+  OrganizationRoleStatus OrganizationRoleStatus[]
+  Permission             Permission[]
+  Organization           Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  UserOrganization       UserOrganization[]
+
+  @@unique([name, organizationId])
+  @@index([organizationId])
+}
+
+model Section {
+  id      String  @id
+  name    String
+  order   Int
+  blockId String
+  active  Boolean @default(true)
+  Field   Field[]
+  Block   Block   @relation(fields: [blockId], references: [id], onDelete: Cascade)
+}
+
+model SystemConfig {
+  id          String   @id
+  key         String   @unique
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([key])
+}
+
+model TechnicalData {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String?
+  type           String        @db.VarChar(255)
+  label          String        @db.VarChar(255)
+  value          String        @db.VarChar(255)
+  data           Json?
+  createdAt      DateTime      @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime      @default(now()) @db.Timestamp(6)
+  leadId         String?
+  Lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  Organization   Organization? @relation(fields: [organizationId], references: [id], onUpdate: NoAction)
+}
+
+model TelnyxCall {
+  id             String       @id
+  callId         String       @unique
+  fromNumber     String
+  toNumber       String
+  direction      String
+  status         String
+  duration       Int?
+  cost           Float?
+  recordingUrl   String?
+  organizationId String
+  leadId         String?
+  startedAt      DateTime
+  endedAt        DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Lead           Lead?        @relation(fields: [leadId], references: [id])
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+  @@index([fromNumber])
+  @@index([leadId])
+  @@index([organizationId])
+  @@index([startedAt])
+  @@index([toNumber])
+}
+
+model TelnyxConnection {
+  id             String       @id
+  name           String
+  status         String
+  type           String
+  webhookUrl     String?
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model TelnyxMessage {
+  id             String       @id
+  messageId      String       @unique
+  fromNumber     String
+  toNumber       String
+  direction      String
+  type           String
+  text           String
+  status         String
+  cost           Float?
+  mediaUrls      String[]     @default([])
+  organizationId String
+  leadId         String?
+  sentAt         DateTime
+  deliveredAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Lead           Lead?        @relation(fields: [leadId], references: [id])
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([fromNumber])
+  @@index([leadId])
+  @@index([messageId])
+  @@index([organizationId])
+  @@index([sentAt])
+  @@index([toNumber])
+}
+
+model TelnyxPhoneNumber {
+  id             String       @id
+  phoneNumber    String       @unique
+  status         String
+  countryCode    String
+  numberType     String
+  features       String[]
+  monthlyCost    Float        @default(0)
+  connectionId   String?
+  organizationId String
+  purchasedAt    DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  assignedUserId String?
+  User           User?        @relation(fields: [assignedUserId], references: [id])
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([assignedUserId])
+  @@index([countryCode])
+  @@index([organizationId])
+  @@index([phoneNumber])
+  @@index([status])
+}
+
+model TelnyxSettings {
+  id              String   @id
+  userId          String   @unique
+  encryptedApiKey String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+  User            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TelnyxUserConfig {
+  id             String       @id
+  userId         String       @unique
+  organizationId String
+  assignedNumber String?
+  canMakeCalls   Boolean      @default(false)
+  canSendSms     Boolean      @default(false)
+  monthlyLimit   Float?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([assignedNumber])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model TimelineEvent {
+  id             String        @id
+  organizationId String?
+  entityType     String
+  entityId       String
+  eventType      String
+  data           Json?
+  createdAt      DateTime      @default(now())
+  leadId         String?
+  Lead           Lead?         @relation(fields: [leadId], references: [id])
+  Organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model TreeBranchLeafAPIConnection {
+  id                 String             @id
+  treeId             String
+  name               String
+  url                String
+  method             String             @default("GET")
+  headers            Json               @default("{}")
+  params             Json               @default("{}")
+  authType           String?
+  authConfig         Json               @default("{}")
+  cacheEnabled       Boolean            @default(true)
+  cacheDuration      Int                @default(3600)
+  lastCall           DateTime?
+  lastResponse       Json?
+  isActive           Boolean            @default(true)
+  metadata           Json               @default("{}")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  TreeBranchLeafTree TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+
+  @@unique([treeId, name])
+  @@index([isActive])
+  @@index([treeId])
+}
+
+model TreeBranchLeafDateConfig {
+  id                 String             @id
+  nodeId             String             @unique
+  includeTime        Boolean            @default(false)
+  minDate            DateTime?
+  maxDate            DateTime?
+  format             String             @default("DD/MM/YYYY")
+  locale             String             @default("fr")
+  disabledDates      Json               @default("[]")
+  allowedDays        Json               @default("[0, 1, 2, 3, 4, 5, 6]")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+}
+
+model TreeBranchLeafFormulaConfig {
+  id                 String             @id
+  nodeId             String             @unique
+  formula            String
+  variables          Json               @default("{}")
+  resultType         String             @default("number")
+  precision          Int                @default(2)
+  autoCalculate      Boolean            @default(true)
+  dependencies       Json               @default("[]")
+  lastCalculated     DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([autoCalculate])
+  @@index([nodeId])
+}
+
+model TreeBranchLeafFormulaReference {
+  id                 String             @id
+  nodeId             String
+  referencedNodeId   String
+  operator           String?
+  weight             Float              @default(1.0)
+  order              Int                @default(0)
+  metadata           Json               @default("{}")
+  createdAt          DateTime           @default(now())
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([order])
+  @@index([referencedNodeId])
+}
+
+model TreeBranchLeafMarker {
+  id                       String                     @id
+  treeId                   String?
+  organizationId           String
+  name                     String
+  description              String?
+  color                    String                     @default("#3b82f6")
+  icon                     String?
+  category                 String?
+  isGlobal                 Boolean                    @default(false)
+  metadata                 Json                       @default("{}")
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime
+  Organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  TreeBranchLeafTree       TreeBranchLeafTree?        @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  TreeBranchLeafNodeMarker TreeBranchLeafNodeMarker[]
+
+  @@unique([organizationId, name])
+  @@index([category])
+  @@index([isGlobal])
+  @@index([organizationId])
+}
+
+model TreeBranchLeafNode {
+  id                             String                           @id
+  treeId                         String
+  parentId                       String?
+  type                           String
+  subType                        String?
+  label                          String
+  description                    String?
+  value                          String?
+  order                          Int                              @default(0)
+  isRequired                     Boolean                          @default(false)
+  isVisible                      Boolean                          @default(true)
+  isActive                       Boolean                          @default(true)
+  fieldConfig                    Json?
+  conditionConfig                Json?
+  formulaConfig                  Json?
+  tableConfig                    Json?
+  apiConfig                      Json?
+  linkConfig                     Json?
+  defaultValue                   String?
+  calculatedValue                String?
+  metadata                       Json                             @default("{}")
+  createdAt                      DateTime                         @default(now())
+  updatedAt                      DateTime
+  hasAPI                         Boolean                          @default(false)
+  hasCondition                   Boolean                          @default(false)
+  hasData                        Boolean                          @default(false)
+  hasFormula                     Boolean                          @default(false)
+  hasLink                        Boolean                          @default(false)
+  hasMarkers                     Boolean                          @default(false)
+  hasTable                       Boolean                          @default(false)
+  api_activeId                   String?
+  api_bodyVars                   Json?
+  api_instances                  Json?
+  api_name                       String?
+  appearance_size                String?                          @default("md")
+  appearance_variant             String?
+  appearance_width               String?
+  bool_defaultValue              Boolean?
+  bool_falseLabel                String?
+  bool_trueLabel                 String?
+  condition_activeId             String?
+  condition_branches             Json?
+  condition_instances            Json?
+  condition_mode                 String?
+  condition_tokens               Json?
+  data_activeId                  String?
+  data_displayFormat             String?
+  data_exposedKey                String?
+  data_instances                 Json?
+  data_precision                 Int?                             @default(2)
+  data_unit                      String?
+  data_visibleToUser             Boolean?                         @default(false)
+  date_format                    String?                          @default("DD/MM/YYYY")
+  date_maxDate                   DateTime?
+  date_minDate                   DateTime?
+  date_showTime                  Boolean?                         @default(false)
+  fieldSubType                   String?
+  fieldType                      String?
+  field_label                    String?
+  formula_activeId               String?
+  formula_instances              Json?
+  formula_name                   String?
+  formula_tokens                 Json?
+  image_crop                     Boolean?                         @default(false)
+  image_maxSize                  Int?
+  image_ratio                    String?
+  image_thumbnails               Json?
+  link_activeId                  String?
+  link_carryContext              Boolean?                         @default(false)
+  link_instances                 Json?
+  link_mode                      String?                          @default("JUMP")
+  link_name                      String?
+  link_params                    Json?
+  link_targetNodeId              String?
+  link_targetTreeId              String?
+  markers_activeId               String?
+  markers_available              Json?
+  markers_instances              Json?
+  markers_name                   String?
+  markers_selectedIds            Json?
+  number_decimals                Int?                             @default(0)
+  number_defaultValue            Decimal?
+  number_max                     Decimal?
+  number_min                     Decimal?
+  number_prefix                  String?
+  number_step                    Decimal?                         @default(1)
+  number_suffix                  String?
+  number_unit                    String?
+  option_label                   String?
+  select_allowClear              Boolean?                         @default(true)
+  select_defaultValue            String?
+  select_multiple                Boolean?                         @default(false)
+  select_options                 Json?
+  select_searchable              Boolean?                         @default(true)
+  table_activeId                 String?
+  table_columns                  Json?
+  table_data                     Json?
+  table_importSource             String?
+  table_instances                Json?
+  table_isImported               Boolean?                         @default(false)
+  table_meta                     Json?
+  table_name                     String?
+  table_rows                     Json?
+  table_type                     String?                          @default("columns")
+  text_mask                      String?
+  text_maxLength                 Int?
+  text_minLength                 Int?
+  text_placeholder               String?
+  text_regex                     String?
+  text_rows                      Int?                             @default(3)
+  tbl_auto_generated             Boolean                          @default(false)
+  tbl_capacity                   Int?
+  tbl_code                       String?                          @db.VarChar(20)
+  tbl_created_at                 DateTime?
+  tbl_type                       Int?
+  tbl_updated_at                 DateTime?
+  TreeBranchLeafDateConfig       TreeBranchLeafDateConfig?
+  TreeBranchLeafFormulaConfig    TreeBranchLeafFormulaConfig?
+  TreeBranchLeafFormulaReference TreeBranchLeafFormulaReference[]
+  TreeBranchLeafNode             TreeBranchLeafNode?              @relation("TreeBranchLeafNodeToTreeBranchLeafNode", fields: [parentId], references: [id], onDelete: Cascade)
+  other_TreeBranchLeafNode       TreeBranchLeafNode[]             @relation("TreeBranchLeafNodeToTreeBranchLeafNode")
+  TreeBranchLeafTree             TreeBranchLeafTree               @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  TreeBranchLeafNodeCondition    TreeBranchLeafNodeCondition[]
+  TreeBranchLeafNodeFormula      TreeBranchLeafNodeFormula[]
+  TreeBranchLeafNodeMarker       TreeBranchLeafNodeMarker[]
+  TreeBranchLeafNodeTable        TreeBranchLeafNodeTable[]
+  TreeBranchLeafNodeVariable     TreeBranchLeafNodeVariable?
+  TreeBranchLeafNumberConfig     TreeBranchLeafNumberConfig?
+  TreeBranchLeafSelectConfig     TreeBranchLeafSelectConfig?
+  TreeBranchLeafSubmissionData   TreeBranchLeafSubmissionData[]
+  TreeBranchLeafTextConfig       TreeBranchLeafTextConfig?
+
+  @@index([order])
+  @@index([parentId])
+  @@index([treeId])
+  @@index([type, subType])
+  @@index([fieldType])
+  @@index([data_exposedKey])
+  @@index([formula_activeId])
+  @@index([condition_activeId])
+  @@index([table_activeId])
+  @@index([api_activeId])
+  @@index([link_activeId])
+  @@index([markers_activeId])
+  @@index([tbl_code])
+  @@index([tbl_type])
+  @@index([tbl_capacity])
+  @@index([tbl_auto_generated])
+}
+
+model TreeBranchLeafNodeMarker {
+  id                   String               @id
+  nodeId               String
+  markerId             String
+  value                String?
+  metadata             Json                 @default("{}")
+  createdAt            DateTime             @default(now())
+  TreeBranchLeafMarker TreeBranchLeafMarker @relation(fields: [markerId], references: [id], onDelete: Cascade)
+  TreeBranchLeafNode   TreeBranchLeafNode   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, markerId])
+  @@index([markerId])
+  @@index([nodeId])
+}
+
+model TreeBranchLeafNumberConfig {
+  id                 String             @id
+  nodeId             String             @unique
+  min                Float?
+  max                Float?
+  decimals           Int                @default(2)
+  step               Float              @default(1)
+  unit               String?
+  prefix             String?
+  suffix             String?
+  separator          String             @default(".")
+  thousandsSeparator String             @default(",")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+}
+
+model TreeBranchLeafNodeVariable {
+  id                 String             @id
+  nodeId             String             @unique
+  exposedKey         String             @unique
+  displayName        String
+  displayFormat      String             @default("number")
+  unit               String?
+  precision          Int?               @default(2)
+  visibleToUser      Boolean            @default(true)
+  isReadonly         Boolean            @default(false)
+  defaultValue       String?
+  metadata           Json               @default("{}")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  fixedValue         String?
+  selectedNodeId     String?
+  sourceRef          String?
+  sourceType         String?            @default("fixed")
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([exposedKey])
+  @@index([visibleToUser])
+  @@index([sourceType])
+  @@index([selectedNodeId])
+}
+
+model TreeBranchLeafSelectConfig {
+  id                 String             @id
+  nodeId             String             @unique
+  options            Json               @default("[]")
+  multiple           Boolean            @default(false)
+  searchable         Boolean            @default(false)
+  allowCustom        Boolean            @default(false)
+  maxSelections      Int?
+  optionsSource      String?
+  apiEndpoint        String?
+  tableReference     String?
+  dependsOnNodeId    String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([optionsSource])
+}
+
+model TreeBranchLeafSubmission {
+  id                           String                         @id
+  treeId                       String
+  userId                       String?
+  leadId                       String?
+  sessionId                    String?
+  status                       String                         @default("draft")
+  totalScore                   Float?
+  summary                      Json                           @default("{}")
+  exportData                   Json?
+  completedAt                  DateTime?
+  createdAt                    DateTime                       @default(now())
+  updatedAt                    DateTime
+  Lead                         Lead?                          @relation(fields: [leadId], references: [id])
+  TreeBranchLeafTree           TreeBranchLeafTree             @relation(fields: [treeId], references: [id], onDelete: Cascade)
+  User                         User?                          @relation(fields: [userId], references: [id])
+  TreeBranchLeafSubmissionData TreeBranchLeafSubmissionData[]
+
+  @@index([createdAt])
+  @@index([leadId])
+  @@index([status])
+  @@index([treeId])
+  @@index([userId])
+}
+
+model TreeBranchLeafSubmissionData {
+  id                       String                   @id
+  submissionId             String
+  nodeId                   String
+  value                    String?
+  createdAt                DateTime                 @default(now())
+  lastResolved             DateTime?
+  operationDetail          Json?
+  operationResult          Json?
+  operationSource          OperationSource?
+  sourceRef                String?
+  fieldLabel               String?
+  isVariable               Boolean                  @default(false)
+  variableDisplayName      String?
+  variableKey              String?
+  variableUnit             String?
+  TreeBranchLeafNode       TreeBranchLeafNode       @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  TreeBranchLeafSubmission TreeBranchLeafSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, nodeId])
+  @@index([nodeId])
+  @@index([submissionId])
+  @@index([sourceRef])
+  @@index([operationSource])
+  @@index([variableKey])
+  @@index([isVariable])
+  @@index([sourceRef], map: "idx_tree_branch_leaf_submission_data_source_ref")
+}
+
+model TreeBranchLeafTableData {
+  id                 String             @id
+  treeId             String
+  name               String
+  description        String?
+  headers            Json
+  rows               Json
+  isImported         Boolean            @default(false)
+  importSource       String?
+  lastUpdated        DateTime           @default(now())
+  metadata           Json               @default("{}")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  TreeBranchLeafTree TreeBranchLeafTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+
+  @@unique([treeId, name])
+  @@index([treeId])
+}
+
+model TreeBranchLeafTextConfig {
+  id                 String             @id
+  nodeId             String             @unique
+  maxLength          Int?
+  minLength          Int?
+  validation         String?
+  placeholder        String?
+  isMultiline        Boolean            @default(false)
+  allowedCharacters  String?
+  forbiddenWords     Json               @default("[]")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime
+  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+}
+
+model TreeBranchLeafTree {
+  id                          String                        @id
+  organizationId              String
+  name                        String
+  description                 String?
+  category                    String                        @default("formulaire")
+  icon                        String?
+  color                       String                        @default("#10b981")
+  version                     String                        @default("1.0.0")
+  status                      String                        @default("draft")
+  settings                    Json                          @default("{}")
+  metadata                    Json                          @default("{}")
+  isPublic                    Boolean                       @default(false)
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime
+  TreeBranchLeafAPIConnection TreeBranchLeafAPIConnection[]
+  TreeBranchLeafMarker        TreeBranchLeafMarker[]
+  TreeBranchLeafNode          TreeBranchLeafNode[]
+  TreeBranchLeafSubmission    TreeBranchLeafSubmission[]
+  TreeBranchLeafTableData     TreeBranchLeafTableData[]
+  Organization                Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([category])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model User {
+  id                                       String                     @id
+  email                                    String                     @unique
+  createdAt                                DateTime                   @default(now())
+  updatedAt                                DateTime
+  passwordHash                             String
+  status                                   String                     @default("active")
+  address                                  String?
+  avatarUrl                                String?
+  firstName                                String?
+  lastName                                 String?
+  phoneNumber                              String?
+  vatNumber                                String?
+  role                                     String                     @default("user")
+  CalendarEvent                            CalendarEvent[]
+  CalendarParticipant                      CalendarParticipant[]
+  DeletedEmail                             DeletedEmail[]
+  Email                                    Email[]
+  EmailAccount                             EmailAccount?
+  FormSubmission                           FormSubmission[]
+  GoogleMailWatch                          GoogleMailWatch?
+  GoogleVoiceCall                          GoogleVoiceCall[]
+  GoogleVoiceSMS                           GoogleVoiceSMS[]
+  GoogleWorkspaceUser                      GoogleWorkspaceUser?
+  IntegrationsSettings                     IntegrationsSettings[]
+  Invitation_Invitation_invitedByIdToUser  Invitation[]               @relation("Invitation_invitedByIdToUser")
+  Invitation_Invitation_targetUserIdToUser Invitation[]               @relation("Invitation_targetUserIdToUser")
+  Lead                                     Lead[]
+  Notification                             Notification[]
+  TelnyxPhoneNumber                        TelnyxPhoneNumber[]
+  TelnyxSettings                           TelnyxSettings?
+  TelnyxUserConfig                         TelnyxUserConfig?
+  TreeBranchLeafSubmission                 TreeBranchLeafSubmission[]
+  UserOrganization                         UserOrganization[]
+  UserService                              UserService[]
+}
+
+model UserOrganization {
+  userId         String
+  organizationId String
+  roleId         String
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime
+  status         UserOrganizationStatus @default(ACTIVE)
+  id             String                 @id
+  Organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Role           Role                   @relation(fields: [roleId], references: [id])
+  User           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+model UserService {
+  id           String   @id
+  userId       String
+  serviceType  String
+  isActive     Boolean  @default(false)
+  isConfigured Boolean  @default(false)
+  email        String?
+  phoneNumber  String?
+  apiKey       String?
+  data         Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serviceType])
+  @@index([userId])
+}
+
+model UserRoles {
+  A String
+  B String
+
+  @@id([A, B], map: "_UserRoles_AB_pkey")
+  @@index([B], map: "_UserRoles_B_index")
+  @@map("_UserRoles")
+}
+
+model TreeBranchLeafNodeFormula {
+  id             String             @id @default(cuid())
+  nodeId         String
+  organizationId String?
+  name           String
+  tokens         Json               @default("[]")
+  description    String?
+  isDefault      Boolean            @default(false)
+  order          Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @default(now()) @updatedAt
+  node           TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  Organization   Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, name])
+  @@index([nodeId])
+  @@index([organizationId])
+}
+
+model TreeBranchLeafNodeCondition {
+  id             String             @id @default(cuid())
+  nodeId         String
+  organizationId String?
+  name           String
+  conditionSet   Json               @default("{}")
+  description    String?
+  isDefault      Boolean            @default(false)
+  order          Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime
+  node           TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  Organization   Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, name])
+  @@index([nodeId])
+  @@index([organizationId])
+}
+
+model TreeBranchLeafNodeTable {
+  id             String             @id @default(cuid())
+  nodeId         String
+  organizationId String?
+  name           String
+  description    String?
+  type           String             @default("basic")
+  columns        Json               @default("[]")
+  rows           Json               @default("[]")
+  data           Json               @default("{}")
+  meta           Json               @default("{}")
+  isDefault      Boolean            @default(false)
+  order          Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  node           TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  Organization   Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, name])
+  @@index([nodeId])
+  @@index([organizationId])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+  DISABLED
+}
+
+enum OperationSource {
+  condition
+  formula
+  table
+  neutral
+}
+
+enum NotificationStatus {
+  PENDING
+  READ
+  ARCHIVED
+}
+
+enum NotificationType {
+  ROLE_UPDATE_AVAILABLE
+  NEW_LEAD_ASSIGNED
+  NEW_MAIL_RECEIVED
+  TASK_COMPLETED
+  CALENDAR_EVENT_REMINDER
+  CALENDAR_EVENT_INVITATION
+  CALENDAR_EVENT_UPDATED
+  CALENDAR_EVENT_CANCELLED
+}
+
+enum UserOrganizationStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  REJECTED
+}

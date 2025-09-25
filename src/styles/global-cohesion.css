@@ -1,0 +1,383 @@
+/* =================================================================== */
+/* 🎨 SYSTÈME DE STYLES GLOBAL CRM - COHÉSION VISUELLE CENTRALISÉE    */
+/* =================================================================== */
+
+/* Variables CSS pour la cohérence globale */
+:root {
+  /* Couleurs principales */
+  --crm-primary: #3b82f6;
+  --crm-primary-dark: #2563eb;
+  --crm-primary-light: #dbeafe;
+  
+  /* Couleurs de fond */
+  --crm-bg-main: #f9fafb;
+  --crm-bg-white: #ffffff;
+  --crm-bg-gray: #f3f4f6;
+  
+  /* Bordures */
+  --crm-border-light: #e5e7eb;
+  --crm-border-medium: #d1d5db;
+  
+  /* Ombres */
+  --crm-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --crm-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  
+  /* Espacements standards */
+  --crm-spacing-xs: 0.25rem;
+  --crm-spacing-sm: 0.5rem;
+  --crm-spacing-md: 1rem;
+  --crm-spacing-lg: 1.5rem;
+  --crm-spacing-xl: 2rem;
+  
+  /* Border radius standards */
+  --crm-radius-sm: 0.25rem;
+  --crm-radius-md: 0.375rem;
+  --crm-radius-lg: 0.5rem;
+}
+
+/* =================================================================== */
+/* LAYOUT GLOBAL - Structure de base                                   */
+/* =================================================================== */
+
+/* Reset et base */
+.crm-layout-container {
+  min-height: 100vh;
+  background-color: var(--crm-bg-main);
+}
+
+/* Sidebar globale */
+.crm-sidebar {
+  background-color: var(--crm-bg-white);
+  border-right: 1px solid var(--crm-border-light);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+/* Header global */
+.crm-header {
+  background-color: var(--crm-bg-white);
+  border-bottom: 1px solid var(--crm-border-light);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+/* Contenu principal */
+.crm-main-content {
+  background-color: var(--crm-bg-main);
+  padding: var(--crm-spacing-xl);
+}
+
+/* =================================================================== */
+/* COMPOSANTS RÉUTILISABLES - Styles cohérents                        */
+/* =================================================================== */
+
+/* Cartes/Cards standardisées */
+.crm-card {
+  background-color: var(--crm-bg-white);
+  border-radius: var(--crm-radius-lg);
+  box-shadow: var(--crm-shadow-sm);
+  border: 1px solid var(--crm-border-light);
+  padding: var(--crm-spacing-lg);
+  margin-bottom: var(--crm-spacing-md);
+}
+
+.crm-card-header {
+  border-bottom: 1px solid var(--crm-border-light);
+  padding-bottom: var(--crm-spacing-md);
+  margin-bottom: var(--crm-spacing-lg);
+}
+
+.crm-card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.crm-card-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: var(--crm-spacing-xs) 0 0 0;
+}
+
+/* Boutons standardisés */
+.crm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--crm-spacing-sm) var(--crm-spacing-md);
+  border-radius: var(--crm-radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  text-decoration: none;
+}
+
+.crm-btn-primary {
+  background-color: var(--crm-primary);
+  color: white;
+}
+
+.crm-btn-primary:hover {
+  background-color: var(--crm-primary-dark);
+}
+
+.crm-btn-secondary {
+  background-color: var(--crm-bg-gray);
+  color: #374151;
+  border: 1px solid var(--crm-border-medium);
+}
+
+.crm-btn-secondary:hover {
+  background-color: #e5e7eb;
+}
+
+/* Tables cohérentes */
+.crm-table {
+  width: 100%;
+  background-color: var(--crm-bg-white);
+  border-radius: var(--crm-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--crm-shadow-sm);
+  border: 1px solid var(--crm-border-light);
+}
+
+.crm-table th {
+  background-color: var(--crm-bg-gray);
+  padding: var(--crm-spacing-md);
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid var(--crm-border-light);
+}
+
+.crm-table td {
+  padding: var(--crm-spacing-md);
+  border-bottom: 1px solid var(--crm-border-light);
+  color: #1f2937;
+}
+
+.crm-table tr:hover td {
+  background-color: var(--crm-bg-gray);
+}
+
+/* Formulaires cohérents */
+.crm-form-group {
+  margin-bottom: var(--crm-spacing-lg);
+}
+
+.crm-form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: var(--crm-spacing-sm);
+}
+
+.crm-form-input {
+  width: 100%;
+  padding: var(--crm-spacing-sm) var(--crm-spacing-md);
+  border: 1px solid var(--crm-border-medium);
+  border-radius: var(--crm-radius-md);
+  font-size: 0.875rem;
+  background-color: var(--crm-bg-white);
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.crm-form-input:focus {
+  outline: none;
+  border-color: var(--crm-primary);
+  box-shadow: 0 0 0 3px var(--crm-primary-light);
+}
+
+/* Badges et statuts */
+.crm-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--crm-spacing-xs) var(--crm-spacing-sm);
+  border-radius: var(--crm-radius-lg);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.crm-badge-success {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.crm-badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.crm-badge-danger {
+  background-color: #fecaca;
+  color: #991b1b;
+}
+
+.crm-badge-info {
+  background-color: var(--crm-primary-light);
+  color: var(--crm-primary-dark);
+}
+
+/* =================================================================== */
+/* NAVIGATION ET SIDEBAR - Styles cohérents                           */
+/* =================================================================== */
+
+/* Navigation principale */
+.crm-nav-item {
+  display: flex;
+  align-items: center;
+  padding: var(--crm-spacing-sm) var(--crm-spacing-md);
+  color: #6b7280;
+  text-decoration: none;
+  border-radius: var(--crm-radius-md);
+  margin-bottom: var(--crm-spacing-xs);
+  transition: all 0.2s ease-in-out;
+}
+
+.crm-nav-item:hover,
+.crm-nav-item.active {
+  background-color: var(--crm-primary-light);
+  color: var(--crm-primary-dark);
+}
+
+.crm-nav-item .icon {
+  margin-right: var(--crm-spacing-sm);
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* =================================================================== */
+/* NOTIFICATIONS ET ALERTES - Système cohérent                        */
+/* =================================================================== */
+
+.crm-notification {
+  padding: var(--crm-spacing-md);
+  border-radius: var(--crm-radius-md);
+  margin-bottom: var(--crm-spacing-md);
+  border-left: 4px solid;
+}
+
+.crm-notification-success {
+  background-color: #f0fdf4;
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.crm-notification-error {
+  background-color: #fef2f2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.crm-notification-warning {
+  background-color: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.crm-notification-info {
+  background-color: #eff6ff;
+  border-color: var(--crm-primary);
+  color: var(--crm-primary-dark);
+}
+
+/* =================================================================== */
+/* UTILITAIRES RESPONSIVES                                             */
+/* =================================================================== */
+
+/* Textes utilitaires */
+.crm-text-xs { font-size: 0.75rem; }
+.crm-text-sm { font-size: 0.875rem; }
+.crm-text-base { font-size: 1rem; }
+.crm-text-lg { font-size: 1.125rem; }
+.crm-text-xl { font-size: 1.25rem; }
+
+.crm-text-gray-500 { color: #6b7280; }
+.crm-text-gray-700 { color: #374151; }
+.crm-text-gray-900 { color: #1f2937; }
+
+/* Espacements utilitaires */
+.crm-mb-2 { margin-bottom: var(--crm-spacing-sm); }
+.crm-mb-4 { margin-bottom: var(--crm-spacing-md); }
+.crm-mb-6 { margin-bottom: var(--crm-spacing-lg); }
+.crm-mb-8 { margin-bottom: var(--crm-spacing-xl); }
+
+.crm-p-4 { padding: var(--crm-spacing-md); }
+.crm-p-6 { padding: var(--crm-spacing-lg); }
+.crm-p-8 { padding: var(--crm-spacing-xl); }
+
+/* =================================================================== */
+/* OVERRIDES ANTD - Harmonisation avec notre système                  */
+/* =================================================================== */
+
+/* Harmonisation des composants Ant Design avec notre système */
+.ant-card {
+  border: 1px solid var(--crm-border-light);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.ant-btn-primary {
+  background-color: var(--crm-primary);
+  border-color: var(--crm-primary);
+}
+
+.ant-btn-primary:hover {
+  background-color: var(--crm-primary-dark);
+  border-color: var(--crm-primary-dark);
+}
+
+.ant-table {
+  border: 1px solid var(--crm-border-light);
+  border-radius: var(--crm-radius-lg);
+}
+
+.ant-table-thead > tr > th {
+  background-color: var(--crm-bg-gray);
+  border-bottom: 1px solid var(--crm-border-light);
+}
+
+/* =================================================================== */
+/* ANIMATIONS ET TRANSITIONS COHÉRENTES                               */
+/* =================================================================== */
+
+.crm-transition-all {
+  transition: all 0.2s ease-in-out;
+}
+
+.crm-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.crm-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* =================================================================== */
+/* RESPONSIVE DESIGN - Adaptabilité mobile                            */
+/* =================================================================== */
+
+@media (max-width: 768px) {
+  .crm-main-content {
+    padding: var(--crm-spacing-md);
+  }
+  
+  .crm-card {
+    padding: var(--crm-spacing-md);
+  }
+  
+  .crm-btn {
+    font-size: 0.75rem;
+    padding: var(--crm-spacing-xs) var(--crm-spacing-sm);
+  }
+}

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧹 Nettoyage Cache CRM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #e74c3c;
+            text-align: center;
+        }
+        .action-button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            display: block;
+            width: 100%;
+        }
+        .action-button:hover {
+            background: #2980b9;
+        }
+        .success-button {
+            background: #27ae60;
+        }
+        .success-button:hover {
+            background: #229954;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background: #ecf0f1;
+        }
+        .step {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+        }
+        code {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Nettoyage Cache CRM</h1>
+        
+        <div class="status" id="status">
+            <strong>État :</strong> Prêt pour le nettoyage
+        </div>
+
+        <div class="step">
+            <h3>🎯 Problème détecté :</h3>
+            <p>Erreurs d'authentification 401 après l'import des nouvelles données. L'ancien token d'authentification est encore présent dans le navigateur.</p>
+        </div>
+
+        <div class="step">
+            <h3>🔧 Solution :</h3>
+            <p>Nettoyer complètement le cache du navigateur pour supprimer l'ancien token.</p>
+        </div>
+
+        <button class="action-button" onclick="clearAllCache()">
+            🧹 NETTOYER TOUT LE CACHE MAINTENANT
+        </button>
+
+        <button class="action-button" onclick="showManualSteps()">
+            📋 Voir les étapes manuelles
+        </button>
+
+        <div id="manual-steps" style="display: none;">
+            <h3>📋 Étapes manuelles :</h3>
+            <ol>
+                <li>Ouvrir les outils développeur : <code>F12</code></li>
+                <li>Aller dans l'onglet <code>Console</code></li>
+                <li>Taper : <code>localStorage.clear()</code></li>
+                <li>Taper : <code>sessionStorage.clear()</code></li>
+                <li>Taper le script cookies (voir ci-dessous)</li>
+                <li>Recharger avec <code>Ctrl+Shift+R</code></li>
+            </ol>
+            <div style="background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                <strong>Script cookies :</strong><br>
+                <code style="background: none; color: #ecf0f1;">
+document.cookie.split(';').forEach(function(c) { 
+    document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'); 
+});
+                </code>
+            </div>
+        </div>
+
+        <div class="step" style="margin-top: 30px;">
+            <h3>🎯 Après le nettoyage :</h3>
+            <p>1. Recharger la page CRM : <code>http://localhost:5173</code></p>
+            <p>2. Se connecter avec : <code>dethier.jls@gmail.com</code></p>
+            <p>3. Vérifier que tous vos modules sont visibles</p>
+        </div>
+
+        <button class="action-button success-button" onclick="goToCRM()" style="margin-top: 20px;">
+            🚀 ALLER AU CRM (après nettoyage)
+        </button>
+    </div>
+
+    <script>
+        function clearAllCache() {
+            const status = document.getElementById('status');
+            
+            try {
+                // 1. Nettoyer localStorage
+                localStorage.clear();
+                console.log('✅ localStorage nettoyé');
+                
+                // 2. Nettoyer sessionStorage
+                sessionStorage.clear();
+                console.log('✅ sessionStorage nettoyé');
+                
+                // 3. Nettoyer les cookies
+                document.cookie.split(';').forEach(function(c) { 
+                    document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'); 
+                });
+                console.log('✅ Cookies nettoyés');
+                
+                // 4. Vérification
+                const localStorageCount = localStorage.length;
+                const sessionStorageCount = sessionStorage.length;
+                const cookies = document.cookie;
+                
+                status.innerHTML = `
+                    <strong>✅ NETTOYAGE TERMINÉ !</strong><br>
+                    LocalStorage: ${localStorageCount} éléments<br>
+                    SessionStorage: ${sessionStorageCount} éléments<br>
+                    Cookies: ${cookies || 'Aucun'}<br><br>
+                    <strong style="color: #e74c3c;">🔄 Rechargez maintenant avec Ctrl+Shift+R</strong>
+                `;
+                status.style.background = '#d5f4e6';
+                status.style.borderLeft = '4px solid #27ae60';
+                
+                console.log('🎯 NETTOYAGE COMPLET TERMINÉ');
+                console.log('LocalStorage éléments:', localStorageCount);
+                console.log('SessionStorage éléments:', sessionStorageCount);
+                console.log('Cookies:', cookies);
+                
+                // Auto-refresh après 3 secondes
+                setTimeout(() => {
+                    if (confirm('Recharger automatiquement la page maintenant ?')) {
+                        window.location.reload(true);
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                status.innerHTML = `<strong style="color: #e74c3c;">❌ Erreur :</strong> ${error.message}`;
+                status.style.background = '#ffeaa7';
+                console.error('Erreur lors du nettoyage:', error);
+            }
+        }
+
+        function showManualSteps() {
+            const manualSteps = document.getElementById('manual-steps');
+            if (manualSteps.style.display === 'none') {
+                manualSteps.style.display = 'block';
+            } else {
+                manualSteps.style.display = 'none';
+            }
+        }
+
+        function goToCRM() {
+            window.open('http://localhost:5173', '_blank');
+        }
+
+        // Vérification au chargement de la page
+        window.onload = function() {
+            const localStorageCount = localStorage.length;
+            const sessionStorageCount = sessionStorage.length;
+            const cookies = document.cookie;
+            
+            console.log('🔍 État actuel du cache:');
+            console.log('LocalStorage éléments:', localStorageCount);
+            console.log('SessionStorage éléments:', sessionStorageCount);
+            console.log('Cookies:', cookies);
+            
+            if (localStorageCount > 0 || sessionStorageCount > 0 || cookies) {
+                document.getElementById('status').innerHTML = `
+                    <strong style="color: #e67e22;">⚠️ Cache détecté !</strong><br>
+                    LocalStorage: ${localStorageCount} éléments<br>
+                    SessionStorage: ${sessionStorageCount} éléments<br>
+                    Cookies: ${cookies || 'Aucun'}<br><br>
+                    <em>Nettoyage recommandé pour résoudre les erreurs 401</em>
+                `;
+                document.getElementById('status').style.background = '#ffeaa7';
+            }
+        };
+    </script>
+</body>
+</html>

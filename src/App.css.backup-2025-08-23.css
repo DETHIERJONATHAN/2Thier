@@ -1,0 +1,397 @@
+#root {
+  max-width: 100%; /* Modifié pour prendre toute la largeur disponible */
+  margin: 0 auto;
+  padding: 0; /* Supprimé le padding pour maximiser l'espace */
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Styles améliorés pour le layout du form builder */
+.form-builder-layout {
+  display: grid;
+  grid-template-columns: 1fr 2fr 3fr; /* Proportions exactes: 1/6, 2/6, 3/6 */
+  gap: 1rem;
+  height: calc(100vh - 60px); /* Ajuster la hauteur en fonction de votre barre de navigation */
+  padding: 1rem;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Styles pour les colonnes du form builder */
+.fields-palette, .form-sections, .advanced-config {
+  overflow-y: auto;
+  background-color: #f8f9fa;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  max-height: 100%;
+}
+
+/* Pour s'assurer que les enfants directs du form-builder-layout respectent la grille */
+.form-builder-layout > * {
+  min-width: 0; /* Pour éviter le dépassement de la grille */
+}
+
+/* Ajuster les largeurs relatives des colonnes */
+.fields-palette {
+  width: 100%;
+  min-width: 0; /* Supprimé la largeur minimum pour être vraiment responsive */
+  /* Colonne gauche: 1/6 de l'espace total */
+}
+
+.form-sections {
+  width: 100%;
+  /* Colonne centrale: 2/6 de l'espace total */
+}
+
+.advanced-config {
+  width: 100%;
+  min-width: 0; /* Supprimé la largeur minimum pour être vraiment responsive */
+  /* Colonne droite: 3/6 de l'espace total */
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  contain: paint;
+}
+
+/* S'assurer que tous les composants dans la colonne de droite restent contenus */
+.advanced-config > * {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
+  contain: content;
+}
+
+/* Assurer que les éditeurs de formules et validations restent dans leur conteneur */
+.advanced-config .form-builder-right-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px;
+  contain: content;
+}
+
+/* Empêcher absolument tout débordement des éléments intérieurs */
+.form-builder-right-panel * {
+  max-width: 100% !important;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
+  contain: content;
+}
+
+/* Styles spécifiques pour les éditeurs de formules et séquences */
+.form-builder-right-panel .p-2,
+.form-builder-right-panel .p-3,
+.form-builder-right-panel .flex,
+.form-builder-right-panel input,
+.form-builder-right-panel div {
+  max-width: 100% !important;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  overflow: hidden;
+}
+
+/* Styles pour les éditeurs de formules et validations */
+.form-builder-right-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Styles pour améliorer les éléments de formules */
+.formula-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 2px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.formula-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  transform: translateY(-1px);
+}
+
+/* Amélioration de la visibilité du bouton de suppression */
+.formula-item > button {
+  opacity: 0.85;
+  transition: all 0.2s ease;
+  z-index: 10 !important;
+}
+
+.formula-item:hover > button {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.formula-item > button:active {
+  transform: scale(0.95);
+}
+
+.formula-drop-zone {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 60px;
+  border: 2px dashed #cbd5e0;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background-color: #ffffff;
+  transition: all 0.2s ease-in-out;
+  box-sizing: border-box;
+}
+
+.formula-drop-zone.active {
+  border-color: #4299e1;
+  background-color: rgba(66, 153, 225, 0.1);
+}
+
+/* Effet de succès pour les actions de drag & drop */
+.highlight-success {
+  animation: pulse-success 0.5s ease-in-out;
+  border: 2px solid #4caf50 !important;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.6) !important;
+}
+
+@keyframes pulse-success {
+  0% { background-color: rgba(76, 175, 80, 0.2); }
+  50% { background-color: rgba(76, 175, 80, 0.4); }
+  100% { background-color: rgba(76, 175, 80, 0.2); }
+}
+
+/* Amélioration des boutons de suppression */
+.formula-item-delete {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 20px;
+  height: 20px;
+  background-color: #ef4444;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 1; /* Toujours visible */
+  transition: all 0.2s ease-in-out;
+  z-index: 10;
+  border: 1px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.formula-item-delete:hover {
+  background-color: #dc2626;
+  transform: scale(1.15);
+}
+
+.formula-item-delete:active {
+  background-color: #b91c1c;
+  transform: scale(0.95);
+}
+
+.formula-item:hover .formula-item-delete {
+  opacity: 1;
+}
+
+/* Styles pour les champs dans les formules */
+.formula-item[class*="bg-blue"] {
+  border-left: 3px solid #1d4ed8;
+}
+
+.formula-item[class*="bg-yellow"] {
+  border-left: 3px solid #ca8a04;
+}
+
+.formula-item[class*="bg-green"] {
+  border-left: 3px solid #15803d;
+}
+
+/* Styles pour la palette d'opérateurs dans les formules */
+.formula-operators-palette {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.operator-category {
+  margin-bottom: 0.5rem;
+}
+
+.operator-category-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin-bottom: 0.25rem;
+}
+
+.operator-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.operator-item {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.operator-item.arithmetic {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.operator-item.arithmetic:hover {
+  background-color: #fde68a;
+}
+
+.operator-item.comparison {
+  background-color: #e0e7ff;
+  color: #4338ca;
+}
+
+.operator-item.comparison:hover {
+  background-color: #c7d2fe;
+}
+
+.operator-item.logical {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.operator-item.logical:hover {
+  background-color: #a7f3d0;
+}
+
+.operator-item.function {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.operator-item.function:hover {
+  background-color: #bfdbfe;
+}
+
+.operator-item.value {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.operator-item.value:hover {
+  background-color: #e5e7eb;
+}
+
+/* Styles responsives pour différentes tailles d'écran */
+@media (max-width: 1200px) {
+  .form-builder-layout {
+    grid-template-columns: 1fr 2fr 3fr; /* Maintien des proportions 1:2:3 */
+  }
+}
+
+@media (max-width: 768px) {
+  .form-builder-layout {
+    grid-template-columns: 1fr; /* Empile les colonnes sur les petits écrans */
+    grid-template-rows: auto auto auto; /* Définit les hauteurs des rangées */
+  }
+  
+  .fields-palette, .form-sections, .advanced-config {
+    max-height: none; /* Permet à chaque section de s'étendre en hauteur */
+    margin-bottom: 1rem;
+  }
+}
+
+/* 🔧 FALLBACK: Layout form builder robuste */
+.form-builder-layout {
+  display: grid !important;
+  grid-template-columns: minmax(200px, 1fr) minmax(300px, 2fr) minmax(300px, 3fr) !important;
+  gap: 1rem !important;
+  height: calc(100vh - 60px) !important;
+  padding: 1rem !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible !important; /* Changé de hidden à visible */
+}
+
+/* 🔧 FALLBACK: Colonnes visibles par défaut */
+.fields-palette, .form-sections, .advanced-config {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  overflow-y: auto !important;
+  background-color: #f8f9fa !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  padding: 1rem !important;
+  max-height: 100% !important;
+  min-height: 300px !important; /* Hauteur minimum */
+}
+
+/* 🔧 FORCE: Visibilité colonnes */
+.form-sections {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.advanced-config {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+}

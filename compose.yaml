@@ -1,0 +1,52 @@
+services:
+  crm:
+    build: .
+    container_name: crm-2thier
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - API_URL=${API_URL:-http://localhost:4000}
+      - SESSION_SECRET=${SESSION_SECRET:-change_me}
+      - JWT_SECRET=${JWT_SECRET:-change_me}
+      - DATABASE_URL=${DATABASE_URL}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:4000/api/google-auth/callback}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
+      - AI_MODE=${AI_MODE:-auto}
+      - AI_MAX_RETRIES=${AI_MAX_RETRIES:-2}
+      - AI_TIMEOUT_MS=${AI_TIMEOUT_MS:-15000}
+      - AI_RETRY_TIMEOUT_INCREMENT_MS=${AI_RETRY_TIMEOUT_INCREMENT_MS:-3000}
+      - TELNYX_API_KEY=${TELNYX_API_KEY}
+      - TELNYX_WEBHOOK_SIGNING_SECRET=${TELNYX_WEBHOOK_SIGNING_SECRET}
+      - APP_URL=${APP_URL:-http://localhost:4000}
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+    # volumes: [] # en prod, image immuableservices:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-crm}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+volumes:
+  pgdata:

@@ -1,0 +1,286 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  DndContext, 
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverEvent
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import useCRMStore from "../../store"
+import type { FieldValidation } from "../../store/slices/types";
+import SortableValidationItem from '../components/validations/SortableValidationItem';
+import { getAPIHeaders } from '../../utils/validationValidator';
+import { fetchWithAuth } from "../../store/slices/api";
+// Importer notre composant sécurisé à la place de l'original
+import FieldsPaletteErrorBoundary from './FieldsPaletteErrorBoundary';
+import OperatorsPalette from '../components/validations/OperatorsPalette';
+import ValuesPalette from '../components/validations/ValuesPalette';
+
+// Fonction de log pour le débogage
+const LOG_PREFIX = '[FieldValidationsEditorFixed]';
+const debugLog = (message: string, data?: any) => {
+  if (data) {
+    console.log(`${LOG_PREFIX} ${message}`, data);
+  } else {
+    console.log(`${LOG_PREFIX} ${message}`);
+  }
+};
+
+interface FieldValidationsEditorProps {
+  fieldId: string;
+  availableFields?: Array<{id: string; label: string; name?: string; type?: string}>;
+}
+
+/**
+ * Version corrigée de l'éditeur de validations qui n'échoue pas avec l'erreur de modules
+ */
+const FieldValidationsEditorFixed: React.FC<FieldValidationsEditorProps> = ({ 
+  fieldId,
+  availableFields = []
+}) => {
+  // États pour les validations
+  const [validations, setValidations] = useState<FieldValidation[]>([]);
+  const [editingValidationId, setEditingValidationId] = useState<string | null>(null);
+  
+  // États pour le drag-and-drop
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeItem, setActiveItem] = useState<any | null>(null);
+  
+  // Récupérer le module associé au champ pour avoir accès à ses autres champs
+  // VERSION CORRIGÉE avec gestion des undefined
+  const { fields = [] } = useCRMStore(state => ({
+    fields: state.fields?.fields || []
+  }));
+  
+  // Log pour déboguer
+  debugLog("Initialisation avec", {
+    fieldId,
+    availableFieldsCount: availableFields.length,
+    storeFieldsCount: fields.length
+  });
+
+  // Récupérer le moduleId du champ actuel
+  const moduleId = fields.find((f: any) => f.id === fieldId)?.moduleId;
+  
+  // Chargement initial des validations
+  useEffect(() => {
+    reloadValidationsFromAPI();
+  }, [fieldId]);
+
+  // Écouter les événements de mise à jour des validations
+  useEffect(() => {
+    const handleValidationUpdated = () => {
+      reloadValidationsFromAPI();
+    };
+
+    // Enregistrer l'écouteur d'événement
+    document.addEventListener('validation-updated', handleValidationUpdated as EventListener);
+
+    // Nettoyer l'écouteur à la désactivation
+    return () => {
+      document.removeEventListener('validation-updated', handleValidationUpdated as EventListener);
+    };
+  }, []);
+
+  // Chargement des validations depuis l'API
+  const reloadValidationsFromAPI = async () => {
+    try {
+      debugLog(`Chargement des validations pour le champ ${fieldId}`);
+      const response = await fetchWithAuth(`/api/fields/${fieldId}/validations`);
+      
+      if (!response.ok) {
+        debugLog(`Erreur API:`, await response.text());
+        return;
+      }
+      
+      const responseData = await response.json();
+      
+      if (responseData.success && Array.isArray(responseData.data)) {
+        debugLog(`${responseData.data.length} validation(s) chargée(s)`);
+        setValidations(responseData.data);
+      } else {
+        debugLog(`Format de réponse API inattendu:`, responseData);
+        setValidations([]);
+      }
+    } catch (error) {
+      debugLog(`Erreur lors du chargement des validations:`, error);
+    }
+  };
+
+  // Ajout d'une nouvelle validation
+  const handleAddValidation = async () => {
+    // Création d'une nouvelle validation avec structure par défaut compatible avec l'API
+    const newValidation = {
+      type: 'required',  // Type par défaut
+      message: `Ce champ est requis`,  // Message par défaut
+      comparisonType: 'static',
+      value: null,
+      comparisonFieldId: null
+    };
+    
+    try {
+      const headers = getAPIHeaders();
+      const response = await fetch(`/api/fields/${fieldId}/validations`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(newValidation),
+      });
+      
+      if (!response.ok) {
+        debugLog(`Erreur API:`, await response.text());
+        return;
+      }
+      
+      const createdValidation = await response.json();
+      
+      // Dispatch d'un événement pour informer les autres composants
+      const event = new CustomEvent('validation-updated', { 
+        detail: { action: 'create', validationId: createdValidation.id } 
+      });
+      document.dispatchEvent(event);
+      
+      // Mise à jour de l'état local
+      setValidations(prev => [...prev, createdValidation]);
+      
+      // Optionnellement, mettre en mode édition la nouvelle validation
+      setEditingValidationId(createdValidation.id);
+    } catch (error) {
+      debugLog(`Erreur lors de la création:`, error);
+    }
+  };
+
+  // Suppression d'une validation
+  const handleDeleteValidation = async (validationId: string) => {
+    try {
+      const headers = getAPIHeaders();
+      const response = await fetch(`/api/validations/${validationId}`, {
+        method: 'DELETE',
+        headers
+      });
+      
+      if (!response.ok) {
+        debugLog(`Erreur API lors de la suppression:`, await response.text());
+        return;
+      }
+      
+      // Mise à jour de l'état local
+      setValidations(prev => prev.filter(v => v.id !== validationId));
+      
+      // Si la validation supprimée était en édition, on réinitialise
+      if (editingValidationId === validationId) {
+        setEditingValidationId(null);
+      }
+      
+      // Dispatch d'un événement pour informer les autres composants
+      const event = new CustomEvent('validation-updated', { 
+        detail: { action: 'delete', validationId } 
+      });
+      document.dispatchEvent(event);
+    } catch (error) {
+      debugLog(`Erreur lors de la suppression:`, error);
+    }
+  };
+
+  // Bascule du mode d'édition d'une validation
+  const handleToggleExpand = (validationId: string) => {
+    setEditingValidationId(prev => prev === validationId ? null : validationId);
+  };
+
+  // Configuration des sensors pour le drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Activer le drag après 8px de mouvement pour éviter les clics accidentels
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  // Gestion du début du drag
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+    setActiveItem(event.active.data.current);
+  };
+  
+  // Gestion du survol pendant le drag
+  const handleDragOver = (_event: DragOverEvent) => {
+    // Logique pour gérer les interactions entre différentes zones de drop
+  };
+
+  // Gestion de la fin du drag-and-drop
+  const handleDragEnd = useCallback((_event: DragEndEvent) => {
+    // Simplification pour éviter les erreurs
+    setActiveId(null);
+    setActiveItem(null);
+  }, []);
+
+  // Interface utilisateur
+  return (
+    <div className="bg-white rounded-lg shadow p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-semibold text-gray-800">Validations du champ</h2>
+        <button 
+          onClick={handleAddValidation}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Ajouter une validation
+        </button>
+      </div>
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* Colonne principale: Liste des validations */}
+          <div className="lg:col-span-3">
+            {validations.length > 0 ? (
+              <SortableContext items={validations.map(v => v.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-3">
+                  {validations.map(validation => (
+                    <SortableValidationItem
+                      key={validation.id}
+                      validation={validation}
+                      isExpanded={validation.id === editingValidationId}
+                      onToggleExpand={() => handleToggleExpand(validation.id)}
+                      onDelete={() => handleDeleteValidation(validation.id)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            ) : (
+              <div className="bg-gray-50 p-6 border border-gray-200 rounded text-center">
+                <p className="text-gray-500">Aucune validation définie pour ce champ.</p>
+                <p className="text-sm text-gray-400 mt-1">Cliquez sur "Ajouter une validation" pour commencer.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Colonne latérale: Palettes */}
+          <div className="space-y-4">
+            {/* Palette de champs - Version sécurisée */}
+            <FieldsPaletteErrorBoundary
+              moduleId={moduleId}
+              excludeFieldIds={[fieldId]} // Exclure le champ actuel
+              availableFields={availableFields}
+            />
+            
+            {/* Palettes pour les opérateurs et valeurs */}
+            <OperatorsPalette />
+            <ValuesPalette />
+          </div>
+        </div>
+      </DndContext>
+    </div>
+  );
+};
+
+export default FieldValidationsEditorFixed;

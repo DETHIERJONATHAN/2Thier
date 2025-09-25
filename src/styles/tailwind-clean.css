@@ -1,0 +1,46 @@
+/* ==========================================================================
+   TAILWIND CSS - VERSION PROPRE SANS CONFLITS
+   ========================================================================== */
+
+/* RESET MINIMAL */
+* {
+  box-sizing: border-box;
+}
+
+/* ICÔNES SECTIONS - MINIMAL ET PROPRE */
+.flex-shrink-0 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* SIDEBAR SCROLLABLE */
+.sidebar-scrollable {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Z-INDEX POUR HEADER */
+.z-header {
+  z-index: 50;
+}
+
+/* RESPONSIVE MOBILE */
+@media (max-width: 768px) {
+  .sidebar-mobile-hidden {
+    display: none;
+  }
+  
+  .content-mobile-full {
+    padding: 0.75rem;
+  }
+}
+
+/* TRANSITIONS DOUCES */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}

@@ -1,0 +1,615 @@
+/**
+ * 🤖 useAIAssistant - Hook pour l'assistant IA conversationnel
+ * 
+ * Gère le chat IA, l'analyse en temps réel et les recommandations
+ * intelligentes pendant les appels commerciaux
+ */
+
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import type { 
+  UseAIAssistantReturn,
+  AIChatMessage,
+  AIAnalysisResult,
+  SuggestionContext,
+  Lead
+} from '../types/CallTypes';
+
+export const useAIAssistant = (
+  lead: Lead | null,
+  isCallInProgress: boolean
+): UseAIAssistantReturn => {
+  
+  const { api } = useAuthenticatedApi();
+  
+  // 💬 États du chat IA
+  const [messages, setMessages] = useState<AIChatMessage[]>([]);
+  const [currentAnalysis, setCurrentAnalysis] = useState<AIAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // 🧠 Analyse initiale du profil prospect
+  const analyzeProspectProfile = useCallback(async (leadData: Lead) => {
+    try {
+      setIsAnalyzing(true);
+      
+      const response = await api.post('/api/ai/analyze-prospect-profile', {
+        lead: leadData,
+        includeRecommendations: true
+      });
+      
+      if (response.data?.analysis) {
+        setCurrentAnalysis(response.data.analysis);
+        
+        // Ajouter les insights IA au chat
+        const analysisMessage: AIChatMessage = {
+          id: `analysis-${Date.now()}`,
+          type: 'ai',
+          message: `🔍 **Analyse prospect terminée !**
+
+📊 **Score d'intérêt estimé :** ${response.data.analysis.interestLevel}/100
+� **Approche recommandée :** ${response.data.analysis.recommendedApproach}
+
+🎯 **Points clés à aborder :**
+${response.data.analysis.keyTopics?.map((topic: string) => `• ${topic}`).join('\n') || '• Identifier les besoins'}
+
+⚡ **Stratégie suggérée :**
+${response.data.analysis.nextActions?.slice(0, 3).map((action: string) => `• ${action}`).join('\n') || '• Engager la conversation'}`,
+          timestamp: new Date(),
+          suggestions: response.data.analysis.nextActions || [],
+          context: {
+            relatedToCall: true,
+            priority: 'high',
+            category: 'opportunity'
+          }
+        };
+        
+        setMessages(prev => [...prev, analysisMessage]);
+      }
+      
+    } catch (error) {
+      console.warn('[useAIAssistant] ❌ Endpoint analyse prospect non disponible:', error);
+      // Analyse de fallback basique
+      setCurrentAnalysis({
+        sentiment: 'neutral',
+        confidence: 70,
+        interestLevel: 50,
+        objections: [],
+        opportunities: ['Nouveau prospect à qualifier'],
+        nextActions: ['Qualifier les besoins', 'Présenter la solution'],
+        recommendedApproach: 'Approche consultative',
+        emotionalState: 'neutral',
+        keyTopics: [lead?.data?.company || 'Entreprise', lead?.source || 'Source inconnue']
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [api, lead?.data?.company, lead?.source]);
+
+  // �🚀 Initialisation de l'assistant IA au démarrage d'appel
+  useEffect(() => {
+    if (isCallInProgress && lead && messages.length === 0) {
+      const welcomeMessage: AIChatMessage = {
+        id: `welcome-${Date.now()}`,
+        type: 'ai',
+        message: `👋 Bonjour ! Je suis votre assistant IA pour cet appel avec **${lead.data?.name}**. 
+
+🎯 **Contexte du prospect :**
+• Société : ${lead.data?.company || 'Particulier'}
+• Source : ${lead.source}
+• Statut : ${lead.status}
+
+Je vais analyser la conversation en temps réel et vous donner des conseils personnalisés pour maximiser vos chances de succès !`,
+        timestamp: new Date(),
+        suggestions: [
+          '🎤 Commencer par le script personnalisé',
+          '❓ Poser des questions qualifiantes',
+          '🎯 Identifier les besoins spécifiques',
+          '📅 Préparer la proposition de RDV'
+        ],
+        context: {
+          relatedToCall: true,
+          priority: 'high',
+          category: 'advice'
+        }
+      };
+      
+      setMessages([welcomeMessage]);
+      
+      // 📊 Démarrer l'analyse IA du prospect
+      analyzeProspectProfile(lead);
+    }
+  }, [isCallInProgress, lead, messages.length, analyzeProspectProfile]);
+
+  // 💬 Fonction pour générer une réponse IA
+  const generateResponse = useCallback(async (userMessage: string) => {
+    console.log('[useAIAssistant] 🚀 DÉBUT generateResponse avec message:', userMessage);
+    console.log('[useAIAssistant] 🔍 Lead actuel:', lead);
+    console.log('[useAIAssistant] 📝 Messages actuels:', messages.length);
+    
+    try {
+      console.log('[useAIAssistant] ⏳ Début de l\'analyse IA...');
+      setIsAnalyzing(true);
+      
+      console.log('[useAIAssistant] 📡 Tentative d\'appel API /api/ai/generate-response...');
+      const response = await api.post('/api/ai/generate-response', {
+        message: userMessage,
+        lead,
+        context: messages.slice(-5),
+        analysis: currentAnalysis
+      });
+      
+      console.log('[useAIAssistant] ✅ Réponse API reçue:', response);
+      
+      // Vérifier si l'API a répondu avec succès
+      if (response.data?.response) {
+        console.log('[useAIAssistant] 💬 Création du message IA avec réponse:', response.data.response);
+        const aiMessage: AIChatMessage = {
+          id: `ai-${Date.now()}`,
+          type: 'ai',
+          message: response.data.response,
+          timestamp: new Date(),
+          suggestions: response.data.suggestions || [],
+          context: {
+            relatedToCall: true,
+            priority: 'medium',
+            category: 'response'
+          }
+        };
+        
+        console.log('[useAIAssistant] 📨 Ajout du message IA au chat:', aiMessage);
+        setMessages(prev => [...prev, aiMessage]);
+        console.log('[useAIAssistant] ✅ Message IA ajouté avec succès !');
+      } else {
+        console.warn('[useAIAssistant] ⚠️ Aucune réponse dans response.data:', response.data);
+        console.log('[useAIAssistant] 🔄 API non disponible - Activation du fallback intelligent...');
+        
+        // Activer le fallback car l'API n'a pas de réponse valide
+        throw new Error('API unavailable - activating fallback');
+      }
+      
+    } catch (error) {
+      console.error('[useAIAssistant] ❌ ERREUR API - Passage au fallback intelligent:', error);
+      console.log('[useAIAssistant] 🔄 Début du fallback intelligent...');
+      
+      // Analyse du message utilisateur pour une réponse de collègue IA
+      const lowerMessage = userMessage.toLowerCase();
+      console.log('[useAIAssistant] 🔍 Message en minuscules pour analyse:', lowerMessage);
+      let aiResponse = '';
+      let suggestions: string[] = [];
+      
+      console.log('[useAIAssistant] 🤖 Génération de réponse collègue IA...');
+      
+      // 🎯 SYSTÈME DE COLLÈGUE IA INTELLIGENT - Naturel mais orienté business
+      
+      // === SALUTATIONS ET OUVERTURE ===
+      if (lowerMessage.includes('salut') || lowerMessage.includes('bonjour') || lowerMessage.includes('hello') || lowerMessage.includes('coucou')) {
+        const greetings = [
+          `Hey ! 👋 Prêt pour cette conversation avec ${lead?.data?.name || 'ce prospect'} ? J'ai quelques idées pour bien commencer !`,
+          `Salut mon pote ! 😊 On va cartonner avec ${lead?.data?.name || 'ce lead'} aujourd'hui. Par où on commence ?`,
+          `Hello ! 🚀 Je suis là pour t'épauler sur cet appel. ${lead?.data?.name || 'Ce prospect'} a l'air intéressant !`
+        ];
+        aiResponse = greetings[Math.floor(Math.random() * greetings.length)];
+        suggestions = ['Analyser ce prospect', 'Préparer mon pitch', 'Script d\'ouverture', 'Gérer les objections'];
+      }
+      
+      // === QUESTIONS MÉTÉO/PERSONNELLES (pivot vers business) ===
+      else if (lowerMessage.includes('météo') || lowerMessage.includes('temps') || lowerMessage.includes('pluie') || lowerMessage.includes('soleil')) {
+        const weatherResponses = [
+          `Ah oui, ${lowerMessage.includes('pluie') ? 'il pleut' : 'beau temps'} aujourd'hui ! 🌤️ C'est parfait pour les appels - les gens sont plus disponibles. Au fait, tu as vu l'heure de ${lead?.data?.name || 'ton prospect'} ? C'est le bon moment !`,
+          `Ouais le temps est ${lowerMessage.includes('pluie') ? 'pourri' : 'génial'} ! � Ça me rappelle que ${lead?.data?.name || 'ton lead'} bosse dans le ${lead?.data?.company || 'business'} - peut-être qu'on peut utiliser ça comme ice-breaker ?`
+        ];
+        aiResponse = weatherResponses[Math.floor(Math.random() * weatherResponses.length)];
+        suggestions = ['Ice-breaker météo', 'Commencer l\'appel', 'Parler de son secteur', 'Script personnalisé'];
+      }
+      
+      // === QUESTIONS SPORT/LOISIRS (pivot vers business) ===
+      else if (lowerMessage.includes('foot') || lowerMessage.includes('sport') || lowerMessage.includes('match') || lowerMessage.includes('weekend')) {
+        const sportResponses = [
+          `Ah tu suis le foot ? ⚽ Moi aussi ! D'ailleurs, l'esprit d'équipe c'est crucial en business. ${lead?.data?.name || 'Ton prospect'} a peut-être cette mentalité aussi ?`,
+          `Le sport c'est la vie ! �‍♂️ Ça me fait penser que ${lead?.data?.name || 'ce lead'} a l'air dynamique aussi. On va matcher son énergie dans l'appel !`,
+          `Weekend sportif ? 😎 Parfait pour avoir la pêche ! ${lead?.data?.name || 'Ce prospect'} va sentir ton énergie positive dès les premières secondes !`
+        ];
+        aiResponse = sportResponses[Math.floor(Math.random() * sportResponses.length)];
+        suggestions = ['Parler de dynamisme', 'Énergie positive', 'Esprit d\'équipe', 'Matcher son énergie'];
+      }
+      
+      // === QUESTIONS NOURRITURE/CAFÉ (pivot vers business) ===
+      else if (lowerMessage.includes('café') || lowerMessage.includes('manger') || lowerMessage.includes('bouffe') || lowerMessage.includes('déjeuner')) {
+        const foodResponses = [
+          `Un bon café, ça c'est essentiel ! ☕ Tu sais quoi ? Une invitation café c'est souvent la meilleure façon de closer un RDV avec ${lead?.data?.name || 'un prospect'} !`,
+          `Miam ! 🍕 Au fait, tu as vu si ${lead?.data?.name || 'ton lead'} bosse près d'un bon resto ? Ça peut être un super spot pour un meeting !`,
+          `Le café ça réveille ! ☕ Parfait timing pour appeler ${lead?.data?.name || 'ce prospect'} - il/elle sera sûrement en forme aussi !`
+        ];
+        aiResponse = foodResponses[Math.floor(Math.random() * foodResponses.length)];
+        suggestions = ['Proposer un café', 'RDV restaurant', 'Meeting physique', 'Closer un RDV'];
+      }
+      
+      // === QUESTIONS TECH/DIGITAL (lien naturel business) ===
+      else if (lowerMessage.includes('tech') || lowerMessage.includes('digital') || lowerMessage.includes('app') || lowerMessage.includes('site')) {
+        const techResponses = [
+          `La tech c'est fou comme ça évolue ! 💻 D'ailleurs, ${lead?.data?.company || 'l\'entreprise de ton prospect'} utilise peut-être des outils qu'on propose ?`,
+          `Ouais le digital c'est dingue ! 🚀 ${lead?.data?.name || 'Ton lead'} bosse dans un secteur qui digitalise beaucoup en ce moment ?`,
+          `Les apps c'est ma passion ! 📱 Ça tombe bien, on peut sûrement aider ${lead?.data?.name || 'ce prospect'} à optimiser ses process digitaux !`
+        ];
+        aiResponse = techResponses[Math.floor(Math.random() * techResponses.length)];
+        suggestions = ['Parler de digitalisation', 'Process optimization', 'Outils tech', 'Modernisation'];
+      }
+      
+      // === QUESTIONS SUR LE PROSPECT ===
+      else if (lowerMessage.includes('marie') || lowerMessage.includes('prospect') || lowerMessage.includes('client') || lowerMessage.includes('lead')) {
+        aiResponse = `🎯 Alors, ${lead?.data?.name || 'ce prospect'} ! Voici ce que j'ai :
+
+**Profile :**
+• ${lead?.data?.name || 'Nom non renseigné'} ${lead?.data?.company ? `chez ${lead?.data?.company}` : ''}
+• ${lead?.data?.email || 'Email à récupérer'}
+• Source : ${lead?.source || 'Direct'}
+• Statut : ${lead?.status || 'Nouveau'}
+
+**Mon analyse :** ${lead?.data?.company ? 'Belle boîte' : 'Prospect intéressant'}, ${lead?.data?.name ? 'contact qualifié' : 'à qualifier'}. Je sens du potentiel ! 💪
+
+Quelle approche tu veux tenter ?`;
+        suggestions = ['Analyse SWOT', 'Points de douleur', 'Approche personnalisée', 'Script sur-mesure'];
+      }
+      
+      // === AIDE BUSINESS/VENTE ===
+      else if (lowerMessage.includes('vente') || lowerMessage.includes('vendre') || lowerMessage.includes('closer') || lowerMessage.includes('pitch')) {
+        const salesResponses = [
+          `Alors là tu parles ma langue ! 💰 Pour ${lead?.data?.name || 'ce prospect'}, je vois plusieurs angles d'attaque. On mise sur quoi ?`,
+          `Vendre c'est un art ! 🎨 Avec ${lead?.data?.name || 'ce lead'}, l'approche consultative sera parfaite. Tu veux qu'on prépare ?`,
+          `Oh yeah, mode warrior ! ⚔️ ${lead?.data?.name || 'Ce prospect'} va pas savoir ce qui l'a frappé ! On structure ton approche ?`
+        ];
+        aiResponse = salesResponses[Math.floor(Math.random() * salesResponses.length)];
+        suggestions = ['Structure de vente', 'Objections courantes', 'Closing techniques', 'Follow-up strategy'];
+      }
+      
+      // === QUESTIONS OBJECTIONS ===
+      else if (lowerMessage.includes('objection') || lowerMessage.includes('pas intéressé') || lowerMessage.includes('trop cher') || lowerMessage.includes('déjà un fournisseur')) {
+        const objectionResponses = [
+          `Ah les objections ! 🛡️ Mon domaine de prédilection ! Pour "${lowerMessage}", j'ai 3-4 parades qui marchent à tous les coups !`,
+          `Les objections c'est des opportunités déguisées ! � Celle-là, je l'ai vue 1000 fois. Laisse-moi te montrer comment la retourner !`,
+          `Perfect ! 🎯 Cette objection, c'est actually un signal d'achat caché. Je t'explique la technique ninja ?`
+        ];
+        aiResponse = objectionResponses[Math.floor(Math.random() * objectionResponses.length)];
+        suggestions = ['Technique du boomerang', 'Reformulation positive', 'Question retour', 'Proof social'];
+      }
+      
+      // === MOTIVATION/MORAL ===
+      else if (lowerMessage.includes('fatigue') || lowerMessage.includes('dur') || lowerMessage.includes('difficile') || lowerMessage.includes('compliqué')) {
+        const motivationResponses = [
+          `Hey, on a tous des jours comme ça ! 💪 Mais tu sais quoi ? ${lead?.data?.name || 'Ce prospect'} va te redonner le smile ! Allez, on y va !`,
+          `Fatigue de warrior ! 😤 C'est normal, tu donnes tout ! ${lead?.data?.name || 'Ce lead'} va être ta victoire du jour, j'en suis sûr !`,
+          `Dur dur... 😓 Mais regarde, ${lead?.data?.name || 'ce prospect'} c'est peut-être LE contrat qui va tout changer ! On tente le coup ?`
+        ];
+        aiResponse = motivationResponses[Math.floor(Math.random() * motivationResponses.length)];
+        suggestions = ['Boost de motivation', 'Techniques énergie', 'Mindset gagnant', 'Quick win'];
+      }
+      
+      // === STRATÉGIE/PLANNING ===
+      else if (lowerMessage.includes('stratégie') || lowerMessage.includes('plan') || lowerMessage.includes('comment') || lowerMessage.includes('approche')) {
+        aiResponse = `🧠 Mode stratège activé ! Pour ${lead?.data?.name || 'ce prospect'}, voici ma roadmap :
+
+**Phase 1 :** Ice-breaker + qualification
+**Phase 2 :** Identification besoins/douleurs  
+**Phase 3 :** Présentation solution ciblée
+**Phase 4 :** Gestion objections
+**Phase 5 :** Closing + next steps
+
+Étape par étape, on assure ! Sur quelle phase tu veux qu'on se concentre ?`;
+        suggestions = ['Phase 1 - Opening', 'Phase 2 - Discovery', 'Phase 3 - Pitch', 'Phase 5 - Closing'];
+      }
+      
+      // === DEFAULT - OUVERT À TOUT MAIS RECENTRAGE SUBTIL ===
+      else {
+        const defaultResponses = [
+          `Interessant ! Au fait, pendant qu'on discute, ${lead?.data?.name || 'ton prospect'} attend peut-etre ton appel ? On s'y met ?`,
+          `Ah ok ! Dis-moi, pour ${lead?.data?.name || 'ce lead'}, tu as une approche en tete ou on brainstorme ensemble ?`,
+          `Je vois ! Ca me fait penser que ${lead?.data?.name || 'ce prospect'} pourrait avoir le meme point de vue. On teste ca dans l'appel ?`,
+          `Hmm ! D'ailleurs, avec ${lead?.data?.name || 'ton lead'}, tu penses partir sur quel angle ? J'ai quelques idees !`
+        ];
+        aiResponse = defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
+        suggestions = ['Lancer l\'appel', 'Preparer l\'approche', 'Angle d\'attaque', 'Brainstorm ideas'];
+      }
+      
+      console.log('[useAIAssistant] Reponse generee:', aiResponse);
+      
+      console.log('[useAIAssistant] Reponse generee:', aiResponse);
+      
+      // Creer le message de reponse IA
+      const fallbackMessage: AIChatMessage = {
+        id: `ai-fallback-${Date.now()}`,
+        type: 'ai',
+        message: aiResponse,
+        timestamp: new Date(),
+        suggestions: suggestions,
+        context: {
+          relatedToCall: true,
+          priority: 'medium',
+          category: 'conversational'
+        }
+      };
+      
+      console.log('[useAIAssistant] 📨 Ajout du message fallback au chat:', fallbackMessage);
+      setMessages(prev => [...prev, fallbackMessage]);
+      console.log('[useAIAssistant] ✅ Message fallback ajoute avec succes !');
+    }
+    
+    console.log('[useAIAssistant] � Fin de generateResponse - setIsAnalyzing(false)');
+    setIsAnalyzing(false);
+          
+          `Excellente question ! Avec ${lead?.data?.company || 'cette entreprise'}, il faut surtout montrer de la valeur dès les premières secondes. Que souhaitez-vous aborder ?`,
+          
+          `Je comprends ! L'appel avec ${lead?.data?.name || 'ce prospect'} demande une préparation spécifique. Sur quoi puis-je vous aider ?`,
+          
+          `Bonne idée ! Pour optimiser cet appel, je peux vous aider sur plusieurs aspects. Qu'est-ce qui vous préoccupe le plus ?`,
+          
+          `C'est noté ! ${lead?.data?.name || 'Ce prospect'} mérite une approche réfléchie. Commençons par quoi ?`
+        ];
+        
+        // Sélectionner une réponse aléatoire pour varier
+        aiResponse = responses[Math.floor(Math.random() * responses.length)];
+        
+        suggestions = [
+          'Analyser ce prospect en détail',
+          'Préparer mon script d\'ouverture',
+          'Anticiper les objections',
+          'Techniques de persuasion'
+        ];
+      }
+      
+      console.log('[useAIAssistant] 🎯 Réponse générée:', aiResponse);
+      console.log('[useAIAssistant] 💡 Suggestions générées:', suggestions);
+      
+      const fallbackMessage: AIChatMessage = {
+        id: `ai-smart-${Date.now()}`,
+        type: 'ai',
+        message: aiResponse,
+        timestamp: new Date(),
+        suggestions,
+        context: {
+          relatedToCall: true,
+          priority: 'high',
+          category: 'advice'
+        }
+      };
+      
+      console.log('[useAIAssistant] 📨 Création du message fallback:', fallbackMessage);
+      console.log('[useAIAssistant] 🔄 Ajout au chat...');
+      setMessages(prev => {
+        console.log('[useAIAssistant] 📝 Messages précédents:', prev.length);
+        const newMessages = [...prev, fallbackMessage];
+        console.log('[useAIAssistant] 📝 Nouveaux messages:', newMessages.length);
+        return newMessages;
+      });
+      console.log('[useAIAssistant] ✅ Message fallback ajouté avec succès !');
+    } finally {
+      console.log('[useAIAssistant] 🏁 Fin de generateResponse - setIsAnalyzing(false)');
+      setIsAnalyzing(false);
+    }
+  }, [api, lead, messages, currentAnalysis]);
+
+  // 💬 Envoyer un message à l'IA
+  const sendMessage = useCallback(async (userMessage: string): Promise<void> => {
+    console.log('[useAIAssistant] 🚀 DÉBUT sendMessage avec:', userMessage);
+    console.log('[useAIAssistant] 🔍 Message trimmed:', userMessage.trim());
+    console.log('[useAIAssistant] 🔍 Lead présent:', !!lead);
+    
+    if (!userMessage.trim() || !lead) {
+      console.warn('[useAIAssistant] ⚠️ ABANDON sendMessage - Message vide ou lead manquant');
+      return;
+    }
+    
+    console.log('[useAIAssistant] 👤 Création du message utilisateur...');
+    // Ajouter le message utilisateur
+    const userMsg: AIChatMessage = {
+      id: `user-${Date.now()}`,
+      type: 'user',
+      message: userMessage,
+      timestamp: new Date()
+    };
+    
+    console.log('[useAIAssistant] 📨 Ajout du message utilisateur au chat:', userMsg);
+    setMessages(prev => {
+      console.log('[useAIAssistant] 📝 Messages précédents avant ajout user:', prev.length);
+      const newMessages = [...prev, userMsg];
+      console.log('[useAIAssistant] 📝 Messages après ajout user:', newMessages.length);
+      return newMessages;
+    });
+    
+    console.log('[useAIAssistant] 🤖 Appel de generateResponse...');
+    // Utiliser generateResponse pour traiter le message
+    await generateResponse(userMessage);
+    console.log('[useAIAssistant] 🏁 sendMessage terminé');
+  }, [lead, generateResponse]);
+
+  // 🗑️ Vider le chat
+  const clearChat = useCallback((): void => {
+    setMessages([]);
+    setCurrentAnalysis(null);
+  }, []);
+
+  // � Fonction pour démarrer l'écoute vocale
+  const startListening = useCallback(() => {
+    console.log('[useAIAssistant] 🎤 Démarrage de l\'écoute vocale...');
+    // Cette fonction sera appelée par le composant VoiceTranscription
+    // Elle peut être utilisée pour déclencher d'autres actions IA
+  }, []);
+
+  //  Fonction pour obtenir des suggestions contextuelles
+  const getSuggestions = useCallback(async (context: SuggestionContext) => {
+    try {
+      console.log('[useAIAssistant] 💡 Génération de suggestions...', context);
+      
+      const response = await api.post('/api/ai/get-suggestions', {
+        lead,
+        callContext: context,
+        currentAnalysis,
+        conversationHistory: messages.slice(-3)
+      });
+      
+      if (response.data?.suggestions) {
+        return response.data.suggestions;
+      }
+      
+      // Suggestions par défaut si l'API ne répond pas
+      return [
+        'Demander des détails sur les besoins',
+        'Proposer une démonstration',
+        'Fixer un rendez-vous de suivi',
+        'Clarifier le budget disponible'
+      ];
+      
+    } catch (error) {
+      console.warn('[useAIAssistant] ❌ Endpoint suggestions non disponible:', error);
+      
+      // Suggestions de fallback basées sur le contexte
+      const fallbackSuggestions = context.currentPhase === 'opening' 
+        ? [
+            'Saluer chaleureusement le prospect',
+            'Se présenter et présenter l\'entreprise',
+            'Expliquer le motif de l\'appel',
+            'Demander si c\'est le bon moment'
+          ]
+        : context.currentPhase === 'discovery'
+        ? [
+            'Poser des questions sur les besoins',
+            'Comprendre les défis actuels',
+            'Identifier les décideurs',
+            'Évaluer le budget disponible'
+          ]
+        : [
+            'Continuer la conversation',
+            'Poser des questions ouvertes',
+            'Écouter les objections',
+            'Proposer des solutions adaptées'
+          ];
+      
+      return fallbackSuggestions;
+    }
+  }, [api, lead, currentAnalysis, messages]);
+
+  // �🎙️ Analyser la transcription vocale en temps réel
+  const analyzeVoiceTranscription = useCallback(async (
+    transcription: string,
+    speaker: 'agent' | 'prospect'
+  ): Promise<void> => {
+    if (!transcription.trim() || transcription.length < 20) return;
+    
+    try {
+      setIsAnalyzing(true);
+      
+      const response = await api.post('/api/ai/analyze-voice-transcription', {
+        transcription,
+        speaker,
+        lead,
+        currentAnalysis,
+        conversationContext: messages.slice(-5)
+      });
+      
+      if (response.data?.analysis) {
+        setCurrentAnalysis(response.data.analysis);
+        
+        // Ajouter insights IA si importants
+        if (response.data.analysis.opportunities?.length > 0) {
+          const opportunityMsg: AIChatMessage = {
+            id: `opportunity-${Date.now()}`,
+            type: 'ai',
+            message: `🎯 **Opportunité détectée !**
+
+${response.data.analysis.opportunities[0]}
+
+💡 **Actions recommandées :**
+${response.data.analysis.nextActions?.slice(0, 2).join('\n• ') || 'Continuer l\'exploration'}`,
+            timestamp: new Date(),
+            suggestions: response.data.analysis.nextActions || [],
+            context: {
+              relatedToCall: true,
+              priority: 'high',
+              category: 'opportunity'
+            }
+          };
+          
+          setMessages(prev => [...prev, opportunityMsg]);
+        }
+        
+        // Alertes si objections détectées
+        if (response.data.analysis.objections?.length > 0) {
+          const objectionMsg: AIChatMessage = {
+            id: `objection-${Date.now()}`,
+            type: 'ai',
+            message: `⚠️ **Objection identifiée :**
+
+"${response.data.analysis.objections[0]}"
+
+🛡️ **Réponse suggérée :**
+${response.data.analysis.recommendedApproach}`,
+            timestamp: new Date(),
+            suggestions: [
+              'Reformuler la valeur ajoutée',
+              'Poser une question de clarification',
+              'Proposer un exemple concret'
+            ],
+            context: {
+              relatedToCall: true,
+              priority: 'high',
+              category: 'warning'
+            }
+          };
+          
+          setMessages(prev => [...prev, objectionMsg]);
+        }
+      }
+      
+    } catch (error) {
+      console.error('[useAIAssistant] ❌ Erreur analyse transcription:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [api, lead, currentAnalysis, messages]);
+
+  // 📊 Score de confiance global
+  const overallConfidence = useMemo(() => {
+    if (!currentAnalysis) return 0;
+    return Math.round(
+      (currentAnalysis.confidence + currentAnalysis.interestLevel) / 2
+    );
+  }, [currentAnalysis]);
+
+  // 🎯 Retour du hook
+  const returnValue: UseAIAssistantReturn = useMemo(() => ({
+    messages,
+    sendMessage,
+    currentAnalysis,
+    isAnalyzing,
+    isLoading: isAnalyzing, // Alias pour compatibilité avec le composant
+    clearChat,
+    generateResponse,
+    startListening,
+    getSuggestions
+  }), [
+    messages,
+    sendMessage,
+    currentAnalysis,
+    isAnalyzing,
+    clearChat,
+    generateResponse,
+    startListening,
+    getSuggestions
+  ]);
+
+  // 🔌 Interface pour les hooks parents
+  const extendedReturn = useMemo(() => ({
+    ...returnValue,
+    analyzeVoiceTranscription,
+    overallConfidence,
+    hasActiveConversation: messages.length > 1,
+    lastAIMessage: messages.filter(m => m.type === 'ai').pop(),
+    pendingSuggestions: messages
+      .filter(m => m.type === 'ai' && m.suggestions?.length)
+      .flatMap(m => m.suggestions || [])
+      .slice(-5) // 5 dernières suggestions
+  }), [returnValue, analyzeVoiceTranscription, overallConfidence, messages]);
+
+  return extendedReturn;
+};
+
+export default useAIAssistant;
