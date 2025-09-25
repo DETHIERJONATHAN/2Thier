@@ -6,8 +6,8 @@ import { useAuth } from '../../auth/useAuth';
 import { NotificationManager } from '../../components/Notifications';
 import AddLeadModal from '../../components/AddLeadModal';
 import DirectAddLeadModal from '../../components/DirectAddLeadModal';
-import EditLeadModal from '../../components/EditLeadModal';
 import ColumnFilter from '../../components/ColumnFilter';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 // Types
 import { Lead } from '../../types/leads';
@@ -27,8 +27,6 @@ export default function LeadsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isDirectModalOpen, setIsDirectModalOpen] = useState(false);
   
   // États pour le tri et le filtrage par colonne
@@ -43,7 +41,7 @@ export default function LeadsList() {
   const { leadStatuses } = useLeadStatuses();
   const { currentOrganization, isSuperAdmin, user } = useAuth();
   const organizationId = currentOrganization?.id;
-  
+
   // Récupérer les leads
   const fetchLeads = useCallback(async () => {
     if (!organizationId && !isSuperAdmin) {
@@ -64,9 +62,9 @@ export default function LeadsList() {
       
       setLeads(leadsData);
       applyFilters(leadsData, activeFilters, searchTerm);
-    } catch (e: any) {
-      const errorMsg = e.message || 'Erreur lors du chargement des leads';
-      console.error('[LeadsList] Erreur fetchLeads:', e);
+    } catch (error: unknown) {
+      const errorMsg = getErrorMessage(error, 'Erreur lors du chargement des leads');
+      console.error('[LeadsList] Erreur fetchLeads:', error);
       setError(errorMsg);
       NotificationManager.error(errorMsg);
     }
@@ -106,14 +104,8 @@ export default function LeadsList() {
     }
   }, [fetchLeads, user]);
 
-  // Mettre à jour les filtres quand ils changent
-  useEffect(() => {
-    applyFilters(leads, activeFilters, searchTerm);
-    applyColumnFilters();
-  }, [activeFilters, searchTerm, leads, sortColumn, sortDirection, sourceFilter, dateStart, dateEnd]);
-  
   // Fonction pour appliquer les filtres de colonne et le tri
-  const applyColumnFilters = () => {
+  const applyColumnFilters = useCallback(() => {
     let result = [...leads];
     
     // Appliquer d'abord les filtres de statut
@@ -186,7 +178,13 @@ export default function LeadsList() {
     });
     
     setFilteredLeads(result);
-  };
+  }, [leads, activeFilters, searchTerm, sourceFilter, dateStart, dateEnd, sortColumn, sortDirection]);
+
+  // Mettre à jour les filtres quand ils changent
+  useEffect(() => {
+    applyFilters(leads, activeFilters, searchTerm);
+    applyColumnFilters();
+  }, [leads, activeFilters, searchTerm, applyColumnFilters]);
 
   // Gérer le filtrage par statut
   const toggleFilter = (status: string) => {
@@ -212,8 +210,8 @@ export default function LeadsList() {
         await api.delete(`/leads/${leadId}`);
         fetchLeads();
         NotificationManager.success("Lead supprimé avec succès !");
-      } catch (e: any) {
-        const errorMsg = e.message || 'Erreur lors de la suppression du lead';
+      } catch (error: unknown) {
+        const errorMsg = getErrorMessage(error, 'Erreur lors de la suppression du lead');
         setError(errorMsg);
         NotificationManager.error(errorMsg);
       }

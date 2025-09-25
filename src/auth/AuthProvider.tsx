@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { message as antdMessage } from 'antd';
 import { AuthUser } from './user';
 import { AuthOrganization } from './organization';
 import { Permission } from './permissions';
-import { RoleName } from './role';
 import { ModuleAccess } from './modules';
+import { AuthContext, type AuthContextType } from './AuthContext';
 
 // Ajouter une déclaration pour Window
 declare global {
@@ -19,39 +19,6 @@ declare global {
     __googleAutoConnectInFlight?: boolean; // Single-flight auto Google connect
   }
 }
-
-export interface AuthContextType {
-  user: AuthUser | null;
-  originalUser: AuthUser | null; // Ajouté pour l'usurpation
-  organizations: AuthOrganization[];
-  currentOrganization: AuthOrganization | null;
-  permissions: Permission[];
-  modules: ModuleAccess[];
-  loading: boolean;
-  refresh: () => Promise<void>;
-  refetchUser: () => Promise<void>;
-  refreshModules: () => Promise<void>; // Ajouté pour forcer le rechargement des modules
-  isSuperAdmin: boolean;
-  userRole: RoleName | null;
-  selectedOrganization: AuthOrganization | null;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void; // Ajouté
-  isImpersonating: boolean;
-  setImpersonation: (user: AuthUser, organization: AuthOrganization) => void; // Ajouté
-  clearImpersonation: () => void; // Ajouté
-  can: (permission: string) => boolean; // Ajouté
-  selectOrganization: (organizationId: string | null) => Promise<void>;
-  // Expose un petit client API (legacy usages dans quelques pages)
-  api: {
-  get: <T = unknown>(url: string) => Promise<T>;
-  post: <T = unknown, B = unknown>(url: string, body: B) => Promise<T>;
-  put: <T = unknown, B = unknown>(url: string, body: B) => Promise<T>;
-  patch: <T = unknown, B = unknown>(url: string, body: B) => Promise<T>;
-  delete: <T = unknown>(url: string) => Promise<T>;
-  };
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Helper API local pour AuthProvider (pas de dépendance au contexte)
 const staticApi = {
@@ -538,7 +505,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return permissions.includes(permission as Permission);
     }, [permissions, user, originalUser]);
 
+    const hasInitialFetchRunRef = useRef(false);
+
     useEffect(() => {
+      if (hasInitialFetchRunRef.current) {
+        return;
+      }
+      hasInitialFetchRunRef.current = true;
+
       // Premier fetch au montage uniquement - avec protection single-flight
       if (window.__authFetchMeInFlight) {
         console.log('[AuthProvider] 🛡️ fetchMe déjà en cours au montage, ignoré');
@@ -556,8 +530,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return () => {
         console.log('[AuthProvider] 🧹 Cleanup effect fetchMe');
       };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // ✅ Dépendances vides - appel UNIQUEMENT au montage (fetchMe cause une boucle infinie)
+    }, [fetchMe]);
 
     // ✨ Ref pour éviter les boucles infinies dans fetchModules
     const fetchModulesRef = useRef<(force?: boolean) => Promise<void>>();
@@ -681,14 +654,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       </AuthContext.Provider>
     );
 };
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const useAuthContext = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuthContext must be used within an AuthProvider');
-  }
-  return context;
-};
-
-// Fin du fichier

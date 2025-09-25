@@ -260,7 +260,7 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
     );
 
     // On retire passwordHash avant de renvoyer l'objet utilisateur
-    const { passwordHash, ...userWithoutPassword } = user;
+  const { passwordHash: _passwordHash, ...userWithoutPassword } = user;
 
     res.json({ token, user: userWithoutPassword });
 

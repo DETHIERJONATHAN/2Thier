@@ -22,6 +22,7 @@ import {
   getTimelineColor
 } from '../../utils/leadTimeline';
 import type { Lead } from '../../types/leads';
+import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
 
 const { Title, Text } = Typography;
 
@@ -651,9 +652,9 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       
       setLeads(transformedLeads);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      console.error('Erreur lors du chargement des leads:', errorMessage);
-      message.error('Erreur lors du chargement des leads');
+      const errorMessage = getErrorMessage(error, 'Erreur lors du chargement des leads');
+      console.error('[LeadsKanban] ❌ Erreur lors du chargement des leads:', errorMessage, error);
+      message.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -734,7 +735,6 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       // 🔄 NOUVEAU: Déclencher un refresh des autres vues (mais pas du kanban)
       if (onLeadUpdated) {
         console.log('[LeadsKanban] 🔄 Déclenchement refresh des autres vues...');
-        console.log('[LeadsKanban] 🔧 État avant setIsUpdatingLead:', { isUpdatingLead, refreshTrigger });
         
         // 🚩 Marquer que c'est nous qui faisons la modification
         lastUpdateByKanban.current = true;
@@ -752,21 +752,21 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
         }, 2000); // 2 secondes pour laisser le temps à toutes les vues de se mettre à jour
       }
       
-    } catch (error) {
-      console.error('[LeadsKanban] ❌ Erreur lors du déplacement du lead:', error);
-      console.error('[LeadsKanban] ❌ Détails de l\'erreur:', {
-        message: error instanceof Error ? error.message : 'Erreur inconnue',
-        status: error && typeof error === 'object' && 'response' in error ? 
-          (error.response as { status?: number })?.status : undefined,
-        data: error && typeof error === 'object' && 'response' in error ? 
-          (error.response as { data?: unknown })?.data : undefined
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Erreur lors du déplacement du lead');
+      const { status, data } = getErrorResponseDetails(error);
+      console.error('[LeadsKanban] ❌ Erreur lors du déplacement du lead:', errorMessage, {
+        status,
+        data,
+        leadId,
+        newStatusId,
       });
-      message.error('Erreur lors du déplacement du lead');
+      message.error(errorMessage);
       
       // Revert optimistic update
       fetchLeads();
     }
-  }, [api, fetchLeads, user, currentOrganization]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [api, fetchLeads, user, currentOrganization, isSuperAdmin, onLeadUpdated]);
 
   // 📋 Groupement des leads par statut dynamique
   const leadsByStatus = useMemo(() => {

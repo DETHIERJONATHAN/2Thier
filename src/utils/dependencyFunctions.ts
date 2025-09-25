@@ -4,7 +4,7 @@
  * en fonction de conditions spécifiques.
  */
 
-import { IS_NULL, IS_EMPTY } from './validationFunctions';
+import { IS_EMPTY } from './validationFunctions';
 
 /**
  * Types d'actions possibles pour les dépendances

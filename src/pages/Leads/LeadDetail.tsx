@@ -17,8 +17,10 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
+import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
+import { unwrapApiData } from '../../utils/apiResponse';
 import { LEAD_STATUSES, LEAD_SOURCES } from './LeadsConfig';
-import { Lead } from '../../types/leads';
+import type { Lead, LeadApiResponse } from '../../types/leads';
 
 const { TabPane } = Tabs;
 
@@ -85,16 +87,23 @@ export default function LeadDetail({
       }
       
       try {
-        const data = await api.get(`/api/leads/${leadId}`);
-        if (data) {
-          setLead(data);
+        const data = await api.get<LeadApiResponse>(`/api/leads/${leadId}`);
+        const leadData = unwrapApiData<Lead>(data);
+        if (leadData) {
+          setLead(leadData);
         } else {
           setError("Lead non trouvé");
         }
-      } catch (e: unknown) {
-        const errorMsg = (e as Error).message || "Erreur lors du chargement du lead";
-        setError(errorMsg);
-        NotificationManager.error(errorMsg);
+      } catch (error: unknown) {
+        const errorMessage = getErrorMessage(error, 'Erreur lors du chargement du lead');
+        const errorDetails = getErrorResponseDetails(error);
+        console.error('Erreur lors du chargement du lead:', {
+          error,
+          status: errorDetails.status,
+          data: errorDetails.data,
+        });
+        setError(errorMessage);
+        NotificationManager.error(errorMessage);
       } finally {
         setLoading(false);
       }

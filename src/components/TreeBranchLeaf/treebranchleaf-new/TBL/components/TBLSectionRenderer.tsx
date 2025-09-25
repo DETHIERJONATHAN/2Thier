@@ -8,7 +8,7 @@
  * - Champs avec configuration TreeBranchLeaf avancée
  */
 
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { dlog as globalDlog } from '../../../../../utils/debug';
 import { SmartCalculatedField } from './SmartCalculatedField';
 import { useBatchEvaluation } from '../hooks/useBatchEvaluation';
@@ -104,7 +104,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   const debugEnabled = useMemo(() => {
     try { return localStorage.getItem('TBL_SMART_DEBUG') === '1'; } catch { return false; }
   }, []);
-  const dlog = (...args: unknown[]) => { if (debugEnabled) globalDlog('[TBLSectionRenderer]', ...args); };
+  const dlog = useCallback((...args: unknown[]) => {
+    if (debugEnabled) {
+      globalDlog('[TBLSectionRenderer]', ...args);
+    }
+  }, [debugEnabled]);
 
   // Cache de logs pour éviter répétitions massives
   const lastInjectionHashRef = useRef<string>('');
@@ -312,9 +316,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     });
     
     return finalFields.sort((a, b) => a.order - b.order);
-  // dlog is stable (memo on mount) and not required as dependency
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section.fields, formData]);
+  }, [dlog, formData, section]);
 
   // 🎨 Déterminer le style selon le niveau
   const getSectionStyle = () => {

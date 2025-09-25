@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
 import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col } from 'antd';
 import { 
@@ -40,7 +39,7 @@ export default function LeadDetail({ leadId, onEdit, onCall, onEmail, onSchedule
         setError(null);
         
         console.log('[LeadDetail] Récupération du lead:', leadId);
-        const leadData = await api.get(`/api/leads/${leadId}`) as Lead;
+    const leadData = await api.get<Lead>(`/api/leads/${leadId}`);
         
         console.log('[LeadDetail] Données reçues:', leadData);
         setLead(leadData);
@@ -105,43 +104,41 @@ export default function LeadDetail({ leadId, onEdit, onCall, onEmail, onSchedule
     return '';
   };
 
-  const displayName = (
-    pickFirst(
-      joinName(lead.firstName, lead.lastName),
-      (lead as any)?.name,
-      joinName((lead as any)?.data?.firstName, (lead as any)?.data?.lastName),
-      (lead as any)?.data?.name
-    ) || ''
+  const displayName = pickFirst(
+    joinName(lead.firstName, lead.lastName),
+    lead.name,
+    joinName(lead.data?.firstName, lead.data?.lastName),
+    lead.data?.name
   ) || 'Nom non renseigné';
 
   const displayEmail = pickFirst(
-    (lead as any)?.email,
-    (lead as any)?.contactEmail,
-    (lead as any)?.contact?.email,
-    (lead as any)?.emails,
-    (lead as any)?.contact?.emails,
-    (lead as any)?.data?.email
+    lead.email,
+    lead.contactEmail,
+    lead.contact?.email,
+    lead.emails,
+    lead.contact?.emails,
+    lead.data?.email
   );
 
   const displayPhone = pickFirst(
-    (lead as any)?.phone,
-    (lead as any)?.mobile,
-    (lead as any)?.telephone,
-    (lead as any)?.contact?.phone,
-    (lead as any)?.contact?.mobile,
-    (lead as any)?.phones,
-    (lead as any)?.contact?.phones,
-    (lead as any)?.data?.phone
+    lead.phone,
+    lead.mobile,
+    lead.telephone,
+    lead.contact?.phone,
+    lead.contact?.mobile,
+    lead.phones,
+    lead.contact?.phones,
+    lead.data?.phone
   );
 
   const displayCompany = pickFirst(
-    (lead as any)?.company,
-    (lead as any)?.companyName,
-    (lead as any)?.organization?.name,
-    (lead as any)?.contact?.company,
-    (lead as any)?.customer?.company,
-    (lead as any)?.isCompany ? (lead as any)?.name : '',
-    (lead as any)?.data?.company
+    lead.company,
+    lead.companyName,
+    lead.organization?.name,
+    lead.contact?.company,
+    lead.customer?.company,
+    lead.isCompany ? lead.name : '',
+    lead.data?.company
   );
   
   return (

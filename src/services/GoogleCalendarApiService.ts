@@ -1,10 +1,7 @@
 // src/services/GoogleCalendarApiService.ts
 import { google, calendar_v3 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
-import { google } from 'googleapis';
 import { googleAuthManager } from '../google-auth/index.js'; // Import du manager centralisé
-import { CalendarEvent } from '../types/CalendarEvent.js';
-import dayjs from 'dayjs';
 
 /**
  * Service pour interagir avec l'API Google Calendar.

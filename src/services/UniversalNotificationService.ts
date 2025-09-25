@@ -115,7 +115,22 @@ export class UniversalNotificationService extends EventEmitter {
   }
 
   /**
-   * 🔔 CRÉER UNE NOTIFICATION UNIVERSELLE
+   * � OBTENIR L'ÉTAT COURANT DU SERVICE
+   */
+  getStatus(): {
+    isRunning: boolean;
+    checksActive: boolean;
+    activeListeners: number;
+  } {
+    return {
+      isRunning: this.isRunning,
+      checksActive: Boolean(this.checkInterval),
+      activeListeners: this.listenerCount('notification-created')
+    };
+  }
+
+  /**
+   * �🔔 CRÉER UNE NOTIFICATION UNIVERSELLE
    */
   async createNotification(data: NotificationData): Promise<void> {
     try {
@@ -175,21 +190,27 @@ export class UniversalNotificationService extends EventEmitter {
     subject: string;
     userId: string;
     organizationId: string;
+    summary?: string;
+    priority?: NotificationData['priority'];
+    metadata?: Record<string, unknown>;
+    actionUrl?: string;
+    tags?: string[];
   }): Promise<void> {
     await this.createNotification({
       type: 'NEW_EMAIL',
       title: 'Nouveau message reçu',
-      message: `De: ${emailData.from.substring(0, 30)}${emailData.from.length > 30 ? '...' : ''}`,
+      message: emailData.summary ?? `De: ${emailData.from.substring(0, 30)}${emailData.from.length > 30 ? '...' : ''}`,
       userId: emailData.userId,
       organizationId: emailData.organizationId,
-      priority: 'medium',
+      priority: emailData.priority ?? 'medium',
       metadata: {
         emailId: emailData.emailId,
         from: emailData.from,
-        subject: emailData.subject
+        subject: emailData.subject,
+        ...emailData.metadata
       },
-      actionUrl: `/emails/${emailData.emailId}`,
-      tags: ['email', 'inbox']
+      actionUrl: emailData.actionUrl ?? `/emails/${emailData.emailId}`,
+      tags: emailData.tags ?? ['email', 'inbox']
     });
   }
 
@@ -335,12 +356,14 @@ export class UniversalNotificationService extends EventEmitter {
    * 📅 VÉRIFIER LES RENDEZ-VOUS PROCHES
    */
   private async checkForUpcomingMeetings(): Promise<void> {
-    const fifteenMinutesFromNow = new Date(Date.now() + 15 * 60 * 1000);
     const now = new Date();
+    const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60 * 1000);
 
     // Logique à implémenter selon votre modèle de données calendrier
     // Exemple: récupérer les meetings dans les 15 prochaines minutes
-    console.log('📅 [UniversalNotification] Vérification des rendez-vous proches...');
+    console.log(
+      `📅 [UniversalNotification] Vérification des rendez-vous entre ${now.toISOString()} et ${fifteenMinutesFromNow.toISOString()}...`
+    );
   }
 
   /**

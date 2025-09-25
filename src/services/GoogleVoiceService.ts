@@ -282,7 +282,7 @@ export class GoogleVoiceService {
    */
   async sendSMS(fromNumber: string, toNumber: string, message: string, userEmail: string): Promise<SMSMessage> {
     try {
-      console.log(`💬 Envoi SMS de ${fromNumber} vers ${toNumber}...`);
+      console.log(`💬 Envoi SMS de ${fromNumber} vers ${toNumber} par ${userEmail}...`);
       
       // En production, ceci utiliserait l'API Google Voice pour envoyer le SMS
       const smsMessage: SMSMessage = {
@@ -309,11 +309,19 @@ export class GoogleVoiceService {
    */
   async getCallHistory(userEmail: string, limit: number = 50): Promise<CallRecord[]> {
     try {
-      console.log(`📊 Récupération de l'historique des appels pour ${userEmail}...`);
+      console.log(`📊 Récupération des ${limit} derniers appels pour ${userEmail}...`);
       
       // En production, ceci récupérerait les données depuis Google Voice
       // Pour l'instant, nous retournons un historique simulé
-      const callHistory: CallRecord[] = [];
+  const simulatedCount = Math.min(limit, 5);
+      const callHistory: CallRecord[] = Array.from({ length: simulatedCount }, (_, index) => ({
+        id: `sim_call_${index}`,
+        fromNumber: '+32470123456',
+        toNumber: '+32471111222',
+        duration: 0,
+        timestamp: new Date(),
+        type: 'inbound'
+      }));
       
       console.log(`✅ ${callHistory.length} appels récupérés`);
       return callHistory;
@@ -328,10 +336,19 @@ export class GoogleVoiceService {
    */
   async getSMSHistory(userEmail: string, limit: number = 50): Promise<SMSMessage[]> {
     try {
-      console.log(`💬 Récupération de l'historique SMS pour ${userEmail}...`);
+      console.log(`💬 Récupération des ${limit} derniers SMS pour ${userEmail}...`);
       
       // En production, ceci récupérerait les données depuis Google Voice
-      const smsHistory: SMSMessage[] = [];
+  const simulatedCount = Math.min(limit, 5);
+      const smsHistory: SMSMessage[] = Array.from({ length: simulatedCount }, (_, index) => ({
+        id: `sim_sms_${index}`,
+        fromNumber: '+32470123456',
+        toNumber: '+32471111222',
+        message: 'Message simulé',
+        timestamp: new Date(),
+        direction: 'inbound',
+        status: 'received'
+      }));
       
       console.log(`✅ ${smsHistory.length} SMS récupérés`);
       return smsHistory;
@@ -347,6 +364,8 @@ export class GoogleVoiceService {
   async configureAutoAttendant(name: string, welcomeMessage: string, menuOptions: any[]): Promise<boolean> {
     try {
       console.log(`🏢 Configuration du standard automatique "${name}"...`);
+      console.log(`📢 Message d'accueil: ${welcomeMessage}`);
+      console.log(`📋 Options de menu (${menuOptions.length}):`, menuOptions.map((option) => option?.label ?? 'option'));
       
       // En production, ceci configurerait un standard automatique Google Voice
       // Pour l'instant, nous simulons la configuration

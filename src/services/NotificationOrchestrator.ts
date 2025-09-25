@@ -272,9 +272,11 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async checkMissedCalls(): Promise<void> {
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    
+
     // TODO: Implémenter selon votre modèle d'appels
-    console.log('📞 [NotificationOrchestrator] Vérification appels manqués...');
+    console.log('📞 [NotificationOrchestrator] Vérification appels manqués...', {
+      since: tenMinutesAgo.toISOString()
+    });
   }
 
   /**
@@ -298,9 +300,11 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async checkNewQuotes(): Promise<void> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    
+
     // TODO: Implémenter selon votre modèle de devis
-    console.log('💰 [NotificationOrchestrator] Vérification nouveaux devis...');
+    console.log('💰 [NotificationOrchestrator] Vérification nouveaux devis...', {
+      since: oneHourAgo.toISOString()
+    });
   }
 
   /**

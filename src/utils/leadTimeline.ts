@@ -31,11 +31,14 @@ export function calculateLeadTimelineStatus(
   deadlineDate: Date;
   isOverdue: boolean;
   description: string;
+  lastContactHoursAgo: number | null;
 } {
   const now = new Date();
   const createdDate = new Date(createdAt);
   const sourceKey = source as SourceKey;
   const sourceConfig = SOURCE_DEADLINES[sourceKey] || SOURCE_DEADLINES.manual;
+  const lastContact = lastContactDate ? new Date(lastContactDate) : null;
+  const lastContactHoursAgo = lastContact ? Math.floor((now.getTime() - lastContact.getTime()) / (1000 * 60 * 60)) : null;
   
   // Calculer la date limite
   const deadlineDate = new Date(createdDate);
@@ -54,6 +57,22 @@ export function calculateLeadTimelineStatus(
   let urgencyLevel: number;
   let description: string;
   
+  const adjustUrgencyForContact = (level: number): number => {
+    if (lastContactHoursAgo === null) {
+      return level;
+    }
+
+    if (lastContactHoursAgo <= 12) {
+      return Math.max(0, level - 20);
+    }
+
+    if (lastContactHoursAgo >= 72) {
+      return Math.min(100, level + 15);
+    }
+
+    return level;
+  };
+
   if (isOverdue) {
     if (hoursUntilDeadline > 72) { // Plus de 3 jours de retard
       status = 'critical';
@@ -63,7 +82,7 @@ export function calculateLeadTimelineStatus(
     } else {
       status = 'overdue';
       color = 'red';
-      urgencyLevel = 90 + Math.min(10, hoursUntilDeadline / 24 * 10);
+      urgencyLevel = adjustUrgencyForContact(90 + Math.min(10, hoursUntilDeadline / 24 * 10));
       description = `En retard: ${hoursUntilDeadline}h`;
     }
   } else {
@@ -75,19 +94,23 @@ export function calculateLeadTimelineStatus(
     if (progressPercent < 50) {
       status = 'on_time';
       color = 'green';
-      urgencyLevel = Math.max(0, progressPercent / 2);
+      urgencyLevel = adjustUrgencyForContact(Math.max(0, progressPercent / 2));
       description = `Dans les temps: ${remainingHours}h restantes`;
     } else if (progressPercent < 80) {
       status = 'warning';
       color = 'orange';
-      urgencyLevel = 50 + (progressPercent - 50) * 0.8;
+      urgencyLevel = adjustUrgencyForContact(50 + (progressPercent - 50) * 0.8);
       description = `Attention: ${remainingHours}h restantes`;
     } else {
       status = 'warning';
       color = 'orange';
-      urgencyLevel = 70 + (progressPercent - 80);
+      urgencyLevel = adjustUrgencyForContact(70 + (progressPercent - 80));
       description = `Urgent: ${remainingHours}h restantes`;
     }
+  }
+
+  if (lastContactHoursAgo !== null) {
+    description += ` | Dernier contact: ${lastContactHoursAgo}h`; 
   }
   
   return {
@@ -97,7 +120,8 @@ export function calculateLeadTimelineStatus(
     remainingHours,
     deadlineDate,
     isOverdue,
-    description
+    description,
+    lastContactHoursAgo
   };
 }
 
@@ -234,6 +258,24 @@ export function generateLeadRecommendations(
     actions.push('Suivre le processus standard');
     reasoning = 'Lead dans les délais';
     aiSuggestion = '✅ Lead sous contrôle: Suivez votre processus habituel.';
+  }
+
+  switch (impact.impactType) {
+    case 'positive':
+      aiSuggestion += ` 🎉 Impact positif (+${impact.score}).`;
+      break;
+    case 'negative':
+      actions.push('Planifier une revue commerciale');
+      aiSuggestion += ` 📉 Impact négatif (${impact.score}).`;
+      break;
+    case 'critical':
+      priority = 'critical';
+      actions.unshift('Analyser les pertes potentielles');
+      reasoning += ' Impact commercial critique.';
+      aiSuggestion = `🚨 Impact critique (${impact.score}). Mobilisez l'équipe commerciale immédiatement.`;
+      break;
+    default:
+      aiSuggestion += ` ℹ️ Impact neutre (${impact.score}).`;
   }
   
   // Ajouts selon la source

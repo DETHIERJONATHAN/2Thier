@@ -9,22 +9,6 @@ const router = Router();
 
 router.use(authMiddleware as unknown as RequestHandler, impersonationMiddleware as unknown as RequestHandler);
 
-// 🔐 MIDDLEWARE DE SÉCURITÉ pour les routes sensibles
-const adminAccessMiddleware = (req: Request, res: Response, next: Function) => {
-  const user = req.user as { role?: string } | undefined;
-  const allowedRoles = ['super_admin', 'admin', 'organization_admin', 'manager'];
-  
-  if (!user?.role || !allowedRoles.includes(user.role)) {
-    res.status(403).json({ 
-      success: false, 
-      error: 'Accès refusé - permissions insuffisantes' 
-    });
-    return;
-  }
-  
-  next();
-};
-
 // 🎯 GET - SYSTÈME CATEGORY COMPLET avec toutes les fonctionnalités multi-tenant
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {

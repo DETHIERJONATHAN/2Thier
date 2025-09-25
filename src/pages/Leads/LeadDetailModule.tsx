@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -38,11 +37,27 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { NotificationManager } from '../../components/Notifications';
-import type { Lead } from '../../types/leads';
+import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
+import { extractApiArray, unwrapApiData } from '../../utils/apiResponse';
+import type { ApiEnvelope } from '../../utils/apiResponse';
+import type { Lead, LeadAddress, LeadApiResponse } from '../../types/leads';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+
+type LeadHistoryItem = {
+  type: 'call' | 'email' | 'note' | 'meeting' | string;
+  content: string;
+  author: string;
+  createdAt: string | Date;
+};
+
+type LeadDocument = {
+  name: string;
+  type: string;
+  url?: string;
+};
 
 /**
  * 📋 Module du Lead (fiche détaillée) - Version finale
@@ -83,14 +98,8 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   const [currentNote, setCurrentNote] = useState('');
   
   // États pour l'historique
-  type LeadHistoryItem = {
-    type: 'call' | 'email' | 'note' | 'meeting' | string;
-    content: string;
-    author: string;
-    createdAt: string | Date;
-  };
   const [history, setHistory] = useState<LeadHistoryItem[]>([]);
-  const [documents, setDocuments] = useState<Array<{ name: string; type: string }>>([]);
+  const [documents, setDocuments] = useState<LeadDocument[]>([]);
 
   // 📊 Récupération des détails du lead
   const fetchLeadDetail = useCallback(async () => {
@@ -99,25 +108,17 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
     setLoading(true);
     try {
       // Détails du lead (gérer {success, data} et fallback direct)
-      const leadResp = await api.get(`/api/leads/${leadId}`);
-      const leadData = (leadResp && leadResp.success ? leadResp.data : leadResp) as Lead;
-      setLead(leadData);
+  const leadResp = await api.get<LeadApiResponse>(`/api/leads/${leadId}`);
+  const leadData = unwrapApiData<Lead>(leadResp);
+      setLead(leadData ?? null);
       
       // Historique (tolérer 404 et structures différentes)
       try {
-        const historyResp = await api.get(`/api/leads/${leadId}/history`, {
+        const historyResp = await api.get<LeadHistoryItem[] | ApiEnvelope<LeadHistoryItem[]> | null>(`/api/leads/${leadId}/history`, {
           suppressErrorLogForStatuses: [404],
           showErrors: false,
         });
-        let historyData: LeadHistoryItem[] = [];
-        if (historyResp?.success && Array.isArray(historyResp.data)) {
-          historyData = historyResp.data as LeadHistoryItem[];
-        } else if (Array.isArray(historyResp)) {
-          historyData = historyResp as LeadHistoryItem[];
-        } else {
-          historyData = [];
-        }
-        setHistory(historyData);
+        setHistory(extractApiArray<LeadHistoryItem>(historyResp));
       } catch {
         // 404 acceptable => pas d'historique
         setHistory([]);
@@ -125,27 +126,25 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
       
       // Documents (tolérer 404 et structures différentes)
       try {
-        const docsResp = await api.get(`/api/leads/${leadId}/documents`, {
+        const docsResp = await api.get<LeadDocument[] | ApiEnvelope<LeadDocument[]> | null>(`/api/leads/${leadId}/documents`, {
           suppressErrorLogForStatuses: [404],
           showErrors: false,
         });
-        let docsData: Array<{ name: string; type: string }>; 
-        if (docsResp?.success && Array.isArray(docsResp.data)) {
-          docsData = docsResp.data as Array<{ name: string; type: string }>; 
-        } else if (Array.isArray(docsResp)) {
-          docsData = docsResp as Array<{ name: string; type: string }>; 
-        } else {
-          docsData = [];
-        }
-        setDocuments(docsData);
+        setDocuments(extractApiArray<LeadDocument>(docsResp));
       } catch {
         setDocuments([]);
       }
       
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur';
-      console.error('Erreur lors du chargement du lead:', msg);
-      NotificationManager.error('Erreur lors du chargement du lead');
+      const errorMessage = getErrorMessage(err, 'Erreur lors du chargement du lead');
+      const errorDetails = getErrorResponseDetails(err);
+      console.error('Erreur lors du chargement du lead:', {
+        error: err,
+        message: errorMessage,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -187,96 +186,91 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   };
 
   // Préférer les colonnes dédiées renvoyées par l'API normalisée
-  let displayName = pickFirst(
-    // Top-level d'abord
+  const displayNameSources: unknown[] = [
     joinName(lead?.firstName, lead?.lastName),
-    (lead as any)?.name,
-    // Puis fallback sur data si présent
-    joinName((lead as any)?.data?.firstName, (lead as any)?.data?.lastName),
-    (lead as any)?.data?.name,
-    (lead as any)?.fullName,
-    (lead as any)?.contact?.name,
-    joinName((lead as any)?.contact?.firstName, (lead as any)?.contact?.lastName),
-    (lead as any)?.customer?.name,
-    (lead as any)?.companyContact?.name
-  );
+    lead?.name,
+    joinName(lead?.data?.firstName, lead?.data?.lastName),
+    lead?.data?.name,
+    lead?.fullName,
+    lead?.contact?.name,
+    joinName(lead?.contact?.firstName, lead?.contact?.lastName),
+    lead?.customer?.name,
+    lead?.companyContact?.name,
+  ];
+  let displayName = pickFirst(...displayNameSources);
   if (!displayName) {
     // Fallback intelligents: email -> nom, sinon téléphone
-    const emailCandidate = pickFirst((lead as any)?.email, (lead as any)?.data?.email);
-    const phoneCandidate = pickFirst((lead as any)?.phone, (lead as any)?.data?.phone);
+    const emailCandidate = pickFirst(lead?.email, lead?.data?.email);
+    const phoneCandidate = pickFirst(lead?.phone, lead?.data?.phone);
     const fromEmail = nameFromEmail(emailCandidate);
     displayName = fromEmail || phoneCandidate || 'Lead sans nom';
   }
 
   const displayEmail = pickFirst(
-    // Top-level
-    (lead as any)?.email,
-    // Fallbacks
-    (lead as any)?.contactEmail,
-    (lead as any)?.contact?.email,
-    (lead as any)?.emails,
-    (lead as any)?.contact?.emails,
-    (lead as any)?.data?.email
+    lead?.email,
+    lead?.contactEmail,
+    lead?.contact?.email,
+    lead?.emails,
+    lead?.contact?.emails,
+    lead?.data?.email
   );
 
   const displayPhone = pickFirst(
-    // Top-level
-    (lead as any)?.phone,
-    // Fallbacks
-    (lead as any)?.mobile,
-    (lead as any)?.telephone,
-    (lead as any)?.contact?.phone,
-    (lead as any)?.contact?.mobile,
-    (lead as any)?.phones,
-    (lead as any)?.contact?.phones,
-    (lead as any)?.data?.phone
+    lead?.phone,
+    lead?.mobile,
+    lead?.telephone,
+    lead?.contact?.phone,
+    lead?.contact?.mobile,
+    lead?.phones,
+    lead?.contact?.phones,
+    lead?.data?.phone
   );
 
   const displayCompany = pickFirst(
-    // Top-level
-    (lead as any)?.company,
-    // Fallbacks
-    (lead as any)?.companyName,
-    (lead as any)?.organization?.name,
-    (lead as any)?.contact?.company,
-    (lead as any)?.customer?.company,
-    (lead as any)?.isCompany ? (lead as any)?.name : '',
-    (lead as any)?.data?.company
+    lead?.company,
+    lead?.companyName,
+    lead?.organization?.name,
+    lead?.contact?.company,
+    lead?.customer?.company,
+    lead?.isCompany ? lead?.name : '',
+    lead?.data?.company
   );
-  const formatAddress = (addr: unknown) => {
+  const formatAddress = (addr: LeadAddress | string | null | undefined): string => {
     if (!addr) return '';
     if (typeof addr === 'string') return addr;
-    if (typeof addr === 'object') {
-      const a = addr as Record<string, unknown>;
-      const parts = [a.street || a.line1, a.postalCode || a.zip, a.city, a.country]
-        .map((x) => (x ? String(x) : ''))
-        .filter(Boolean);
-      return parts.join(' ');
-    }
-    return '';
+    const parts = [addr.street ?? addr.line1, addr.postalCode ?? addr.zip, addr.city, addr.country]
+      .map((x) => (x ? String(x) : ''))
+      .filter(Boolean);
+    return parts.join(' ');
   };
-  const displayAddress = formatAddress(
-    // Top-level
-    (lead as any)?.address ||
-    (Array.isArray((lead as any)?.addresses) ? (lead as any)?.addresses?.[0] : undefined) ||
-    // Fallbacks
-    (lead as any)?.contact?.address ||
-    (Array.isArray((lead as any)?.contact?.addresses) ? (lead as any)?.contact?.addresses?.[0] : undefined) ||
-    (lead as any)?.data?.address ||
-    (Array.isArray((lead as any)?.data?.addresses) ? (lead as any)?.data?.addresses?.[0] : undefined)
-  );
+
+  const firstAddress = (entries: Array<LeadAddress | string | null | undefined>): LeadAddress | string | null | undefined => {
+    for (const entry of entries) {
+      if (entry) return entry;
+    }
+    return null;
+  };
+
+  const displayAddress = formatAddress(firstAddress([
+    lead?.address,
+    Array.isArray(lead?.addresses) ? lead?.addresses?.[0] : undefined,
+    lead?.contact?.address,
+    Array.isArray(lead?.contact?.addresses) ? lead?.contact?.addresses?.[0] : undefined,
+    lead?.data?.address as LeadAddress | string | null | undefined,
+    Array.isArray(lead?.data?.addresses) ? (lead?.data?.addresses?.[0] as LeadAddress | string | undefined) : undefined,
+  ]));
 
   // Debug non intrusif pour comprendre la source du nom affiché
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && lead) {
     try {
       console.log('[LeadDetailModule] 🧩 Debug nom', {
-        id: (lead as any)?.id,
-        firstName: (lead as any)?.firstName,
-        lastName: (lead as any)?.lastName,
-        nameTop: (lead as any)?.name,
-        nameData: (lead as any)?.data?.name,
-        email: (lead as any)?.email,
-        phone: (lead as any)?.phone,
+        id: lead.id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        nameTop: lead.name,
+        nameData: lead.data?.name,
+        email: lead.email,
+        phone: lead.phone,
         displayName
       });
     } catch (e) {
@@ -295,7 +289,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
       content: (
         <div>
           <p><strong>Contexte :</strong> {displayCompany ? 'Prospect B2B' : 'Prospect B2C'}</p>
-          <p><strong>Dernier contact :</strong> { (lead as any)?.lastContactDate ? dayjs((lead as any).lastContactDate).format('DD/MM/YYYY') : 'Premier contact'}</p>
+          <p><strong>Dernier contact :</strong> {lead?.lastContactDate ? dayjs(lead.lastContactDate).format('DD/MM/YYYY') : 'Premier contact'}</p>
           <p><strong>Script suggéré :</strong></p>
           <div className="bg-blue-50 p-3 rounded mt-2">
             \"Bonjour {displayName}, je suis {user?.firstName} de 2Thier SRL. 
@@ -371,8 +365,15 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
       // TODO: Analyse IA de la note
       // Détection d'opportunités ou signaux faibles
       
-    } catch {
-      NotificationManager.error('Erreur lors de l\'ajout de la note');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, 'Erreur lors de l\'ajout de la note');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de l\'ajout de la note:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   }, [currentNote, leadId, api, user, fetchLeadDetail]);
 
@@ -391,8 +392,15 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
       NotificationManager.success('Document uploadé avec succès');
       fetchLeadDetail();
       
-    } catch {
-      NotificationManager.error('Erreur lors de l\'upload du document');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, 'Erreur lors de l\'upload du document');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de l\'upload du document:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
     
     return false; // Empêcher l'upload automatique d'Antd
@@ -533,10 +541,10 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                         {dayjs(lead.createdAt).format('DD/MM/YYYY HH:mm')}
                       </Descriptions.Item>
                       <Descriptions.Item label="Dernière action">
-                        {(lead as any)?.lastContactDate ? dayjs((lead as any).lastContactDate).format('DD/MM/YYYY HH:mm') : 'Aucune'}
+                        {lead?.lastContactDate ? dayjs(lead.lastContactDate).format('DD/MM/YYYY HH:mm') : 'Aucune'}
                       </Descriptions.Item>
                       <Descriptions.Item label="Prochain suivi">
-                        {(lead as any)?.nextFollowUpDate ? dayjs((lead as any).nextFollowUpDate).format('DD/MM/YYYY') : 'À définir'}
+                        {lead?.nextFollowUpDate ? dayjs(lead.nextFollowUpDate).format('DD/MM/YYYY') : 'À définir'}
                       </Descriptions.Item>
                     </Descriptions>
                   </Card>

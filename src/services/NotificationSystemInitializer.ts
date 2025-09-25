@@ -187,16 +187,18 @@ export class NotificationSystemInitializer {
   async getSystemStats(): Promise<any> {
     try {
       const universal = UniversalNotificationService.getInstance();
-      
+      const universalStatus = universal.getStatus();
+
       // TODO: Collecter stats de tous les services
       return {
         isRunning: this.isInitialized,
         services: {
-          universal: true,
+          universal: universalStatus.isRunning,
           gmail: true,
           calendar: true,
           orchestrator: true
         },
+        universal: universalStatus,
         // stats: await universal.getStats('organization-id')
       };
 

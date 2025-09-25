@@ -211,26 +211,47 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
     setStageId(null);
   }, [initialFormData]);
 
+  const hasRunInitialPreview = useRef(false);
   // Preview initial si souhaité (si initialFormData ou submissionId)
   useEffect(() => {
-    if ((initialSubmissionId || Object.keys(initialFormData || {}).length > 0) && !results.length) {
-      // ne pas spammer: lancer un staging + preview unique au montage
-      (async () => {
-        try {
-          const r = await api.post('/api/tbl/submissions/stage', { stageId: null, treeId: initialTreeId, submissionId: initialSubmissionId, formData: initialFormData });
-          const sid = r.data?.stage?.id ?? null;
-          setStageId(sid);
-          if (sid) {
-            const pv = await api.post('/api/tbl/submissions/stage/preview', { stageId: sid });
-            setResults(Array.isArray(pv.data?.results) ? pv.data.results : []);
-          }
-        } catch {
-          // silencieux au montage
-        }
-      })();
+    if (hasRunInitialPreview.current) {
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    const hasInitialData = Boolean(initialSubmissionId) || Object.keys(initialFormData || {}).length > 0;
+    if (!hasInitialData || results.length > 0) {
+      return;
+    }
+
+    hasRunInitialPreview.current = true;
+    let cancelled = false;
+
+    const runInitialPreview = async () => {
+      try {
+        const stageResponse = await api.post('/api/tbl/submissions/stage', {
+          stageId: null,
+          treeId: initialTreeId,
+          submissionId: initialSubmissionId,
+          formData: initialFormData,
+        });
+        if (cancelled) return;
+        const sid = stageResponse.data?.stage?.id ?? null;
+        setStageId(sid);
+        if (!sid) return;
+        const previewResponse = await api.post('/api/tbl/submissions/stage/preview', { stageId: sid });
+        if (cancelled) return;
+        setResults(Array.isArray(previewResponse.data?.results) ? previewResponse.data.results : []);
+      } catch {
+        // silencieux au montage
+      }
+    };
+
+    runInitialPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, initialSubmissionId, initialFormData, initialTreeId, results.length]);
 
   const apiValue: UseTblSubmissionApi = useMemo(() => ({
     treeId,

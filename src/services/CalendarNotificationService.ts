@@ -1,5 +1,6 @@
 // Service pour gérer les notifications et emails liés à l'agenda
 import { PrismaClient } from '@prisma/client';
+import { emailService } from './EmailService';
 
 const prisma = new PrismaClient();
 
@@ -190,35 +191,36 @@ export class CalendarNotificationService {
   ) {
     try {
       // Utiliser votre système d'email existant
-      // Exemple de contenu d'email
-      const emailContent = {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const agendaUrl = `${frontendUrl}/agenda`;
+      const subject = `Invitation: ${eventData.eventTitle}`;
+      const html = `
+        <h2>Invitation à un événement</h2>
+        <p><strong>Événement:</strong> ${eventData.eventTitle}</p>
+        <p><strong>Date:</strong> ${new Date(eventData.eventDate).toLocaleDateString('fr-FR', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })}</p>
+        ${eventData.eventLocation ? `<p><strong>Lieu:</strong> ${eventData.eventLocation}</p>` : ''}
+        <p><strong>Organisateur:</strong> ${organizerName}</p>
+        
+        <p>Vous êtes invité(e) à participer à cet événement.</p>
+        
+        <div style="margin: 20px 0;">
+          <a href="${agendaUrl}" style="background-color: #1890ff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Voir l'agenda</a>
+        </div>
+      `;
+
+      await emailService.sendEmail({
         to: recipientEmail,
-        subject: `Invitation: ${eventData.eventTitle}`,
-        html: `
-          <h2>Invitation à un événement</h2>
-          <p><strong>Événement:</strong> ${eventData.eventTitle}</p>
-          <p><strong>Date:</strong> ${new Date(eventData.eventDate).toLocaleDateString('fr-FR', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</p>
-          ${eventData.eventLocation ? `<p><strong>Lieu:</strong> ${eventData.eventLocation}</p>` : ''}
-          <p><strong>Organisateur:</strong> ${organizerName}</p>
-          
-          <p>Vous êtes invité(e) à participer à cet événement.</p>
-          
-          <div style="margin: 20px 0;">
-            <a href="${process.env.FRONTEND_URL}/agenda" style="background-color: #1890ff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Voir l'agenda</a>
-          </div>
-        `
-      };
-      
-      // Ici vous intégreriez avec votre service email existant
-      console.log(`📧 [Calendar] Email d'invitation préparé pour ${recipientEmail}`);
-      // await emailService.send(emailContent);
+        subject,
+        html
+      });
+      console.log(`📧 [Calendar] Email d'invitation envoyé à ${recipientEmail}`);
       
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de l\'envoi de l\'email d\'invitation:', error);

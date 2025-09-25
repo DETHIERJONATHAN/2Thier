@@ -1,5 +1,7 @@
 // Types et configurations pour la gestion des leads
 
+import type { LeadData } from '../../types/leads';
+
 /**
  * Type pour un lead
  */
@@ -14,7 +16,7 @@ export interface Lead {
     lastName: string;
     email: string;
   };
-  data: any;
+  data?: LeadData;
   source?: string;
   organizationId: string;
 }

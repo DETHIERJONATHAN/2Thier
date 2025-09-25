@@ -26,6 +26,9 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 // 🎣 Hooks centralisés
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
+import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
+import { unwrapApiData } from '../../utils/apiResponse';
+import type { LeadApiResponse } from '../../types/leads';
 
 // 📞 Composants CallModule existants
 import { LeadInfoPanel } from '../../components/CallModule/components/LeadInfoPanel';
@@ -85,11 +88,17 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
     if (!leadId) return;
     
     try {
-      const leadData = await api.get(`/api/leads/${leadId}`);
-      setLead(leadData);
+  const leadResponse = await api.get<LeadApiResponse>(`/api/leads/${leadId}`);
+  setLead(unwrapApiData(leadResponse));
     } catch (error) {
-      console.error('Erreur lors du chargement du lead:', error);
-      NotificationManager.error('Erreur lors du chargement du lead');
+      const errorMessage = getErrorMessage(error, 'Erreur lors du chargement du lead');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors du chargement du lead:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
       navigate('/leads/home');
     } finally {
       setLoading(false);

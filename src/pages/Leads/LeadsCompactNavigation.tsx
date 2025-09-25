@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Card, Row, Col, Typography, Space, Button } from 'antd';
+import { Space, Button } from 'antd';
 import { 
   HomeOutlined, 
   UnorderedListOutlined, 
@@ -10,8 +10,6 @@ import {
   ApiOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
-
-const { Text } = Typography;
 
 const LeadsCompactNavigation = () => {
   const { can } = useAuth();

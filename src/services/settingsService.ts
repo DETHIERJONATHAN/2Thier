@@ -41,6 +41,11 @@ export const updateLeadStatus = async (id: string, data: { label: string; value:
     });
   } catch (error) {
     // Si le statut n'existe pas, retourner null
+    console.warn('[SettingsService] Impossible de mettre à jour le statut du lead', {
+      id,
+      organizationId,
+      error
+    });
     return null;
   }
 };

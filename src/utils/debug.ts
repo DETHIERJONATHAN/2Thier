@@ -8,16 +8,14 @@ export const isVerbose = (): boolean => {
 };
 
 // Log contrôlé
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const dlog = (...args: any[]) => {
+export const dlog = (...args: unknown[]) => {
   if (isVerbose()) {
     console.log('[VERBOSE]', ...args);
   }
 };
 
 // Warn contrôlé (toujours affiché si verbose, sinon passe à travers console.warn standard)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const dwarn = (...args: any[]) => {
+export const dwarn = (...args: unknown[]) => {
   if (isVerbose()) {
     console.warn('[VERBOSE]', ...args);
   }

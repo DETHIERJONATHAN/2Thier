@@ -2,19 +2,12 @@ import express from 'express';
 import prisma from '../prisma';
 import { z } from 'zod';
 import { requirePermission } from '../middlewares/requirePermission';
-import { authMiddleware } from '../middlewares/auth';
-// import { sendInvitationEmail } from '../services/emailService';
 import { v4 as uuidv4 } from 'uuid';
+import { emailService } from '../services/EmailService';
 
 const router = express.Router();
 
 // --- Schémas de validation Zod ---
-
-const UserUpdateSchema = z.object({
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  roleId: z.string().optional(),
-});
 
 const UserStatusSchema = z.object({
     status: z.enum(['ACTIVE', 'INACTIVE']),
@@ -46,6 +39,7 @@ router.get('/invitations', requirePermission('manage_users'), async (req, res) =
     });
     res.json({ success: true, data: invitations });
   } catch (error) {
+    console.error('[USERS] Erreur lors de la récupération des invitations:', error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la récupération des invitations." });
   }
 });
@@ -63,7 +57,8 @@ router.post('/invite', requirePermission('manage_users'), async (req, res) => {
     }
     const { email, roleId } = result.data;
 
-    try {
+  try {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 7); // L'invitation expire dans 7 jours
 
@@ -76,14 +71,28 @@ router.post('/invite', requirePermission('manage_users'), async (req, res) => {
                 status: 'PENDING',
                 expiresAt,
             },
+      include: {
+        organization: { select: { name: true } },
+        role: { select: { name: true, label: true } },
+      }
         });
 
-        await sendInvitationEmail(email, invitation.id);
+    try {
+      await emailService.sendInvitationEmail({
+        to: invitation.email,
+        token: invitation.id,
+        isExistingUser: !!existingUser,
+        organizationName: invitation.organization?.name ?? 'Votre organisation',
+        roleName: invitation.role?.label ?? invitation.role?.name ?? 'Utilisateur'
+      });
+    } catch (emailError) {
+      console.error("Erreur lors de l'envoi de l'invitation par email:", emailError);
+    }
 
-        res.status(201).json({ success: true, message: 'Invitation envoyée avec succès.', data: invitation });
-    } catch (error) {
-        console.error("Erreur lors de la création de l'invitation :", error);
-        res.status(500).json({ success: false, message: "Erreur interne du serveur." });
+    res.status(201).json({ success: true, message: 'Invitation envoyée avec succès.', data: invitation });
+  } catch (error) {
+    console.error("Erreur lors de la création de l'invitation :", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur." });
     }
 });
 
@@ -96,8 +105,9 @@ router.delete('/invitations/:id', requirePermission('manage_users'), async (req,
             data: { status: 'REVOKED' },
         });
         res.json({ success: true, message: "Invitation révoquée." });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Erreur lors de la révocation." });
+  } catch (error) {
+    console.error('Erreur lors de la révocation d\'invitation:', error);
+    res.status(500).json({ success: false, message: "Erreur lors de la révocation." });
     }
 });
 
@@ -125,6 +135,7 @@ router.get('/', requirePermission('manage_users'), async (req, res) => {
     });
     res.json({ success: true, data: users });
   } catch (error) {
+    console.error('[USERS] Erreur lors de la récupération des utilisateurs:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -168,8 +179,9 @@ router.patch('/user-organizations/:userOrgId', requirePermission('manage_users')
             data: { status: result.data.status },
         });
         res.json({ success: true, data: updatedRelation });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Erreur lors de la mise à jour du statut." });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du statut de userOrganization:', error);
+    res.status(500).json({ success: false, message: "Erreur lors de la mise à jour du statut." });
     }
 });
 
@@ -182,8 +194,9 @@ router.get('/:id/organizations', requirePermission('super_admin'), async (req, r
             include: { Organization: true }
         });
         res.json({ success: true, data: userOrgs });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Erreur serveur." });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des organisations utilisateur:', error);
+    res.status(500).json({ success: false, message: "Erreur serveur." });
     }
 });
 
@@ -235,9 +248,9 @@ router.post('/:id/organizations', requirePermission('super_admin'), async (req, 
         });
 
         res.json({ success: true, message: "Organisations mises à jour." });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: "Erreur serveur." });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour des organisations utilisateur:', error);
+    res.status(500).json({ success: false, message: "Erreur serveur." });
     }
 });
 

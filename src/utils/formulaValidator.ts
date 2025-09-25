@@ -1,4 +1,4 @@
-import { Formula, FormulaItem, FormulaValidationResult, FormulaValidationType } from '../types/formula';
+import { Formula, FormulaItem, FormulaValidationResult } from '../types/formula';
 
 /**
  * Vérifie si une formule est valide pour être manipulée
@@ -46,7 +46,7 @@ export const validateFormula = (formula: any, source: string = 'Validator'): For
 
     // Analyse approfondie de la séquence
     if (formula.sequence && Array.isArray(formula.sequence)) {
-        const sequenceAnalysis = analyzeSequence(formula.sequence, source);
+    const sequenceAnalysis = analyzeSequence(formula.sequence);
         
         // Vérifier les IDs des éléments
         const invalidItems = formula.sequence.filter(
@@ -106,7 +106,7 @@ export const validateFormula = (formula: any, source: string = 'Validator'): For
 /**
  * Analyse la séquence d'une formule pour détecter des problèmes potentiels
  */
-const analyzeSequence = (sequence: FormulaItem[], source: string) => {
+const analyzeSequence = (sequence: FormulaItem[]) => {
     const result = {
         typeCounts: {
             field: 0,

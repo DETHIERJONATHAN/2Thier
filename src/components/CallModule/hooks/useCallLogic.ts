@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { CALL_STATUSES, CallStatusType } from '../../../constants/callStatuses';
 import { NotificationManager } from '../../../components/Notifications';
+import { getErrorMessage, getErrorResponseDetails } from '../../../utils/errorHandling';
 import type { 
   UseCallLogicReturn, 
   CallState, 
@@ -132,10 +133,15 @@ export const useCallLogic = (
       }
       
     } catch (error: unknown) {
-      console.error('[useCallLogic] ❌ Erreur démarrage appel:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur lors du démarrage de l\'appel';
+      const errorMessage = getErrorMessage(error, 'Erreur lors du démarrage de l\'appel');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('[useCallLogic] ❌ Erreur démarrage appel:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
       setError(errorMessage);
-      NotificationManager.error('Erreur lors du démarrage de l\'appel');
+      NotificationManager.error(errorMessage);
       
       // Reset état en cas d'erreur
       setCallState(prev => ({
@@ -208,10 +214,15 @@ export const useCallLogic = (
       }
       
     } catch (error: unknown) {
-      console.error('[useCallLogic] ❌ Erreur sauvegarde appel:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la sauvegarde';
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde de l\'appel');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('[useCallLogic] ❌ Erreur sauvegarde appel:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
       setError(errorMessage);
-      NotificationManager.error('Erreur lors de la sauvegarde de l\'appel');
+      NotificationManager.error(errorMessage);
       
     } finally {
       setIsLoading(false);
@@ -239,7 +250,15 @@ export const useCallLogic = (
       const leadUpdate = getLeadStatusFromCallResult(status);
       if (leadUpdate) {
         api.put(`/api/leads/${leadId}`, leadUpdate).catch(err => {
-          console.error('Erreur mise à jour statut lead:', err);
+          const errorMessage = getErrorMessage(err, 'Erreur mise à jour statut lead');
+          const errorDetails = getErrorResponseDetails(err);
+          console.error('Erreur mise à jour statut lead:', {
+            error: err,
+            message: errorMessage,
+            status: errorDetails.status,
+            data: errorDetails.data,
+          });
+          NotificationManager.error(errorMessage);
         });
       }
     }

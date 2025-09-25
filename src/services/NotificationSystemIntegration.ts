@@ -75,6 +75,16 @@ export class NotificationSystemIntegration {
       socket.on('authenticate', async (data) => {
         try {
           const { userId, organizationId, token } = data;
+
+          if (!token || typeof token !== 'string') {
+            socket.emit('auth-error', { message: 'Token manquant ou invalide' });
+            console.warn('❌ [NotificationSystem] Authentification rejetée - token absent', {
+              socketId: socket.id,
+              userId,
+              organizationId
+            });
+            return;
+          }
           
           // Vérifier le token (implémentation simplifiée)
           const user = await prisma.user.findFirst({

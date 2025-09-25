@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 
 interface Column {
@@ -59,6 +59,13 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
     return Array.isArray(config.data) ? config.data as Array<Record<string, unknown>> : [];
   });
 
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const crossingData = useMemo(() => config.crossingData || {}, [config.crossingData]);
+
   // Synchroniser les états quand la config change
   useEffect(() => {
     if (Array.isArray(config.columns)) {
@@ -77,15 +84,14 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
 
   // Synchronisation avec le parent
   useEffect(() => {
-    onChange({ 
+    onChangeRef.current({ 
       columns, 
       rows, 
       templates, 
       data, 
-      crossingData: config.crossingData || {}
+      crossingData
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, rows, templates, data, config.crossingData]);
+  }, [columns, rows, templates, data, crossingData]);
 
   // Migration des anciennes données vers crossingData si nécessaire
   useEffect(() => {
@@ -173,25 +179,6 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
 
   const removeTemplate = (index: number) => {
     setTemplates(templates.filter((_, i) => i !== index));
-  };
-
-  // Gestion des lignes principales du tableau
-  const addRow = () => {
-    const emptyRow: Record<string, unknown> = {};
-    columns.forEach(col => {
-      emptyRow[col.key] = col.type === 'number' || col.type === 'currency' || col.type === 'percentage' ? 0 : '';
-    });
-    setData([...data, emptyRow]);
-  };
-
-  const updateRow = (rowIndex: number, key: string, value: unknown) => {
-    const newData = [...data];
-    newData[rowIndex] = { ...newData[rowIndex], [key]: value };
-    setData(newData);
-  };
-
-  const removeRow = (rowIndex: number) => {
-    setData(data.filter((_, i) => i !== rowIndex));
   };
 
   // Fonctions pour gérer les données de croisement

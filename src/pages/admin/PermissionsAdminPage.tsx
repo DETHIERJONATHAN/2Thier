@@ -4,10 +4,19 @@ import { useAuth } from '../../auth/useAuth';
 import { NotificationManager } from '../../components/Notifications';
 import AdminSwitch from '../../components/admin/AdminSwitch';
 
-interface Organization {
-  id: string;
-  name: string;
-}
+
+const resolveErrorMessage = (err: unknown, fallback: string) => {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const maybeMessage = (err as { message?: unknown }).message;
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+      return maybeMessage;
+    }
+  }
+  return fallback;
+};
 
 interface Role {
   id: string;
@@ -94,8 +103,8 @@ export default function PermissionsAdminPage() {
       } else {
         throw new Error(modulesResponse.message || 'Erreur lors du chargement des modules');
       }
-    } catch (e: any) {
-      const errorMessage = e.message || 'Une erreur est survenue lors du chargement des données.';
+    } catch (err: unknown) {
+      const errorMessage = resolveErrorMessage(err, 'Une erreur est survenue lors du chargement des données.');
       setError(errorMessage);
       NotificationManager.error(errorMessage);
       setRoles([]);
@@ -123,8 +132,8 @@ export default function PermissionsAdminPage() {
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des permissions');
       }
-    } catch (e: any) {
-      const errorMessage = e.message || 'Erreur lors du chargement des permissions.';
+    } catch (err: unknown) {
+      const errorMessage = resolveErrorMessage(err, 'Erreur lors du chargement des permissions.');
       setError(errorMessage);
       NotificationManager.error(errorMessage);
       setPermissions([]);
@@ -146,8 +155,7 @@ export default function PermissionsAdminPage() {
     } else if (roles.length === 0) {
       setSelectedRole(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roles]);
+  }, [roles, selectedRole]);
 
   useEffect(() => {
     // If a role is selected, fetch its permissions. Otherwise, clear them.
@@ -196,8 +204,8 @@ export default function PermissionsAdminPage() {
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des permissions');
       }
-    } catch (e: any) {
-      const errorMessage = e.message || 'Erreur lors du chargement des permissions.';
+    } catch (err: unknown) {
+      const errorMessage = resolveErrorMessage(err, 'Erreur lors du chargement des permissions.');
       setError(errorMessage);
       NotificationManager.error(errorMessage);
       setPermissions([]);
@@ -228,8 +236,8 @@ export default function PermissionsAdminPage() {
       } else {
         throw new Error(response.message || 'Erreur lors de la sauvegarde.');
       }
-    } catch (e: any) {
-      const errorMessage = e.message || 'Erreur lors de la sauvegarde.';
+    } catch (err: unknown) {
+      const errorMessage = resolveErrorMessage(err, 'Erreur lors de la sauvegarde.');
       setError(errorMessage);
       NotificationManager.error(errorMessage);
     } finally {
