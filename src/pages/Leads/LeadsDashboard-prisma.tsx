@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
 import { useAuth } from '../../auth/useAuth';
-import { LEAD_SOURCES, LEAD_PRIORITIES, LEAD_AVERAGE_VALUE } from './LeadsConfig';
+import { LEAD_SOURCES, LEAD_PRIORITIES } from './LeadsConfig';
 import { NotificationManager } from '../../components/Notifications';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { FaUsers, FaExclamationTriangle, FaCheckCircle, FaClock } from 'react-icons/fa';
 
 interface LeadDashboardState {
@@ -33,7 +34,6 @@ export default function LeadsDashboard() {
   
   const { leadStatuses } = useLeadStatuses();
   const { currentOrganization, isSuperAdmin, user } = useAuth();
-  const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
   const [dashboardData, setDashboardData] = useState<LeadDashboardState>({
     totalLeads: 0,
     newLeads: 0,
@@ -60,9 +60,6 @@ export default function LeadsDashboard() {
       console.log('Aucune organisation sélectionnée, abandon de la récupération des leads');
       return;
     }
-    
-    // Marquer que nous avons tenté un chargement initial
-    setInitialLoadAttempted(true);
     
     const fetchDashboardData = async () => {
       try {
@@ -229,7 +226,13 @@ export default function LeadsDashboard() {
         console.log('✅ Dashboard mis à jour avec les données Prisma');
         
       } catch (error) {
-        console.error('❌ Erreur lors du chargement des données du dashboard:', error);
+        const errorMessage = getErrorMessage(error, 'Impossible de charger les données du dashboard. Veuillez réessayer.');
+        const errorDetails = getErrorResponseDetails(error);
+        console.error('❌ Erreur lors du chargement des données du dashboard:', {
+          error,
+          status: errorDetails.status,
+          data: errorDetails.data,
+        });
         // Fallback avec des données vides en cas d'erreur
         setDashboardData(prev => ({
           ...prev,
@@ -245,7 +248,7 @@ export default function LeadsDashboard() {
           loading: false
         }));
         
-        NotificationManager.error('Impossible de charger les données du dashboard. Veuillez réessayer.');
+        NotificationManager.error(errorMessage);
       }
     };
     
@@ -390,7 +393,7 @@ export default function LeadsDashboard() {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Activité récente (TimelineEvents)</h3>
           <div className="space-y-4">
-            {dashboardData.recentActivity.slice(0, 5).map((activity, index) => (
+            {dashboardData.recentActivity.slice(0, 5).map(activity => (
               <div key={activity.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <div className="w-2 h-2 bg-blue-600 rounded-full"></div>

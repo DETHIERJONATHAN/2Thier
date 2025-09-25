@@ -31,6 +31,7 @@ interface EmailAIAnalysis {
   priority: number; // 1-10
   tags: string[];
   estimatedResponseTime?: string;
+  rawContent?: string;
 }
 
 // 📧 INTERFACE EMAIL ENRICHI
@@ -186,7 +187,10 @@ Body: ${email.textContent || email.snippet}
 
       // TODO: Intégrer votre service IA (OpenAI, Anthropic, etc.)
       // Pour l'instant, analyse basique avec des règles
-      const analysis = this.analyzeEmailBasic(email);
+        const analysis = {
+          ...this.analyzeEmailBasic(email),
+          rawContent: content
+        };
       
       console.log(`🧠 [GoogleMail] Analyse IA: ${analysis.category} - urgence: ${analysis.urgency}`);
       
@@ -205,7 +209,8 @@ Body: ${email.textContent || email.snippet}
         keyPoints: ['Email reçu'],
         priority: 5,
         tags: ['email'],
-        estimatedResponseTime: '24h'
+        estimatedResponseTime: '24h',
+        rawContent: content
       };
     }
   }
@@ -303,7 +308,8 @@ Body: ${email.textContent || email.snippet}
         subject: notification.subject,
         aiAnalysis: ai,
         attachments: notification.attachments,
-        processingTime: new Date().toISOString()
+        processingTime: new Date().toISOString(),
+        rawContentPreview: ai.rawContent?.substring(0, 500)
       },
       actionUrl: `/emails/${notification.emailId}`,
       tags: ['gmail', ...ai.tags]
@@ -368,7 +374,7 @@ Body: ${email.textContent || email.snippet}
     return sentences.slice(0, 3).map(s => s.trim());
   }
 
-  private async getFullEmailContent(emailId: string, userId: string): Promise<any> {
+  private async getFullEmailContent(emailId: string, _userId: string): Promise<any> {
     // TODO: Implémenter la récupération complète via Gmail API
     return {
       id: emailId,

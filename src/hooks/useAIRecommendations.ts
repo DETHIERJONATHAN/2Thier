@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
-import type { TimeSlot } from './useGoogleCalendar';
 
 export interface AIRecommendation {
   datetime: string;

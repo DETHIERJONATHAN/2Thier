@@ -1,4 +1,4 @@
-import { Formula, FormulaItem } from '../types/formula';
+import { Formula } from '../types/formula';
 
 /**
  * Génère un ensemble de cas de test pour les formules

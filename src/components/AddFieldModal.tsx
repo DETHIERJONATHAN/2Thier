@@ -267,21 +267,22 @@ export default function AddFieldModal({ onClose, onAdd, existingFields = [], edi
 
   // Quand le type de champ change, on réinitialise placeholder si besoin
   useEffect(() => {
-    if (["select", "checkboxes", "radio"].includes(type)) {
-      if (!Array.isArray(placeholder) || typeof placeholder === 'string') {
-        setPlaceholder([]); // Toujours un tableau pour les types à options
+    const isOptionType = ["select", "checkboxes", "radio"].includes(type);
+
+    if (isOptionType) {
+      if (!Array.isArray(placeholder)) {
+        setPlaceholder([]);
+        return;
       }
-    } else {
-      if (Array.isArray(placeholder)) {
-        setPlaceholder(""); // Toujours une string sinon
+
+      const cleanedOptions = placeholder.filter(opt => opt && typeof opt.label === 'string');
+      if (cleanedOptions.length !== placeholder.length) {
+        setPlaceholder(cleanedOptions);
       }
+    } else if (Array.isArray(placeholder)) {
+      setPlaceholder("");
     }
-    // Sécurité : nettoyage des options vides
-    if (["select", "checkboxes", "radio"].includes(type) && Array.isArray(placeholder)) {
-      setPlaceholder(placeholder.filter(opt => opt && typeof opt.label === 'string'));
-    }
-    // eslint-disable-next-line
-  }, [type]);
+  }, [placeholder, type]);
 
   const [error, setError] = useState<string | null>(null);
 

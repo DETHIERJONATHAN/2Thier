@@ -4,7 +4,7 @@ console.log('🔍 [DEBUG] Chargement dotenv...');
 dotenv.config();
 console.log('✅ [DEBUG] Dotenv chargé');
 
-import express, { type Request, type Response } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 console.log('✅ [DEBUG] Express importé');
 import cors from 'cors';
 console.log('✅ [DEBUG] CORS importé');
@@ -220,9 +220,8 @@ app.get('/', (req, res) => {
 // app.use('/api/analytics', analyticsRouter);
 
 // Gestion des erreurs
-// Middleware d'erreurs (signature à 4 args conservée via eslint-disable comment si nécessaire)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, req: Request, res: Response, _next: unknown) => {
+// Middleware d'erreurs (signature à 4 args conservée pour Express)
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
     console.error('Erreur serveur:', err);
     res.status(500).json({ error: 'Une erreur est survenue sur le serveur.' });
 });

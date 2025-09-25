@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -21,6 +21,58 @@ const adminLandingRateLimit = rateLimit({
   max: 50, // 50 requêtes par minute
   message: { success: false, message: 'Trop de requêtes landing admin' }
 });
+
+type JsonValue = Prisma.JsonValue;
+type JsonObject = Prisma.JsonObject;
+
+const isJsonObject = (value: JsonValue | null | undefined): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const toJsonObject = (value: JsonValue | null | undefined): JsonObject =>
+  (isJsonObject(value) ? value : {}) as JsonObject;
+
+const toStringOrNull = (value: JsonValue | null | undefined): string | null =>
+  (typeof value === 'string' ? value : null);
+
+const toStringArray = (value: JsonValue | null | undefined): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
+type LandingSnapshot = JsonObject & {
+  id: string;
+  label: string;
+  createdAt: string;
+  content: JsonObject;
+  settings: JsonObject;
+};
+
+const toSnapshots = (value: JsonValue | null | undefined): LandingSnapshot[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is JsonObject => isJsonObject(item))
+    .map((item) => {
+      const id = toStringOrNull(item.id);
+      const label = toStringOrNull(item.label) ?? `Snapshot ${new Date().toLocaleString()}`;
+      const createdAt = toStringOrNull(item.createdAt) ?? new Date().toISOString();
+      const content = toJsonObject(item.content ?? {});
+      const settings = toJsonObject(item.settings ?? {});
+
+      if (!id) {
+        return null;
+      }
+
+      const snapshot: LandingSnapshot = {
+        id,
+        label,
+        createdAt,
+        content,
+        settings
+      };
+
+      return snapshot;
+    })
+    .filter((snapshot): snapshot is LandingSnapshot => snapshot !== null);
+};
 
 // 🌐 GET /api/landing-pages/public/:slug - Affichage public d'une landing page
 router.get('/public/:slug', publicLandingRateLimit, async (req, res) => {
@@ -61,27 +113,34 @@ router.get('/public/:slug', publicLandingRateLimit, async (req, res) => {
     });
 
     // Extraire SEO et tracking à partir des blobs JSON existants (sans changer le schéma)
-    const content = (landingPage.metadata as any) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const styling = (landingPage.settings as any) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const seo = content.seo || {};
-    const tracking = styling.tracking || {};
+    const content = toJsonObject(landingPage.metadata);
+    const styling = toJsonObject(landingPage.settings);
+    const seo = toJsonObject(content.seo ?? null);
+    const tracking = toJsonObject(styling.tracking ?? null);
+    const title = toStringOrNull(content.title) ?? landingPage.name;
+    const subtitle = toStringOrNull(content.subtitle);
+    const ctaButton = toStringOrNull(content.ctaButton);
+    const ctaUrl = toStringOrNull(content.ctaUrl);
+    const seoTitle = toStringOrNull(seo.title) ?? landingPage.name;
+    const seoDescription = toStringOrNull(seo.description);
+    const keywords = toStringArray(seo.keywords);
 
     res.json({
       success: true,
       data: {
         id: landingPage.id,
-        title: content.title || landingPage.name,
-        subtitle: content.subtitle ?? null,
+        title,
+        subtitle,
         content,
         seo: {
-          title: seo.title || landingPage.name,
-          description: seo.description || null,
-          keywords: Array.isArray(seo.keywords) ? seo.keywords : []
+          title: seoTitle,
+          description: seoDescription,
+          keywords
         },
         styling,
         tracking, // { googleTagId?: string; metaPixelId?: string; enable?: boolean }
-        ctaButton: content.ctaButton ?? null,
-        ctaUrl: content.ctaUrl ?? null,
+        ctaButton,
+        ctaUrl,
         campaign: { name: landingPage.Organization?.name }
       }
     });
@@ -187,13 +246,15 @@ router.get('/admin/list', requireRole(['admin', 'super_admin']), async (req: Aut
           prisma.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: 'form_submit' } })
         ]);
         const conversionRate = views > 0 ? Math.round((conversions / views) * 100) : 0;
+        const content = toJsonObject(t.metadata);
+        const status = (t.status ?? 'draft').toUpperCase();
         return {
           id: t.id,
           title: t.name,
           slug: t.id,
-          description: t.description || '',
-          content: t.metadata || {},
-          status: (t.status || 'draft').toUpperCase(),
+          description: t.description ?? '',
+          content,
+          status,
           metaTitle: t.name,
           metaDescription: '',
           keywords: [],
@@ -234,13 +295,15 @@ router.get('/', authMiddleware, adminLandingRateLimit, requireRole(['admin','sup
           prisma.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: 'form_submit' } })
         ]);
         const conversionRate = views > 0 ? Math.round((conversions / views) * 100) : 0;
+        const content = toJsonObject(t.metadata);
+        const status = (t.status ?? 'draft').toUpperCase();
         return {
           id: t.id,
           title: t.name,
           slug: t.id,
-          description: t.description || '',
-          content: t.metadata || {},
-          status: (t.status || 'draft').toUpperCase(),
+          description: t.description ?? '',
+          content,
+          status,
           metaTitle: t.name,
           metaDescription: '',
           keywords: [],
@@ -291,7 +354,10 @@ router.get('/stats/timeseries', authMiddleware, adminLandingRateLimit, requireRo
   try {
     const organizationId = req.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: 'Organization ID manquant' });
-    const days = Math.min(365, Math.max(1, parseInt(String((req.query as any).days ?? '30'), 10))); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+  const requestedDays = Number.parseInt(daysParam ?? '30', 10);
+  const safeDays = Number.isNaN(requestedDays) ? 30 : requestedDays;
+  const days = Math.min(365, Math.max(1, safeDays));
     const start = new Date(); start.setDate(start.getDate() - (days - 1)); start.setHours(0,0,0,0);
 
     const submissions = await prisma.treeBranchLeafSubmission.findMany({
@@ -421,23 +487,27 @@ router.get('/admin/:id', requireRole(['admin', 'super_admin']), async (req: Auth
     const tree = await prisma.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: 'landing' } });
     if (!tree) return res.status(404).json({ success: false, message: 'Landing page non trouvée' });
 
-    const content = (tree.metadata as any) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const styling = (tree.settings as any) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const seo = content.seo || {};
-    const tracking = styling.tracking || {};
+    const content = toJsonObject(tree.metadata);
+    const styling = toJsonObject(tree.settings);
+    const seo = toJsonObject(content.seo ?? null);
+    const tracking = toJsonObject(styling.tracking ?? null);
+    const status = (tree.status ?? 'draft').toUpperCase();
+    const seoTitle = toStringOrNull(seo.title) ?? tree.name;
+    const seoDescription = toStringOrNull(seo.description) ?? '';
+    const keywords = toStringArray(seo.keywords);
 
     res.json({
       success: true,
       data: {
         id: tree.id,
         title: tree.name,
-        description: tree.description || '',
-        status: (tree.status || 'draft').toUpperCase(),
+        description: tree.description ?? '',
+        status,
         content,
         seo: {
-          title: seo.title || tree.name,
-          description: seo.description || '',
-          keywords: Array.isArray(seo.keywords) ? seo.keywords : []
+          title: seoTitle,
+          description: seoDescription,
+          keywords
         },
         styling,
         tracking,
@@ -471,8 +541,8 @@ router.post('/:id/duplicate', authMiddleware, adminLandingRateLimit, requireRole
         category: 'landing',
         status: 'draft',
         isPublic: false,
-        metadata: tree.metadata || {},
-        settings: tree.settings || {}
+        metadata: toJsonObject(tree.metadata),
+        settings: toJsonObject(tree.settings)
       }
     });
     res.json({ success: true, data: { id: copy.id } });
@@ -493,18 +563,21 @@ router.post('/:id/snapshot', authMiddleware, adminLandingRateLimit, requireRole(
     const tree = await prisma.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: 'landing' } });
     if (!tree) return res.status(404).json({ success: false, message: 'Landing page non trouvée' });
 
-    const settings = (tree.settings as any) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const versions: any[] = Array.isArray(settings._versions) ? settings._versions : []; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const settings = toJsonObject(tree.settings);
+    const versions = toSnapshots(settings._versions);
     const snapshotId = `${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-    const snapshot = {
+    const snapshot: LandingSnapshot = {
       id: snapshotId,
       label: label || `Snapshot ${new Date().toLocaleString()}`,
       createdAt: new Date().toISOString(),
-      content: tree.metadata || {},
-      settings: tree.settings || {}
+      content: toJsonObject(tree.metadata),
+      settings: toJsonObject(tree.settings)
     };
-    versions.unshift(snapshot);
-    const updated = await prisma.treeBranchLeafTree.update({ where: { id }, data: { settings: { ...(settings || {}), _versions: versions } } as any }); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const updatedSettings: JsonObject = {
+      ...settings,
+      _versions: [snapshot, ...versions] as Prisma.JsonArray
+    };
+    const updated = await prisma.treeBranchLeafTree.update({ where: { id }, data: { settings: updatedSettings } });
     res.json({ success: true, data: { id: updated.id, snapshotId } });
   } catch (error) {
     console.error('❌ [LANDING] Erreur snapshot:', error);
@@ -521,9 +594,16 @@ router.get('/:id/versions', authMiddleware, adminLandingRateLimit, requireRole([
 
     const tree = await prisma.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: 'landing' } });
     if (!tree) return res.status(404).json({ success: false, message: 'Landing page non trouvée' });
-    const settings = (tree.settings as any) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const versions: any[] = Array.isArray(settings._versions) ? settings._versions : []; // eslint-disable-line @typescript-eslint/no-explicit-any
-    res.json({ success: true, data: versions.map(v => ({ id: v.id, label: v.label, createdAt: v.createdAt })) });
+    const settings = toJsonObject(tree.settings);
+    const versions = toSnapshots(settings._versions);
+    res.json({
+      success: true,
+      data: versions.map((version) => ({
+        id: version.id,
+        label: version.label,
+        createdAt: version.createdAt
+      }))
+    });
   } catch (error) {
     console.error('❌ [LANDING] Erreur versions:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des versions' });
@@ -541,17 +621,17 @@ router.post('/:id/restore', authMiddleware, adminLandingRateLimit, requireRole([
 
     const tree = await prisma.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: 'landing' } });
     if (!tree) return res.status(404).json({ success: false, message: 'Landing page non trouvée' });
-    const settings = (tree.settings as any) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const versions: any[] = Array.isArray(settings._versions) ? settings._versions : []; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const snap = versions.find(v => v.id === snapshotId);
+    const settings = toJsonObject(tree.settings);
+    const versions = toSnapshots(settings._versions);
+    const snap = versions.find((version) => version.id === snapshotId);
     if (!snap) return res.status(404).json({ success: false, message: 'Snapshot non trouvé' });
 
     const updated = await prisma.treeBranchLeafTree.update({
       where: { id },
       data: {
-        metadata: snap.content || {},
-        settings: { ...(snap.settings || {}), _versions: versions }
-      } as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        metadata: snap.content,
+        settings: { ...snap.settings, _versions: versions as Prisma.JsonArray }
+      }
     });
     res.json({ success: true, data: { id: updated.id } });
   } catch (error) {

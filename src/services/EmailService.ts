@@ -6,6 +6,14 @@ interface InvitationEmailPayload {
     roleName: string;
 }
 
+interface SendEmailPayload {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+    replyTo?: string;
+}
+
 class EmailService {
     /**
      * Envoie un e-mail d'invitation.
@@ -48,6 +56,27 @@ class EmailService {
         console.log('------------------------------------');
         
         // En production, vous intégreriez un vrai service d'envoi ici.
+        return Promise.resolve();
+    }
+
+    /**
+     * Envoie un e-mail générique (simulation console).
+     */
+    async sendEmail(payload: SendEmailPayload): Promise<void> {
+        const { to, subject, html, text, replyTo } = payload;
+
+        console.log('--- SIMULATION ENVOI EMAIL (générique) ---');
+        console.log(`À: ${to}`);
+        console.log(`Sujet: ${subject}`);
+        if (replyTo) {
+            console.log(`Répondre à: ${replyTo}`);
+        }
+        if (text) {
+            console.log(`Corps (texte): ${text.replace(/\s+/g, ' ').trim()}`);
+        }
+        console.log(`Corps (HTML): ${html.replace(/\s+/g, ' ').trim()}`);
+        console.log('------------------------------------------');
+
         return Promise.resolve();
     }
 }

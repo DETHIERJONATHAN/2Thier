@@ -34,6 +34,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
+import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
 import { LeadStatus } from '../../types/leads';
 import SortableCallStatus from '../../components/SortableCallStatus';
 import SortableLeadStatus from '../../components/SortableLeadStatus';
@@ -176,8 +177,14 @@ const LeadsSettingsPage = () => {
       setEmailTemplates(templatesRes || []);
       
     } catch (error) {
-      console.error('Erreur lors du chargement des paramètres:', error);
-      NotificationManager.error('Erreur lors du chargement des paramètres');
+      const errorMessage = getErrorMessage(error, 'Erreur lors du chargement des paramètres');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors du chargement des paramètres:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   }, [api]);
 
@@ -199,8 +206,14 @@ const LeadsSettingsPage = () => {
       setEditingStatus(null);
       fetchAllData();
     } catch (error) {
-      console.error(error);
-      NotificationManager.error('Erreur lors de la sauvegarde du statut');
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde du statut');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de la sauvegarde du statut:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   };
 
@@ -210,8 +223,14 @@ const LeadsSettingsPage = () => {
       NotificationManager.success('Statut supprimé avec succès');
       fetchAllData();
     } catch (error) {
-      console.error(error);
-      NotificationManager.error('Erreur lors de la suppression du statut');
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la suppression du statut');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de la suppression du statut:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   };
 
@@ -246,8 +265,14 @@ const LeadsSettingsPage = () => {
       setEditingCallStatus(null);
       callStatusForm.resetFields();
     } catch (error) {
-      console.error(error);
-      NotificationManager.error('Erreur lors de la sauvegarde du statut d\'appel');
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde du statut d\'appel');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de la sauvegarde du statut d\'appel:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   };
 
@@ -261,8 +286,14 @@ const LeadsSettingsPage = () => {
       
       NotificationManager.success('Statut d\'appel supprimé avec succès');
     } catch (error) {
-      console.error(error);
-      NotificationManager.error('Erreur lors de la suppression du statut d\'appel');
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la suppression du statut d\'appel');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de la suppression du statut d\'appel:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   };
 
@@ -525,8 +556,14 @@ const LeadsSettingsPage = () => {
       setIsSourceModalVisible(false);
       setEditingSource(null);
     } catch (error) {
-      console.error(error);
-      NotificationManager.error('Erreur lors de la sauvegarde de la source');
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde de la source');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de la sauvegarde de la source:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   };
 
@@ -545,8 +582,14 @@ const LeadsSettingsPage = () => {
       setIsEmailModalVisible(false);
       setEditingTemplate(null);
     } catch (error) {
-      console.error(error);
-      NotificationManager.error('Erreur lors de la sauvegarde du modèle');
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde du modèle');
+      const errorDetails = getErrorResponseDetails(error);
+      console.error('Erreur lors de la sauvegarde du modèle:', {
+        error,
+        status: errorDetails.status,
+        data: errorDetails.data,
+      });
+      NotificationManager.error(errorMessage);
     }
   };
 

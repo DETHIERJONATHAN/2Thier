@@ -134,7 +134,7 @@ router.get('/mail/settings', async (req: Request, res: Response): Promise<void> 
     }
 
     // Masque le mot de passe dans la réponse
-    const { encryptedPassword, ...settings } = mailSettings;
+  const { encryptedPassword: _encryptedPassword, ...settings } = mailSettings;
     
     res.status(200).json(settings);
   } catch (error) {

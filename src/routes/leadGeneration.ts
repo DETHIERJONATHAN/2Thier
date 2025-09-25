@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -17,6 +17,26 @@ const leadGenRateLimit = rateLimit({
 
 router.use(authMiddleware);
 router.use(leadGenRateLimit);
+
+const getQueryString = (value: unknown): string | undefined => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const firstString = value.find((item): item is string => typeof item === 'string');
+    if (firstString) return firstString;
+  }
+  return undefined;
+};
+
+const buildOriginFilter = (origin: string | undefined): Prisma.LeadWhereInput | undefined => {
+  if (origin !== 'd1m') return undefined;
+
+  return {
+    OR: [
+      { NOT: { sourceId: null } },
+      { source: { in: ['public-form', 'd1m', 'devis1minute', 'landing'] } }
+    ]
+  };
+};
 
 // 📊 GET /api/lead-generation/campaigns - Liste des campagnes
 // Ici, nous mappions le concept de "campagne" sur LeadSource (modèle existant)
@@ -61,7 +81,7 @@ router.get('/campaigns', requireRole(['admin', 'super_admin']), async (req: Auth
           leadsPublished: 0,
           conversionRate,
           qualityScore: 0,
-          createdAt: (s.createdAt as unknown as Date)?.toISOString?.() ?? new Date().toISOString(),
+          createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : new Date().toISOString(),
           startDate: undefined,
           endDate: undefined,
           isAutomatic: false,
@@ -109,21 +129,14 @@ router.get('/stats', requireRole(['admin', 'super_admin']), async (req: Authenti
     monthStart.setHours(0, 0, 0, 0);
 
     // Par défaut, les stats D1M ne comptent que les leads d'origine D1M
-    const originParam = String((req.query as any)?.origin ?? 'd1m'); // eslint-disable-line @typescript-eslint/no-explicit-any
-    const originWhere = originParam === 'd1m'
-      ? {
-          OR: [
-            { NOT: { sourceId: null } }, // lié à une LeadSource (campagne)
-            { source: { in: ['public-form', 'd1m', 'devis1minute', 'landing'] } }
-          ]
-        }
-      : undefined;
+    const originParam = getQueryString(req.query.origin) ?? 'd1m';
+    const originWhere = buildOriginFilter(originParam);
 
     const [totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads] = await Promise.all([
       prisma.leadSource.count({ where: { organizationId } }),
       prisma.leadSource.count({ where: { organizationId, isActive: true } }),
-      prisma.lead.count({ where: { organizationId, ...(originWhere || {}) } }),
-      prisma.lead.count({ where: { organizationId, createdAt: { gte: monthStart }, ...(originWhere || {}) } })
+  prisma.lead.count({ where: { organizationId, ...(originWhere ?? {}) } }),
+  prisma.lead.count({ where: { organizationId, createdAt: { gte: monthStart }, ...(originWhere ?? {}) } })
     ]);
 
     res.json({ success: true, data: { totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads } });
@@ -219,26 +232,21 @@ router.post('/campaigns/:id/duplicate', requireRole(['admin', 'super_admin']), a
 // 📈 GET /api/lead-generation/stats/timeseries?days=30
 router.get('/stats/timeseries', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
   try {
-    const organizationId = req.user?.organizationId;
-    if (!organizationId) return res.status(400).json({ success: false, message: 'Organization ID manquant' });
-    const days = Math.min(365, Math.max(1, parseInt(String((req.query as any).days ?? '30'), 10))); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const organizationId = req.user?.organizationId;
+  if (!organizationId) return res.status(400).json({ success: false, message: 'Organization ID manquant' });
+  const daysParam = getQueryString(req.query.days);
+  const requestedDays = Number.parseInt(daysParam ?? '30', 10);
+  const days = Math.min(365, Math.max(1, Number.isNaN(requestedDays) ? 30 : requestedDays));
     const start = new Date();
     start.setDate(start.getDate() - (days - 1));
     start.setHours(0, 0, 0, 0);
 
     // Par défaut, séries D1M uniquement (mêmes critères que /stats)
-    const originParam = String((req.query as any)?.origin ?? 'd1m'); // eslint-disable-line @typescript-eslint/no-explicit-any
-    const originWhere = originParam === 'd1m'
-      ? {
-          OR: [
-            { NOT: { sourceId: null } },
-            { source: { in: ['public-form', 'd1m', 'devis1minute', 'landing'] } }
-          ]
-        }
-      : undefined;
+    const originParam = getQueryString(req.query.origin) ?? 'd1m';
+    const originWhere = buildOriginFilter(originParam);
 
     const leads = await prisma.lead.findMany({
-      where: { organizationId, createdAt: { gte: start }, ...(originWhere || {}) },
+      where: { organizationId, createdAt: { gte: start }, ...(originWhere ?? {}) },
       select: { createdAt: true, status: true }
     });
 
@@ -249,12 +257,12 @@ router.get('/stats/timeseries', requireRole(['admin', 'super_admin']), async (re
       const key = d.toISOString().slice(0, 10);
       byDay.set(key, { created: 0, completed: 0 });
     }
-    for (const l of leads) {
-      const key = new Date(l.createdAt as unknown as Date).toISOString().slice(0, 10);
+    for (const lead of leads) {
+      const key = lead.createdAt instanceof Date ? lead.createdAt.toISOString().slice(0, 10) : new Date(lead.createdAt).toISOString().slice(0, 10);
       const rec = byDay.get(key);
       if (rec) {
         rec.created++;
-        if (l.status === 'completed') rec.completed++;
+        if (lead.status === 'completed') rec.completed++;
       }
     }
     const series = Array.from(byDay.entries()).map(([date, v]) => ({ date, created: v.created, completed: v.completed }));

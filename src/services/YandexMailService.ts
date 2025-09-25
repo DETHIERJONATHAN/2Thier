@@ -3,11 +3,6 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import prisma from '../prisma.js';
 
-interface YandexConfig {
-  user: string;
-  password: string;
-}
-
 export class YandexMailService {
   private smtpTransporter: nodemailer.Transporter;
   private imapConfig: any;
@@ -42,7 +37,7 @@ export class YandexMailService {
   /**
    * Envoie un email via SMTP Yandex
    */
-  async sendEmail(to: string, subject: string, body: string, isHtml: boolean = false): Promise<void> {
+  async sendEmail(to: string, subject: string, body: string, isHtml: boolean = false): Promise<nodemailer.SentMessageInfo> {
     try {
       const mailOptions = {
         from: this.userEmail,
@@ -101,7 +96,7 @@ export class YandexMailService {
             let buffer = '';
             let uid = null;
 
-            msg.on('body', (stream, info) => {
+            msg.on('body', (stream, _info) => {
               stream.on('data', (chunk) => {
                 buffer += chunk.toString('utf8');
               });

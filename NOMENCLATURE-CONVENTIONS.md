@@ -242,6 +242,14 @@ import { formatDuration } from '../../utils/formatters';
 import { CALL_STATUSES } from './constants';
 ```
 
+
+## 🚨 Gestion des erreurs côté frontend
+
+- Utiliser les helpers `getErrorMessage` et `getErrorResponseDetails` définis dans `src/utils/errorHandling.ts` pour formater les messages affichés et enrichir les logs internes.
+- Journaliser systématiquement `{ status, data }` via `console.error` avant d'alerter l'utilisateur pour accélérer le débogage.
+- Recourir à `unwrapApiData` et `extractApiArray` depuis `src/utils/apiResponse.ts` pour extraire proprement les données issues des endpoints qui renvoient une enveloppe `{ success, data }`.
+- Centraliser les notifications utilisateur via `NotificationManager` afin de conserver une expérience homogène.
+
 ---
 
 ## 🎪 CONVENTIONS COMMENTAIRES

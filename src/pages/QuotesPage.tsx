@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 type Totals = { subtotalExcl?: number; totalTax?: number; totalIncl?: number } | null | undefined;
@@ -65,29 +65,42 @@ export default function QuotesPage() {
         const mapped = arr.map(l => ({ id: l.id, name: l.name || `${l.firstName ?? ''} ${l.lastName ?? ''}`.trim(), company: l.company, email: l.email })) as LeadLite[];
         setLeads(mapped);
         // Pré-sélection si vide et au moins un lead
-        if (!leadId && mapped.length > 0) setLeadId(mapped[0].id);
+        setLeadId(prev => (prev || (mapped[0]?.id ?? '')));
       })
       .catch(() => {
         // Silencieux: la page reste fonctionnelle même si les leads n'arrivent pas
       });
   }, [get]);
 
+  const hasFetchedBlocks = useRef(false);
   // Charger les blocks de formulaire (respect des formulaires Prisma)
   useEffect(() => {
-    setBlocksLoadError(null);
-    get<{ success?: boolean; data?: any[] }>(`/api/blocks`)
-      .then((res) => {
+    if (hasFetchedBlocks.current) return;
+    hasFetchedBlocks.current = true;
+    let cancelled = false;
+
+    const loadBlocks = async () => {
+      setBlocksLoadError(null);
+      try {
+        const res = await get<{ success?: boolean; data?: any[] }>(`/api/blocks`);
+        if (cancelled) return;
         const arr = (res && 'data' in res ? res.data : (Array.isArray(res) ? res : [])) as any[];
         const mapped = arr.map((b: any) => ({ id: b.id, name: b.name })) as BlockLite[];
         setBlocks(mapped);
-        if (!blockId && mapped.length > 0) setBlockId(mapped[0].id);
-      })
-      .catch((err: any) => {
+        setBlockId(prev => (prev || (mapped[0]?.id ?? '')));
+      } catch {
+        if (cancelled) return;
         // L'endpoint /api/blocks peut être restreint aux administrateurs
         setBlocksLoadError('Impossible de charger les formulaires (droits requis). Saisissez un Block ID si besoin.');
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      }
+    };
+
+    loadBlocks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [get]);
 
   // Charger items du devis sélectionné
   useEffect(() => {
@@ -128,7 +141,6 @@ export default function QuotesPage() {
   const createQuote = async () => {
     if (!leadId || !blockId) return alert('leadId et blockId requis');
     const lead = leads.find(l => l.id === leadId);
-    const block = blocks.find(b => b.id === blockId);
     const title = lead ? `Devis - ${lead.name}${lead.company ? ' (' + lead.company + ')' : ''}` : 'Nouveau devis';
     const created = await post<Quote>(`/api/quotes`, { leadId, blockId, title });
     setQuotes((q) => [created, ...q]);

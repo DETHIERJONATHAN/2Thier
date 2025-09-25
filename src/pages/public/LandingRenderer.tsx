@@ -5,10 +5,10 @@ type PublicLanding = {
   id: string;
   title: string;
   subtitle?: string | null;
-  content: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  content: unknown;
   seo?: { title?: string; description?: string | null; keywords?: string[] };
   tracking?: { enable?: boolean; googleTagId?: string; metaPixelId?: string };
-  styling?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  styling?: unknown;
 };
 
 const injectScript = (id: string, inner: string) => {
@@ -72,8 +72,12 @@ export default function LandingRenderer() {
             injectScript('fb-pixel', `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod? n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window, document,'script','https://connect.facebook.net/en_US/fbevents.js'); fbq('init', '${pid}'); fbq('track', 'PageView');`);
           }
         }
-      } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        setError(e?.message || 'Erreur de chargement');
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message || 'Erreur de chargement');
+        } else {
+          setError('Erreur de chargement');
+        }
       }
     };
     run();

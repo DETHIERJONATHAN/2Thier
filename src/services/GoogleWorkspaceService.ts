@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google, admin_directory_v1 } from 'googleapis';
 import { JWT } from 'google-auth-library';
 
 interface GoogleWorkspaceUser {
@@ -24,7 +24,7 @@ interface GoogleWorkspaceConfig {
 
 export class GoogleWorkspaceService {
   private config: GoogleWorkspaceConfig;
-  private adminClient: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  private adminClient: admin_directory_v1.Admin;
 
   constructor(config: GoogleWorkspaceConfig) {
     this.config = config;
@@ -88,7 +88,7 @@ export class GoogleWorkspaceService {
     lastName: string;
     email: string;
     password: string;
-  }): Promise<{ success: boolean; user?: unknown; error?: string }> {
+  }): Promise<{ success: boolean; user?: admin_directory_v1.Schema$User; error?: string }> {
     try {
       console.log(`👤 [GoogleWorkspace] Création utilisateur ${userData.email}...`);
 
@@ -110,7 +110,7 @@ export class GoogleWorkspaceService {
       console.log('✅ [GoogleWorkspace] Utilisateur créé avec succès:', userData.email);
       return {
         success: true,
-        user: response.data
+  user: response.data
       };
     } catch (error: unknown) {
       console.error('❌ [GoogleWorkspace] Erreur création utilisateur:', error);
@@ -163,13 +163,13 @@ export class GoogleWorkspaceService {
   /**
    * Liste tous les utilisateurs du domaine
    */
-  async listUsers(): Promise<unknown[]> {
+  async listUsers(): Promise<admin_directory_v1.Schema$User[]> {
     try {
       const response = await this.adminClient.users.list({
         domain: this.config.domain,
         maxResults: 500
       });
-      return response.data.users || [];
+  return response.data.users ?? [];
     } catch (error) {
       console.error('[GoogleWorkspace] Erreur liste utilisateurs:', error);
       return [];

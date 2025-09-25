@@ -176,10 +176,12 @@ export function useAuthenticatedApi() {
 
         const contentType = response.headers.get('content-type') || '';
         L.debug('Content-Type', contentType);
-        let data: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+        let data: unknown = null;
         if (contentType.includes('application/json')) {
           data = await response.json();
-          L.debug('JSON keys', Object.keys(data || {}));
+          if (data && typeof data === 'object') {
+            L.debug('JSON keys', Object.keys(data as Record<string, unknown>));
+          }
         } else {
           const textContent = await response.text();
           // Si l'état HTTP est prévu comme « supprimé », ne pas polluer les logs avec un warn
@@ -202,9 +204,19 @@ export function useAuthenticatedApi() {
             return null as T;
           } else {
             L.error('API Error', { url: finalUrl, status: response.status, statusText: response.statusText, data });
-            const message = (data && (data.message || data.error)) || `Erreur ${response.status}`;
-            if (showErrors) setGlobalError(message);
-            const apiError = new Error(message) as Error & { status?: number };
+            let messageText = `Erreur ${response.status}`;
+            if (typeof data === 'object' && data !== null) {
+              const payload = data as Record<string, unknown>;
+              const candidate = payload.message ?? payload.error;
+              if (typeof candidate === 'string') {
+                messageText = candidate;
+              }
+            } else if (typeof data === 'string' && data.trim().length > 0) {
+              messageText = data;
+            }
+
+            if (showErrors) setGlobalError(messageText);
+            const apiError = new Error(messageText) as Error & { status?: number };
             apiError.status = response.status;
             return Promise.reject(apiError);
           }
@@ -240,25 +252,20 @@ export function useAuthenticatedApi() {
   );
 
   const api = useMemo(() => ({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    get: <T = any>(url: string, options: ApiOptions = {}) => fetchApi<T>(url, { ...options, method: 'GET' }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    post: <T = any>(url: string, body?: unknown, options: ApiOptions = {}) => {
+    get: <T = unknown>(url: string, options: ApiOptions = {}) => fetchApi<T>(url, { ...options, method: 'GET' }),
+    post: <T = unknown>(url: string, body?: unknown, options: ApiOptions = {}) => {
       const isFormData = body instanceof FormData;
       return fetchApi<T>(url, { ...options, method: 'POST', body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body)) });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    put: <T = any>(url: string, body?: unknown, options: ApiOptions = {}) => {
+    put: <T = unknown>(url: string, body?: unknown, options: ApiOptions = {}) => {
       const isFormData = body instanceof FormData;
       return fetchApi<T>(url, { ...options, method: 'PUT', body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body)) });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    patch: <T = any>(url: string, body?: unknown, options: ApiOptions = {}) => {
+    patch: <T = unknown>(url: string, body?: unknown, options: ApiOptions = {}) => {
       const isFormData = body instanceof FormData;
       return fetchApi<T>(url, { ...options, method: 'PATCH', body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body)) });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete: <T = any>(url: string, options: ApiOptions = {}) => fetchApi<T>(url, { ...options, method: 'DELETE' })
+    delete: <T = unknown>(url: string, options: ApiOptions = {}) => fetchApi<T>(url, { ...options, method: 'DELETE' })
   }), [fetchApi]);
 
   return { api, isLoading, globalError, ...api };

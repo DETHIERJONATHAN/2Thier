@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 
@@ -57,7 +57,12 @@ router.post('/ad-platform/connect', requireRole(['admin', 'super_admin']), async
     const organizationId = req.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: 'Organization ID manquant' });
 
-    const { platform, name, credentials = {}, config = {} } = req.body as { platform: string; name?: string; credentials?: unknown; config?: unknown };
+    const { platform, name, credentials, config } = req.body as {
+      platform: string;
+      name?: string;
+      credentials?: Prisma.InputJsonValue;
+      config?: Prisma.InputJsonValue;
+    };
     if (!platform) return res.status(400).json({ success: false, message: 'Paramètre platform requis' });
 
     const existing = await prisma.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
@@ -67,8 +72,8 @@ router.post('/ad-platform/connect', requireRole(['admin', 'super_admin']), async
         where: { id: existing.id },
         data: {
           name: name ?? existing.name,
-          credentials: credentials as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-          config: config as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          credentials: credentials ?? (existing.credentials as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+          config: config ?? (existing.config as Prisma.InputJsonValue) ?? Prisma.JsonNull,
           status: 'connected',
           active: true,
           updatedAt: new Date()
@@ -81,8 +86,8 @@ router.post('/ad-platform/connect', requireRole(['admin', 'super_admin']), async
           organizationId,
           platform,
           name: name || platform,
-          credentials: credentials as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-          config: config as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          credentials: credentials ?? Prisma.JsonNull,
+          config: config ?? Prisma.JsonNull,
           status: 'connected',
           active: true,
           updatedAt: new Date()

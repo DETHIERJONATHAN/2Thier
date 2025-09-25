@@ -108,6 +108,55 @@ export const useDynamicSections = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ Initialiser les Categories par défaut dans Prisma
+  const initializeDefaultCategories = useCallback(async () => {
+    if (!currentOrganization?.id || !api) return;
+
+    try {
+      const categoriesToCreate = defaultDynamicSections.map(section => ({
+        name: section.title,
+        description: section.description,
+        icon: section.iconName,
+        iconColor: section.iconColor,
+        order: section.order,
+        active: section.active,
+        organizationId: currentOrganization.id,
+        superAdminOnly: false,
+        allowedRoles: null,
+        requiredPermissions: null
+      }));
+
+      console.log(`� [useDynamicSections] Création de ${categoriesToCreate.length} Categories par défaut...`);
+      const response = await api.post('/admin-modules/categories/bulk', {
+        categories: categoriesToCreate
+      });
+
+      if (response?.success && Array.isArray(response.data)) {
+        console.log(`✅ [useDynamicSections] ${response.data.length} Categories créées avec succès`);
+
+        // ✅ Convertir les Categories vers DynamicSection
+        const sectionsFromCategories: DynamicSection[] = response.data.map((category: Category) => ({
+          id: category.id,
+          title: category.name,
+          description: category.description || '',
+          iconName: category.icon,
+          iconColor: category.iconColor,
+          order: category.order,
+          active: category.active,
+          organizationId: category.organizationId,
+          createdAt: category.createdAt,
+          updatedAt: category.updatedAt
+        }));
+
+        setSections(sectionsFromCategories.sort((a, b) => a.order - b.order));
+        message.success('Categories initialisées avec succès');
+      }
+    } catch (error) {
+      console.error('❌ [useDynamicSections] Erreur lors de l\'initialisation des Categories:', error);
+      setError('Erreur lors de l\'initialisation des categories');
+    }
+  }, [currentOrganization?.id, api]);
+
   // ✅ Charger les Categories depuis Prisma au lieu des sections 
   const loadSections = useCallback(async () => {
     if (!currentOrganization?.id || !api) {
@@ -118,7 +167,7 @@ export const useDynamicSections = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 [useDynamicSections] Chargement des Categories depuis Prisma...');
+      console.log('� [useDynamicSections] Chargement des Categories depuis Prisma...');
       
       // ✅ NOUVEAU : Utiliser les routes Categories au lieu de /api/sections
       const response = await api.get(`/admin-modules/categories?organizationId=${currentOrganization.id}`);
@@ -142,7 +191,7 @@ export const useDynamicSections = () => {
         
         setSections(sectionsFromCategories.sort((a, b) => a.order - b.order));
       } else {
-        console.log('📝 [useDynamicSections] Aucune Category trouvée, création des categories par défaut...');
+        console.log('� [useDynamicSections] Aucune Category trouvée, création des categories par défaut...');
         await initializeDefaultCategories();
       }
     } catch (error) {
@@ -155,7 +204,7 @@ export const useDynamicSections = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganization?.id, api]);
+  }, [currentOrganization?.id, api, initializeDefaultCategories]);
 
   // Charger les modules depuis la base de données
   const loadModules = useCallback(async () => {
@@ -175,55 +224,6 @@ export const useDynamicSections = () => {
     } catch (error) {
       console.error('❌ [useDynamicSections] Erreur lors du chargement des modules:', error);
       setError('Erreur lors du chargement des modules');
-    }
-  }, [currentOrganization?.id, api]);
-
-  // ✅ Initialiser les Categories par défaut dans Prisma
-  const initializeDefaultCategories = useCallback(async () => {
-    if (!currentOrganization?.id || !api) return;
-
-    try {
-      const categoriesToCreate = defaultDynamicSections.map(section => ({
-        name: section.title,
-        description: section.description,
-        icon: section.iconName,
-        iconColor: section.iconColor,
-        order: section.order,
-        active: section.active,
-        organizationId: currentOrganization.id,
-        superAdminOnly: false,
-        allowedRoles: null,
-        requiredPermissions: null
-      }));
-
-      console.log(`📦 [useDynamicSections] Création de ${categoriesToCreate.length} Categories par défaut...`);
-      const response = await api.post('/admin-modules/categories/bulk', {
-        categories: categoriesToCreate
-      });
-
-      if (response?.success && Array.isArray(response.data)) {
-        console.log(`✅ [useDynamicSections] ${response.data.length} Categories créées avec succès`);
-        
-        // ✅ Convertir les Categories vers DynamicSection
-        const sectionsFromCategories: DynamicSection[] = response.data.map((category: Category) => ({
-          id: category.id,
-          title: category.name,
-          description: category.description || '',
-          iconName: category.icon,
-          iconColor: category.iconColor,
-          order: category.order,
-          active: category.active,
-          organizationId: category.organizationId,
-          createdAt: category.createdAt,
-          updatedAt: category.updatedAt
-        }));
-        
-        setSections(sectionsFromCategories.sort((a, b) => a.order - b.order));
-        message.success('Categories initialisées avec succès');
-      }
-    } catch (error) {
-      console.error('❌ [useDynamicSections] Erreur lors de l\'initialisation des Categories:', error);
-      setError('Erreur lors de l\'initialisation des categories');
     }
   }, [currentOrganization?.id, api]);
 

@@ -340,7 +340,7 @@ class AutoMailSyncService extends EventEmitter {
                 });
                 console.log(`📧 [AUTO-SYNC] ${folder.imapName}: ${results.length} emails depuis ${formattedDate}`);
               } catch (sinceError) {
-                console.log(`⚠️ [AUTO-SYNC] Erreur SINCE dans ${folder.imapName}, fallback vers récents`);
+                console.log(`⚠️ [AUTO-SYNC] Erreur SINCE dans ${folder.imapName}, fallback vers récents:`, sinceError);
                 
                 try {
                   const allResults = await connection.search(['ALL'], {
@@ -351,7 +351,7 @@ class AutoMailSyncService extends EventEmitter {
                   results = allResults.slice(-50); // 50 plus récents
                   console.log(`📧 [AUTO-SYNC] ${folder.imapName}: ${results.length} emails (fallback récents)`);
                 } catch (fallbackError) {
-                  console.log(`❌ [AUTO-SYNC] Erreur fallback dans ${folder.imapName}`);
+                  console.log(`❌ [AUTO-SYNC] Erreur fallback dans ${folder.imapName}:`, fallbackError);
                 }
               }
             }
@@ -636,7 +636,7 @@ class AutoMailSyncService extends EventEmitter {
               }
             }
           } catch (folderError) {
-            console.log(`⚠️ [AUTO-SYNC] Dossier ${folder.imapName} inaccessible, ignoré`);
+            console.log(`⚠️ [AUTO-SYNC] Dossier ${folder.imapName} inaccessible, ignoré:`, folderError);
           }
         }
 

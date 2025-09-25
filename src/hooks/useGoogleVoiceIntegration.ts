@@ -2,18 +2,6 @@ import { useCallback } from 'react';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { message } from 'antd';
 
-interface CallActivity {
-  leadId: string;
-  type: 'call' | 'sms' | 'voicemail';
-  phoneNumber: string;
-  timestamp: Date;
-  duration?: number;
-  message?: string;
-  transcription?: string;
-  callId?: string;
-  status: string;
-}
-
 export const useGoogleVoiceIntegration = () => {
   const api = useAuthenticatedApi();
 

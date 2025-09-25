@@ -155,6 +155,16 @@ export const useAutoGoogleAuth = () => {
 
   // Écouter les événements de connexion Google (si vous implémentez des WebSockets)
   useEffect(() => {
+    type SocketService = {
+      on: (event: string, handler: () => void) => void;
+      off: (event: string, handler: () => void) => void;
+    };
+
+    const socketService = (window as unknown as { socketService?: SocketService }).socketService;
+    if (!socketService) {
+      return undefined;
+    }
+
     const handleGoogleConnected = () => {
       console.log('[useAutoGoogleAuth] Google connecté automatiquement détecté');
       refreshConnectionStatus();
@@ -166,19 +176,12 @@ export const useAutoGoogleAuth = () => {
       message.info('Connexion Google requise. Cliquez ici pour vous connecter.', 5);
     };
 
-    // TODO: Écouter les événements WebSocket ou Server-Sent Events
-    // if (window.socketService) {
-    //   window.socketService.on('GOOGLE_AUTO_CONNECTED', handleGoogleConnected);
-    //   window.socketService.on('GOOGLE_MANUAL_AUTH_REQUIRED', handleGoogleAuthRequired);
-    // }
+    socketService.on('GOOGLE_AUTO_CONNECTED', handleGoogleConnected);
+    socketService.on('GOOGLE_MANUAL_AUTH_REQUIRED', handleGoogleAuthRequired);
 
-    // Nettoyage
     return () => {
-      // TODO: Nettoyer les écouteurs d'événements
-      // if (window.socketService) {
-      //   window.socketService.off('GOOGLE_AUTO_CONNECTED', handleGoogleConnected);
-      //   window.socketService.off('GOOGLE_MANUAL_AUTH_REQUIRED', handleGoogleAuthRequired);
-      // }
+      socketService.off('GOOGLE_AUTO_CONNECTED', handleGoogleConnected);
+      socketService.off('GOOGLE_MANUAL_AUTH_REQUIRED', handleGoogleAuthRequired);
     };
   }, [refreshConnectionStatus]);
 

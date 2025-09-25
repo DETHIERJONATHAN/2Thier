@@ -1,0 +1,104 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ secrets.PRODUCTION_APP_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply Prisma migrations (production)
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: npx prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/crm
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Capture primary image tag
+        id: image-tag
+        run: |
+          echo "tag=$(echo '${{ steps.meta.outputs.tags }}' | tr ',' '\n' | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy container over SSH
+        if: ${{ secrets.PRODUCTION_SSH_HOST != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          COMPOSE_FILE_PATH: ${{ secrets.PRODUCTION_COMPOSE_FILE }}
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        with:
+          host: ${{ secrets.PRODUCTION_SSH_HOST }}
+          username: ${{ secrets.PRODUCTION_SSH_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          port: ${{ secrets.PRODUCTION_SSH_PORT || 22 }}
+          script: |
+            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+            FILE=${COMPOSE_FILE_PATH:-docker-compose.yml}
+            if [ -n "$IMAGE_TAG" ]; then
+              if grep -q '^GHCR_IMAGE=' .env.production 2>/dev/null; then
+                sed -i "s|^GHCR_IMAGE=.*|GHCR_IMAGE=$IMAGE_TAG|g" .env.production
+              else
+                echo "GHCR_IMAGE=$IMAGE_TAG" >> .env.production
+              fi
+            fi
+            docker compose -f "$FILE" pull
+            docker compose -f "$FILE" up -d --remove-orphans
+            docker image prune -f
+

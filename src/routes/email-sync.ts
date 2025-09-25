@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
-import { syncUserEmails } from '../services/EmailSyncService.js';
 
 const router = Router();
 

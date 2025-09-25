@@ -407,16 +407,54 @@ export class GoogleCalendarNotificationService extends EventEmitter {
   }
 
   private async getUpcomingEvents(userId: string, start: Date, end: Date): Promise<any[]> {
+    console.log(`🔍 [GoogleCalendar] getUpcomingEvents (stub) pour ${userId} du ${start.toISOString()} au ${end.toISOString()}`);
     // TODO: Implémenter récupération événements via Google Calendar API
     return [];
   }
 
   private analyzeParticipants(attendees: any[]) {
-    // TODO: Analyser les participants (VIP, nouveaux contacts, etc.)
+    if (!Array.isArray(attendees) || attendees.length === 0) {
+      return {
+        vipAttendees: [],
+        newContacts: [],
+        decisionMakers: []
+      };
+    }
+
+    const normalized = attendees.map((attendee) => {
+      if (typeof attendee === 'string') {
+        return { email: attendee };
+      }
+      return attendee || {};
+    });
+
+    const vipKeywords = ['ceo', 'cfo', 'cto', 'founder', 'président', 'president', 'vp'];
+    const decisionKeywords = ['director', 'manager', 'lead', 'responsable', 'head'];
+
+    const vipAttendees = normalized
+      .filter((attendee) => typeof attendee.email === 'string' && vipKeywords.some((keyword) => attendee.email.toLowerCase().includes(keyword)))
+      .map((attendee) => attendee.email!);
+
+    const decisionMakers = normalized
+      .filter((attendee) => {
+        const target = (attendee.email || attendee.displayName || '').toLowerCase();
+        return decisionKeywords.some((keyword) => target.includes(keyword));
+      })
+      .map((attendee) => attendee.email || attendee.displayName)
+      .filter(Boolean) as string[];
+
+    const newContacts = normalized
+      .filter((attendee) => {
+        if (typeof attendee.email !== 'string') return false;
+        const status = (attendee.responseStatus || attendee.status || '').toLowerCase();
+        return status === 'needsaction' || status === 'tentative';
+      })
+      .map((attendee) => attendee.email!);
+
     return {
-      vipAttendees: [],
-      newContacts: [],
-      decisionMakers: []
+      vipAttendees,
+      newContacts,
+      decisionMakers
     };
   }
 
@@ -428,11 +466,22 @@ export class GoogleCalendarNotificationService extends EventEmitter {
 
   private generatePreparationSuggestions(meetingType: string, title: string): string[] {
     const suggestions = ['Vérifier l\'agenda'];
+    const normalizedTitle = title.toLowerCase();
     
     if (meetingType === 'commercial') {
       suggestions.push('Préparer argumentaire', 'Revoir historique client');
     } else if (meetingType === 'presentation') {
       suggestions.push('Tester la présentation', 'Préparer Q&A');
+    }
+
+    if (normalizedTitle.includes('budget')) {
+      suggestions.push('Réviser les chiffres budgétaires');
+    }
+    if (normalizedTitle.includes('contrat')) {
+      suggestions.push('Relire le contrat');
+    }
+    if (normalizedTitle.includes('board') || normalizedTitle.includes('direction')) {
+      suggestions.push('Préparer les indicateurs clés');
     }
     
     return suggestions;
@@ -453,7 +502,28 @@ export class GoogleCalendarNotificationService extends EventEmitter {
   }
 
   private async assessConflictRisk(event: any): Promise<'none' | 'low' | 'medium' | 'high'> {
-    // TODO: Vérifier conflits avec autres événements
+    if (!event || !event.start || !event.end) {
+      return 'none';
+    }
+
+    const start = new Date(event.start.dateTime || event.start.date).getTime();
+    const end = new Date(event.end.dateTime || event.end.date).getTime();
+    const now = Date.now();
+
+    if (start <= now && end >= now) {
+      return 'high';
+    }
+
+    const timeUntilStart = start - now;
+    if (timeUntilStart < 15 * 60 * 1000) {
+      return 'medium';
+    }
+
+    const attendeeCount = Array.isArray(event.attendees) ? event.attendees.length : 0;
+    if (attendeeCount > 6) {
+      return 'low';
+    }
+
     return 'none';
   }
 

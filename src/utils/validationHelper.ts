@@ -126,20 +126,143 @@ export function applyValidation(
  * Fonction simplifiée d'évaluation de condition
  * À remplacer par un vrai évaluateur d'expressions
  */
-function evaluateCondition(condition: string, values: Record<string, any>): boolean {
+function evaluateCondition(condition: string, values: Record<string, unknown>): boolean {
+    if (!condition.trim()) {
+        return false;
+    }
+
     try {
-        // ATTENTION: Ceci est dangereux en production!
-        // À remplacer par un évaluateur sécurisé
-        // eslint-disable-next-line no-new-func
-        const evalFn = new Function(
-            ...Object.keys(values),
-            `return ${condition};`
-        );
-        return evalFn(...Object.values(values));
+        const orGroups = condition.split(/\|\|/).map(group => group.trim()).filter(Boolean);
+
+        return orGroups.some(group => {
+            const andClauses = group.split(/&&/).map(clause => clause.trim()).filter(Boolean);
+            return andClauses.every(clause => evaluateClause(clause, values));
+        });
     } catch (e) {
         console.error('Erreur évaluation condition:', e);
         return false;
     }
+}
+
+function evaluateClause(clause: string, values: Record<string, unknown>): boolean {
+    const comparisonRegex = /^(?<path>[a-zA-Z0-9_.]+)\s*(?<operator>===|!==|>=|<=|==|!=|>|<)\s*(?<expected>.+)$/;
+    const match = clause.match(comparisonRegex);
+
+    if (!match || !match.groups) {
+        const directValue = getValueByPath(values, clause);
+        return Boolean(directValue);
+    }
+
+    const { path, operator, expected } = match.groups;
+    const actualValue = getValueByPath(values, path);
+    const expectedValue = parseComparisonValue(expected, values);
+
+    switch (operator) {
+        case '===':
+            return actualValue === expectedValue;
+        case '!==':
+            return actualValue !== expectedValue;
+        case '==':
+            return looseEquality(actualValue, expectedValue);
+        case '!=':
+            return !looseEquality(actualValue, expectedValue);
+        case '>':
+        case '>=':
+        case '<':
+        case '<=':
+            return compareOrdered(actualValue, expectedValue, operator);
+        default:
+            return false;
+    }
+}
+
+function looseEquality(left: unknown, right: unknown): boolean {
+    if (left === right) {
+        return true;
+    }
+
+    const leftComparable = toComparableValue(left);
+    const rightComparable = toComparableValue(right);
+
+    if (leftComparable !== null && rightComparable !== null) {
+        return leftComparable === rightComparable;
+    }
+
+    return String(left) === String(right);
+}
+
+function compareOrdered(left: unknown, right: unknown, operator: string): boolean {
+    const leftComparable = toComparableValue(left);
+    const rightComparable = toComparableValue(right);
+
+    if (leftComparable === null || rightComparable === null) {
+        return false;
+    }
+
+    switch (operator) {
+        case '>':
+            return leftComparable > rightComparable;
+        case '>=':
+            return leftComparable >= rightComparable;
+        case '<':
+            return leftComparable < rightComparable;
+        case '<=':
+            return leftComparable <= rightComparable;
+        default:
+            return false;
+    }
+}
+
+function toComparableValue(value: unknown): number | null {
+    if (value instanceof Date) {
+        return value.getTime();
+    }
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null;
+    }
+
+    if (typeof value === 'string') {
+        const numeric = Number(value);
+        if (!Number.isNaN(numeric)) {
+            return numeric;
+        }
+
+        const timestamp = Date.parse(value);
+        if (!Number.isNaN(timestamp)) {
+            return timestamp;
+        }
+    }
+
+    return null;
+}
+
+function parseComparisonValue(raw: string, values: Record<string, unknown>): unknown {
+    const trimmed = raw.trim();
+
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed.slice(1, -1);
+    }
+
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    if (trimmed === 'null') return null;
+    if (trimmed === 'undefined') return undefined;
+
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+        return Number(trimmed);
+    }
+
+    return getValueByPath(values, trimmed);
+}
+
+function getValueByPath(source: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((acc, key) => {
+        if (acc && typeof acc === 'object' && key in acc) {
+            return (acc as Record<string, unknown>)[key];
+        }
+        return undefined;
+    }, source);
 }
 
 /**

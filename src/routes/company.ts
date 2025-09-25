@@ -75,9 +75,10 @@ router.put('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
 router.get('/settings', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
   try {
     const { organizationId } = req.user!;
-    
+
     // TODO: Récupérer les paramètres depuis la base de données
     const settings = {
+      organizationId,
       currency: "EUR",
       timezone: "Europe/Brussels",
       language: "fr",

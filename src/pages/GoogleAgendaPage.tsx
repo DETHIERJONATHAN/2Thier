@@ -42,6 +42,7 @@ import {
   LinkOutlined,
   PushpinOutlined,
   CheckOutlined,
+  WarningOutlined,
   FileTextOutlined
 } from '@ant-design/icons';
 import FullCalendar, { EventClickArg } from '@fullcalendar/react';
@@ -53,6 +54,8 @@ import frLocale from '@fullcalendar/core/locales/fr';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
 import isBetween from 'dayjs/plugin/isBetween';
+import { computeNotesSummary, countNotesCompletedToday, sortNotesByUrgency } from './googleAgenda/noteUtils';
+import type { AgendaNote } from './googleAgenda/noteUtils';
 
 // Extension des plugins dayjs utilisés (isBetween pour les stats de notes)
 dayjs.extend(isBetween);
@@ -69,18 +72,26 @@ interface CalendarEvent {
   id: string;
   title: string;
   description?: string;
-  start: string;
-  end: string;
+  start?: string;
+  end?: string;
+  startDate?: string;
+  endDate?: string;
   location?: string;
   attendees?: Attendee[];
-  organizer: Attendee;
-  status: 'confirmed' | 'tentative' | 'cancelled';
-  eventType: 'meeting' | 'call' | 'rdv' | 'deadline' | 'reminder' | 'other';
+  organizer?: Attendee;
+  status?: 'confirmed' | 'tentative' | 'cancelled' | 'needsAction' | string;
+  eventType?: 'meeting' | 'call' | 'rdv' | 'deadline' | 'reminder' | 'other';
+  type?: 'note' | 'meeting' | 'call' | 'rdv' | 'deadline' | 'reminder' | 'other';
   meetingUrl?: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  category: string;
-  isAllDay: boolean;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  category?: string;
+  isAllDay?: boolean;
   leadId?: string;
+  dueDate?: string;
+  statusLabel?: string;
+  completedAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
 }
 
 interface Attendee {
@@ -112,7 +123,12 @@ interface ExtendedCalendarStats extends CalendarStats {
   notesPending: number;
   notesToday: number;
   notesOverdue: number;
+  notesDueSoon: number;
+  notesDueNextWeek: number;
+  notesCompletedToday: number;
 }
+
+type IncomingAgendaPayload = Partial<CalendarEvent> & { id: string };
 
 // --- COMPOSANT PRINCIPAL ---
 const GoogleAgendaPage: React.FC = () => {
@@ -143,8 +159,6 @@ const GoogleAgendaPage: React.FC = () => {
   interface NoteFormValues { title: string; description?: string; dueDate?: dayjs.Dayjs; priority?: string; category?: string }
   const [showNotes, setShowNotes] = useState(true);
   const [hideDoneNotes, setHideDoneNotes] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [notesSummary, setNotesSummary] = useState<{ totalActive: number; overdueCount: number } | null>(null);
   const [pollInterval, setPollInterval] = useState<number>(() => {
     const saved = localStorage.getItem('agendaNotesPollMs');
     return saved ? parseInt(saved, 10) : 60000;
@@ -154,6 +168,23 @@ const GoogleAgendaPage: React.FC = () => {
   const [sseStatus, setSseStatus] = useState<'disconnected'|'connecting'|'connected'>('disconnected');
   const [notificationsAllowed, setNotificationsAllowed] = useState<boolean>(false);
   const sseRef = useRef<EventSource | null>(null);
+
+  const noteEvents = useMemo<AgendaNote[]>(() => events.filter(event => event.type === 'note') as AgendaNote[], [events]);
+  const activeNotes = useMemo<AgendaNote[]>(() => noteEvents.filter(note => note.status !== 'done'), [noteEvents]);
+  const sortedActiveNotes = useMemo(() => sortNotesByUrgency(activeNotes), [activeNotes]);
+  const noteMetrics = useMemo(() => {
+    const now = dayjs();
+    const summaryThreeDays = computeNotesSummary(noteEvents, now, { dueSoonWindowDays: 3 });
+    const summarySevenDays = computeNotesSummary(noteEvents, now, { dueSoonWindowDays: 7 });
+    const dueNextWeek = Math.max(summarySevenDays.dueSoonCount - summaryThreeDays.dueSoonCount, 0);
+    const completedToday = countNotesCompletedToday(noteEvents, now);
+    return {
+      summary: summaryThreeDays,
+      dueNextWeek,
+      completedToday,
+    };
+  }, [noteEvents]);
+  const notesSummary = noteMetrics.summary;
 
   const eventCategories = useMemo(() => [
     { value: 'meeting', label: 'Réunion', color: token.colorPrimary },
@@ -267,7 +298,9 @@ const GoogleAgendaPage: React.FC = () => {
     try {
       if (!notificationsAllowed || !('Notification' in window)) return;
       new Notification(title, { body });
-  } catch (_err) { /* silencieux */ }
+  } catch {
+      /* silencieux */
+    }
   }, [notificationsAllowed]);
 
   // --- SSE TEMPS RÉEL ---
@@ -283,18 +316,28 @@ const GoogleAgendaPage: React.FC = () => {
       console.log('[GoogleAgenda][SSE] Connecté:', (e as MessageEvent).data);
       setSseStatus('connected');
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleInsertOrUpdate = (payload: any, origin: string) => {
+  const handleInsertOrUpdate = (payload: IncomingAgendaPayload | null, origin: string) => {
       if (!payload) return;
+      const normalized: CalendarEvent = {
+        id: payload.id,
+        title: payload.title ?? 'Sans titre',
+        category: payload.category ?? payload.type ?? 'other',
+        priority: payload.priority ?? 'medium',
+        isAllDay: payload.isAllDay ?? false,
+        status: payload.status,
+        ...payload,
+      };
+
       setEvents(prev => {
-        const idx = prev.findIndex(ev => ev.id === payload.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mapped: any = { ...payload };
-        if (idx === -1) return [...prev, mapped];
+        const idx = prev.findIndex(ev => ev.id === normalized.id);
+        if (idx === -1) {
+          return [...prev, normalized];
+        }
         const clone = [...prev];
-        clone[idx] = { ...clone[idx], ...mapped };
+        clone[idx] = { ...clone[idx], ...normalized };
         return clone;
       });
+
       if (payload.type === 'note') {
         if (origin === 'note.created' && (payload.priority === 'urgent' || payload.priority === 'high')) {
           showSystemNotification('Nouvelle note prioritaire', payload.title || 'Sans titre');
@@ -307,13 +350,28 @@ const GoogleAgendaPage: React.FC = () => {
       }
     };
     es.addEventListener('event.created', (e) => {
-      try { handleInsertOrUpdate(JSON.parse((e as MessageEvent).data), 'event.created'); } catch(err){ console.warn('[SSE] parse event.created', err); }
+      try {
+        const payload = JSON.parse((e as MessageEvent).data) as IncomingAgendaPayload;
+        handleInsertOrUpdate(payload, 'event.created');
+      } catch (err) {
+        console.warn('[SSE] parse event.created', err);
+      }
     });
     es.addEventListener('note.created', (e) => {
-      try { handleInsertOrUpdate(JSON.parse((e as MessageEvent).data), 'note.created'); } catch(err){ console.warn('[SSE] parse note.created', err); }
+      try {
+        const payload = JSON.parse((e as MessageEvent).data) as IncomingAgendaPayload;
+        handleInsertOrUpdate(payload, 'note.created');
+      } catch (err) {
+        console.warn('[SSE] parse note.created', err);
+      }
     });
     es.addEventListener('note.updated', (e) => {
-      try { handleInsertOrUpdate(JSON.parse((e as MessageEvent).data), 'note.updated'); } catch(err){ console.warn('[SSE] parse note.updated', err); }
+      try {
+        const payload = JSON.parse((e as MessageEvent).data) as IncomingAgendaPayload;
+        handleInsertOrUpdate(payload, 'note.updated');
+      } catch (err) {
+        console.warn('[SSE] parse note.updated', err);
+      }
     });
     es.onerror = (err) => {
       console.warn('[GoogleAgenda][SSE] Erreur / tentative reconnexion dans 5s', err);
@@ -542,8 +600,6 @@ const GoogleAgendaPage: React.FC = () => {
   // --- CALCULS & HELPERS ---
   const calculateStats = (eventsData: CalendarEvent[]) => {
     const now = dayjs();
-    const todayStart = now.startOf('day');
-    const todayEnd = now.endOf('day');
     const todayEvents = eventsData.filter(e => dayjs(e.startDate || e.start).isSame(now, 'day') && e.type !== 'note').length;
     const weekStart = now.startOf('week');
     const weekEnd = now.endOf('week');
@@ -555,10 +611,16 @@ const GoogleAgendaPage: React.FC = () => {
       const eventDate = dayjs(e.startDate || e.start);
       return eventDate.isAfter(now) && eventDate.isBefore(now.add(7, 'days')) && e.type !== 'note';
     }).length;
-    // Notes
-    const notesPending = eventsData.filter(e => e.type === 'note' && e.status !== 'done').length;
-    const notesToday = eventsData.filter(e => e.type === 'note' && e.status !== 'done' && dayjs(e.startDate).isBetween(todayStart, todayEnd, null, '[]')).length;
-    const notesOverdue = eventsData.filter(e => e.type === 'note' && e.status !== 'done' && e.dueDate && dayjs(e.dueDate).isBefore(todayStart, 'day')).length;
+   // Notes
+   const noteEntries = eventsData.filter(e => e.type === 'note') as AgendaNote[];
+   const notesSummaryThreeDays = computeNotesSummary(noteEntries, now, { dueSoonWindowDays: 3 });
+   const notesSummarySevenDays = computeNotesSummary(noteEntries, now, { dueSoonWindowDays: 7 });
+   const notesPending = notesSummaryThreeDays.totalActive;
+   const notesToday = notesSummaryThreeDays.todayCount;
+   const notesOverdue = notesSummaryThreeDays.overdueCount;
+   const notesDueSoon = notesSummaryThreeDays.dueSoonCount;
+   const notesDueNextWeek = Math.max(notesSummarySevenDays.dueSoonCount - notesSummaryThreeDays.dueSoonCount, 0);
+   const notesCompletedToday = countNotesCompletedToday(noteEntries, now);
     const nextStats: ExtendedCalendarStats = {
        totalEvents: eventsData.filter(e => e.type !== 'note').length,
        todayEvents,
@@ -569,7 +631,10 @@ const GoogleAgendaPage: React.FC = () => {
        avgMeetingDuration: 30,
        notesPending,
        notesToday,
-       notesOverdue,
+     notesOverdue,
+     notesDueSoon,
+     notesDueNextWeek,
+     notesCompletedToday,
     };
     setStats(nextStats);
   };
@@ -593,6 +658,10 @@ const GoogleAgendaPage: React.FC = () => {
         <Col span={12}><Statistic title="Cette semaine" value={stats?.weekEvents} prefix={<ClockCircleOutlined />} /></Col>
         <Col span={12}><Statistic title="Notes (actives)" value={stats?.notesPending} prefix={<FileTextOutlined />} /></Col>
         <Col span={12}><Statistic title="Notes en retard" value={stats?.notesOverdue} prefix={<ExclamationCircleOutlined />} valueStyle={{ color: (stats?.notesOverdue || 0) > 0 ? token.colorError : token.colorText }} /></Col>
+        <Col span={12}><Statistic title="Notes du jour" value={stats?.notesToday} prefix={<ClockCircleOutlined />} /></Col>
+        <Col span={12}><Statistic title="Notes imminentes (≤3j)" value={stats?.notesDueSoon} prefix={<WarningOutlined />} /></Col>
+        <Col span={12}><Statistic title="Notes semaine prochaine" value={stats?.notesDueNextWeek} prefix={<CalendarOutlined />} /></Col>
+        <Col span={12}><Statistic title="Notes terminées (aujourd'hui)" value={stats?.notesCompletedToday} prefix={<CheckOutlined />} /></Col>
       </Row>
     </Card>
   );
@@ -631,24 +700,6 @@ const GoogleAgendaPage: React.FC = () => {
       />
     </Card>
   );
-
-  const activeNotes = useMemo(() => events.filter(e => e.type === 'note' && e.status !== 'done'), [events]);
-  const sortedActiveNotes = useMemo(() => {
-    const priorityRank: Record<string, number> = { urgent:0, high:1, medium:2, low:3 };
-    return [...activeNotes].sort((a,b) => {
-      const now = dayjs();
-      const aOver = a.dueDate && dayjs(a.dueDate).isBefore(now, 'day');
-      const bOver = b.dueDate && dayjs(b.dueDate).isBefore(now, 'day');
-      if (aOver !== bOver) return aOver ? -1 : 1; // Overdue d'abord
-      const aPr = priorityRank[a.priority || 'medium'] ?? 2;
-      const bPr = priorityRank[b.priority || 'medium'] ?? 2;
-      if (aPr !== bPr) return aPr - bPr; // Priorité
-      if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return dayjs(a.dueDate).valueOf() - dayjs(b.dueDate).valueOf(); // Échéance proche
-      if (a.dueDate && !b.dueDate) return -1; if (b.dueDate && !a.dueDate) return 1;
-      return dayjs(a.startDate).valueOf() - dayjs(b.startDate).valueOf(); // Ancienneté
-    });
-  }, [activeNotes]);
-
   const toggleSelectNote = (id: string) => {
     setSelectedNoteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
@@ -661,7 +712,34 @@ const GoogleAgendaPage: React.FC = () => {
   };
 
   const renderNotesPanel = () => (
-    <Card title={<Space>🗒️ Notes actives<Popover content={<div style={{width:220}}><p style={{marginBottom:4}}>Intervalle polling (sec):</p><Slider min={15} max={300} step={15} value={pollInterval/1000} onChange={(v:number)=>setPollInterval(v*1000)} tooltip={{ open:false }} /><small>Actuel: {(pollInterval/1000)}s</small></div>} trigger="click"><Button size="small">⚙️</Button></Popover></Space>} size="small" className="mt-4" extra={selectedNoteIds.length>0 && <Button size="small" type="primary" onClick={markBatchDone}>Valider ({selectedNoteIds.length})</Button>}>
+    <Card
+      title={(
+        <Space size={6} wrap>
+          <span role="img" aria-label="notes">🗒️</span>
+          <Text strong>Notes</Text>
+          <Text type="secondary">actives {notesSummary.totalActive}</Text>
+          <Text type={notesSummary.overdueCount > 0 ? 'danger' : 'secondary'}>retard {notesSummary.overdueCount}</Text>
+          <Text type="secondary">≤3j {notesSummary.dueSoonCount}</Text>
+          {noteMetrics.dueNextWeek > 0 && <Text type="secondary">+7j {noteMetrics.dueNextWeek}</Text>}
+          {noteMetrics.completedToday > 0 && <Text type="success">✔ {noteMetrics.completedToday}</Text>}
+          <Popover
+            content={(
+              <div style={{ width: 220 }}>
+                <p style={{ marginBottom: 4 }}>Intervalle polling (sec):</p>
+                <Slider min={15} max={300} step={15} value={pollInterval / 1000} onChange={(v: number) => setPollInterval(v * 1000)} tooltip={{ open: false }} />
+                <small>Actuel: {(pollInterval / 1000)}s</small>
+              </div>
+            )}
+            trigger="click"
+          >
+            <Button size="small">⚙️</Button>
+          </Popover>
+        </Space>
+      )}
+      size="small"
+      className="mt-4"
+      extra={selectedNoteIds.length > 0 && <Button size="small" type="primary" onClick={markBatchDone}>Valider ({selectedNoteIds.length})</Button>}
+    >
       <List
         size="small"
         dataSource={sortedActiveNotes}
@@ -686,10 +764,9 @@ const GoogleAgendaPage: React.FC = () => {
   );
 
   useEffect(() => {
-    if (notesSummary) {
-      console.log('[GoogleAgenda] Notes summary mise à jour', notesSummary);
-      // Met à jour la référence (si diminution, on autorisera re-notification)
-      if ((notesSummary.overdueCount || 0) === 0) previousOverdueCount.current = 0;
+    console.log('[GoogleAgenda] Notes summary mise à jour', notesSummary);
+    if (notesSummary.overdueCount === 0) {
+      previousOverdueCount.current = 0;
     }
   }, [notesSummary]);
 
@@ -728,8 +805,8 @@ const GoogleAgendaPage: React.FC = () => {
             <Tooltip title="Nouvel événement">
               <Button type="primary" icon={<PlusOutlined />} onClick={() => handleDateClick({ dateStr: dayjs().toISOString(), allDay: false } as DateClickArg)} />
             </Tooltip>
-            <Tooltip title={`Notes actives: ${notesSummary?.totalActive || 0} (retard: ${notesSummary?.overdueCount || 0})`}>
-              <Badge count={notesSummary?.overdueCount} size="small" offset={[ -2, 2 ]} color="red">
+            <Tooltip title={`Notes actives: ${notesSummary.totalActive} (retard: ${notesSummary.overdueCount})`}>
+              <Badge count={notesSummary.overdueCount} showZero size="small" offset={[ -2, 2 ]} color="red">
                 <Button icon={<FileTextOutlined />} onClick={() => setIsNoteModalVisible(true)} />
               </Badge>
             </Tooltip>

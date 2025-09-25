@@ -87,7 +87,7 @@ export class EmailSyncService {
             console.log(`📧 [IMAP] Traitement message ${seqno}`);
             let buffer = '';
 
-            msg.on('body', (stream, info) => {
+            msg.on('body', (stream, _info) => {
               stream.on('data', (chunk) => {
                 buffer += chunk.toString('utf8');
               });

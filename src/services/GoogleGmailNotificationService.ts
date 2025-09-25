@@ -431,7 +431,17 @@ export class GoogleGmailNotificationService {
         from: email.from,
         subject: email.subject,
         userId: userToken.userId,
-        organizationId: userToken.organizationId
+        organizationId: userToken.organizationId,
+        summary: intelligentMessage,
+        priority: analysis.priority,
+        metadata: {
+          category: analysis.category,
+          importance: analysis.importance,
+          suggestedActions: analysis.suggestedActions,
+          keyInfo: analysis.keyInfo,
+          extractedData: analysis.extractedData
+        },
+        tags: ['email', 'inbox', analysis.category]
       });
 
       // Si c'est un email commercial, créer potentiellement un lead

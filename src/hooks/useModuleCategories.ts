@@ -144,6 +144,32 @@ export const useModuleCategories = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ Initialiser les Categories par défaut
+  const initializeDefaultCategories = useCallback(async () => {
+    if (!currentOrganization?.id || !api) return;
+
+    try {
+      const categoriesToCreate = defaultCategories.map(category => ({
+        ...category,
+        organizationId: currentOrganization.id
+      }));
+
+      console.log(`📦 [useModuleCategories] Création de ${categoriesToCreate.length} Categories par défaut...`);
+      const response = await api.post('/admin-modules/categories/bulk', {
+        categories: categoriesToCreate
+      });
+
+      if (response?.success && Array.isArray(response.data)) {
+        console.log(`✅ [useModuleCategories] ${response.data.length} Categories créées avec succès`);
+        setCategories(response.data.sort((a: ModuleCategory, b: ModuleCategory) => a.order - b.order));
+        message.success('Categories initialisées avec succès');
+      }
+    } catch (error) {
+      console.error('❌ [useModuleCategories] Erreur lors de l\'initialisation des Categories:', error);
+      setError('Erreur lors de l\'initialisation des categories');
+    }
+  }, [currentOrganization?.id, api]);
+
   // ✅ Charger les Categories depuis Prisma
   const loadCategories = useCallback(async () => {
     if (!currentOrganization?.id || !api) {
@@ -183,7 +209,7 @@ export const useModuleCategories = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganization?.id, api]);
+  }, [currentOrganization?.id, api, initializeDefaultCategories]);
 
   // ✅ Charger les Modules avec leurs Categories
   const loadModules = useCallback(async () => {
@@ -216,32 +242,6 @@ export const useModuleCategories = () => {
     } catch (error) {
       console.error('❌ [useModuleCategories] Erreur lors du chargement des modules:', error);
       setError('Erreur lors du chargement des modules');
-    }
-  }, [currentOrganization?.id, api]);
-
-  // ✅ Initialiser les Categories par défaut
-  const initializeDefaultCategories = useCallback(async () => {
-    if (!currentOrganization?.id || !api) return;
-
-    try {
-      const categoriesToCreate = defaultCategories.map(category => ({
-        ...category,
-        organizationId: currentOrganization.id
-      }));
-
-      console.log(`📦 [useModuleCategories] Création de ${categoriesToCreate.length} Categories par défaut...`);
-      const response = await api.post('/admin-modules/categories/bulk', {
-        categories: categoriesToCreate
-      });
-
-      if (response?.success && Array.isArray(response.data)) {
-        console.log(`✅ [useModuleCategories] ${response.data.length} Categories créées avec succès`);
-        setCategories(response.data.sort((a: ModuleCategory, b: ModuleCategory) => a.order - b.order));
-        message.success('Categories initialisées avec succès');
-      }
-    } catch (error) {
-      console.error('❌ [useModuleCategories] Erreur lors de l\'initialisation des Categories:', error);
-      setError('Erreur lors de l\'initialisation des categories');
     }
   }, [currentOrganization?.id, api]);
 

@@ -81,9 +81,81 @@ export const useGoogleAgenda = () => {
   const [stats, setStats] = useState<CalendarStats | null>(null);
 
   // 🔧 API STABILISÉE
-  const stableApi = useMemo(() => api, []);
+  const stableApi = useMemo(() => api, [api]);
 
-  // 📊 CHARGEMENT DES ÉVÉNEMENTS
+  // � DÉTECTION DES CONFLITS
+  const detectEventConflicts = useCallback((eventsData: CalendarEvent[]) => {
+    const conflicts: string[] = [];
+    
+    for (let i = 0; i < eventsData.length; i++) {
+      for (let j = i + 1; j < eventsData.length; j++) {
+        const event1 = eventsData[i];
+        const event2 = eventsData[j];
+        
+        const start1 = dayjs(event1.start);
+        const end1 = dayjs(event1.end);
+        const start2 = dayjs(event2.start);
+        const end2 = dayjs(event2.end);
+        
+        if (start1.isBefore(end2) && start2.isBefore(end1)) {
+          conflicts.push(event1.id, event2.id);
+        }
+      }
+    }
+    
+    return [...new Set(conflicts)];
+  }, []);
+
+  // 📈 CALCUL DES STATISTIQUES
+  const calculateStats = useCallback((eventsData: CalendarEvent[]) => {
+    const now = dayjs();
+    const today = now.startOf('day');
+    const weekStart = now.startOf('week');
+    const monthStart = now.startOf('month');
+
+    const todayEvents = eventsData.filter(event => 
+      dayjs(event.start).isSame(today, 'day')
+    ).length;
+
+    const weekEvents = eventsData.filter(event => 
+      dayjs(event.start).isAfter(weekStart) && dayjs(event.start).isBefore(weekStart.add(1, 'week'))
+    ).length;
+
+    const monthEvents = eventsData.filter(event => 
+      dayjs(event.start).isAfter(monthStart) && dayjs(event.start).isBefore(monthStart.add(1, 'month'))
+    ).length;
+
+    const upcomingMeetings = eventsData.filter(event => 
+      dayjs(event.start).isAfter(now) && dayjs(event.start).isBefore(now.add(7, 'days'))
+    ).length;
+
+    // Détection des conflits
+    const conflicts = detectEventConflicts(eventsData);
+
+    // Taux de complétion
+    const pastEvents = eventsData.filter(event => dayjs(event.end).isBefore(now));
+    const completedEvents = pastEvents.filter(event => event.status === 'confirmed');
+    const completionRate = pastEvents.length > 0 ? (completedEvents.length / pastEvents.length) * 100 : 100;
+
+    // Durée moyenne des réunions
+    const meetings = eventsData.filter(event => event.eventType === 'meeting');
+    const avgDuration = meetings.length > 0 
+      ? meetings.reduce((sum, event) => sum + dayjs(event.end).diff(dayjs(event.start), 'minutes'), 0) / meetings.length
+      : 0;
+
+    setStats({
+      totalEvents: eventsData.length,
+      todayEvents,
+      weekEvents,
+      monthEvents,
+      upcomingMeetings,
+      conflicts: conflicts.length,
+      completionRate: Math.round(completionRate),
+      avgMeetingDuration: Math.round(avgDuration)
+    });
+  }, [detectEventConflicts]);
+
+  // �📊 CHARGEMENT DES ÉVÉNEMENTS
   const loadEvents = useCallback(async (startDate?: string, endDate?: string) => {
     if (!stableApi) return;
     
@@ -135,7 +207,7 @@ export const useGoogleAgenda = () => {
     } finally {
       setLoading(false);
     }
-  }, [stableApi]);
+  }, [stableApi, calculateStats]);
 
   // 🔄 SYNCHRONISATION GOOGLE CALENDAR
   const syncWithGoogleCalendar = useCallback(async () => {
@@ -230,79 +302,7 @@ export const useGoogleAgenda = () => {
     }
   }, [stableApi, loadEvents]);
 
-  // 📈 CALCUL DES STATISTIQUES
-  const calculateStats = useCallback((eventsData: CalendarEvent[]) => {
-    const now = dayjs();
-    const today = now.startOf('day');
-    const weekStart = now.startOf('week');
-    const monthStart = now.startOf('month');
-
-    const todayEvents = eventsData.filter(event => 
-      dayjs(event.start).isSame(today, 'day')
-    ).length;
-
-    const weekEvents = eventsData.filter(event => 
-      dayjs(event.start).isAfter(weekStart) && dayjs(event.start).isBefore(weekStart.add(1, 'week'))
-    ).length;
-
-    const monthEvents = eventsData.filter(event => 
-      dayjs(event.start).isAfter(monthStart) && dayjs(event.start).isBefore(monthStart.add(1, 'month'))
-    ).length;
-
-    const upcomingMeetings = eventsData.filter(event => 
-      dayjs(event.start).isAfter(now) && dayjs(event.start).isBefore(now.add(7, 'days'))
-    ).length;
-
-    // Détection des conflits
-    const conflicts = detectEventConflicts(eventsData);
-
-    // Taux de complétion
-    const pastEvents = eventsData.filter(event => dayjs(event.end).isBefore(now));
-    const completedEvents = pastEvents.filter(event => event.status === 'confirmed');
-    const completionRate = pastEvents.length > 0 ? (completedEvents.length / pastEvents.length) * 100 : 100;
-
-    // Durée moyenne des réunions
-    const meetings = eventsData.filter(event => event.eventType === 'meeting');
-    const avgDuration = meetings.length > 0 
-      ? meetings.reduce((sum, event) => sum + dayjs(event.end).diff(dayjs(event.start), 'minutes'), 0) / meetings.length
-      : 0;
-
-    setStats({
-      totalEvents: eventsData.length,
-      todayEvents,
-      weekEvents,
-      monthEvents,
-      upcomingMeetings,
-      conflicts: conflicts.length,
-      completionRate: Math.round(completionRate),
-      avgMeetingDuration: Math.round(avgDuration)
-    });
-  }, []);
-
-  // 🔍 DÉTECTION DES CONFLITS
-  const detectEventConflicts = useCallback((eventsData: CalendarEvent[]) => {
-    const conflicts: string[] = [];
-    
-    for (let i = 0; i < eventsData.length; i++) {
-      for (let j = i + 1; j < eventsData.length; j++) {
-        const event1 = eventsData[i];
-        const event2 = eventsData[j];
-        
-        const start1 = dayjs(event1.start);
-        const end1 = dayjs(event1.end);
-        const start2 = dayjs(event2.start);
-        const end2 = dayjs(event2.end);
-        
-        if (start1.isBefore(end2) && start2.isBefore(end1)) {
-          conflicts.push(event1.id, event2.id);
-        }
-      }
-    }
-    
-    return [...new Set(conflicts)];
-  }, []);
-
-  // 🚀 CHARGEMENT INITIAL
+  //  CHARGEMENT INITIAL
   useEffect(() => {
     loadEvents();
   }, [loadEvents]);

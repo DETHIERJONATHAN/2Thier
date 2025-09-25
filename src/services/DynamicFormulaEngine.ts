@@ -763,7 +763,7 @@ export class DynamicFormulaEngine {
       if (debug) console.log(`🔍 Recherche NextField: ${nextFieldId}`);
       
       // CORRECTION: Chercher directement le nodeId qui correspond
-      for (const [fieldId, fieldValue] of Object.entries(fieldValues)) {
+  for (const [_fieldId, fieldValue] of Object.entries(fieldValues)) {
         if (fieldValue && typeof fieldValue === 'object' && !Array.isArray(fieldValue)) {
           const obj = fieldValue as Record<string, unknown>;
           // Si c'est un advanced_select avec nodeId qui correspond DIRECTEMENT

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
 import { useAuth } from '../../auth/useAuth';
@@ -27,6 +27,8 @@ import {
   Switch
 } from 'antd';
 import { SmartNotifications } from '../../components/SmartNotifications';
+import type { SegmentedValue } from 'antd/es/segmented';
+import { getErrorMessage } from '../../utils/errorHandling';
 import { 
   UserOutlined, 
   TrophyOutlined, 
@@ -48,6 +50,13 @@ import {
 
 const { Title, Text, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
+
+type ChartType = 'pie' | 'bar';
+type TimeRange = 'week' | 'month' | 'quarter';
+
+const isChartType = (value: SegmentedValue): value is ChartType => value === 'pie' || value === 'bar';
+const isTimeRange = (value: SegmentedValue): value is TimeRange =>
+  value === 'week' || value === 'month' || value === 'quarter';
 
 interface LeadDashboardState {
   totalLeads: number;
@@ -77,8 +86,8 @@ export default function LeadsDashboard() {
   const { currentOrganization, isSuperAdmin, user } = useAuth();
   
   // 🎛️ États pour l'interactivité
-  const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
-  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'quarter'>('month');
+  const [chartType, setChartType] = useState<ChartType>('pie');
+  const [timeRange, setTimeRange] = useState<TimeRange>('month');
   const [showDetails, setShowDetails] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -96,7 +105,7 @@ export default function LeadsDashboard() {
   });
   
   // 📊 Fonction de récupération des données
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       // 🔗 PRISMA INTEGRATION: Récupération des leads avec leurs relations
       const response = await api.get('/api/leads');
@@ -260,9 +269,13 @@ export default function LeadsDashboard() {
       
       console.log('✅ Dashboard mis à jour avec les données Prisma');
       
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des données du dashboard:', error);
-      // Fallback avec des données vides en cas d'erreur
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(
+        error,
+        'Impossible de charger les données du dashboard. Veuillez réessayer.'
+      );
+      console.error('❌ Erreur lors du chargement des données du dashboard:', errorMessage, error);
+
       setDashboardData(prev => ({
         ...prev,
         totalLeads: 0,
@@ -276,18 +289,40 @@ export default function LeadsDashboard() {
         leadsEvolution: [],
         loading: false
       }));
-      
-      NotificationManager.error('Impossible de charger les données du dashboard. Veuillez réessayer.');
+
+      NotificationManager.error(errorMessage);
     }
-  };
+  }, [api, leadStatuses]);
   
   // 🔄 Fonction de rafraîchissement interactive
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchDashboardData();
     setRefreshing(false);
     NotificationManager.success('Données actualisées !');
-  };
+  }, [fetchDashboardData]);
+
+  const handleTimeRangeChange = useCallback(
+    (next: SegmentedValue) => {
+      if (isTimeRange(next)) {
+        setTimeRange(next);
+      } else {
+        console.warn('[LeadsDashboard] Valeur de période inattendue reçue:', next);
+      }
+    },
+    []
+  );
+
+  const handleChartTypeChange = useCallback(
+    (next: SegmentedValue) => {
+      if (isChartType(next)) {
+        setChartType(next);
+      } else {
+        console.warn('[LeadsDashboard] Type de graphique inattendu reçu:', next);
+      }
+    },
+    []
+  );
   
   useEffect(() => {
     // ✅ PRODUCTION: Utiliser le hook useAuth au lieu de isAuthenticated()
@@ -304,8 +339,7 @@ export default function LeadsDashboard() {
     }
     
     fetchDashboardData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, currentOrganization, isSuperAdmin, leadStatuses]);
+  }, [user, currentOrganization, isSuperAdmin, fetchDashboardData]);
 
   const { loading } = dashboardData;
 
@@ -384,7 +418,7 @@ export default function LeadsDashboard() {
                   { label: 'Trimestre', value: 'quarter' }
                 ]}
                 value={timeRange}
-                onChange={(value) => setTimeRange(value as 'week' | 'month' | 'quarter')}
+                onChange={handleTimeRangeChange}
               />
             </Col>
             <Col>
@@ -395,7 +429,7 @@ export default function LeadsDashboard() {
                   { label: <BarChartOutlined />, value: 'bar' }
                 ]}
                 value={chartType}
-                onChange={(value) => setChartType(value as 'pie' | 'bar')}
+                onChange={handleChartTypeChange}
               />
             </Col>
           </Row>

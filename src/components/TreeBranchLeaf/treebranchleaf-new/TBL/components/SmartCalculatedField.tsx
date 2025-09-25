@@ -485,6 +485,21 @@ export function SmartCalculatedField({
   const { api } = useAuthenticatedApi(); // Récupérer l'instance API authentifiée
   const [result, setResult] = useState<unknown | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const latestFormDataRef = useRef(formData);
+  useEffect(() => {
+    latestFormDataRef.current = formData;
+  }, [formData]);
+
+  const latestResultRef = useRef(result);
+  useEffect(() => {
+    latestResultRef.current = result;
+  }, [result]);
+
+  const latestIsLoadingRef = useRef(isLoading);
+  useEffect(() => {
+    latestIsLoadingRef.current = isLoading;
+  }, [isLoading]);
   
   // 🚀 NOUVEAU: Évaluation DYNAMIQUE COMPLÈTE - PLUS DE MIRROR STATIQUE !
   const getMirrorFallback = useCallback(async (sourceRef: string): Promise<unknown | null> => {
@@ -742,7 +757,7 @@ export function SmartCalculatedField({
     const cachedSig = signatureResultCache.get(sigKey);
     if (cachedSig && cachedSig.expiresAt > Date.now()) {
       if (isSmartDebug()) console.log('[SMART][FAST-PATH] signature cache hit', { sourceRef, signature });
-      if (result !== cachedSig.value) {
+      if (latestResultRef.current !== cachedSig.value) {
         console.log(`🏃 [RESULT DEBUG] Cache hit pour ${sourceRef}, setResult:`, cachedSig.value);
         setResult(cachedSig.value);
       }
@@ -755,7 +770,7 @@ export function SmartCalculatedField({
       setIsLoading(prev => prev || true);
       try {
         lastCalcRef.current = { sourceRef, signature };
-        const { result: calculatedResult } = await translateAndExecute(sourceRef, formData);
+  const { result: calculatedResult } = await translateAndExecute(sourceRef, latestFormDataRef.current);
         if ((diagMode() || isSmartDebug())) console.log('[SMART][CALC][DONE]', { sourceRef, signature, calculatedResult });
         // Logging ordre d'évaluation naïf: compter combien de dépendants connus dans graphe pointent vers cette source
         try {
@@ -805,7 +820,7 @@ export function SmartCalculatedField({
 
     // Timeout de secours: si pas de résultat sous 2000ms et aucune nouvelle tentative -> forcer un affichage neutre
     const timeoutId = setTimeout(() => {
-      if (isLoading) {
+      if (latestIsLoadingRef.current) {
         if ((diagMode() || isSmartDebug())) console.warn('[SMART][TIMEOUT]', sourceRef);
         console.log(`⏰ [RESULT DEBUG] Timeout pour ${sourceRef}, setResult(prev ?? null)`);
         setIsLoading(false);
@@ -814,8 +829,7 @@ export function SmartCalculatedField({
     }, 2000);
     calculate();
     return () => clearTimeout(timeoutId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceRef, dataSignature]); // formData déjà incorporé dans la signature pertinente
+  }, [sourceRef, dataSignature, translateAndExecute]); // formData déjà incorporé dans la signature pertinente
 
   // 🎨 Formatage du résultat final
   const formatResult = useCallback((value: unknown): string => {

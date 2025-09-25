@@ -1,4 +1,4 @@
-import { useAuthContext } from './AuthProvider';
+import { useAuthContext } from './AuthContext';
 import { useCallback } from 'react';
 
 export function useAuth() {

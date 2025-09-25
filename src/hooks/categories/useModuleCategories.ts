@@ -137,6 +137,43 @@ export const useModuleCategories = () => {
     updatedAt: category.updatedAt
   }));
 
+  // Initialiser les Categories par défaut
+  const initializeDefaultCategories = useCallback(async () => {
+    if (!currentOrganization?.id || !api) return;
+
+    try {
+      console.log(`📦 [useModuleCategories] Création de ${defaultCategories.length} Categories par défaut...`);
+
+      const createdCategories: ModuleCategory[] = [];
+
+      // Créer chaque category individuellement pour éviter les erreurs
+      for (const categoryData of defaultCategories) {
+        try {
+          const response = await api.post('/admin-modules/categories', {
+            ...categoryData,
+            organizationId: currentOrganization.id
+          });
+
+          if (response?.success && response.data) {
+            createdCategories.push(response.data);
+            console.log(`✅ Category "${categoryData.name}" créée`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Erreur création category "${categoryData.name}":`, error);
+        }
+      }
+
+      if (createdCategories.length > 0) {
+        console.log(`✅ [useModuleCategories] ${createdCategories.length} Categories créées avec succès`);
+        setCategories(createdCategories.sort((a, b) => a.order - b.order));
+        message.success(`${createdCategories.length} Categories initialisées avec succès`);
+      }
+    } catch (error) {
+      console.error('❌ [useModuleCategories] Erreur lors de l\'initialisation des Categories:', error);
+      setError('Erreur lors de l\'initialisation des categories');
+    }
+  }, [currentOrganization?.id, api]);
+
   // Charger les Categories depuis Prisma
   const loadCategories = useCallback(async () => {
     if (!currentOrganization?.id || !api) {
@@ -171,7 +208,7 @@ export const useModuleCategories = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganization?.id, api]);
+  }, [currentOrganization?.id, api, initializeDefaultCategories]);
 
   // ✅ Charger les modules (compatible avec ModulesAdminPage.tsx)
   const loadModules = useCallback(async () => {
@@ -195,43 +232,6 @@ export const useModuleCategories = () => {
       }
     } catch (error) {
       console.error('❌ [useModuleCategories] Erreur lors du chargement des modules:', error);
-    }
-  }, [currentOrganization?.id, api]);
-
-  // Initialiser les Categories par défaut
-  const initializeDefaultCategories = useCallback(async () => {
-    if (!currentOrganization?.id || !api) return;
-
-    try {
-      console.log(`📦 [useModuleCategories] Création de ${defaultCategories.length} Categories par défaut...`);
-      
-      const createdCategories: ModuleCategory[] = [];
-      
-      // Créer chaque category individuellement pour éviter les erreurs
-      for (const categoryData of defaultCategories) {
-        try {
-          const response = await api.post('/admin-modules/categories', {
-            ...categoryData,
-            organizationId: currentOrganization.id
-          });
-          
-          if (response?.success && response.data) {
-            createdCategories.push(response.data);
-            console.log(`✅ Category "${categoryData.name}" créée`);
-          }
-        } catch (error) {
-          console.warn(`⚠️ Erreur création category "${categoryData.name}":`, error);
-        }
-      }
-      
-      if (createdCategories.length > 0) {
-        console.log(`✅ [useModuleCategories] ${createdCategories.length} Categories créées avec succès`);
-        setCategories(createdCategories.sort((a, b) => a.order - b.order));
-        message.success(`${createdCategories.length} Categories initialisées avec succès`);
-      }
-    } catch (error) {
-      console.error('❌ [useModuleCategories] Erreur lors de l\'initialisation des Categories:', error);
-      setError('Erreur lors de l\'initialisation des categories');
     }
   }, [currentOrganization?.id, api]);
 

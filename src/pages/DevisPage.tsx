@@ -124,7 +124,7 @@ export default function DevisPage() {
   // Mapping explicite champ->node
   const fieldNodeMappingRef = useRef<null | { mappings?: Array<{ labelMatch?: string; nodeRole?: string; preferredNodeId?: string }> }>(null);
   const evaluatePriceDebounceRef = useRef<number | null>(null);
-  const triggerEvaluatePriceRef = useRef<(() => void) | null>(null);
+  const latestValuesRef = useRef<Record<string, unknown>>({});
 
   // Charger mapping (lazy)
   useEffect(() => {
@@ -218,6 +218,10 @@ export default function DevisPage() {
   const lastUserEditRef = useRef<string | null>(null);
   // Ensemble des champs considérés comme récemment modifiés (inclut propagation prix)
   const recentUserFieldsRef = useRef<Set<string>>(new Set());
+  const latestValuesRef = useRef<Record<string, unknown>>({});
+  useEffect(() => {
+    latestValuesRef.current = { ...values };
+  }, [values]);
   // Ensemble des champs dont la valeur affichée provient d'une formule (badge "auto")
   const [autoFields, setAutoFields] = useState<Set<string>>(new Set());
   // Champs dont la valeur affichée provient d'un override manuel (mode auto désactivé)
@@ -303,11 +307,10 @@ export default function DevisPage() {
   }, [normalize]);
 
   // Wrapper d'évaluation de dépendance avec typage sécurisé
-  const evalDepSafe = useCallback((dep: StoreFieldDependency, v: Record<string, unknown>) => {
-    // evaluateDependency attend Record<string, any> en interne; cast contrôlé
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return evaluateDependency(dep, v as Record<string, any>);
-  }, []);
+  const evalDepSafe = useCallback(
+    (dep: StoreFieldDependency, v: Record<string, unknown>) => evaluateDependency(dep, v),
+    []
+  );
 
   // Charger le bloc (lecture sûre) dès qu'un blockId est présent
   useEffect(() => {
@@ -795,9 +798,8 @@ export default function DevisPage() {
   useEffect(() => {
     if (!leadId || !blockId) return;
     // Déclencher une sauvegarde des métadonnées sans toucher aux valeurs
-    scheduleSave({ ...(values || {}) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [devisName]);
+    scheduleSave({ ...latestValuesRef.current });
+  }, [devisName, leadId, blockId, scheduleSave]);
 
   const onChange = useCallback((fieldId: string, value: unknown) => {
     lastUserEditRef.current = String(fieldId);

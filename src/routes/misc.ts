@@ -129,10 +129,9 @@ router.post("/login", async (req: Request, res: Response) => {
       { expiresIn: "24h" }
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { passwordHash, UserOrganization, ...userInfos } = freshUser;
+  const { passwordHash: _passwordHash, UserOrganization: userOrganizations = [], ...userInfos } = freshUser;
 
-    const organizations = UserOrganization
+  const organizations = userOrganizations
         .filter(uo => uo.Organization && uo.Role) // Filtrer les relations invalides
         .map((uo) => ({
             ...uo.Organization,
@@ -226,10 +225,17 @@ router.get(
           { expiresIn: "24h" }
         );
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { passwordHash, UserOrganization, ...userInfos } = user;
+        res.cookie('token', token, {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'lax',
+          maxAge: 24 * 60 * 60 * 1000,
+          path: '/'
+        });
 
-        const organizations = UserOrganization
+  const { passwordHash: _passwordHash, UserOrganization: userOrganizations = [], ...userInfos } = user;
+
+    const organizations = userOrganizations
             .filter(uo => uo.Organization && uo.Role) // Filtrer les relations invalides
             .map((uo) => ({
                 ...uo.Organization,

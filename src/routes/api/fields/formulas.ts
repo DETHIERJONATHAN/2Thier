@@ -253,7 +253,6 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
       const { sequence, name, order } = req.body;
       
       // Utiliser le système de mock pour mettre à jour ou créer la formule
-      /* eslint-disable */
       mockFormulas.updateFormula(fieldId as string, formulaId as string, {
         name,
         sequence,

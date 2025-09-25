@@ -32,6 +32,7 @@ import {
   generateLeadRecommendations
 } from '../../utils/leadTimeline';
 import dayjs from 'dayjs';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -495,9 +496,9 @@ export default function LeadsHomePage({
       console.log('[LeadsHomePage] 📊 Leads transformés:', transformedLeads);
       setLeads(transformedLeads);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      console.error('Erreur lors du chargement des leads:', errorMessage);
-      NotificationManager.error('Erreur lors du chargement des leads');
+      const errorMessage = getErrorMessage(error, 'Erreur lors du chargement des leads');
+      console.error('[LeadsHomePage] ❌ Erreur lors du chargement des leads:', errorMessage, error);
+      NotificationManager.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -526,8 +527,8 @@ export default function LeadsHomePage({
       // Si aucune exception levée, considérer comme succès (gère 204 No Content)
       message.success('Lead supprimé avec succès');
       await fetchLeads();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la suppression';
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Erreur lors de la suppression');
       message.error(errorMessage);
       throw error;
     } finally {

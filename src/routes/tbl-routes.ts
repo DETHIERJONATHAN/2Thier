@@ -66,13 +66,13 @@ router.post('/devis', authenticateToken, requireRole(['user', 'admin', 'super_ad
     
     // Simuler la sauvegarde pour le moment
     const devisId = `tbl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    console.log('✅ [TBL API] Devis sauvegardé avec succès:', devisId);
+    console.log('✅ [TBL API] Devis sauvegardé avec succès:', { devisId, devisData });
 
     res.json({
       success: true,
       devisId,
-      message: 'Devis TBL sauvegardé avec succès'
+      message: 'Devis TBL sauvegardé avec succès',
+      data: devisData
     });
 
   } catch (error) {
@@ -88,9 +88,16 @@ router.post('/devis', authenticateToken, requireRole(['user', 'admin', 'super_ad
 router.get('/devis/client/:clientId', authenticateToken, requireRole(['user', 'admin', 'super_admin']), async (req, res) => {
   try {
     const { clientId } = req.params;
-    const { organizationId } = req.user || {};
+    const { organizationId, role } = req.user || {};
 
     console.log('📖 [TBL API] Récupération devis client:', clientId);
+
+    if (!organizationId && role !== 'super_admin') {
+      return res.status(403).json({
+        error: 'Organisation non renseignée pour l’utilisateur',
+        success: false
+      });
+    }
 
     // TODO: Implémenter la récupération depuis la base de données
     // Pour l'instant, retourner un tableau vide
@@ -109,9 +116,16 @@ router.get('/devis/client/:clientId', authenticateToken, requireRole(['user', 'a
 router.get('/devis/:devisId', authenticateToken, requireRole(['user', 'admin', 'super_admin']), async (req, res) => {
   try {
     const { devisId } = req.params;
-    const { organizationId } = req.user || {};
+    const { organizationId, role } = req.user || {};
 
     console.log('📖 [TBL API] Chargement devis:', devisId);
+
+    if (!organizationId && role !== 'super_admin') {
+      return res.status(403).json({
+        error: 'Organisation non renseignée pour l’utilisateur',
+        success: false
+      });
+    }
 
     // TODO: Implémenter la récupération depuis la base de données
     // Pour l'instant, retourner null
@@ -139,6 +153,13 @@ router.get('/clients/:clientId/access-check', authenticateToken, requireRole(['u
     // SuperAdmin a accès à tout
     if (role === 'super_admin') {
       return res.json({ hasAccess: true });
+    }
+
+    if (!organizationId) {
+      return res.status(403).json({
+        hasAccess: false,
+        error: 'Organisation non renseignée pour l’utilisateur'
+      });
     }
 
     // TODO: Vérifier dans la base de données si le client appartient à l'organisation

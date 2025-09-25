@@ -152,7 +152,10 @@ export function getAPIHeaders(): HeadersInit {
  * @param dependency La dépendance à évaluer
  * @param values Les valeurs à utiliser pour l'évaluation
  */
-export function evaluateDependency(dependency: FieldDependency, values: Record<string, any>): { result: 'show' | 'hide' | 'require' | 'unrequire'; details?: any } {
+export function evaluateDependency(
+  dependency: FieldDependency,
+  values: Record<string, unknown>
+): { result: 'show' | 'hide' | 'require' | 'unrequire'; details?: unknown } {
   console.log(`[DependencyEvaluator] 🧪 Évaluation de la dépendance ${dependency.id}`, values);
   
   if (!dependency.sequence) {

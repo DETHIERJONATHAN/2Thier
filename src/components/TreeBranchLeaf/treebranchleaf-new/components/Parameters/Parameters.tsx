@@ -66,6 +66,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const [capsState, setCapsState] = useState<Record<string, boolean>>({});
   // Mémorise l'état précédent des capacités pour détecter les activations externes
   const prevCapsRef = useRef<Record<string, boolean>>({});
+  const lastNodeIdRef = useRef<string | null>(null);
+  const defaultAppearanceAppliedRef = useRef<string | null>(null);
+  const panelStateOpenCapabilities = panelState.openCapabilities;
 
   // Cleanup au démontage
   useEffect(() => {
@@ -78,12 +81,19 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   // Hydratation à la sélection
   useEffect(() => {
     if (!selectedNode) return;
+
+    const isNewNode = lastNodeIdRef.current !== selectedNode.id;
+    lastNodeIdRef.current = selectedNode.id;
+
     setLabel(selectedNode.label || '');
     setDescription(selectedNode.description || '');
     setIsRequired(!!selectedNode.isRequired);
     setIsVisible(selectedNode.isVisible !== false);
-    // Fermer le panneau d'apparence lors du changement de nœud
-    setAppearanceOpen(false);
+
+    if (isNewNode) {
+      setAppearanceOpen(false);
+    }
+
     // Repliable supprimé: on ignore metadata.collapsible
     const nodeType = registry.getNodeType(selectedNode.type);
     const ft = (selectedNode.subType as string | undefined)
@@ -92,8 +102,16 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     setFieldType(ft);
     
     // Initialiser l'apparence par défaut si elle n'existe pas et que c'est un champ
-    if (ft && !selectedNode.appearanceConfig && selectedNode.type !== 'branch' && selectedNode.type !== 'section') {
-      const defaultAppearance = TreeBranchLeafRegistry.getDefaultAppearanceConfig(ft);
+    const shouldApplyDefaultAppearance = Boolean(
+      ft &&
+      !selectedNode.appearanceConfig &&
+      selectedNode.type !== 'branch' &&
+      selectedNode.type !== 'section'
+    );
+
+    if (shouldApplyDefaultAppearance && defaultAppearanceAppliedRef.current !== selectedNode.id) {
+      defaultAppearanceAppliedRef.current = selectedNode.id;
+      const defaultAppearance = TreeBranchLeafRegistry.getDefaultAppearanceConfig(ft!);
       const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(defaultAppearance);
       
       // Mettre à jour le nœud avec l'apparence par défaut
@@ -102,6 +120,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         ...tblMapping
       });
     }
+    if (!shouldApplyDefaultAppearance && defaultAppearanceAppliedRef.current === selectedNode.id) {
+      defaultAppearanceAppliedRef.current = null;
+    }
+
     // 🔧 FIX: Détecter si des conditions existent via l'API et hasCondition
     // Note: Les conditions sont maintenant dans une table séparée, pas dans conditionConfig
     const conditionActive = !!selectedNode.hasCondition;
@@ -115,24 +137,30 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       link: !!selectedNode.hasLink,
       markers: !!selectedNode.hasMarkers
     });
-    // Initialiser les panneaux ouverts SEULEMENT au premier chargement du node
-    if (selectedNode) {
-      setOpenCaps(new Set<string>(Array.from(panelState.openCapabilities || [])));
+
+    if (isNewNode) {
+      setOpenCaps(new Set<string>(Array.from(panelStateOpenCapabilities || [])));
     }
-  }, [selectedNode?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- Volontairement limité à l'ID pour éviter les re-synchronisations intempestives
+  }, [selectedNode, registry, panelStateOpenCapabilities, patchNode]);
   
+  const selectedNodeId = selectedNode?.id;
+
   // Auto-focus sur le libellé pour édition rapide
   useEffect(() => {
-    if (selectedNode) {
-      setTimeout(() => {
-        try {
-          labelInputRef.current?.focus?.({ cursor: 'end' });
-        } catch {
-          // noop
-        }
-      }, 50);
-    }
-  }, [selectedNode?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- Seulement au changement de node
+    if (!selectedNodeId) return;
+
+    const timeoutId = window.setTimeout(() => {
+      try {
+        labelInputRef.current?.focus?.({ cursor: 'end' });
+      } catch {
+        // noop
+      }
+    }, 50);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [selectedNodeId]);
 
   // Suivi des changements d'état pour diagnostic, sans auto-ouverture
   useEffect(() => {
