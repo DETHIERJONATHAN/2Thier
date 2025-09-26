@@ -129,13 +129,14 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
 
   const setField = useCallback(<K extends keyof LinkConfigValue>(key: K, value: LinkConfigValue[K]) => {
     setConfig(prev => {
-      const next = { ...prev, [key]: value };
+      const next: LinkConfigValue = { ...prev, [key]: value };
       if (key === 'targetTreeId') {
         // Reset targetNodeId si l’arbre change
-        delete next.targetNodeId;
+        next.targetNodeId = undefined;
       }
       debouncedSave(next);
       return next;
+    });
   }, [debouncedSave]);
 
   const treeOptions = useMemo(() => trees.map(t => ({ value: t.id, label: t.name })), [trees]);
@@ -170,6 +171,7 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
           message.error('Impossible de supprimer le lien');
         }
       }
+    });
   }, [api, nodeId, onChange]);
 
   return (

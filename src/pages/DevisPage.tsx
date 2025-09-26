@@ -218,7 +218,6 @@ export default function DevisPage() {
   const lastUserEditRef = useRef<string | null>(null);
   // Ensemble des champs considérés comme récemment modifiés (inclut propagation prix)
   const recentUserFieldsRef = useRef<Set<string>>(new Set());
-  const latestValuesRef = useRef<Record<string, unknown>>({});
   useEffect(() => {
     latestValuesRef.current = { ...values };
   }, [values]);
