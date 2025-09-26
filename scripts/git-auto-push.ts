@@ -82,6 +82,7 @@ type ParsedArgs = {
   reason?: string;
   signoff: boolean;
   allowEmpty: boolean;
+  tagPrefix?: string;
 };
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -134,6 +135,18 @@ function parseArgs(argv: string[]): ParsedArgs {
       case "--allow-empty":
         parsed.allowEmpty = true;
         break;
+      case "--tag-prefix":
+      case "--tag": {
+        const value = args.shift();
+        if (!value) {
+          throw new Error("L'option --tag-prefix attend une valeur.");
+        }
+        parsed.tagPrefix = value;
+        break;
+      }
+      case "--snapshot-tag":
+        parsed.tagPrefix = parsed.tagPrefix ?? process.env.GIT_AUTO_TAG_PREFIX ?? "backup/";
+        break;
       default:
         if (token.startsWith("--")) {
           throw new Error(`Option inconnue : ${token}`);
@@ -153,15 +166,13 @@ function parseArgs(argv: string[]): ParsedArgs {
   return parsed;
 }
 
-function buildCommitMessage(parsed: ParsedArgs): string {
+function buildCommitMessage(parsed: ParsedArgs, timestampIso: string): string {
   if (parsed.message) return parsed.message;
   if (process.env.GIT_AUTO_MESSAGE) return String(process.env.GIT_AUTO_MESSAGE);
 
-  const now = new Date();
-  const iso = now.toISOString().replace(/[:]/g, "-");
   const reason = parsed.reason ?? process.env.GIT_AUTO_REASON;
   const suffix = reason ? ` (${reason})` : "";
-  return `Chore: sauvegarde automatique ${iso}${suffix}`;
+  return `Chore: sauvegarde automatique ${timestampIso}${suffix}`;
 }
 
 function log(step: string, detail?: string) {
@@ -271,11 +282,22 @@ function gitPush() {
   runGit(["push", process.env.GIT_AUTO_REMOTE ?? "origin"]);
 }
 
+function createSnapshotTag(prefix: string, timestamp: string) {
+  const sanitizedPrefix = prefix.endsWith("/") ? prefix : `${prefix}`;
+  const tagName = `${sanitizedPrefix}${timestamp}`;
+  log("tag", `Création du tag ${tagName}`);
+  runGit(["tag", "-a", tagName, "-m", `Snapshot ${timestamp}`]);
+  runGit(["push", process.env.GIT_AUTO_REMOTE ?? "origin", tagName]);
+}
+
 async function main() {
   try {
     const parsed = parseArgs(process.argv.slice(2));
     if (process.env.GIT_AUTO_SKIP_PULL?.toLowerCase() === "true" || process.env.GIT_AUTO_SKIP_PULL === "1") {
       parsed.pull = false;
+    }
+    if (!parsed.tagPrefix && process.env.GIT_AUTO_TAG_PREFIX) {
+      parsed.tagPrefix = process.env.GIT_AUTO_TAG_PREFIX;
     }
     const repoRoot = resolveRepoRoot();
     process.chdir(repoRoot);
@@ -290,15 +312,23 @@ async function main() {
     }
     gitAddAll();
 
-    const message = buildCommitMessage(parsed);
+  const now = new Date();
+  const timestampIso = now.toISOString().replace(/[:]/g, "-");
+  const message = buildCommitMessage(parsed, timestampIso);
     const committed = gitCommit(message, parsed.allowEmpty, parsed.signoff);
 
     const aheadAfterCommit = hasAheadCommits();
 
     if (parsed.push && (committed !== false || aheadAfterCommit)) {
       gitPush();
+      if (parsed.tagPrefix) {
+        createSnapshotTag(parsed.tagPrefix, timestampIso);
+      }
     } else if (parsed.push) {
       log("push", "Aucun nouveau commit, push ignoré");
+      if (parsed.tagPrefix) {
+        log("tag", "Tag ignoré car aucun push n'a été effectué");
+      }
     }
 
     log("done", "Workflow terminé avec succès");
