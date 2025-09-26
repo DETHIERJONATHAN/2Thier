@@ -48,8 +48,8 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // 🔧 CORRECTION: Augmenter limite fichiers lourds
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB au lieu de 2MB
+  // 🔧 CORRECTION: Augmenter limite fichiers lourds (assets ~13MB)
+  maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB au lieu de 2MB
         
         // Cache strategy agressif
         runtimeCaching: [

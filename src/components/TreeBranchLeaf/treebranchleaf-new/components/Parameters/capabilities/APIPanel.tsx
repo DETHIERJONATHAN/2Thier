@@ -129,7 +129,8 @@ const APIPanel: React.FC<APIPanelProps> = ({ treeId, nodeId, value, onChange, re
         } catch {
           message.error('Impossible de supprimer la configuration API');
         }
-      }
+      },
+    });
   }, [api, nodeId, onChange, value, treeId, activeId, instances]);
 
   return (

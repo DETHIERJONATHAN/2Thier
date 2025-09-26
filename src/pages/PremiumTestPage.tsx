@@ -15,7 +15,6 @@ import {
   Progress,
   Statistic,
   Alert,
-  Tooltip,
   Avatar
 } from 'antd';
 import { 
@@ -230,8 +229,8 @@ const PremiumTestPage: React.FC = () => {
             <Statistic
               title="Revenue"
               value={24567}
-              prefix="€"
               prefix={<CrownOutlined />}
+              suffix="€"
               valueStyle={{ color: '#fadb14', fontWeight: 'bold' }}
             />
           </Card>
