@@ -35,6 +35,46 @@ function resolveRepoRoot(): string {
   return resolved;
 }
 
+function getCurrentBranch(): string {
+  const { stdout } = runGit(["rev-parse", "--abbrev-ref", "HEAD"], { capture: true });
+  const branch = stdout.trim();
+  if (!branch) {
+    throw new Error("Impossible de déterminer la branche courante.");
+  }
+  return branch;
+}
+
+function getUpstreamRef(): string | null {
+  try {
+    const { stdout } = runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], {
+      capture: true,
+    });
+    const upstream = stdout.trim();
+    return upstream || null;
+  } catch {
+    return null;
+  }
+}
+
+function hasAheadCommits(): boolean {
+  if (!hasRemote()) return false;
+  const upstream = getUpstreamRef();
+  if (!upstream) return false;
+  try {
+    const { stdout } = runGit([
+      "rev-list",
+      "--left-right",
+      "--count",
+      `HEAD...${upstream}`,
+    ], { capture: true });
+    const [aheadStr] = stdout.trim().split(/\s+/);
+    const ahead = Number(aheadStr || 0);
+    return Number.isFinite(ahead) && ahead > 0;
+  } catch {
+    return false;
+  }
+}
+
 type ParsedArgs = {
   push: boolean;
   pull: boolean;
@@ -155,11 +195,7 @@ function hasBranchUpstream(): boolean {
 
 function ensureUpstream() {
   if (hasBranchUpstream()) return;
-  const { stdout } = runGit(["rev-parse", "--abbrev-ref", "HEAD"], { capture: true });
-  const branch = stdout.trim();
-  if (!branch) {
-    throw new Error("Impossible de déterminer la branche courante.");
-  }
+  const branch = getCurrentBranch();
   const remote = process.env.GIT_AUTO_REMOTE ?? "origin";
   log("upstream", `Aucun suivi détecté, création vers ${remote}/${branch}`);
   runGit(["push", "-u", remote, branch]);
@@ -257,7 +293,9 @@ async function main() {
     const message = buildCommitMessage(parsed);
     const committed = gitCommit(message, parsed.allowEmpty, parsed.signoff);
 
-    if (parsed.push && committed !== false) {
+    const aheadAfterCommit = hasAheadCommits();
+
+    if (parsed.push && (committed !== false || aheadAfterCommit)) {
       gitPush();
     } else if (parsed.push) {
       log("push", "Aucun nouveau commit, push ignoré");
