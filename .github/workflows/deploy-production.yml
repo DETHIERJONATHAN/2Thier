@@ -1,4 +1,4 @@
-name: Deploy production
+name: Deploy CRM to Google Cloud Run
 
 on:
   push:
@@ -7,22 +7,30 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  deployments: write
+  id-token: write
 
 concurrency:
-  group: production
+  group: cloud-run-production
   cancel-in-progress: false
 
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  SERVICE_NAME: ${{ secrets.CLOUD_RUN_SERVICE }}
+  ARTIFACT_REGISTRY_LOCATION: ${{ secrets.ARTIFACT_REGISTRY_LOCATION }}
+  ARTIFACT_REGISTRY_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
+  CLOUD_SQL_INSTANCE: ${{ secrets.CLOUD_SQL_INSTANCE }}
+  CLOUD_SQL_DB: ${{ secrets.CLOUD_SQL_DB }}
+  SERVICE_ACCOUNT_EMAIL: ${{ vars.CLOUD_RUN_SERVICE_ACCOUNT || 'github-cloud-run@thiernew.iam.gserviceaccount.com' }}
+  PRISMA_JOB_NAME: ${{ vars.CLOUD_RUN_JOB || 'crm-prisma-migrate' }}
+  IMAGE_NAME: crm-backend
+
 jobs:
-  deploy:
-    name: Build & Deploy
+  build-test-deploy:
+    name: Build, Test & Deploy
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ secrets.PRODUCTION_APP_URL }}
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -34,71 +42,153 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma client
-        run: npx prisma generate
-
-      - name: Lint
+      - name: Lint sources
         run: npm run lint
 
-      - name: Test
-        run: npm run test
-
-      - name: Build
+      - name: Build frontend bundle (sanity check)
         run: npm run build
 
-      - name: Apply Prisma migrations (production)
-        env:
-          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-        run: npx prisma migrate deploy --schema prisma/schema.prisma
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
         with:
-          images: ghcr.io/${{ github.repository }}/crm
+          project_id: ${{ env.PROJECT_ID }}
+          install_components: beta
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Capture primary image tag
-        id: image-tag
+      - name: Prepare image coordinates
+        id: image
         run: |
-          echo "tag=$(echo '${{ steps.meta.outputs.tags }}' | tr ',' '\n' | head -n 1)" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
 
-      - name: Deploy container over SSH
-        if: ${{ secrets.PRODUCTION_SSH_HOST != '' }}
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          COMPOSE_FILE_PATH: ${{ secrets.PRODUCTION_COMPOSE_FILE }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-        with:
-          host: ${{ secrets.PRODUCTION_SSH_HOST }}
-          username: ${{ secrets.PRODUCTION_SSH_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          port: ${{ secrets.PRODUCTION_SSH_PORT || 22 }}
-          script: |
-            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
-            FILE=${COMPOSE_FILE_PATH:-docker-compose.yml}
-            if [ -n "$IMAGE_TAG" ]; then
-              if grep -q '^GHCR_IMAGE=' .env.production 2>/dev/null; then
-                sed -i "s|^GHCR_IMAGE=.*|GHCR_IMAGE=$IMAGE_TAG|g" .env.production
+          if [[ -z "${PROJECT_ID}" || -z "${ARTIFACT_REGISTRY_LOCATION}" || -z "${ARTIFACT_REGISTRY_REPO}" ]]; then
+            echo "Variables PROJECT_ID, ARTIFACT_REGISTRY_LOCATION ou ARTIFACT_REGISTRY_REPO manquantes" >&2
+            exit 1
+          fi
+
+          HOST="${ARTIFACT_REGISTRY_LOCATION}-docker.pkg.dev"
+          IMAGE_PATH="$HOST/${PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}"
+          TAG="$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
+
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE_PATH:$TAG" >> "$GITHUB_OUTPUT"
+          echo "image_path=$IMAGE_PATH" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Artifact Registry auth
+        run: gcloud auth configure-docker ${{ steps.image.outputs.host }}
+
+      - name: Build container with Cloud Build
+        id: build-image
+        run: |
+          set -euo pipefail
+          gcloud builds submit \
+            --project "$PROJECT_ID" \
+            --tag "${{ steps.image.outputs.image }}"
+
+      - name: Ensure Prisma migrate job
+        run: |
+          set -euo pipefail
+
+          IMAGE="${{ steps.image.outputs.image }}"
+          JOB_NAME="$PRISMA_JOB_NAME"
+
+          declare -a COMMON_FLAGS
+          COMMON_FLAGS+=("--set-secrets" "DATABASE_URL=DATABASE_URL:latest")
+
+          if [[ -n "$CLOUD_SQL_INSTANCE" ]]; then
+            COMMON_FLAGS+=("--add-cloudsql-instances" "$CLOUD_SQL_INSTANCE")
+          fi
+          if [[ -n "$SERVICE_ACCOUNT_EMAIL" ]]; then
+            COMMON_FLAGS+=("--service-account" "$SERVICE_ACCOUNT_EMAIL")
+          fi
+
+          if ! gcloud run jobs describe "$JOB_NAME" --project "$PROJECT_ID" --region "$REGION" >/dev/null 2>&1; then
+            gcloud run jobs create "$JOB_NAME" \
+              --image "$IMAGE" \
+              --project "$PROJECT_ID" \
+              --region "$REGION" \
+              "${COMMON_FLAGS[@]}" \
+              --max-retries 1 \
+              --command npx \
+              --args prisma,migrate,deploy
+          fi
+
+          gcloud run jobs update "$JOB_NAME" \
+            --image "$IMAGE" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            "${COMMON_FLAGS[@]}" \
+            --command npx \
+            --args prisma,migrate,deploy
+
+      - name: Run Prisma migrations
+        run: |
+          set -euo pipefail
+          gcloud run jobs execute "$PRISMA_JOB_NAME" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --wait
+
+      - name: Deploy Cloud Run service
+        run: |
+          set -euo pipefail
+
+          IMAGE="${{ steps.image.outputs.image }}"
+          ENV_VARS=""
+          SECRET_MAPPINGS=""
+
+          append_env_var() {
+            local key="$1"
+            local value="$2"
+            if [[ -n "$value" ]]; then
+              if [[ -n "$ENV_VARS" ]]; then
+                ENV_VARS+=",$key=$value"
               else
-                echo "GHCR_IMAGE=$IMAGE_TAG" >> .env.production
+                ENV_VARS="$key=$value"
               fi
             fi
-            docker compose -f "$FILE" pull
-            docker compose -f "$FILE" up -d --remove-orphans
-            docker image prune -f
+          }
+
+          append_env_var "PORT" "${{ secrets.PORT }}"
+          append_env_var "NODE_ENV" "${{ secrets.NODE_ENV }}"
+          append_env_var "FRONTEND_URL" "${{ secrets.FRONTEND_URL }}"
+          append_env_var "BACKEND_URL" "${{ secrets.BACKEND_URL }}"
+
+          SECRET_MAPPINGS="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,SUPERADMIN_EMAIL=SUPERADMIN_EMAIL:latest,SUPERADMIN_PASSWORD=SUPERADMIN_PASSWORD:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GOOGLE_REDIRECT_URI=GOOGLE_REDIRECT_URI:latest,GOOGLE_ADS_CLIENT_ID=GOOGLE_ADS_CLIENT_ID:latest,GOOGLE_ADS_CLIENT_SECRET=GOOGLE_ADS_CLIENT_SECRET:latest,GOOGLE_ADS_DEVELOPER_TOKEN=GOOGLE_ADS_DEVELOPER_TOKEN:latest,GOOGLE_ADS_REDIRECT_URI=GOOGLE_ADS_REDIRECT_URI:latest,GOOGLE_ADS_LOGIN_CUSTOMER_ID=GOOGLE_ADS_LOGIN_CUSTOMER_ID:latest,GOOGLE_ADS_MANAGER_CUSTOMER_ID=GOOGLE_ADS_MANAGER_CUSTOMER_ID:latest,GOOGLE_ADS_LIST_SEND_LOGIN_CUSTOMER=GOOGLE_ADS_LIST_SEND_LOGIN_CUSTOMER:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,VERTEX_AI_LOCATION=VERTEX_AI_LOCATION:latest,GEMINI_MODEL=GEMINI_MODEL:latest,TELNYX_API_KEY=TELNYX_API_KEY:latest,META_APP_ID=META_APP_ID:latest,META_APP_SECRET=META_APP_SECRET:latest,META_REDIRECT_URI=META_REDIRECT_URI:latest,SUPERADMIN_CODE=SUPERADMIN_CODE:latest,REACT_APP_GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest,VITE_GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest"
+
+          declare -a DEPLOY_FLAGS
+          DEPLOY_FLAGS+=("--project" "$PROJECT_ID")
+          DEPLOY_FLAGS+=("--region" "$REGION")
+          DEPLOY_FLAGS+=("--image" "$IMAGE")
+          DEPLOY_FLAGS+=("--platform" "managed")
+          DEPLOY_FLAGS+=("--allow-unauthenticated")
+          DEPLOY_FLAGS+=("--port" "8080")
+
+          if [[ -n "$CLOUD_SQL_INSTANCE" ]]; then
+            DEPLOY_FLAGS+=("--add-cloudsql-instances" "$CLOUD_SQL_INSTANCE")
+          fi
+          if [[ -n "$ENV_VARS" ]]; then
+            DEPLOY_FLAGS+=("--set-env-vars" "$ENV_VARS")
+          fi
+          if [[ -n "$SECRET_MAPPINGS" ]]; then
+            DEPLOY_FLAGS+=("--set-secrets" "$SECRET_MAPPINGS")
+          fi
+          if [[ -n "$SERVICE_ACCOUNT_EMAIL" ]]; then
+            DEPLOY_FLAGS+=("--service-account" "$SERVICE_ACCOUNT_EMAIL")
+          fi
+
+          gcloud run deploy "$SERVICE_NAME" "${DEPLOY_FLAGS[@]}"
+
+          SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format "value(status.url)")
+          {
+            echo "### ✅ Déploiement Cloud Run"
+            echo "- Service : $SERVICE_NAME"
+            echo "- Région : $REGION"
+            echo "- Image  : $IMAGE"
+            echo "- URL    : ${SERVICE_URL:-inconnue}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
