@@ -2,6 +2,7 @@ Param(
   [string]$Project,
   [string]$Region = "europe-west1",
   [string]$Repo = "crm", # Nom réel du repository Artifact Registry détecté
+  [string]$Service = "crm-backend",
   [switch]$SkipBuild,
   [switch]$VerboseLogs,
   [switch]$AutoCreateRepo
@@ -22,7 +23,18 @@ Param(
   - Suppose qu'un repository Artifact Registry ($Repo) existe dans la région.
 #>
 
-if (-not $Project) { Write-Error "Paramètre -Project requis"; exit 1 }
+if (-not $Project) {
+  $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot ".." )).Path
+  $projectFile = Join-Path $repoRoot "current_project.txt"
+  if (Test-Path $projectFile) {
+    $Project = (Get-Content $projectFile | Select-Object -First 1).Trim()
+  }
+  if (-not $Project -and $env:GCP_PROJECT) {
+    $Project = $env:GCP_PROJECT
+  }
+}
+
+if (-not $Project) { Write-Error "Paramètre -Project requis (aucun défaut trouvé dans current_project.txt ni GCP_PROJECT)"; exit 1 }
 
 function Fail($msg, $code=1) {
   Write-Error $msg
@@ -32,6 +44,7 @@ function Fail($msg, $code=1) {
 Write-Host "[INFO] Projet: $Project" -ForegroundColor Cyan
 Write-Host "[INFO] Région: $Region" -ForegroundColor Cyan
 Write-Host "[INFO] Repo   : $Repo" -ForegroundColor Cyan
+Write-Host "[INFO] Service: $Service" -ForegroundColor Cyan
 
 # Vérifier config gcloud
 $currentProject = (gcloud config get-value core/project 2>$null)
@@ -100,7 +113,7 @@ if (-not $SkipBuild) {
 Write-Host "[DEPLOY] Déploiement Cloud Run..." -ForegroundColor Green
 
 $deployCmd = @(
-  'run','deploy','crm-backend',
+  'run','deploy',$Service,
   '--image', $fullImage,
   '--region', $Region,
   '--platform','managed',
@@ -117,7 +130,7 @@ Write-Host "[SUCCESS] Nouvelle révision déployée." -ForegroundColor Green
 Write-Host "[INFO] Image: $fullImage" -ForegroundColor Cyan
 
 Write-Host "[CHECK] Récupération URL..." -ForegroundColor Magenta
-$serviceUrl = (gcloud run services describe crm-backend --region $Region --format='value(status.url)')
+$serviceUrl = (gcloud run services describe $Service --region $Region --format='value(status.url)')
 Write-Host "[URL] Service: $serviceUrl" -ForegroundColor Green
 
 Write-Host "[TEST] Endpoint /api/root-info" -ForegroundColor Magenta
