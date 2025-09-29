@@ -97,7 +97,7 @@ jobs:
           JOB_NAME="$PRISMA_JOB_NAME"
 
           declare -a COMMON_FLAGS
-          COMMON_FLAGS+=("--set-secrets" "DATABASE_URL=DATABASE_URL:latest")
+          COMMON_FLAGS+=("--set-secrets" "PGPASSWORD=PGPASSWORD:latest")
 
           if [[ -n "$CLOUD_SQL_INSTANCE" ]]; then
             COMMON_FLAGS+=("--add-cloudsql-instances" "$CLOUD_SQL_INSTANCE")
