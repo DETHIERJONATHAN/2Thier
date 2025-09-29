@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NotificationManager } from './Notifications';
 import DirectAddLeadModal from './DirectAddLeadModal';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 interface Lead {
   id: string;
@@ -26,6 +27,7 @@ export default function DirectLeadsList({ organizationId }: DirectLeadsListProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const { api } = useAuthenticatedApi();
 
   // Fonction pour récupérer les leads via notre route directe
   const fetchLeads = async () => {
@@ -36,21 +38,18 @@ export default function DirectLeadsList({ organizationId }: DirectLeadsListProps
       // Utiliser notre méthode directe pour récupérer les leads
       // Noter que cette fonctionnalité n'est pas encore implémentée côté serveur
       // Il faudra créer une nouvelle route API pour cela
-      const response = await fetch(`http://localhost:4000/api/direct/get-leads-direct?organizationId=${organizationId}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
+      const data = await api.get<Lead[]>(`/api/direct/get-leads-direct`, {
+        params: { organizationId },
+        showErrors: true,
+        suppressErrorLogForStatuses: [404] // 404 toléré si pas encore implémenté
       });
-
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
+      if (Array.isArray(data)) {
+        console.log('Leads récupérés (API hook)', data.length);
+        setLeads(data);
+      } else if (data === null) {
+        // suppress error scenario
+        setLeads([]);
       }
-
-      const data = await response.json();
-      console.log('Leads récupérés avec succès via route directe:', data);
-      setLeads(data);
     } catch (err: any) {
       console.error('Erreur lors de la récupération des leads:', err);
       setError(err.message || 'Erreur lors de la récupération des leads');

@@ -110,7 +110,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
           adminEmail: response.data.adminEmail || '',
           clientId: response.data.clientId || '',
           clientSecret: response.data.clientSecret || '',
-          redirectUri: response.data.redirectUri || 'http://localhost:4000/api/auth/google/callback',
+          redirectUri: response.data.redirectUri || (import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || window.location.origin) + '/api/auth/google/callback',
           serviceAccountEmail: response.data.serviceAccountEmail || '',
           privateKey: response.data.privateKey || '',
           isActive: response.data.isActive || response.data.enabled || false
@@ -124,7 +124,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         // Définir les valeurs par défaut si pas de config
         form.setFieldsValue({
           domain: '2thier.be',
-          redirectUri: 'http://localhost:4000/api/auth/google/callback',
+          redirectUri: (import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || window.location.origin) + '/api/auth/google/callback',
           isActive: false
         });
       }
@@ -686,7 +686,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         onFinish={handleSave}
         initialValues={{
           domain: '2thier.be',
-          redirectUri: 'http://localhost:4000/api/auth/google/callback',
+          redirectUri: (import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || window.location.origin) + '/api/auth/google/callback',
           isActive: false
         }}
       >
@@ -739,7 +739,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
           help="Cette URI doit être ajoutée dans la console Google Cloud"
         >
           <Input 
-            placeholder="http://localhost:4000/api/auth/google/callback"
+            placeholder={(import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'https://api.2thier.com') + '/api/auth/google/callback'}
           />
         </Form.Item>
 

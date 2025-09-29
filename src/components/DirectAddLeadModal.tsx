@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NotificationManager } from './Notifications';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 interface DirectAddLeadModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface DirectAddLeadModalProps {
 // sans passer par l'API, pour contourner l'erreur 500
 export default function DirectAddLeadModal({ isOpen, onClose, onLeadAdded, organizationId }: DirectAddLeadModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // 🔄 Utilisation du hook centralisé pour éviter tout hardcode de http://localhost:4000
+  const { api } = useAuthenticatedApi();
 
   if (!isOpen) return null;
 
@@ -31,36 +34,20 @@ export default function DirectAddLeadModal({ isOpen, onClose, onLeadAdded, organ
     const status = formData.get('status') as string;
 
     try {
-      console.log('Envoi des données au serveur via route directe:', {
-        status: status,
-        data: leadData,
-        organizationId
-      });
+      console.log('[DirectAddLeadModal] Envoi des données via API hook /api/direct/add-lead-direct', { status, leadData, organizationId });
 
-      // Effectuer une requête à notre nouvelle route API directe avec URL absolue
-      console.log('Envoi vers URL absolue http://localhost:4000/api/direct/add-lead-direct');
-      const response = await fetch('http://localhost:4000/api/direct/add-lead-direct', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          status: status,
+      // Utilise l'API authentifiée (ajoute cookies + organisation + gestion centralisée baseUrl)
+      const data = await api.post<{ success?: boolean; id?: string; error?: string }>(
+        '/api/direct/add-lead-direct',
+        {
+          status,
           data: leadData,
-          organizationId: organizationId
-        }),
-      });
+          organizationId
+        },
+        { showErrors: true }
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || `Erreur ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Lead créé avec succès via la route directe:', data);
+      console.log('Lead créé avec succès via API hook:', data);
       NotificationManager.success("Lead ajouté avec succès !");
       onLeadAdded();
       onClose();
