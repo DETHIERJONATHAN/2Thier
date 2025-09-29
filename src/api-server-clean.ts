@@ -251,5 +251,11 @@ app.listen(port, () => {
   console.log(`   - Google Auth: http://localhost:${port}/api/auto-google-auth/connect`);
 });
 
-export { app };a p p . g e t ( " / h e a l t h " ,   ( r e q ,   r e s )   = >   {   r e s . j s o n ( {   s t a t u s :   " O K " ,   t i m e s t a m p :   n e w   D a t e ( ) . t o I S O S t r i n g ( )   } ) ;   } ) ;  
- 
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+export { app };
