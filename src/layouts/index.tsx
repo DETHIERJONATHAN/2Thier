@@ -29,7 +29,7 @@ const AgendaWrapper = React.lazy(() => import('../pages/AgendaWrapper'));
 const DevisPage = React.lazy(() => import('../pages/DevisPage'));
 
 // Pages Google Workspace
-const GoogleMailPageFixed = React.lazy(() => import('../pages/GoogleMailPageFixed'));
+const GoogleMailPageFixed = React.lazy(() => import('../pages/GoogleMailPageFixed_New'));
 const GoogleAgendaPage = React.lazy(() => import('../pages/GoogleAgendaPage'));
 const GoogleContactsPage = React.lazy(() => import('../pages/GoogleContactsPage'));
 
@@ -58,7 +58,7 @@ export const AppLayout: React.FC = () => {
     loading
   } = useAuth();
 
-  const { sidebarOpen } = useSidebar(); // Utilisé dans le template
+  const { sidebarOpen: _sidebarOpen } = useSidebar(); // Utilisé dans le template
 
   // Organisation des modules en sections
   const sections = useSharedSections();

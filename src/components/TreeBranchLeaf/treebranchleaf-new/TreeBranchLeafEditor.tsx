@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Row, Col, Layout, Card, Spin, Switch, Space, Tooltip } from 'antd';
+import { Row, Col, Layout, Card, Spin, Switch, Space, Tooltip, Segmented, Grid } from 'antd';
 import { DndContext } from '@dnd-kit/core';
 
 // Composants
@@ -71,6 +71,9 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   const selectedTree = selectedTreeProp || (trees && trees.length > 0 ? trees[0] : null);
   // Hook pour l'API authentifiée
   const { api } = useAuthenticatedApi();
+  const screens = Grid.useBreakpoint();
+  const isDesktop = screens.lg ?? false;
+  const isMobile = !(screens.md ?? false);
   // =============================================================================
   // 🎛️ STATE - État local
   // =============================================================================
@@ -94,6 +97,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       previewMode: false
     }
   });
+  const [activeMobileTab, setActiveMobileTab] = useState<string>('structure');
   // Ref pour accéder aux nœuds courants dans les callbacks sans dépendre de propNodes
   const nodesRef = useRef<TreeBranchLeafNode[]>(propNodes || []);
   useEffect(() => {
@@ -939,9 +943,147 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     });
   }, [propNodes]);
 
+  useEffect(() => {
+    if (!isDesktop && activeMobileTab === 'parameters' && uiState.panelState.previewMode) {
+      setActiveMobileTab('structure');
+    }
+  }, [isDesktop, activeMobileTab, uiState.panelState.previewMode]);
+
+  useEffect(() => {
+    if (!isDesktop && uiState.selectedNode && !uiState.panelState.previewMode && activeMobileTab === 'structure') {
+      setActiveMobileTab('parameters');
+    }
+  }, [isDesktop, uiState.selectedNode, uiState.panelState.previewMode, activeMobileTab]);
+
+  useEffect(() => {
+    if (isDesktop && activeMobileTab !== 'structure') {
+      setActiveMobileTab('structure');
+    }
+  }, [isDesktop, activeMobileTab]);
+
   // =============================================================================
   // 🎨 RENDER - Rendu
   // =============================================================================
+
+  const paletteCard = (
+    <Card
+      title="🎨 Palette"
+      size="small"
+      style={{ height: isDesktop ? '100%' : 'auto', marginBottom: isDesktop ? 0 : 16 }}
+      styles={{
+        body: {
+          padding: isDesktop ? '6px' : 12,
+          height: isDesktop ? 'calc(100% - 55px)' : 'auto',
+          overflow: isDesktop ? 'auto' : 'visible'
+        }
+      }}
+    >
+      <Palette
+        onItemCreate={handlePaletteItemCreate}
+        readOnly={readOnly}
+        registry={TreeBranchLeafRegistry}
+      />
+    </Card>
+  );
+
+  const structureCard = (
+    <Card
+      title={uiState.panelState.previewMode ? '👁️ Aperçu' : '🌲 Structure'}
+      size="small"
+      style={{ height: isDesktop ? '100%' : 'auto', marginBottom: isDesktop ? 0 : 16 }}
+      styles={{
+        body: {
+          padding: isDesktop ? '12px' : 12,
+          height: isDesktop ? 'calc(100% - 55px)' : 'auto',
+          overflow: uiState.panelState.previewMode ? 'auto' : (isDesktop ? 'hidden' : 'auto')
+        }
+      }}
+    >
+      {uiState.panelState.previewMode ? (
+        <SimplePreview nodes={propNodes || []} readOnly={readOnly} />
+      ) : (
+        <Structure
+          tree={selectedTree}
+          nodes={propNodes || []}
+          selectedNode={uiState.selectedNode}
+          expandedNodes={uiState.expandedNodes}
+          searchState={uiState.searchState}
+          dragState={uiState.dragState}
+          onSelectNode={handleSelectNode}
+          onToggleExpanded={handleToggleExpanded}
+          onSearch={handleSearch}
+          onNodeAction={updateNode}
+          onCapabilityToggle={handleCapabilityToggle}
+          readOnly={readOnly}
+          registry={TreeBranchLeafRegistry}
+          onEditNode={editNodeLabel}
+          onDuplicateNode={duplicateNode}
+          onDeleteNode={deleteNode}
+          onMoveUpNode={moveNodeUp}
+          onMoveDownNode={moveNodeDown}
+          onToggleNodeVisibility={toggleNodeVisibility}
+          onOpenNodeSettings={openNodeSettings}
+          onMoveNodeToRoot={moveNodeToRoot}
+        />
+      )}
+    </Card>
+  );
+
+  const parametersPanel = uiState.panelState.previewMode ? null : (
+    <div
+      style={{
+        height: isDesktop ? '100%' : 'auto',
+        marginBottom: isDesktop ? 0 : 16,
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <Parameters
+          tree={selectedTree}
+          selectedNode={uiState.selectedNode}
+          panelState={uiState.panelState}
+          onNodeUpdate={updateNode}
+          onCapabilityToggle={handleCapabilityToggle}
+          onCapabilityConfig={updateNode}
+          readOnly={readOnly}
+          registry={TreeBranchLeafRegistry}
+        />
+      </div>
+    </div>
+  );
+
+  const mobileSections: Array<{ key: string; label: string; content: React.ReactNode }> = [
+    {
+      key: 'structure',
+      label: uiState.panelState.previewMode ? 'Aperçu' : 'Structure',
+      content: structureCard
+    },
+    {
+      key: 'palette',
+      label: 'Palette',
+      content: paletteCard
+    }
+  ];
+
+  if (parametersPanel) {
+    mobileSections.push({
+      key: 'parameters',
+      label: 'Paramètres',
+      content: parametersPanel
+    });
+  }
+
+  const availableMobileKeys = mobileSections.map(section => section.key);
+  const derivedMobileActiveKey = availableMobileKeys.includes(activeMobileTab)
+    ? activeMobileTab
+    : (availableMobileKeys[0] ?? 'structure');
+
+  useEffect(() => {
+    if (derivedMobileActiveKey !== activeMobileTab) {
+      setActiveMobileTab(derivedMobileActiveKey);
+    }
+  }, [derivedMobileActiveKey, activeMobileTab]);
 
   if (loading) {
     return (
@@ -983,19 +1125,39 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         
         
         {/* �🎛️ GESTIONNAIRE D'ARBRES - En haut */}
-        <Layout.Header style={{ background: 'white', padding: '0 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <TreeManager
-            tree={selectedTree}
-            trees={trees}
-            organizationId={selectedTree?.organizationId || (typeof window.__CURRENT_ORG_ID === 'string' ? window.__CURRENT_ORG_ID : '')}
-            readOnly={readOnly}
-            onAction={handleTreeAction}
-            onTreeSelect={(tree) => {
-              // Gestionnaire pour la sélection d'un arbre depuis le TreeManager
-              onTreeChange(tree);
+        <Layout.Header
+          style={{
+            background: 'white',
+            padding: isMobile ? '0 12px' : '0 24px',
+            borderBottom: '1px solid #f0f0f0',
+            display: 'flex',
+            flexWrap: isMobile ? 'wrap' : 'nowrap',
+            alignItems: isMobile ? 'stretch' : 'center',
+            justifyContent: isMobile ? 'center' : 'space-between',
+            gap: isMobile ? 12 : 0
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TreeManager
+              tree={selectedTree}
+              trees={trees}
+              organizationId={selectedTree?.organizationId || (typeof window.__CURRENT_ORG_ID === 'string' ? window.__CURRENT_ORG_ID : '')}
+              readOnly={readOnly}
+              onAction={handleTreeAction}
+              onTreeSelect={(tree) => {
+                // Gestionnaire pour la sélection d'un arbre depuis le TreeManager
+                onTreeChange(tree);
+              }}
+            />
+          </div>
+          <Space
+            size={isMobile ? 8 : 12}
+            wrap
+            style={{
+              alignSelf: isMobile ? 'flex-end' : 'center',
+              flexShrink: 0
             }}
-          />
-          <Space>
+          >
             <Tooltip title="Aperçu simple du formulaire">
               <span style={{ fontSize: 12, color: '#888' }}>Aperçu</span>
             </Tooltip>
@@ -1010,82 +1172,38 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         </Layout.Header>
 
         {/* 🏗️ CONTENU PRINCIPAL - 3 colonnes */}
-        <Content style={{ padding: '16px' }}>
-          <Row gutter={16} style={{ height: 'calc(100vh - 120px)' }} wrap={false}>
-            
-            {/* 🎨 PALETTE - Gauche (créer) */}
-            <Col flex="0 0 260px">
-              <Card 
-                title="🎨 Palette" 
-                size="small"
-                style={{ height: '100%' }}
-                styles={{ body: { padding: '6px', height: 'calc(100% - 55px)', overflow: 'auto' } }}
-              >
-                <Palette
-                  onItemCreate={handlePaletteItemCreate}
-                  readOnly={readOnly}
-                  registry={TreeBranchLeafRegistry}
-                />
-              </Card>
-            </Col>
-
-            {/* 🌲 STRUCTURE / 👁️ APERÇU - Milieu */}
-            <Col flex="1 1 0px">
-              {uiState.panelState.previewMode ? (
-                <SimplePreview nodes={propNodes || []} readOnly={readOnly} />
-              ) : (
-                <Card 
-                  title="🌲 Structure" 
-                  size="small"
-                  style={{ height: '100%' }}
-                  styles={{ body: { padding: '12px', height: 'calc(100% - 55px)', overflow: 'hidden' } }}
-                >
-                  <Structure
-                    tree={selectedTree}
-                    nodes={propNodes || []}
-                    selectedNode={uiState.selectedNode}
-                    expandedNodes={uiState.expandedNodes}
-                    searchState={uiState.searchState}
-                    dragState={uiState.dragState}
-                    onSelectNode={handleSelectNode}
-                    onToggleExpanded={handleToggleExpanded}
-                    onSearch={handleSearch}
-                    onNodeAction={updateNode}
-                    onCapabilityToggle={handleCapabilityToggle}
-                    readOnly={readOnly}
-                    registry={TreeBranchLeafRegistry}
-                    onEditNode={editNodeLabel}
-                    onDuplicateNode={duplicateNode}
-                    onDeleteNode={deleteNode}
-                    onMoveUpNode={moveNodeUp}
-                    onMoveDownNode={moveNodeDown}
-                    onToggleNodeVisibility={toggleNodeVisibility}
-                    onOpenNodeSettings={openNodeSettings}
-                    onMoveNodeToRoot={moveNodeToRoot}
-                  />
-                </Card>
-              )}
-            </Col>
-
-            {/* ⚙️ PARAMÈTRES - Droite (configurer) */}
-            {!uiState.panelState.previewMode && (
-              <Col flex="1 1 0px">
-                <div style={{ height: '100%' }}>
-                  <Parameters
-                    tree={selectedTree}
-                    selectedNode={uiState.selectedNode}
-                    panelState={uiState.panelState}
-                    onNodeUpdate={updateNode}
-                    onCapabilityToggle={handleCapabilityToggle}
-                    onCapabilityConfig={updateNode}
-                    readOnly={readOnly}
-                    registry={TreeBranchLeafRegistry}
-                  />
-                </div>
+        <Content style={{ padding: isMobile ? '12px' : '16px' }}>
+          {isDesktop ? (
+            <Row gutter={[16, 16]} style={{ height: 'calc(100vh - 120px)' }} wrap={false}>
+              <Col flex="0 0 280px" style={{ minWidth: 240 }}>
+                {paletteCard}
               </Col>
-            )}
-
-          </Row>
+              <Col flex="1 1 0px">
+                {structureCard}
+              </Col>
+              {parametersPanel && (
+                <Col flex="1 1 320px" style={{ minWidth: 280 }}>
+                  {parametersPanel}
+                </Col>
+              )}
+            </Row>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Segmented
+                options={mobileSections.map(section => ({
+                  label: section.label,
+                  value: section.key
+                }))}
+                block
+                size="small"
+                value={derivedMobileActiveKey}
+                onChange={(value) => setActiveMobileTab(String(value))}
+              />
+              <div>
+                {mobileSections.find(section => section.key === derivedMobileActiveKey)?.content}
+              </div>
+            </div>
+          )}
         </Content>
 
       </Layout>

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authRoutes from './authRoutes';
 import gmailRoutes from './gmailRoutes'; // Réactivé
 import miscRoutes from './misc';
+import profileRoutes from './profile';
 import modulesRoutes from './modules';
 import adminModulesRoutes from './admin-modules'; // 🎯 ROUTES ADMINISTRATION MODULES DYNAMIQUE
 import iconsRoutes from './icons'; // 🎨 ROUTES ICÔNES DYNAMIQUES
@@ -86,6 +87,10 @@ console.log('[ROUTER] Routes auto-google-auth montées sur /auto-google-auth');
 // Routes diverses (me, register, etc.)
 apiRouter.use('/', miscRoutes);
 console.log('[ROUTER] Routes diverses montées sur /');
+
+// Routes de profil utilisateur
+apiRouter.use('/profile', profileRoutes);
+console.log('[ROUTER] Routes profil montées sur /profile');
 
 // Route de déconnexion directe (attendue par le frontend)
 apiRouter.post('/logout', logout);

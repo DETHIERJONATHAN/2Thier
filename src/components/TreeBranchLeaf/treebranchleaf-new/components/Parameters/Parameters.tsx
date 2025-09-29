@@ -69,6 +69,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const lastNodeIdRef = useRef<string | null>(null);
   const defaultAppearanceAppliedRef = useRef<string | null>(null);
   const panelStateOpenCapabilities = panelState.openCapabilities;
+  const selectedNodeId = selectedNode?.id ?? null;
 
   // Cleanup au démontage
   useEffect(() => {
@@ -77,6 +78,38 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       mountedRef.current = false;
     };
   }, []);
+
+  // Sauvegarde debounced avec l'API optimisée
+  const patchNode = useDebouncedCallback(async (payload: Record<string, unknown>) => {
+    if (!selectedNodeId) return;
+    
+    console.log('🔄 [Parameters] Sauvegarde avec debounce:', {
+      nodeId: selectedNodeId,
+      payload: payload,
+      hasAppearanceConfig: !!payload.appearanceConfig
+    });
+    
+    try {
+      // 🔄 NOUVEAU : Flatten appearanceConfig vers metadata.appearance pour compatibilité API
+      const apiData = { ...payload };
+      if (payload.appearanceConfig) {
+        apiData.metadata = {
+          ...(apiData.metadata as Record<string, unknown> || {}),
+          appearance: payload.appearanceConfig
+        };
+        
+        console.log('🔄 [Parameters] Transformation appearanceConfig vers metadata.appearance:', {
+          original: payload.appearanceConfig,
+          metadata: apiData.metadata
+        });
+      }
+      
+      await onNodeUpdate({ ...apiData, id: selectedNodeId });
+      console.log('✅ [Parameters] Sauvegarde réussie');
+    } catch (error) {
+      console.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
+    }
+  }, [selectedNodeId, onNodeUpdate]);
 
   // Hydratation à la sélection
   useEffect(() => {
@@ -142,8 +175,6 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       setOpenCaps(new Set<string>(Array.from(panelStateOpenCapabilities || [])));
     }
   }, [selectedNode, registry, panelStateOpenCapabilities, patchNode]);
-  
-  const selectedNodeId = selectedNode?.id;
 
   // Auto-focus sur le libellé pour édition rapide
   useEffect(() => {
@@ -166,38 +197,6 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   useEffect(() => {
     prevCapsRef.current = { ...capsState };
   }, [capsState]);
-
-  // Sauvegarde debounced avec l'API optimisée
-  const patchNode = useDebouncedCallback(async (payload: Record<string, unknown>) => {
-    if (!selectedNode || !tree) return;
-    
-    console.log('🔄 [Parameters] Sauvegarde avec debounce:', {
-      nodeId: selectedNode.id,
-      payload: payload,
-      hasAppearanceConfig: !!payload.appearanceConfig
-    });
-    
-    try {
-      // 🔄 NOUVEAU : Flatten appearanceConfig vers metadata.appearance pour compatibilité API
-      const apiData = { ...payload };
-      if (payload.appearanceConfig) {
-        apiData.metadata = {
-          ...(apiData.metadata as Record<string, unknown> || {}),
-          appearance: payload.appearanceConfig
-        };
-        
-        console.log('🔄 [Parameters] Transformation appearanceConfig vers metadata.appearance:', {
-          original: payload.appearanceConfig,
-          metadata: apiData.metadata
-        });
-      }
-      
-      await onNodeUpdate({ ...apiData, id: selectedNode.id });
-      console.log('✅ [Parameters] Sauvegarde réussie');
-    } catch (error) {
-      console.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
-    }
-  }, [selectedNode, tree, onNodeUpdate]);
 
   // Gestionnaire de changement de label
   const handleLabelChange = useCallback((value: string) => {

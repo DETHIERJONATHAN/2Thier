@@ -28,10 +28,9 @@ const DevisPage = React.lazy(() => import('../pages/DevisPage'));
 
 // Pages TreeBranchLeaf (système 3 colonnes)
 const TreeBranchLeafLayoutV2 = React.lazy(() => import('../pages/Formulaire/TreeBranchLeafWrapper-Fixed'));
-const TreeBranchLeafListPage = React.lazy(() => import('../pages/Formulaire/TreeBranchLeafListPage'));
 
 // Pages Google Workspace
-const GoogleMailPageFixed = React.lazy(() => import('../pages/GoogleMailPageFixed'));
+const GoogleMailPageFixed = React.lazy(() => import('../pages/GoogleMailPageFixed_New'));
 const GoogleAgendaPage = React.lazy(() => import('../pages/GoogleAgendaPage'));
 const GoogleContactsPage = React.lazy(() => import('../pages/GoogleContactsPage'));
 

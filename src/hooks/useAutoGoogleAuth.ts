@@ -43,7 +43,7 @@ export const useAutoGoogleAuth = () => {
     }
 
     try {
-      const response = await api.get(`/auto-google-auth/status?userId=${user.id}&organizationId=${currentOrganization?.id || ''}`) as GoogleConnectionStatus;
+  const response = await api.get(`/api/auto-google-auth/status?userId=${user.id}&organizationId=${currentOrganization?.id || ''}`) as GoogleConnectionStatus;
       return response;
     } catch (error) {
       console.error('Erreur récupération statut Google:', error);

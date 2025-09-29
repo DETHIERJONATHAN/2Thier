@@ -5,6 +5,8 @@ dotenv.config();
 console.log('✅ [DEBUG] Dotenv chargé');
 
 import express, { type NextFunction, type Request, type Response } from 'express';
+import path from 'path';
+import fs from 'fs';
 console.log('✅ [DEBUG] Express importé');
 import cors from 'cors';
 console.log('✅ [DEBUG] CORS importé');
@@ -51,6 +53,16 @@ console.log('✅ [DEBUG] JSON parser configuré');
 console.log('🔧 [DEBUG] Configuration Cookie parser...');
 app.use(cookieParser());
 console.log('✅ [DEBUG] Cookie parser configuré');
+
+const publicDir = path.resolve(process.cwd(), 'public');
+const uploadsDir = path.join(publicDir, 'uploads');
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+app.use('/uploads', express.static(uploadsDir));
+console.log('✅ [DEBUG] Statics configurés');
 
 // Configuration de la session
 console.log('🔧 [DEBUG] Configuration sessions...');
