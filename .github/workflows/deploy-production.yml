@@ -153,12 +153,12 @@ jobs:
             fi
           }
 
-          append_env_var "PORT" "${{ secrets.PORT }}"
           append_env_var "NODE_ENV" "${{ secrets.NODE_ENV }}"
           append_env_var "FRONTEND_URL" "${{ secrets.FRONTEND_URL }}"
           append_env_var "BACKEND_URL" "${{ secrets.BACKEND_URL }}"
+          append_env_var "API_URL" "${{ secrets.BACKEND_URL }}"
 
-          SECRET_MAPPINGS="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,SUPERADMIN_EMAIL=SUPERADMIN_EMAIL:latest,SUPERADMIN_PASSWORD=SUPERADMIN_PASSWORD:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GOOGLE_REDIRECT_URI=GOOGLE_REDIRECT_URI:latest,GOOGLE_ADS_CLIENT_ID=GOOGLE_ADS_CLIENT_ID:latest,GOOGLE_ADS_CLIENT_SECRET=GOOGLE_ADS_CLIENT_SECRET:latest,GOOGLE_ADS_DEVELOPER_TOKEN=GOOGLE_ADS_DEVELOPER_TOKEN:latest,GOOGLE_ADS_REDIRECT_URI=GOOGLE_ADS_REDIRECT_URI:latest,GOOGLE_ADS_LOGIN_CUSTOMER_ID=GOOGLE_ADS_LOGIN_CUSTOMER_ID:latest,GOOGLE_ADS_MANAGER_CUSTOMER_ID=GOOGLE_ADS_MANAGER_CUSTOMER_ID:latest,GOOGLE_ADS_LIST_SEND_LOGIN_CUSTOMER=GOOGLE_ADS_LIST_SEND_LOGIN_CUSTOMER:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,VERTEX_AI_LOCATION=VERTEX_AI_LOCATION:latest,GEMINI_MODEL=GEMINI_MODEL:latest,TELNYX_API_KEY=TELNYX_API_KEY:latest,META_APP_ID=META_APP_ID:latest,META_APP_SECRET=META_APP_SECRET:latest,META_REDIRECT_URI=META_REDIRECT_URI:latest,SUPERADMIN_CODE=SUPERADMIN_CODE:latest,REACT_APP_GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest,VITE_GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest"
+          SECRET_MAPPINGS="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,SUPERADMIN_EMAIL=SUPERADMIN_EMAIL:latest,SUPERADMIN_PASSWORD=SUPERADMIN_PASSWORD:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GOOGLE_REDIRECT_URI=GOOGLE_REDIRECT_URI:latest,GOOGLE_ADS_CLIENT_ID=GOOGLE_ADS_CLIENT_ID:latest,GOOGLE_ADS_CLIENT_SECRET=GOOGLE_ADS_CLIENT_SECRET:latest,GOOGLE_ADS_DEVELOPER_TOKEN=GOOGLE_ADS_DEVELOPER_TOKEN:latest,GOOGLE_ADS_REDIRECT_URI=GOOGLE_ADS_REDIRECT_URI:latest,GOOGLE_ADS_LOGIN_CUSTOMER_ID=GOOGLE_ADS_LOGIN_CUSTOMER_ID:latest,GOOGLE_ADS_MANAGER_CUSTOMER_ID=GOOGLE_ADS_MANAGER_CUSTOMER_ID:latest,GOOGLE_ADS_LIST_SEND_LOGIN_CUSTOMER=GOOGLE_ADS_LIST_SEND_LOGIN_CUSTOMER:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,VERTEX_AI_LOCATION=VERTEX_AI_LOCATION:latest,GEMINI_MODEL=GEMINI_MODEL:latest,TELNYX_API_KEY=TELNYX_API_KEY:latest,META_APP_ID=META_APP_ID:latest,META_APP_SECRET=META_APP_SECRET:latest,META_REDIRECT_URI=META_REDIRECT_URI:latest,SUPERADMIN_CODE=SUPERADMIN_CODE:latest,REACT_APP_GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest,VITE_GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest"
 
           declare -a DEPLOY_FLAGS
           DEPLOY_FLAGS+=("--project" "$PROJECT_ID")
@@ -167,6 +167,10 @@ jobs:
           DEPLOY_FLAGS+=("--platform" "managed")
           DEPLOY_FLAGS+=("--allow-unauthenticated")
           DEPLOY_FLAGS+=("--port" "8080")
+          DEPLOY_FLAGS+=("--memory" "1Gi")
+          DEPLOY_FLAGS+=("--cpu" "1")
+          DEPLOY_FLAGS+=("--min-instances" "1")
+          DEPLOY_FLAGS+=("--max-instances" "10")
 
           if [[ -n "$CLOUD_SQL_INSTANCE" ]]; then
             DEPLOY_FLAGS+=("--add-cloudsql-instances" "$CLOUD_SQL_INSTANCE")
@@ -184,11 +188,24 @@ jobs:
           gcloud run deploy "$SERVICE_NAME" "${DEPLOY_FLAGS[@]}"
 
           SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format "value(status.url)")
+          
+          # Health check
+          echo "🔍 Test de santé du service..."
+          sleep 10
+          if curl -sf "${SERVICE_URL}/health" || curl -sf "${SERVICE_URL}/api/health" || curl -sf "${SERVICE_URL}/"; then
+            echo "✅ Service répond correctement"
+            HEALTH_STATUS="✅ OK"
+          else
+            echo "⚠️ Service ne répond pas aux endpoints de santé"
+            HEALTH_STATUS="⚠️ À vérifier"
+          fi
+          
           {
             echo "### ✅ Déploiement Cloud Run"
             echo "- Service : $SERVICE_NAME"
             echo "- Région : $REGION"
             echo "- Image  : $IMAGE"
             echo "- URL    : ${SERVICE_URL:-inconnue}"
+            echo "- Santé  : $HEALTH_STATUS"
           } >> "$GITHUB_STEP_SUMMARY"
 
