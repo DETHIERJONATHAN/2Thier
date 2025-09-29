@@ -47,7 +47,18 @@ export const AD_PLATFORMS: Record<string, AdPlatform> = {
     name: 'google_ads',
     displayName: 'Google Ads',
     icon: 'GoogleOutlined',
-    authUrl: 'http://localhost:4000/api/google-auth/callback',
+    // URL de callback dynamique (évite le hardcode localhost dans le bundle)
+    authUrl: ((): string => {
+      const env = (globalThis as any)?.process?.env || {};
+      const explicit = env.GOOGLE_ADS_REDIRECT || env.GOOGLE_REDIRECT_URI;
+      if (explicit) return explicit;
+      // Frontend build time variables (Vite)
+      const viteEnv: any = (import.meta as any)?.env || {};
+      const frontendBase = viteEnv.VITE_API_BASE_URL || viteEnv.API_URL || '';
+      if (frontendBase) return `${frontendBase.replace(/\/$/, '')}/api/google-auth/callback`;
+      if (typeof window !== 'undefined') return `${window.location.origin}/api/google-auth/callback`;
+      return '/api/google-auth/callback';
+    })(),
     scopes: [
       'https://www.googleapis.com/auth/adwords'
     ],

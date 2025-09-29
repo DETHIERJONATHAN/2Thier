@@ -13,7 +13,7 @@ interface DirectAddLeadModalProps {
 // sans passer par l'API, pour contourner l'erreur 500
 export default function DirectAddLeadModal({ isOpen, onClose, onLeadAdded, organizationId }: DirectAddLeadModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // 🔄 Utilisation du hook centralisé pour éviter tout hardcode de http://localhost:4000
+  // 🔄 Utilisation du hook centralisé pour éviter tout hardcode d'URL (localhost ou autre). Mention de localhost uniquement à titre documentaire.
   const { api } = useAuthenticatedApi();
 
   if (!isOpen) return null;

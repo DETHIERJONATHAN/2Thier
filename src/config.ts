@@ -12,7 +12,9 @@ export const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? 'prod_secret
 export const TOKEN_EXPIRY = isProduction ? '24h' : '8h';
 
 // Configuration API
-export const API_URL = process.env.API_URL || (isProduction ? 'https://api.crmpro.com' : 'http://localhost:4000');
+// Base API dynamique : on évite de figer 'http://localhost:4000' afin de ne pas le retrouver dans le bundle prod.
+// En dev, le hook useAuthenticatedApi gère déjà un fallback local si aucune variable n'est définie.
+export const API_URL = process.env.API_URL || (isProduction ? 'https://api.crmpro.com' : '');
 export const ENABLE_API_LOGS = !isProduction;
 
 // Fonctionnalités de développement
