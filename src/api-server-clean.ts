@@ -171,6 +171,13 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // 📊 LOGGING SÉCURISÉ DES ERREURS
 app.use(expressWinston.errorLogger({
   winstonInstance: securityLogger,
@@ -250,12 +257,4 @@ app.listen(port, () => {
   console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
   console.log(`   - Google Auth: http://localhost:${port}/api/auto-google-auth/connect`);
 });
-
-app.get('/health', (_req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-  });
-});
-
 export { app };
