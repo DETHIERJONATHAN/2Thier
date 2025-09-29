@@ -52,7 +52,7 @@ const Devis1minuteAdminIntegrations = lazy(() => import('./pages/devis1minute/ad
 const Devis1minuteAdminSite = lazy(() => import('./pages/devis1minute/admin/Devis1minuteAdminSite'));
 
 // Pages Google Workspace (très lourdes)
-const GoogleMailPageFixed = lazy(() => import('./pages/GoogleMailPageFixed'));
+const GoogleMailPageFixed = lazy(() => import('./pages/GoogleMailPageFixed_New'));
 const GoogleAgendaPage = lazy(() => import('./pages/GoogleAgendaPage'));
 const GoogleDrivePage = lazy(() => import('./pages/GoogleDrivePage'));
 const GoogleMeetPage = lazy(() => import('./pages/GoogleMeetPage'));

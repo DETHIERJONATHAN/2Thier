@@ -20,6 +20,40 @@ declare global {
   }
 }
 
+type ApiError = Error & {
+  status?: number;
+  body?: unknown;
+  retryAfterMs?: number;
+};
+
+const ensureCooldown = (url: string, retryAfterMs?: number) => {
+  if (!retryAfterMs) {
+    return;
+  }
+  if (url.includes('/auth/me')) {
+    window.__authMeCooldownUntil = Date.now() + retryAfterMs;
+  }
+};
+
+const parseRetryAfterMs = (response: Response, parsedBody: unknown): number | undefined => {
+  const header = response.headers.get('Retry-After');
+  if (header) {
+    const headerSeconds = Number.parseInt(header, 10);
+    if (!Number.isNaN(headerSeconds) && headerSeconds > 0) {
+      return headerSeconds * 1000;
+    }
+  }
+  if (parsedBody && typeof parsedBody === 'object') {
+    const retryAfter = (parsedBody as { retryAfter?: number; retryAfterMs?: number }).retryAfterMs
+      ?? (parsedBody as { retryAfter?: number }).retryAfter;
+    if (typeof retryAfter === 'number' && retryAfter > 0) {
+      // Le backend renvoie des secondes
+      return retryAfter >= 1000 ? retryAfter : retryAfter * 1000;
+    }
+  }
+  return undefined;
+};
+
 // Helper API local pour AuthProvider (pas de dépendance au contexte)
 const staticApi = {
   get: async (url: string) => {
@@ -29,9 +63,28 @@ const staticApi = {
       credentials: 'include' // Important: inclure les cookies
     });
     if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Could not read error response body');
-        console.error(`[staticApi] GET ${url} failed with status ${response.status}`, errorText);
-        throw new Error(`API call failed: ${response.status}`);
+        let rawText = 'Could not read error response body';
+        let parsedBody: unknown = null;
+        try {
+          rawText = await response.text();
+          parsedBody = JSON.parse(rawText);
+        } catch {
+          parsedBody = rawText;
+        }
+        const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response, parsedBody) : undefined;
+        ensureCooldown(url, retryAfterMs);
+        const message =
+          (parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody && typeof (parsedBody as { error?: string }).error === 'string')
+            ? (parsedBody as { error: string }).error
+            : `API call failed: ${response.status}`;
+        const error: ApiError = new Error(message);
+        error.status = response.status;
+        error.body = parsedBody;
+        if (retryAfterMs) {
+          error.retryAfterMs = retryAfterMs;
+        }
+        console.error(`[staticApi] GET ${url} failed with status ${response.status}`, parsedBody ?? rawText);
+        throw error;
     }
     const text = await response.text();
     try {
@@ -62,9 +115,28 @@ const staticApi = {
       credentials: 'include' // Important: inclure les cookies
     });
     if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Could not read error response body');
-        console.error(`[staticApi] POST ${url} failed with status ${response.status}`, errorText);
-        throw new Error(`API call failed: ${response.status}`);
+        let rawText = 'Could not read error response body';
+        let parsedBody: unknown = null;
+        try {
+          rawText = await response.text();
+          parsedBody = JSON.parse(rawText);
+        } catch {
+          parsedBody = rawText;
+        }
+        const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response, parsedBody) : undefined;
+        ensureCooldown(url, retryAfterMs);
+        const message =
+          (parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody && typeof (parsedBody as { error?: string }).error === 'string')
+            ? (parsedBody as { error: string }).error
+            : `API call failed: ${response.status}`;
+        const error: ApiError = new Error(message);
+        error.status = response.status;
+        error.body = parsedBody;
+        if (retryAfterMs) {
+          error.retryAfterMs = retryAfterMs;
+        }
+        console.error(`[staticApi] POST ${url} failed with status ${response.status}`, parsedBody ?? rawText);
+        throw error;
     }
     const text = await response.text();
     try {
@@ -143,15 +215,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           res = await staticApi.get('/auth/me');
           break; // succès
-    } catch (err: unknown) {
-          // Détection rudimentaire 429 (le message contient le status)
-      if (typeof (err as Error)?.message === 'string' && (err as Error).message.includes('429')) {
-              const delay = baseDelay * Math.pow(2, attempt - 1);
-              console.warn(`[AuthProvider] 429 reçu sur /auth/me – tentative ${attempt}/${maxAttempts}, attente ${delay}ms`);
-              await new Promise(r => setTimeout(r, delay));
-              continue;
+        } catch (err: unknown) {
+          const apiError = err as ApiError;
+          if (apiError?.status === 429) {
+            const retryAfterMs = apiError.retryAfterMs ?? baseDelay * Math.pow(2, attempt - 1);
+            const seconds = Math.round(retryAfterMs / 1000);
+            console.warn(`[AuthProvider] 429 reçu sur /auth/me – tentative ${attempt}/${maxAttempts}, attente ${retryAfterMs}ms (≈${seconds}s)`);
+            if (apiError.retryAfterMs && apiError.retryAfterMs > 30_000) {
+              // Cooldown long -> inutile de retenter immédiatement
+              throw err;
             }
-            throw err; // autre erreur => on sort
+            await new Promise(r => setTimeout(r, retryAfterMs));
+            continue;
+          }
+          throw err; // autre erreur => on sort
         }
       }
       if (!res) throw new Error('Impossible de récupérer /auth/me après retries');
@@ -346,11 +423,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Format de réponse /auth/me invalide');
       }
     } catch (e: unknown) {
-      // Si la dernière erreur était un 429 prolongé, déclencher un cooldown plus long
-      if (e instanceof Error && e.message.includes('/auth/me') && e.message.includes('retries')) {
-        // Impossible de récupérer après retries -> probablement 429 répétés
-        // Activer un cooldown de 60s pour éviter le spam
-        window.__authMeCooldownUntil = Date.now() + 60000;
+      const apiError = e as ApiError;
+      if (apiError?.status === 429) {
+        const retryAfterMs = apiError.retryAfterMs ?? 60_000;
+        window.__authMeCooldownUntil = Date.now() + retryAfterMs;
+        const seconds = Math.round(retryAfterMs / 1000);
+        console.warn(`[AuthProvider] Cooldown activé suite à un 429: ${seconds}s`);
+        msgApi.warning(`Trop de tentatives. Réessayez dans ${seconds > 60 ? `${Math.ceil(seconds / 60)} minutes` : `${seconds} secondes`}.`, seconds > 60 ? 5 : 3);
       }
       console.error("Erreur fetchMe:", e);
       setUser(null);
@@ -376,6 +455,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await staticApi.post('/auth/login', { email, password });
         // Force un refresh immédiat en ignorant le TTL
         await fetchMe({ force: true });
+      } catch (error) {
+        const apiError = error as ApiError;
+        if (apiError?.status === 429) {
+          const retryAfterMs = apiError.retryAfterMs ?? 60_000;
+          const seconds = Math.round(retryAfterMs / 1000);
+          window.__authMeCooldownUntil = Date.now() + retryAfterMs;
+          msgApi.error(`Trop de tentatives de connexion. Patientez ${seconds > 60 ? `${Math.ceil(seconds / 60)} minutes` : `${seconds} secondes`} avant de réessayer.`);
+        } else if (apiError?.status === 401) {
+          msgApi.error(apiError.message || 'Identifiants invalides.');
+        } else {
+          msgApi.error(apiError?.message || 'Connexion impossible pour le moment.');
+        }
+        throw error;
       } finally {
         // On relâche le verrou avec un micro délai pour prévenir les doubles clics rapides
         setTimeout(() => { window.__authLoginInFlight = false; }, 300);

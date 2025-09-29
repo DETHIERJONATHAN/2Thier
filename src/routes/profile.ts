@@ -9,6 +9,33 @@ import fs from 'fs';
 const prisma = new PrismaClient();
 const router = Router();
 
+const buildAvatarUrl = (req: AuthenticatedRequest, avatarPath?: string | null) => {
+  if (!avatarPath) {
+    return '';
+  }
+
+  if (avatarPath.startsWith('http://') || avatarPath.startsWith('https://')) {
+    return avatarPath;
+  }
+
+  const host = req.get('host');
+  if (!host) {
+    return avatarPath;
+  }
+
+  const normalizedPath = avatarPath.startsWith('/') ? avatarPath : `/${avatarPath}`;
+  return `${req.protocol}://${host}${normalizedPath}`;
+};
+
+const sanitizeText = (value: unknown): string | null | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+};
+
 // Configuration de Multer pour le stockage des avatars
 const storage = multer.diskStorage({
     destination: function (_req, _file, cb) {
@@ -64,7 +91,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<any> =
       vatNumber: user.vatNumber || "",  // Ajouter le numéro TVA
       phoneNumber: user.phoneNumber || "", // Ajouter le numéro de téléphone
       role: user.role || "user",
-      avatarUrl: user.avatarUrl,
+  avatarUrl: buildAvatarUrl(req, user.avatarUrl),
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       organizationId: req.user?.organizationId || null,
@@ -136,7 +163,10 @@ router.post('/avatar', upload.single('avatar'), async (req: AuthenticatedRequest
       }
     });
 
-    res.json(updatedUser);
+    res.json({
+      ...updatedUser,
+      avatarUrl: buildAvatarUrl(req, updatedUser.avatarUrl)
+    });
   } catch (error) {
     console.error("Erreur lors du téléversement de l'avatar:", error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
@@ -214,17 +244,34 @@ router.put('/', (async (req: any, res: Response) => {
       lastName,
       address,
       vatNumber,
-      phoneNumber
+      phoneNumber,
+      avatarUrl
     } = req.body;
+
+    let normalizedAvatarUrl: string | null | undefined = undefined;
+    if (typeof avatarUrl === 'string') {
+      const trimmed = avatarUrl.trim();
+      if (trimmed.length === 0) {
+        normalizedAvatarUrl = null;
+      } else {
+        try {
+          const parsed = new URL(trimmed);
+          normalizedAvatarUrl = parsed.pathname.startsWith('/uploads/') ? parsed.pathname : trimmed;
+        } catch {
+          normalizedAvatarUrl = trimmed;
+        }
+      }
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        firstName,
-        lastName,
-        address,
-        vatNumber,
-        phoneNumber,
+        firstName: sanitizeText(firstName),
+        lastName: sanitizeText(lastName),
+        address: sanitizeText(address),
+        vatNumber: sanitizeText(vatNumber),
+        phoneNumber: sanitizeText(phoneNumber),
+        avatarUrl: normalizedAvatarUrl,
       },
       select: {
         id: true,
@@ -261,7 +308,10 @@ router.put('/', (async (req: any, res: Response) => {
       }
     });
 
-    res.json(updatedUser);
+    res.json({
+      ...updatedUser,
+      avatarUrl: buildAvatarUrl(req, updatedUser.avatarUrl)
+    });
 
   } catch (error) {
     console.error('Error updating profile:', error);

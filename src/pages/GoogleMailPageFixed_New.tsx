@@ -3,18 +3,18 @@ import DOMPurify from 'dompurify';
 import {
   Layout, List, Button, Input,
   Modal, Form, Select, message,
-  Drawer, Empty, Menu, Skeleton
+  Drawer, Empty, Menu, Skeleton, Tooltip, Grid, Space, Typography
 } from 'antd';
 import { 
   EditOutlined, ReloadOutlined, InboxOutlined, SendOutlined, 
   FileTextOutlined, StarOutlined, DeleteOutlined, ExclamationCircleOutlined, 
-  FolderOutlined, RollbackOutlined, ShareAltOutlined, StarFilled
+  FolderOutlined, RollbackOutlined, ShareAltOutlined, StarFilled, FolderOpenOutlined, CloseOutlined
 } from '@ant-design/icons';
 import { useGmailService, FormattedGmailMessage, GmailMessage, GmailLabel } from '../hooks/useGmailService';
 import PageHeader from '../components/PageHeader';
 import GoogleAuthError from '../components/GoogleAuthError';
 
-const { Content, Sider } = Layout;
+const { Content } = Layout;
 const { TextArea } = Input;
 
 interface ComposeFormData {
@@ -38,6 +38,29 @@ interface GmailBodyPart {
   parts?: GmailBodyPart[];
 }
 
+const normalizeArrayPayload = <T,>(input: unknown): T[] => {
+  if (Array.isArray(input)) {
+    return input as T[];
+  }
+
+  if (input && typeof input === 'object') {
+    const candidate = (input as { data?: unknown; labels?: unknown }).data;
+    if (Array.isArray(candidate)) {
+      return candidate as T[];
+    }
+
+    if (candidate && typeof candidate === 'object' && Array.isArray((candidate as { labels?: unknown }).labels)) {
+      return (candidate as { labels: T[] }).labels;
+    }
+
+    if (Array.isArray((input as { labels?: unknown }).labels)) {
+      return (input as { labels: T[] }).labels;
+    }
+  }
+
+  return [];
+};
+
 const GoogleMailPageFixed: React.FC = () => {
   const gmailService = useGmailService();
   const [msgApi, msgCtx] = message.useMessage();
@@ -45,6 +68,7 @@ const GoogleMailPageFixed: React.FC = () => {
   const [messages, setMessages] = useState<FormattedGmailMessage[]>([]);
   const [labels, setLabels] = useState<GmailLabel[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<GmailMessage | null>(null);
+  const [selectedMessageMeta, setSelectedMessageMeta] = useState<FormattedGmailMessage | null>(null);
   const [currentLabelId, setCurrentLabelId] = useState<string>('INBOX');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pageToken, setPageToken] = useState<string>('');
@@ -53,6 +77,9 @@ const GoogleMailPageFixed: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<boolean>(false);
   const [composeForm] = Form.useForm<ComposeFormData>();
+  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const systemLabels = useMemo(() => ({
     'INBOX': { name: 'Boîte de réception', icon: <InboxOutlined /> },
@@ -63,9 +90,46 @@ const GoogleMailPageFixed: React.FC = () => {
     'SPAM': { name: 'Courriers indésirables', icon: <ExclamationCircleOutlined /> },
   }), []);
 
-  const getHeaderValue = (headers: { name: string; value: string }[], name: string): string => {
+  const getHeaderValue = (headers: { name: string; value: string }[] | undefined, name: string): string => {
+    if (!Array.isArray(headers)) {
+      return '';
+    }
     const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
     return header ? header.value : '';
+  };
+
+  const decodeBodyData = (input?: string): string => {
+    if (!input) return '';
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    try {
+      const binary = atob(normalized);
+      if (typeof TextDecoder !== 'undefined') {
+        try {
+          const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+          return new TextDecoder('utf-8').decode(bytes);
+        } catch {
+          return binary;
+        }
+      }
+      return binary;
+    } catch (err) {
+      console.warn('[Gmail] Décodage body échoué, tentative fallback', err);
+      try {
+        return atob(input);
+      } catch {
+        return '';
+      }
+    }
+  };
+
+  const formatDate = (value?: string): string => {
+    if (!value) return '';
+    const numeric = Number(value);
+    const date = Number.isFinite(numeric) ? new Date(numeric) : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+    return date.toLocaleString();
   };
 
   // Types utilitaires pour normaliser les différentes formes de réponse
@@ -119,11 +183,17 @@ const GoogleMailPageFixed: React.FC = () => {
         // Charger les labels
         const labelsResult = await getLabels();
         console.log('[Gmail] 📧 Labels result:', labelsResult);
-  if (labelsResult && labelsResult.data) {
-          setLabels(labelsResult.data);
-          
-          // Charger les messages INBOX directement ici
-          const result = await getMessages({
+        const normalizedLabels = normalizeArrayPayload<GmailLabel>(labelsResult);
+
+        if (!labelsResult && normalizedLabels.length === 0) {
+          setAuthError(true);
+          return;
+        }
+
+        setLabels(normalizedLabels);
+        
+        // Charger les messages INBOX directement ici
+        const result = await getMessages({
             labelIds: ['INBOX'],
             q: '',
             maxResults: 25,
@@ -145,9 +215,6 @@ const GoogleMailPageFixed: React.FC = () => {
           setPageToken(nextToken || '');
           
           console.log('[Gmail] ✅ Initialisation terminée avec succès');
-        } else {
-          setAuthError(true);
-        }
       } catch (error) {
         console.error('Erreur chargement initial:', error);
         setAuthError(true);
@@ -163,6 +230,9 @@ const GoogleMailPageFixed: React.FC = () => {
     setCurrentLabelId(labelId);
     setSearchQuery('');
     setPageToken('');
+    setSelectedMessage(null);
+    setSelectedMessageMeta(null);
+    setMessageDetailDrawerVisible(false);
     loadMessages(labelId, '');
   };
 
@@ -174,6 +244,7 @@ const GoogleMailPageFixed: React.FC = () => {
 
   const handleOpenMessage = async (message: FormattedGmailMessage) => {
     try {
+      setSelectedMessageMeta(message);
       // Récupérer le message complet avec le body pour l'affichage détaillé
       const fullMessage = await gmailService.getMessage(message.id);
       if (fullMessage) {
@@ -187,14 +258,16 @@ const GoogleMailPageFixed: React.FC = () => {
     } catch (error) {
   console.error('Erreur lors de l\'ouverture du message:', error);
   msgApi.error('Impossible d\'ouvrir le message');
+        setSelectedMessageMeta(null);
     }
   };
 
   const handleCompose = (type: 'new' | 'reply' | 'forward' = 'new', originalMessage?: GmailMessage) => {
     composeForm.resetFields();
     if (originalMessage) {
-      const from = getHeaderValue(originalMessage.payload.headers, 'From');
-      const subject = getHeaderValue(originalMessage.payload.headers, 'Subject');
+      const payloadHeaders = originalMessage.payload?.headers;
+      const from = getHeaderValue(payloadHeaders, 'From');
+      const subject = getHeaderValue(payloadHeaders, 'Subject');
       
       if (type === 'reply') {
         composeForm.setFieldsValue({
@@ -224,8 +297,10 @@ const GoogleMailPageFixed: React.FC = () => {
   const handleDeleteMessage = async (messageId: string) => {
     const result = await gmailService.deleteMessage(messageId);
     if (result) {
-      setMessages(messages.filter(m => m.id !== messageId));
+      setMessages(prev => prev.filter(m => m.id !== messageId));
       setMessageDetailDrawerVisible(false);
+      setSelectedMessage(null);
+      setSelectedMessageMeta(null);
       msgApi.success('Message supprimé');
     } else {
       msgApi.error('Impossible de supprimer le message');
@@ -239,57 +314,116 @@ const GoogleMailPageFixed: React.FC = () => {
     const result = await gmailService.modifyMessage(messageId, addLabelIds, removeLabelIds);
     if (result) {
       // Mettre à jour l'état local pour un retour visuel immédiat
-      setMessages(messages.map(m => 
+      setMessages(prev => prev.map(m => 
         m.id === messageId 
           ? { ...m, labelIds: isStarred ? m.labelIds?.filter(l => l !== 'STARRED') : [...(m.labelIds || []), 'STARRED'] }
           : m
       ));
-      if (selectedMessage?.id === messageId) {
-        setSelectedMessage({
-            ...selectedMessage,
-            labelIds: isStarred ? selectedMessage.labelIds?.filter(l => l !== 'STARRED') : [...(selectedMessage.labelIds || []), 'STARRED']
-        });
-      }
+      setSelectedMessage(prev => {
+        if (!prev || prev.id !== messageId) {
+          return prev;
+        }
+        const updatedLabels = isStarred
+          ? prev.labelIds?.filter(l => l !== 'STARRED')
+          : [...(prev.labelIds || []), 'STARRED'];
+        return { ...prev, labelIds: updatedLabels };
+      });
     } else {
       msgApi.error("Impossible de modifier le statut de l'étoile.");
     }
   };
 
+  const sidebarContent = (
+    <Menu
+      mode="inline"
+      selectedKeys={[currentLabelId]}
+      onClick={({ key }) => {
+        handleLabelClick(key);
+        setIsSidebarDrawerOpen(false);
+      }}
+      className="border-0"
+    >
+      {Object.entries(systemLabels).map(([labelId, label]) => (
+        <Menu.Item key={labelId} icon={label.icon}>
+          {label.name}
+        </Menu.Item>
+      ))}
+      {labels
+        .filter(label => !Object.keys(systemLabels).includes(label.id))
+        .map(label => (
+          <Menu.Item key={label.id} icon={<FolderOutlined />}>
+            {label.name}
+          </Menu.Item>
+        ))}
+    </Menu>
+  );
+
+  const renderSidebar = () => (
+    <Drawer
+      title="Tous les dossiers"
+      placement="left"
+      open={isSidebarDrawerOpen}
+      onClose={() => setIsSidebarDrawerOpen(false)}
+      width={320}
+      styles={{ body: { padding: 0 } }}
+    >
+      {sidebarContent}
+    </Drawer>
+  );
+
+  const currentLabelName = useMemo(() => {
+    const systemLabel = systemLabels[currentLabelId];
+    if (systemLabel) {
+      return systemLabel.name;
+    }
+    const customLabel = labels.find(label => label.id === currentLabelId);
+    return customLabel?.name ?? 'Boîte de réception';
+  }, [currentLabelId, labels, systemLabels]);
+
+  const renderFolderBar = () => (
+    <div className="flex flex-col gap-3 mb-4">
+      <div className="flex items-center gap-3">
+        <Tooltip title="Nouveau message">
+          <Button
+            type="primary"
+            shape="circle"
+            size="large"
+            icon={<EditOutlined />}
+            onClick={() => handleCompose('new')}
+            aria-label="Nouveau message"
+          />
+        </Tooltip>
+        <Tooltip title="Tous les dossiers">
+          <Button
+            shape="circle"
+            size="large"
+            icon={<FolderOpenOutlined />}
+            onClick={() => setIsSidebarDrawerOpen(true)}
+            aria-label="Tous les dossiers"
+          />
+        </Tooltip>
+        <Tooltip title="Actualiser">
+          <Button
+            shape="circle"
+            size="large"
+            icon={<ReloadOutlined />}
+            onClick={() => loadMessages(currentLabelId, searchQuery)}
+            loading={isLoading}
+            aria-label="Actualiser"
+          />
+        </Tooltip>
+      </div>
+      <span className="text-sm text-gray-600">Dossier actuel : <strong>{currentLabelName}</strong></span>
+    </div>
+  );
+
   if (authError) {
     return <GoogleAuthError onReconnect={() => window.location.href = '/api/google-auth'} />;
   }
 
-  const renderSidebar = () => (
-    <Sider width={240} theme="light" className="border-r">
-      <div className="p-4">
-        <Button type="primary" icon={<EditOutlined />} block onClick={() => handleCompose('new')} size="large">
-          Nouveau message
-        </Button>
-      </div>
-      <Menu
-        mode="inline"
-        selectedKeys={[currentLabelId]}
-        onClick={({ key }) => handleLabelClick(key)}
-        className="border-0"
-      >
-        {Object.entries(systemLabels).map(([labelId, label]) => (
-          <Menu.Item key={labelId} icon={label.icon}>
-            {label.name}
-          </Menu.Item>
-        ))}
-        {labels
-          .filter(label => !Object.keys(systemLabels).includes(label.id))
-          .map(label => (
-            <Menu.Item key={label.id} icon={<FolderOutlined />}>
-              {label.name}
-            </Menu.Item>
-          ))}
-      </Menu>
-    </Sider>
-  );
-
   const renderMessageList = () => (
     <div className="p-4">
+      {renderFolderBar()}
       <div className="mb-4">
         <Input.Search
           placeholder="Rechercher dans les messages..."
@@ -369,67 +503,125 @@ const GoogleMailPageFixed: React.FC = () => {
   const renderMessageDetail = () => {
     if (!selectedMessage) return null;
     
-    const from = getHeaderValue(selectedMessage.payload.headers, 'From');
-    const to = getHeaderValue(selectedMessage.payload.headers, 'To');
-    const subject = getHeaderValue(selectedMessage.payload.headers, 'Subject');
-    const date = new Date(parseInt(selectedMessage.internalDate)).toLocaleString();
+    const headers = selectedMessage.payload?.headers ?? [];
+    const from = getHeaderValue(headers, 'From') || selectedMessageMeta?.from || '';
+    const to = getHeaderValue(headers, 'To') || selectedMessageMeta?.to || '';
+    const subject = getHeaderValue(headers, 'Subject') || selectedMessageMeta?.subject || '';
+    const internalDate = formatDate(selectedMessage.internalDate);
+    const fallbackDate = selectedMessageMeta?.timestamp ? formatDate(selectedMessageMeta.timestamp) : '';
+    const displayedDate = internalDate || fallbackDate || '—';
     const isStarred = selectedMessage.labelIds?.includes('STARRED');
     
     let body = '';
-    const findBodyPart = (parts: GmailBodyPart[]): GmailBodyPart | null => {
-        for (const part of parts) {
-            if (part.mimeType === 'text/html') {
-                return part;
-            }
-            if (part.parts) {
-                const nestedPart = findBodyPart(part.parts);
-                if (nestedPart) return nestedPart;
-            }
+    const findBodyPart = (parts?: GmailBodyPart[]): GmailBodyPart | null => {
+      if (!Array.isArray(parts)) {
+        return null;
+      }
+      for (const part of parts) {
+        if (part.mimeType === 'text/html') {
+          return part;
         }
-        return parts.find(p => p.mimeType === 'text/plain') || null;
+        if (part.parts && part.parts.length > 0) {
+          const nestedPart = findBodyPart(part.parts);
+          if (nestedPart) return nestedPart;
+        }
+      }
+      return parts.find(p => p.mimeType === 'text/plain') || null;
     };
 
-    if (selectedMessage.payload.parts) {
-        const part = findBodyPart(selectedMessage.payload.parts);
-        if (part && part.body.data) {
-            body = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-        }
-    } else if (selectedMessage.payload.body.data) {
-        body = atob(selectedMessage.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = selectedMessage.payload ?? {};
+    if (payload.parts && payload.parts.length > 0) {
+      const part = findBodyPart(payload.parts);
+      if (part && part.body && part.body.data) {
+        body = decodeBodyData(part.body.data);
+      }
+    } else if (payload.body && payload.body.data) {
+      body = decodeBodyData(payload.body.data);
     }
 
-  return (
+    if (!body) {
+      body = selectedMessageMeta?.htmlBody || selectedMessage.snippet || selectedMessageMeta?.snippet || 'Aucun contenu disponible pour ce message.';
+    }
+
+    const sanitizedBody = DOMPurify.sanitize(body);
+
+    const handleCloseDetail = () => {
+      setMessageDetailDrawerVisible(false);
+      setSelectedMessage(null);
+      setSelectedMessageMeta(null);
+    };
+
+    const headerPrimary = (
+      <div className="flex items-center justify-between gap-2 w-full">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Tooltip title={isStarred ? 'Retirer des favoris' : 'Ajouter aux favoris'}>
+            <Button 
+              type="text" 
+              icon={isStarred ? <StarFilled style={{ color: '#fadb14' }} /> : <StarOutlined />} 
+              onClick={() => handleToggleStar(selectedMessage.id, isStarred)}
+              aria-label={isStarred ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+            />
+          </Tooltip>
+          <Typography.Text
+            strong
+            ellipsis={{ tooltip: subject || 'Détail du message' }}
+            className="text-base leading-5"
+            style={{ maxWidth: isMobile ? '65vw' : '45vw' }}
+          >
+            {subject || 'Détail du message'}
+          </Typography.Text>
+        </div>
+        <Tooltip title="Fermer">
+          <Button type="text" icon={<CloseOutlined />} onClick={handleCloseDetail} aria-label="Fermer le message" />
+        </Tooltip>
+      </div>
+    );
+
+    const headerActions = (
+      <Space
+        wrap
+        size={[8, 8]}
+        className={isMobile ? 'w-full justify-between' : ''}
+      >
+        <Button icon={<RollbackOutlined />} onClick={() => handleCompose('reply', selectedMessage)} block={isMobile}>Répondre</Button>
+        <Button icon={<ShareAltOutlined />} onClick={() => handleCompose('forward', selectedMessage)} block={isMobile}>Transférer</Button>
+        <Button icon={<DeleteOutlined />} danger onClick={() => handleDeleteMessage(selectedMessage.id)} block={isMobile}>Supprimer</Button>
+      </Space>
+    );
+
+    return (
       <Drawer
         title={
-            <div className="flex items-center">
-                <Button 
-                    type="text" 
-                    icon={isStarred ? <StarFilled style={{ color: '#fadb14' }} /> : <StarOutlined />} 
-                    onClick={() => handleToggleStar(selectedMessage.id, isStarred)}
-                    className="mr-2"
-                />
-                <span className="truncate">{subject || 'Détail du message'}</span>
-            </div>
+          <div className="flex flex-col gap-3 w-full">
+            {headerPrimary}
+            {headerActions}
+          </div>
         }
-        placement="right"
-        width={'60%'}
-        onClose={() => setMessageDetailDrawerVisible(false)}
+        placement={isMobile ? 'bottom' : 'right'}
+        width={isMobile ? '100%' : '60%'}
+        height={isMobile ? '100%' : undefined}
+        onClose={handleCloseDetail}
         open={messageDetailDrawerVisible}
-        extra={
-          <Button.Group>
-            <Button icon={<RollbackOutlined />} onClick={() => handleCompose('reply', selectedMessage)}>Répondre</Button>
-            <Button icon={<ShareAltOutlined />} onClick={() => handleCompose('forward', selectedMessage)}>Transférer</Button>
-            <Button icon={<DeleteOutlined />} danger onClick={() => handleDeleteMessage(selectedMessage.id)}>Supprimer</Button>
-          </Button.Group>
-        }
+        closable={false}
+        styles={{
+          body: {
+            padding: isMobile ? '16px' : '24px',
+            height: isMobile ? '100%' : 'auto',
+            overflowY: 'auto'
+          },
+          header: {
+            padding: isMobile ? '12px 16px' : '16px 24px'
+          }
+        }}
       >
         <div className="p-2">
-          <p><strong>De :</strong> {from}</p>
-          <p><strong>À :</strong> {to}</p>
-          <p><strong>Date :</strong> {date}</p>
+          <p><strong>De :</strong> {from || '—'}</p>
+          <p><strong>À :</strong> {to || '—'}</p>
+          <p><strong>Date :</strong> {displayedDate}</p>
           <hr className="my-4"/>
           <div
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body) }}
+            className="whitespace-pre-wrap"
+            dangerouslySetInnerHTML={{ __html: sanitizedBody }}
             style={{ overflowWrap: 'break-word', wordWrap: 'break-word' }}
           />
         </div>
@@ -443,7 +635,7 @@ const GoogleMailPageFixed: React.FC = () => {
       open={composeModalVisible}
       onCancel={() => setComposeModalVisible(false)}
       width={800}
-      destroyOnClose // Important pour réinitialiser le form
+      destroyOnHidden // Important pour réinitialiser le form
       footer={[
         <Button key="back" onClick={() => setComposeModalVisible(false)}>Annuler</Button>,
         <Button key="submit" type="primary" onClick={() => composeForm.submit()}>
@@ -466,25 +658,18 @@ const GoogleMailPageFixed: React.FC = () => {
   );
 
   return (
-    <Layout className="h-screen bg-white">
+    <Layout className="min-h-screen bg-white">
       {msgCtx}
       <PageHeader
         title="Boîte Mail Gmail"
         subtitle="Votre boîte de réception centralisée"
-        extra={[
-          <Button key="refresh" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading}>
-            Actualiser
-          </Button>
-        ]}
       />
-      <Layout>
-        {renderSidebar()}
-        <Content className="bg-white border-l">
-          {renderMessageList()}
-        </Content>
-      </Layout>
+      <Content className="bg-white">
+        {renderMessageList()}
+      </Content>
       {renderMessageDetail()}
       {renderComposeModal()}
+      {renderSidebar()}
     </Layout>
   );
 };

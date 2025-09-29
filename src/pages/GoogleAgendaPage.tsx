@@ -25,7 +25,8 @@ import {
   Tooltip,
   Badge,
   Popover,
-  Slider
+  Slider,
+  Grid
 } from 'antd';
 import {
   CalendarOutlined,
@@ -136,6 +137,9 @@ const GoogleAgendaPage: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const { token } = theme.useToken();
   const calendarRef = useRef<FullCalendar>(null);
+  const screens = Grid.useBreakpoint();
+  const isDesktop = screens.lg;
+  const contentPadding = isDesktop ? '0 24px 24px' : '0 16px 24px';
 
   // --- ÉTATS ---
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -283,6 +287,15 @@ const GoogleAgendaPage: React.FC = () => {
     // Chargement initial = forceSync pour toujours récupérer les données Google à l'ouverture
     loadData({ forceSync: true });
   }, [loadData]);
+
+  useEffect(() => {
+    const calendarApi = calendarRef.current?.getApi();
+    if (!calendarApi) return;
+    const desiredView = isDesktop ? 'dayGridMonth' : 'listWeek';
+    if (calendarApi.view.type !== desiredView) {
+      calendarApi.changeView(desiredView);
+    }
+  }, [isDesktop]);
 
   // --- NOTIFICATIONS SYSTÈME ---
   useEffect(() => {
@@ -651,49 +664,58 @@ const GoogleAgendaPage: React.FC = () => {
   }, [calendarEvents]); // Re-render title on event change
 
   // --- RENDU DES COMPOSANTS ---
-  const renderStatsPanel = () => (
-    <Card title="📊 Statistiques" className="mb-4">
+  const renderStatsPanel = (cardSize: 'default' | 'small' = 'default') => (
+    <Card title="📊 Statistiques" size={cardSize} style={{ width: '100%' }}>
       <Row gutter={[16, 16]}>
-        <Col span={12}><Statistic title="Aujourd'hui" value={stats?.todayEvents} prefix={<CalendarOutlined />} /></Col>
-        <Col span={12}><Statistic title="Cette semaine" value={stats?.weekEvents} prefix={<ClockCircleOutlined />} /></Col>
-        <Col span={12}><Statistic title="Notes (actives)" value={stats?.notesPending} prefix={<FileTextOutlined />} /></Col>
-        <Col span={12}><Statistic title="Notes en retard" value={stats?.notesOverdue} prefix={<ExclamationCircleOutlined />} valueStyle={{ color: (stats?.notesOverdue || 0) > 0 ? token.colorError : token.colorText }} /></Col>
-        <Col span={12}><Statistic title="Notes du jour" value={stats?.notesToday} prefix={<ClockCircleOutlined />} /></Col>
-        <Col span={12}><Statistic title="Notes imminentes (≤3j)" value={stats?.notesDueSoon} prefix={<WarningOutlined />} /></Col>
-        <Col span={12}><Statistic title="Notes semaine prochaine" value={stats?.notesDueNextWeek} prefix={<CalendarOutlined />} /></Col>
-        <Col span={12}><Statistic title="Notes terminées (aujourd'hui)" value={stats?.notesCompletedToday} prefix={<CheckOutlined />} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Aujourd'hui" value={stats?.todayEvents} prefix={<CalendarOutlined />} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Cette semaine" value={stats?.weekEvents} prefix={<ClockCircleOutlined />} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Notes (actives)" value={stats?.notesPending} prefix={<FileTextOutlined />} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Notes en retard" value={stats?.notesOverdue} prefix={<ExclamationCircleOutlined />} valueStyle={{ color: (stats?.notesOverdue || 0) > 0 ? token.colorError : token.colorText }} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Notes du jour" value={stats?.notesToday} prefix={<ClockCircleOutlined />} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Notes imminentes (≤3j)" value={stats?.notesDueSoon} prefix={<WarningOutlined />} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Notes semaine prochaine" value={stats?.notesDueNextWeek} prefix={<CalendarOutlined />} /></Col>
+        <Col xs={12} sm={12} md={12} lg={12}><Statistic title="Notes terminées (aujourd'hui)" value={stats?.notesCompletedToday} prefix={<CheckOutlined />} /></Col>
       </Row>
     </Card>
   );
 
-  const renderFiltersPanel = () => (
-    <Card title="🔍 Filtres & Recherche" className="mb-4">
-      <Space direction="vertical" style={{ width: '100%' }}>
+  const renderFiltersPanel = (cardSize: 'default' | 'small' = 'default') => (
+    <Card title="🔍 Filtres & Recherche" size={cardSize} style={{ width: '100%' }}>
+      <Space direction="vertical" style={{ width: '100%' }} size={12}>
         <Input.Search placeholder="Rechercher un événement..." onSearch={setSearchTerm} allowClear />
         <Select placeholder="Catégorie" value={filterCategory} onChange={setFilterCategory} style={{ width: '100%' }}>
           <Option value="all">Toutes les catégories</Option>
           {eventCategories.map(cat => <Option key={cat.value} value={cat.value}>{cat.label}</Option>)}
         </Select>
         <Divider style={{ margin: '8px 0' }} />
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Switch checked={showNotes} onChange={setShowNotes} /> <Text>Afficher les notes</Text>
-          <Switch checked={hideDoneNotes} onChange={setHideDoneNotes} /> <Text>Masquer notes faites</Text>
-        </Space>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text>Afficher les notes</Text>
+          <Switch checked={showNotes} onChange={setShowNotes} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text>Masquer notes faites</Text>
+          <Switch checked={hideDoneNotes} onChange={setHideDoneNotes} />
+        </div>
       </Space>
     </Card>
   );
 
-  const renderUpcomingEvents = () => (
-    <Card title="📋 Prochains événements" size="small">
+  const renderUpcomingEvents = (cardSize: 'default' | 'small' = 'small') => (
+    <Card title="📋 Prochains événements" size={cardSize} style={{ width: '100%' }}>
       <List
         loading={loading}
-        dataSource={filteredEvents.filter(e => dayjs(e.start).isAfter(dayjs())).slice(0, 5)}
+        dataSource={filteredEvents
+          .filter(e => {
+            const eventStart = dayjs(e.startDate || e.start);
+            return eventStart.isValid() && eventStart.isAfter(dayjs());
+          })
+          .slice(0, 5)}
         renderItem={(event) => (
           <List.Item style={{ cursor: 'pointer' }} onClick={() => handleEventClick({ event: { extendedProps: event, id: event.id } } as EventClickArg)}>
             <List.Item.Meta
               avatar={<Avatar style={{ backgroundColor: eventCategories.find(c => c.value === event.category)?.color }} icon={<CalendarOutlined />} />}
               title={<Text style={{ fontSize: '12px' }}>{event.title}</Text>}
-              description={<Text style={{ fontSize: '10px' }} type="secondary">{dayjs(event.start).format('DD/MM HH:mm')}</Text>}
+              description={<Text style={{ fontSize: '10px' }} type="secondary">{dayjs(event.startDate || event.start).format('DD/MM HH:mm')}</Text>}
             />
           </List.Item>
         )}
@@ -711,7 +733,7 @@ const GoogleAgendaPage: React.FC = () => {
     setSelectedNoteIds([]);
   };
 
-  const renderNotesPanel = () => (
+  const renderNotesPanel = (cardSize: 'default' | 'small' = 'small') => (
     <Card
       title={(
         <Space size={6} wrap>
@@ -736,8 +758,8 @@ const GoogleAgendaPage: React.FC = () => {
           </Popover>
         </Space>
       )}
-      size="small"
-      className="mt-4"
+      size={cardSize}
+      style={{ width: '100%' }}
       extra={selectedNoteIds.length > 0 && <Button size="small" type="primary" onClick={markBatchDone}>Valider ({selectedNoteIds.length})</Button>}
     >
       <List
@@ -771,20 +793,66 @@ const GoogleAgendaPage: React.FC = () => {
   }, [notesSummary]);
 
   return (
-    <Layout style={{ minHeight: '100vh', background: token.colorBgContainer }}>
-      <Sider width={300} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorder}`, padding: '16px' }}>
-        {renderStatsPanel()}
-        {renderFiltersPanel()}
-        {renderUpcomingEvents()}
-        {renderNotesPanel()}
-      </Sider>
+    <Layout
+      style={{
+        minHeight: '100vh',
+        background: token.colorBgContainer,
+        flexDirection: isDesktop ? 'row' : 'column'
+      }}
+    >
+      {isDesktop && (
+        <Sider
+          width={320}
+          style={{
+            background: token.colorBgContainer,
+            borderRight: `1px solid ${token.colorBorder}`,
+            padding: '24px 16px',
+            overflowY: 'auto'
+          }}
+        >
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            {renderStatsPanel('default')}
+            {renderFiltersPanel('default')}
+            {renderUpcomingEvents('small')}
+            {renderNotesPanel('small')}
+          </Space>
+        </Sider>
+      )}
 
-      <Content style={{ padding: '0 24px 24px' }}>
-        <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <Space wrap>
+      <Content style={{ padding: contentPadding, width: '100%' }}>
+        {!isDesktop && (
+          <Space direction="vertical" size={16} style={{ width: '100%', marginBottom: 16 }}>
+            {renderStatsPanel('small')}
+            {renderFiltersPanel('small')}
+            {renderUpcomingEvents('small')}
+            {renderNotesPanel('small')}
+          </Space>
+        )}
+
+        <div
+          style={{
+            padding: isDesktop ? '24px 0' : '16px 0',
+            display: 'flex',
+            flexDirection: isDesktop ? 'row' : 'column',
+            alignItems: isDesktop ? 'center' : 'stretch',
+            justifyContent: isDesktop ? 'space-between' : 'flex-start',
+            gap: isDesktop ? 12 : 16,
+            width: '100%'
+          }}
+        >
+          <Space
+            wrap
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: isDesktop ? 'center' : 'flex-start',
+              gap: 12,
+              width: isDesktop ? 'auto' : '100%'
+            }}
+          >
             <Button icon={<LeftOutlined />} onClick={() => calendarRef.current?.getApi().prev()} />
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-              <span style={{ fontSize: 20, fontWeight: 600, whiteSpace: 'nowrap' }}>{viewTitle}</span>
+              <span style={{ fontSize: isDesktop ? 20 : 18, fontWeight: 600, whiteSpace: 'nowrap' }}>{viewTitle}</span>
               <Text type="secondary" style={{ fontSize: 12 }}>
                 Maj {lastRefreshTime ? dayjs(lastRefreshTime).format('HH:mm') : '...'}
               </Text>
@@ -792,11 +860,20 @@ const GoogleAgendaPage: React.FC = () => {
             <Button icon={<RightOutlined />} onClick={() => calendarRef.current?.getApi().next()} />
             <Button onClick={() => calendarRef.current?.getApi().today()}>Aujourd'hui</Button>
           </Space>
-          <Space wrap>
-            <Space.Compact>
-              <Button onClick={() => changeView('dayGridMonth')}>Mois</Button>
-              <Button onClick={() => changeView('timeGridWeek')}>Semaine</Button>
-              <Button onClick={() => changeView('timeGridDay')}>Jour</Button>
+          <Space
+            wrap
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 12,
+              justifyContent: isDesktop ? 'flex-end' : 'flex-start',
+              width: isDesktop ? 'auto' : '100%'
+            }}
+          >
+            <Space.Compact style={{ width: isDesktop ? 'auto' : '100%' }}>
+              <Button onClick={() => changeView('dayGridMonth')} style={isDesktop ? undefined : { flex: 1 }}>Mois</Button>
+              <Button onClick={() => changeView('timeGridWeek')} style={isDesktop ? undefined : { flex: 1 }}>Semaine</Button>
+              <Button onClick={() => changeView('timeGridDay')} style={isDesktop ? undefined : { flex: 1 }}>Jour</Button>
             </Space.Compact>
             <Button icon={<SyncOutlined spin={syncing} />} onClick={syncWithGoogleCalendar} loading={syncing} />
             <Tooltip title={`Temps réel: ${sseStatus}`}>
@@ -806,21 +883,30 @@ const GoogleAgendaPage: React.FC = () => {
               <Button type="primary" icon={<PlusOutlined />} onClick={() => handleDateClick({ dateStr: dayjs().toISOString(), allDay: false } as DateClickArg)} />
             </Tooltip>
             <Tooltip title={`Notes actives: ${notesSummary.totalActive} (retard: ${notesSummary.overdueCount})`}>
-              <Badge count={notesSummary.overdueCount} showZero size="small" offset={[ -2, 2 ]} color="red">
+              <Badge count={notesSummary.overdueCount} showZero size="small" offset={[-2, 2]} color="red">
                 <Button icon={<FileTextOutlined />} onClick={() => setIsNoteModalVisible(true)} />
               </Badge>
             </Tooltip>
           </Space>
         </div>
 
-  <Card variant="borderless">
+        <Card
+          variant="borderless"
+          style={{
+            marginTop: isDesktop ? 0 : 16,
+            borderRadius: 12,
+            boxShadow: isDesktop ? 'none' : '0 8px 24px rgba(0,0,0,0.05)'
+          }}
+          bodyStyle={{ padding: isDesktop ? 0 : 8 }}
+        >
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
             headerToolbar={false}
-            initialView="dayGridMonth"
+            initialView={isDesktop ? 'dayGridMonth' : 'listWeek'}
             locale={frLocale}
             events={calendarEvents}
+            height="auto"
             editable
             selectable
             selectMirror
@@ -838,7 +924,9 @@ const GoogleAgendaPage: React.FC = () => {
         open={isModalVisible}
         onCancel={() => setIsModalVisible(false)}
         footer={null}
-        width={700}
+        width={isDesktop ? 700 : '100%'}
+        style={!isDesktop ? { top: 0 } : undefined}
+        bodyStyle={!isDesktop ? { padding: 16 } : undefined}
         destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={handleFormSubmit} initialValues={{ priority: 'medium' }}>
@@ -901,6 +989,9 @@ const GoogleAgendaPage: React.FC = () => {
         onOk={() => noteForm.submit()}
         okText={creatingNote ? 'Création...' : 'Créer'}
         confirmLoading={creatingNote}
+        width={isDesktop ? 520 : '100%'}
+        style={!isDesktop ? { top: 0 } : undefined}
+        bodyStyle={!isDesktop ? { padding: 16 } : undefined}
         destroyOnHidden
       >
         <Form form={noteForm} layout="vertical" initialValues={{ priority: 'medium', category: 'general' }} onFinish={handleNoteFinish}>
@@ -942,8 +1033,10 @@ const GoogleAgendaPage: React.FC = () => {
 
       <Drawer
         title={<Space><PushpinOutlined />{selectedEvent?.event.title}</Space>}
-        placement="right"
-        size="large"
+        placement={isDesktop ? 'right' : 'bottom'}
+        size={isDesktop ? 'large' : 'default'}
+        height={isDesktop ? undefined : '80vh'}
+        width={isDesktop ? 480 : '100%'}
         onClose={() => setIsDetailsDrawerVisible(false)}
         open={isDetailsDrawerVisible}
         extra={
