@@ -19,7 +19,7 @@ env:
   SERVICE_NAME: ${{ secrets.CLOUD_RUN_SERVICE }}
   ARTIFACT_REGISTRY_LOCATION: ${{ secrets.ARTIFACT_REGISTRY_LOCATION }}
   ARTIFACT_REGISTRY_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
-  CLOUD_SQL_INSTANCE: ${{ secrets.CLOUD_SQL_INSTANCE }}
+  CLOUD_SQL_INSTANCE: thiernew:europe-west1:crm-db
   CLOUD_SQL_DB: ${{ secrets.CLOUD_SQL_DB }}
   SERVICE_ACCOUNT_EMAIL: ${{ vars.CLOUD_RUN_SERVICE_ACCOUNT || 'github-cloud-run@thiernew.iam.gserviceaccount.com' }}
   PRISMA_JOB_NAME: ${{ vars.CLOUD_RUN_JOB || 'crm-prisma-migrate' }}
