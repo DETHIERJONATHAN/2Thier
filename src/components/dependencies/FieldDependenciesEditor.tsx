@@ -134,7 +134,7 @@ const FieldDependenciesEditor: React.FC<FieldDependenciesEditorProps> = ({ field
   const handleTestDependency = async (dependencyId: string) => {
     try {
       // Pour le développement, simulons le comportement du test
-      if (process.env.NODE_ENV === 'development' || !process.env.VITE_API_BASE_URL) {
+  if (import.meta.env.DEV || !import.meta.env.VITE_API_BASE_URL) {
         // Simulation d'un test réussi
         const testResult = {
           status: 'success',
