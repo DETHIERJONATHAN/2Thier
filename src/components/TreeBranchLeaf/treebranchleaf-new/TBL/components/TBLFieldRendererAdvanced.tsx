@@ -25,7 +25,8 @@ import {
   Tag,
   Tooltip,
   Alert,
-  Typography
+  Typography,
+  Grid
 } from 'antd';
 import { 
   InfoCircleOutlined, 
@@ -45,6 +46,7 @@ interface FormulaConfigLocal { expression?: string; variables?: Record<string, V
 const { TextArea } = Input;
 const { Option } = Select;
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
 
 interface TreeBranchLeafFieldConfig {
   // Configuration de base
@@ -372,6 +374,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   formData = {},
   treeMetadata = {}
 }) => {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   const [localValue, setLocalValue] = useState(value);
   const [calculatedValue, setCalculatedValue] = useState<unknown>(null);
   const [conditionMet, setConditionMet] = useState(true);
@@ -1363,10 +1367,14 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
   return (
     <Form.Item
-      className="mb-4"
+      className={`mb-4 ${isMobile ? 'tbl-form-item-mobile' : ''}`}
+      labelCol={{ span: 24 }}
+      wrapperCol={{ span: 24 }}
+      colon={false}
+      style={{ width: '100%' }}
       label={
-        <div className="flex items-center gap-2">
-          <span>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <span className="font-medium text-gray-700 whitespace-normal break-words">
             {fieldConfig.label}
             {fieldConfig.required && <span className="text-red-500 ml-1">*</span>}
           </span>

@@ -12,6 +12,7 @@ import {
   Alert,
   Select,
   Badge,
+  Grid,
   
 } from 'antd';
 import { 
@@ -28,6 +29,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 const { Option } = Select;
+const { useBreakpoint } = Grid;
 
 // Types pour les templates d'email
 interface EmailTemplate {
@@ -60,6 +62,8 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
   const navigate = useNavigate();
   const location = useLocation();
   const { api } = useAuthenticatedApi();
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   
   // Utilise le leadId des props si disponible, sinon celui de l'URL
   const leadId = propLeadId || urlLeadId;
@@ -295,11 +299,17 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div
+      className="mx-auto w-full"
+      style={{
+        maxWidth: 960,
+        padding: isMobile ? '16px' : '24px'
+      }}
+    >
       {/* 📧 Header */}
-      <Row justify="space-between" align="middle" className="mb-6">
-        <Col>
-          <Space>
+      <Row justify="space-between" align="middle" className="mb-6" gutter={[16, 16]}>
+        <Col xs={24} md={16}>
+          <Space wrap size={isMobile ? 12 : 16}>
             <Button 
               icon={<ArrowLeftOutlined />} 
               onClick={handleClose}
@@ -311,22 +321,23 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
             </Title>
           </Space>
         </Col>
-        <Col>
+        <Col xs={24} md={8}>
           <Badge 
             status="processing" 
             text={`Pour: ${lead.data?.name || 'Lead'}`} 
+            style={{ width: '100%', display: 'flex', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}
           />
         </Col>
       </Row>
 
       {/* 📋 Informations du lead */}
-      <Card className="mb-6" size="small">
-        <Row gutter={16}>
-          <Col span={12}>
+      <Card className="mb-6" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+        <Row gutter={[16, 12]}>
+          <Col xs={24} md={12}>
             <Text strong>Nom:</Text> {lead.data?.name}<br/>
             <Text strong>Email:</Text> {lead.data?.email}
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <Text strong>Société:</Text> {lead.data?.company || 'Particulier'}<br/>
             <Text strong>Source:</Text> {lead.source}
           </Col>
@@ -334,14 +345,15 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* 🎨 Templates d'email */}
-      <Card title="📝 Templates d'email" className="mb-6" size="small">
+      <Card title="📝 Templates d'email" className="mb-6" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
         <Row gutter={[8, 8]}>
           {emailTemplates.map(template => (
-            <Col key={template.id}>
+            <Col key={template.id} xs={12} sm={8} md={6} lg={6}>
               <Button
                 size="small"
                 type={selectedTemplate?.id === template.id ? 'primary' : 'default'}
                 onClick={() => selectTemplate(template)}
+                block
               >
                 {template.name}
               </Button>
@@ -351,12 +363,13 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* 🤖 Actions IA */}
-      <Card title="🤖 Génération IA" className="mb-6" size="small">
-        <Space wrap>
+      <Card title="🤖 Génération IA" className="mb-6" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
+        <Space wrap size={isMobile ? 12 : 16}>
           <Button
             icon={<RobotOutlined />}
             loading={isGeneratingAI}
             onClick={() => generateAIEmail('premier_contact')}
+            block={isMobile}
           >
             Générer premier contact
           </Button>
@@ -364,6 +377,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
             icon={<RobotOutlined />}
             loading={isGeneratingAI}
             onClick={() => generateAIEmail('suivi_commercial')}
+            block={isMobile}
           >
             Générer suivi
           </Button>
@@ -371,6 +385,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
             icon={<RobotOutlined />}
             loading={isGeneratingAI}
             onClick={() => generateAIEmail('relance')}
+            block={isMobile}
           >
             Générer relance
           </Button>
@@ -378,25 +393,29 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* ✉️ Formulaire d'email */}
-      <Card title="✉️ Composer l'email">
+      <Card title="✉️ Composer l'email" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
         <Form
           form={form}
           layout="vertical"
           onValuesChange={(_, allValues) => setEmailData(allValues)}
         >
-          <Row gutter={16}>
-            <Col span={18}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={16}>
               <Form.Item
                 label="Destinataire"
                 name="to"
                 rules={[{ required: true, message: 'Email destinataire requis' }]}
               >
-                <Input prefix={<MailOutlined />} placeholder="email@example.com" />
+                <Input
+                  prefix={<MailOutlined />}
+                  placeholder="email@example.com"
+                  size={isMobile ? 'large' : undefined}
+                />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col xs={24} md={8}>
               <Form.Item label="Ton" name="tone">
-                <Select>
+                <Select size={isMobile ? 'large' : undefined}>
                   <Option value="cordial">Cordial</Option>
                   <Option value="formel">Formel</Option>
                   <Option value="amical">Amical</Option>
@@ -410,7 +429,10 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
             name="subject"
             rules={[{ required: true, message: 'Objet requis' }]}
           >
-            <Input placeholder="Objet de l'email" />
+            <Input
+              placeholder="Objet de l'email"
+              size={isMobile ? 'large' : undefined}
+            />
           </Form.Item>
 
           <Form.Item
@@ -423,21 +445,23 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
               placeholder="Tapez votre message ici..."
               showCount
               maxLength={2000}
+              style={{ fontSize: isMobile ? '16px' : undefined }}
             />
           </Form.Item>
 
           <Form.Item>
-            <Space>
+            <Space wrap size={isMobile ? 12 : 16}>
               <Button
                 type="primary"
                 icon={<SendOutlined />}
                 loading={sending}
                 onClick={sendEmail}
                 size="large"
+                block={isMobile}
               >
                 Envoyer l'email
               </Button>
-              <Button onClick={handleClose}>
+              <Button onClick={handleClose} block={isMobile}>
                 Annuler
               </Button>
             </Space>
@@ -446,7 +470,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
       </Card>
 
       {/* 📊 Informations de suivi */}
-      <Card title="📊 Suivi et analytics" size="small">
+      <Card title="📊 Suivi et analytics" size="small" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
         <Text type="secondary">
           ✅ Suivi d'ouverture activé<br/>
           ✅ Suivi des clics activé<br/>

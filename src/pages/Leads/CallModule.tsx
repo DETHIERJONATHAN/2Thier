@@ -20,6 +20,7 @@ import {
   Row,
   Col,
   Alert,
+  Grid,
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 
@@ -45,6 +46,7 @@ import { useCallLogic } from '../../components/CallModule/hooks/useCallLogic';
 import type { Lead } from '../../types/leads';
 
 const { Title } = Typography;
+const { useBreakpoint } = Grid;
 
 interface CallModuleProps {
   leadId?: string; // Prop optionnelle pour utilisation en Modal
@@ -54,6 +56,9 @@ interface CallModuleProps {
 export default function CallModule({ leadId: propLeadId, onClose }: CallModuleProps = {}): React.ReactElement {
   const { leadId: urlLeadId } = useParams<{ leadId: string }>();
   const navigate = useNavigate();
+  const screens = useBreakpoint();
+  const isMobile = !screens.lg;
+
   
   // Utilise le leadId des props si disponible, sinon celui de l'URL
   const leadId = propLeadId || urlLeadId;
@@ -121,12 +126,26 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
     'Nom non renseigné';
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div
+      className="min-h-screen bg-gray-50"
+      style={{ padding: isMobile ? '16px' : '24px' }}
+    >
       
       {/* 🎯 Header simple */}
-      <div className="bg-white p-4 mb-6 rounded-lg shadow">
-        <div className="flex justify-between items-center">
-          <Space>
+      <div
+        className="bg-white mb-6 rounded-lg shadow"
+        style={{ padding: isMobile ? '16px' : '24px' }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            justifyContent: 'space-between',
+            gap: isMobile ? 12 : 24,
+          }}
+        >
+          <Space wrap size={isMobile ? 12 : 16}>
             <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
               Retour
             </Button>
@@ -138,10 +157,10 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
       </div>
 
       {/* 🎯 Layout principal - 3 colonnes */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[16, 16]} align="stretch">
         
         {/* Colonne 1: Lead + IA */}
-        <Col span={8}>
+        <Col xs={24} md={12} xl={8} style={{ order: isMobile ? 1 : 0 }}>
           <div className="space-y-4">
             <LeadInfoPanel 
               lead={lead} 
@@ -160,7 +179,7 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
         </Col>
 
         {/* Colonne 2: Appel + Analyse */}
-        <Col span={8}>
+        <Col xs={24} md={12} xl={8} style={{ order: isMobile ? 0 : 0 }}>
           <div className="space-y-4">
             <TelnyxInterface
               lead={lead}
@@ -177,7 +196,7 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
         </Col>
 
         {/* Colonne 3: Notes + Calendrier */}
-        <Col span={8}>
+        <Col xs={24} md={12} xl={8} style={{ order: isMobile ? 2 : 0 }}>
           <div className="space-y-4">
             <CallNotesForm
               callState={callState}

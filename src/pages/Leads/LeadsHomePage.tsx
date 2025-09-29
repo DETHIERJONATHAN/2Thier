@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Table, Button, Space, Badge, Input, Select, DatePicker, Card, Typography, Row, Col, Tag, Modal, message, Popconfirm } from 'antd';
+import { Table, Button, Space, Badge, Input, Select, DatePicker, Card, Typography, Row, Col, Tag, Modal, message, Popconfirm, Grid } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { 
   PhoneOutlined, 
@@ -37,6 +37,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 const { Title } = Typography;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
+const { useBreakpoint } = Grid;
 
 interface LeadsHomePageProps {
   onViewLead: (leadId: string) => void;
@@ -59,6 +60,8 @@ export default function LeadsHomePage({
   refreshTrigger = 0,
   openInline = true
 }: LeadsHomePageProps): React.ReactElement {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   
   // 🔍 DEBUG: Vérifier les props reçues en détail
   console.log('[LeadsHomePage] 📦 Props reçues:', {
@@ -701,21 +704,33 @@ export default function LeadsHomePage({
   //  Fonction pour rendre la vue liste (contenu actuel)
   function renderListeView() {
     return (
-    <div className="p-6">
+    <div
+      className="w-full"
+      style={{
+        padding: isMobile ? '16px' : '24px'
+      }}
+    >
       {/* ⚡ CENTRE DE NOTIFICATIONS IA */}
-      <Card className="mb-6 border-l-4 border-l-blue-500">
-        <Row align="middle" justify="space-between" className="mb-4">
-          <Col>
+      <Card
+        className="mb-6 border-l-4 border-l-blue-500"
+        bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+      >
+        <Row
+          align="middle"
+          justify="space-between"
+          className="mb-4"
+          gutter={[12, 12]}
+        >
+          <Col flex="auto">
             <Title level={4} className="mb-0 flex items-center">
               ⚡ Alertes IA
               <Badge count={aiAnalysis.alerts.length} className="ml-2" />
             </Title>
           </Col>
-          <Col>
+          <Col flex="none">
             <BellOutlined className="text-xl text-blue-600" />
           </Col>
         </Row>
-        
         <Space direction="vertical" size="small" className="w-full">
           {aiAnalysis.alerts.length > 0 ? (
             aiAnalysis.alerts.map((alert) => (
@@ -749,18 +764,22 @@ export default function LeadsHomePage({
       </Card>
 
       {/*  Barre de recherche et filtres */}
-      <Card className="mb-4">
-        <Row gutter={16} align="middle">
-          <Col span={6}>
+      <Card
+        className="mb-4"
+        bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+      >
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} sm={24} md={12} lg={8} xl={6}>
             <Input
               placeholder="🔍 Recherche intelligente (nom, email, téléphone...)"
               prefix={<SearchOutlined />}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               allowClear
+              size={isMobile ? 'large' : 'middle'}
             />
           </Col>
-          <Col span={4}>
+          <Col xs={24} sm={12} md={12} lg={8} xl={6}>
             <Select
               mode="multiple"
               placeholder="Statuts"
@@ -768,6 +787,7 @@ export default function LeadsHomePage({
               value={statusFilter}
               onChange={setStatusFilter}
               allowClear
+              size={isMobile ? 'large' : 'middle'}
             >
               {leadStatuses.map(status => (
                 <Option key={status.id} value={status.id}>
@@ -776,13 +796,14 @@ export default function LeadsHomePage({
               ))}
             </Select>
           </Col>
-          <Col span={3}>
+          <Col xs={12} sm={12} md={8} lg={4} xl={3}>
             <Select
               placeholder="Source"
               style={{ width: '100%' }}
               value={sourceFilter}
               onChange={setSourceFilter}
               allowClear
+              size={isMobile ? 'large' : 'middle'}
             >
               <Option value="website">Site Web</Option>
               <Option value="facebook">Facebook Ads</Option>
@@ -790,33 +811,36 @@ export default function LeadsHomePage({
               <Option value="referral">Parrainage</Option>
             </Select>
           </Col>
-          <Col span={3}>
+          <Col xs={12} sm={12} md={8} lg={4} xl={3}>
             <Select
               placeholder="Commercial"
               style={{ width: '100%' }}
               value={commercialFilter}
               onChange={setCommercialFilter}
               allowClear
+              size={isMobile ? 'large' : 'middle'}
             >
               {/* TODO: Récupérer liste des commerciaux */}
               <Option value="user1">Commercial 1</Option>
               <Option value="user2">Commercial 2</Option>
             </Select>
           </Col>
-          <Col span={4}>
+          <Col xs={24} sm={24} md={12} lg={8} xl={6}>
             <RangePicker 
               style={{ width: '100%' }}
               value={dateRange}
               onChange={setDateRange}
               placeholder={['Date début', 'Date fin']}
+              size={isMobile ? 'large' : 'middle'}
             />
           </Col>
-          <Col span={4}>
+          <Col xs={24} sm={24} md={12} lg={8} xl={6}>
             <Select
               placeholder="Tri par"
               style={{ width: '100%' }}
               value={sortColumn}
               onChange={setSortColumn}
+              size={isMobile ? 'large' : 'middle'}
             >
               <Option value="priorityIA">🤖 Priorité IA</Option>
               <Option value="createdAt">Date création</Option>
@@ -833,14 +857,15 @@ export default function LeadsHomePage({
         dataSource={filteredLeads}
         loading={loading}
         rowKey="id"
+        size={isMobile ? 'small' : 'middle'}
         pagination={{
-          pageSize: 50,
+          pageSize: isMobile ? 20 : 50,
           showSizeChanger: true,
           showQuickJumper: true,
           showTotal: (total, range) => 
             `${range[0]}-${range[1]} sur ${total} leads`,
         }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: isMobile ? 900 : 1200 }}
         onChange={(pagination, filters, sorter) => {
           // TODO: Gérer le tri côté serveur
           console.log('Table change:', { pagination, filters, sorter });
@@ -853,6 +878,7 @@ export default function LeadsHomePage({
           title="⚡ Alertes IA Urgentes" 
           className="mt-4 border-red-500"
           extra={<BellOutlined className="text-red-500" />}
+          bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
         >
           <div className="space-y-2">
             {leads
@@ -883,8 +909,18 @@ export default function LeadsHomePage({
   return (
     <div className="h-full">
       {/* 🎯 Header avec actions principales */}
-      <div className="mb-4 flex justify-between items-center p-6 pb-0">
-        <div>
+      <div
+        className="mb-4 w-full"
+        style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          justifyContent: isMobile ? 'flex-start' : 'space-between',
+          gap: isMobile ? 16 : 24,
+          padding: isMobile ? '16px 16px 0' : '24px 24px 0'
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
           <Title level={2} className="mb-0">
             📊 CRM Leads & Appels
           </Title>
@@ -893,11 +929,12 @@ export default function LeadsHomePage({
           </p>
         </div>
         
-        <Space>
+        <Space wrap size={isMobile ? 12 : 16}>
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setIsAddModalVisible(true)}
+            block={isMobile}
           >
             Nouveau Lead
           </Button>
@@ -908,6 +945,7 @@ export default function LeadsHomePage({
               icon={<SettingOutlined />}
               onClick={() => navigate('/leads/settings')}
               title="Configuration des leads et statuts"
+              block={isMobile}
             >
               Paramètres
             </Button>
@@ -917,6 +955,7 @@ export default function LeadsHomePage({
             <Button
               icon={<BellOutlined />}
               title="Notifications IA"
+              block={isMobile}
             >
               Alertes IA
             </Button>

@@ -36,8 +36,18 @@ logSecurityEvent('SERVER_STARTUP', {
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
+// 📦 Métadonnées build (injectées par le script de déploiement)
+const BUILD_VERSION = process.env.BUILD_VERSION || 'dev-local';
+const GIT_SHA = process.env.GIT_SHA || 'unknown';
 
-// 📊 LOGGING SÉCURISÉ DE TOUTES LES REQUÊTES
+// � Middleware d'en-têtes de version
+app.use((req, res, next) => {
+  res.setHeader('X-App-Version', BUILD_VERSION);
+  res.setHeader('X-Git-Sha', GIT_SHA);
+  next();
+});
+
+// �📊 LOGGING SÉCURISÉ DE TOUTES LES REQUÊTES
 app.use(expressWinston.logger({
   winstonInstance: securityLogger,
   meta: true,
@@ -175,7 +185,17 @@ if (process.env.NODE_ENV === 'production') {
   const indexHtml = path.join(distDir, 'index.html');
   if (fs.existsSync(indexHtml)) {
     console.log('🗂️ [STATIC] Distribution front détectée, activation du serveur statique');
-    app.use(express.static(distDir));
+    app.use(express.static(distDir, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+        }
+      }
+    }));
     // Fallback SPA: toutes les routes non-API renvoient index.html
     app.get(/^(?!\/api\/).*/, (_req, res) => {
       res.sendFile(indexHtml);

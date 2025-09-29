@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { Layout, Dropdown, Button, Input } from 'antd';
+import { Layout, Dropdown, Button, Input, Drawer, Collapse, Avatar } from 'antd';
+import type { CollapseProps } from 'antd';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   MenuOutlined, 
@@ -72,6 +73,8 @@ type SectionWithModules = {
   }>;
 };
 
+type ModuleItem = SectionWithModules['modules'][number];
+
 interface MainLayoutProps {
   children: React.ReactNode;
 }
@@ -121,6 +124,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openSections, setOpenSections] = useState<string[]>([]);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const isMobile = windowWidth < 768;
 
   // Gérer le redimensionnement de la fenêtre pour la responsivité
   useEffect(() => {
@@ -139,6 +143,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     user,
     modules
   } = useAuth();
+
+  const userInitial = useMemo(() => {
+    const source = user?.firstName || user?.firstname || user?.email || currentOrganization?.name || 'C';
+    return (source?.charAt?.(0) || 'C').toUpperCase();
+  }, [user?.firstName, user?.firstname, user?.email, currentOrganization?.name]);
+
+  const userLabel = useMemo(() => {
+    const orgName = currentOrganization?.name || 'CRM';
+    if (!user) return orgName;
+    const name = user.firstName || user.firstname || user.email || 'Utilisateur';
+    return `${orgName} (${name})`;
+  }, [currentOrganization?.name, user]);
 
   // État des favoris
   const [favoriteModules, setFavoriteModules] = useState<string[]>([]);
@@ -206,6 +222,30 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     );
   }, []);
 
+  const getModuleKey = useCallback((module: ModuleItem | undefined | null) => {
+    if (!module) return null;
+    return module.key || module.id || module.route || module.name || module.label || null;
+  }, []);
+
+  const modulesByKey = useMemo(() => {
+    const map = new Map<string, ModuleItem>();
+    sectionsWithModules.forEach(section => {
+      section.modules.forEach(module => {
+        const key = getModuleKey(module);
+        if (key) {
+          map.set(key, module);
+        }
+      });
+    });
+    return map;
+  }, [sectionsWithModules, getModuleKey]);
+
+  const favoriteModuleDetails = useMemo(() => (
+    favoriteModules
+      .map(key => modulesByKey.get(key))
+      .filter((module): module is ModuleItem => Boolean(module))
+  ), [favoriteModules, modulesByKey]);
+
   // Fonction pour obtenir l'icône d'un module avec sa couleur
   const getModuleIcon = useCallback((module: { key?: string; name?: string; label?: string; icon?: string; iconColor?: string; categoryColor?: string; categoryIcon?: string }) => {
     // Utiliser la couleur du module si elle existe, sinon la couleur de la catégorie, sinon couleur par défaut
@@ -254,6 +294,141 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const CustomHamburgerMenu = useMemo(() => {
     if (!isMenuOpen) return null;
 
+    if (isMobile) {
+      const collapseItems: CollapseProps['items'] = sectionsWithModules.map(section => {
+        const sectionKey = section.id || section.title;
+        return {
+          key: sectionKey,
+          label: (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{section.title}</span>
+              <span style={{ fontSize: '12px', color: '#86919a' }}>{section.modules.length}</span>
+            </div>
+          ),
+          children: (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {section.modules.map((module, index) => {
+                const moduleKey = getModuleKey(module);
+                const isFavorite = moduleKey ? favoriteModules.includes(moduleKey) : false;
+                const compositeKey = moduleKey || `${sectionKey}-module-${index}`;
+
+                return (
+                  <div
+                    key={compositeKey}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 0',
+                      borderBottom: '1px solid #f0f0f0'
+                    }}
+                  >
+                    <div
+                      onClick={() => {
+                        navigate(getModuleRoute(module));
+                        setIsMenuOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: 'pointer',
+                        flex: 1,
+                        minWidth: 0
+                      }}
+                    >
+                      {getModuleIcon(module)}
+                      <span style={{
+                        fontSize: '14px',
+                        color: '#1f2933',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {module.label || module.name}
+                      </span>
+                    </div>
+                    {moduleKey && (
+                      <StarOutlined
+                        onClick={(e) => toggleFavorite(moduleKey, e)}
+                        style={{
+                          cursor: 'pointer',
+                          color: isFavorite ? '#faad14' : '#d9d9d9',
+                          fontSize: '16px',
+                          marginLeft: '12px'
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        };
+      });
+
+      return (
+        <Drawer
+          open={isMenuOpen}
+          placement="left"
+          width={Math.min(windowWidth, 360)}
+          onClose={() => setIsMenuOpen(false)}
+          bodyStyle={{ padding: '0 16px 24px' }}
+          headerStyle={{ borderBottom: '1px solid #f0f0f0' }}
+          title="Navigation"
+        >
+          <div style={{ marginBottom: '16px' }}>
+            <Input
+              placeholder="Recherche"
+              prefix={<SearchOutlined style={{ color: '#999' }} />}
+              allowClear
+            />
+          </div>
+
+          {favoriteModuleDetails.length > 0 && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '8px', color: '#1a4951' }}>Favoris</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {favoriteModuleDetails.map(module => {
+                  const moduleKey = getModuleKey(module);
+                  if (!moduleKey) return null;
+                  return (
+                    <Button
+                      key={`fav-${moduleKey}`}
+                      type="text"
+                      onClick={() => {
+                        navigate(getModuleRoute(module));
+                        setIsMenuOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        padding: '8px 4px'
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#1f2933' }}>
+                        {getModuleIcon(module)}
+                        {module.label || module.name}
+                      </span>
+                      <StarOutlined style={{ color: '#faad14' }} />
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <Collapse
+            bordered={false}
+            defaultActiveKey={collapseItems.length ? [collapseItems[0]?.key || ''] : undefined}
+            items={collapseItems}
+          />
+        </Drawer>
+      );
+    }
+
     return (
       <div style={{
         position: 'fixed',
@@ -265,7 +440,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         zIndex: 999,
         borderBottom: '1px solid #e8e8e8'
       }}>
-        {/* Sections principales horizontalement avec dropdowns individuels - RESPONSIVE */}
         <div style={{
           display: 'flex',
           flexDirection: 'row',
@@ -278,7 +452,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           minHeight: '36px',
           alignItems: 'flex-start'
         }}>
-          {/* Navigation rapide - Dashboard - RESPONSIVE */}
           <div style={{ 
             position: 'relative', 
             marginRight: '4px',
@@ -297,13 +470,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 minWidth: 'auto'
               }}
             >
-              <span style={{ 
-                display: windowWidth < 768 ? 'none' : 'inline'
-              }}>Dashboard</span>
+              <span>Dashboard</span>
             </Button>
           </div>
-          
-          {/* Sections dynamiques avec dropdowns sous chaque section - RESPONSIVE */}
+
           {sectionsWithModules.map(section => (
             <div key={section.id} style={{ 
               position: 'relative', 
@@ -327,21 +497,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     : 'transparent',
                   whiteSpace: 'nowrap',
                   minWidth: 'auto',
-                  maxWidth: windowWidth < 576 ? '80px' : 'none',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis'
                 }}
-                title={section.title} // Tooltip pour les écrans petits
+                title={section.title}
               >
-                <span style={{
-                  display: 'inline',
-                  fontSize: windowWidth < 576 ? '11px' : '12px'
-                }}>
-                  {windowWidth < 576 && section.title.length > 8 
-                    ? section.title.substring(0, 6) + '...'
-                    : section.title
-                  }
-                </span>
+                <span>{section.title}</span>
                 <DownOutlined style={{ 
                   fontSize: '10px', 
                   marginLeft: '4px',
@@ -349,79 +510,81 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                   transition: 'transform 0.2s ease'
                 }} />
               </Button>
-              
-              {/* Dropdown sous cette section spécifique - RESPONSIVE */}
+
               {openSections.includes(section.id) && (
                 <div style={{
                   position: 'absolute',
                   top: '100%',
-                  left: windowWidth < 768 ? '-50px' : '0',
-                  minWidth: windowWidth < 576 ? '180px' : '200px',
-                  maxWidth: windowWidth < 768 ? '250px' : '300px',
+                  left: '0',
+                  minWidth: '220px',
                   backgroundColor: 'white',
                   border: '1px solid #e8e8e8',
                   borderRadius: '4px',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                   zIndex: 1001,
-                  maxHeight: windowWidth < 576 ? '250px' : '300px',
+                  maxHeight: '320px',
                   overflowY: 'auto'
                 }}>
-                  {section.modules.map(module => (
-                    <div
-                      key={module.id || module.key}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: windowWidth < 576 ? '6px 8px' : '8px 12px',
-                        fontSize: windowWidth < 576 ? '12px' : '13px',
-                        color: '#333',
-                        transition: 'background-color 0.2s ease',
-                        borderBottom: '1px solid #f5f5f5',
-                        justifyContent: 'space-between'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      {/* Module cliquable */}
+                  {section.modules.map((module, index) => {
+                    const moduleKey = getModuleKey(module);
+                    const isFavorite = moduleKey ? favoriteModules.includes(moduleKey) : false;
+                    const compositeKey = moduleKey || `${section.id}-module-${index}`;
+
+                    return (
                       <div
-                        onClick={() => { 
-                          navigate(getModuleRoute(module)); 
-                          setIsMenuOpen(false); 
-                        }}
+                        key={compositeKey}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          flex: 1,
-                          cursor: 'pointer'
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          color: '#333',
+                          borderBottom: '1px solid #f5f5f5',
+                          justifyContent: 'space-between'
                         }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
-                        {getModuleIcon(module)}
-                        <span style={{ 
-                          marginLeft: '8px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          color: module.iconColor || module.categoryColor || '#333'
-                        }}>
-                          {module.label || module.name}
-                        </span>
+                        <div
+                          onClick={() => {
+                            navigate(getModuleRoute(module));
+                            setIsMenuOpen(false);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            flex: 1,
+                            cursor: 'pointer',
+                            gap: '8px'
+                          }}
+                        >
+                          {getModuleIcon(module)}
+                          <span style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            color: module.iconColor || module.categoryColor || '#333'
+                          }}>
+                            {module.label || module.name}
+                          </span>
+                        </div>
+                        {moduleKey && (
+                          <StarOutlined
+                            onClick={(e) => toggleFavorite(moduleKey, e)}
+                            style={{
+                              cursor: 'pointer',
+                              color: isFavorite ? '#faad14' : '#d9d9d9',
+                              fontSize: '14px',
+                              padding: '4px',
+                              marginLeft: '8px',
+                              transition: 'color 0.2s ease'
+                            }}
+                            title={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                          />
+                        )}
                       </div>
-                      
-                      {/* Étoile pour favoris */}
-                      <StarOutlined
-                        onClick={(e) => toggleFavorite(module.key || module.id || '', e)}
-                        style={{
-                          cursor: 'pointer',
-                          color: favoriteModules.includes(module.key || module.id || '') ? '#faad14' : '#d9d9d9',
-                          fontSize: '14px',
-                          padding: '4px',
-                          marginLeft: '8px',
-                          transition: 'color 0.2s ease'
-                        }}
-                        title={favoriteModules.includes(module.key || module.id || '') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -429,7 +592,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         </div>
       </div>
     );
-  }, [isMenuOpen, sectionsWithModules, openSections, navigate, toggleSection, getModuleIcon, windowWidth, toggleFavorite, favoriteModules]);
+  }, [
+    isMenuOpen,
+    isMobile,
+    sectionsWithModules,
+    favoriteModules,
+    favoriteModuleDetails,
+    windowWidth,
+    navigate,
+    getModuleIcon,
+    toggleFavorite,
+    toggleSection,
+    openSections,
+    getModuleKey
+  ]);
 
   // Menu des sites vitrines (drapeau)
   const sitesMenu = useMemo(() => ({
@@ -460,25 +636,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   // Menu des favoris (étoile) - à partir des modules favoris de l'utilisateur
   const favoritesMenu = useMemo(() => {
-    const favoriteItems = sectionsWithModules
-      .flatMap(section => section.modules)
-      .filter(module => favoriteModules.includes(module.key))
-      .map(module => ({
-        key: module.key,
-        label: (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {getModuleIcon(module)}
-            <span style={{ color: module.iconColor || module.categoryColor || '#333' }}>{module.label || module.name}</span>
-          </div>
-        ),
-        onClick: () => navigate(getModuleRoute(module))
-      }));
+    const favoriteItems = favoriteModuleDetails
+      .map(module => {
+        const moduleKey = getModuleKey(module);
+        if (!moduleKey) return null;
+        return {
+          key: moduleKey,
+          label: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {getModuleIcon(module)}
+              <span style={{ color: module.iconColor || module.categoryColor || '#333' }}>{module.label || module.name}</span>
+            </div>
+          ),
+          onClick: () => navigate(getModuleRoute(module))
+        };
+      })
+      .filter(Boolean) as Array<{ key: string; label: React.ReactNode; onClick: () => void }>;
 
     return {
       items: favoriteItems.length > 0 
         ? [
             ...favoriteItems,
-            { type: 'divider' },
+            { type: 'divider' as const },
             {
               key: 'manage-favorites',
               label: '⚙️ Gérer les favoris',
@@ -493,7 +672,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             }
           ]
     };
-  }, [favoriteModules, sectionsWithModules, navigate, getModuleIcon]);
+  }, [favoriteModuleDetails, getModuleIcon, getModuleKey, navigate]);
 
   // Menu profil utilisateur
   const userProfileMenu = useMemo(() => ({
@@ -525,10 +704,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       <Header 
         style={{ 
           backgroundColor: '#1a4951', 
-          height: '48px',
-          padding: '0 16px',
+          minHeight: isMobile ? '56px' : '56px',
+          padding: isMobile ? '0 12px' : '0 20px',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'flex-start',
+          flexWrap: 'nowrap',
+          gap: isMobile ? '8px' : '16px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
           width: '100%',
           position: 'fixed',
@@ -559,13 +741,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           className="header-2thier-item" 
           style={{ 
             fontWeight: 'bold', 
-            fontSize: '18px', 
-            marginLeft: '16px', 
+            fontSize: isMobile ? '16px' : '18px', 
+            marginLeft: isMobile ? '4px' : '16px', 
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            flex: isMobile ? '1 1 auto' : '0 0 auto',
+            minWidth: 0
           }}
+          onClick={() => navigate('/dashboard')}
         >
           <img 
             src="/2thier-logo.png" 
@@ -575,7 +760,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               width: 'auto'
             }}
           />
-          2THIER CRM
+          {!isMobile && '2THIER CRM'}
         </div>
 
         {/* Icône Home */}
@@ -588,7 +773,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             padding: '8px',
             height: '40px',
             minWidth: '40px',
-            marginLeft: '16px'
+            marginLeft: isMobile ? '0' : '12px'
           }}
           onClick={() => navigate('/dashboard')}
         />
@@ -598,44 +783,49 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           placeholder="Search"
           prefix={<SearchOutlined style={{ color: '#999' }} />}
           style={{ 
-            marginLeft: '16px',
-            marginRight: 'auto',
-            maxWidth: '300px',
-            borderRadius: '4px'
+            marginLeft: isMobile ? '0' : '16px',
+            marginRight: isMobile ? '0' : 'auto',
+            maxWidth: isMobile ? '100%' : '320px',
+            borderRadius: '4px',
+            display: isMobile ? 'none' : 'block'
           }}
         />
 
         {/* Icônes à droite */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
           {/* Favoris */}
-          <Dropdown menu={favoritesMenu} trigger={['click']} placement="bottomRight">
-            <Button 
-              type="text" 
-              icon={<StarOutlined style={{ fontSize: '16px' }} />}
-              className="header-2thier-item"
-              style={{ 
-                border: 'none',
-                padding: '8px',
-                height: '40px',
-                minWidth: '40px'
-              }}
-            />
-          </Dropdown>
+          <div style={{ display: 'inline-flex' }}>
+            <Dropdown menu={favoritesMenu} trigger={['click']} placement="bottomRight">
+              <Button 
+                type="text" 
+                icon={<StarOutlined style={{ fontSize: '16px' }} />}
+                className="header-2thier-item"
+                style={{ 
+                  border: 'none',
+                  padding: '8px',
+                  height: '40px',
+                  minWidth: isMobile ? '36px' : '40px'
+                }}
+              />
+            </Dropdown>
+          </div>
 
           {/* Sites Vitrines */}
-          <Dropdown menu={sitesMenu} trigger={['click']} placement="bottomRight">
-            <Button 
-              type="text" 
-              icon={<FlagOutlined style={{ fontSize: '16px' }} />}
-              className="header-2thier-item"
-              style={{ 
-                border: 'none',
-                padding: '8px',
-                height: '40px',
-                minWidth: '40px'
-              }}
-            />
-          </Dropdown>
+          <div style={{ display: 'inline-flex' }}>
+            <Dropdown menu={sitesMenu} trigger={['click']} placement="bottomRight">
+              <Button 
+                type="text" 
+                icon={<FlagOutlined style={{ fontSize: '16px' }} />}
+                className="header-2thier-item"
+                style={{ 
+                  border: 'none',
+                  padding: '8px',
+                  height: '40px',
+                  minWidth: isMobile ? '36px' : '40px'
+                }}
+              />
+            </Dropdown>
+          </div>
 
           {/* Notifications avec Badge */}
           <div style={{ position: 'relative' }}>
@@ -678,7 +868,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               border: 'none',
               padding: '8px',
               height: '40px',
-              minWidth: '40px'
+              minWidth: '40px',
+              display: isMobile ? 'none' : 'inline-flex'
             }}
           />
 
@@ -691,16 +882,32 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 border: 'none',
                 color: 'white',
                 height: '40px',
-                padding: '0 12px',
+                padding: isMobile ? '0 8px' : '0 12px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: isMobile ? '6px' : '8px'
               }}
             >
-              <span style={{ fontSize: '14px', fontWeight: '500' }}>
-                {user ? `${currentOrganization?.name || 'CRM'} (${user.firstName || 'User'})` : 'CRM'}
-              </span>
-              <DownOutlined style={{ fontSize: '12px' }} />
+              <Avatar size="small" style={{ backgroundColor: '#1890ff' }}>
+                {userInitial}
+              </Avatar>
+              {!isMobile && (
+                <>
+                  <span
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      maxWidth: '160px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {userLabel}
+                  </span>
+                  <DownOutlined style={{ fontSize: '12px' }} />
+                </>
+              )}
             </Button>
           </Dropdown>
         </div>
@@ -728,7 +935,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       <Content style={{ 
         backgroundColor: 'white',  /* CHANGÉ: blanc au lieu de #004445 */
         minHeight: '100vh',
-        marginTop: '48px',
+        marginTop: isMobile ? '64px' : '72px',
         overflow: 'auto'
       }}>
         {children}

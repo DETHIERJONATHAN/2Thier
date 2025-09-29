@@ -24,8 +24,24 @@ export interface EvaluateOptions {
 // Ajout: opérateurs comparaison gérés en phase de parsing (transformés en fonctions booléennes)
 // Ils ne sont PAS ajoutés à OP_PRECEDENCE pour éviter de modifier la logique arithmétique: au lieu de cela,
 // on réécrit 'a > b' en gt(a,b) directement sous forme de tokens fonction.
-const OP_PRECEDENCE: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2, '^': 3 };
-const OP_ASSOC: Record<string, 'L' | 'R'> = { '+': 'L', '-': 'L', '*': 'L', '/': 'L', '^': 'R' };
+const OP_PRECEDENCE: Record<string, number> = {
+  '+': 1,
+  '-': 1,
+  '*': 2,
+  '/': 2,
+  '^': 3,
+  and: 0,
+  or: 0
+};
+const OP_ASSOC: Record<string, 'L' | 'R'> = {
+  '+': 'L',
+  '-': 'L',
+  '*': 'L',
+  '/': 'L',
+  '^': 'R',
+  and: 'L',
+  or: 'L'
+};
 
 // Cache RPN basé sur empreinte des tokens
 const rpnCache = new Map<string, FormulaToken[]>();
@@ -82,7 +98,7 @@ function tokensFingerprint(tokens: FormulaToken[]): string {
 function validateExpression(expr: string, opts?: EvaluateOptions) {
   const maxLen = opts?.maxExpressionLength ?? 500;
   if (expr.length > maxLen) throw new Error('Expression trop longue');
-  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:]+$/;
+  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=]+$/;
   if (!allowed.test(expr)) throw new Error('Caractères non autorisés dans l\'expression');
 }
 
@@ -125,10 +141,26 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
       let j = i + 1;
       while (j < working.length && /[A-Za-z0-9_]/.test(working[j])) j++;
       const ident = working.slice(i, j);
+      const lowerIdent = ident.toLowerCase();
+      if (lowerIdent === 'true' || lowerIdent === 'false') {
+        tokens.push({ type: 'number', value: lowerIdent === 'true' ? 1 : 0 });
+        i = j; lastToken = tokens[tokens.length - 1];
+        continue;
+      }
+      const canUseAsBinary = Boolean(lastToken && (
+        (lastToken.type === 'number') ||
+        (lastToken.type === 'variable') ||
+        (lastToken.type === 'paren' && lastToken.value === ')')
+      ));
+      if ((lowerIdent === 'and' || lowerIdent === 'or') && canUseAsBinary) {
+        tokens.push({ type: 'operator', value: lowerIdent });
+        i = j; lastToken = tokens[tokens.length - 1];
+        continue;
+      }
       // Fonction si prochaine non-espace est (
       let k = j; while (k < working.length && /\s/.test(working[k])) k++;
       if (working[k] === '(') {
-        tokens.push({ type: 'func', name: ident.toLowerCase() });
+        tokens.push({ type: 'func', name: lowerIdent });
         // La parenthèse sera traitée dans cycle suivant
         i = j; lastToken = tokens[tokens.length - 1];
         continue;
@@ -376,6 +408,12 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           // Utiliser Math.pow (peut générer Infinity si grand)
           r = Math.pow(a, b);
           if (!Number.isFinite(r)) { pushError('invalid_result', { op: '^', a, b }); r = 0; }
+          break;
+        case 'and':
+          r = (a !== 0 && b !== 0) ? 1 : 0;
+          break;
+        case 'or':
+          r = (a !== 0 || b !== 0) ? 1 : 0;
           break;
         default:
           pushError('unknown_operator', { op: tk.value });
