@@ -8,7 +8,14 @@ const prisma = new PrismaClient();
 // Configuration OAuth2 Google
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/google-auth/callback';
+const GOOGLE_REDIRECT_URI = (() => {
+  const explicit = process.env.GOOGLE_REDIRECT_URI?.trim();
+  if (explicit) return explicit;
+  const base = process.env.API_URL || process.env.BACKEND_URL || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+    ? 'https://api.2thier.com'
+    : 'http://localhost:4000');
+  return `${base.replace(/\/$/, '')}/api/google-auth/callback`;
+})();
 
 // Scopes Google Workspace nécessaires COMPLETS
 export const GOOGLE_SCOPES_LIST = [

@@ -26,7 +26,14 @@ function cacheSet(key: string, payload: unknown, ttlMs: number) {
 }
 
 // Utilitaire: sécuriser/normaliser le redirectUri provenant des variables d'environnement
-const DEFAULT_ADS_REDIRECT = 'http://localhost:4000/api/google-auth/callback';
+const DEFAULT_ADS_REDIRECT = (() => {
+  const explicit = process.env.GOOGLE_ADS_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI;
+  if (explicit && explicit.trim().length > 0) return explicit.trim();
+  const base = process.env.API_URL || process.env.BACKEND_URL || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
+    ? 'https://api.2thier.com'
+    : 'http://localhost:4000');
+  return `${base.replace(/\/$/, '')}/api/google-auth/callback`;
+})();
 function sanitizeRedirectUri(raw?: string): { uri: string; raw?: string; sanitized: boolean; warning?: string } {
   if (!raw) return { uri: DEFAULT_ADS_REDIRECT, sanitized: false };
   const original = raw;
@@ -634,7 +641,7 @@ router.get('/advertising/oauth/:platform/url', async (req: Request, res: Respons
       const { uri: redirectUri, warning } = sanitizeRedirectUri(process.env.GOOGLE_ADS_REDIRECT_URI);
       if (!clientId) {
         const missing = ['GOOGLE_ADS_CLIENT_ID'];
-        const backend = process.env.BACKEND_URL || 'http://localhost:4000';
+  const backend = (process.env.BACKEND_URL || process.env.API_URL || '').trim() || 'http://localhost:4000';
         const demoUrl = `${backend}/api/integrations/advertising/oauth/google_ads/demo?missing=${encodeURIComponent(missing.join(','))}`;
         return res.json({ success: true, platform, demo: true, requiredEnv: missing, authUrl: demoUrl, message: 'Mode démo: variables d\'environnement manquantes' });
       }
@@ -665,7 +672,7 @@ router.get('/advertising/oauth/:platform/url', async (req: Request, res: Respons
       const redirectUri = process.env.META_REDIRECT_URI || 'https://localhost:3000/';
       if (!appId) {
         const missing = ['META_APP_ID'];
-        const backend = process.env.BACKEND_URL || 'http://localhost:4000';
+  const backend = (process.env.BACKEND_URL || process.env.API_URL || '').trim() || 'http://localhost:4000';
         const demoUrl = `${backend}/api/integrations/advertising/oauth/meta_ads/demo?missing=${encodeURIComponent(missing.join(','))}`;
         return res.json({ success: true, platform, demo: true, requiredEnv: missing, authUrl: demoUrl, message: 'Mode démo: variables d\'environnement manquantes' });
       }
