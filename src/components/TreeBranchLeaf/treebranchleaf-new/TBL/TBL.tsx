@@ -14,7 +14,8 @@ import {
   Col,
   Spin,
   Alert,
-  Form
+  Form,
+  Grid
 } from 'antd';
 import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
@@ -40,6 +41,7 @@ declare global { interface Window { TBL_DEP_GRAPH?: Map<string, Set<string>>; TB
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 interface TBLProps {
   clientData?: {
@@ -57,6 +59,26 @@ const TBL: React.FC<TBLProps> = ({
   // Récupérer leadId depuis l'URL
   const { leadId: urlLeadId } = useParams<{ leadId?: string }>();
   const { api } = useAuthenticatedApi();
+  const screens = useBreakpoint();
+  const isMobile = !screens.lg;
+  const isTablet = !screens.xl && screens.lg;
+  const contentPaddingClass = useMemo(() => {
+    if (isMobile) return 'p-3';
+    if (isTablet) return 'p-4';
+    return 'p-6';
+  }, [isMobile, isTablet]);
+  const mainRowGutter = useMemo<[number, number]>(() => [
+    isMobile ? 16 : isTablet ? 20 : 24,
+    isMobile ? 16 : 32
+  ], [isMobile, isTablet]);
+  const headerContainerClass = useMemo(
+    () => `mb-6 pb-4 border-b border-gray-200 flex ${isMobile ? 'flex-col gap-4 items-start' : 'items-center justify-between'}`,
+    [isMobile]
+  );
+  const headerActionsDirection = isMobile ? 'vertical' : 'horizontal';
+  const headerActionsAlign = isMobile ? 'start' : 'center';
+  const headerActionsClassName = isMobile ? 'w-full' : undefined;
+  const actionButtonBlock = isMobile;
   
   // État pour les données Lead dynamiques
   const [clientData, setClientData] = useState({
@@ -1389,10 +1411,10 @@ const TBL: React.FC<TBLProps> = ({
 
   return (
     <Layout className="h-full bg-gray-50">
-      <Content className="p-6">
-        <Row gutter={24} className="h-full">
+      <Content className={contentPaddingClass}>
+        <Row gutter={mainRowGutter} className="h-full">
           {/* Sidebar client */}
-          <Col span={6}>
+          <Col xs={24} lg={8} xl={6} className={isMobile ? 'mb-4' : undefined}>
             <ClientSidebar 
               clientData={clientData}
               projectStats={{
@@ -1408,8 +1430,8 @@ const TBL: React.FC<TBLProps> = ({
           </Col>
 
           {/* Contenu principal */}
-          <Col span={18}>
-            <Card className="h-full shadow-sm">
+          <Col xs={24} lg={16} xl={18}>
+            <Card className="h-full shadow-sm" bodyStyle={{ padding: isMobile ? 16 : isTablet ? 20 : 24 }}>
               {/* Dev panel capabilities (diagnostic) */}
               {useFixed && (() => { try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } })() && (
                 <div className="mb-4">
@@ -1419,7 +1441,7 @@ const TBL: React.FC<TBLProps> = ({
                 </div>
               )}
               {/* En-tête compact avec Lead */}
-              <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
+              <div className={headerContainerClass}>
                 <div>
                   <Title level={3} className="mb-1 flex items-center gap-3">
                     <span>TreeBranchLeaf - {leadId ? clientData.name : tree.name}</span>
@@ -1439,22 +1461,31 @@ const TBL: React.FC<TBLProps> = ({
                   </Text>
                 </div>
                 
-                <Space>
+                <Space
+                  direction={headerActionsDirection}
+                  size={isMobile ? 'middle' : 'small'}
+                  className={headerActionsClassName}
+                  wrap={!isMobile}
+                  align={headerActionsAlign}
+                >
                   <Button 
                     icon={<UserOutlined />}
                     onClick={handleLoadLead}
+                    block={actionButtonBlock}
                   >
                     Charger Lead
                   </Button>
                   <Button 
                     icon={<PlusOutlined />}
                     onClick={handleNewLead}
+                    block={actionButtonBlock}
                   >
                     Nouveau Lead
                   </Button>
                   <Button 
                     icon={<FolderOpenOutlined />}
                     onClick={handleLoadDevis}
+                    block={actionButtonBlock}
                   >
                     Charger Devis
                   </Button>
@@ -1462,19 +1493,21 @@ const TBL: React.FC<TBLProps> = ({
                     icon={<FileAddOutlined />}
                     onClick={handleNewDevis}
                     type="primary"
+                    block={actionButtonBlock}
                   >
                     Nouveau Devis
                   </Button>
                   <Button 
                     icon={<DownloadOutlined />}
                     onClick={handleGeneratePDF}
+                    block={actionButtonBlock}
                   >
                     PDF
                   </Button>
                   {isSuperAdmin && (
                     <>
-                      <Button onClick={() => { void fillAllFields(false); }}>Remplir tout (admin)</Button>
-                      <Button type="primary" onClick={() => { void fillAllFields(true); }}>Remplir + Enregistrer</Button>
+                      <Button onClick={() => { void fillAllFields(false); }} block={actionButtonBlock}>Remplir tout (admin)</Button>
+                      <Button type="primary" onClick={() => { void fillAllFields(true); }} block={actionButtonBlock}>Remplir + Enregistrer</Button>
                     </>
                   )}
                   {/* Bouton Actualiser retiré (reload state supprimé) */}
@@ -1498,8 +1531,9 @@ const TBL: React.FC<TBLProps> = ({
                 activeKey={activeTab}
                 onChange={setActiveTab}
                 type="card"
-                size="large"
+                size={isMobile ? 'small' : 'large'}
                 className="tbl-tabs"
+                tabBarGutter={isMobile ? 12 : 24}
                 items={tabs ? tabs.map(tab => ({
                   key: tab.id,
                   label: (
@@ -1515,7 +1549,7 @@ const TBL: React.FC<TBLProps> = ({
                     </div>
                   ),
                   children: (
-                    <div className="p-4">
+                    <div className={isMobile ? 'p-0' : 'p-4'}>
                       <TBLTabContentWithSections
                         sections={tab.sections || []}
                         fields={tab.fields || []}
@@ -1625,21 +1659,22 @@ const TBL: React.FC<TBLProps> = ({
             Annuler
           </Button>
         ]}
-        width={800}
+        width={isMobile ? 360 : isTablet ? 640 : 800}
       >
         <div className="space-y-4">
           {/* Barre de recherche identique à la modal lead */}
-          <div className="flex items-center space-x-2">
+          <div className={isMobile ? 'flex flex-col gap-2' : 'flex items-center space-x-2'}>
             <Input
               placeholder="Rechercher dans les devis..."
               prefix={<SearchOutlined />}
               value={devisSearchTerm}
               onChange={(e) => setDevisSearchTerm(e.target.value)}
-              className="flex-1"
+              className={isMobile ? 'w-full' : 'flex-1'}
             />
             <Button 
               type="primary" 
               icon={<SearchOutlined />}
+              block={isMobile}
             >
               <span className="hidden sm:inline">Rechercher</span>
             </Button>
@@ -1663,18 +1698,19 @@ const TBL: React.FC<TBLProps> = ({
             </div>
           ) : (
             <div>
-              {/* En-têtes du tableau identiques à la modal lead */}
-              <div className="bg-gray-50 border-b border-gray-200">
-                <div className="grid grid-cols-4 gap-4 px-4 py-3 text-sm font-medium text-gray-600" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto' }}>
-                  <div>Nom</div>
-                  <div>Contact</div>
-                  <div>Entreprise</div>
-                  <div>Actions</div>
+              {!isMobile && (
+                <div className="bg-gray-50 border-b border-gray-200">
+                  <div className="grid grid-cols-4 gap-4 px-4 py-3 text-sm font-medium text-gray-600" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto' }}>
+                    <div>Nom</div>
+                    <div>Contact</div>
+                    <div>Entreprise</div>
+                    <div>Actions</div>
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Corps du tableau avec style identique */}
-              <div className="max-h-80 overflow-y-auto">
+              <div className={isMobile ? 'space-y-3' : 'max-h-80 overflow-y-auto'}>
                 {(() => {
                   // Récupérer tous les devis avec infos lead
                   const allDevis = availableDevis.flatMap((lead) => 
@@ -1705,88 +1741,141 @@ const TBL: React.FC<TBLProps> = ({
                       );
                     })
                     .map((devis) => (
-                      <div
-                        key={devis.id}
-                        className="grid grid-cols-4 gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 transition-colors items-center"
-                        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto' }}
-                      >
-                        {/* Nom - UNE SEULE LIGNE avec icône et numérotation */}
-                        <div className="flex items-center space-x-2">
-                          <span className="text-blue-500">📄</span>
-                          <span className="font-medium text-gray-900">{devis.displayName}</span>
-                        </div>
-                      
-                      {/* Contact - EXACTEMENT comme dans la modal lead */}
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-1 text-sm text-gray-600">
-                          <span>✉️</span>
-                          <span>{devis.leadInfo.email}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-600">
-                          <span>📞</span>
-                          <span>+32 477 12 34 56</span>
-                        </div>
-                      </div>
-                      
-                      {/* Entreprise - UNE SEULE LIGNE */}
-                      <div className="flex items-center space-x-1 text-sm text-gray-600">
-                        <span>🏢</span>
-                        <span>{devis.leadInfo.company}</span>
-                      </div>
-                      
-                      {/* Actions - boutons Sélectionner et Supprimer */}
-                      <div className="flex items-center justify-center space-x-2">
-                        <Button
-                          type="primary"
+                      isMobile ? (
+                        <Card
+                          key={devis.id}
                           size="small"
-                          onClick={() => handleSelectDevis(devis.id, devis.leadInfo)}
-                          className="bg-blue-600 hover:bg-blue-700"
+                          className="shadow-sm border border-gray-100"
                         >
-                          Sélectionner
-                        </Button>
-                        <Button
-                          type="text"
-                          size="small"
-                          danger
-                          onClick={() => handleDeleteDevis(devis.id, devis.displayName)}
-                          className="hover:bg-red-50"
-                          title="Supprimer ce devis"
+                          <Space direction="vertical" size={8} className="w-full">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-blue-500">📄</span>
+                                <span className="font-medium text-gray-900">{devis.displayName}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="primary"
+                                  size="small"
+                                  onClick={() => handleSelectDevis(devis.id, devis.leadInfo)}
+                                  className="bg-blue-600 hover:bg-blue-700"
+                                >
+                                  Ouvrir
+                                </Button>
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  danger
+                                  onClick={() => handleDeleteDevis(devis.id, devis.displayName)}
+                                  className="hover:bg-red-50"
+                                  title="Supprimer ce devis"
+                                >
+                                  🗑️
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-sm text-gray-600">
+                              <div className="flex items-center gap-1">
+                                <span>✉️</span>
+                                <span>{devis.leadInfo.email}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span>📞</span>
+                                <span>+32 477 12 34 56</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span>🏢</span>
+                                <span>{devis.leadInfo.company}</span>
+                              </div>
+                            </div>
+                          </Space>
+                        </Card>
+                      ) : (
+                        <div
+                          key={devis.id}
+                          className="grid grid-cols-4 gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 transition-colors items-center"
+                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto' }}
                         >
-                          🗑️
-                        </Button>
+                          {/* Nom - UNE SEULE LIGNE avec icône et numérotation */}
+                          <div className="flex items-center space-x-2">
+                            <span className="text-blue-500">📄</span>
+                            <span className="font-medium text-gray-900">{devis.displayName}</span>
+                          </div>
+                        
+                        {/* Contact - EXACTEMENT comme dans la modal lead */}
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-1 text-sm text-gray-600">
+                            <span>✉️</span>
+                            <span>{devis.leadInfo.email}</span>
+                          </div>
+                          <div className="flex items-center space-x-1 text-sm text-gray-600">
+                            <span>📞</span>
+                            <span>+32 477 12 34 56</span>
+                          </div>
+                        </div>
+                        
+                        {/* Entreprise - UNE SEULE LIGNE */}
+                        <div className="flex items-center space-x-1 text-sm text-gray-600">
+                          <span>🏢</span>
+                          <span>{devis.leadInfo.company}</span>
+                        </div>
+                        
+                        {/* Actions - boutons Sélectionner et Supprimer */}
+                        <div className="flex items-center justify-center space-x-2">
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => handleSelectDevis(devis.id, devis.leadInfo)}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            Sélectionner
+                          </Button>
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            onClick={() => handleDeleteDevis(devis.id, devis.displayName)}
+                            className="hover:bg-red-50"
+                            title="Supprimer ce devis"
+                          >
+                            🗑️
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ));
+                      )
+                    ));
                 })()}
               </div>
               
               {/* Footer avec pagination identique à la modal lead */}
-              <div className="flex justify-between items-center mt-4 px-4 py-2 text-sm text-gray-600">
-                <div>
-                  {(() => {
-                    const totalDevis = availableDevis.flatMap(lead => lead.submissions || []).length;
-                    const filteredDevis = availableDevis.flatMap((lead) => 
-                      lead.submissions?.map((devis) => ({
-                        ...devis,
-                        leadInfo: { firstName: lead.firstName, lastName: lead.lastName, email: lead.email, company: lead.company }
-                      })) || []
-                    ).filter((devis) => {
-                      if (!devisSearchTerm) return true;
-                      const searchLower = devisSearchTerm.toLowerCase();
-                      return (
-                        devis.name?.toLowerCase().includes(searchLower) ||
-                        devis.treeName?.toLowerCase().includes(searchLower)
-                      );
-                    }).length;
-                    return `${filteredDevis} sur ${totalDevis} devis`;
-                  })()}
+              {!isMobile && (
+                <div className="flex justify-between items-center mt-4 px-4 py-2 text-sm text-gray-600">
+                  <div>
+                    {(() => {
+                      const totalDevis = availableDevis.flatMap(lead => lead.submissions || []).length;
+                      const filteredDevis = availableDevis.flatMap((lead) => 
+                        lead.submissions?.map((devis) => ({
+                          ...devis,
+                          leadInfo: { firstName: lead.firstName, lastName: lead.lastName, email: lead.email, company: lead.company }
+                        })) || []
+                      ).filter((devis) => {
+                        if (!devisSearchTerm) return true;
+                        const searchLower = devisSearchTerm.toLowerCase();
+                        return (
+                          devis.name?.toLowerCase().includes(searchLower) ||
+                          devis.treeName?.toLowerCase().includes(searchLower)
+                        );
+                      }).length;
+                      return `${filteredDevis} sur ${totalDevis} devis`;
+                    })()}
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <span>1-{Math.min(availableDevis.flatMap(lead => lead.submissions || []).length, 10)} sur {availableDevis.flatMap(lead => lead.submissions || []).length} devis</span>
+                    <Button size="small" disabled>1</Button>
+                  </div>
                 </div>
-                
-                <div className="flex items-center space-x-2">
-                  <span>1-{Math.min(availableDevis.flatMap(lead => lead.submissions || []).length, 10)} sur {availableDevis.flatMap(lead => lead.submissions || []).length} devis</span>
-                  <Button size="small" disabled>1</Button>
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -1802,7 +1891,7 @@ const TBL: React.FC<TBLProps> = ({
           form.resetFields();
         }}
         footer={null}
-        width={500}
+        width={isMobile ? 360 : isTablet ? 440 : 500}
       >
         <Form
           form={form}

@@ -17,7 +17,8 @@ import {
   Col,
   Descriptions,
   Badge,
-  Tooltip
+  Tooltip,
+  Grid
 } from 'antd';
 import { 
   PhoneOutlined, 
@@ -45,6 +46,7 @@ import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+const { useBreakpoint } = Grid;
 
 type LeadHistoryItem = {
   type: 'call' | 'email' | 'note' | 'meeting' | string;
@@ -80,6 +82,8 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   const navigate = useNavigate();
   const { api } = useAuthenticatedApi();
   const { user } = useAuth();
+  const screens = useBreakpoint();
+  const isMobile = !screens.lg;
   
   // Déterminer la source du leadId (prop > URL)
   const leadId = propLeadId || urlLeadId;
@@ -434,14 +438,21 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div
+      className="mx-auto w-full"
+      style={{
+        maxWidth: 1200,
+        padding: isMobile ? '16px' : '24px'
+      }}
+    >
       {/* 📊 Header avec actions principales */}
-      <Row justify="space-between" align="middle" className="mb-6">
-        <Col>
-          <Space>
+      <Row justify="space-between" align="middle" className="mb-6" gutter={[16, 16]}>
+        <Col xs={24} lg={16}>
+          <Space wrap size={isMobile ? 12 : 16}>
             <Button 
               icon={<ArrowLeftOutlined />} 
               onClick={handleBack}
+              block={isMobile}
             >
               Retour à la liste
             </Button>
@@ -454,13 +465,14 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
             )}
           </Space>
         </Col>
-        <Col>
-          <Space size="middle">
+        <Col xs={24} lg={8}>
+          <Space size={isMobile ? 12 : 16} wrap style={{ width: '100%', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
             <Tooltip title="Ouvrir TreeBranchLeaf pour ce lead">
               <Button 
                 icon={<FolderOpenOutlined />}
                 onClick={() => navigate(`/tbl/${lead.id}`)}
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
+                block={isMobile}
               >
                 Ouvrir TBL
               </Button>
@@ -470,7 +482,8 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                 type="primary" 
                 icon={<PhoneOutlined />}
                 onClick={handleCallLead}
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
+                block={isMobile}
               >
                 📞 Appeler
               </Button>
@@ -479,7 +492,8 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
               <Button 
                 icon={<CalendarOutlined />}
                 onClick={handleScheduleMeeting}
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
+                block={isMobile}
               >
                 📅 Agenda
               </Button>
@@ -488,7 +502,8 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
               <Button 
                 icon={<MailOutlined />}
                 onClick={handleSendEmail}
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
+                block={isMobile}
               >
                 ✉️ Email
               </Button>
@@ -511,10 +526,14 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
               </span>
             ),
             children: (
-              <Row gutter={24}>
-                <Col span={12}>
-                  <Card title="👤 Coordonnées" className="mb-4">
-                    <Descriptions column={1} bordered size="small">
+              <Row gutter={[16, 16]}>
+                <Col xs={24} lg={12}>
+                  <Card
+                    title="👤 Coordonnées"
+                    className="mb-4"
+                    bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+                  >
+                    <Descriptions column={1} bordered size={isMobile ? 'middle' : 'small'}>
                       <Descriptions.Item label="Nom">{displayName || 'N/A'}</Descriptions.Item>
                       <Descriptions.Item label="Email">{displayEmail || 'N/A'}</Descriptions.Item>
                       <Descriptions.Item label="Téléphone">{displayPhone || 'N/A'}</Descriptions.Item>
@@ -526,9 +545,13 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                     </Descriptions>
                   </Card>
                 </Col>
-                <Col span={12}>
-                  <Card title="📊 Statut & Suivi" className="mb-4">
-                    <Descriptions column={1} bordered size="small">
+                <Col xs={24} lg={12}>
+                  <Card
+                    title="📊 Statut & Suivi"
+                    className="mb-4"
+                    bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+                  >
+                    <Descriptions column={1} bordered size={isMobile ? 'middle' : 'small'}>
                       <Descriptions.Item label="Statut actuel">
                         <Badge status="processing" text={lead.status} />
                       </Descriptions.Item>
@@ -563,11 +586,14 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
             children: (
               <Card 
                 title="📞 Historique des interactions" 
+                bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
                 extra={
                   <Button 
                     type="primary" 
                     icon={<PlusOutlined />}
                     onClick={() => setIsNoteModalOpen(true)}
+                    size={isMobile ? 'middle' : 'large'}
+                    style={{ width: isMobile ? '100%' : 'auto' }}
                   >
                     Ajouter une note
                   </Button>
@@ -610,6 +636,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
             children: (
               <Card 
                 title="📄 Documents attachés" 
+                bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
                 extra={
                   <Upload 
                     beforeUpload={handleDocumentUpload}
@@ -653,9 +680,9 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
               </span>
             ),
             children: (
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Card title="🤖 Analyse IA du Lead" className="mb-4">
+              <Row gutter={[16, 16]}>
+                <Col xs={24} lg={12}>
+                  <Card title="🤖 Analyse IA du Lead" className="mb-4" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
                     <div className="space-y-3">
                       <div className="bg-blue-50 p-3 rounded">
                         <strong>💡 Opportunité détectée :</strong>
@@ -668,16 +695,16 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                     </div>
                   </Card>
                 </Col>
-                <Col span={12}>
-                  <Card title="🎯 Prochaines actions suggérées" className="mb-4">
+                <Col xs={24} lg={12}>
+                  <Card title="🎯 Prochaines actions suggérées" className="mb-4" bodyStyle={{ padding: isMobile ? '16px' : '24px' }}>
                     <div className="space-y-2">
-                      <Button block type="dashed" icon={<PhoneOutlined />}>
+                      <Button block type="dashed" icon={<PhoneOutlined />} size={isMobile ? 'large' : 'middle'}>
                         Appeler avant 18h aujourd'hui
                       </Button>
-                      <Button block type="dashed" icon={<MailOutlined />}>
+                      <Button block type="dashed" icon={<MailOutlined />} size={isMobile ? 'large' : 'middle'}>
                         Envoyer documentation produit
                       </Button>
-                      <Button block type="dashed" icon={<CalendarOutlined />}>
+                      <Button block type="dashed" icon={<CalendarOutlined />} size={isMobile ? 'large' : 'middle'}>
                         Proposer RDV démonstration
                       </Button>
                     </div>
@@ -697,6 +724,8 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
         onCancel={() => setIsNoteModalOpen(false)}
         okText="Enregistrer"
         cancelText="Annuler"
+        width={isMobile ? '100%' : 520}
+        style={isMobile ? { top: 12, padding: '0 12px' } : undefined}
       >
         <TextArea
           rows={4}

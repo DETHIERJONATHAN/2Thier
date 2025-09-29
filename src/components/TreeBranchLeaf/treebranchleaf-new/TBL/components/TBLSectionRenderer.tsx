@@ -19,7 +19,8 @@ import {
   Col,
   Divider,
   Tag,
-  Collapse
+  Collapse,
+  Grid
 } from 'antd';
 import { 
   BranchesOutlined,
@@ -32,6 +33,7 @@ import { buildMirrorKeys } from '../utils/mirrorNormalization';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
+const { useBreakpoint } = Grid;
 
 // 🎯 FONCTION HELPER: Formatage des valeurs selon la configuration (depuis useTBLDataPrismaComplete)
 const formatValueWithConfig = (
@@ -100,6 +102,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   level = 0,
   parentConditions = {}
 }) => {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const formRowGutter: [number, number] = useMemo(() => [
+    isMobile ? 12 : 16,
+    isMobile ? 12 : 24
+  ], [isMobile]);
+  const dataRowGutter: [number, number] = useMemo(() => [
+    isMobile ? 12 : 16,
+    16
+  ], [isMobile]);
   // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1'))
   const debugEnabled = useMemo(() => {
     try { return localStorage.getItem('TBL_SMART_DEBUG') === '1'; } catch { return false; }
@@ -674,7 +686,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     };
 
     return (
-      <Col key={field.id} span={8}>
+      <Col key={field.id} xs={24} sm={12} lg={8}>
         <Card
           size="small"
           style={getCardStyle()}
@@ -767,16 +779,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             {/* Style spécial pour les champs des sections données */}
             {(section.isDataSection || section.title === 'Données' || section.title.includes('Données')) ? (
               <div style={{ marginBottom: '16px' }}>
-                <Row gutter={[16, 16]} justify="center">
+                <Row gutter={dataRowGutter} justify="center">
                   {(orderedFields.length > 0 ? orderedFields : section.fields || []).map(renderDataSectionField)}
                 </Row>
               </div>
             ) : orderedFields.length > 0 ? (
-              <Row gutter={[16, 16]} className="tbl-form-row">
+              <Row gutter={formRowGutter} className="tbl-form-row">
                 {orderedFields.map((field) => (
                   <Col
                     key={field.id}
-                    span={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 12}
+                    xs={24}
+                    sm={24}
+                    md={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 12}
+                    lg={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 12}
                     className="mb-2 tbl-form-col"
                   >
                     <TBLFieldRendererAdvanced
