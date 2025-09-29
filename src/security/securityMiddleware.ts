@@ -1,5 +1,4 @@
 import rateLimit from 'express-rate-limit';
-import slowDown from 'express-slow-down';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { logSecurityEvent, securityMetrics } from './securityLogger';
@@ -71,41 +70,57 @@ export const timingAttackProtection = (req: Request, res: Response, next: NextFu
 };
 
 // 🛡️ RATE LIMITING AVANCÉ AVEC WHITELIST
+// Limiteur spécifique pour les endpoints d'authentification (permet plus de tentatives sans bloquer d'autres routes)
+export const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20, // 20 tentatives de login / registre / reset par IP / 15min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives d\'authentification, réessayez plus tard.' },
+  keyGenerator: (req: Request) => `${req.ip}|${(req.body && (req.body.email || req.body.username)) || 'anon'}`,
+  handler: (req: Request, res: Response) => {
+    securityMetrics.blockedRequests++;
+    logSecurityEvent('AUTH_RATE_LIMIT', { ip: req.ip, url: req.url, bodyKeys: Object.keys(req.body || {}) }, 'warn');
+    res.status(429).json({ error: 'Trop de tentatives', retryAfter: 900 });
+  }
+});
+
+// Limiteur général API (exclut explicitement static et OPTIONS, plus plafond élevé)
 export const advancedRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: (req: Request) => {
-    // IPs de confiance (localhost, etc.)
+    // OPTIONS jamais compté (CORS preflight)
+    if (req.method === 'OPTIONS') return 10_000;
+
+    // Exclusions static
+    if (
+      req.path.startsWith('/assets/') ||
+      req.path === '/manifest.webmanifest' ||
+      req.path === '/registerSW.js' ||
+      req.path === '/sw.js'
+    ) return 10_000;
+
     const trustedIPs = ['127.0.0.1', '::1', 'localhost'];
-    if (trustedIPs.includes(req.ip)) return 10000; // Augmenté à 10000 pour le dev
-    
-    // Endpoints sensibles
-    const sensitiveEndpoints = ['/api/auth/login', '/api/auth/register', '/api/auth/reset'];
-    if (sensitiveEndpoints.some(endpoint => req.path.includes(endpoint))) {
-      return 5; // Max 5 tentatives de connexion par 15min
-    }
-    
-    return 100; // Limite générale
+    if (trustedIPs.includes(req.ip)) return 10_000;
+
+    return 1000; // plafond général relevé
   },
-  message: {
-    error: 'Trop de requêtes, veuillez réessayer plus tard',
-    retryAfter: '15 minutes'
+  skip: (req: Request) => {
+    return (
+      req.method === 'OPTIONS' ||
+      req.path.startsWith('/assets/') ||
+      req.path === '/manifest.webmanifest' ||
+      req.path === '/registerSW.js' ||
+      req.path === '/sw.js'
+    );
   },
   standardHeaders: true,
   legacyHeaders: false,
+  message: { error: 'Trop de requêtes, veuillez réessayer plus tard', retryAfter: '15 minutes' },
   handler: (req: Request, res: Response) => {
     securityMetrics.blockedRequests++;
-    logSecurityEvent('RATE_LIMIT_EXCEEDED', {
-      ip: req.ip,
-      method: req.method,
-      url: req.url,
-      userAgent: req.headers['user-agent']
-    }, 'warn');
-    
-    res.status(429).json({
-      error: 'Trop de requêtes',
-      message: 'Limite de requêtes dépassée. Veuillez réessayer plus tard.',
-      retryAfter: 900 // 15 minutes en secondes
-    });
+    logSecurityEvent('API_RATE_LIMIT', { ip: req.ip, url: req.url, method: req.method }, 'warn');
+    res.status(429).json({ error: 'Trop de requêtes', retryAfter: 900 });
   }
 });
 
