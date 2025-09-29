@@ -184,9 +184,19 @@ const MailSystemTest: React.FC = () => {
 
         <Card title="🔧 Configuration">
           <Paragraph>
-            <Text strong>Backend :</Text> http://localhost:4000<br />
-            <Text strong>Frontend :</Text> http://localhost:5173<br />
-            <Text strong>API Mail :</Text> /api/mail-system/*
+            {(() => {
+              // 🔄 Résolution dynamique pour éviter tout hardcode de http://localhost:4000
+              const apiEnv = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.API_URL;
+              const backend = apiEnv || (typeof window !== 'undefined' ? window.location.origin : '');
+              const frontend = typeof window !== 'undefined' ? window.location.origin : '';
+              return (
+                <>
+                  <Text strong>Backend :</Text> {backend || '(inconnu)'}<br />
+                  <Text strong>Frontend :</Text> {frontend || '(inconnu)'}<br />
+                  <Text strong>API Mail :</Text> /api/mail-system/*
+                </>
+              );
+            })()}
           </Paragraph>
         </Card>
 
