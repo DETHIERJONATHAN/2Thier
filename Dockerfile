@@ -37,4 +37,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 	CMD wget -qO- http://127.0.0.1:4000/api/health || exit 1
 
 # Start API server (serves API + static dist)
+ENV PGHOST=/cloudsql/thiernew:europe-west1:crm-db
+ENV PGDATABASE=2thier
+ENV PGUSER=postgres
 CMD ["tsx", "./src/api-server-clean.ts"]
