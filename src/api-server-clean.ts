@@ -19,6 +19,7 @@ import {
   securityMonitoring,
   timingAttackProtection,
   advancedRateLimit,
+  authRateLimit,
   anomalyDetection,
   inputSanitization
 } from './security/securityMiddleware';
@@ -47,7 +48,7 @@ app.use(expressWinston.logger({
   responseWhitelist: ['statusCode'],
   skip: (req, res) => {
     // Skip les endpoints de santé pour éviter le spam de logs
-    return req.url === '/api/health' && res.statusCode < 400;
+    return ['/api/health', '/health'].includes(req.url) && res.statusCode < 400;
   }
 }));
 
@@ -93,9 +94,13 @@ app.use(advancedRateLimit);
 // 🛡️ SÉCURITÉ NIVEAU 4 - DÉTECTION D'ANOMALIES
 app.use(anomalyDetection);
 
-// ⚡ Configuration CORS sécurisée
+// ⚡ Configuration CORS sécurisée (ajout app.2thier.be)
 const FRONTEND_URL = process.env.FRONTEND_URL;
-const prodOrigins = [FRONTEND_URL || 'https://crm.2thier.be', 'https://www.2thier.be'];
+const prodOrigins = [
+  FRONTEND_URL || 'https://app.2thier.be',
+  'https://www.2thier.be',
+  'https://crm.2thier.be'
+];
 const devOrigins = [FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000'];
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? prodOrigins : devOrigins,
@@ -151,9 +156,18 @@ console.log('✅ [API-SERVER-CLEAN] Passport configuré');
 
 // Routes API - Utilisation du système existant complet
 console.log('🔧 [API-SERVER-CLEAN] Configuration des routes...');
+// Limiteur spécialisé auth uniquement sur bloc /api/auth
+app.use('/api/auth', authRateLimit);
 app.use('/api', apiRouter); // Utilise TOUTES les routes existantes !
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 console.log('✅ [API-SERVER-CLEAN] Routes configurées');
+
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // 🎯 Production: servir le frontend statique (dist) si présent
 if (process.env.NODE_ENV === 'production') {
@@ -171,13 +185,6 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-app.get('/health', (_req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-  });
-});
-
 // 📊 LOGGING SÉCURISÉ DES ERREURS
 app.use(expressWinston.errorLogger({
   winstonInstance: securityLogger,
@@ -187,8 +194,8 @@ app.use(expressWinston.errorLogger({
   blacklistedMetaFields: ['password', 'token', 'secret']
 }));
 
-// Route de test racine
-app.get('/', (req, res) => {
+// Nouvelle route de diagnostic (remplace l'ancienne racine JSON)
+app.get('/api/root-info', (_req, res) => {
   res.json({
     status: 'CRM API Server Online - ENTERPRISE SECURITY',
     timestamp: new Date().toISOString(),
@@ -200,6 +207,18 @@ app.get('/', (req, res) => {
       blocks: '/api/blocks',
       auth: '/api/auto-google-auth/connect'
     }
+  });
+});
+
+// Endpoint debug pour vérifier la présence du build front en production
+app.get('/api/debug/static-status', (_req, res) => {
+  const distDir = path.resolve(process.cwd(), 'dist');
+  const indexHtml = path.join(distDir, 'index.html');
+  res.json({
+    env: process.env.NODE_ENV,
+    distExists: fs.existsSync(distDir),
+    indexExists: fs.existsSync(indexHtml),
+    served: process.env.NODE_ENV === 'production' && fs.existsSync(indexHtml)
   });
 });
 
