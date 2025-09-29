@@ -59,6 +59,32 @@ export function useAuthenticatedApi() {
   const navigate = useNavigate();
   const { logout: authLogout, currentOrganization } = useAuth();
 
+  const envApiBase = import.meta.env.VITE_API_BASE_URL;
+  const apiBaseUrl = useMemo(() => {
+    let base = envApiBase?.trim();
+
+    if (typeof window !== 'undefined') {
+      const runtimeOverride = (window as typeof window & { __API_BASE_URL?: string }).__API_BASE_URL;
+      if (runtimeOverride) {
+        base = runtimeOverride.trim();
+      }
+    }
+
+    if (!base || base.length === 0) {
+      if (import.meta.env.DEV) {
+        base = 'http://localhost:4000';
+      } else if (typeof window !== 'undefined') {
+        base = window.location.origin;
+      }
+    }
+
+    if (!base || base.length === 0) {
+      base = 'http://localhost:4000';
+    }
+
+    return base.replace(/\/$/, '');
+  }, [envApiBase]);
+
   const logout = useCallback(() => {
     authLogout();
     navigate('/login');
@@ -99,9 +125,9 @@ export function useAuthenticatedApi() {
       setGlobalError(null);
 
       const method = (fetchOptions.method || 'GET').toUpperCase();
-      const ttl = method === 'GET' && !options.noLocalCache ? matchTtl(finalUrl) : undefined;
+  const ttl = method === 'GET' && !options.noLocalCache ? matchTtl(finalUrl) : undefined;
       const orgKey = currentOrganization?.id || 'no-org';
-      const cacheKey = `${finalUrl}#${orgKey}`;
+  const cacheKey = `${apiBaseUrl}${finalUrl}#${orgKey}`;
 
       // Déduplication stricte des GET en cours (même URL/org) pour éviter les doublons dus à StrictMode
       if (method === 'GET') {
@@ -124,13 +150,13 @@ export function useAuthenticatedApi() {
         }
       }
 
-      const baseUrl = 'http://localhost:4000'; // Forcer l'URL complète pour toutes les routes API
-      const fullApiUrl = `${baseUrl}${finalUrl}`;
+  const fullApiUrl = `${apiBaseUrl}${finalUrl}`;
 
       L.info('➡️', method, finalUrl, ttl ? `(TTL ${ttl}ms)` : '');
       L.debug('Headers', Object.fromEntries(headers.entries()));
       if (params) L.debug('Query', params);
-      L.debug('Full URL', fullApiUrl);
+  L.debug('Base URL', apiBaseUrl);
+  L.debug('Full URL', fullApiUrl);
 
       const finalFetchOptions: RequestInit = {
         ...fetchOptions,
@@ -248,7 +274,7 @@ export function useAuthenticatedApi() {
       }
     },
   // L est stable car défini dans le rendu; si on souhaite stricte dépendance, on l'ajoute
-  [currentOrganization, logout, L]
+  [currentOrganization, logout, L, apiBaseUrl]
   );
 
   const api = useMemo(() => ({

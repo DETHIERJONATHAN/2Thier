@@ -100,11 +100,11 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     console.log(`📡 [PUT /api/organizations/${id}] Mise à jour organisation...`);
     const organizationData = req.body;
-    
+
     // 🔍 DEBUG - Afficher les données reçues
     console.log('📝 [PUT Organizations] Données reçues:', JSON.stringify(organizationData, null, 2));
     console.log('🔑 [PUT Organizations] Clés reçues:', Object.keys(organizationData));
-    
+
     const updatedOrganization = await prisma.organization.update({
       where: { id },
       data: {
@@ -127,19 +127,18 @@ router.put('/:id', async (req, res) => {
     res.json({ success: true, data: updatedOrganization });
   } catch (error) {
     console.error(`❌ [PUT /api/organizations/${req.params.id}] Erreur:`, error);
-    
+
     // 🔍 Plus de détails sur l'erreur
     if (error instanceof Error) {
-      console.error('❌ Message d\'erreur:', error.message);
+      console.error("❌ Message d'erreur:", error.message);
       console.error('❌ Stack trace:', error.stack);
     }
-    
-    res.status(400).json({ 
-      success: false, 
-      error: 'Erreur lors de la mise à jour de l\'organisation',
+
+    res.status(400).json({
+      success: false,
+      error: "Erreur lors de la mise à jour de l'organisation",
       details: error instanceof Error ? error.message : 'Erreur inconnue'
     });
-  }
   }
 });
 
