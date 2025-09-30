@@ -9,28 +9,20 @@ const prisma = new PrismaClient();
  * Délégation depuis api-server.ts pour architecture propre
  */
 
-// POST /api/auth/login - Connexion utilisateur
+// POST /api/auth/login - Connexion utilisateur (SIMPLE PLACEHOLDER)
 router.post('/login', async (req, res) => {
   try {
     const { email } = req.body;
-    
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email requis' });
     }
-    
     const user = await prisma.user.findFirst({
       where: { email },
-      include: {
-        UserOrganization: {
-          include: { Organization: true }
-        }
-      }
+      include: { UserOrganization: { include: { Organization: true } } }
     });
-
     if (!user) {
-      return res.json({ success: false, message: 'Utilisateur non trouvé' });
+      return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
     }
-
     const response = {
       success: true,
       currentUser: {
@@ -51,7 +43,6 @@ router.post('/login', async (req, res) => {
       },
       token: 'temporary-jwt-token'
     };
-
     res.json(response);
   } catch (error) {
     console.error('Erreur auth/login:', error);
@@ -59,34 +50,18 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me - Informations utilisateur courant
-router.get('/me', async (req, res) => {
+// GET /api/auth/me - Retourne un utilisateur (temporaire) pour le front
+router.get('/me', async (_req, res) => {
   try {
-    const userEmail = 'jonathan.dethier@dethier.be'; 
-    let user = await prisma.user.findFirst({
-      where: { email: userEmail },
-      include: {
-        UserOrganization: {
-          include: { Organization: true }
-        }
-      }
+    // Récupérer n'importe quel utilisateur (id le plus bas) en fallback
+    const user = await prisma.user.findFirst({
+      include: { UserOrganization: { include: { Organization: true } } }
     });
-
     if (!user) {
-      user = await prisma.user.findFirst({
-        include: {
-          UserOrganization: {
-            include: { Organization: true }
-          }
-        }
-      });
+      return res.status(401).json({ success: false, message: 'Aucun utilisateur en base' });
     }
-
-    if (!user) {
-      return res.status(401).json({ error: 'Non authentifié' });
-    }
-
     res.json({
+      success: true,
       currentUser: {
         id: user.id,
         email: user.email,
@@ -106,7 +81,7 @@ router.get('/me', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur auth/me:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
 
