@@ -117,9 +117,12 @@ $deployCmd = @(
   '--image', $fullImage,
   '--region', $Region,
   '--platform','managed',
-  '--allow-unauthenticated',
-  '--set-env-vars',"GIT_SHA=$gitSha,BUILD_VERSION=$imageTag"
+  '--allow-unauthenticated'
 )
+
+# Ajout des variables d'environnement de manière robuste
+$envVars = "BUILD_VERSION=$imageTag,GIT_SHA=$gitSha"
+$deployCmd += '--set-env-vars', $envVars
 
 if ($VerboseLogs) { $deployCmd += '--verbosity=debug' }
 
