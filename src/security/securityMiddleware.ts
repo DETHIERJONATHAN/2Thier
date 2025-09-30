@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { logSecurityEvent, securityMetrics } from './securityLogger';
@@ -77,7 +77,11 @@ export const authRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Trop de tentatives d\'authentification, réessayez plus tard.' },
-  keyGenerator: (req: Request) => `${req.ip}|${(req.body && (req.body.email || req.body.username)) || 'anon'}`,
+  keyGenerator: (req: Request) => {
+    const ipKey = ipKeyGenerator(req.ip ?? '');
+    const identifier = (req.body && (req.body.email || req.body.username)) || 'anon';
+    return `${ipKey}|${identifier}`;
+  },
   handler: (req: Request, res: Response) => {
     securityMetrics.blockedRequests++;
     logSecurityEvent('AUTH_RATE_LIMIT', { ip: req.ip, url: req.url, bodyKeys: Object.keys(req.body || {}) }, 'warn');
