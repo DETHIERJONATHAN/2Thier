@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { Layout, Dropdown, Button, Input, Drawer, Collapse, Avatar } from 'antd';
-import type { CollapseProps } from 'antd';
+import type { CollapseProps, MenuProps } from 'antd';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   MenuOutlined, 
@@ -46,6 +46,13 @@ import { useSharedSections } from '../../hooks/useSharedSections';
 import { organizeModulesInSections } from '../../utils/modulesSections';
 
 const { Header, Content } = Layout;
+
+const DESKTOP_HEADER_HEIGHT = 48;
+const MOBILE_HEADER_HEIGHT = 52;
+const DESKTOP_ICON_BUTTON_SIZE = 36;
+const MOBILE_ICON_BUTTON_SIZE = 34;
+const DESKTOP_SEARCH_MAX_WIDTH = 220;
+const SUBNAV_HEIGHT = 44;
 
 // Types pour les sections modulaires
 type SectionWithModules = {
@@ -125,6 +132,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const [openSections, setOpenSections] = useState<string[]>([]);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const isMobile = windowWidth < 768;
+  const headerHeight = isMobile ? MOBILE_HEADER_HEIGHT : DESKTOP_HEADER_HEIGHT;
+  const iconButtonSize = isMobile ? MOBILE_ICON_BUTTON_SIZE : DESKTOP_ICON_BUTTON_SIZE;
 
   // Gérer le redimensionnement de la fenêtre pour la responsivité
   useEffect(() => {
@@ -194,6 +203,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     const organized = organizeModulesInSections(activeSections, modules || []);
     return organized;
   }, [sharedSections, modules]);
+
+  const secondaryNavHeight = !isMobile && sectionsWithModules.length > 0 ? SUBNAV_HEIGHT : 0;
+  const contentTopOffset = headerHeight + secondaryNavHeight + (isMobile ? 8 : 16);
 
   // Fermer le menu avec la touche Échap
   useEffect(() => {
@@ -373,8 +385,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           placement="left"
           width={Math.min(windowWidth, 360)}
           onClose={() => setIsMenuOpen(false)}
-          bodyStyle={{ padding: '0 16px 24px' }}
-          headerStyle={{ borderBottom: '1px solid #f0f0f0' }}
+          styles={{
+            body: { padding: '0 16px 24px' },
+            header: { borderBottom: '1px solid #f0f0f0' }
+          }}
           title="Navigation"
         >
           <div style={{ marginBottom: '16px' }}>
@@ -432,7 +446,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     return (
       <div style={{
         position: 'fixed',
-        top: '48px',
+        top: `${headerHeight}px`,
         left: '0',
         right: '0',
         backgroundColor: 'white',
@@ -449,7 +463,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           backgroundColor: '#fafafa',
           position: 'relative',
           gap: '4px',
-          minHeight: '36px',
+          minHeight: `${SUBNAV_HEIGHT}px`,
           alignItems: 'flex-start'
         }}>
           <div style={{ 
@@ -604,11 +618,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     toggleFavorite,
     toggleSection,
     openSections,
-    getModuleKey
+    getModuleKey,
+    headerHeight
   ]);
 
   // Menu des sites vitrines (drapeau)
-  const sitesMenu = useMemo(() => ({
+  const sitesMenu = useMemo<MenuProps>(() => ({
+    className: 'dropdown-2thier-menu',
     items: [
       {
         key: '2thier-vitrine',
@@ -635,7 +651,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   }), [navigate]);
 
   // Menu des favoris (étoile) - à partir des modules favoris de l'utilisateur
-  const favoritesMenu = useMemo(() => {
+  const favoritesMenu = useMemo<MenuProps>(() => {
     const favoriteItems = favoriteModuleDetails
       .map(module => {
         const moduleKey = getModuleKey(module);
@@ -654,6 +670,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       .filter(Boolean) as Array<{ key: string; label: React.ReactNode; onClick: () => void }>;
 
     return {
+      className: 'dropdown-2thier-menu',
       items: favoriteItems.length > 0 
         ? [
             ...favoriteItems,
@@ -675,7 +692,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   }, [favoriteModuleDetails, getModuleIcon, getModuleKey, navigate]);
 
   // Menu profil utilisateur
-  const userProfileMenu = useMemo(() => ({
+  const userProfileMenu = useMemo<MenuProps>(() => ({
+    className: 'dropdown-2thier-menu',
     items: [
       {
         key: 'profile',
@@ -704,13 +722,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       <Header 
         style={{ 
           backgroundColor: '#1a4951', 
-          minHeight: isMobile ? '56px' : '56px',
-          padding: isMobile ? '0 12px' : '0 20px',
+          height: `${headerHeight}px`,
+          minHeight: `${headerHeight}px`,
+          padding: isMobile ? '0 10px' : '0 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-start',
           flexWrap: 'nowrap',
-          gap: isMobile ? '8px' : '16px',
+          gap: isMobile ? '8px' : '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
           width: '100%',
           position: 'fixed',
@@ -727,11 +746,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           className="header-2thier-item"
           style={{ 
             border: 'none',
-            padding: '8px',
-            height: '40px',
-            minWidth: '40px',
-            borderRadius: '4px',
-            backgroundColor: isMenuOpen ? 'rgba(255,255,255,0.1)' : 'transparent'
+            padding: '6px',
+            height: `${iconButtonSize}px`,
+            minWidth: `${iconButtonSize}px`,
+            borderRadius: '6px',
+            backgroundColor: isMenuOpen ? 'rgba(255,255,255,0.16)' : 'transparent'
           }}
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         />
@@ -756,7 +775,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             src="/2thier-logo.png" 
             alt="2Thier Logo" 
             style={{ 
-              height: '24px', 
+              height: '22px', 
               width: 'auto'
             }}
           />
@@ -770,9 +789,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           className="header-2thier-item"
           style={{ 
             border: 'none',
-            padding: '8px',
-            height: '40px',
-            minWidth: '40px',
+            padding: '6px',
+            height: `${iconButtonSize}px`,
+            minWidth: `${iconButtonSize}px`,
             marginLeft: isMobile ? '0' : '12px'
           }}
           onClick={() => navigate('/dashboard')}
@@ -780,19 +799,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
         {/* Barre de recherche */}
         <Input
-          placeholder="Search"
-          prefix={<SearchOutlined style={{ color: '#999' }} />}
+          placeholder="Rechercher"
+          prefix={<SearchOutlined style={{ color: '#93a3aa', fontSize: '14px' }} />}
+          className="search-2thier"
+          allowClear
+          aria-label="Recherche globale"
+          size={isMobile ? 'middle' : 'large'}
           style={{ 
-            marginLeft: isMobile ? '0' : '16px',
+            marginLeft: isMobile ? '0' : '12px',
             marginRight: isMobile ? '0' : 'auto',
-            maxWidth: isMobile ? '100%' : '320px',
-            borderRadius: '4px',
-            display: isMobile ? 'none' : 'block'
+            maxWidth: isMobile ? '100%' : `${DESKTOP_SEARCH_MAX_WIDTH}px`,
+            height: `${headerHeight - 14}px`,
+            display: isMobile ? 'none' : 'flex',
+            alignItems: 'center'
           }}
         />
 
-        {/* Icônes à droite */}
-  <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
+    {/* Icônes à droite */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
           {/* Favoris */}
           <div style={{ display: 'inline-flex' }}>
             <Dropdown menu={favoritesMenu} trigger={['click']} placement="bottomRight">
@@ -802,9 +826,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 className="header-2thier-item"
                 style={{ 
                   border: 'none',
-                  padding: '8px',
-                  height: '40px',
-                  minWidth: isMobile ? '36px' : '40px'
+                  padding: '6px',
+                  height: `${iconButtonSize}px`,
+                  minWidth: `${iconButtonSize}px`
                 }}
               />
             </Dropdown>
@@ -819,9 +843,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 className="header-2thier-item"
                 style={{ 
                   border: 'none',
-                  padding: '8px',
-                  height: '40px',
-                  minWidth: isMobile ? '36px' : '40px'
+                  padding: '6px',
+                  height: `${iconButtonSize}px`,
+                  minWidth: `${iconButtonSize}px`
                 }}
               />
             </Dropdown>
@@ -835,9 +859,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               className="header-2thier-item"
               style={{ 
                 border: 'none',
-                padding: '8px',
-                height: '40px',
-                minWidth: '40px'
+                padding: '6px',
+                height: `${iconButtonSize}px`,
+                minWidth: `${iconButtonSize}px`
               }}
             />
             <div style={{
@@ -866,9 +890,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             className="header-2thier-item"
             style={{ 
               border: 'none',
-              padding: '8px',
-              height: '40px',
-              minWidth: '40px',
+              padding: '6px',
+              height: `${iconButtonSize}px`,
+              minWidth: `${iconButtonSize}px`,
               display: isMobile ? 'none' : 'inline-flex'
             }}
           />
@@ -881,7 +905,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
               style={{ 
                 border: 'none',
                 color: 'white',
-                height: '40px',
+                height: `${iconButtonSize}px`,
                 padding: isMobile ? '0 8px' : '0 12px',
                 display: 'flex',
                 alignItems: 'center',
@@ -935,7 +959,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       <Content style={{ 
         backgroundColor: 'white',  /* CHANGÉ: blanc au lieu de #004445 */
         minHeight: '100vh',
-        marginTop: isMobile ? '64px' : '72px',
+        marginTop: `${contentTopOffset}px`,
         overflow: 'auto'
       }}>
         {children}

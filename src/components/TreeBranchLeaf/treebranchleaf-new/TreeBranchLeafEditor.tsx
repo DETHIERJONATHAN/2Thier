@@ -10,7 +10,7 @@
  * + Module du haut : Gestionnaire d'arbres
  */
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle, useRef, useCallback } from 'react';
 import { Row, Col, Layout, Card, Spin, Switch, Space, Tooltip, Segmented, Grid } from 'antd';
 import { DndContext } from '@dnd-kit/core';
 
@@ -98,12 +98,45 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       previewMode: false
     }
   });
+  const renderInfoRef = useRef({ count: 0 });
+  renderInfoRef.current.count += 1;
+  // Log de rendu temporairement supprimé
+
+  // UIState monitoring temporairement supprimé
+
+  // PropNodes monitoring temporairement supprimé
+
+  const prevTreesSignatureRef = useRef<string | null>(null);
+  // useEffect(() => {
+    // const signature = JSON.stringify({
+    //   count: trees?.length || 0,
+    //   ids: (trees || []).slice(0, 10).map((t) => t.id)
+    // });
+    // if (prevTreesSignatureRef.current !== signature) {
+    //   // console.log('🌿 [TreeBranchLeafEditor] trees prop changed', {
+    //   //   previous: prevTreesSignatureRef.current,
+    //   //   next: signature,
+    //   //   treesSample: (trees || []).slice(0, 3)
+    //   // });
+    //   prevTreesSignatureRef.current = signature;
+    // }
+  // }, [trees]);
+
+  // useEffect(() => {
+    // console.log('🌿 [TreeBranchLeafEditor] selectedTree changed', {
+    //   selectedTreeId: selectedTree?.id,
+    //   name: selectedTree?.name
+    // });
+  // }, [selectedTree?.id, selectedTree?.name]);
+
+  // Ellipsis monitoring temporairement désactivé
+
   const [activeMobileTab, setActiveMobileTab] = useState<string>('structure');
   // Ref pour accéder aux nœuds courants dans les callbacks sans dépendre de propNodes
   const nodesRef = useRef<TreeBranchLeafNode[]>(propNodes || []);
-  useEffect(() => {
-    nodesRef.current = propNodes || [];
-  }, [propNodes]);
+  // useEffect(() => {
+    // nodesRef.current = propNodes || [];
+  // }, [propNodes]);
   
   // Actions sur les arbres
   const createTree = useCallback(async (data: Partial<TreeBranchLeafTree>) => {
@@ -577,7 +610,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         return refreshed ? { ...prev, selectedNode: refreshed } : prev;
       });
       // Option: ouvrir automatiquement le nœud déplacé (pas nécessaire ici)
-      console.log('✅ Nœud déplacé à la racine');
+      // console.log('✅ Nœud déplacé à la racine');
     } catch (error) {
       console.error('❌ Erreur déplacement à la racine:', error);
       throw error;
@@ -727,10 +760,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     propNodesData: propNodes?.slice(0, 3) // Premiers 3 nœuds pour debug
   }), [trees, selectedTree, propNodes]);
 
-  // Log seulement quand les données changent vraiment - OPTIMISÉ
-  useEffect(() => {
-    performanceLogger.debug('[TreeBranchLeafEditor] Debug données:', debugInfo);
-  }, [debugInfo]);
+  // Debug logging temporairement désactivé pour éviter les boucles
 
   // =============================================================================
   // 🎣 HOOKS - Hooks personnalisés OPTIMISÉS
@@ -901,66 +931,69 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   // =============================================================================
   // ✅ AUTO-SÉLECTION - Sélectionner automatiquement le premier nœud
   // =============================================================================
-  useEffect(() => {
-    if (!uiState.selectedNode && Array.isArray(propNodes) && propNodes.length > 0) {
-      // Prendre le premier nœud racine de la hiérarchie
-      const first = propNodes[0];
-      setUIState(prev => ({ ...prev, selectedNode: first }));
-      // console.log('[TreeBranchLeafEditor] ✅ Auto-sélection du premier nœud:', { id: first.id, label: first.label, type: first.type }); // ✨ Log réduit
-    }
-  }, [propNodes, uiState.selectedNode]);
+  // useEffect(() => {
+    // if (!uiState.selectedNode && Array.isArray(propNodes) && propNodes.length > 0) {
+    //   const first = propNodes[0];
+    //   setUIState(prev => ({ ...prev, selectedNode: first }));
+    // }
+  // }, [propNodes]);
 
   // 🌿 AUTO-EXPAND INITIALE : ouvrir automatiquement les nœuds racines ayant des enfants (une seule fois)
-  useEffect(() => {
-    if (!propNodes || propNodes.length === 0) return;
-    setUIState(prev => {
-      if (prev.expandedNodes.size > 0) return prev; // ne le fait qu'une fois (évite réinitialisation)
-      const hasChildrenSet = new Set<string>();
-      const byParent: Record<string, number> = {};
-      for (const n of propNodes) {
-        if (n.parentId) {
-          byParent[n.parentId] = (byParent[n.parentId] || 0) + 1;
-        }
-      }
-      for (const n of propNodes) {
-        if (!n.parentId && byParent[n.id] > 0) {
-          hasChildrenSet.add(n.id);
-        }
-      }
-      if (hasChildrenSet.size === 0) return prev;
-      return { ...prev, expandedNodes: hasChildrenSet };
-    });
-  }, [propNodes]);
+  const hasInitializedExpandRef = useRef(false);
+  // useEffect(() => {
+    // if (!propNodes || propNodes.length === 0 || hasInitializedExpandRef.current) return;
+    // 
+    // const hasChildrenSet = new Set<string>();
+    // const byParent: Record<string, number> = {};
+    // for (const n of propNodes) {
+    //   if (n.parentId) {
+    //     byParent[n.parentId] = (byParent[n.parentId] || 0) + 1;
+    //   }
+    // }
+    // for (const n of propNodes) {
+    //   if (!n.parentId && byParent[n.id] > 0) {
+    //     hasChildrenSet.add(n.id);
+    //   }
+    // }
+    // 
+    // if (hasChildrenSet.size > 0) {
+    //   setUIState(prev => ({ ...prev, expandedNodes: hasChildrenSet }));
+    //   hasInitializedExpandRef.current = true;
+    // }
+  // }, [propNodes]);
 
   // Garder l'objet du nœud sélectionné synchronisé lorsque la liste des nœuds change
-  useEffect(() => {
-    setUIState(prev => {
-      if (!prev.selectedNode) return prev;
-      const updated = (propNodes || []).find(n => n.id === prev.selectedNode!.id);
-      if (updated && updated !== prev.selectedNode) {
-        return { ...prev, selectedNode: updated };
-      }
-      return prev;
-    });
-  }, [propNodes]);
+  const previousSelectedNodeIdRef = useRef<string | null>(null);
+  // useEffect(() => {
+    // if (!uiState.selectedNode || !propNodes) return;
+    // 
+    // const currentId = uiState.selectedNode.id;
+    // if (previousSelectedNodeIdRef.current === currentId) return; // Éviter les re-déclenchements
+    // 
+    // const updated = propNodes.find(n => n.id === currentId);
+    // if (updated && updated !== uiState.selectedNode) {
+    //   setUIState(prev => ({ ...prev, selectedNode: updated }));
+    //   previousSelectedNodeIdRef.current = currentId;
+    // }
+  // }, [propNodes, uiState.selectedNode?.id]);
 
-  useEffect(() => {
-    if (!isDesktop && activeMobileTab === 'parameters' && uiState.panelState.previewMode) {
-      setActiveMobileTab('structure');
-    }
-  }, [isDesktop, activeMobileTab, uiState.panelState.previewMode]);
+  // useEffect(() => {
+    // if (!isDesktop && activeMobileTab === 'parameters' && uiState.panelState.previewMode && activeMobileTab !== 'structure') {
+    //   setActiveMobileTab('structure');
+    // }
+  // }, [isDesktop, activeMobileTab, uiState.panelState.previewMode]);
 
-  useEffect(() => {
-    if (!isDesktop && uiState.selectedNode && !uiState.panelState.previewMode && activeMobileTab === 'structure') {
-      setActiveMobileTab('parameters');
-    }
-  }, [isDesktop, uiState.selectedNode, uiState.panelState.previewMode, activeMobileTab]);
+  // useEffect(() => {
+    // if (!isDesktop && uiState.selectedNode && !uiState.panelState.previewMode && activeMobileTab === 'structure' && activeMobileTab !== 'parameters') {
+    //   setActiveMobileTab('parameters');
+    // }
+  // }, [isDesktop, uiState.selectedNode, uiState.panelState.previewMode, activeMobileTab]);
 
-  useEffect(() => {
-    if (isDesktop && activeMobileTab !== 'structure') {
-      setActiveMobileTab('structure');
-    }
-  }, [isDesktop, activeMobileTab]);
+  // useEffect(() => {
+    // if (isDesktop && activeMobileTab !== 'structure') {
+    //   setActiveMobileTab('structure');
+    // }
+  // }, [isDesktop, activeMobileTab]);
 
   // =============================================================================
   // 🎨 RENDER - Rendu
@@ -1080,11 +1113,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     ? activeMobileTab
     : (availableMobileKeys[0] ?? 'structure');
 
-  useEffect(() => {
-    if (derivedMobileActiveKey !== activeMobileTab) {
-      setActiveMobileTab(derivedMobileActiveKey);
-    }
-  }, [derivedMobileActiveKey, activeMobileTab]);
+  // Synchronisation mobile key temporairement désactivée pour éviter les boucles
 
   if (loading) {
     return (

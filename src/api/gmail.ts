@@ -10,6 +10,7 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
 import { authenticateToken } from '../middleware/auth';
+import { googleOAuthConfig, isGoogleOAuthConfigured } from '../auth/googleConfig';
 
 const router = Router();
 const gmail = google.gmail('v1');
@@ -233,10 +234,14 @@ async function logEmailActivity(data: {
  */
 async function getGoogleAuth(userId: string) {
   // Réutiliser la même logique que pour Google Calendar
+  if (!isGoogleOAuthConfigured()) {
+    throw new Error('Configuration Google OAuth manquante. Vérifier googleOAuthConfig.');
+  }
+
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    googleOAuthConfig.clientId,
+    googleOAuthConfig.clientSecret,
+    googleOAuthConfig.redirectUri
   );
   
   // TODO: Récupérer les tokens depuis la DB
@@ -250,7 +255,7 @@ async function getGoogleAuth(userId: string) {
   return oauth2Client;
 }
 
-async function getUserGoogleTokens(userId: string) {
+async function getUserGoogleTokens(_userId: string) {
   // TODO: Implémentation avec Prisma
   throw new Error('getUserGoogleTokens à implémenter avec Prisma');
 }

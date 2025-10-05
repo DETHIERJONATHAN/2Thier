@@ -46,6 +46,11 @@ export interface TBLField {
   config?: Record<string, unknown>;
   treeMetadata?: Record<string, unknown>;
   capabilities?: Record<string, unknown>; // structure légère (data/formula...)
+  // 💡 Propriétés tooltip
+  text_helpTooltipType?: string;
+  text_helpTooltipText?: string;
+  text_helpTooltipImage?: string;
+  appearanceConfig?: Record<string, unknown>;
 }
 
 export interface TBLSection {
@@ -169,7 +174,19 @@ function createField(node: TreeBranchLeafNode, nodeMap: Map<string, TreeBranchLe
     parentId: node.parentId || undefined,
     shouldDisplay: node.isActive !== false,
     config: (node.fieldConfig || undefined) as Record<string, unknown> | undefined,
-    treeMetadata: (node.metadata || undefined) as Record<string, unknown> | undefined
+    treeMetadata: (node.metadata || undefined) as Record<string, unknown> | undefined,
+    // 💡 Propriétés tooltip depuis les colonnes TBL
+    text_helpTooltipType: node.text_helpTooltipType,
+    text_helpTooltipText: node.text_helpTooltipText,
+    text_helpTooltipImage: node.text_helpTooltipImage,
+    // 🎯 APPARENCE CONFIG avec tooltips intégrés
+    appearanceConfig: {
+      ...(node.appearanceConfig || {}),
+      // ✅ Ajouter les tooltips dans appearanceConfig
+      helpTooltipType: node.text_helpTooltipType,
+      helpTooltipText: node.text_helpTooltipText,
+      helpTooltipImage: node.text_helpTooltipImage
+    }
   };
 
   // 🧠 Capabilities via preload si disponibles, sinon fallback inférence locale
@@ -270,6 +287,8 @@ function createField(node: TreeBranchLeafNode, nodeMap: Map<string, TreeBranchLe
 // Hook principal
 // -------------------------------------------------------------
 export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams): UseTBLDataHierarchicalReturn {
+  // 🚨 LOG TRÈS VISIBLE AU DÉBUT DU HOOK
+  console.log('🟢🟢🟢 [TBL HOOK] useTBLDataHierarchicalFixed APPELÉ !', params);
   const { api } = useAuthenticatedApi();
   const { tree_id, disabled } = params;
   const [rawNodes, setRawNodes] = useState<TreeBranchLeafNode[]>([]);
@@ -290,8 +309,44 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     setError(null);
     try {
       dlog('[TBL] Fetch nodes for tree', tree_id);
-      const data = await api.get<{ success?: boolean; data?: TreeBranchLeafNode[]; nodes?: TreeBranchLeafNode[] }>(`/api/treebranchleaf/trees/${tree_id}/nodes`);
-      const nodes = (data?.data || data?.nodes || []) as TreeBranchLeafNode[];
+      const data = await api.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
+      
+      // 🔧 L'API peut retourner directement un tableau OU un objet wrapper
+      let nodes: TreeBranchLeafNode[] = [];
+      if (Array.isArray(data)) {
+        // Cas 1: Tableau direct
+        nodes = data as TreeBranchLeafNode[];
+      } else if (data && typeof data === 'object') {
+        // Cas 2: Objet wrapper { data: [...] } ou { nodes: [...] }
+        const wrapped = data as { success?: boolean; data?: TreeBranchLeafNode[]; nodes?: TreeBranchLeafNode[] };
+        nodes = (wrapped.data || wrapped.nodes || []) as TreeBranchLeafNode[];
+      }
+      
+      console.log('🚨 [TBL NEW] Nœuds reçus:', nodes.length);
+      
+      // 🔍 DEBUG: Vérifier les données tooltip dans les nodes
+      console.log('🚨 [TBL] TOUS LES NODES reçus de l\'API:', nodes.map(n => ({
+        id: n.id,
+        label: n.label,
+        text_helpTooltipType: n.text_helpTooltipType,
+        text_helpTooltipText: n.text_helpTooltipText,
+        text_helpTooltipImage: n.text_helpTooltipImage
+      })));
+      
+      const firstNode = nodes[0];
+      if (firstNode) {
+        console.log('🔍 [TBL] Premier node reçu de l\'API (COMPLET):', JSON.stringify(firstNode, null, 2));
+        console.log('🔍 [TBL] Premier node - Propriétés tooltip:', {
+          id: firstNode.id,
+          label: firstNode.label,
+          text_helpTooltipType: firstNode.text_helpTooltipType,
+          text_helpTooltipText: firstNode.text_helpTooltipText,
+          text_helpTooltipImage: firstNode.text_helpTooltipImage,
+          appearanceConfig: firstNode.appearanceConfig,
+          allKeys: Object.keys(firstNode)
+        });
+      }
+      
       setRawNodes(nodes);
     } catch (e) {
       console.error('❌ [TBL] Erreur chargement nœuds:', e);
@@ -304,6 +359,23 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
   useEffect(() => {
     if (!disabled) fetchData();
   }, [fetchData, disabled]);
+
+  // 🔄 Écouter les changements de capacité pour recharger les données
+  useEffect(() => {
+    const handleCapabilityUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined }>;
+      const { treeId: eventTreeId } = customEvent.detail;
+      
+      // Recharger uniquement si c'est notre arbre
+      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
+        console.log('🔄 [TBL Hook] Capacité mise à jour détectée, rechargement des données...', customEvent.detail);
+        fetchData();
+      }
+    };
+
+    window.addEventListener('tbl-capability-updated', handleCapabilityUpdate);
+    return () => window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
+  }, [fetchData, disabled, tree_id]);
 
   const { tree, tabs, fieldsByTab, sectionsByTab } = useMemo(() => {
     if (!rawNodes.length) return { tree: null, tabs: [], fieldsByTab: {}, sectionsByTab: {} };

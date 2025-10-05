@@ -713,7 +713,7 @@ export default function LeadsHomePage({
       {/* ⚡ CENTRE DE NOTIFICATIONS IA */}
       <Card
         className="mb-6 border-l-4 border-l-blue-500"
-        bodyStyle={{ padding: isMobile ? '16px' : '24px' }}
+        styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
       >
         <Row
           align="middle"

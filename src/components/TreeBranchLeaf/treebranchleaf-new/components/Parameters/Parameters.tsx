@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, Typography, Empty, Space, Input, Select, Tooltip, Button } from 'antd';
+import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button } from 'antd';
 import type { InputRef } from 'antd';
 import { 
   SettingOutlined, 
@@ -29,7 +29,7 @@ import type {
   TreeBranchLeafRegistry as TreeBranchLeafRegistryType 
 } from '../../types';
 
-const { Title, Text } = Typography;
+// const { Title, Text } = Typography; // TEMPORAIREMENT DÉSACTIVÉ POUR DEBUG ELLIPSISMEASURE
 
 interface ParametersProps {
   tree: TreeBranchLeafTree | null;
@@ -174,7 +174,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (isNewNode) {
       setOpenCaps(new Set<string>(Array.from(panelStateOpenCapabilities || [])));
     }
-  }, [selectedNode, registry, panelStateOpenCapabilities, patchNode]);
+  }, [selectedNode, registry, panelStateOpenCapabilities]); // 🔧 FIX: Retirer patchNode des dépendances pour éviter la boucle infinie
 
   // Auto-focus sur le libellé pour édition rapide
   useEffect(() => {
@@ -264,16 +264,16 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         
         {/* Section Apparence */}
         <div>
-          <Title level={5} style={{ marginBottom: 12 }}>
+          <h5 style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, margin: 0 }}>
             <BgColorsOutlined style={{ marginRight: 8 }} />
             Apparence
-          </Title>
+          </h5>
           
           <Space direction="vertical" style={{ width: '100%' }}>
             {/* Libellé avec boutons de visibilité à droite */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ flex: 1 }}>
-                <Text strong>Libellé</Text>
+                <strong style={{ fontSize: 12 }}>Libellé</strong>
                 <Input
                   ref={labelInputRef}
                   value={label}
@@ -313,7 +313,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             </div>
             
             <div>
-              <Text strong>Description</Text>
+              <strong style={{ fontSize: 12 }}>Description</strong>
               <Input.TextArea
                 value={description}
                 onChange={(e) => handleDescriptionChange(e.target.value)}
@@ -326,7 +326,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             {/* Type de champ avec bouton Apparence à droite */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ flex: 1 }}>
-                <Text strong>Type de champ</Text>
+                <strong style={{ fontSize: 12 }}>Type de champ</strong>
                 {selectedNode?.type === 'branch' || selectedNode?.type === 'section' ? (
                   <div style={{ 
                     padding: '4px 8px', 
@@ -388,10 +388,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         {appearanceOpen && fieldType && (
           <div style={{ marginTop: 12, border: '1px solid #e8e8e8', borderRadius: 6, backgroundColor: '#fbfbfb' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #e8e8e8', backgroundColor: '#f7f7f7' }}>
-              <Text strong style={{ fontSize: 12 }}>
+              <strong style={{ fontSize: 12 }}>
                 <BgColorsOutlined style={{ marginRight: 6, fontSize: 11 }} />
                 Configuration Apparence ({fieldType?.toUpperCase()})
-              </Text>
+              </strong>
               <Button 
                 type="text" 
                 size="small" 
@@ -428,12 +428,37 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       <LazyAppearancePanel 
                         value={selectedNode?.appearanceConfig || {}}
                         onChange={(config: Record<string, unknown>) => {
+                          console.log('🎨 [Apparence] Changement détecté:', config);
+                          
                           // Mapper vers les champs TBL
                           const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(config);
-                          patchNode({ 
+                          console.log('🎨 [Apparence] Mapping TBL généré:', tblMapping);
+                          
+                          // ✅ SAUVEGARDE SANS .then() pour éviter l'erreur
+                          const saveResult = patchNode({ 
                             appearanceConfig: config,
                             ...tblMapping 
                           });
+                          
+                          // Si c'est une Promise, on peut attendre
+                          if (saveResult && typeof saveResult.then === 'function') {
+                            saveResult.then(() => {
+                              console.log('🎨 [Apparence] Sauvegarde terminée, déclenchement refresh...');
+                              
+                              // 🔄 DÉCLENCHER UN REFRESH DES DONNÉES TBL
+                              if (typeof window !== 'undefined' && window.TBL_FORCE_REFRESH) {
+                                console.log('🔄 [Apparence] Refresh TBL déclenché');
+                                window.TBL_FORCE_REFRESH();
+                              }
+                            });
+                          } else {
+                            // Si ce n'est pas une Promise, on fait le refresh immédiatement
+                            console.log('🎨 [Apparence] Sauvegarde debounced, déclenchement refresh...');
+                            if (typeof window !== 'undefined' && window.TBL_FORCE_REFRESH) {
+                              console.log('🔄 [Apparence] Refresh TBL déclenché');
+                              window.TBL_FORCE_REFRESH();
+                            }
+                          }
                         }}
                         readOnly={props.readOnly}
                       />
@@ -447,10 +472,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
         {/* Section Capacités */}
         <div>
-          <Title level={5} style={{ marginBottom: 12 }}>
+          <h5 style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, margin: 0 }}>
             <AppstoreOutlined style={{ marginRight: 8 }} />
             Capacités
-          </Title>
+          </h5>
           
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {capabilities.map(cap => {
@@ -516,7 +541,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             })}
           </div>
 
-          {/* Panneaux auto-ouverts */}
+          {/* Panneaux auto-ouverts - TEMPORAIREMENT DÉSACTIVÉS POUR DEBUG */}
           <div style={{ marginTop: 12 }}>
             {capabilities.map(cap => {
               if (!openCaps.has(cap.key)) return null;

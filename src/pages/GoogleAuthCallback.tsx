@@ -1,9 +1,16 @@
 import React, { useEffect } from 'react';
 import { Spin, Result } from 'antd';
 import { CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { emergencyGoogleAuthReset, isInGoogleAuthLoop } from '../utils/googleAuthReset';
 
 const GoogleAuthCallback: React.FC = () => {
   useEffect(() => {
+    // Vérification de sécurité : détection de boucle
+    if (isInGoogleAuthLoop()) {
+      console.warn('[GoogleAuthCallback] 🚨 BOUCLE DÉTECTÉE - Application du reset d\'urgence');
+      emergencyGoogleAuthReset();
+    }
+
     // Récupérer les paramètres de l'URL
     const urlParams = new URLSearchParams(window.location.search);
     const googleSuccess = urlParams.get('google_success');
@@ -34,6 +41,21 @@ const GoogleAuthCallback: React.FC = () => {
       }
     }
 
+    // Si erreur: marquer l'erreur Google pour éviter les tentatives automatiques répétées
+    if (googleError) {
+      try {
+        const now = Date.now();
+        const payload = {
+          ts: now,
+          error: googleError,
+          organizationId: organizationId || null,
+        };
+        sessionStorage.setItem('google_auth_error', JSON.stringify(payload));
+      } catch {
+        // ignore
+      }
+    }
+
     // Communiquer avec la fenêtre parent (popup -> main window)
     if (window.opener && !window.opener.closed) {
       if (googleSuccess === '1') {
@@ -58,10 +80,20 @@ const GoogleAuthCallback: React.FC = () => {
     } else {
       // Si pas de fenêtre parent, rediriger vers la page principale
       console.log('[GoogleAuthCallback] Pas de fenêtre parent, redirection...');
+      
+      // Si c'est une erreur, attendre plus longtemps pour laisser le temps à l'utilisateur de voir
+      const delay = googleError ? 5000 : 2000;
+      
       setTimeout(() => {
-        // Utiliser replace pour ne pas polluer l'historique
-        window.location.replace('/');
-      }, 2000);
+        // Vérification de sécurité : éviter les boucles si on est déjà sur la page principale
+        if (window.location.pathname !== '/' && window.location.pathname !== '') {
+          console.log('[GoogleAuthCallback] Redirection vers la page principale...');
+          // Utiliser replace pour ne pas polluer l'historique
+          window.location.replace('/');
+        } else {
+          console.log('[GoogleAuthCallback] Déjà sur la page principale, pas de redirection');
+        }
+      }, delay);
     }
     
     // Nettoyer l'URL pour retirer les query params après traitement

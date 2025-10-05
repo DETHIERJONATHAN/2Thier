@@ -10,25 +10,8 @@ export function useFormulasVersionWatcher(): void {
   // n'utilise plus de "formulas-version" ping. Laisser en place pour éviter les crashs.
   // TODO: supprimer complètement après refonte cache dépendances.
   useEffect(() => {
-    const isProd = (() => {
-      // Vite expose import.meta.env; fallback safe si process absent
-      try {
-        const meta: unknown = (import.meta as unknown);
-        if (meta && typeof meta === 'object' && 'env' in meta) {
-          const env = (meta as { env?: Record<string, unknown> }).env || {};
-            const prodFlag = env.PROD === true;
-            const modeProd = env.MODE === 'production';
-            return Boolean(prodFlag || modeProd);
-        }
-      } catch { /* ignore */ }
-      if (typeof process !== 'undefined' && process.env) {
-        return process.env.NODE_ENV === 'production';
-      }
-      return false; // défaut: considérer dev
-    })();
-    if (!isProd) {
-      console.warn('[TBL] useFormulasVersionWatcher est déprécié (noop).');
-    }
+    // Hook neutralisé - plus d'avertissement pour ne pas polluer la console
+    // TODO: supprimer complètement après refonte cache dépendances.
   }, []);
 }
 

@@ -1,14 +1,16 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
+import { googleOAuthConfig } from '../../auth/googleConfig';
+
 class GoogleAppsService {
   private oauth2Client: OAuth2Client;
   
   constructor() {
     this.oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      googleOAuthConfig.clientId,
+      googleOAuthConfig.clientSecret,
+      googleOAuthConfig.redirectUri
     );
   }
 
@@ -58,7 +60,7 @@ class GoogleAppsService {
     }
   }
 
-  async sendGmailEmail(to: string, subject: string, body: string, context: any) {
+  async sendGmailEmail(to: string, subject: string, body: string, _context: any) {
     const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
     
     const email = [
@@ -248,7 +250,7 @@ class GoogleAppsService {
     }
   }
 
-  async shareDriveFile(fileId: string, email: string, permission: string, context: any) {
+  async shareDriveFile(fileId: string, email: string, permission: string, _context: any) {
     const drive = google.drive({ version: 'v3', auth: this.oauth2Client });
     
     try {

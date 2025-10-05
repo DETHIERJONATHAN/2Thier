@@ -18,6 +18,7 @@ import {
   theme,
   Row,
   Col,
+  Grid,
   Typography,
   Table,
   Tag,
@@ -25,23 +26,6 @@ import {
   Tabs,
   // Collapse
 } from 'antd';
-import {
-  PhoneOutlined,
-  MessageOutlined,
-  PlusOutlined,
-  SyncOutlined,
-  ClockCircleOutlined,
-  SoundOutlined,
-  MutedOutlined,
-  PhoneTwoTone,
-  DashboardOutlined,
-  NumberOutlined,
-  AudioOutlined,
-  ApiOutlined,
-  BarChartOutlined
-} from '@ant-design/icons';
-import dayjs from 'dayjs';
-import 'dayjs/locale/fr';
 
 dayjs.locale('fr');
 
@@ -163,6 +147,9 @@ const TelnyxPage: React.FC = () => {
   const [callForm] = Form.useForm();
   const [smsForm] = Form.useForm();
   const [numberForm] = Form.useForm();
+
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const stableApi = useMemo(() => api, [api]);
 
@@ -418,52 +405,58 @@ const TelnyxPage: React.FC = () => {
   };
 
   // --- RENDU DES COMPOSANTS ---
-  const renderStatsPanel = () => (
-    <Card title="📊 Statistiques Telnyx" className="mb-4">
+  const renderStatsPanel = (isMobileView = false) => (
+    <Card
+      title="📊 Statistiques Telnyx"
+      className="mb-4"
+      bodyStyle={{ padding: isMobileView ? 16 : 24 }}
+      bordered={!isMobileView}
+      style={isMobileView ? { borderRadius: 14 } : undefined}
+    >
       <Row gutter={[16, 16]}>
-        <Col span={8}>
+        <Col xs={12} sm={12} md={12} lg={12} xl={8}>
           <Statistic 
             title="Appels Aujourd'hui" 
-            value={stats?.todayCalls} 
+            value={stats?.todayCalls ?? 0} 
             prefix={<PhoneOutlined style={{ color: token.colorPrimary }} />} 
           />
         </Col>
-        <Col span={8}>
+        <Col xs={12} sm={12} md={12} lg={12} xl={8}>
           <Statistic 
             title="SMS Aujourd'hui" 
-            value={stats?.todayMessages} 
+            value={stats?.todayMessages ?? 0} 
             prefix={<MessageOutlined style={{ color: token.colorSuccess }} />} 
           />
         </Col>
-        <Col span={8}>
+        <Col xs={12} sm={12} md={12} lg={12} xl={8}>
           <Statistic 
             title="Numéros Actifs" 
-            value={stats?.activeNumbers} 
+            value={stats?.activeNumbers ?? 0} 
             prefix={<NumberOutlined style={{ color: token.colorWarning }} />} 
           />
         </Col>
-        <Col span={8}>
+        <Col xs={12} sm={12} md={12} lg={12} xl={8}>
           <Statistic 
             title="Coût Mensuel" 
-            value={stats?.monthlyCost || 0} 
+            value={stats?.monthlyCost ?? 0} 
             precision={2}
             prefix="€"
             valueStyle={{ color: token.colorError }}
           />
         </Col>
-        <Col span={8}>
+        <Col xs={12} sm={12} md={12} lg={12} xl={8}>
           <Statistic 
             title="Taux de Réussite" 
-            value={stats?.successRate || 0} 
+            value={stats?.successRate ?? 0} 
             precision={1}
             suffix="%"
             valueStyle={{ color: stats?.successRate && stats.successRate > 90 ? token.colorSuccess : token.colorWarning }}
           />
         </Col>
-        <Col span={8}>
+        <Col xs={12} sm={12} md={12} lg={12} xl={8}>
           <Statistic 
             title="Minutes Totales" 
-            value={stats?.totalMinutes} 
+            value={stats?.totalMinutes ?? 0} 
             prefix={<ClockCircleOutlined style={{ color: token.colorInfo }} />} 
           />
         </Col>
@@ -483,24 +476,27 @@ const TelnyxPage: React.FC = () => {
           </Space>
         }
         className="mb-4"
-        style={{ border: `2px solid ${token.colorSuccess}` }}
+        style={{ border: `2px solid ${token.colorSuccess}`, borderRadius: 16 }}
       >
-        <Row gutter={16} align="middle">
-          <Col span={8}>
-            <Text strong>Vers: {currentCall.to}</Text><br/>
-            <Text type="secondary">De: {currentCall.from}</Text>
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} md={9}>
+            <Space direction="vertical" size={4}>
+              <Text strong>Vers: {currentCall.to}</Text>
+              <Text type="secondary">De: {currentCall.from}</Text>
+            </Space>
           </Col>
-          <Col span={8} style={{ textAlign: 'center' }}>
-            <Title level={3} style={{ margin: 0, color: token.colorSuccess }}>
+          <Col xs={24} md={7} style={{ textAlign: 'center' }}>
+            <Title level={isMobile ? 3 : 2} style={{ margin: 0, color: token.colorSuccess }}>
               {formatDuration(callDuration)}
             </Title>
           </Col>
-          <Col span={8} style={{ textAlign: 'right' }}>
-            <Space>
+          <Col xs={24} md={8} style={{ textAlign: isMobile ? 'left' : 'right' }}>
+            <Space size={12} wrap>
               <Button 
                 icon={isMuted ? <SoundOutlined /> : <MutedOutlined />}
                 onClick={handleToggleMute}
                 type={isMuted ? "primary" : "default"}
+                style={{ minWidth: 120 }}
               >
                 {isMuted ? 'Activer' : 'Couper'}
               </Button>
@@ -508,6 +504,7 @@ const TelnyxPage: React.FC = () => {
                 danger
                 icon={<PhoneOutlined style={{ transform: 'rotate(135deg)' }} />}
                 onClick={handleEndCall}
+                style={{ minWidth: 120 }}
               >
                 Raccrocher
               </Button>
@@ -518,40 +515,45 @@ const TelnyxPage: React.FC = () => {
     );
   };
 
-  const renderQuickActions = () => (
-    <Card title="🚀 Actions Rapides" className="mb-4">
-      <Row gutter={[16, 16]}>
-        <Col span={8}>
+  const renderQuickActions = (isMobileView = false) => (
+    <Card
+      title="🚀 Actions Rapides"
+      className="mb-4"
+      bodyStyle={{ padding: isMobileView ? 16 : 24 }}
+      style={isMobileView ? { borderRadius: 14 } : undefined}
+    >
+      <Row gutter={[12, 12]}>
+        <Col xs={24} sm={12} lg={8}>
           <Button 
             type="primary" 
             icon={<PhoneOutlined />} 
             onClick={() => setIsCallModalVisible(true)}
             block
-            size="large"
+            size={isMobileView ? 'middle' : 'large'}
           >
             Passer un Appel
           </Button>
         </Col>
-        <Col span={8}>
+        <Col xs={24} sm={12} lg={8}>
           <Button 
             type="primary" 
             icon={<MessageOutlined />} 
             onClick={() => setIsSmsModalVisible(true)}
             block
-            size="large"
-            style={{ backgroundColor: token.colorSuccess }}
+            size={isMobileView ? 'middle' : 'large'}
+            style={{ backgroundColor: token.colorSuccess, borderColor: token.colorSuccess }}
           >
             Envoyer SMS
           </Button>
         </Col>
-        <Col span={8}>
+        <Col xs={24} sm={12} lg={8}>
           <Button 
             type="primary" 
             icon={<NumberOutlined />} 
             onClick={() => setIsNumberModalVisible(true)}
             block
-            size="large"
-            style={{ backgroundColor: token.colorWarning }}
+            size={isMobileView ? 'middle' : 'large'}
+            style={{ backgroundColor: token.colorWarning, borderColor: token.colorWarning }}
           >
             Acheter Numéro
           </Button>
@@ -560,13 +562,20 @@ const TelnyxPage: React.FC = () => {
     </Card>
   );
 
-  const renderConnectionsStatus = () => (
-    <Card title="🔗 État des Connexions" size="small">
+  const renderConnectionsStatus = (isMobileView = false) => (
+    <Card
+      title="🔗 État des Connexions"
+      size={isMobileView ? 'default' : 'small'}
+      className="mb-4"
+      bodyStyle={{ padding: isMobileView ? 16 : 20 }}
+      style={isMobileView ? { borderRadius: 14 } : undefined}
+    >
       <List
         loading={loading}
         dataSource={connections}
+        locale={{ emptyText: 'Aucune connexion configurée' }}
         renderItem={(connection) => (
-          <List.Item>
+          <List.Item style={{ paddingInline: isMobileView ? 0 : undefined }}>
             <List.Item.Meta
               avatar={
                 <Avatar 
@@ -576,11 +585,11 @@ const TelnyxPage: React.FC = () => {
                   icon={<ApiOutlined />} 
                 />
               }
-              title={<Text style={{ fontSize: '12px' }}>{connection.name}</Text>}
+              title={<Text style={{ fontSize: isMobileView ? '14px' : '12px' }}>{connection.name}</Text>}
               description={
-                <Space>
+                <Space size={8} wrap>
                   <Tag color={getStatusColor(connection.status)}>{connection.status}</Tag>
-                  <Text style={{ fontSize: '10px' }} type="secondary">{connection.type}</Text>
+                  <Text style={{ fontSize: '12px' }} type="secondary">{connection.type}</Text>
                 </Space>
               }
             />
@@ -590,250 +599,396 @@ const TelnyxPage: React.FC = () => {
     </Card>
   );
 
+  const renderCallHistorySection = () => {
+    const latestCalls = callHistory.slice(0, 10);
+    const columns = [
+      {
+        title: 'Direction',
+        dataIndex: 'direction',
+        key: 'direction',
+        render: (direction: CallRecord['direction']) => (
+          <Tag color={direction === 'inbound' ? 'blue' : 'green'}>
+            {direction === 'inbound' ? '↓ Entrant' : '↑ Sortant'}
+          </Tag>
+        ),
+        width: 110
+      },
+      {
+        title: 'Numéro',
+        key: 'number',
+        render: (_: unknown, record: CallRecord) => (
+          <Text>{record.direction === 'inbound' ? record.from : record.to}</Text>
+        )
+      },
+      {
+        title: 'Durée',
+        dataIndex: 'duration',
+        key: 'duration',
+        render: (duration: number) => formatDuration(duration),
+        width: 90
+      },
+      {
+        title: 'Statut',
+        dataIndex: 'status',
+        key: 'status',
+        render: (status: CallRecord['status']) => <Tag color={getStatusColor(status)}>{status}</Tag>,
+        width: 110
+      },
+      {
+        title: 'Date',
+        dataIndex: 'started_at',
+        key: 'started_at',
+        render: (date: string) => dayjs(date).format('DD/MM HH:mm'),
+        width: 110
+      }
+    ];
+
+    return (
+      <Card title="📞 Historique des Appels" extra={!isMobile && <Button size="small">Voir tout</Button>}>
+        {isMobile ? (
+          <List
+            dataSource={latestCalls}
+            loading={loading}
+            locale={{ emptyText: 'Aucun appel récent' }}
+            renderItem={(record) => (
+              <List.Item
+                key={record.id}
+                onClick={() => {
+                  setSelectedCall(record);
+                  setIsCallDrawerVisible(true);
+                }}
+                style={{ cursor: 'pointer', borderBottom: '1px solid ' + token.colorBorderSecondary, paddingInline: 0 }}
+              >
+                <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                  <Space size={8}>
+                    <Tag color={record.direction === 'inbound' ? 'blue' : 'green'}>
+                      {record.direction === 'inbound' ? 'Entrant' : 'Sortant'}
+                    </Tag>
+                    <Tag color={getStatusColor(record.status)}>{record.status}</Tag>
+                  </Space>
+                  <Text strong>{record.direction === 'inbound' ? record.from : record.to}</Text>
+                  <Space size={12}>
+                    <Text type="secondary">Durée: {formatDuration(record.duration)}</Text>
+                    <Text type="secondary">{dayjs(record.started_at).format('DD/MM HH:mm')}</Text>
+                  </Space>
+                </Space>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Table
+            dataSource={latestCalls}
+            columns={columns}
+            pagination={false}
+            size="small"
+            rowKey="id"
+            loading={loading}
+            scroll={{ x: 600 }}
+            onRow={(record) => ({
+              onClick: () => {
+                setSelectedCall(record);
+                setIsCallDrawerVisible(true);
+              }
+            })}
+          />
+        )}
+      </Card>
+    );
+  };
+
+  const renderMessageHistorySection = () => {
+    const latestMessages = messageHistory.slice(0, 10);
+    const columns = [
+      {
+        title: 'Direction',
+        dataIndex: 'direction',
+        key: 'direction',
+        render: (direction: MessageRecord['direction']) => (
+          <Tag color={direction === 'inbound' ? 'blue' : 'green'}>
+            {direction === 'inbound' ? '↓ Reçu' : '↑ Envoyé'}
+          </Tag>
+        ),
+        width: 100
+      },
+      {
+        title: 'Numéro',
+        key: 'number',
+        render: (_: unknown, record: MessageRecord) => (
+          <Text>{record.direction === 'inbound' ? record.from : record.to}</Text>
+        )
+      },
+      {
+        title: 'Message',
+        dataIndex: 'text',
+        key: 'text',
+        render: (text: string) => (
+          <Text ellipsis={{ tooltip: text }}>
+            {text.length > 40 ? `${text.substring(0, 40)}...` : text}
+          </Text>
+        )
+      },
+      {
+        title: 'Statut',
+        dataIndex: 'status',
+        key: 'status',
+        render: (status: MessageRecord['status']) => <Tag color={getStatusColor(status)}>{status}</Tag>,
+        width: 90
+      },
+      {
+        title: 'Date',
+        dataIndex: 'sent_at',
+        key: 'sent_at',
+        render: (date: string) => dayjs(date).format('DD/MM HH:mm'),
+        width: 110
+      }
+    ];
+
+    return (
+      <Card title="💬 Historique des Messages" extra={!isMobile && <Button size="small">Voir tout</Button>}>
+        {isMobile ? (
+          <List
+            dataSource={latestMessages}
+            loading={loading}
+            locale={{ emptyText: 'Aucun message récent' }}
+            renderItem={(record) => (
+              <List.Item key={record.id} style={{ paddingInline: 0, borderBottom: '1px solid ' + token.colorBorderSecondary }}>
+                <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                  <Space size={8}>
+                    <Tag color={record.direction === 'inbound' ? 'blue' : 'green'}>
+                      {record.direction === 'inbound' ? 'Reçu' : 'Envoyé'}
+                    </Tag>
+                    <Tag color={getStatusColor(record.status)}>{record.status}</Tag>
+                  </Space>
+                  <Text strong>{record.direction === 'inbound' ? record.from : record.to}</Text>
+                  <Text>{record.text.length > 60 ? `${record.text.substring(0, 60)}...` : record.text}</Text>
+                  <Text type="secondary">{dayjs(record.sent_at).format('DD/MM HH:mm')}</Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Table
+            dataSource={latestMessages}
+            columns={columns}
+            pagination={false}
+            size="small"
+            rowKey="id"
+            loading={loading}
+            scroll={{ x: 640 }}
+          />
+        )}
+      </Card>
+    );
+  };
+
+  const renderPhoneNumbersSection = () => {
+    const columns = [
+      {
+        title: 'Numéro',
+        dataIndex: 'phone_number',
+        key: 'phone_number',
+        render: (number: string) => <Text strong>{number}</Text>
+      },
+      {
+        title: 'Type',
+        dataIndex: 'number_type',
+        key: 'number_type',
+        render: (type: PhoneNumber['number_type']) => {
+          const colors: Record<PhoneNumber['number_type'], string> = {
+            local: 'blue',
+            'toll-free': 'green',
+            national: 'orange',
+            mobile: 'purple'
+          };
+          return <Tag color={colors[type]}>{type}</Tag>;
+        }
+      },
+      {
+        title: 'Pays',
+        dataIndex: 'country_code',
+        key: 'country_code',
+        render: (code: string) => <Text>{code.toUpperCase()}</Text>
+      },
+      {
+        title: 'Fonctionnalités',
+        dataIndex: 'features',
+        key: 'features',
+        render: (features: string[]) => (
+          <Space wrap>
+            {features.map((feature) => (
+              <Tag key={feature}>{feature}</Tag>
+            ))}
+          </Space>
+        )
+      },
+      {
+        title: 'Coût/Mois',
+        dataIndex: 'monthly_cost',
+        key: 'monthly_cost',
+        render: (cost: number) => formatCurrency(cost)
+      },
+      {
+        title: 'Statut',
+        dataIndex: 'status',
+        key: 'status',
+        render: (status: PhoneNumber['status']) => <Tag color={getStatusColor(status)}>{status}</Tag>
+      },
+      {
+        title: "Date d'achat",
+        dataIndex: 'purchased_at',
+        key: 'purchased_at',
+        render: (date: string) => dayjs(date).format('DD/MM/YYYY')
+      }
+    ];
+
+    return (
+      <Card title="📞 Numéros de Téléphone">
+        {isMobile ? (
+          <List
+            dataSource={phoneNumbers}
+            loading={loading}
+            locale={{ emptyText: 'Aucun numéro enregistré' }}
+            renderItem={(number) => (
+              <List.Item key={number.id} style={{ borderBottom: '1px solid ' + token.colorBorderSecondary, paddingInline: 0 }}>
+                <Space direction="vertical" style={{ width: '100%' }} size={6}>
+                  <Space size={8}>
+                    <Text strong>{number.phone_number}</Text>
+                    <Tag color={getStatusColor(number.status)}>{number.status}</Tag>
+                  </Space>
+                  <Space size={8} wrap>
+                    <Tag>{number.number_type}</Tag>
+                    <Tag>{number.country_code.toUpperCase()}</Tag>
+                    <Tag color="purple">{formatCurrency(number.monthly_cost)}</Tag>
+                  </Space>
+                  <Space wrap>
+                    {number.features.map((feature) => (
+                      <Tag key={feature} bordered={false} color="geekblue">
+                        {feature}
+                      </Tag>
+                    ))}
+                  </Space>
+                  <Text type="secondary">Acheté le {dayjs(number.purchased_at).format('DD/MM/YYYY')}</Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Table
+            dataSource={phoneNumbers}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            pagination={{ pageSize: 10 }}
+            scroll={{ x: 960 }}
+          />
+        )}
+      </Card>
+    );
+  };
+
   return (
     <Layout style={{ minHeight: '100vh', background: token.colorBgContainer }}>
       {msgCtx}
-      <Sider width={300} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorder}`, padding: '16px' }}>
-        {renderStatsPanel()}
-        {renderQuickActions()}
-        {renderConnectionsStatus()}
-      </Sider>
+      {!isMobile && (
+        <Sider
+          width={320}
+          style={{
+            background: token.colorBgContainer,
+            borderRight: `1px solid ${token.colorBorder}`,
+            padding: '20px 16px',
+            overflowY: 'auto'
+          }}
+        >
+          {renderStatsPanel()}
+          {renderQuickActions()}
+          {renderConnectionsStatus()}
+        </Sider>
+      )}
 
-      <Content style={{ padding: '0 24px 24px' }}>
-        <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Space>
-            <PhoneTwoTone style={{ fontSize: '24px' }} />
-            <Title level={2} style={{ margin: 0 }}>Telnyx - Communications</Title>
+      <Content style={{ padding: isMobile ? '16px 12px 24px' : '0 32px 32px' }}>
+        <div
+          style={{
+            padding: isMobile ? '12px 0 20px' : '24px 0',
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            justifyContent: 'space-between',
+            gap: 16
+          }}
+        >
+          <Space align="center" size={12}>
+            <PhoneTwoTone style={{ fontSize: isMobile ? 24 : 28 }} />
+            <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>Telnyx - Communications</Title>
           </Space>
-          <Space>
-            <Button 
-              icon={<SyncOutlined spin={syncing} />} 
-              onClick={syncWithTelnyx} 
-              loading={syncing}
-            >
-              Synchroniser
-            </Button>
-          </Space>
+          <Button 
+            icon={<SyncOutlined spin={syncing} />} 
+            onClick={syncWithTelnyx} 
+            loading={syncing}
+            type="primary"
+            style={{ width: isMobile ? '100%' : 'auto' }}
+          >
+            Synchroniser
+          </Button>
         </div>
+
+        {isMobile && (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            {renderStatsPanel(true)}
+            {renderQuickActions(true)}
+            {renderConnectionsStatus(true)}
+          </Space>
+        )}
 
         {renderCurrentCall()}
 
-        <Tabs defaultActiveKey="dashboard" items={[
-          {
-            key: 'dashboard',
-            label: (
-              <span>
-                <DashboardOutlined />
-                Tableau de Bord
-              </span>
-            ),
-            children: (
-              <Row gutter={[24, 24]}>
-                <Col span={12}>
-                  <Card title="📞 Historique des Appels" extra={<Button size="small">Voir tout</Button>}>
-                    <Table
-                      dataSource={callHistory.slice(0, 10)}
-                      columns={[
-                        {
-                          title: 'Direction',
-                          dataIndex: 'direction',
-                          key: 'direction',
-                          render: (direction) => (
-                            <Tag color={direction === 'inbound' ? 'blue' : 'green'}>
-                              {direction === 'inbound' ? '↓ Entrant' : '↑ Sortant'}
-                            </Tag>
-                          ),
-                          width: 100
-                        },
-                        {
-                          title: 'Numéro',
-                          key: 'number',
-                          render: (_, record) => (
-                            <Text>{record.direction === 'inbound' ? record.from : record.to}</Text>
-                          )
-                        },
-                        {
-                          title: 'Durée',
-                          dataIndex: 'duration',
-                          key: 'duration',
-                          render: (duration) => formatDuration(duration),
-                          width: 80
-                        },
-                        {
-                          title: 'Statut',
-                          dataIndex: 'status',
-                          key: 'status',
-                          render: (status) => <Tag color={getStatusColor(status)}>{status}</Tag>,
-                          width: 100
-                        },
-                        {
-                          title: 'Date',
-                          dataIndex: 'started_at',
-                          key: 'started_at',
-                          render: (date) => dayjs(date).format('DD/MM HH:mm'),
-                          width: 100
-                        }
-                      ]}
-                      pagination={false}
-                      size="small"
-                      rowKey="id"
-                      onRow={(record) => ({
-                        onClick: () => {
-                          setSelectedCall(record);
-                          setIsCallDrawerVisible(true);
-                        }
-                      })}
+        <Tabs
+          defaultActiveKey="dashboard"
+          items={[
+            {
+              key: 'dashboard',
+              label: (
+                <span>
+                  <DashboardOutlined />
+                  Tableau de Bord
+                </span>
+              ),
+              children: (
+                <Row gutter={[24, 24]}>
+                  <Col xs={24} lg={12}>
+                    {renderCallHistorySection()}
+                  </Col>
+                  <Col xs={24} lg={12}>
+                    {renderMessageHistorySection()}
+                  </Col>
+                  <Col span={24}>
+                    {renderPhoneNumbersSection()}
+                  </Col>
+                </Row>
+              )
+            },
+            {
+              key: 'analytics',
+              label: (
+                <span>
+                  <BarChartOutlined />
+                  Analytiques
+                </span>
+              ),
+              children: (
+                <Row gutter={[24, 24]}>
+                  <Col span={24}>
+                    <Alert
+                      message="Analytiques Telnyx"
+                      description="Fonctionnalité en cours de développement. Statistiques détaillées et rapports à venir."
+                      type="info"
+                      showIcon
                     />
-                  </Card>
-                </Col>
-                
-                <Col span={12}>
-                  <Card title="💬 Historique des Messages" extra={<Button size="small">Voir tout</Button>}>
-                    <Table
-                      dataSource={messageHistory.slice(0, 10)}
-                      columns={[
-                        {
-                          title: 'Direction',
-                          dataIndex: 'direction',
-                          key: 'direction',
-                          render: (direction) => (
-                            <Tag color={direction === 'inbound' ? 'blue' : 'green'}>
-                              {direction === 'inbound' ? '↓ Reçu' : '↑ Envoyé'}
-                            </Tag>
-                          ),
-                          width: 80
-                        },
-                        {
-                          title: 'Numéro',
-                          key: 'number',
-                          render: (_, record) => (
-                            <Text>{record.direction === 'inbound' ? record.from : record.to}</Text>
-                          )
-                        },
-                        {
-                          title: 'Message',
-                          dataIndex: 'text',
-                          key: 'text',
-                          render: (text) => (
-                            <Text ellipsis={{ tooltip: text }}>
-                              {text.length > 30 ? `${text.substring(0, 30)}...` : text}
-                            </Text>
-                          )
-                        },
-                        {
-                          title: 'Statut',
-                          dataIndex: 'status',
-                          key: 'status',
-                          render: (status) => <Tag color={getStatusColor(status)}>{status}</Tag>,
-                          width: 80
-                        },
-                        {
-                          title: 'Date',
-                          dataIndex: 'sent_at',
-                          key: 'sent_at',
-                          render: (date) => dayjs(date).format('DD/MM HH:mm'),
-                          width: 100
-                        }
-                      ]}
-                      pagination={false}
-                      size="small"
-                      rowKey="id"
-                    />
-                  </Card>
-                </Col>
-                
-                <Col span={24}>
-                  <Card title="📞 Numéros de Téléphone">
-                    <Table
-                      dataSource={phoneNumbers}
-                      columns={[
-                        {
-                          title: 'Numéro',
-                          dataIndex: 'phone_number',
-                          key: 'phone_number',
-                          render: (number) => <Text strong>{number}</Text>
-                        },
-                        {
-                          title: 'Type',
-                          dataIndex: 'number_type',
-                          key: 'number_type',
-                          render: (type) => {
-                            const colors = {
-                              'local': 'blue',
-                              'toll-free': 'green',
-                              'national': 'orange',
-                              'mobile': 'purple'
-                            };
-                            return <Tag color={colors[type as keyof typeof colors]}>{type}</Tag>;
-                          }
-                        },
-                        {
-                          title: 'Pays',
-                          dataIndex: 'country_code',
-                          key: 'country_code',
-                          render: (code) => <Text>{code.toUpperCase()}</Text>
-                        },
-                        {
-                          title: 'Fonctionnalités',
-                          dataIndex: 'features',
-                          key: 'features',
-                          render: (features) => (
-                            <Space wrap>
-                              {features.map((feature: string) => (
-                                <Tag key={feature} size="small">{feature}</Tag>
-                              ))}
-                            </Space>
-                          )
-                        },
-                        {
-                          title: 'Coût/Mois',
-                          dataIndex: 'monthly_cost',
-                          key: 'monthly_cost',
-                          render: (cost) => formatCurrency(cost)
-                        },
-                        {
-                          title: 'Statut',
-                          dataIndex: 'status',
-                          key: 'status',
-                          render: (status) => <Tag color={getStatusColor(status)}>{status}</Tag>
-                        },
-                        {
-                          title: 'Date d\'achat',
-                          dataIndex: 'purchased_at',
-                          key: 'purchased_at',
-                          render: (date) => dayjs(date).format('DD/MM/YYYY')
-                        }
-                      ]}
-                      rowKey="id"
-                      pagination={{ pageSize: 10 }}
-                    />
-                  </Card>
-                </Col>
-              </Row>
-            )
-          },
-          {
-            key: 'analytics',
-            label: (
-              <span>
-                <BarChartOutlined />
-                Analytiques
-              </span>
-            ),
-            children: (
-              <Row gutter={[24, 24]}>
-                <Col span={24}>
-                  <Alert
-                    message="Analytiques Telnyx"
-                    description="Fonctionnalité en cours de développement. Statistiques détaillées et rapports à venir."
-                    type="info"
-                    showIcon
-                  />
-                </Col>
-              </Row>
-            )
-          }
-        ]} />
+                  </Col>
+                </Row>
+              )
+            }
+          ]}
+        />
       </Content>
 
       {/* Modal Configuration */}

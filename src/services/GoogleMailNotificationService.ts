@@ -17,6 +17,8 @@ import { PrismaClient } from '@prisma/client';
 import { UniversalNotificationService } from './UniversalNotificationService';
 import { EventEmitter } from 'events';
 
+import { googleOAuthConfig } from '../auth/googleConfig';
+
 const prisma = new PrismaClient();
 
 // 🧠 INTERFACE ANALYSE IA EMAIL
@@ -95,10 +97,15 @@ export class GoogleMailNotificationService extends EventEmitter {
       const gmail = google.gmail({ version: 'v1', auth });
 
       // Configurer le watch Gmail avec Push notifications
+      const projectId = googleOAuthConfig.projectId;
+      if (!projectId) {
+        throw new Error('GOOGLE_PROJECT_ID manquant dans googleOAuthConfig.');
+      }
+
       const watchResponse = await gmail.users.watch({
         userId: 'me',
         requestBody: {
-          topicName: `projects/${process.env.GOOGLE_PROJECT_ID}/topics/gmail-notifications`,
+          topicName: `projects/${projectId}/topics/gmail-notifications`,
           labelIds: ['INBOX'],
           labelFilterAction: 'include'
         }

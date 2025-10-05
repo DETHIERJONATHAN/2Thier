@@ -1,0 +1,71 @@
+/* 🎯 ASTÉRISQUES VERTS PAR DÉFAUT POUR TBL - Solution de force CSS FINALISÉE */
+
+/* ========== ASTÉRISQUES ========== */
+/* Style global pour forcer les astérisques des champs obligatoires TBL à être verts ÉPAIS */
+.ant-form-item-required:not(.ant-form-item-required-mark-optional)::before {
+  color: #059669 !important; /* Vert foncé par défaut */
+  font-weight: 900 !important; /* Très épais */
+  font-size: 16px !important; /* Plus gros */
+}
+
+/* Astérisque rouge ÉPAIS SEULEMENT pendant la validation */
+.tbl-validation-mode .ant-form-item-required:not(.ant-form-item-required-mark-optional)::before {
+  color: #dc2626 !important; /* Rouge foncé pendant validation */
+  font-weight: 900 !important; /* Très épais */
+  font-size: 16px !important; /* Plus gros */
+}
+
+/* ========== MESSAGES D'ERREUR ========== */
+/* Messages "Ce champ est obligatoire" en VERT par défaut */
+.ant-form-item-explain-error {
+  color: #059669 !important; /* Vert foncé par défaut */
+  font-weight: 600 !important; /* Semi-épais */
+}
+
+/* Messages en rouge seulement pendant validation */
+.tbl-validation-mode .ant-form-item-explain-error {
+  color: #dc2626 !important; /* Rouge foncé pendant validation */
+  font-weight: 600 !important; /* Semi-épais */
+}
+
+/* ========== CONTOURS DES CHAMPS ========== */
+/* Contour des champs en vert ÉPAIS par défaut */
+.ant-form-item-has-success .ant-select-selector,
+.ant-form-item-has-success .ant-input,
+.ant-form-item-has-success .ant-input-number,
+.ant-form-item-has-success .ant-picker {
+  border-color: #059669 !important; /* Vert foncé */
+  border-width: 2px !important; /* Contour plus épais */
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.1) !important; /* Halo vert léger */
+}
+
+/* Contour rouge ÉPAIS seulement pendant validation */
+.tbl-validation-mode .ant-form-item-has-error .ant-select-selector,
+.tbl-validation-mode .ant-form-item-has-error .ant-input,
+.tbl-validation-mode .ant-form-item-has-error .ant-input-number,
+.tbl-validation-mode .ant-form-item-has-error .ant-picker {
+  border-color: #dc2626 !important; /* Rouge foncé */
+  border-width: 2px !important; /* Contour plus épais */
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1) !important; /* Halo rouge léger */
+}
+
+/* ========== FOCUS DES CHAMPS ========== */
+/* Focus en vert pour les champs obligatoires */
+.ant-form-item-has-success .ant-select-focused .ant-select-selector,
+.ant-form-item-has-success .ant-input:focus,
+.ant-form-item-has-success .ant-input-number:focus-within,
+.ant-form-item-has-success .ant-picker:focus-within {
+  border-color: #059669 !important;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2) !important; /* Halo vert plus fort au focus */
+}
+
+/* ========== ÉTIQUETTES DES CHAMPS ========== */
+/* Labels des champs obligatoires en vert foncé */
+.ant-form-item-label > label.ant-form-item-required {
+  color: #065f46 !important; /* Vert très foncé pour les labels */
+  font-weight: 600 !important; /* Semi-épais */
+}
+
+/* ========== ONGLETS TBL - RÈGLES DYNAMIQUES SEULEMENT ========== */
+
+/* CSS supprimé - on utilise l'API native d'Ant Design maintenant */

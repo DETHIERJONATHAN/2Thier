@@ -1,4 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+
+// 🎯 CSS pour astérisques verts par défaut
+import '../../../../styles/tbl-green-asterisk.css';
+
+// 🔄 Déclaration TypeScript pour la fonction de refresh
+declare global {
+  interface Window {
+    TBL_FORCE_REFRESH?: () => void;
+  }
+}
 import { 
   Layout, 
   Typography, 
@@ -26,6 +36,8 @@ import { ClientSidebar } from './components/ClientSidebar';
 import TBLSectionRenderer from './components/TBLSectionRenderer';
 import { useTBLDataPrismaComplete, type TBLField, type TBLSection } from './hooks/useTBLDataPrismaComplete';
 import { useTBLDataHierarchicalFixed } from './hooks/useTBLData-hierarchical-fixed';
+import { useTBLValidation } from './hooks/useTBLValidation';
+import { TBLValidationProvider, useTBLValidationContext } from './contexts/TBLValidationContext';
 import { useTBLCapabilitiesPreload } from './hooks/useTBLCapabilitiesPreload';
 import TBLDevCapabilitiesPanel from './components/Dev/TBLDevCapabilitiesPanel';
 import { dlog, isVerbose } from '../../../../utils/debug';
@@ -113,15 +125,15 @@ const TBL: React.FC<TBLProps> = ({
 
   // Charger les données Lead si leadId fourni
   useEffect(() => {
-    console.log('🔍 [TBL] useEffect loadLead - leadId:', leadId, 'api:', !!api);
+    // console.log('🔍 [TBL] useEffect loadLead - leadId:', leadId, 'api:', !!api);
     if (leadId && api) {
       const loadLead = async () => {
         try {
-          console.log('🔍 [TBL] Appel API /api/leads/' + leadId);
+          // console.log('🔍 [TBL] Appel API /api/leads/' + leadId);
           const response = await api.get(`/api/leads/${leadId}`);
-          console.log('🔍 [TBL] Réponse API lead:', response);
-          console.log('🔍 [TBL] response.success:', response.success);
-          console.log('🔍 [TBL] response.data:', response.data);
+          // console.log('🔍 [TBL] Réponse API lead:', response);
+          // console.log('🔍 [TBL] response.success:', response.success);
+          // console.log('🔍 [TBL] response.data:', response.data);
           
           // L'API retourne directement l'objet lead ou une structure {success, data}
           const lead = response.success ? response.data : response;
@@ -134,7 +146,7 @@ const TBL: React.FC<TBLProps> = ({
               phone: lead.phone || '',
               address: lead.data?.address || ''
             };
-            console.log('🔍 [TBL] Mise à jour clientData:', newClientData);
+            // console.log('🔍 [TBL] Mise à jour clientData:', newClientData);
             setClientData(newClientData);
           } else {
             console.warn('🔍 [TBL] Lead non trouvé ou invalide');
@@ -152,12 +164,12 @@ const TBL: React.FC<TBLProps> = ({
 
   // Fonctions pour gérer les leads
   const handleLoadLead = useCallback(() => {
-    console.log('🔍 [TBL] handleLoadLead appelé');
+    // console.log('🔍 [TBL] handleLoadLead appelé');
     setLeadSelectorVisible(true);
   }, []);
 
   const handleNewLead = useCallback(() => {
-    console.log('➕ [TBL] handleNewLead appelé');
+    // console.log('➕ [TBL] handleNewLead appelé');
     setLeadCreatorVisible(true);
   }, []);
 
@@ -182,8 +194,8 @@ const TBL: React.FC<TBLProps> = ({
       const runDiagnostic = () => {
         const data = window.TBL_FORM_DATA || {};
         const mirrorKeys = Object.keys(data).filter(k => k.startsWith('__mirror_data_'));
-        console.log('🔧 [TBL] Diagnostic - FormData keys:', Object.keys(data).length);
-        console.log('🪞 [TBL] Diagnostic - Mirror keys:', mirrorKeys.length);
+        // console.log('🔧 [TBL] Diagnostic - FormData keys:', Object.keys(data).length);
+        // console.log('🪞 [TBL] Diagnostic - Mirror keys:', mirrorKeys.length);
         return { data, mirrorKeys };
       };
       window.runTBLDiagnostic = runDiagnostic;
@@ -204,18 +216,18 @@ const TBL: React.FC<TBLProps> = ({
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       const timer = setTimeout(() => {
-        console.log('🚀 [TBL AUTO] ANALYSE AUTOMATIQUE DES MIRRORS');
-        console.log('='.repeat(50));
+        // console.log('🚀 [TBL AUTO] ANALYSE AUTOMATIQUE DES MIRRORS');
+        // console.log('='.repeat(50));
         
         // 1. Analyse des données formData
         const allKeys = Object.keys(formData);
         const mirrorKeys = allKeys.filter(k => k.startsWith('__mirror_'));
         const dataKeys = allKeys.filter(k => !k.startsWith('__mirror_'));
         
-        console.log(`📊 FormData - Total: ${allKeys.length}, Données: ${dataKeys.length}, Mirrors: ${mirrorKeys.length}`);
+        // console.log(`📊 FormData - Total: ${allKeys.length}, Données: ${dataKeys.length}, Mirrors: ${mirrorKeys.length}`);
         
         if (mirrorKeys.length > 0) {
-          console.log('🪞 MIRRORS DÉTECTÉS:');
+          // console.log('🪞 MIRRORS DÉTECTÉS:');
           
           // Séparer par type de mirror
           const dataMirrors = mirrorKeys.filter(k => k.startsWith('__mirror_data_'));
@@ -227,14 +239,14 @@ const TBL: React.FC<TBLProps> = ({
           const formulaWithValues = formulaMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== 0).map(k => `${k}=${formData[k]}`);
           const conditionWithValues = conditionMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== false).map(k => `${k}=${formData[k]}`);
           
-          console.log(`  📊 DONNÉES (${dataMirrors.length} total, ${dataWithValues.length} avec valeurs):`, dataWithValues.length > 0 ? dataWithValues : dataMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
-          console.log(`  🧮 FORMULES (${formulaMirrors.length} total, ${formulaWithValues.length} avec valeurs):`, formulaWithValues.length > 0 ? formulaWithValues : formulaMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
-          console.log(`  🔀 CONDITIONS (${conditionMirrors.length} total, ${conditionWithValues.length} avec valeurs):`, conditionWithValues.length > 0 ? conditionWithValues : conditionMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
+          // console.log(`  📊 DONNÉES (${dataMirrors.length} total, ${dataWithValues.length} avec valeurs):`, dataWithValues.length > 0 ? dataWithValues : dataMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
+          // console.log(`  🧮 FORMULES (${formulaMirrors.length} total, ${formulaWithValues.length} avec valeurs):`, formulaWithValues.length > 0 ? formulaWithValues : formulaMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
+          // console.log(`  🔀 CONDITIONS (${conditionMirrors.length} total, ${conditionWithValues.length} avec valeurs):`, conditionWithValues.length > 0 ? conditionWithValues : conditionMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
         }
         
         // 2. Analyse des cartes SmartCalculatedField
         const smartFields = document.querySelectorAll('[data-testid*="smart-calculated-field"]');
-        console.log(`🎴 SmartCalculatedField détectés: ${smartFields.length}`);
+        // console.log(`🎴 SmartCalculatedField détectés: ${smartFields.length}`);
         
         if (smartFields.length > 0) {
           const stats = { calculating: 0, withMirror: 0, resolved: 0, empty: 0 };
@@ -253,28 +265,28 @@ const TBL: React.FC<TBLProps> = ({
             }
           });
           
-          console.log(`📈 ÉTAT DES CARTES:`);
-          console.log(`  🔄 En calcul: ${stats.calculating}`);
-          console.log(`  🪞 Avec mirror: ${stats.withMirror}`);
-          console.log(`  ✅ Résolues: ${stats.resolved}`);
-          console.log(`  ⚪ Vides: ${stats.empty}`);
+          // console.log(`📈 ÉTAT DES CARTES:`);
+          // console.log(`  🔄 En calcul: ${stats.calculating}`);
+          // console.log(`  🪞 Avec mirror: ${stats.withMirror}`);
+          // console.log(`  ✅ Résolues: ${stats.resolved}`);
+          // console.log(`  ⚪ Vides: ${stats.empty}`);
           
           const total = smartFields.length;
           const working = stats.withMirror + stats.resolved;
           const successRate = Math.round((working / total) * 100);
           
-          console.log(`🎯 TAUX DE SUCCÈS: ${successRate}% (${working}/${total})`);
+          // console.log(`🎯 TAUX DE SUCCÈS: ${successRate}% (${working}/${total})`);
           
           if (stats.withMirror > 0) {
-            console.log('🎉 EXCELLENT! Le système mirror automatique FONCTIONNE!');
+            // console.log('🎉 EXCELLENT! Le système mirror automatique FONCTIONNE!');
           } else if (stats.calculating > 0) {
-            console.log('⚠️ Des cartes sont en calcul - Mirrors pas encore appliqués');
+            // console.log('⚠️ Des cartes sont en calcul - Mirrors pas encore appliqués');
           } else {
-            console.log('❌ Aucun mirror automatique détecté');
+            // console.log('❌ Aucun mirror automatique détecté');
           }
         }
         
-        console.log('='.repeat(50));
+        // console.log('='.repeat(50));
       }, 2000); // Attendre 2 secondes pour que tout soit chargé
       
       return () => clearTimeout(timer);
@@ -324,6 +336,17 @@ const TBL: React.FC<TBLProps> = ({
   const dataLoading = useFixed ? newData.loading : oldData.loading;
   const dataError = useFixed ? newData.error : oldData.error;
 
+  // 🎯 Hook de validation pour les onglets et champs obligatoires
+  const { validationState, actions: validationActions } = useTBLValidation({
+    tabs: tabs || [],
+    fieldValues: formData
+  });
+
+  // 🎯 Contexte de validation simple
+  const { isValidation, startValidation, stopValidation } = useTBLValidationContext();
+
+
+
   // Diff structurel (verbose uniquement)
   useEffect(() => {
     if (!isVerbose()) return;
@@ -360,11 +383,6 @@ const TBL: React.FC<TBLProps> = ({
       const mirrorKeys = Object.keys(globalData).filter(k => k.startsWith('__mirror_data_'));
       
       if (mirrorKeys.length > 0) {
-        console.log('🔄 [SYNC] Synchronisation des mirrors vers FormData...', { 
-          mirrors: mirrorKeys.length,
-          keys: mirrorKeys.slice(0, 3) 
-        });
-        
         setFormData(prev => {
           const next = { ...prev };
           let syncCount = 0;
@@ -386,7 +404,7 @@ const TBL: React.FC<TBLProps> = ({
           });
           
           if (syncCount > 0) {
-            console.log(`✅ [SYNC] ${syncCount} éléments synchronisés vers FormData`);
+            // console.log(`✅ [SYNC] ${syncCount} éléments synchronisés vers FormData`);
           }
           
           return next;
@@ -502,7 +520,7 @@ const TBL: React.FC<TBLProps> = ({
       const sig = computeSignature(formData);
       // Anti-doublons: si déjà envoyé/sauvé, on ne renvoie pas
       if (lastSavedSignatureRef.current === sig || lastQueuedSignatureRef.current === sig) {
-        if (isVerbose()) console.log('[TBL][AUTOSAVE] No-op (signature identique)');
+        if (isVerbose()) // console.log('[TBL][AUTOSAVE] No-op (signature identique)');
         return;
       }
       lastQueuedSignatureRef.current = sig;
@@ -547,7 +565,30 @@ const TBL: React.FC<TBLProps> = ({
     return () => clearInterval(interval);
   }, [formData, autoSaveEnabled, tree, scheduleAutosave]);
 
+  // 🔄 EXPOSITION DE LA FONCTION DE REFRESH POUR LES CHANGEMENTS D'APPARENCE
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.TBL_FORCE_REFRESH = () => {
+        console.log('🔄 [TBL] Force refresh déclenché depuis Parameters');
+        if (useFixed && newData.refetch) {
+          newData.refetch();
+        } else if (!useFixed && oldData.refetch) {
+          oldData.refetch();
+        }
+      };
+      
+      // Cleanup
+      return () => {
+        if (window.TBL_FORCE_REFRESH) {
+          delete window.TBL_FORCE_REFRESH;
+        }
+      };
+    }
+  }, [useFixed, newData.refetch, oldData.refetch]);
+
   const handleFieldChange = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
+    console.log(`🔄🔄🔄 [TBL] handleFieldChange appelé: fieldId=${fieldId}, value=${value}`);
+    
     // Vérifier si le champ existe dans la configuration
     let fieldConfig = tblConfig?.fields.find(f => f.id === fieldId);
     if (!fieldConfig) {
@@ -663,6 +704,9 @@ const TBL: React.FC<TBLProps> = ({
     // Si la validation passe, mettre à jour le state
     setFormData(prev => {
       const next: Record<string, unknown> = { ...prev, [fieldId]: value };
+      console.log(`✅✅✅ [TBL] setFormData - Mise à jour: fieldId=${fieldId}, value=${value}, formData.keys=${Object.keys(next).length}`);
+      console.log(`📦 [TBL] formData COMPLET après mise à jour:`, next);
+      
       try {
         // Exposer en debug (lecture) pour analyse miroir
         if (typeof window !== 'undefined') {
@@ -674,14 +718,14 @@ const TBL: React.FC<TBLProps> = ({
         const dynamicLabel = fieldConfig?.label || fieldId;
         // Log générique (diagnostic) au lieu de filtre métier
         if (localStorage.getItem('TBL_DIAG') === '1') {
-          console.log('[TBL][FIELD][CHANGE]', { fieldId, label: dynamicLabel, value });
+          // console.log('[TBL][FIELD][CHANGE]', { fieldId, label: dynamicLabel, value });
         }
         // Miroir automatique: si le label se termine par ' - Champ' on alimente __mirror_data_<BaseLabel>
         if (typeof dynamicLabel === 'string' && / - Champ$/i.test(dynamicLabel)) {
           const baseLabel = dynamicLabel.replace(/ - Champ$/i, '');
           const mirrorKey = `__mirror_data_${baseLabel}`;
           if (!(mirrorKey in next)) {
-            console.log('[TBL][MIRROR][SET]', { mirrorKey, from: fieldId, value });
+            // console.log('[TBL][MIRROR][SET]', { mirrorKey, from: fieldId, value });
           }
           next[mirrorKey] = value;
           try {
@@ -690,7 +734,7 @@ const TBL: React.FC<TBLProps> = ({
               const k = `__mirror_data_${v}`;
               if (!(k in next)) {
                 next[k] = value;
-                console.log('[TBL][MIRROR][SET_VARIANT]', { variantKey: k, base: baseLabel, from: fieldId });
+                // console.log('[TBL][MIRROR][SET_VARIANT]', { variantKey: k, base: baseLabel, from: fieldId });
               }
             });
           } catch (e) {
@@ -704,7 +748,7 @@ const TBL: React.FC<TBLProps> = ({
               const k = `__mirror_data_${v}`;
               if (!(k in next)) {
                 next[k] = value;
-                console.log('[TBL][MIRROR][SET_VARIANT_FROM_MIRROR]', { variantKey: k, from: fieldId });
+                // console.log('[TBL][MIRROR][SET_VARIANT_FROM_MIRROR]', { variantKey: k, from: fieldId });
               }
             });
           } catch (e) {
@@ -727,16 +771,16 @@ const TBL: React.FC<TBLProps> = ({
     try {
       console.group('[TBL][SAVE_AS_DEVIS] Début');
       console.time('[TBL] SAVE_AS_DEVIS');
-      console.log('[TBL][SAVE_AS_DEVIS] Params', values);
+      // console.log('[TBL][SAVE_AS_DEVIS] Params', values);
       const dataSize = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
-      console.log('[TBL][SAVE_AS_DEVIS] formData', { keys: Object.keys(formData).length, approxBytes: dataSize });
+      // console.log('[TBL][SAVE_AS_DEVIS] formData', { keys: Object.keys(formData).length, approxBytes: dataSize });
       const result = await saveAsDevis(formData, tree!.id, {
         clientId: 'temp-client-id', // TODO: utiliser le vrai client ID
         projectName: values.projectName,
         notes: values.notes,
         isDraft: false
       });
-      console.log('[TBL][SAVE_AS_DEVIS] Résultat', result);
+      // console.log('[TBL][SAVE_AS_DEVIS] Résultat', result);
       if (result.success) {
         message.success('Devis sauvegardé avec succès !');
         setSaveModalVisible(false);
@@ -752,7 +796,18 @@ const TBL: React.FC<TBLProps> = ({
 
   // Générer le PDF
   const handleGeneratePDF = () => {
-    message.info('Génération PDF - À implémenter');
+    // 🎯 DÉCLENCHER LA VALIDATION SIMPLE avant la génération PDF
+    startValidation();
+    
+    console.log('🎯 VALIDATION PDF DÉCLENCHÉE !');
+    
+    message.info('Génération PDF - Validation en cours...');
+    
+    // Arrêter la validation après un délai
+    setTimeout(() => {
+      stopValidation();
+      message.success('Validation terminée');
+    }, 3000);
   };
 
   // Charger un devis existant
@@ -768,19 +823,19 @@ const TBL: React.FC<TBLProps> = ({
     const leadIdFromUrl = leadId;
     const effectiveLeadId = clientData.id || leadIdFromUrl;
     
-    console.log('🔍 [TBL] FILTRAGE STRICT - clientData.id:', clientData.id);
-    console.log('🔍 [TBL] FILTRAGE STRICT - leadIdFromUrl:', leadIdFromUrl);
-    console.log('🔍 [TBL] FILTRAGE STRICT - effectiveLeadId:', effectiveLeadId);
-    console.log('🔍 [TBL] FILTRAGE STRICT - clientData:', clientData);
+    // console.log('🔍 [TBL] FILTRAGE STRICT - clientData.id:', clientData.id);
+    // console.log('🔍 [TBL] FILTRAGE STRICT - leadIdFromUrl:', leadIdFromUrl);
+    // console.log('🔍 [TBL] FILTRAGE STRICT - effectiveLeadId:', effectiveLeadId);
+    // console.log('🔍 [TBL] FILTRAGE STRICT - clientData:', clientData);
     
     try {
-      console.log('🔍 [TBL] FILTRAGE STRICT - Chargement des devis pour:', effectiveLeadId, clientData.name);
+      // console.log('🔍 [TBL] FILTRAGE STRICT - Chargement des devis pour:', effectiveLeadId, clientData.name);
       
       // Charger TOUS les devis d'abord, puis filtrer côté client
       const apiUrl = `/api/treebranchleaf/submissions/by-leads?treeId=${effectiveTreeId}`;
       
       const allLeadsWithSubmissions = await api.get(apiUrl);
-      console.log('🔍 [TBL] AVANT FILTRAGE - Tous les leads reçus:', allLeadsWithSubmissions);
+      // console.log('🔍 [TBL] AVANT FILTRAGE - Tous les leads reçus:', allLeadsWithSubmissions);
       
       // FILTRAGE STRICT : Ne garder QUE le lead sélectionné
       let filteredLeads = allLeadsWithSubmissions;
@@ -788,20 +843,20 @@ const TBL: React.FC<TBLProps> = ({
       if (effectiveLeadId) {
         filteredLeads = allLeadsWithSubmissions.filter(lead => {
           const isMatch = lead.id === effectiveLeadId;
-          console.log(`🔍 [TBL] Vérification lead ${lead.id} (${lead.firstName} ${lead.lastName}) VS ${effectiveLeadId}: ${isMatch}`);
+          // console.log(`🔍 [TBL] Vérification lead ${lead.id} (${lead.firstName} ${lead.lastName}) VS ${effectiveLeadId}: ${isMatch}`);
           return isMatch;
         });
-        console.log('🔍 [TBL] APRÈS FILTRAGE STRICT - Leads conservés:', filteredLeads);
+        // console.log('🔍 [TBL] APRÈS FILTRAGE STRICT - Leads conservés:', filteredLeads);
       } else {
-        console.log('⚠️ [TBL] Aucun leadId trouvé, affichage de tous les devis');
+        // console.log('⚠️ [TBL] Aucun leadId trouvé, affichage de tous les devis');
       }
       
       if (!filteredLeads || filteredLeads.length === 0) {
-        console.log('❌ [TBL] AUCUN devis trouvé pour le lead:', effectiveLeadId, clientData.name);
+        // console.log('❌ [TBL] AUCUN devis trouvé pour le lead:', effectiveLeadId, clientData.name);
         message.info(`Aucun devis trouvé pour ${clientData.name || 'ce lead'}`);
         setAvailableDevis([]);
       } else {
-        console.log('✅ [TBL] Devis trouvés pour le lead:', clientData.name, filteredLeads);
+        // console.log('✅ [TBL] Devis trouvés pour le lead:', clientData.name, filteredLeads);
         setAvailableDevis(filteredLeads);
       }
       
@@ -831,7 +886,7 @@ const TBL: React.FC<TBLProps> = ({
         submission.summary?.name || submission.name || ''
       ).filter(name => name.trim() !== '');
       
-      console.log('🔍 [TBL] Noms de devis existants:', existingNames);
+      // console.log('🔍 [TBL] Noms de devis existants:', existingNames);
       
       // Vérifier si le nom de base est unique
       if (!existingNames.includes(baseName)) {
@@ -847,7 +902,7 @@ const TBL: React.FC<TBLProps> = ({
         uniqueName = `${baseName} (${counter})`;
       }
       
-      console.log('🔢 [TBL] Nom unique généré:', uniqueName);
+      // console.log('🔢 [TBL] Nom unique généré:', uniqueName);
       return uniqueName;
     } catch (error) {
       console.error('❌ [TBL] Erreur lors de la génération du nom unique:', error);
@@ -932,7 +987,7 @@ const TBL: React.FC<TBLProps> = ({
 
       if (!confirmed) return;
 
-      console.log('🗑️ [TBL] Suppression du devis:', { devisId, devisName });
+      // console.log('🗑️ [TBL] Suppression du devis:', { devisId, devisName });
       
       // Appeler l'API de suppression
       await api.delete(`/api/treebranchleaf/submissions/${devisId}`);
@@ -943,7 +998,7 @@ const TBL: React.FC<TBLProps> = ({
       }
       
       message.success(`Devis "${devisName}" supprimé avec succès`);
-      console.log('✅ [TBL] Devis supprimé avec succès');
+      // console.log('✅ [TBL] Devis supprimé avec succès');
     } catch (error) {
       console.error('❌ [TBL] Erreur lors de la suppression du devis:', error);
       message.error('Erreur lors de la suppression du devis');
@@ -958,17 +1013,17 @@ const TBL: React.FC<TBLProps> = ({
 
       const effectiveTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
       const approxBytes = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
-      console.log('🔍 [TBL] État actuel:', { leadId, treeId, effectiveTreeId, devisName, formDataKeys: Object.keys(formData), approxBytes });
+      // console.log('🔍 [TBL] État actuel:', { leadId, treeId, effectiveTreeId, devisName, formDataKeys: Object.keys(formData), approxBytes });
 
       const values = await form.validateFields();
-      console.log('✅ [TBL] Validation formulaire réussie:', values);
+      // console.log('✅ [TBL] Validation formulaire réussie:', values);
 
       const baseDevisName = values.devisName || devisName;
-      console.log('🔍 [TBL] Nom de base du devis:', baseDevisName);
+      // console.log('🔍 [TBL] Nom de base du devis:', baseDevisName);
 
       // Vérifier l'unicité du nom avant la sauvegarde finale
       const finalDevisName = await generateUniqueDevisName(baseDevisName, leadId || '');
-      console.log('🔍 [TBL] Nom final du devis (unique):', finalDevisName);
+      // console.log('🔍 [TBL] Nom final du devis (unique):', finalDevisName);
 
       if (!effectiveTreeId) {
         console.error('❌ [TBL] Tree ID manquant:', { effectiveTreeId });
@@ -976,7 +1031,7 @@ const TBL: React.FC<TBLProps> = ({
         return;
       }
 
-      console.log('🔍 [TBL] Création devis avec paramètres:', { leadId: leadId || 'aucun', treeId: effectiveTreeId, name: finalDevisName, dataKeys: Object.keys(formData).length, approxBytes });
+      // console.log('🔍 [TBL] Création devis avec paramètres:', { leadId: leadId || 'aucun', treeId: effectiveTreeId, name: finalDevisName, dataKeys: Object.keys(formData).length, approxBytes });
 
       // Créer le devis via API avec les données actuelles du formulaire
       const submissionData: { treeId: string; name: string; data: TBLFormData; leadId?: string } = {
@@ -990,7 +1045,7 @@ const TBL: React.FC<TBLProps> = ({
       // Tentative de création de la submission avec repli automatique si 404 (arbre introuvable ou non autorisé)
       let submission: unknown;
       try {
-        console.log('📡 [TBL] POST TBL Prisma create-and-evaluate - payload meta', { treeId: submissionData.treeId, name: submissionData.name, dataKeys: Object.keys(submissionData.data || {}).length });
+        // console.log('📡 [TBL] POST TBL Prisma create-and-evaluate - payload meta', { treeId: submissionData.treeId, name: submissionData.name, dataKeys: Object.keys(submissionData.data || {}).length });
         
         const formData = Array.isArray(submissionData.data) 
           ? submissionData.data.reduce((acc, item) => {
@@ -1019,9 +1074,9 @@ const TBL: React.FC<TBLProps> = ({
 
         if (status === 404) {
           try {
-            console.log('🌲 [TBL] Chargement des arbres accessibles pour repli…');
+            // console.log('🌲 [TBL] Chargement des arbres accessibles pour repli…');
             const trees = await api.get('/api/treebranchleaf/trees') as Array<{ id: string; name?: string }>;
-            console.log('🌲 [TBL] Arbres reçus (count):', Array.isArray(trees) ? trees.length : 'non-array');
+            // console.log('🌲 [TBL] Arbres reçus (count):', Array.isArray(trees) ? trees.length : 'non-array');
             if (Array.isArray(trees) && trees.length > 0) {
               const fallbackTreeId = trees[0].id;
               console.info('🔁 [TBL] Repli: on essaie avec le premier arbre accessible', { fallbackTreeId, fallbackTreeName: trees[0]?.name });
@@ -1063,7 +1118,7 @@ const TBL: React.FC<TBLProps> = ({
         }
       }
 
-      console.log('✅ [TBL] Devis créé avec succès. Détails (clés):', submission && typeof submission === 'object' ? Object.keys(submission as Record<string, unknown>) : typeof submission);
+      // console.log('✅ [TBL] Devis créé avec succès. Détails (clés):', submission && typeof submission === 'object' ? Object.keys(submission as Record<string, unknown>) : typeof submission);
       message.success(`Nouveau devis "${finalDevisName}" créé avec succès`);
 
       // Récupérer et mémoriser l'ID de la submission créée (pour activer les mises à jour idempotentes)
@@ -1121,10 +1176,10 @@ const TBL: React.FC<TBLProps> = ({
       try {
         const err = error as { response?: { status?: number; data?: unknown; statusText?: string }; status?: number; message?: string; url?: string };
         console.group('[TBL][CREATE_DEVIS][ERROR]');
-        console.log('status:', err?.response?.status ?? err?.status);
-        console.log('statusText:', err?.response?.statusText);
-        console.log('message:', err?.message);
-        console.log('data:', err?.response?.data);
+        // console.log('status:', err?.response?.status ?? err?.status);
+        // console.log('statusText:', err?.response?.statusText);
+        // console.log('message:', err?.message);
+        // console.log('data:', err?.response?.data);
         console.groupEnd();
       } catch { /* noop */ }
 
@@ -1234,7 +1289,7 @@ const TBL: React.FC<TBLProps> = ({
       const uniqueName = await generateUniqueDevisName(baseName, leadId || '');
       try {
         // 🔥 NOUVEAU: Utiliser TBL Prisma pour l'auto-sauvegarde
-        console.log('🚀 [TBL] Auto-sauvegarde via TBL Prisma...');
+        // console.log('🚀 [TBL] Auto-sauvegarde via TBL Prisma...');
         
         await api.post('/api/tbl/submissions/create-and-evaluate', {
           treeId: effectiveTreeId,
@@ -1258,9 +1313,9 @@ const TBL: React.FC<TBLProps> = ({
   // Sélectionner un devis spécifique
   const handleSelectDevis = useCallback(async (devisId: string, leadData?: {id: string, firstName: string, lastName: string, email: string}) => {
     try {
-      console.log('🔍 [TBL] === DÉBUT CHARGEMENT DEVIS ===');
-      console.log('🔍 [TBL] ID du devis:', devisId);
-      console.log('🔍 [TBL] Données du lead:', leadData);
+      // console.log('🔍 [TBL] === DÉBUT CHARGEMENT DEVIS ===');
+      // console.log('🔍 [TBL] ID du devis:', devisId);
+      // console.log('🔍 [TBL] Données du lead:', leadData);
       
       // Indicateur de chargement
       message.loading('Chargement du devis...', 0.5);
@@ -1276,34 +1331,34 @@ const TBL: React.FC<TBLProps> = ({
         };
         setClientData(newClientData);
         setLeadId(leadData.id);
-        console.log('🔍 [TBL] Client mis à jour:', newClientData);
+        // console.log('🔍 [TBL] Client mis à jour:', newClientData);
       }
       
       // Charger les données du devis sélectionné
-      console.log('🔍 [TBL] Appel API pour récupérer la submission...');
+      // console.log('🔍 [TBL] Appel API pour récupérer la submission...');
       const submission = await api.get(`/api/treebranchleaf/submissions/${devisId}`);
-      console.log('🔍 [TBL] Réponse API complète:', submission);
+      // console.log('🔍 [TBL] Réponse API complète:', submission);
       
-      console.log('🔍 [TBL] Réponse API complète:', submission);
+      // console.log('🔍 [TBL] Réponse API complète:', submission);
       
       if (submission && submission.TreeBranchLeafSubmissionData) {
-        console.log('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData);
-        console.log('🔍 [TBL] Nombre d\'éléments:', submission.TreeBranchLeafSubmissionData.length);
+        // console.log('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData);
+        // console.log('🔍 [TBL] Nombre d\'éléments:', submission.TreeBranchLeafSubmissionData.length);
         
         // Reformater les données pour le formulaire
         const formattedData: TBLFormData = {};
         submission.TreeBranchLeafSubmissionData.forEach((item: {nodeId: string, value?: string}, index: number) => {
-          console.log(`🔍 [TBL] Item ${index}:`, item);
+          // console.log(`🔍 [TBL] Item ${index}:`, item);
           if (item.value !== undefined && item.value !== null && item.value !== '') {
             formattedData[item.nodeId] = item.value;
-            console.log(`✅ [TBL] Ajouté: ${item.nodeId} = ${item.value}`);
+            // console.log(`✅ [TBL] Ajouté: ${item.nodeId} = ${item.value}`);
           } else {
-            console.log(`⚠️ [TBL] Ignoré (valeur vide): ${item.nodeId} = ${item.value}`);
+            // console.log(`⚠️ [TBL] Ignoré (valeur vide): ${item.nodeId} = ${item.value}`);
           }
         });
         
-        console.log('🔍 [TBL] Données formatées finales:', formattedData);
-        console.log('🔍 [TBL] Nombre de champs avec données:', Object.keys(formattedData).length);
+        // console.log('🔍 [TBL] Données formatées finales:', formattedData);
+        // console.log('🔍 [TBL] Nombre de champs avec données:', Object.keys(formattedData).length);
         
         // Mettre à jour le formulaire
         setFormData(formattedData);
@@ -1315,10 +1370,10 @@ const TBL: React.FC<TBLProps> = ({
           const sig = computeSignature(normalized);
           lastSavedSignatureRef.current = sig;
         } catch { /* noop */ }
-        console.log('✅ [TBL] FormData mis à jour');
+        // console.log('✅ [TBL] FormData mis à jour');
         
         const devisName = submission.summary?.name || submission.name || `Devis ${devisId.slice(0, 8)}`;
-        console.log('🔍 [TBL] Nom du devis:', devisName);
+        // console.log('🔍 [TBL] Nom du devis:', devisName);
         message.success(`Devis "${devisName}" chargé avec succès (${Object.keys(formattedData).length} champs)`);
       } else {
         console.warn('🔍 [TBL] Aucune donnée TreeBranchLeafSubmissionData trouvée');
@@ -1328,7 +1383,7 @@ const TBL: React.FC<TBLProps> = ({
       
       // Fermer la modal
       setDevisSelectorVisible(false);
-      console.log('🔍 [TBL] === FIN CHARGEMENT DEVIS ===');
+      // console.log('🔍 [TBL] === FIN CHARGEMENT DEVIS ===');
       
     } catch (error) {
       console.error('❌ [TBL] Erreur lors du chargement du devis:', error);
@@ -1410,8 +1465,9 @@ const TBL: React.FC<TBLProps> = ({
   }
 
   return (
-    <Layout className="h-full bg-gray-50">
-      <Content className={contentPaddingClass}>
+    <TBLValidationProvider>
+      <Layout className={`h-full bg-gray-50 ${isValidation ? 'tbl-validation-mode' : ''}`}>
+        <Content className={contentPaddingClass}>
         <Row gutter={mainRowGutter} className="h-full">
           {/* Sidebar client */}
           <Col xs={24} lg={8} xl={6} className={isMobile ? 'mb-4' : undefined}>
@@ -1532,20 +1588,165 @@ const TBL: React.FC<TBLProps> = ({
                 onChange={setActiveTab}
                 type="card"
                 size={isMobile ? 'small' : 'large'}
-                className="tbl-tabs"
+                className={`tbl-tabs ${
+                  // 🎯 LOGIQUE 100% DYNAMIQUE pour les onglets
+                  tabs?.map(tab => {
+                    const tabSections = tab.sections || [];
+                    const requiredFields: Array<{id: string, label: string}> = [];
+                    
+                    // Extraire tous les champs obligatoires de cet onglet
+                    tabSections.forEach(section => {
+                      const sectionFields = section.fields || [];
+                      sectionFields.forEach(field => {
+                        if (field.required) {
+                          requiredFields.push({ id: field.id, label: field.label || field.name });
+                        }
+                      });
+                    });
+                    
+                    // 🎯 LOGIQUE DYNAMIQUE CORRECTE
+                    if (requiredFields.length === 0) {
+                      // Aucun champ obligatoire = automatiquement complet (vert)
+                      return `tab-${tab.id}-complete`;
+                    } else {
+                      // Il y a des champs obligatoires, vérifier s'ils sont TOUS remplis
+                      const allFieldsComplete = requiredFields.every(field => {
+                        const value = formData[field.id];
+                        return value !== null && value !== undefined && value !== '';
+                      });
+                      
+                      return allFieldsComplete ? `tab-${tab.id}-complete` : `tab-${tab.id}-incomplete`;
+                    }
+                  }).join(' ') || ''
+                }`}
                 tabBarGutter={isMobile ? 12 : 24}
-                items={tabs ? tabs.map(tab => ({
-                  key: tab.id,
-                  label: (
-                    <div className="flex items-center gap-2">
+                items={tabs ? tabs.map(tab => {
+                  // 🎯 Calculer l'état de cet onglet spécifique pour le badge seulement
+                  // 🎯 NOUVELLE LOGIQUE : Utiliser les sections au lieu de tab.fields
+                  const tabSections = tab.sections || [];
+                  const requiredFields: Array<{id: string, label: string}> = [];
+                  
+                  // Extraire tous les champs requis de toutes les sections de cet onglet
+                  tabSections.forEach(section => {
+                    const sectionFields = section.fields || [];
+                    sectionFields.forEach(field => {
+                      if (field.required) {
+                        requiredFields.push({ id: field.id, label: field.label || field.name });
+                      }
+                    });
+                  });
+                  
+                  // 🔍 DEBUG COMPLET DE LA LOGIQUE DE VALIDATION
+                  // 🎯 LOGIQUE FINALE - Couleurs des onglets
+                  let isComplete = false;
+                  let isValidatingIncomplete = false;
+                  
+                  if (requiredFields.length === 0) {
+                    // Aucun champ requis = automatiquement complet (vert)
+                    isComplete = true;
+                  } else {
+                    // Il y a des champs requis, vérifier s'ils sont tous remplis
+                    const allFieldsComplete = requiredFields.every(field => {
+                      const value = formData[field.id];
+                      return value !== null && value !== undefined && value !== '';
+                    });
+                    
+                    isComplete = allFieldsComplete;
+                    // Rouge seulement si validation PDF + champs manquants
+                    isValidatingIncomplete = validationState.isValidating && !allFieldsComplete;
+                  }
+                  
+
+                  
+                  // 🔍 Logs pour debug
+                  if (isValidatingIncomplete) {
+                    console.log(`🔴 [ONGLET ROUGE] ${tab.label} - incomplet pendant validation PDF`);
+                  } else if (isComplete && requiredFields.length > 0) {
+                    console.log(`🟢 [ONGLET VERT] ${tab.label} - complet (${requiredFields.length} champs requis)`);
+                  } else {
+                    console.log(`⚪ [ONGLET NORMAL] ${tab.label} - normal`);
+                  }
+
+                  // 🎯 STYLE DYNAMIQUE - API NATIVE ANT DESIGN
+                  const tabStyle = (() => {
+                    console.log(`🎯 [STYLE DEBUG] ${tab.label}: isComplete=${isComplete}, requiredFields.length=${requiredFields.length}, isValidatingIncomplete=${isValidatingIncomplete}`);
+                    
+                    // Si tentative PDF ET onglet incomplet → ROUGE
+                    if (isValidatingIncomplete && !isComplete) {
+                      console.log(`🔴 [STYLE] ${tab.label} → ROUGE (validation PDF échouée)`);
+                      return {
+                        backgroundColor: '#fee2e2',
+                        borderColor: '#dc2626',
+                        color: '#991b1b'
+                      };
+                    }
+                    // Si onglet complet (même si 0/0) → VERT  
+                    else if (isComplete) {
+                      console.log(`🟢 [STYLE] ${tab.label} → VERT (${requiredFields.length} champs requis)`);
+                      return {
+                        backgroundColor: '#0f766e', // Même vert que le bouton "Nouveau Devis"
+                        borderColor: '#0f766e',
+                        color: '#ffffff' // Texte en blanc
+                      };
+                    }
+                    // Sinon onglet normal (incomplet)
+                    console.log(`⚪ [STYLE] ${tab.label} → NORMAL (incomplet)`);
+                    return {};
+                  })();
+
+                  return {
+                    key: tab.id,
+                    // Pas de style sur l'item - seulement sur le label
+                    label: (
+                    <div 
+                      className="flex items-center gap-2" 
+                      style={{
+                        ...tabStyle,  // Appliquer le style directement sur le label
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
                       <FileTextOutlined />
                       <span>{tab.label}</span>
-                      {/* Badge de completion pour l'onglet */}
-                      <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
-                        {tab.fields?.filter(f => formData[f.id] !== undefined).length || 0}
-                        /
-                        {tab.fields?.length || 0}
-                      </span>
+                      {/* Badge de completion avec couleurs dynamiques */}
+                      {(() => {
+                        // 🎯 UTILISER LA MÊME LOGIQUE QUE POUR LES COULEURS DES ONGLETS
+                        // Réutiliser les mêmes requiredFields calculés plus haut
+                        // 🎯 UTILISER LA MÊME LOGIQUE COHÉRENTE POUR LE BADGE
+                        const badgeIsIncomplete = validationState.isValidating && !isComplete && requiredFields.length > 0;
+                        
+                        let badgeClass = "text-xs px-2 py-1 rounded-full";
+                        if (badgeIsIncomplete) {
+                          badgeClass += " bg-red-100 text-red-600"; // Rouge si incomplet pendant validation
+                        } else if (isComplete) {
+                          badgeClass += " bg-green-100 text-green-700"; // VERT si tous les champs obligatoires sont remplis
+                        } else {
+                          badgeClass += " bg-gray-100 text-gray-600"; // GRIS par défaut
+                        }
+
+                        // 🎯 COMPTER BASÉ SUR LES SECTIONS (COHÉRENT)
+                        const allTabFields: Array<{id: string}> = [];
+                        tabSections.forEach(section => {
+                          const sectionFields = section.fields || [];
+                          sectionFields.forEach(field => {
+                            allTabFields.push({ id: field.id });
+                          });
+                        });
+                        
+                        const completedFields = allTabFields.filter(field => {
+                          const value = formData[field.id];
+                          return value !== undefined && value !== null && value !== '';
+                        });
+
+                        return (
+                          <span className={badgeClass}>
+                            {completedFields.length}
+                            /
+                            {allTabFields.length}
+                          </span>
+                        );
+                      })()}
                     </div>
                   ),
                   children: (
@@ -1556,10 +1757,13 @@ const TBL: React.FC<TBLProps> = ({
                         formData={formData}
                         onChange={handleFieldChange}
                         disabled={saving}
+                        validationState={validationState}
+                        validationActions={validationActions}
                       />
                     </div>
                   )
-                })) : []}
+                };
+                }) : []}
               />
 
               {/* Indicateur d'auto-sauvegarde */}
@@ -1613,7 +1817,25 @@ const TBL: React.FC<TBLProps> = ({
               <Button onClick={() => setSaveModalVisible(false)}>
                 Annuler
               </Button>
-              <Button type="primary" htmlType="submit" loading={saving}>
+              <Button 
+                onClick={() => {
+                  // 🧪 TEST: Déclencher la validation
+                  validationActions.startValidation();
+                  console.log('🎯 VALIDATION DÉCLENCHÉE !', {
+                    isValidating: validationState.isValidating,
+                    completedTabs: Array.from(validationState.completedTabs),
+                    incompleteTabs: Array.from(validationState.incompleteTabs)
+                  });
+                }}
+                style={{ background: '#f0f0f0' }}
+              >
+                🧪 Tester Validation
+              </Button>
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                loading={saving}
+              >
                 Sauvegarder
               </Button>
             </Space>
@@ -1622,27 +1844,25 @@ const TBL: React.FC<TBLProps> = ({
       </Modal>
 
       {/* Modal de sélection de lead */}
-      {console.log('🔍 [TBL] Rendu LeadSelectorModal, visible:', leadSelectorVisible)}
       <LeadSelectorModal
         open={leadSelectorVisible}
         onClose={() => {
-          console.log('🔍 [TBL] Fermeture LeadSelectorModal');
+          // console.log('🔍 [TBL] Fermeture LeadSelectorModal');
           setLeadSelectorVisible(false);
         }}
         onSelectLead={handleSelectLead}
       />
 
       {/* Modal de création de lead */}
-      {console.log('➕ [TBL] Rendu LeadCreatorModal, visible:', leadCreatorVisible)}
       <LeadCreatorModalAdvanced
         open={leadCreatorVisible}
         onClose={() => {
-          console.log('➕ [TBL] Fermeture LeadCreatorModal');
+          // console.log('➕ [TBL] Fermeture LeadCreatorModal');
           setLeadCreatorVisible(false);
         }}
         onCreateLead={handleCreateLead}
         onLeadCreated={(lead) => {
-          console.log('✅ Lead créé:', lead);
+          // console.log('✅ Lead créé:', lead);
           // Naviguer immédiatement vers le nouveau lead dans TBL
           setLeadCreatorVisible(false);
           window.location.href = `/tbl/${lead.id}`;
@@ -1923,7 +2143,7 @@ const TBL: React.FC<TBLProps> = ({
               }}>
                 Annuler
               </Button>
-              <Button type="primary" htmlType="submit" onClick={() => console.log('🖱️ [TBL] Clic sur "Créer le devis"')}>
+              <Button type="primary" htmlType="submit" onClick={() => {}}>
                 Créer le devis
               </Button>
             </Space>
@@ -1931,6 +2151,7 @@ const TBL: React.FC<TBLProps> = ({
         </Form>
       </Modal>
     </Layout>
+    </TBLValidationProvider>
   );
 };
 
@@ -1943,6 +2164,8 @@ interface TBLTabContentWithSectionsProps {
   formData: TBLFormData;
   onChange: (fieldId: string, value: string | number | boolean | string[] | null | undefined) => void;
   disabled?: boolean;
+  validationState?: any;
+  validationActions?: any;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
@@ -1950,6 +2173,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
   fields,
   formData,
   onChange,
+  validationState,
+  validationActions,
   disabled = false
 }) => {
   const stats = useMemo(() => {

@@ -210,6 +210,10 @@ router.get('/fields', authMiddleware, requireRole(['user', 'admin', 'super_admin
         treeId: true,
         parentId: true,
         order: true,
+        // 🏷️ COLONNES TOOLTIP - CRITIQUES POUR TBL
+        text_helpTooltipType: true,
+        text_helpTooltipText: true,
+        text_helpTooltipImage: true,
         TreeBranchLeafTree: { select: { organizationId: true } }
       },
       orderBy: { updatedAt: 'desc' }
@@ -230,7 +234,11 @@ router.get('/fields', authMiddleware, requireRole(['user', 'admin', 'super_admin
       required: false,
       defaultValue: null,
       category: n.fieldSubType || null,
-      order: n.order
+      order: n.order,
+      // 🏷️ DONNÉES TOOLTIP - ESSENTIELLES POUR TBL
+      text_helpTooltipType: n.text_helpTooltipType,
+      text_helpTooltipText: n.text_helpTooltipText,
+      text_helpTooltipImage: n.text_helpTooltipImage
     }));
 
     return res.json({ fields, count: fields.length, source: 'database' });

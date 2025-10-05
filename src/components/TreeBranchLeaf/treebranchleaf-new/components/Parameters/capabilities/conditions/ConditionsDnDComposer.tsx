@@ -64,7 +64,7 @@ const DisplaySlot: React.FC<{ label: string; content?: React.ReactNode; onClear?
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8
   }}>
     <Tooltip title={label}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden' /* textOverflow: 'ellipsis' TEMPORAIREMENT DÉSACTIVÉ */ }}>
         {content || <Text type="secondary">{label}</Text>}
       </span>
     </Tooltip>

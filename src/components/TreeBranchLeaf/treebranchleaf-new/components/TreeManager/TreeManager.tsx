@@ -1,71 +1,75 @@
 /**
- * 🌳 TreeManager - Gestionnaire d'interface TreeManagerProps {
-  tree?: TreeBranchLeafTree;
-  trees?: TreeBranchLeafTree[];
-  organizationId?: string;
-  readOnly?: boolean;
-  onAction: (action: 'create' | 'update' | 'delete' | 'duplicate', data?: Partial<TreeBranchLeafTree>) => void;
-  onTreeSelect?: (tree: TreeBranchLeafTree) => void;
-  onSave?: (tree: TreeBranchLeafTree) => void;
-  onPreview?: (tree: TreeBranchLeafTree) => void;
-}dule du haut)
- * 
- * Permet de créer/renommer/dupliquer/supprimer un arbre
- * Barre d'outils avec actions principales
+ * 🌳 TreeManager - Gestionnaire de barre d'outils pour les arbres TreeBranchLeaf
+ *
+ * - Permet de créer, éditer, dupliquer et supprimer des arbres
+ * - Fournit les actions de sauvegarde/aperçu et un sélecteur d'arbre
+ * - Ajoute des logs détaillés pour diagnostiquer les re-rendus excessifs
  */
 
-import React, { useState } from 'react';
-import { 
-  Space, 
-  Button, 
-  Dropdown, 
-  Modal, 
-  Form, 
-  Input, 
-  Select, 
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Space,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Select,
   ColorPicker,
   message,
   Tooltip,
   Typography
 } from 'antd';
-import { 
+import {
   PlusOutlined,
   SaveOutlined,
   EyeOutlined,
-  CopyOutlined,
-  EditOutlined,
-  DeleteOutlined,
   MoreOutlined,
-  SettingOutlined,
+  EditOutlined,
+  CopyOutlined,
   ExportOutlined,
   ImportOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  SettingOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import type { TreeBranchLeafTree } from '../../types';
+
 import './TreeManager.css';
-const { TextArea } = Input;
-const { Text } = Typography;
+
 const { Option } = Select;
+const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
+
+interface CreateTreeFormValues {
+  name: string;
+  description?: string;
+  category: string;
+  color: string;
+  icon?: string;
+  status: 'draft' | 'published' | 'archived';
+}
+
+type UpdateTreeFormValues = CreateTreeFormValues;
 
 interface TreeManagerProps {
-  tree: TreeBranchLeafTree | null;
+  tree?: TreeBranchLeafTree | null;
   trees?: TreeBranchLeafTree[];
-  organizationId: string;
+  organizationId?: string;
   readOnly?: boolean;
-  onAction: (action: 'create' | 'update' | 'delete' | 'duplicate', data?: Partial<TreeBranchLeafTree>) => void;
+  onAction: (action: 'create' | 'update' | 'delete' | 'duplicate', data?: Partial<TreeBranchLeafTree>) => void | Promise<void>;
   onTreeSelect?: (tree: TreeBranchLeafTree) => void;
   onSave?: (tree: TreeBranchLeafTree) => void;
   onPreview?: (tree: TreeBranchLeafTree) => void;
 }
 
-interface TreeFormData {
-  name: string;
-  description?: string;
-  category: string;
-  icon?: string;
-  color: string;
-  status: 'draft' | 'published' | 'archived';
-}
+const DEFAULT_CREATE_VALUES: CreateTreeFormValues = {
+  name: '',
+  description: '',
+  category: 'formulaire',
+  color: '#10b981',
+  icon: undefined,
+  status: 'draft'
+};
 
 const TreeManager: React.FC<TreeManagerProps> = ({
   tree,
@@ -77,94 +81,210 @@ const TreeManager: React.FC<TreeManagerProps> = ({
   onSave,
   onPreview
 }) => {
+  const [form] = Form.useForm<CreateTreeFormValues>();
+  const [editForm] = Form.useForm<UpdateTreeFormValues>();
+
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [form] = Form.useForm<TreeFormData>();
-  const [editForm] = Form.useForm<TreeFormData>();
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
 
-  // =============================================================================
-  // 🎬 ACTIONS - Gestionnaires d'événements
-  // =============================================================================
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const renderCountRef = useRef(0);
+  const snapshotRef = useRef<string>('');
 
-  const handleCreate = async (values: TreeFormData) => {
-    try {
-      // Inclure l'organisation si connue
-      const payload: Partial<TreeBranchLeafTree> = {
-        ...values,
-        ...(organizationId ? { organizationId } : {})
-      };
-      onAction('create', payload);
-      setCreateModalVisible(false);
-      form.resetFields();
-      message.success('Arbre créé avec succès');
-  } catch {
-      message.error('Erreur lors de la création de l\'arbre');
+  useEffect(() => {
+    // console.log('🌳 [TreeManager] props update', {
+    //   treeId: tree?.id,
+    //   treesCount: trees.length,
+    //   readOnly,
+    //   organizationId
+    // });
+  }, [tree?.id, trees.length, readOnly, organizationId]);
+
+  useEffect(() => {
+    // console.log('🌳 [TreeManager] actionsMenuOpen ->', actionsMenuOpen);
+  }, [actionsMenuOpen]);
+
+  useEffect(() => {
+    if (createModalVisible) {
+      // console.log('🌳 [TreeManager] createModalVisible OPEN');
     }
-  };
+  }, [createModalVisible]);
 
-  const handleUpdate = async (values: TreeFormData) => {
-    if (!tree) return;
-    
-    try {
-      onAction('update', { ...tree, ...values });
-      setEditModalVisible(false);
-      editForm.resetFields();
-      message.success('Arbre mis à jour avec succès');
-  } catch {
-      message.error('Erreur lors de la mise à jour de l\'arbre');
+  useEffect(() => {
+    if (editModalVisible) {
+      // console.log('🌳 [TreeManager] editModalVisible OPEN for tree', tree?.id);
     }
-  };
+  }, [editModalVisible, tree?.id]);
 
-  const handleDelete = async () => {
-    if (!tree) return;
-    
-    try {
-      onAction('delete');
-      setDeleteModalVisible(false);
-      message.success('Arbre supprimé avec succès');
-  } catch {
-      message.error('Erreur lors de la suppression de l\'arbre');
+  useEffect(() => {
+    if (deleteModalVisible) {
+      // console.log('🌳 [TreeManager] deleteModalVisible OPEN for tree', tree?.id);
     }
-  };
+  }, [deleteModalVisible, tree?.id]);
 
-  const handleDuplicate = () => {
-    if (!tree) return;
-    onAction('duplicate');
-    message.info('Duplication de l\'arbre en cours...');
-  };
+  renderCountRef.current += 1;
+  const stateSnapshot = JSON.stringify({
+    createModalVisible,
+    editModalVisible,
+    deleteModalVisible,
+    actionsMenuOpen,
+    treeId: tree?.id ?? null,
+    treesCount: trees.length,
+    readOnly
+  });
 
-  const handleSave = () => {
-    if (tree && onSave) {
-      onSave(tree);
+  if (snapshotRef.current !== stateSnapshot) {
+    // console.log('🌳 [TreeManager] render #%d state snapshot %o', renderCountRef.current, {
+    //   createModalVisible,
+    //   editModalVisible,
+    //   deleteModalVisible,
+    //   actionsMenuOpen,
+    //   treeId: tree?.id,
+    //   treesCount: trees.length,
+    //   readOnly
+    // });
+    snapshotRef.current = stateSnapshot;
+  }
+
+  const closeAllModals = useCallback(() => {
+    setCreateModalVisible(false);
+    setEditModalVisible(false);
+    setDeleteModalVisible(false);
+  }, []);
+
+  const openCreateModal = useCallback(() => {
+    // console.log('🌳 [TreeManager] openCreateModal');
+    form.setFieldsValue(DEFAULT_CREATE_VALUES);
+    setCreateModalVisible(true);
+  }, [form]);
+
+  const openEditModal = useCallback(() => {
+    if (!tree) {
+      console.warn('🌳 [TreeManager] openEditModal without tree');
+      return;
     }
-  };
-
-  const handlePreview = () => {
-    if (tree && onPreview) {
-      onPreview(tree);
-    }
-  };
-
-  const openEditModal = () => {
-    if (!tree) return;
-    
+    // console.log('🌳 [TreeManager] openEditModal for tree', tree.id);
     editForm.setFieldsValue({
       name: tree.name,
       description: tree.description,
       category: tree.category,
-      icon: tree.icon,
       color: tree.color,
+      icon: tree.icon,
       status: tree.status
     });
     setEditModalVisible(true);
-  };
+  }, [editForm, tree]);
 
-  // =============================================================================
-  // 🎨 MENU ITEMS - Éléments des menus
-  // =============================================================================
+  const handleCreate = useCallback(async (values: CreateTreeFormValues) => {
+    // console.log('🌳 [TreeManager] handleCreate submit', values);
+    closeAllModals();
+    form.resetFields();
+    await onAction('create', {
+      ...values,
+      organizationId
+    });
+  }, [closeAllModals, form, onAction, organizationId]);
 
-  const treeMenuItems = [
+  const handleUpdate = useCallback(async (values: UpdateTreeFormValues) => {
+    if (!tree) {
+      console.warn('🌳 [TreeManager] handleUpdate without tree');
+      return;
+    }
+    // console.log('🌳 [TreeManager] handleUpdate submit', tree.id, values);
+    closeAllModals();
+    await onAction('update', {
+      id: tree.id,
+      ...values
+    });
+  }, [closeAllModals, onAction, tree]);
+
+  const handleDelete = useCallback(async () => {
+    if (!tree) {
+      console.warn('🌳 [TreeManager] handleDelete without tree');
+      return;
+    }
+    // console.log('🌳 [TreeManager] handleDelete', tree.id);
+    closeAllModals();
+    await onAction('delete');
+  }, [closeAllModals, onAction, tree]);
+
+  const handleDuplicate = useCallback(async () => {
+    if (!tree) {
+      console.warn('🌳 [TreeManager] handleDuplicate without tree');
+      return;
+    }
+    // console.log('🌳 [TreeManager] handleDuplicate', tree.id);
+    await onAction('duplicate');
+  }, [onAction, tree]);
+
+  const handleSave = useCallback(() => {
+    if (!tree) {
+      console.warn('🌳 [TreeManager] handleSave without tree');
+      return;
+    }
+    if (onSave) {
+      // console.log('🌳 [TreeManager] handleSave delegated to parent', tree.id);
+      onSave(tree);
+    } else {
+      // console.log('🌳 [TreeManager] handleSave fallback to onAction update', tree.id);
+      onAction('update', { id: tree.id });
+    }
+  }, [onAction, onSave, tree]);
+
+  const handlePreview = useCallback(() => {
+    if (!tree) {
+      message.warning('Aucun arbre sélectionné pour l\'aperçu');
+      return;
+    }
+    if (onPreview) {
+      // console.log('🌳 [TreeManager] handlePreview delegated', tree.id);
+      onPreview(tree);
+    } else {
+      message.info('Prévisualisation non disponible');
+    }
+  }, [onPreview, tree]);
+
+  useEffect(() => {
+    if (!editModalVisible || !tree) {
+      return;
+    }
+    editForm.setFieldsValue({
+      name: tree.name,
+      description: tree.description,
+      category: tree.category,
+      color: tree.color,
+      icon: tree.icon,
+      status: tree.status
+    });
+  }, [editModalVisible, editForm, tree]);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (actionsMenuRef.current?.contains(target)) {
+        // console.log('🌳 [TreeManager] pointerdown inside menu');
+        return;
+      }
+      if (actionsTriggerRef.current?.contains(target as HTMLElement)) {
+        // console.log('🌳 [TreeManager] pointerdown on trigger');
+        return;
+      }
+      // console.log('🌳 [TreeManager] pointerdown outside -> closing menu');
+      setActionsMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, { capture: true } as EventListenerOptions);
+    };
+  }, [actionsMenuOpen]);
+
+  const treeMenuItems = useMemo(() => ([
     {
       key: 'edit',
       label: 'Modifier',
@@ -176,11 +296,10 @@ const TreeManager: React.FC<TreeManagerProps> = ({
       key: 'duplicate',
       label: 'Dupliquer',
       icon: <CopyOutlined />,
+      disabled: readOnly,
       onClick: handleDuplicate
     },
-    {
-      type: 'divider' as const
-    },
+    { type: 'divider' as const },
     {
       key: 'export',
       label: 'Exporter',
@@ -194,9 +313,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
       disabled: readOnly,
       onClick: () => message.info('Import - TODO')
     },
-    {
-      type: 'divider' as const
-    },
+    { type: 'divider' as const },
     {
       key: 'history',
       label: 'Historique',
@@ -210,9 +327,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
       disabled: readOnly,
       onClick: () => message.info('Paramètres - TODO')
     },
-    {
-      type: 'divider' as const
-    },
+    { type: 'divider' as const },
     {
       key: 'delete',
       label: 'Supprimer',
@@ -221,65 +336,60 @@ const TreeManager: React.FC<TreeManagerProps> = ({
       disabled: readOnly,
       onClick: () => setDeleteModalVisible(true)
     }
-  ];
+  ]), [handleDuplicate, openEditModal, readOnly]);
 
-  // =============================================================================
-  // 🎨 RENDER - Rendu principal
-  // =============================================================================
+  const handleTreeSelection = useCallback((treeId: string) => {
+    const selected = trees.find((item) => item.id === treeId);
+    // console.log('� [TreeManager] tree selection change', treeId, 'found?', !!selected);
+    if (selected && onTreeSelect) {
+      onTreeSelect(selected);
+    }
+  }, [onTreeSelect, trees]);
 
   return (
     <>
-  <div className="tree-manager-header" style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        width: '100%',
-        padding: '8px 16px',
-        backgroundColor: '#fafafa',
-        borderRadius: '6px',
-        border: '1px solid #f0f0f0',
-        minHeight: '60px'
-      }}>
-        
-        {/* Partie gauche : Sélecteur d'arbre + Info */}
+      <div
+        className="tree-manager-header"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '8px 16px',
+          backgroundColor: '#fafafa',
+          borderRadius: '6px',
+          border: '1px solid #f0f0f0',
+          minHeight: '60px'
+        }}
+      >
         <Space align="center" size="middle">
-          {/* Sélecteur d'arbres */}
           {trees.length > 0 && (
             <Select
               value={tree?.id}
               placeholder="Sélectionner un arbre..."
-              style={{ minWidth: 180 }}
+              style={{ minWidth: 200 }}
               size="middle"
-              styles={{ popup: { root: { backgroundColor: '#1f2937', color: '#fff' } } }}
-              onChange={(treeId) => {
-                const selectedTree = trees.find(t => t.id === treeId);
-                if (selectedTree && onTreeSelect) {
-                  onTreeSelect(selectedTree);
-                }
-              }}
               showSearch
               optionFilterProp="label"
+              onChange={handleTreeSelection}
+              styles={{ popup: { root: { backgroundColor: '#1f2937', color: '#fff' } } }}
             >
-              {trees.map((t) => (
-                <Option key={t.id} value={t.id} label={t.name}>
-                  {t.name} ({t.category})
+              {trees.map((item) => (
+                <Option key={item.id} value={item.id} label={item.name}>
+                  {item.name} ({item.category})
                 </Option>
               ))}
             </Select>
           )}
-          {/* Infos à droite du sélecteur volontairement masquées selon demande */}
         </Space>
 
-        {/* Partie droite : Actions compactes */}
         <Space size="small">
-          
-          {/* Créer un nouvel arbre */}
           <Tooltip title="Créer un nouvel arbre">
             <Button
               type="primary"
               icon={<PlusOutlined />}
               size="middle"
-              onClick={() => setCreateModalVisible(true)}
+              onClick={openCreateModal}
               disabled={readOnly}
             >
               Nouveau
@@ -288,7 +398,6 @@ const TreeManager: React.FC<TreeManagerProps> = ({
 
           {tree && (
             <>
-              {/* Sauvegarder */}
               <Tooltip title="Sauvegarder les modifications">
                 <Button
                   icon={<SaveOutlined />}
@@ -300,193 +409,148 @@ const TreeManager: React.FC<TreeManagerProps> = ({
                 </Button>
               </Tooltip>
 
-              {/* Prévisualiser */}
               <Tooltip title="Prévisualiser l'arbre">
-                <Button
-                  icon={<EyeOutlined />}
-                  size="middle"
-                  onClick={handlePreview}
-                >
+                <Button icon={<EyeOutlined />} size="middle" onClick={handlePreview}>
                   Aperçu
                 </Button>
               </Tooltip>
 
-              {/* Menu d'actions */}
-              <Dropdown
-                menu={{ 
-                  items: treeMenuItems.map(item => ({
-                    ...item,
-                    onClick: item.onClick
-                  }))
-                }}
-                trigger={['click']}
-              >
-                <Button 
-                  icon={<MoreOutlined />} 
+              <div style={{ position: 'relative' }}>
+                <Button
+                  ref={actionsTriggerRef}
+                  icon={<MoreOutlined />}
                   size="middle"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    // console.log('🌳 [TreeManager] trigger click -> toggling menu');
+                    setActionsMenuOpen((open) => !open);
+                  }}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
                 />
-              </Dropdown>
+                {actionsMenuOpen && (
+                  <div
+                    ref={actionsMenuRef}
+                    style={{
+                      position: 'absolute',
+                      top: '110%',
+                      right: 0,
+                      background: '#fff',
+                      border: '1px solid #d9d9d9',
+                      borderRadius: 6,
+                      boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+                      padding: '4px 0',
+                      minWidth: 200,
+                      zIndex: 2000
+                    }}
+                  >
+                    {treeMenuItems.map((item, index) => {
+                      if ('type' in item) {
+                        return (
+                          <div
+                            key={`divider-${index}`}
+                            style={{
+                              height: 1,
+                              margin: '4px 0',
+                              backgroundColor: '#f0f0f0'
+                            }}
+                          />
+                        );
+                      }
+
+                      const { key, icon, label, disabled, danger, onClick } = item;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            // console.log('🌳 [TreeManager] menu click', key);
+                            setActionsMenuOpen(false);
+                            if (!disabled) {
+                              onClick?.();
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            width: '100%',
+                            padding: '6px 12px',
+                            gap: 8,
+                            background: 'transparent',
+                            border: 'none',
+                            color: danger ? '#ff4d4f' : disabled ? '#aaa' : '#333',
+                            fontSize: 13,
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 14 }}>
+                            {icon}
+                          </span>
+                          <span style={{ flex: 1 }}>{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </Space>
-
       </div>
 
-      {/* =============================================================================
-          📝 MODALS - Modales de création/édition/suppression
-          ============================================================================= */}
-
-      {/* Modal de création */}
-      <Modal
-        title="Créer un nouvel arbre"
-        open={createModalVisible}
-        onCancel={() => {
-          setCreateModalVisible(false);
-          form.resetFields();
-        }}
-        onOk={() => form.submit()}
-        okText="Créer"
-        cancelText="Annuler"
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleCreate}
-          initialValues={{
-            category: 'formulaire',
-            color: '#10b981',
-            status: 'draft'
+      {createModalVisible && (
+        <Modal
+          title="Créer un nouvel arbre"
+          open
+          onCancel={() => {
+            setCreateModalVisible(false);
+            form.resetFields();
           }}
+          onOk={() => form.submit()}
+          okText="Créer"
+          cancelText="Annuler"
         >
-          <Form.Item
-            name="name"
-            label="Nom de l'arbre"
-            rules={[{ required: true, message: 'Le nom est obligatoire' }]}
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleCreate}
+            initialValues={DEFAULT_CREATE_VALUES}
           >
-            <Input placeholder="Mon arbre de décision" />
-          </Form.Item>
-
-          <Form.Item
-            name="description"
-            label="Description"
-          >
-            <TextArea 
-              placeholder="Description de l'arbre..."
-              rows={3}
-            />
-          </Form.Item>
-
-          <div style={{ display: 'flex', gap: '12px' }}>
             <Form.Item
-              name="category"
-              label="Catégorie"
-              style={{ flex: 1 }}
+              name="name"
+              label="Nom de l'arbre"
+              rules={[{ required: true, message: 'Le nom est obligatoire' }]}
             >
-              <Select>
-                <Option value="formulaire">📋 Formulaire</Option>
-                <Option value="diagnostic">🩺 Diagnostic</Option>
-                <Option value="devis">💰 Devis</Option>
-                <Option value="configuration">⚙️ Configuration</Option>
-                <Option value="evaluation">📊 Évaluation</Option>
-                <Option value="autre">📁 Autre</Option>
-              </Select>
+              <Input placeholder="Mon arbre de décision" />
             </Form.Item>
 
-            <Form.Item
-              name="color"
-              label="Couleur"
-            >
-              <ColorPicker showText format="hex" />
-            </Form.Item>
-          </div>
-
-          <Form.Item
-            name="icon"
-            label="Icône"
-          >
-            <Select placeholder="Choisir une icône" allowClear>
-              <Option value="TreeOutlined">🌳 Arbre</Option>
-              <Option value="BranchesOutlined">🌿 Branches</Option>
-              <Option value="SettingOutlined">⚙️ Configuration</Option>
-              <Option value="FormOutlined">📋 Formulaire</Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Modal d'édition */}
-      <Modal
-        title="Modifier l'arbre"
-        open={editModalVisible}
-        onCancel={() => {
-          setEditModalVisible(false);
-          editForm.resetFields();
-        }}
-        onOk={() => editForm.submit()}
-        okText="Sauvegarder"
-        cancelText="Annuler"
-      >
-        <Form
-          form={editForm}
-          layout="vertical"
-          onFinish={handleUpdate}
-        >
-          <Form.Item
-            name="name"
-            label="Nom de l'arbre"
-            rules={[{ required: true, message: 'Le nom est obligatoire' }]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            name="description"
-            label="Description"
-          >
-            <TextArea rows={3} />
-          </Form.Item>
-
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <Form.Item
-              name="category"
-              label="Catégorie"
-              style={{ flex: 1 }}
-            >
-              <Select>
-                <Option value="formulaire">📋 Formulaire</Option>
-                <Option value="diagnostic">🩺 Diagnostic</Option>
-                <Option value="devis">💰 Devis</Option>
-                <Option value="configuration">⚙️ Configuration</Option>
-                <Option value="evaluation">📊 Évaluation</Option>
-                <Option value="autre">📁 Autre</Option>
-              </Select>
+            <Form.Item name="description" label="Description">
+              <TextArea rows={3} placeholder="Description de l'arbre..." />
             </Form.Item>
 
-            <Form.Item
-              name="status"
-              label="Statut"
-            >
-              <Select>
-                <Option value="draft">🚧 Brouillon</Option>
-                <Option value="published">✅ Publié</Option>
-                <Option value="archived">📦 Archivé</Option>
-              </Select>
-            </Form.Item>
-          </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Form.Item name="category" label="Catégorie" style={{ flex: 1 }}>
+                <Select>
+                  <Option value="formulaire">📋 Formulaire</Option>
+                  <Option value="diagnostic">🩺 Diagnostic</Option>
+                  <Option value="devis">💰 Devis</Option>
+                  <Option value="configuration">⚙️ Configuration</Option>
+                  <Option value="evaluation">📊 Évaluation</Option>
+                  <Option value="autre">📁 Autre</Option>
+                </Select>
+              </Form.Item>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <Form.Item
-              name="color"
-              label="Couleur"
-            >
-              <ColorPicker showText format="hex" />
-            </Form.Item>
+              <Form.Item name="color" label="Couleur">
+                <ColorPicker showText format="hex" disabled={readOnly} />
+              </Form.Item>
+            </div>
 
-            <Form.Item
-              name="icon"
-              label="Icône"
-              style={{ flex: 1 }}
-            >
+            <Form.Item name="icon" label="Icône">
               <Select placeholder="Choisir une icône" allowClear>
                 <Option value="TreeOutlined">🌳 Arbre</Option>
                 <Option value="BranchesOutlined">🌿 Branches</Option>
@@ -494,38 +558,90 @@ const TreeManager: React.FC<TreeManagerProps> = ({
                 <Option value="FormOutlined">📋 Formulaire</Option>
               </Select>
             </Form.Item>
-          </div>
-        </Form>
-      </Modal>
+          </Form>
+        </Modal>
+      )}
 
-      {/* Modal de suppression */}
-      <Modal
-        title="Supprimer l'arbre"
-        open={deleteModalVisible}
-        onCancel={() => setDeleteModalVisible(false)}
-        onOk={handleDelete}
-        okText="Supprimer"
-        cancelText="Annuler"
-        okType="danger"
-      >
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Text>
-            Êtes-vous sûr de vouloir supprimer l'arbre <strong>"{tree?.name}"</strong> ?
-          </Text>
-          
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: '#fff2f0', 
-            borderRadius: '4px',
-            border: '1px solid #ffccc7'
-          }}>
-            <Text type="danger" style={{ fontSize: '12px' }}>
-              ⚠️ Cette action est irréversible. Tous les nœuds, configurations et données 
-              associées seront définitivement supprimés.
-            </Text>
-          </div>
-        </Space>
-      </Modal>
+      {editModalVisible && (
+        <Modal
+          title="Modifier l'arbre"
+          open
+          onCancel={() => {
+            setEditModalVisible(false);
+            editForm.resetFields();
+          }}
+          onOk={() => editForm.submit()}
+          okText="Sauvegarder"
+          cancelText="Annuler"
+        >
+          <Form form={editForm} layout="vertical" onFinish={handleUpdate}>
+            <Form.Item
+              name="name"
+              label="Nom de l'arbre"
+              rules={[{ required: true, message: 'Le nom est obligatoire' }]}
+            >
+              <Input />
+            </Form.Item>
+
+            <Form.Item name="description" label="Description">
+              <TextArea rows={3} />
+            </Form.Item>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Form.Item name="category" label="Catégorie" style={{ flex: 1 }}>
+                <Select>
+                  <Option value="formulaire">📋 Formulaire</Option>
+                  <Option value="diagnostic">🩺 Diagnostic</Option>
+                  <Option value="devis">💰 Devis</Option>
+                  <Option value="configuration">⚙️ Configuration</Option>
+                  <Option value="evaluation">📊 Évaluation</Option>
+                  <Option value="autre">📁 Autre</Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item name="status" label="Statut">
+                <Select>
+                  <Option value="draft">🚧 Brouillon</Option>
+                  <Option value="published">✅ Publié</Option>
+                  <Option value="archived">📦 Archivé</Option>
+                </Select>
+              </Form.Item>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Form.Item name="color" label="Couleur">
+                <ColorPicker showText format="hex" disabled={readOnly} />
+              </Form.Item>
+
+              <Form.Item name="icon" label="Icône" style={{ flex: 1 }}>
+                <Select placeholder="Choisir une icône" allowClear>
+                  <Option value="TreeOutlined">🌳 Arbre</Option>
+                  <Option value="BranchesOutlined">🌿 Branches</Option>
+                  <Option value="SettingOutlined">⚙️ Configuration</Option>
+                  <Option value="FormOutlined">📋 Formulaire</Option>
+                </Select>
+              </Form.Item>
+            </div>
+          </Form>
+        </Modal>
+      )}
+
+      {deleteModalVisible && (
+        <Modal
+          title="Supprimer l'arbre"
+          open
+          onCancel={() => setDeleteModalVisible(false)}
+          onOk={handleDelete}
+          okText="Supprimer"
+          cancelText="Annuler"
+          okButtonProps={{ danger: true }}
+        >
+          <Paragraph>
+            Êtes-vous sûr de vouloir supprimer l'arbre <strong>{tree?.name}</strong> ?
+          </Paragraph>
+          <Text type="secondary">Cette action est irréversible.</Text>
+        </Modal>
+      )}
     </>
   );
 };

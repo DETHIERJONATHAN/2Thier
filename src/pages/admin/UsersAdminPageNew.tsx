@@ -1,34 +1,39 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Table, 
-  Button, 
+import {
+  Table,
+  Button,
   message as antdMessage,
-  Space, 
-  Switch, 
-  Tooltip, 
-  Tag, 
-  Popconfirm, 
-  Tabs, 
+  Space,
+  Switch,
+  Tooltip,
+  Tag,
+  Popconfirm,
+  Tabs,
   Card,
   Statistic,
   Row,
   Col,
-  Typography
+  Typography,
+  Grid,
+  Empty,
+  Divider,
+  Input
 } from 'antd';
-import { 
-  MailOutlined, 
-  EditOutlined, 
-  CheckCircleOutlined, 
-  ApartmentOutlined, 
-  PhoneOutlined, 
-  DeleteOutlined, 
-  UserAddOutlined, 
-  TeamOutlined, 
-  SendOutlined, 
+import {
+  MailOutlined,
+  EditOutlined,
+  CheckCircleOutlined,
+  ApartmentOutlined,
+  PhoneOutlined,
+  DeleteOutlined,
+  UserAddOutlined,
+  TeamOutlined,
+  SendOutlined,
   ThunderboltOutlined,
   UserOutlined,
   ClockCircleOutlined,
-  GoogleOutlined
+  GoogleOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
@@ -53,7 +58,11 @@ const UsersAdminPageNew: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const [msgApi, contextHolder] = antdMessage.useMessage();
   const { permissions, currentOrganization } = useAuth();
-  const hasPermission = (permission: string) => permissions.includes(permission);
+  const hasPermission = useCallback((permission: string) => permissions.includes(permission), [permissions]);
+
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = !!screens.md && !screens.lg;
 
   // État général
   const [users, setUsers] = useState<User[]>([]);
@@ -63,6 +72,7 @@ const UsersAdminPageNew: React.FC = () => {
   const [userServices, setUserServices] = useState<Record<string, UserService[]>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('users');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Modals
   const [isInvitationModalVisible, setIsInvitationModalVisible] = useState(false);
@@ -73,6 +83,40 @@ const UsersAdminPageNew: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const apiInstance = useMemo(() => api, [api]);
+
+  const normalizedSearch = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
+
+  const matchesUserSearch = useCallback((user: User) => {
+    if (!normalizedSearch) return true;
+    const parts = [
+      user.email,
+      user.firstName,
+      user.firstname,
+      user.lastName,
+      user.lastname,
+      user.organizationRole?.name,
+      user.organizationRole?.label
+    ]
+      .filter(Boolean)
+      .map(value => String(value).toLowerCase());
+    return parts.some(value => value.includes(normalizedSearch));
+  }, [normalizedSearch]);
+
+  const filteredUsers = useMemo(() => (
+    normalizedSearch ? users.filter(matchesUserSearch) : users
+  ), [users, normalizedSearch, matchesUserSearch]);
+
+  const filteredFreeUsers = useMemo(() => (
+    normalizedSearch
+      ? freeUsers.filter(user => matchesUserSearch(user))
+      : freeUsers
+  ), [freeUsers, normalizedSearch, matchesUserSearch]);
+
+  const filteredInvitations = useMemo(() => (
+    normalizedSearch
+      ? invitations.filter(invite => invite.email.toLowerCase().includes(normalizedSearch))
+      : invitations
+  ), [invitations, normalizedSearch]);
 
   // Récupération des données
   const fetchUsers = useCallback(async () => {
@@ -516,27 +560,336 @@ const UsersAdminPageNew: React.FC = () => {
       ),
     },
   ];
+  const renderUserMobileCard = (user: User) => {
+    const services = userServices[user.id] || [];
+    const emailService = services.find(service => service.serviceName === 'email');
+    const telnyxService = services.find(service => service.serviceName === 'telnyx');
+    const isActive = user.status === 'ACTIVE';
+    const showAddToOrg = !user.userOrganizationId && currentOrganization?.id && currentOrganization.id !== 'all' && hasPermission('super_admin');
+    const canEdit = hasPermission('admin') || hasPermission('super_admin');
+    const canManageOrgs = hasPermission('super_admin');
+    const canAccessGoogle = Boolean(
+      user.organizationId &&
+      user.UserOrganization?.[0]?.Organization?.googleWorkspaceConfig &&
+      (hasPermission('super_admin') || hasPermission('admin'))
+    );
+    const canAccessTelnyx = Boolean(user.organizationId && (hasPermission('super_admin') || hasPermission('admin')));
+    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
 
-const { Title } = Typography;
+    return (
+      <Card key={user.id} size="small" bodyStyle={{ padding: 16 }}>
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <Text strong style={{ fontSize: 16 }}>{fullName || user.email}</Text>
+            <Text type="secondary">{user.email}</Text>
+            <Space size={[8, 8]} wrap>
+              {user.organizationRole?.name && (
+                <Tag color="geekblue">{user.organizationRole.name}</Tag>
+              )}
+              {user.organizationRole?.label && user.organizationRole.label !== user.organizationRole.name && (
+                <Tag color="blue">{user.organizationRole.label}</Tag>
+              )}
+            </Space>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <Tag color={isActive ? 'green' : 'red'} style={{ margin: 0 }}>
+              {isActive ? 'Actif' : 'Inactif'}
+            </Tag>
+            <Space size={8} align="center">
+              <Text type="secondary">Statut</Text>
+              <Switch
+                size="small"
+                checked={isActive}
+                onChange={(checked) => handleStatusChange(user, checked ? 'ACTIVE' : 'INACTIVE')}
+                disabled={!user.userOrganizationId}
+              />
+            </Space>
+          </div>
+
+          <Divider style={{ margin: 0 }} />
+
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Text type="secondary">Services</Text>
+            <Space size={[12, 8]} wrap style={{ width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch
+                  size="small"
+                  checked={emailService?.isActive || false}
+                  onChange={() => handleServiceToggle(user.id, 'email', emailService?.isActive || false)}
+                  checkedChildren={<MailOutlined />}
+                  unCheckedChildren={<MailOutlined />}
+                />
+                <Text>Email</Text>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch
+                  size="small"
+                  checked={telnyxService?.isActive || false}
+                  onChange={() => handleServiceToggle(user.id, 'telnyx', telnyxService?.isActive || false)}
+                  checkedChildren={<PhoneOutlined />}
+                  unCheckedChildren={<PhoneOutlined />}
+                />
+                <Text>Telnyx</Text>
+              </div>
+            </Space>
+          </Space>
+
+          <Divider style={{ margin: 0 }} />
+
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Text type="secondary">Actions</Text>
+            <Space size={[12, 12]} wrap style={{ width: '100%' }}>
+              {showAddToOrg && (
+                <Button
+                  key="add-org"
+                  type="primary"
+                  icon={<UserAddOutlined />}
+                  onClick={() => handleAttachToOrg(user)}
+                  block
+                  style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+                >
+                  Ajouter à l'organisation
+                </Button>
+              )}
+              {canEdit && (
+                <Button
+                  key="edit"
+                  icon={<EditOutlined />}
+                  onClick={() => handleEditUser(user)}
+                  block
+                  style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+                >
+                  Modifier
+                </Button>
+              )}
+              {canAccessGoogle && (
+                <Button
+                  key="google"
+                  icon={<GoogleOutlined />}
+                  onClick={() => handleGoogleWorkspace(user)}
+                  block
+                  style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, color: '#4285F4' }}
+                >
+                  Google Workspace
+                </Button>
+              )}
+              {canAccessTelnyx && (
+                <Button
+                  key="telnyx"
+                  icon={<PhoneOutlined />}
+                  onClick={() => handleTelnyx(user)}
+                  block
+                  style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, color: '#FF6B6B' }}
+                >
+                  Telnyx
+                </Button>
+              )}
+              {canManageOrgs && (
+                <Button
+                  key="organizations"
+                  icon={<ApartmentOutlined />}
+                  onClick={() => handleManageOrganizations(user)}
+                  block
+                  style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+                >
+                  Gérer les organisations
+                </Button>
+              )}
+              {canManageOrgs && (
+                <Popconfirm
+                  key="delete"
+                  title="Supprimer l'utilisateur"
+                  description={`Êtes-vous sûr de vouloir supprimer ${user.email} ? Cette action est irréversible.`}
+                  onConfirm={() => handleDeleteUser(user)}
+                  okText="Supprimer"
+                  cancelText="Annuler"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    block
+                    style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+                  >
+                    Supprimer
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
+          </Space>
+        </Space>
+      </Card>
+    );
+  };
+
+  const renderFreeUserMobileCard = (user: User) => {
+    const showAddToOrg = currentOrganization?.id && currentOrganization.id !== 'all' && hasPermission('super_admin');
+    const canDelete = hasPermission('super_admin');
+    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+
+    return (
+      <Card key={`free-${user.id}`} size="small" bodyStyle={{ padding: 16 }}>
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Text strong>{fullName || user.email}</Text>
+            <Text type="secondary">{user.email}</Text>
+            {user.createdAt && (
+              <Text type="secondary">Inscrit le {new Date(user.createdAt).toLocaleDateString()}</Text>
+            )}
+          </div>
+
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            {showAddToOrg && (
+              <Button
+                type="primary"
+                icon={<UserAddOutlined />}
+                onClick={() => handleAttachToOrg(user)}
+                block
+                style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+              >
+                Ajouter à l'organisation
+              </Button>
+            )}
+            {canDelete && (
+              <Popconfirm
+                title="Supprimer l'utilisateur"
+                description={`Êtes-vous sûr de vouloir supprimer ${user.email} ? Cette action est irréversible.`}
+                onConfirm={() => handleDeleteUser(user)}
+                okText="Supprimer"
+                cancelText="Annuler"
+                okButtonProps={{ danger: true }}
+              >
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  block
+                  style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+                >
+                  Supprimer
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        </Space>
+      </Card>
+    );
+  };
+
+  const renderInvitationMobileCard = (invitation: UiInvitation) => (
+    <Card key={`invite-${invitation.id}`} size="small" bodyStyle={{ padding: 16 }}>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Text strong>{invitation.email}</Text>
+          {invitation.organization?.name && (
+            <Text type="secondary">Organisation : {invitation.organization.name}</Text>
+          )}
+          {invitation.role?.name && (
+            <Text type="secondary">Rôle : {invitation.role.name}</Text>
+          )}
+        </div>
+
+        <Space size={8} align="center" wrap>
+          <Tag color={invitation.status === 'PENDING' ? 'orange' : 'red'}>{invitation.status}</Tag>
+          <Text type="secondary">Créée le {new Date(invitation.createdAt).toLocaleDateString()}</Text>
+          {invitation.expiresAt && (
+            <Text type="secondary">Expire le {new Date(invitation.expiresAt).toLocaleDateString()}</Text>
+          )}
+        </Space>
+
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            onClick={() => handleForceAcceptInvitation(invitation)}
+            block
+            disabled={invitation.status !== 'PENDING'}
+            style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+          >
+            Force Accept
+          </Button>
+          <Button
+            icon={<SendOutlined />}
+            disabled={invitation.status !== 'PENDING'}
+            block
+            style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+          >
+            Renvoyer l'invitation
+          </Button>
+          <Popconfirm
+            title="Supprimer l'invitation"
+            description="Êtes-vous sûr de vouloir supprimer cette invitation ?"
+            onConfirm={() => handleDeleteInvitation(invitation)}
+            okText="Supprimer"
+            cancelText="Annuler"
+            okButtonProps={{ danger: true }}
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              block
+              style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}
+            >
+              Supprimer
+            </Button>
+          </Popconfirm>
+        </Space>
+      </Space>
+    </Card>
+  );
+
+  const { Title, Text } = Typography;
 
   return (
-    <div>
+    <div
+      style={{
+        padding: isMobile ? '12px' : '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: isMobile ? 16 : 24
+      }}
+    >
       {contextHolder}
       {/* 📊 EN-TÊTE AMÉLIORÉ AVEC STATISTIQUES */}
       <div className="mb-6">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'stretch' : 'center',
+            justifyContent: 'space-between',
+            gap: isMobile ? 12 : 16,
+            marginBottom: 16
+          }}
+        >
           <Title level={2} style={{ margin: 0, display: 'flex', alignItems: 'center' }}>
             <UserOutlined style={{ marginRight: 12, color: '#1890ff' }} />
             Gestion des Utilisateurs
           </Title>
-          <Button type="primary" icon={<UserAddOutlined />} onClick={() => setIsInvitationModalVisible(true)} size="large">
+          <Button
+            type="primary"
+            icon={<UserAddOutlined />}
+            onClick={() => setIsInvitationModalVisible(true)}
+            size={isMobile ? 'middle' : 'large'}
+            block={isMobile}
+          >
             Inviter un utilisateur
           </Button>
         </div>
 
+        <Input
+          allowClear
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Rechercher un utilisateur, un email ou un rôle"
+          prefix={<SearchOutlined style={{ color: '#93a3aa' }} />}
+          size={isMobile ? 'middle' : 'large'}
+          style={{ width: '100%', maxWidth: isMobile ? '100%' : 360, marginBottom: 16 }}
+        />
+
         {/* 📈 STATISTIQUES RAPIDES */}
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={6}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
                 title="Total Utilisateurs"
@@ -546,7 +899,7 @@ const { Title } = Typography;
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
                 title="Utilisateurs Actifs"
@@ -556,7 +909,7 @@ const { Title } = Typography;
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
                 title="Invitations En Attente"
@@ -566,7 +919,7 @@ const { Title } = Typography;
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
                 title="Utilisateurs Libres"
@@ -582,6 +935,8 @@ const { Title } = Typography;
       <Tabs 
         activeKey={activeTab} 
         onChange={setActiveTab}
+        type={isMobile ? 'line' : 'card'}
+        tabBarGutter={isMobile ? 8 : 24}
         items={[
           {
             key: 'users',
@@ -591,14 +946,26 @@ const { Title } = Typography;
                 Utilisateurs ({users.length})
               </span>
             ),
-            children: (
+            children: isMobile ? (
+              users.length ? (
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  {users.map(renderUserMobileCard)}
+                </Space>
+              ) : (
+                <Card>
+                  <Empty description="Aucun utilisateur" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </Card>
+              )
+            ) : (
               <Card>
                 <Table
                   columns={userColumns}
                   dataSource={users}
                   loading={loading}
                   rowKey="id"
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ pageSize: 10, showSizeChanger: true, responsive: true }}
+                  size={isTablet ? 'small' : 'middle'}
+                  scroll={isTablet ? { x: 1000 } : undefined}
                 />
               </Card>
             ),
@@ -611,7 +978,17 @@ const { Title } = Typography;
                 Utilisateurs libres ({freeUsers.length})
               </span>
             ),
-            children: (
+            children: isMobile ? (
+              freeUsers.length ? (
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  {freeUsers.map(renderFreeUserMobileCard)}
+                </Space>
+              ) : (
+                <Card>
+                  <Empty description="Aucun utilisateur libre" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </Card>
+              )
+            ) : (
               <Card>
                 <div style={{ marginBottom: 16 }}>
                   <Tag color="blue">
@@ -623,7 +1000,9 @@ const { Title } = Typography;
                   dataSource={freeUsers}
                   loading={loading}
                   rowKey="id"
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ pageSize: 10, showSizeChanger: true, responsive: true }}
+                  size={isTablet ? 'small' : 'middle'}
+                  scroll={isTablet ? { x: 900 } : undefined}
                 />
               </Card>
             ),
@@ -636,14 +1015,26 @@ const { Title } = Typography;
                 Invitations ({invitations.length})
               </span>
             ),
-            children: (
+            children: isMobile ? (
+              invitations.length ? (
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  {invitations.map(renderInvitationMobileCard)}
+                </Space>
+              ) : (
+                <Card>
+                  <Empty description="Aucune invitation" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </Card>
+              )
+            ) : (
               <Card>
                 <Table
                   columns={invitationColumns}
                   dataSource={invitations}
                   loading={loading}
                   rowKey="id"
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ pageSize: 10, showSizeChanger: true, responsive: true }}
+                  size={isTablet ? 'small' : 'middle'}
+                  scroll={isTablet ? { x: 800 } : undefined}
                 />
               </Card>
             ),

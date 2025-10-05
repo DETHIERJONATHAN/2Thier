@@ -116,7 +116,7 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
   ,onMoveNodeToRoot,
   onToggleExpandNode
 }) => {
-  console.log('🔧 [OptimizedStructureNode] RENDU pour node:', node.id, node.label, 'readOnly:', readOnly, 'onEditNode:', !!onEditNode, 'onDuplicateNode:', !!onDuplicateNode);
+  // Rendu log temporairement supprimé
   
   // =============================================================================
   // 🎛️ DRAGGABLE - Configuration du drag
@@ -383,6 +383,7 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
         <div
           style={{
             flex: 1,
+            minWidth: 0,
             cursor: 'pointer',
             padding: '1px 4px',
             margin: 0,
@@ -467,8 +468,15 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
               color: inSection ? '#0958d9' : '#333',
               fontSize: '11px',
               marginRight: '4px',
-              flex: 1
+              flex: 1,
+              minWidth: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              overflow: 'hidden',
+              // textOverflow: 'ellipsis', // TEMPORAIREMENT DÉSACTIVÉ POUR DEBUG ELLIPSISMEASURE
+              whiteSpace: 'nowrap'
             }}
+            title={node.label || `${node.type}_${node.id}`}
           >
             {node.label || `${node.type}_${node.id}`}
           </span>

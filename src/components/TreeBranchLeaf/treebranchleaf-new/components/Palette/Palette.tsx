@@ -58,7 +58,7 @@ const PaletteItem: React.FC<PaletteItemProps> = ({
   });
 
   // Debug logs
-  console.log(`🎨 PaletteItem ${nodeType} - isDragging: ${isDragging}, disabled: ${readOnly}`);
+  // console.log(`🎨 PaletteItem ${nodeType} - isDragging: ${isDragging}, disabled: ${readOnly}`);
   if (isDragging) {
     console.log(`🔥 PALETTE ITEM EN COURS DE DRAG:`, { nodeType, label });
   }

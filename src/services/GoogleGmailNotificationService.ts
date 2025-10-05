@@ -13,6 +13,8 @@ import { google } from 'googleapis';
 import { PrismaClient } from '@prisma/client';
 import UniversalNotificationService from './UniversalNotificationService';
 
+import { googleOAuthConfig, isGoogleOAuthConfigured } from '../auth/googleConfig';
+
 const prisma = new PrismaClient();
 
 interface EmailAnalysis {
@@ -93,10 +95,14 @@ export class GoogleGmailNotificationService {
    */
   private async setupUserGmailWatch(userToken: any): Promise<void> {
     try {
+      if (!isGoogleOAuthConfigured()) {
+        throw new Error('Configuration Google OAuth manquante pour GoogleGmailNotificationService.');
+      }
+
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
+        googleOAuthConfig.clientId,
+        googleOAuthConfig.clientSecret,
+        googleOAuthConfig.redirectUri
       );
 
       oauth2Client.setCredentials({
@@ -107,10 +113,15 @@ export class GoogleGmailNotificationService {
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
       // Configurer le webhook pour les nouveaux emails
+      const projectId = googleOAuthConfig.projectId;
+      if (!projectId) {
+        throw new Error('GOOGLE_PROJECT_ID manquant dans googleOAuthConfig.');
+      }
+
       const watchResponse = await gmail.users.watch({
         userId: 'me',
         requestBody: {
-          topicName: `projects/${process.env.GOOGLE_PROJECT_ID}/topics/gmail-notifications`,
+          topicName: `projects/${projectId}/topics/gmail-notifications`,
           labelIds: ['INBOX'],
           labelFilterAction: 'include'
         }
@@ -181,10 +192,14 @@ export class GoogleGmailNotificationService {
    */
   private async fetchNewEmails(userToken: any, currentHistoryId: string): Promise<void> {
     try {
+      if (!isGoogleOAuthConfigured()) {
+        throw new Error('Configuration Google OAuth manquante pour fetchNewEmails.');
+      }
+
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
+        googleOAuthConfig.clientId,
+        googleOAuthConfig.clientSecret,
+        googleOAuthConfig.redirectUri
       );
 
       oauth2Client.setCredentials({

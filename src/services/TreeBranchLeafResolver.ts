@@ -39,9 +39,16 @@ export class TreeBranchLeafResolver {
         case 'table': {
           const table = await this.prisma.treeBranchLeafNodeTable.findUnique({
             where: { id },
-            select: { data: true }
+            select: { 
+              data: true,
+              type: true,
+              columns: true,
+              rows: true,
+              lookupSelectColumn: true,
+              lookupDisplayColumns: true
+            }
           });
-          return table?.data || null;
+          return table || null;
         }
 
         default:
@@ -225,10 +232,52 @@ export class TreeBranchLeafResolver {
   }
 
   /**
-   * Évalue une table (placeholder pour la logique métier)
+   * Évalue une table avec support du lookup
    */
   private evaluateTable(tableData: unknown, value: string | null): unknown {
-    // TODO: Implémenter la logique d'évaluation des tables
+    if (!tableData || typeof tableData !== 'object') {
+      return null;
+    }
+
+    const table = tableData as {
+      type?: string;
+      rows?: Array<Record<string, unknown>>;
+      lookupSelectColumn?: string;
+      lookupDisplayColumns?: string[];
+    };
+
+    // Si c'est une table avec lookup et qu'une valeur est sélectionnée
+    if (table.type === 'columns' && table.lookupSelectColumn && value && table.rows) {
+      // Trouver la ligne correspondant à la valeur sélectionnée
+      const selectedRow = table.rows.find(
+        (row: Record<string, unknown>) => String(row[table.lookupSelectColumn!]) === value
+      );
+
+      if (!selectedRow) {
+        return { error: 'Ligne non trouvée', selectedValue: value };
+      }
+
+      // Extraire les données des colonnes configurées
+      const extractedData: Record<string, unknown> = {
+        selected: value
+      };
+
+      if (table.lookupDisplayColumns && table.lookupDisplayColumns.length > 0) {
+        table.lookupDisplayColumns.forEach((colName: string) => {
+          extractedData[colName] = selectedRow[colName];
+        });
+      }
+
+      return {
+        processed: true,
+        type: 'lookup',
+        selectedValue: value,
+        data: extractedData,
+        fullRow: selectedRow
+      };
+    }
+
+    // Fallback pour les autres types de tables
     return { processed: true, tableData, inputValue: value };
   }
 }

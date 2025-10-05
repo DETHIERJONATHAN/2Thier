@@ -39,6 +39,10 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { SmartCalculatedField } from './SmartCalculatedField';
+import { HelpTooltip } from '../../../../common/HelpTooltip';
+import { useTBLTooltip } from '../../../../../hooks/useTBLTooltip';
+import { useTBLValidationContext } from '../contexts/TBLValidationContext';
+import { useTBLTableLookup } from '../hooks/useTBLTableLookup';
 // Types locaux pour éviter les 'any' lors de l'extraction des formules dynamiques
 interface VariableDefLocal { sourceField: string; type?: string }
 interface FormulaConfigLocal { expression?: string; variables?: Record<string, VariableDefLocal> }
@@ -288,6 +292,9 @@ interface TBLFieldAdvancedProps {
   disabled?: boolean;
   formData?: Record<string, unknown>;
   treeMetadata?: Record<string, unknown>; // Métadonnées du nœud TreeBranchLeaf
+  // 🎯 Props de validation pour les couleurs dynamiques
+  isValidating?: boolean;
+  hasValidationError?: boolean;
 }
 
 /**
@@ -366,13 +373,77 @@ const FIELD_TYPE_DEFINITIONS = {
   }
 } as const;
 
+// Helper pour gérer les tooltips personnalisés
+const wrapWithCustomTooltip = (element: React.ReactElement, field: any): React.ReactElement => {
+  // Vérifier si le champ a une configuration de tooltip personnalisé
+  const appearanceConfig = field.appearanceConfig || {};
+  const tooltipType = appearanceConfig.helpTooltipType;
+  
+  if (!tooltipType || tooltipType === 'none') {
+    return element;
+  }
+  
+  let tooltipContent: React.ReactNode = null;
+  
+  if (tooltipType === 'text' && appearanceConfig.helpTooltipText) {
+    tooltipContent = <div>{appearanceConfig.helpTooltipText}</div>;
+  } else if (tooltipType === 'image' && appearanceConfig.helpTooltipImage) {
+    tooltipContent = (
+      <div style={{ maxWidth: 300 }}>
+        <img 
+          src={appearanceConfig.helpTooltipImage} 
+          alt="Aide" 
+          style={{ maxWidth: '100%', height: 'auto' }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      </div>
+    );
+  } else if (tooltipType === 'both' && (appearanceConfig.helpTooltipText || appearanceConfig.helpTooltipImage)) {
+    tooltipContent = (
+      <div>
+        {appearanceConfig.helpTooltipText && (
+          <div style={{ marginBottom: appearanceConfig.helpTooltipImage ? 8 : 0 }}>
+            {appearanceConfig.helpTooltipText}
+          </div>
+        )}
+        {appearanceConfig.helpTooltipImage && (
+          <div style={{ maxWidth: 300 }}>
+            <img 
+              src={appearanceConfig.helpTooltipImage} 
+              alt="Aide" 
+              style={{ maxWidth: '100%', height: 'auto' }}
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  if (tooltipContent) {
+    return (
+      <Tooltip title={tooltipContent} placement="top">
+        {element}
+      </Tooltip>
+    );
+  }
+  
+  return element;
+};
+
 const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   field,
   value,
   onChange,
   disabled = false,
   formData = {},
-  treeMetadata = {}
+  treeMetadata = {},
+  isValidating = false,
+  hasValidationError = false
 }) => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -380,6 +451,26 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   const [calculatedValue, setCalculatedValue] = useState<unknown>(null);
   const [conditionMet, setConditionMet] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // 🔍 Hook tooltip TBL pour le champ
+  const tooltipData = useTBLTooltip(field);
+
+  // 🎯 Contexte de validation pour les couleurs dynamiques
+  const { isValidation } = useTBLValidationContext();
+  
+  // ✅ NOUVEAU: Calculer hasTable AVANT d'appeler le hook pour pouvoir le passer en paramètre
+  const hasTableCapability = useMemo(() => {
+    const capabilities = field.capabilities || {};
+    const metadata = treeMetadata || {};
+    return capabilities.table?.enabled || metadata.hasTable || false;
+  }, [field.capabilities, treeMetadata]);
+  
+  // 🔗 Hook pour charger les options depuis un tableau lookup (si configuré)
+  // ✅ NOUVEAU: On passe hasTableCapability pour que le hook vide les options quand le lookup est désactivé
+  const tableLookup = useTBLTableLookup(field.id, field.id, hasTableCapability);
+  
+  // 🚨 DEBUG: Vérifier si le contexte fonctionne
+  console.log(`🔍 [${field.label}] isValidation:`, isValidation, 'localValue:', localValue, 'tableLookup:', tableLookup);
 
   // Synchronisation avec la valeur externe
   useEffect(() => {
@@ -394,7 +485,22 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // Récupérer la configuration depuis les métadonnées TreeBranchLeaf
     const nodeType = field.type?.toUpperCase() || 'TEXT';
-    const subType = field.type?.toUpperCase() || metadata.subType || nodeType; // 🎯 CORRECTION: Utiliser field.type en premier
+    const baseSubType = field.type?.toUpperCase() || metadata.subType || nodeType; // 🎯 Type d'origine depuis Prisma
+    
+    // ✅ CORRECTION DYNAMIQUE: Si table lookup activé, transformer TEXT en SELECT
+    const hasTableLookup = capabilities.table?.enabled || metadata.hasTable || false;
+    const subType = hasTableLookup ? 'SELECT' : baseSubType; // 🔥 TRANSFORMATION DYNAMIQUE
+    
+    // 🔍 DEBUG: Log du type de champ calculé
+    if (field.label === 'Test - liste') {
+      console.log(`🔍 [FIELD TYPE CALC][${field.label}]:`, {
+        baseSubType,
+        hasTableLookup,
+        'capabilities.table?.enabled': capabilities.table?.enabled,
+        'metadata.hasTable': metadata.hasTable,
+        finalSubType: subType
+      });
+    }
     // 🔥 CORRECTION: Lire l'apparence depuis field.config ET metadata.appearance
     const appearance = {
       size: config.size || metadata.appearance?.size,
@@ -634,9 +740,13 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     let error: string | null = null;
     const valueToCheck = fieldConfig.hasFormula ? calculatedValue : localValue;
 
-    // Validation required
+    // Message obligatoire en VERT par défaut, ROUGE seulement pendant validation PDF
     if (fieldConfig.required && (valueToCheck === null || valueToCheck === undefined || valueToCheck === '')) {
-      error = 'Ce champ est obligatoire';
+      if (isValidation) {
+        error = 'Ce champ est obligatoire'; // Rouge pendant validation
+      } else {
+        error = 'Ce champ est obligatoire'; // Vert par défaut (sera stylé différemment)
+      }
     }
 
     // Validations spécifiques par type
@@ -672,7 +782,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           const textVal = String(valueToCheck);
           // 🔥 UTILISATION DIRECTE DES PARAMÈTRES PRISMA
           const minLength = fieldConfig.textConfig?.minLength || fieldConfig.minLength;
-          const maxLength = fieldConfig.textConfig?.maxLength || fieldConfig.maxLength;
+          const maxLength = field.text_maxLength || fieldConfig.textConfig?.maxLength || fieldConfig.maxLength;
           const pattern = fieldConfig.textConfig?.pattern || fieldConfig.regex || fieldConfig.pattern;
           
           if (minLength && textVal.length < minLength) {
@@ -698,12 +808,30 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
 
     setValidationError(error);
-  }, [fieldConfig, calculatedValue, localValue]);
+  }, [fieldConfig, calculatedValue, localValue, isValidation, field.text_maxLength]);
 
   // Gestionnaire de changement unifié
   const handleChange = (newValue: unknown) => {
+    console.log(`🎯 [${field.label}] handleChange appelé:`, { 
+      newValue, 
+      fieldId: field.id, 
+      hasOnChange: !!onChange,
+      onChangeType: typeof onChange,
+      hasTableCapability: fieldConfig.hasTable,
+      tableLookupOptionsCount: tableLookup.options.length
+    });
+    
+    // ⚠️ DIAGNOSTIC : Champ dans section DATA (read-only) ?
+    if (!onChange) {
+      console.error(`❌ [${field.label}] onChange est undefined - Le champ est probablement dans une SECTION DE DONNÉES (read-only) !`);
+      console.error(`💡 SOLUTION : Déplacez "${field.label}" dans une section normale (pas isDataSection) pour permettre l'édition.`);
+      return;
+    }
+    
     setLocalValue(newValue);
-    onChange?.(newValue);
+    console.log(`✅ [${field.label}] APPEL onChange avec:`, newValue);
+    onChange(newValue);
+    console.log(`✔️ [${field.label}] onChange terminé`);
   };
 
   // Rendu conditionnel basé sur les conditions TreeBranchLeaf
@@ -764,14 +892,48 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
   // Rendu du champ selon le type et la configuration TreeBranchLeaf
   const renderFieldInput = () => {
-    // 🚀 PRIORITÉ ABSOLUE: Champs TreeBranchLeaf intelligents (générés dynamiquement)
+    // 🎯 PRIORITÉ 0: Table Lookup - Si le champ a un lookup configuré ET activé ET des options chargées
+    if (fieldConfig.hasTable && tableLookup.options.length > 0) {
+      return (
+        <Select
+          value={localValue}
+          onChange={handleChange}
+          placeholder={`Sélectionnez ${fieldConfig.label.toLowerCase()}`}
+          loading={tableLookup.loading}
+          showSearch
+          allowClear
+          disabled={disabled}
+          style={{ width: '100%' }}
+          filterOption={(input, option) =>
+            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          }
+        >
+          {tableLookup.options.map((option) => (
+            <Option key={option.value} value={option.value} label={option.label}>
+              {option.label}
+            </Option>
+          ))}
+        </Select>
+      );
+    }
+
+    // Si le lookup est activé ET en cours de chargement, afficher un état de chargement
+    if (fieldConfig.hasTable && tableLookup.loading) {
+      return (
+        <Select
+          value={localValue}
+          onChange={handleChange}
+          placeholder="Chargement..."
+          loading={true}
+          disabled
+          style={{ width: '100%' }}
+        />
+      );
+    }
+
+    // 🚀 PRIORITÉ 1: Champs TreeBranchLeaf intelligents (générés dynamiquement)
     if (field.isTreeBranchLeafSmart && (field.hasData || field.hasFormula)) {
       const caps = field.capabilities || {};
-      console.log(`🎯 [TreeBranchLeaf SMART] Rendu du champ intelligent "${field.label}" avec capacités:`, {
-        hasData: field.hasData,
-        hasFormula: field.hasFormula,
-        caps
-      });
 
       // 1) Si une formule est disponible, on la privilégie
       const formulaId = caps?.formula?.activeId 
@@ -779,7 +941,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       const hasFormulaConfig = Boolean(formulaId || caps?.formula?.currentFormula);
       if (hasFormulaConfig && formulaId) {
         const sourceRef = `formula:${formulaId}`;
-        console.log(`🧮 [TreeBranchLeaf SMART] Utilisation SmartCalculatedField pour formule: ${sourceRef}`);
   const currentFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
   const rawExpression = currentFormula?.expression;
   const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
@@ -808,7 +969,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           const resolvedRef = meta.sourceRef.startsWith('condition:') || meta.sourceRef.startsWith('formula:') || meta.sourceRef.startsWith('@value.')
             ? meta.sourceRef
             : `variable:${variableId}`;
-          console.log(`🌲 [TreeBranchLeaf SMART] Data.sourceRef détecté -> ${resolvedRef}`);
           
           // ✅ CORRECTION: Utiliser les mêmes propriétés que "Prix Kw/h test"
           const currentFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
@@ -829,7 +989,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           );
         }
         const sourceRef = `variable:${variableId}`;
-        console.log(`🌱 [TreeBranchLeaf SMART] Utilisation SmartCalculatedField pour variable nodeId: ${variableId}`);
   const currentFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
   const rawExpression = currentFormula?.expression;
   const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
@@ -848,7 +1007,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       }
 
       // 3) Aucun mapping exploitable → placeholder
-      console.warn(`ℹ️ [TreeBranchLeaf SMART] Aucune formule/variable exploitable pour "${field.label}"`);
       return (
         <span style={{ color: '#999' }}>---</span>
       );
@@ -859,7 +1017,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // ✨ PRIORITÉ 1: Capacité Data (données dynamiques depuis TreeBranchLeafNodeVariable)
   if (capabilities.data?.enabled && (capabilities.data.activeId || capabilities.data.instances)) {
-      console.log(`🔍 [TBL FIELD DATA] Champ "${field.label}" a une capacité Data active:`, capabilities.data.activeId);
       
       // Récupérer la configuration de la variable active
       const dataInstance = capabilities.data.instances?.[capabilities.data.activeId] as {
@@ -875,16 +1032,11 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       if (dataInstance && dataInstance.metadata) {
         const { sourceType: configSourceType, sourceRef: configSourceRef, fixedValue } = dataInstance.metadata;
         
-        console.log(`🔍 [TBL FIELD DATA] Champ "${field.label}" - sourceType: "${configSourceType}", sourceRef: "${configSourceRef}"`);
-        
         // Mode arborescence (déléguer à la variable du nœud pour couvrir formules ET conditions)
         if (configSourceType === 'tree' && configSourceRef) {
           const instanceId = capabilities.data.activeId 
             || (capabilities.data.instances ? Object.keys(capabilities.data.instances)[0] : undefined)
             || field.id;
-          console.log(`🎯 [TBL FIELD DATA] ⚠️ DEBUG: nodeId utilisé pour évaluation: ${instanceId}`);
-          console.log(`🎯 [TBL FIELD DATA] ⚠️ DEBUG: field.id: ${field.id}, field.label: "${field.label}"`);
-          console.log(`🎯 [TBL FIELD DATA] ⚠️ DEBUG: capabilities.data:`, capabilities.data);
         const metaFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
         const rawExpression = metaFormula?.expression || (dataInstance as { metadata?: { expression?: string } })?.metadata?.expression;
         let variablesDef = metaFormula?.variables ? Object.fromEntries(Object.entries(metaFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
@@ -909,7 +1061,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         
         // Mode valeur fixe
         if (configSourceType === 'fixed' && fixedValue !== undefined) {
-          console.log(`💎 [TBL FIELD FIXE] Champ "${field.label}" - valeur fixe: ${fixedValue}`);
           return (
             <Input 
               value={String(fixedValue)} 
@@ -923,10 +1074,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // ✨ PRIORITÉ 2: Capacité Formula (formules directes)
     if (capabilities.formula?.enabled && capabilities.formula.currentFormula) {
-      const formula = capabilities.formula.currentFormula;
-      console.log(`🧮 [TBL FIELD FORMULA DIRECTE] Champ "${field.label}" - formule:`, formula.expression);
-      
-  const currentFormula = capabilities.formula.currentFormula as FormulaConfigLocal | undefined;
+      const currentFormula = capabilities.formula.currentFormula as FormulaConfigLocal | undefined;
   const rawExpression = currentFormula?.expression;
   const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
       return (
@@ -954,26 +1102,37 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // Appliquer la largeur configurée depuis TreeBranchLeaf
     const widthStyle: React.CSSProperties = {};
-    // 🔥 LARGEUR DYNAMIQUE PRISMA avec fallback
+    // 🔥 LARGEUR DYNAMIQUE PRISMA avec fallback - PRIORITÉ AUX DONNÉES PRISMA
     const dynamicWidth = fieldConfig.appearance?.width || fieldConfig.width || treeAppearance.width;
     const dynamicSize = fieldConfig.appearance?.size || fieldConfig.size || treeAppearance.size;
     
-    if (dynamicWidth) {
-      widthStyle.width = dynamicWidth;
-    } else if (dynamicSize) {
+    // 🎯 FIX CRITICAL: Utiliser aussi les données directes du field pour les propriétés Prisma
+    const prismaWidth = field.appearance_width || field.config?.appearance_width;
+    const prismaSize = field.appearance_size || field.config?.appearance_size;
+    
+    const finalWidth = prismaWidth || dynamicWidth;
+    const finalSize = prismaSize || dynamicSize;
+    
+    if (finalWidth) {
+      widthStyle.width = finalWidth;
+    } else if (finalSize) {
       // Conversion des tailles prédéfinies
-      switch (dynamicSize) {
+      switch (finalSize) {
+        case 'sm':
         case 'small':
-          widthStyle.width = '150px';
+          widthStyle.width = '200px';
           break;
+        case 'lg':
         case 'large':
           widthStyle.width = '400px';
           break;
         case 'full':
           widthStyle.width = '100%';
           break;
+        case 'md':
+        case 'medium':
         default:
-          widthStyle.width = '250px'; // medium par défaut
+          widthStyle.width = '300px'; // medium par défaut
       }
     } else {
       // Par défaut, prendre toute la largeur disponible
@@ -982,11 +1141,11 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     const commonProps = {
       disabled: isDisabled,
-      // 🔥 PLACEHOLDER DYNAMIQUE PRISMA
-      placeholder: fieldConfig.textConfig?.placeholder || fieldConfig.placeholder || `Saisissez ${fieldConfig.label.toLowerCase()}`,
-      status: validationError ? 'error' as const : undefined,
-      // 🔥 TAILLE DYNAMIQUE PRISMA avec fallback
-      size: dynamicSize || fieldConfig.appearance?.size || 'middle' as const,
+      // 🔥 PLACEHOLDER DYNAMIQUE PRISMA - PRIORITÉ AUX DONNÉES DIRECTES
+      placeholder: field.text_placeholder || field.placeholder || fieldConfig.textConfig?.placeholder || fieldConfig.placeholder || `Saisissez ${fieldConfig.label.toLowerCase()}`,
+      status: validationError && isValidation ? 'error' as const : validationError && !isValidation ? 'success' as const : undefined,
+      // 🔥 TAILLE DYNAMIQUE PRISMA avec fallback - UTILISER LES DONNÉES FINALES
+      size: finalSize || fieldConfig.appearance?.size || 'middle' as const,
       style: { 
         ...appearanceStyle, 
         ...widthStyle 
@@ -1004,21 +1163,22 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     switch (fieldConfig.fieldType) {
       case 'TEXT':
-        return (
+        return wrapWithCustomTooltip(
           <Input
             {...commonProps}
             value={finalValue || ''}
             onChange={(e) => handleChange(e.target.value)}
-            // 🔥 LONGUEUR MAX DYNAMIQUE PRISMA
-            maxLength={fieldConfig.textConfig?.maxLength || fieldConfig.maxLength}
-            showCount={!!(fieldConfig.textConfig?.maxLength || fieldConfig.maxLength)}
+            // 🔥 LONGUEUR MAX DYNAMIQUE PRISMA - PRIORITÉ AUX DONNÉES DIRECTES
+            maxLength={field.text_maxLength || fieldConfig.textConfig?.maxLength || fieldConfig.maxLength}
+            showCount={!!(field.text_maxLength || fieldConfig.textConfig?.maxLength || fieldConfig.maxLength)}
             // 🔥 PATTERN/REGEX DYNAMIQUE PRISMA
             pattern={fieldConfig.textConfig?.pattern || fieldConfig.regex || fieldConfig.pattern}
-          />
+          />,
+          field
         );
 
       case 'TEXTAREA':
-        return (
+        return wrapWithCustomTooltip(
           <TextArea
             {...commonProps}
             value={finalValue || ''}
@@ -1029,7 +1189,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             showCount={!!(fieldConfig.textConfig?.maxLength || fieldConfig.maxLength)}
             // 🔥 PATTERN/REGEX DYNAMIQUE PRISMA TEXTAREA
             pattern={fieldConfig.textConfig?.pattern || fieldConfig.regex || fieldConfig.pattern}
-          />
+          />,
+          field
         );
 
       case 'NUMBER':
@@ -1062,16 +1223,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             {...commonProps}
             value={finalValue}
             onChange={(val)=>{
-              const before = finalValue;
               handleChange(val);
-              const after = val;
-              // Log ciblé multi-chiffres
-              if (typeof after === 'number' || typeof after === 'string') {
-                const aStr = String(after);
-                if (aStr.length > 1) {
-                  console.log(`🔢 [MULTI-CHIFFRES] Champ ${field.id} progression: ${before} -> ${after}`);
-                }
-              }
             }}
             min={fieldConfig.numberConfig?.min || fieldConfig.min}
             max={fieldConfig.numberConfig?.max || fieldConfig.max}
@@ -1086,8 +1238,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         );
 
       case 'SELECT': {
-        // 🔥 OPTIONS DYNAMIQUES PRISMA avec fallback
-        const options = fieldConfig.selectConfig?.options || fieldConfig.options || [];
+        // 🔥 OPTIONS DYNAMIQUES - PRIORITÉ: 1) Table Lookup (si activé), 2) Prisma Config, 3) Fallback
+        const staticOptions = fieldConfig.selectConfig?.options || fieldConfig.options || [];
+        const finalOptions = (fieldConfig.hasTable && tableLookup.options.length > 0) ? tableLookup.options : staticOptions;
         
         // 🔥 VARIANT DYNAMIQUE PRISMA SELECT avec fallback
         if ((fieldConfig.appearance?.variant || fieldConfig.variant) === 'radio') {
@@ -1098,7 +1251,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               onChange={(e) => handleChange(e.target.value)}
               size={fieldConfig.appearance?.size}
             >
-              {options.map((option) => (
+              {finalOptions.map((option) => (
                 <Radio 
                   key={option.value} 
                   value={option.value}
@@ -1117,6 +1270,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             value={finalValue}
             onChange={handleChange}
             style={commonProps.style}
+            loading={fieldConfig.hasTable && tableLookup.loading}
             // 🔥 PARAMÈTRES DYNAMIQUES PRISMA SELECT avec fallback
             mode={(fieldConfig.selectConfig?.multiple || fieldConfig.config?.multiple || fieldConfig.multiple) ? 'multiple' : undefined}
             showSearch={fieldConfig.selectConfig?.searchable ?? fieldConfig.config?.searchable ?? fieldConfig.searchable ?? true}
@@ -1125,7 +1279,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
             }
           >
-            {options.map((option) => (
+            {finalOptions.map((option) => (
               <Option 
                 key={option.value} 
                 value={option.value} 
@@ -1376,17 +1530,52 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
           <span className="font-medium text-gray-700 whitespace-normal break-words">
             {fieldConfig.label}
-            {fieldConfig.required && <span className="text-red-500 ml-1">*</span>}
+            {(() => {
+              if (fieldConfig.required) {
+                return (
+                  <span 
+                    className={isValidation ? 'text-red-500 ml-1' : 'text-green-600 ml-1'} 
+                    style={{ color: isValidation ? '#ef4444 !important' : '#16a34a !important' }}
+                  >
+                    *
+                  </span>
+                );
+              }
+              return null;
+            })()}
+            {/* 🎯 Tooltip à droite du label avec espacement */}
+            {tooltipData.hasTooltip && (
+              <span className="ml-2 inline-flex">
+                <HelpTooltip
+                  type={tooltipData.type}
+                  text={tooltipData.text}
+                  image={tooltipData.image}
+                />
+              </span>
+            )}
           </span>
-          {fieldConfig.description && (
-            <Tooltip title={fieldConfig.description}>
-              <InfoCircleOutlined className="text-gray-400" />
-            </Tooltip>
-          )}
+          <div className="flex items-center gap-1">
+            {fieldConfig.description && (
+              <Tooltip title={fieldConfig.description}>
+                <InfoCircleOutlined className="text-gray-400" />
+              </Tooltip>
+            )}
+          </div>
         </div>
       }
-      validateStatus={validationError ? 'error' : ''}
-      help={validationError}
+      validateStatus={validationError && isValidation ? 'error' : validationError && !isValidation ? 'success' : ''}
+      help={validationError ? (
+        <div 
+          style={{ 
+            color: isValidation ? '#dc2626' : '#059669',
+            fontWeight: '400',
+            fontSize: '14px',
+            marginTop: '4px'
+          }}
+        >
+          {validationError}
+        </div>
+      ) : undefined}
       required={fieldConfig.required}
     >
       {renderCapabilityBadges()}

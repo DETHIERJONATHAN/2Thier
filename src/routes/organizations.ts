@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
+import { randomUUID } from 'crypto';
 
 // ✅ PLUS BESOIN D'INTERFACE LOCALE - UTILISATION DE L'INTERFACE CENTRALISÉE
 
@@ -169,6 +170,83 @@ const extractGoogleWorkspaceDomain = (organization: OrganizationWithFeatures): s
     return `${organization.name.toLowerCase().replace(/\s+/g, '')}.com`;
   }
   return null;
+};
+
+// 🧹 SUPPRESSION PROFONDE DES DONNÉES LIÉES À UNE ORGANISATION AVANT LA SUPPRESSION
+const cleanupOrganizationData = async (tx: Prisma.TransactionClient, organizationId: string): Promise<void> => {
+  const runDelete = async (label: string, action: () => Promise<unknown>) => {
+    try {
+      console.log(`[ORGANIZATIONS] 🗑️ Suppression ${label} pour ${organizationId}`);
+      await action();
+    } catch (error) {
+      console.error(`[ORGANIZATIONS] ❌ Échec suppression ${label} pour ${organizationId}`, error);
+      throw error;
+    }
+  };
+
+  await runDelete('CalendarParticipant', () => tx.calendarParticipant.deleteMany({
+    where: {
+      CalendarEvent: {
+        organizationId
+      }
+    }
+  }));
+
+  await runDelete('FormSubmission', () => tx.formSubmission.deleteMany({
+    where: {
+      Block: {
+        organizationId
+      }
+    }
+  }));
+
+  await runDelete('AIRecommendation', () => tx.aIRecommendation.deleteMany({ where: { organizationId } }));
+  await runDelete('AdCampaign', () => tx.adCampaign.deleteMany({ where: { organizationId } }));
+  await runDelete('AdPlatformIntegration', () => tx.adPlatformIntegration.deleteMany({ where: { organizationId } }));
+  await runDelete('AnalyticsEvent', () => tx.analyticsEvent.deleteMany({ where: { organizationId } }));
+  await runDelete('AutomationRule', () => tx.automationRule.deleteMany({ where: { organizationId } }));
+  await runDelete('AiUsageLog', () => tx.aiUsageLog.deleteMany({ where: { organizationId } }));
+  await runDelete('CallToLeadMapping', () => tx.callToLeadMapping.deleteMany({ where: { organizationId } }));
+  await runDelete('CallStatus', () => tx.callStatus.deleteMany({ where: { organizationId } }));
+  await runDelete('Category', () => tx.category.deleteMany({ where: { organizationId } }));
+  await runDelete('GoogleMailWatch', () => tx.googleMailWatch.deleteMany({ where: { organizationId } }));
+  await runDelete('GoogleToken', () => tx.googleToken.deleteMany({ where: { organizationId } }));
+  await runDelete('GoogleVoiceCall', () => tx.googleVoiceCall.deleteMany({ where: { organizationId } }));
+  await runDelete('GoogleVoiceConfig', () => tx.googleVoiceConfig.deleteMany({ where: { organizationId } }));
+  await runDelete('GoogleVoiceSMS', () => tx.googleVoiceSMS.deleteMany({ where: { organizationId } }));
+  await runDelete('GoogleWorkspaceConfig', () => tx.googleWorkspaceConfig.deleteMany({ where: { organizationId } }));
+  await runDelete('IntegrationsSettings', () => tx.integrationsSettings.deleteMany({ where: { organizationId } }));
+  await runDelete('Invitation', () => tx.invitation.deleteMany({ where: { organizationId } }));
+  await runDelete('Lead', () => tx.lead.deleteMany({ where: { organizationId } }));
+  await runDelete('LeadSource', () => tx.leadSource.deleteMany({ where: { organizationId } }));
+  await runDelete('LeadStatus', () => tx.leadStatus.deleteMany({ where: { organizationId } }));
+  await runDelete('Module', () => tx.module.deleteMany({ where: { organizationId } }));
+  await runDelete('Notification', () => tx.notification.deleteMany({ where: { organizationId } }));
+  await runDelete('Order', () => tx.order.deleteMany({ where: { organizationId } }));
+  await runDelete('OrganizationModuleStatus', () => tx.organizationModuleStatus.deleteMany({ where: { organizationId } }));
+  await runDelete('OrganizationRoleStatus', () => tx.organizationRoleStatus.deleteMany({ where: { organizationId } }));
+  await runDelete('Permission', () => tx.permission.deleteMany({ where: { organizationId } }));
+  await runDelete('Product', () => tx.product.deleteMany({ where: { organizationId } }));
+  await runDelete('Role', () => tx.role.deleteMany({ where: { organizationId } }));
+  await runDelete('TechnicalData', () => tx.technicalData.deleteMany({ where: { organizationId } }));
+  await runDelete('TelnyxCall', () => tx.telnyxCall.deleteMany({ where: { organizationId } }));
+  await runDelete('TelnyxConnection', () => tx.telnyxConnection.deleteMany({ where: { organizationId } }));
+  await runDelete('TelnyxMessage', () => tx.telnyxMessage.deleteMany({ where: { organizationId } }));
+  await runDelete('TelnyxPhoneNumber', () => tx.telnyxPhoneNumber.deleteMany({ where: { organizationId } }));
+  await runDelete('TelnyxUserConfig', () => tx.telnyxUserConfig.deleteMany({ where: { organizationId } }));
+  await runDelete('TimelineEvent', () => tx.timelineEvent.deleteMany({ where: { organizationId } }));
+  await runDelete('TreeBranchLeafNodeCondition', () => tx.treeBranchLeafNodeCondition.deleteMany({ where: { organizationId } }));
+  await runDelete('TreeBranchLeafNodeFormula', () => tx.treeBranchLeafNodeFormula.deleteMany({ where: { organizationId } }));
+  await runDelete('TreeBranchLeafNodeTable', () => tx.treeBranchLeafNodeTable.deleteMany({ where: { organizationId } }));
+  await runDelete('TreeBranchLeafMarker', () => tx.treeBranchLeafMarker.deleteMany({ where: { organizationId } }));
+  await runDelete('TreeBranchLeafTree', () => tx.treeBranchLeafTree.deleteMany({ where: { organizationId } }));
+  await runDelete('EcommerceIntegration', () => tx.ecommerceIntegration.deleteMany({ where: { organizationId } }));
+  await runDelete('EmailAccount', () => tx.emailAccount.deleteMany({ where: { organizationId } }));
+  await runDelete('EmailDomain', () => tx.emailDomain.deleteMany({ where: { organizationId } }));
+  await runDelete('EmailTemplate', () => tx.emailTemplate.deleteMany({ where: { organizationId } }));
+  await runDelete('CalendarEvent', () => tx.calendarEvent.deleteMany({ where: { organizationId } }));
+  await runDelete('Block', () => tx.block.deleteMany({ where: { organizationId } }));
+  await runDelete('UserOrganization', () => tx.userOrganization.deleteMany({ where: { organizationId } }));
 };
 
 // 🔒 VALIDATION ZOD ULTRA-STRICTE
@@ -573,14 +651,14 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
     // 🧹 SANITISATION SUPPLÉMENTAIRE
     const sanitizedData = {
       name: sanitizeString(data.name),
-      description: data.description ? sanitizeString(data.description) : undefined,
-      status: data.status || 'ACTIVE',
+      description: data.description ? sanitizeString(data.description) : null,
+      status: (data.status || 'ACTIVE').toUpperCase(),
       // 📞 NOUVEAUX CHAMPS DE CONTACT
-      website: data.website ? sanitizeString(data.website) : undefined,
-      phone: data.phone ? sanitizeString(data.phone) : undefined,
-      address: data.address ? sanitizeString(data.address) : undefined
+      website: data.website ? sanitizeString(data.website) : null,
+      phone: data.phone ? sanitizeString(data.phone) : null,
+      address: data.address ? sanitizeString(data.address) : null
     };
-    
+
     console.log('[ORGANIZATIONS] Données sanitisées:', sanitizedData);
     
     // ✅ VÉRIFICATION UNICITÉ
@@ -601,9 +679,22 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
     }
     
     // 🔄 TRANSACTION SÉCURISÉE
+    const now = new Date();
+    const generatedId = randomUUID();
+
     const newOrganization = await prisma.$transaction(async (tx) => {
       const org = await tx.organization.create({
-        data: sanitizedData
+        data: {
+          id: generatedId,
+          name: sanitizedData.name,
+          description: sanitizedData.description,
+          status: sanitizedData.status,
+          website: sanitizedData.website,
+          phone: sanitizedData.phone,
+          address: sanitizedData.address,
+          createdAt: now,
+          updatedAt: now
+        }
       });
       
       // 🌟 CONFIGURATION GOOGLE WORKSPACE SI ACTIVÉE
@@ -965,14 +1056,9 @@ router.delete('/:id', organizationsDeleteRateLimit, requireRole(['super_admin'])
       });
     }
     
-    // 🔄 TRANSACTION SÉCURISÉE
+    // 🔄 TRANSACTION SÉCURISÉE AVEC NETTOYAGE COMPLET
     await prisma.$transaction(async (tx) => {
-      // Supprimer d'abord les relations modules
-      await tx.organizationModuleStatus.deleteMany({
-        where: { organizationId: sanitizedId }
-      });
-      
-      // Puis supprimer l'organisation
+      await cleanupOrganizationData(tx, sanitizedId);
       await tx.organization.delete({
         where: { id: sanitizedId }
       });
@@ -987,6 +1073,16 @@ router.delete('/:id', organizationsDeleteRateLimit, requireRole(['super_admin'])
     
   } catch (error) {
     console.error('[ORGANIZATIONS] Erreur DELETE:', error);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2003') {
+        return res.status(409).json({
+          success: false,
+          message: 'Impossible de supprimer cette organisation tant que des données associées existent (modules, rôles, configurations, etc.).'
+        });
+      }
+    }
+
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la suppression de l\'organisation'

@@ -22,6 +22,8 @@ L'approche adoptée est celle d'une **architecture modulaire et centralisée**. 
 
 - **`authApi.ts` :** (Conceptuel, peut être intégré ailleurs) Centralise les appels API spécifiques à l'authentification (`/login`, `/me`, `/logout`, etc.).
 
+- **`googleConfig.ts` :** Point d'entrée unique pour la configuration Google OAuth/Workspace (client ID, secret, redirect URI, project ID, scopes). À utiliser par tout service nécessitant l'écosystème Google.
+
 - **Fichiers de Types (`user.ts`, `role.ts`, `permissions.ts`, etc.) :** Définissent les structures de données (interfaces TypeScript) pour garantir la cohérence et la robustesse du code.
 
 ## 3. Comment l'utiliser ?
@@ -59,3 +61,7 @@ const MaPage = () => {
 - **Clarté :** Le code des composants est plus simple et plus lisible. Il se concentre sur l'affichage et délègue la logique d'autorisation au hook `useAuth`.
 - **Performance :** En utilisant `useMemo` et des sélecteurs fins dans le provider, on évite des re-rendus inutiles de l'application.
 - **Testabilité :** Il est plus facile de tester les composants en "mockant" le retour du hook `useAuth` pour simuler différents types d'utilisateurs et de permissions.
+
+## 5. Ressources complémentaires
+
+- [docs/google-oauth-config.md](../../docs/google-oauth-config.md) — checklist pour synchroniser la configuration Google OAuth entre le local, Cloud Run et l'Admin Console Workspace.

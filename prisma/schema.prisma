@@ -1366,6 +1366,9 @@ model TreeBranchLeafNode {
   text_placeholder               String?
   text_regex                     String?
   text_rows                      Int?                             @default(3)
+  text_helpTooltipType           String?                          @default("none")
+  text_helpTooltipText           String?
+  text_helpTooltipImage          String?
   tbl_auto_generated             Boolean                          @default(false)
   tbl_capacity                   Int?
   tbl_code                       String?                          @db.VarChar(20)
@@ -1478,6 +1481,12 @@ model TreeBranchLeafSelectConfig {
   optionsSource      String?
   apiEndpoint        String?
   tableReference     String?
+  keyColumn          String?
+  keyRow             String?            // ✅ NOUVEAU: Clé pour lookup par ligne
+  valueColumn        String?
+  valueRow           String?            // ✅ NOUVEAU: Valeur pour lookup par ligne
+  displayColumn      String?
+  displayRow         String?            // ✅ NOUVEAU: Affichage pour lookup par ligne
   dependsOnNodeId    String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime
@@ -1722,26 +1731,53 @@ model TreeBranchLeafNodeCondition {
 }
 
 model TreeBranchLeafNodeTable {
-  id             String             @id @default(cuid())
-  nodeId         String
-  organizationId String?
-  name           String
-  description    String?
-  type           String             @default("basic")
-  columns        Json               @default("[]")
-  rows           Json               @default("[]")
-  data           Json               @default("{}")
-  meta           Json               @default("{}")
-  isDefault      Boolean            @default(false)
-  order          Int                @default(0)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  node           TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  Organization   Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                    String             @id @default(cuid())
+  nodeId                String
+  organizationId        String?
+  name                  String
+  description           String?
+  type                  String             @default("basic")
+  columns               Json               @default("[]")
+  rows                  Json               @default("[]")
+  data                  Json               @default("{}")
+  meta                  Json               @default("{}")
+  isDefault             Boolean            @default(false)
+  order                 Int                @default(0)
+  
+  // Configuration du lookup pour tables simples (type = 'columns')
+  lookupSelectColumn    String?            // Colonne utilisée pour le choix (ex: "Marque")
+  lookupDisplayColumns  String[]           @default([]) // Colonnes dont on veut récupérer les données (ex: ["WC", "Volt", "Prix"])
+  
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  node                  TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  Organization          Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([nodeId, name])
   @@index([nodeId])
   @@index([organizationId])
+  @@index([lookupSelectColumn])
+}
+
+model AiUsageLog {
+  id             String   @id
+  userId         String?
+  organizationId String?
+  type           String
+  model          String?
+  tokensPrompt   Int?     @default(0)
+  tokensOutput   Int?     @default(0)
+  latencyMs      Int?
+  success        Boolean? @default(true)
+  errorCode      String?
+  errorMessage   String?
+  meta           Json?
+  createdAt      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([createdAt])
+  @@index([organizationId], map: "AiUsageLog_orgId_idx")
+  @@index([type])
+  @@index([userId])
 }
 
 enum InvitationStatus {

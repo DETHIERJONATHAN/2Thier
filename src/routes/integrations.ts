@@ -6,6 +6,8 @@ import axios from 'axios';
 import { google } from 'googleapis';
 import { randomUUID, createHash } from 'crypto';
 
+import { googleOAuthConfig } from '../auth/googleConfig';
+
 const prisma = new PrismaClient();
 const router = Router();
 
@@ -27,12 +29,9 @@ function cacheSet(key: string, payload: unknown, ttlMs: number) {
 
 // Utilitaire: sécuriser/normaliser le redirectUri provenant des variables d'environnement
 const DEFAULT_ADS_REDIRECT = (() => {
-  const explicit = process.env.GOOGLE_ADS_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI;
+  const explicit = process.env.GOOGLE_ADS_REDIRECT_URI || googleOAuthConfig.redirectUri;
   if (explicit && explicit.trim().length > 0) return explicit.trim();
-  const base = process.env.API_URL || process.env.BACKEND_URL || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-    ? 'https://api.2thier.com'
-    : 'http://localhost:4000');
-  return `${base.replace(/\/$/, '')}/api/google-auth/callback`;
+  return googleOAuthConfig.redirectUri;
 })();
 function sanitizeRedirectUri(raw?: string): { uri: string; raw?: string; sanitized: boolean; warning?: string } {
   if (!raw) return { uri: DEFAULT_ADS_REDIRECT, sanitized: false };

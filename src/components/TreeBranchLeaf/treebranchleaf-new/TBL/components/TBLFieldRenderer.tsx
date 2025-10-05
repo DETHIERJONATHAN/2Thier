@@ -16,6 +16,9 @@ import { QuestionCircleOutlined } from '@ant-design/icons';
 import type { TBLField } from '../hooks/useTBLData';
 import type { TBLFormData } from '../hooks/useTBLSave';
 import dayjs from 'dayjs';
+import { HelpTooltip } from '../../../../common/HelpTooltip';
+import { useNodeTooltip } from '../../../../../hooks/useNodeTooltip';
+import { useTBLValidation } from '../context/useTBLValidation';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -35,6 +38,31 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
   disabled = false
 }) => {
   const [localValue, setLocalValue] = useState(value);
+  
+  // Hook de validation pour les astérisques
+  const { isValidation } = useTBLValidation();
+  
+  // Récupérer les données tooltip du nœud
+  const tooltipData = useNodeTooltip(field);
+  
+  // 🔍 DEBUG: Log des données tooltip
+  useEffect(() => {
+    const hasTooltipData = field.text_helpTooltipType && field.text_helpTooltipType !== 'none';
+    if (hasTooltipData || field.label.toLowerCase().includes('consommation') || field.label.toLowerCase().includes('puissance')) {
+      console.log(`🔍 [TBL][TOOLTIP][${field.label}]`, {
+        fieldId: field.id,
+        fieldLabel: field.label,
+        tooltipData,
+        hasTooltipData,
+        rawField: {
+          text_helpTooltipType: field.text_helpTooltipType,
+          text_helpTooltipText: field.text_helpTooltipText ? 'OUI' : 'NON',
+          text_helpTooltipImage: field.text_helpTooltipImage ? 'OUI' : 'NON',
+          appearanceConfig: field.appearanceConfig
+        }
+      });
+    }
+  }, [field, tooltipData]);
 
   // Mettre à jour la valeur locale quand la prop change
   useEffect(() => {
@@ -109,19 +137,38 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
   }
 
   // Label avec tooltip optionnel
-  const renderLabel = () => (
-    <div className="flex items-center gap-1 mb-2">
-      <Text strong className={field.required ? 'text-red-500' : ''}>
-        {field.label}
-        {field.required && ' *'}
-      </Text>
-      {field.description && (
-        <Tooltip title={field.description}>
-          <QuestionCircleOutlined className="text-gray-400" />
-        </Tooltip>
-      )}
-    </div>
-  );
+  const renderLabel = () => {
+    // Debug pour vérifier le contexte de validation
+    if (field.required) {
+      console.log(`🎯 [TBL-ASTERISK][${field.label}] isValidation: ${isValidation}, color: ${isValidation ? 'RED' : 'GREEN'}`);
+    }
+    
+    return (
+      <div className="flex items-center gap-1 mb-2">
+        <Text strong className={field.required ? (isValidation ? 'text-red-500' : 'text-green-600') : ''}>
+          {field.label}
+          {field.required && ' *'}
+        </Text>
+        
+        {/* Tooltip personnalisé avec image/texte (priorité) */}
+        {tooltipData.hasTooltip && (
+          <HelpTooltip
+            title={tooltipData.title}
+            text={tooltipData.text}
+            image={tooltipData.image}
+            type={tooltipData.type}
+          />
+        )}
+        
+        {/* Fallback vers l'ancien système si pas de tooltip personnalisé */}
+        {!tooltipData.hasTooltip && field.description && (
+          <Tooltip title={field.description}>
+            <QuestionCircleOutlined className="text-gray-400" />
+          </Tooltip>
+        )}
+      </div>
+    );
+  };
 
   // Rendu selon le type de champ
   const renderField = () => {

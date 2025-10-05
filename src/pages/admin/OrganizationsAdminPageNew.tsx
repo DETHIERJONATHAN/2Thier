@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
+  App,
   Card, 
   Table, 
   Button, 
@@ -14,12 +15,13 @@ import {
   Statistic, 
   Row, 
   Col,
+  Grid,
   Alert,
   Badge,
-  message,
   Popconfirm,
   Typography,
-  Spin
+  Spin,
+  Empty
 } from 'antd';
 import {
   PlusOutlined,
@@ -140,6 +142,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const { user, refreshModules } = useAuth();
   const { sections, toggleSectionActive } = useSharedSections();
+  const { message: messageApi } = App.useApp();
 
   // 📊 ÉTATS PRINCIPAUX
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -183,6 +186,10 @@ const OrganizationsAdminPageNew: React.FC = () => {
   // 🎯 PERMISSIONS
   const isSuperAdmin = user?.role === 'super_admin' || user?.isSuperAdmin;
   const canManageOrgs = isSuperAdmin;
+
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = !!screens.md && !screens.lg;
 
   // � RECHERCHE OPTIMISÉE AVEC DEBOUNCE 
   const [searchInputValue, setSearchInputValue] = useState('');
@@ -242,15 +249,16 @@ const OrganizationsAdminPageNew: React.FC = () => {
       if (response.success && Array.isArray(response.data)) {
         setOrganizations(response.data);
       } else {
-        message.error('Erreur lors du chargement des organisations');
+        messageApi.error('Erreur lors du chargement des organisations');
       }
-    } catch {
+    } catch (error) {
       
-      message.error('Erreur de connexion');
+      const errMessage = error instanceof Error ? error.message : 'Erreur de connexion';
+      messageApi.error(errMessage);
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, messageApi]);
 
   const fetchCrmModulesForDetails = useCallback(async (orgId: string) => {
     if (!orgId) return;
@@ -332,7 +340,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
     // 🛡️ SÉCURITÉ : Vérifier que ce n'est PAS un module Google Workspace
     const googleModuleKeys = ['gmail', 'calendar', 'drive', 'meet', 'docs', 'sheets', 'voice'];
     if (googleModuleKeys.includes(module.key)) {
-      message.error('Les modules Google Workspace doivent être gérés via le bouton Google Workspace');
+      messageApi.error('Les modules Google Workspace doivent être gérés via le bouton Google Workspace');
       return;
     }
     
@@ -344,7 +352,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       });
       
       if (response.success) {
-        message.success(`Module ${module.label || module.name} ${enabled ? 'activé' : 'désactivé'} avec succès`);
+        messageApi.success(`Module ${module.label || module.name} ${enabled ? 'activé' : 'désactivé'} avec succès`);
         
         // � MISE À JOUR EN TEMPS RÉEL - Feedback visuel immédiat
         await updateRealTimeModuleCount(selectedOrganization.id, enabled);
@@ -357,13 +365,14 @@ const OrganizationsAdminPageNew: React.FC = () => {
           await refreshModules();
         }
       } else {
-        message.error(`Erreur lors de la ${enabled ? 'activation' : 'désactivation'} du module`);
+        messageApi.error(`Erreur lors de la ${enabled ? 'activation' : 'désactivation'} du module`);
       }
-    } catch {
+    } catch (error) {
       
-      message.error('Erreur de connexion');
+      const errMessage = error instanceof Error ? error.message : 'Erreur de connexion';
+      messageApi.error(errMessage);
     }
-  }, [selectedOrganization, api, fetchOrganizationModules, updateRealTimeModuleCount, refreshModules]);
+  }, [selectedOrganization, api, fetchOrganizationModules, updateRealTimeModuleCount, refreshModules, messageApi]);
 
   // 🚀 Fonction pour activer automatiquement les modules Google Workspace
   const handleActivateGoogleWorkspaceModules = useCallback(async (organizationId: string) => {
@@ -377,7 +386,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       if (googleWorkspaceSection && !googleWorkspaceSection.active) {
         console.log('🔧 Activation de la section Google Workspace...');
         toggleSectionActive('googleWorkspace');
-        message.success('Section Google Workspace activée');
+        messageApi.success('Section Google Workspace activée');
       } else if (googleWorkspaceSection?.active) {
         console.log('✅ [DEBUG] Section Google Workspace déjà active');
       }
@@ -426,7 +435,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       const successCount = results.filter(result => result.status === 'fulfilled').length;
       
       if (successCount > 0) {
-        message.success(`${successCount} modules Google Workspace activés avec succès`);
+        messageApi.success(`${successCount} modules Google Workspace activés avec succès`);
         
         // 🚀 MISE À JOUR EN TEMPS RÉEL - Mettre à jour le compteur immédiatement
         setModuleCache(prevCache => {
@@ -449,19 +458,19 @@ const OrganizationsAdminPageNew: React.FC = () => {
         }
         console.log('✅ Données rechargées');
       } else {
-        message.warning('Aucun module Google Workspace n\'a pu être activé');
+        messageApi.warning('Aucun module Google Workspace n\'a pu être activé');
       }
 
     } catch (error) {
       console.error('Erreur lors de l\'activation des modules Google Workspace:', error);
-      message.error('Erreur lors de l\'activation des modules Google Workspace');
+      messageApi.error('Erreur lors de l\'activation des modules Google Workspace');
     }
-  }, [allModules, api, fetchOrganizationModules, fetchOrganizations, refreshModules, sections, toggleSectionActive]);
+  }, [allModules, api, fetchOrganizationModules, fetchOrganizations, messageApi, refreshModules, sections, toggleSectionActive]);
 
   // 🔗 Fonction pour activer Google Workspace et ses modules en un clic
   const handleQuickActivateGoogleWorkspace = useCallback(async (organization: Organization) => {
     if (organization.googleWorkspaceEnabled || organization.stats?.googleWorkspaceEnabled) {
-      message.info('Google Workspace est déjà activé pour cette organisation');
+      messageApi.info('Google Workspace est déjà activé pour cette organisation');
       return;
     }
 
@@ -479,7 +488,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       });
 
       if (response.success) {
-        message.success('Google Workspace activé avec succès');
+        messageApi.success('Google Workspace activé avec succès');
         
         // 2. Activer automatiquement les modules Google Workspace
         await handleActivateGoogleWorkspaceModules(organization.id);
@@ -487,13 +496,13 @@ const OrganizationsAdminPageNew: React.FC = () => {
         // 3. Recharger les données
         await fetchOrganizations();
       } else {
-        message.error('Erreur lors de l\'activation de Google Workspace');
+        messageApi.error('Erreur lors de l\'activation de Google Workspace');
       }
     } catch (error) {
       console.error('Erreur lors de l\'activation rapide de Google Workspace:', error);
-      message.error('Erreur lors de l\'activation de Google Workspace');
+      messageApi.error('Erreur lors de l\'activation de Google Workspace');
     }
-  }, [api, handleActivateGoogleWorkspaceModules, fetchOrganizations]);
+  }, [api, fetchOrganizations, handleActivateGoogleWorkspaceModules, messageApi]);
 
   // 🎯 AUTO-ACTIVATION : Activer automatiquement les modules Google Workspace pour les orgs avec Google Workspace activé mais sans modules
   useEffect(() => {
@@ -543,16 +552,17 @@ const OrganizationsAdminPageNew: React.FC = () => {
       
       const response = await api.post('/api/organizations', organizationData);
       if (response.success) {
-        message.success('Organisation créée avec succès');
+        messageApi.success('Organisation créée avec succès');
         setCreateModal(false);
         form.resetFields();
         await fetchOrganizations();
       } else {
-        message.error(response.message || 'Erreur lors de la création');
+        messageApi.error(response.message || 'Erreur lors de la création');
       }
-    } catch {
+    } catch (error) {
       
-      message.error('Erreur de création');
+      const errMessage = error instanceof Error ? error.message : 'Erreur de création';
+      messageApi.error(errMessage);
     }
   };
 
@@ -581,16 +591,17 @@ const OrganizationsAdminPageNew: React.FC = () => {
       
       const response = await api.put(`/api/organizations/${selectedOrganization.id}`, organizationData);
       if (response.success) {
-        message.success('Organisation modifiée avec succès');
+        messageApi.success('Organisation modifiée avec succès');
         setEditModal(false);
         editForm.resetFields();
         await fetchOrganizations();
       } else {
-        message.error(response.message || 'Erreur lors de la modification');
+        messageApi.error(response.message || 'Erreur lors de la modification');
       }
-    } catch {
+    } catch (error) {
       
-      message.error('Erreur de modification');
+      const errMessage = error instanceof Error ? error.message : 'Erreur de modification';
+      messageApi.error(errMessage);
     }
   };
 
@@ -604,14 +615,15 @@ const OrganizationsAdminPageNew: React.FC = () => {
       });
       
       if (response.success) {
-        message.success(`Organisation "${orgName}" ${newStatus === 'ACTIVE' ? 'activée' : 'désactivée'} avec succès`);
+        messageApi.success(`Organisation "${orgName}" ${newStatus === 'ACTIVE' ? 'activée' : 'désactivée'} avec succès`);
         await fetchOrganizations();
       } else {
-        message.error(response.message || `Erreur lors de la ${actionText === 'activer' ? 'activation' : 'désactivation'}`);
+        messageApi.error(response.message || `Erreur lors de la ${actionText === 'activer' ? 'activation' : 'désactivation'}`);
       }
-    } catch {
+    } catch (error) {
       
-      message.error(`Erreur de ${actionText === 'activer' ? 'activation' : 'désactivation'}`);
+      const errMessage = error instanceof Error ? error.message : `Erreur de ${actionText === 'activer' ? 'activation' : 'désactivation'}`;
+      messageApi.error(errMessage);
     }
   };
 
@@ -619,14 +631,20 @@ const OrganizationsAdminPageNew: React.FC = () => {
     try {
       const response = await api.delete(`/api/organizations/${orgId}`);
       if (response.success) {
-        message.success(`Organisation "${orgName}" supprimée avec succès`);
+        messageApi.success(`Organisation "${orgName}" supprimée avec succès`);
         await fetchOrganizations();
       } else {
-        message.error(response.message || 'Erreur lors de la suppression');
+        messageApi.error(response.message || 'Erreur lors de la suppression');
       }
-    } catch {
+    } catch (error) {
       
-      message.error('Erreur de suppression');
+      const apiError = error as (Error & { status?: number });
+      if (apiError.status === 409) {
+        messageApi.error(apiError.message || 'Impossible de supprimer cette organisation tant que des données associées existent.');
+      } else {
+        const errMessage = apiError.message || 'Erreur de suppression';
+        messageApi.error(errMessage);
+      }
     }
   };
 
@@ -667,7 +685,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des modules Devis1Minute:', error);
-      message.error('Erreur lors du chargement des modules');
+      const errMessage = error instanceof Error ? error.message : 'Erreur lors du chargement des modules';
+      messageApi.error(errMessage);
     } finally {
       setDevis1minuteLoading(false);
     }
@@ -685,7 +704,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       });
 
       if (response.success) {
-        message.success(`Module ${active ? 'activé' : 'désactivé'} avec succès`);
+        messageApi.success(`Module ${active ? 'activé' : 'désactivé'} avec succès`);
         
         // Mettre à jour l'état local
         setDevis1minuteModules(prevModules =>
@@ -697,11 +716,12 @@ const OrganizationsAdminPageNew: React.FC = () => {
         // Rafraîchir la liste des organisations pour les compteurs
         await fetchOrganizations();
       } else {
-        message.error(response.message || 'Erreur lors de la mise à jour');
+        messageApi.error(response.message || 'Erreur lors de la mise à jour');
       }
     } catch (error) {
       console.error('Erreur toggle module:', error);
-      message.error('Erreur lors de la mise à jour du module');
+      const errMessage = error instanceof Error ? error.message : 'Erreur lors de la mise à jour du module';
+      messageApi.error(errMessage);
     }
   };
 
@@ -918,6 +938,54 @@ const OrganizationsAdminPageNew: React.FC = () => {
   }, [organizationModules, sectionsOpen, toggleSection, handleToggleModule]);
 
   // 📋 COLONNES TABLEAU PRINCIPALES
+  const openOrganizationDetails = (organization: Organization) => {
+    setSelectedOrganization(organization);
+    setDetailModal(true);
+    fetchCrmModulesForDetails(organization.id);
+  };
+
+  const openEditOrganization = (organization: Organization) => {
+    setSelectedOrganization(organization);
+    editForm.setFieldsValue({
+      name: organization.name,
+      description: organization.description,
+      website: organization.website,
+      phone: organization.phone,
+      address: organization.address
+    });
+    setEditModal(true);
+  };
+
+  const openGoogleWorkspaceConfig = (organization: Organization) => {
+    setSelectedOrganization(organization);
+    setGoogleWorkspaceModal(true);
+  };
+
+  const openModulesManager = (organization: Organization) => {
+    setSelectedOrganization(organization);
+    fetchOrganizationModules(organization.id);
+    setModulesModal(true);
+  };
+
+  const openTelnyxConfig = (organization: Organization) => {
+    setSelectedOrganization(organization);
+    setTelnyxModal(true);
+  };
+
+  const openDevis1Minute = (organization: Organization) => {
+    handleActivateDevis1Minute(organization);
+  };
+
+  const renderStatusTag = (status: 'ACTIVE' | 'INACTIVE') => (
+    <Tag 
+      color={status === 'ACTIVE' ? 'green' : 'red'} 
+      icon={status === 'ACTIVE' ? <CheckCircleOutlined /> : <PoweroffOutlined />} 
+      style={{ borderRadius: '4px', fontWeight: 500 }}
+    >
+      {status === 'ACTIVE' ? 'Actif' : 'Inactif'}
+    </Tag>
+  );
+
   const columns = [
     {
       title: 'Organisation',
@@ -946,15 +1014,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 120,
-      render: (status: string) => (
-        <Tag 
-          color={status === 'ACTIVE' ? 'green' : 'red'} 
-          icon={status === 'ACTIVE' ? <CheckCircleOutlined /> : <PoweroffOutlined />}
-          style={{ borderRadius: '4px', fontWeight: 500 }}
-        >
-          {status === 'ACTIVE' ? 'Actif' : 'Inactif'}
-        </Tag>
-      ),
+      render: (status: 'ACTIVE' | 'INACTIVE') => renderStatusTag(status),
     },
     {
       title: 'Utilisateurs',
@@ -1071,11 +1131,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             <Button
               type="text"
               icon={<EyeOutlined />}
-              onClick={() => {
-                setSelectedOrganization(record);
-                setDetailModal(true);
-                fetchCrmModulesForDetails(record.id);
-              }}
+              onClick={() => openOrganizationDetails(record)}
               style={{ color: '#1890ff' }}
             />
           </Tooltip>
@@ -1106,17 +1162,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 <Button
                   type="text"
                   icon={<EditOutlined />}
-                  onClick={() => {
-                    setSelectedOrganization(record);
-                    editForm.setFieldsValue({
-                      name: record.name,
-                      description: record.description,
-                      website: record.website,
-                      phone: record.phone,
-                      address: record.address
-                    });
-                    setEditModal(true);
-                  }}
+                  onClick={() => openEditOrganization(record)}
                   style={{ color: '#722ed1' }}
                 />
               </Tooltip>
@@ -1125,10 +1171,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 <Button
                   type="text"
                   icon={<GoogleOutlined />}
-                  onClick={() => {
-                    setSelectedOrganization(record);
-                    setGoogleWorkspaceModal(true);
-                  }}
+                  onClick={() => openGoogleWorkspaceConfig(record)}
                   style={{ color: '#4285F4' }}
                 />
               </Tooltip>
@@ -1147,10 +1190,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 <Button
                   type="text"
                   icon={<PhoneOutlined />}
-                  onClick={() => {
-                    setSelectedOrganization(record);
-                    setTelnyxModal(true);
-                  }}
+                  onClick={() => openTelnyxConfig(record)}
                   style={{ color: '#FF6B6B' }}
                 />
               </Tooltip>
@@ -1159,11 +1199,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 <Button
                   type="text"
                   icon={<AppstoreAddOutlined />}
-                  onClick={() => {
-                    setSelectedOrganization(record);
-                    fetchOrganizationModules(record.id);
-                    setModulesModal(true);
-                  }}
+                  onClick={() => openModulesManager(record)}
                   style={{ color: '#52c41a' }}
                 />
               </Tooltip>
@@ -1172,7 +1208,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 <Button
                   type="text"
                   icon={<RocketOutlined />}
-                  onClick={() => handleActivateDevis1Minute(record)}
+                  onClick={() => openDevis1Minute(record)}
                   style={{ color: '#ff7a00' }}
                 />
               </Tooltip>
@@ -1200,37 +1236,287 @@ const OrganizationsAdminPageNew: React.FC = () => {
     },
   ];
 
+  const renderMobileOrganizationActions = (organization: Organization) => {
+    const googleWorkspaceEnabled = organization.googleWorkspaceEnabled || organization.stats?.googleWorkspaceEnabled;
+
+    return (
+      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Button
+          type="primary"
+          icon={<EyeOutlined />}
+          block
+          onClick={() => openOrganizationDetails(organization)}
+        >
+          Voir les détails
+        </Button>
+
+        {canManageOrgs && (
+          <>
+            <Button
+              icon={<EditOutlined />}
+              block
+              onClick={() => openEditOrganization(organization)}
+            >
+              Modifier l'organisation
+            </Button>
+
+            <Button
+              icon={<AppstoreAddOutlined />}
+              block
+              onClick={() => openModulesManager(organization)}
+            >
+              Modules CRM
+            </Button>
+
+            <Button
+              icon={<GoogleOutlined />}
+              block
+              onClick={() => openGoogleWorkspaceConfig(organization)}
+            >
+              Google Workspace
+            </Button>
+
+            {!googleWorkspaceEnabled && (
+              <Button
+                icon={<RocketOutlined />}
+                block
+                onClick={() => handleQuickActivateGoogleWorkspace(organization)}
+              >
+                Activer Google Workspace
+              </Button>
+            )}
+
+            <Button
+              icon={<PhoneOutlined />}
+              block
+              onClick={() => openTelnyxConfig(organization)}
+            >
+              Configuration Telnyx
+            </Button>
+
+            <Button
+              icon={<RocketOutlined />}
+              block
+              onClick={() => openDevis1Minute(organization)}
+            >
+              Devis1Minute
+            </Button>
+
+            <Popconfirm
+              title={`${organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'} cette organisation ?`}
+              onConfirm={() => handleToggleOrganizationStatus(organization.id, organization.name, organization.status)}
+              okText={organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
+              cancelText="Annuler"
+              okButtonProps={{ type: organization.status === 'ACTIVE' ? 'default' : 'primary' }}
+            >
+              <Button
+                icon={<PoweroffOutlined />}
+                block
+              >
+                {organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
+              </Button>
+            </Popconfirm>
+
+            <Popconfirm
+              title="Supprimer cette organisation ?"
+              description="Cette action est irréversible et supprimera toutes les données associées."
+              onConfirm={() => handleDeleteOrganization(organization.id, organization.name)}
+              okText="Supprimer"
+              cancelText="Annuler"
+              okButtonProps={{ danger: true }}
+            >
+              <Button
+                icon={<DeleteOutlined />}
+                block
+                danger
+              >
+                Supprimer
+              </Button>
+            </Popconfirm>
+          </>
+        )}
+      </Space>
+    );
+  };
+
+  const renderOrganizationCard = (organization: Organization) => {
+    const cachedModuleCount = moduleCache[organization.id];
+    const moduleCount = cachedModuleCount !== undefined
+      ? cachedModuleCount
+      : organization.stats?.activeModules || 0;
+
+    const googleEnabled = organization.googleWorkspaceEnabled || organization.stats?.googleWorkspaceEnabled;
+
+    const statChipStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      padding: '10px 12px',
+      borderRadius: 10,
+      backgroundColor: '#f5f5f5',
+      flex: isTablet ? '1 1 45%' : '1 1 48%',
+      minWidth: 140
+    };
+
+    return (
+      <Card
+        key={organization.id}
+        size="small"
+        className="shadow-sm"
+        style={{ borderRadius: 12 }}
+        bodyStyle={{ padding: 16 }}
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <div className="flex flex-wrap items-start gap-3 justify-between">
+            <Space direction="vertical" size={8} style={{ flex: '1 1 240px' }}>
+              <Space size={8} wrap>
+                <Text strong style={{ fontSize: 16 }}>
+                  {formatOrganizationName(organization.name, 60)}
+                </Text>
+                {renderStatusTag(organization.status)}
+              </Space>
+              {organization.description && (
+                <Text type="secondary">
+                  {formatDescription(organization.description, 90)}
+                </Text>
+              )}
+              {organization.website && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  🌐 {organization.website}
+                </Text>
+              )}
+              {organization.googleWorkspaceDomain && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Domaine Google Workspace : {organization.googleWorkspaceDomain}
+                </Text>
+              )}
+            </Space>
+
+            <Space size={12} direction="vertical" style={{ minWidth: 140 }}>
+              <div style={{ textAlign: 'right' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Modules actifs</Text>
+                <div style={{ fontWeight: 700, fontSize: 20, color: moduleCount > 0 ? '#52c41a' : '#999' }}>
+                  {moduleCount}
+                </div>
+              </div>
+              <Badge
+                status={googleEnabled ? 'success' : 'default'}
+                text={googleEnabled ? 'Google Workspace activé' : 'Google Workspace inactif'}
+              />
+            </Space>
+          </div>
+
+          <Space size={12} wrap>
+            <div style={statChipStyle}>
+              <UserOutlined style={{ color: '#1890ff' }} />
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Utilisateurs</Text>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>
+                  {organization.stats?.totalUsers || 0}
+                </div>
+              </div>
+            </div>
+            <div style={statChipStyle}>
+              <TeamOutlined style={{ color: '#722ed1' }} />
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Rôles</Text>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>
+                  {organization.stats?.totalRoles || 0}
+                </div>
+              </div>
+            </div>
+            <div style={statChipStyle}>
+              <AppstoreOutlined style={{ color: '#52c41a' }} />
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Modules CRM</Text>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>
+                  {moduleCount}
+                </div>
+              </div>
+            </div>
+            <div style={statChipStyle}>
+              <GoogleOutlined style={{ color: '#4285F4' }} />
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Google Workspace</Text>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>
+                  {googleEnabled ? 'Activé' : 'Inactif'}
+                </div>
+              </div>
+            </div>
+          </Space>
+
+          {organization.googleWorkspaceModules.length > 0 && (
+            <Space size={8} wrap>
+              {organization.googleWorkspaceModules.map(module => {
+                const iconConfig = getCachedGoogleIcon(module.key);
+                return (
+                  <Tag
+                    key={module.id}
+                    icon={getGoogleModuleIcon(module.key)}
+                    color={iconConfig.color}
+                    style={{ borderRadius: 16, marginRight: 0 }}
+                  >
+                    {module.label}
+                  </Tag>
+                );
+              })}
+            </Space>
+          )}
+
+          {renderMobileOrganizationActions(organization)}
+        </Space>
+      </Card>
+    );
+  };
+
   // 🚀 EFFET DE CHARGEMENT INITIAL
   useEffect(() => {
     fetchOrganizations();
   }, [fetchOrganizations]);
 
   return (
-    <div className="p-6">
-      {/* 📊 EN-TÊTE AVEC STATISTIQUES */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <Title level={2} className="mb-0">
-            <TeamOutlined className="mr-3" />
-            Gestion des Organisations
-          </Title>
-          
+    <div
+      style={{
+        padding: isMobile ? '16px 12px' : '32px',
+        backgroundColor: '#f7f9fc',
+        minHeight: '100%',
+        transition: 'padding 0.2s ease-in-out'
+      }}
+    >
+      <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            marginBottom: isMobile ? 16 : 24
+          }}
+        >
+          <Space align="center" size={12}>
+            <TeamOutlined style={{ fontSize: isMobile ? 24 : 28, color: '#1f2937' }} />
+            <Title level={2} style={{ margin: 0, fontSize: isMobile ? 22 : 28 }}>
+              Gestion des Organisations
+            </Title>
+          </Space>
+
           {canManageOrgs && (
             <Button
               type="primary"
               icon={<PlusOutlined />}
+              size={isMobile ? 'middle' : 'large'}
               onClick={() => setCreateModal(true)}
-              size="large"
+              style={{ width: isMobile ? '100%' : 'auto' }}
             >
               Nouvelle Organisation
             </Button>
           )}
         </div>
 
-        {/* 📈 STATISTIQUES RAPIDES */}
-        <Row gutter={16} className="mb-4">
-          <Col span={6}>
-            <Card>
+        <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 12 : 24 }}>
+          <Col xs={24} sm={12} md={12} lg={6}>
+            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Total Organisations"
                 value={organizations.length}
@@ -1238,8 +1524,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col span={6}>
-            <Card>
+          <Col xs={24} sm={12} md={12} lg={6}>
+            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Organisations Actives"
                 value={organizations.filter(o => o.status === 'ACTIVE').length}
@@ -1247,8 +1533,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col span={6}>
-            <Card>
+          <Col xs={24} sm={12} md={12} lg={6}>
+            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Avec Google Workspace"
                 value={organizations.filter(o => o.googleWorkspaceEnabled).length}
@@ -1256,8 +1542,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col span={6}>
-            <Card>
+          <Col xs={24} sm={12} md={12} lg={6}>
+            <Card bodyStyle={{ padding: isMobile ? 16 : 20 }} style={{ borderRadius: 14 }}>
               <Statistic
                 title="Total Modules Actifs"
                 value={Object.values(moduleCache).reduce((sum, count) => sum + count, 0)}
@@ -1267,27 +1553,33 @@ const OrganizationsAdminPageNew: React.FC = () => {
           </Col>
         </Row>
 
-        {/* 🔍 BARRE DE RECHERCHE ET FILTRES OPTIMISÉS */}
-        <Card className="mb-4" style={{ borderRadius: '8px' }}>
-          <Row gutter={16} align="middle">
-            <Col span={12}>
+        <Card
+          className="mb-4"
+          style={{
+            borderRadius: 18,
+            boxShadow: isMobile ? 'none' : '0 12px 32px rgba(15, 23, 42, 0.08)'
+          }}
+          bodyStyle={{ padding: isMobile ? 16 : 20 }}
+        >
+          <Row gutter={[12, 12]} align="middle">
+            <Col xs={24} md={12} lg={10}>
               <Input
-                placeholder="🔍 Rechercher par nom ou description..."
+                placeholder="Rechercher par nom ou description..."
                 value={searchInputValue}
                 onChange={handleSearchChange}
                 prefix={<SearchOutlined style={{ color: '#666' }} />}
                 allowClear
-                size="large"
-                style={{ borderRadius: '6px' }}
+                size={isMobile ? 'middle' : 'large'}
+                style={{ borderRadius: 8 }}
               />
             </Col>
-            <Col span={6}>
+            <Col xs={24} sm={12} md={6} lg={6}>
               <Select
                 placeholder="Filtrer par statut"
                 value={statusFilter}
                 onChange={setStatusFilter}
                 style={{ width: '100%' }}
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
               >
                 <Select.Option value="all">
                   <Space>
@@ -1309,67 +1601,55 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 </Select.Option>
               </Select>
             </Col>
-            <Col span={4}>
+            <Col xs={24} sm={12} md={6} lg={5}>
               <Button
                 icon={<ReloadOutlined />}
                 onClick={fetchOrganizations}
                 loading={loading}
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
                 style={{ width: '100%' }}
               >
                 Actualiser
               </Button>
             </Col>
-            <Col span={2}>
-              <Text type="secondary">
+            <Col xs={24} md={6} lg={3}>
+              <Text type="secondary" style={{ display: 'block', textAlign: isMobile ? 'left' : 'right' }}>
                 {filteredOrganizations.length} résultat{filteredOrganizations.length > 1 ? 's' : ''}
               </Text>
             </Col>
           </Row>
         </Card>
-      </div>
 
-      {/* 🔍 FILTRES ET RECHERCHE */}
-      <Card className="mb-4">
-        <Row gutter={16} align="middle">
-          <Col flex="auto">
-            <Input.Search
-              placeholder="Rechercher par nom ou description..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ width: '100%' }}
+        {isMobile ? (
+          filteredOrganizations.length > 0 ? (
+            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              {filteredOrganizations.map(renderOrganizationCard)}
+            </Space>
+          ) : (
+            <Card style={{ borderRadius: 18 }}>
+              <Empty
+                description="Aucune organisation ne correspond à votre recherche"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            </Card>
+          )
+        ) : (
+          <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 20, overflow: 'hidden' }}>
+            <Table
+              columns={columns}
+              dataSource={filteredOrganizations}
+              rowKey="id"
+              loading={loading}
+              pagination={{
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total, range) => `${range[0]}-${range[1]} sur ${total} organisations`,
+              }}
+              scroll={{ x: isTablet ? 960 : 1200 }}
             />
-          </Col>
-          <Col>
-            <Select
-              value={statusFilter}
-              onChange={setStatusFilter}
-              style={{ width: 120 }}
-            >
-              <Select.Option value="all">Tous</Select.Option>
-              <Select.Option value="ACTIVE">Actifs</Select.Option>
-              <Select.Option value="INACTIVE">Inactifs</Select.Option>
-            </Select>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* 📋 TABLEAU PRINCIPAL */}
-      <Card>
-        <Table
-          columns={columns}
-          dataSource={filteredOrganizations}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => 
-              `${range[0]}-${range[1]} sur ${total} organisations`,
-          }}
-          scroll={{ x: 1200 }}
-        />
-      </Card>
+          </Card>
+        )}
+      </div>
 
       {/* 🏗️ MODAL CRÉATION ORGANISATION */}
       <Modal
@@ -1629,7 +1909,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                       onClick={async () => {
                         console.log('🔄 Actualisation des statistiques...');
                         await fetchOrganizations();
-                        message.success('Statistiques actualisées');
+                        messageApi.success('Statistiques actualisées');
                       }}
                     >
                       Actualiser les statistiques

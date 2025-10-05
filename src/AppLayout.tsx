@@ -34,6 +34,9 @@ const DevisPage = lazy(() => import('./pages/DevisPage'));
 // TBL - Nouveau système de formulaires connectés
 const TBLPage = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL'));
 
+// Test TBL Tooltips
+const TestTBLTooltips = lazy(() => import('./pages/TestTBLTooltips'));
+
 // Pages Devis1Minute
 const MarketplacePage = lazy(() => import('./pages/devis1minute/MarketplacePage'));
 const PartnerPortalPage = lazy(() => import('./pages/devis1minute/PartnerPortalPage'));
@@ -187,6 +190,7 @@ export default function AppLayout() {
             {/* TBL - Nouveau système de formulaires connectés */}
             <Route path="/tbl" element={<TBLPage />} />
             <Route path="/tbl/:leadId" element={<TBLPage />} />
+            <Route path="/test-tooltips" element={<TestTBLTooltips />} />
             {/* Alias pour le module TBL (route définie en BDD: /module-tbl) */}
             <Route path="/module-tbl" element={<TBLPage />} />
             <Route path="/module-tbl/:leadId" element={<TBLPage />} />

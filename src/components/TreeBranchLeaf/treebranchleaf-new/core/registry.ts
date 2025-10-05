@@ -978,7 +978,62 @@ export class TreeBranchLeafRegistry {
       // Configuration champs select
       select_mode: appearanceConfig.mode || null,
       select_allowClear: appearanceConfig.allowClear ? Boolean(appearanceConfig.allowClear) : null,
-      select_showSearch: appearanceConfig.showSearch ? Boolean(appearanceConfig.showSearch) : null
+      select_showSearch: appearanceConfig.showSearch ? Boolean(appearanceConfig.showSearch) : null,
+      
+      // Configuration tooltip d'aide
+      text_helpTooltipType: appearanceConfig.helpTooltipType || 'none',
+      text_helpTooltipText: appearanceConfig.helpTooltipText || null,
+      text_helpTooltipImage: appearanceConfig.helpTooltipImage || null
+    };
+    
+    // Nettoyer les valeurs null/undefined
+    Object.keys(result).forEach(key => {
+      if (result[key] === null || result[key] === undefined) {
+        delete result[key];
+      }
+    });
+    
+    return result;
+  }
+
+  static mapTBLToAppearanceConfig(tblData: Record<string, unknown>): Record<string, unknown> {
+    // Mappe les champs TBL vers la configuration d'apparence
+    const result: Record<string, unknown> = {
+      // Apparence générale
+      size: tblData.appearance_size || 'md',
+      variant: tblData.appearance_variant || 'default',
+      
+      // Configuration champs texte
+      placeholder: tblData.text_placeholder || null,
+      maxLength: tblData.text_maxLength || null,
+      minLength: tblData.text_minLength || null,
+      mask: tblData.text_mask || null,
+      regex: tblData.text_regex || null,
+      
+      // Configuration champs nombre
+      min: tblData.number_min || null,
+      max: tblData.number_max || null,
+      step: tblData.number_step || null,
+      decimals: tblData.number_decimals || null,
+      prefix: tblData.number_prefix || null,
+      suffix: tblData.number_suffix || null,
+      unit: tblData.number_unit || null,
+      
+      // Configuration champs date
+      format: tblData.date_format || null,
+      showTime: tblData.date_showTime || null,
+      minDate: tblData.date_minDate || null,
+      maxDate: tblData.date_maxDate || null,
+      
+      // Configuration champs select
+      mode: tblData.select_mode || null,
+      allowClear: tblData.select_allowClear || null,
+      showSearch: tblData.select_showSearch || null,
+      
+      // Configuration tooltip d'aide
+      helpTooltipType: tblData.text_helpTooltipType || 'none',
+      helpTooltipText: tblData.text_helpTooltipText || null,
+      helpTooltipImage: tblData.text_helpTooltipImage || null
     };
     
     // Nettoyer les valeurs null/undefined

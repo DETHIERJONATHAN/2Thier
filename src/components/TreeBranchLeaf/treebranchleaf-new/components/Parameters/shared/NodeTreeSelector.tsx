@@ -43,6 +43,12 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   const [conditionSearch, setConditionSearch] = useState('');
   const [nodeConditions, setNodeConditions] = useState<Array<{ id: string; name: string; conditionSet?: unknown }>>([]);
   const [allNodeConditions, setAllNodeConditions] = useState<Array<{ id: string; name: string; conditionSet?: unknown; nodeLabel?: string; nodeId?: string }>>([]);
+  
+  // États pour les tables réutilisables
+  const [tablesLoading, setTablesLoading] = useState(false);
+  const [tableSearch, setTableSearch] = useState('');
+  const [nodeTables, setNodeTables] = useState<Array<{ id: string; name: string; type?: string }>>([]);
+  const [allNodeTables, setAllNodeTables] = useState<Array<{ id: string; name: string; type?: string; nodeLabel?: string; nodeId?: string }>>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -68,12 +74,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     return () => { mounted = false; };
   }, [api, nodeId, open]);
 
-  // Charger les formules réutilisables ET les conditions réutilisables quand l'onglet est ouvert
+  // Charger les formules réutilisables ET les conditions réutilisables ET les tables quand l'onglet est ouvert
   useEffect(() => {
     if (!open) return;
     let mounted = true;
     setFormulasLoading(true);
     setConditionsLoading(true);
+    setTablesLoading(true);
     (async () => {
       try {
         // Charger TOUTES les formules depuis TreeBranchLeafNodeFormula
@@ -131,6 +138,34 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         // ignore, onglet non bloquant
       } finally {
         if (mounted) setConditionsLoading(false);
+      }
+
+      try {
+        // Charger TOUTES les tables depuis TreeBranchLeafNodeTable
+        const allTablesRes = await api.get('/api/treebranchleaf/reusables/tables') as { 
+          items?: Array<{ 
+            id: string; 
+            name: string; 
+            type?: string;
+            nodeLabel?: string;
+            treeId?: string;
+            nodeId?: string;
+          }> 
+        };
+        
+        const allTables = allTablesRes?.items || [];
+        
+        // Séparer les tables du nœud actuel vs les autres
+        const currentNodeTables = allTables.filter(t => t.nodeId === nodeId);
+        const otherTables = allTables.filter(t => t.nodeId !== nodeId);
+        
+        if (!mounted) return;
+        setNodeTables(currentNodeTables);
+        setAllNodeTables(otherTables);
+      } catch {
+        // ignore, onglet non bloquant
+      } finally {
+        if (mounted) setTablesLoading(false);
       }
     })();
     return () => { mounted = false; };
@@ -214,6 +249,12 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
       if (String(v).startsWith('condition:') || String(v).startsWith('node-condition:')) {
         const conditionId = String(v).replace(/^(node-)?condition:/, '');
         onSelect({ kind: 'condition', ref: `condition:${conditionId}` });
+        continue;
+      }
+      // Cas tables réutilisables
+      if (String(v).startsWith('table:') || String(v).startsWith('node-table:')) {
+        const tableId = String(v).replace(/^(node-)?table:/, '');
+        onSelect({ kind: 'node', ref: `@table.${tableId}` });
         continue;
       }
       const isVirtual = String(v).includes('::');
@@ -524,6 +565,116 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                     {/* Message si aucune condition */}
                     {nodeConditions.length === 0 && allNodeConditions.length === 0 && (
                       <Typography.Text type="secondary">Aucune condition disponible.</Typography.Text>
+                    )}
+                  </Space>
+                )}
+              </Space>
+            )},
+            { key: 'tables', label: 'Tables (réutilisables)', children: (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {/* Recherche dans les tables */}
+                <Input.Search
+                  placeholder="Rechercher une table..."
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+
+                {tablesLoading ? (
+                  <Spin>Chargement des tables...</Spin>
+                ) : (
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    {/* Tables du nœud actuel */}
+                    {nodeTables.length > 0 && (
+                      <>
+                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
+                          📊 Tables de ce nœud
+                        </Typography.Text>
+                        <List
+                          size="small"
+                          bordered
+                          dataSource={nodeTables.filter(t => !tableSearch || t.name.toLowerCase().includes(tableSearch.toLowerCase()))}
+                          renderItem={(item) => {
+                            const isSelected = value === `table:${item.id}`;
+                            return (
+                              <List.Item
+                                onClick={() => setValue(`table:${item.id}`)}
+                                style={{ 
+                                  cursor: 'pointer', 
+                                  backgroundColor: isSelected ? '#1890ff' : '#e8f4fd',
+                                  color: isSelected ? 'white' : 'inherit'
+                                }}
+                              >
+                                <Space>
+                                  <span>🗂️</span>
+                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                    {item.name}
+                                  </Typography.Text>
+                                  <Typography.Text 
+                                    type="secondary" 
+                                    style={{ 
+                                      fontSize: '11px',
+                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
+                                    }}
+                                  >
+                                    ({item.type || 'table'}) - (ce nœud)
+                                  </Typography.Text>
+                                  {isSelected && <span>✓</span>}
+                                </Space>
+                              </List.Item>
+                            );
+                          }}
+                        />
+                      </>
+                    )}
+                    
+                    {/* Tables d'autres nœuds */}
+                    {allNodeTables.length > 0 && (
+                      <>
+                        <Typography.Text strong style={{ fontSize: '12px', color: '#666' }}>
+                          🌐 Tables d'autres nœuds (réutilisables)
+                        </Typography.Text>
+                        <List
+                          size="small"
+                          bordered
+                          dataSource={allNodeTables.filter(t => !tableSearch || t.name.toLowerCase().includes(tableSearch.toLowerCase()))}
+                          renderItem={(item) => {
+                            const isSelected = value === `node-table:${item.id}`;
+                            return (
+                              <List.Item
+                                onClick={() => setValue(`node-table:${item.id}`)}
+                                style={{ 
+                                  cursor: 'pointer', 
+                                  backgroundColor: isSelected ? '#1890ff' : '#fff4e6',
+                                  color: isSelected ? 'white' : 'inherit'
+                                }}
+                              >
+                                <Space>
+                                  <span>🗂️</span>
+                                  <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                    {item.name}
+                                  </Typography.Text>
+                                  <Typography.Text 
+                                    type="secondary" 
+                                    style={{ 
+                                      fontSize: '11px',
+                                      color: isSelected ? 'rgba(255,255,255,0.7)' : undefined
+                                    }}
+                                  >
+                                    ({item.type || 'table'}) - ({item.nodeLabel || 'Nœud inconnu'})
+                                  </Typography.Text>
+                                  {isSelected && <span>✓</span>}
+                                </Space>
+                              </List.Item>
+                            );
+                          }}
+                        />
+                      </>
+                    )}
+                    
+                    {/* Message si aucune table */}
+                    {nodeTables.length === 0 && allNodeTables.length === 0 && (
+                      <Typography.Text type="secondary">Aucune table disponible.</Typography.Text>
                     )}
                   </Space>
                 )}

@@ -153,25 +153,71 @@ button:active {
 }
 
 /* Search Bar avec style 2Thier */
-.search-2thier {
-  background-color: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
+.search-2thier.ant-input-affix-wrapper {
+  background-color: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  padding: 0 12px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
   transition: all 0.2s ease-in-out;
 }
 
-.search-2thier:focus {
-  background-color: white !important;
+.search-2thier.ant-input-affix-wrapper:hover {
+  border-color: rgba(255, 255, 255, 0.48);
+}
+
+.search-2thier.ant-input-affix-wrapper .ant-input-prefix {
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.search-2thier.ant-input-affix-wrapper .ant-input-prefix svg {
+  transition: color 0.2s ease-in-out;
+}
+
+.search-2thier.ant-input-affix-wrapper .ant-input {
+  background: transparent !important;
+  color: #f8fafc !important;
+  font-size: 13px;
+  height: 100%;
+  padding: 0;
+  line-height: 1.4;
+}
+
+.search-2thier.ant-input-affix-wrapper .ant-input::placeholder {
+  color: rgba(248, 250, 252, 0.7) !important;
+}
+
+.search-2thier.ant-input-affix-wrapper:focus-within,
+.search-2thier.ant-input-affix-wrapper.ant-input-affix-wrapper-focused {
+  background-color: #ffffff !important;
   border-color: var(--2thier-orange) !important;
-  color: var(--2thier-teal) !important;
   box-shadow: 0 0 0 3px var(--2thier-orange-20) !important;
 }
 
-.search-2thier:focus::placeholder {
+.search-2thier.ant-input-affix-wrapper:focus-within .ant-input,
+.search-2thier.ant-input-affix-wrapper.ant-input-affix-wrapper-focused .ant-input {
+  color: var(--2thier-teal) !important;
+}
+
+.search-2thier.ant-input-affix-wrapper:focus-within .ant-input::placeholder,
+.search-2thier.ant-input-affix-wrapper.ant-input-affix-wrapper-focused .ant-input::placeholder {
   color: #9ca3af !important;
 }
 
-.search-2thier:focus + .search-icon {
+.search-2thier.ant-input-affix-wrapper:focus-within .ant-input-prefix,
+.search-2thier.ant-input-affix-wrapper.ant-input-affix-wrapper-focused .ant-input-prefix {
+  color: var(--2thier-orange) !important;
+}
+
+.search-2thier.ant-input-affix-wrapper:focus-within .ant-input-prefix svg,
+.search-2thier.ant-input-affix-wrapper.ant-input-affix-wrapper-focused .ant-input-prefix svg {
   color: var(--2thier-orange) !important;
 }
 
@@ -196,6 +242,28 @@ button:active {
 
 .dropdown-2thier-item:active {
   background-color: var(--2thier-orange-20) !important;
+}
+
+.dropdown-2thier-menu {
+  background: #ffffff !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(31, 59, 83, 0.08) !important;
+  box-shadow: 0 14px 24px -12px rgba(0, 0, 0, 0.35) !important;
+  padding: 6px 0 !important;
+}
+
+.dropdown-2thier-menu .ant-dropdown-menu-item,
+.dropdown-2thier-menu .ant-dropdown-menu-submenu-title {
+  font-size: 13px;
+  color: #1f2937;
+  padding: 6px 16px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dropdown-2thier-menu .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):hover,
+.dropdown-2thier-menu .ant-dropdown-menu-submenu-title:hover {
+  background-color: var(--2thier-orange-10) !important;
+  color: var(--2thier-orange-dark) !important;
 }
 
 /* Menu hamburger avec style 2Thier */

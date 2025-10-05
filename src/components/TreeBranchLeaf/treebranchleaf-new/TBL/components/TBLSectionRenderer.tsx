@@ -395,16 +395,61 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     }, [isDataSection, formData, section.fields, evaluateBatch]);
 
     const renderDataSectionField = (field: TBLField) => {
-  dlog(`🔬 [TEST ANALYSE] ========== CHAMP "${field.label}" ==========`);
-  dlog(`🔬 [TEST ANALYSE] Field ID: ${field.id}`);
-  dlog(`🔬 [TEST ANALYSE] Field Type: ${field.fieldType}`);
-  dlog(`🔬 [TEST ANALYSE] Has Capabilities:`, !!field.capabilities);
-  dlog(`🔬 [TEST ANALYSE] Capabilities:`, field.capabilities);
-  dlog(`🔬 [TEST ANALYSE] TreeMetadata:`, field.treeMetadata);
-  dlog(`🔬 [TEST ANALYSE] FormData Value:`, formData[field.id]);
-  dlog(`🔬 [TEST ANALYSE] FormData Complete:`, formData);
+  console.log(`🔬🔬🔬 [DATA SECTION FIELD] DÉBUT RENDER "${field.label}" ==========`);
+  console.log(`🔬 [DATA SECTION FIELD] Field ID: ${field.id}`);
+  console.log(`🔬 [DATA SECTION FIELD] Field Type: ${field.fieldType}`);
+  console.log(`🔬 [DATA SECTION FIELD] Has Capabilities:`, !!field.capabilities);
+  console.log(`🔬 [DATA SECTION FIELD] Capabilities:`, field.capabilities);
+  console.log(`🔬 [DATA SECTION FIELD] FormData Value:`, formData[field.id]);
     
-    // 🎯 Système TreeBranchLeaf : connexion aux capacités réelles
+    // 🔥 CORRECTION CRITIQUE : Si le champ a une capacité Table (lookup ou matrix), utiliser le renderer éditable
+    const hasTableCapability = field.capabilities?.table?.enabled;
+    const hasRowOrColumnMode = field.capabilities?.table?.currentTable?.rowBased === true || 
+                               field.capabilities?.table?.currentTable?.columnBased === true;
+    const isMatrixMode = field.capabilities?.table?.currentTable?.mode === 'matrix';
+    
+    // 🔬 DIAGNOSTIC APPROFONDI
+    console.log(`🔬 [DATA SECTION FIELD] "${field.label}" - currentTable COMPLET:`, field.capabilities?.table?.currentTable);
+    console.log(`🔬 [DATA SECTION FIELD] "${field.label}" - hasTableCapability: ${hasTableCapability}, hasRowOrColumnMode: ${hasRowOrColumnMode}, isMatrixMode: ${isMatrixMode}`);
+    
+    // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un résultat de matrice
+    if (hasTableCapability && (hasRowOrColumnMode || isMatrixMode)) {
+      console.log(`✅✅✅ [DATA SECTION FIX] Champ "${field.label}" a une capacité Table -> Utilisation TBLFieldRendererAdvanced`);
+      return (
+        <Col
+          key={field.id}
+          xs={24}
+          sm={12}
+          lg={8}
+          className="mb-2"
+        >
+          <TBLFieldRendererAdvanced
+            field={field}
+            value={formData[field.id]}
+            onChange={(value) => {
+              console.log(`🔄🔄🔄 [SECTION RENDERER][DATA SECTION] onChange appelé pour ${field.id}:`, value);
+              onChange(field.id, value);
+
+              // Synchronisation miroir
+              try {
+                const label = (field.label || '').toString();
+                if (label) {
+                  const mirrorKey = `__mirror_data_${label}`;
+                  console.log(`🪞 [MIRROR][DATA SECTION] Synchronisation: "${label}" -> ${mirrorKey} = ${value}`);
+                  onChange(mirrorKey, value);
+                }
+              } catch (e) {
+                console.warn('⚠️ [MIRROR] Impossible de créer la valeur miroir:', e);
+              }
+            }}
+            isValidation={isValidation}
+            formData={formData}
+          />
+        </Col>
+      );
+    }
+    
+    // 🎯 Système TreeBranchLeaf : connexion aux capacités réelles (DISPLAY ONLY)
     const getDisplayValue = () => {
       const capabilities = field.capabilities;
       

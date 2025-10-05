@@ -1185,6 +1185,22 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
     // 🔄 MIGRATION : Reconstruire les données JSON depuis les colonnes dédiées
     console.log('🔄 [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour', nodes.length, 'nœuds');
     const reconstructedNodes = nodes.map(node => buildResponseFromColumns(node));
+    
+    // 🚨 DEBUG TOOLTIP FINAL : Vérifier ce qui va être envoyé au client
+    const nodesWithTooltips = reconstructedNodes.filter(node => 
+      node.text_helpTooltipType && node.text_helpTooltipType !== 'none'
+    );
+    if (nodesWithTooltips.length > 0) {
+      console.log('🎯 [GET /trees/:treeId/nodes] ENVOI AU CLIENT - Nœuds avec tooltips:', 
+        nodesWithTooltips.map(node => ({
+          id: node.id,
+          name: node.name,
+          tooltipType: node.text_helpTooltipType,
+          hasTooltipText: !!node.text_helpTooltipText,
+          hasTooltipImage: !!node.text_helpTooltipImage
+        }))
+      );
+    }
 
     res.json(reconstructedNodes);
   } catch (error) {
@@ -1362,10 +1378,16 @@ router.post('/trees/:treeId/nodes', async (req, res) => {
 function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, unknown> {
   const columnData: Record<string, unknown> = {};
   
-  // Extraire les metadata et fieldConfig si présentes
-  const metadata = (updateData.metadata as Record<string, unknown>) || {};
-  const fieldConfig = (updateData.fieldConfig as Record<string, unknown>) || {};
-  const appearanceConfig = (updateData.appearanceConfig as Record<string, unknown>) || {};
+  // ✅ PROTECTION DÉFENSIVE - Vérifier la structure des données
+  if (!updateData || typeof updateData !== 'object') {
+    console.log('🔄 [mapJSONToColumns] ❌ updateData invalide:', updateData);
+    return columnData;
+  }
+  
+  // Extraire les metadata et fieldConfig si présentes avec protection
+  const metadata = (updateData.metadata && typeof updateData.metadata === 'object' ? updateData.metadata as Record<string, unknown> : {});
+  const fieldConfig = (updateData.fieldConfig && typeof updateData.fieldConfig === 'object' ? updateData.fieldConfig as Record<string, unknown> : {});
+  const appearanceConfig = (updateData.appearanceConfig && typeof updateData.appearanceConfig === 'object' ? updateData.appearanceConfig as Record<string, unknown> : {});
   
   console.log('🔄 [mapJSONToColumns] Entrées détectées:', {
     hasMetadata: Object.keys(metadata).length > 0,
@@ -1457,7 +1479,14 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (imageConfig.thumbnails) columnData.image_thumbnails = imageConfig.thumbnails;
   }
   
-  // ✅ ÉTAPE 8 : Types de champs spécifiques
+  // ✅ ÉTAPE 8 : Migration configuration tooltips d'aide
+  if (Object.keys(appearanceConfig).length > 0) {
+    if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
+    if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
+    if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
+  }
+  
+  // ✅ ÉTAPE 9 : Types de champs spécifiques
   if (updateData.fieldType) columnData.fieldType = updateData.fieldType;
   if (updateData.fieldSubType) columnData.fieldSubType = updateData.fieldSubType;
   if (updateData.subType) columnData.fieldSubType = updateData.subType;
@@ -1492,7 +1521,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     placeholder: node.text_placeholder || '',
     maxLength: node.text_maxLength || 255,
     mask: node.text_mask || '',
-    regex: node.text_regex || ''
+    regex: node.text_regex || '',
+    helpTooltipType: node.text_helpTooltipType || 'none',
+    helpTooltipText: node.text_helpTooltipText || null,
+    helpTooltipImage: node.text_helpTooltipImage || null
   };
   
   // Construire fieldConfig depuis les colonnes dédiées
@@ -1554,7 +1586,15 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     appearance
   };
   
-  return {
+  // 🔍 DEBUG: Log metadata pour "Test - liste"
+  if (node.id === '131a7b51-97d5-4f40-8a5a-9359f38939e8') {
+    console.log('🔍 [buildResponseFromColumns][Test - liste] node.metadata BRUT:', node.metadata);
+    console.log('🔍 [buildResponseFromColumns][Test - liste] cleanedMetadata:', cleanedMetadata);
+    console.log('🔍 [buildResponseFromColumns][Test - liste] metadata.capabilities:', 
+      (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : 'N/A');
+  }
+  
+  const result = {
     ...node,
     metadata: cleanedMetadata,
     fieldConfig,
@@ -1563,8 +1603,27 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     appearanceConfig, // 🎯 CORRECTION : Ajouter appearanceConfig pour l'interface Parameters
     // ⚠️ IMPORTANT : fieldType depuis les colonnes dédiées
     fieldType: node.fieldType || node.type,
-    fieldSubType: node.fieldSubType || node.subType
+    fieldSubType: node.fieldSubType || node.subType,
+    // 🔥 TOOLTIP FIX : Ajouter les propriétés tooltip au niveau racine pour TBL
+    text_helpTooltipType: node.text_helpTooltipType,
+    text_helpTooltipText: node.text_helpTooltipText,
+    text_helpTooltipImage: node.text_helpTooltipImage
   };
+  
+  // 🚨 DEBUG TOOLTIP : Log si des tooltips sont trouvés
+  if (node.text_helpTooltipType && node.text_helpTooltipType !== 'none') {
+    console.log('🔥 [buildResponseFromColumns] TOOLTIP TROUVÉ:', {
+      id: node.id,
+      name: node.name,
+      tooltipType: node.text_helpTooltipType,
+      hasTooltipText: !!node.text_helpTooltipText,
+      hasTooltipImage: !!node.text_helpTooltipImage,
+      textLength: node.text_helpTooltipText?.length || 0,
+      imageLength: node.text_helpTooltipImage?.length || 0
+    });
+  }
+  
+  return result;
 }
 
 // =============================================================================
@@ -1576,7 +1635,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
  * Préserve metadata.capabilities (formules multiples, etc.) tout en migrant le reste vers les colonnes
  */
 function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<string, unknown> {
-  const { metadata, /* fieldConfig, appearanceConfig, */ ...cleanData } = updateData;
+  const { metadata, fieldConfig, appearanceConfig, ...cleanData } = updateData;
   
   // 🔥 CORRECTION : Préserver metadata.capabilities pour les formules multiples
   if (metadata && typeof metadata === 'object' && (metadata as Record<string, unknown>).capabilities) {
@@ -1812,8 +1871,16 @@ const updateOrMoveNode = async (req, res) => {
     
     return res.json(responseData);
   } catch (error) {
-    console.error('[TreeBranchLeaf API] Error updating node:', error);
-    res.status(500).json({ error: 'Impossible de mettre à jour le nœud' });
+    console.error('[TreeBranchLeaf API] ❌ ERREUR DÉTAILLÉE lors de updateOrMoveNode:', {
+      error: error,
+      message: error.message,
+      stack: error.stack,
+      treeId: req.params?.treeId,
+      nodeId: req.params?.nodeId,
+      updateDataKeys: Object.keys(req.body || {}),
+      organizationId: req.user?.organizationId
+    });
+    res.status(500).json({ error: 'Impossible de mettre à jour le nœud', details: error.message });
   }
 };
 
@@ -1894,6 +1961,185 @@ router.get('/nodes/:nodeId', async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la récupération du nœud' });
   }
 });
+
+// GET /api/treebranchleaf/nodes/:tableNodeId/table/lookup - Récupère les données pour un select basé sur une table
+// ⚠️ ANCIEN ENDPOINT - DÉSACTIVÉ CAR DOUBLON AVEC L'ENDPOINT LIGNE 6339 (NOUVELLE VERSION AVEC keyRow/keyColumn)
+/*
+router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
+  const { tableNodeId } = req.params; // ✅ DÉPLACÉ AVANT LE TRY pour être accessible dans le catch
+  try {
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    console.log(`[table/lookup] Début pour tableNodeId: ${tableNodeId}`);
+    
+    // 🔍 DIAGNOSTIC: Vérifier si Prisma est disponible
+    if (!prisma) {
+      console.error(`[table/lookup] ❌ ERREUR CRITIQUE: prisma est undefined !`);
+      console.error(`[table/lookup] Type de prisma:`, typeof prisma);
+      return res.status(500).json({ 
+        error: 'Database connection not available',
+        details: 'Prisma client is not initialized. Please restart the server.'
+      });
+    }
+    
+    console.log(`[table/lookup] ✅ Prisma client disponible, type:`, typeof prisma);
+
+    // 1. Récupérer la configuration SELECT du champ pour savoir quelle table référencer
+    const selectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
+      where: { nodeId: tableNodeId },
+      select: {
+        tableReference: true,
+        valueColumn: true,
+        displayColumn: true,
+      },
+    });
+
+    if (!selectConfig || !selectConfig.tableReference) {
+      console.log(`[table/lookup] 404 - Aucune configuration de table référencée pour le nœud ${tableNodeId}`);
+      return res.status(404).json({ error: 'Configuration de la table de référence non trouvée.' });
+    }
+
+    const { tableReference } = selectConfig;
+    const _valueColumn = selectConfig.valueColumn; // Pour info (non utilisé en mode dynamique)
+    const _displayColumn = selectConfig.displayColumn; // Pour info (non utilisé en mode dynamique)
+
+    // 2. Récupérer les données de la table référencée
+    const tableData = await prisma.treeBranchLeafNodeTable.findFirst({
+      where: { id: tableReference },
+      select: {
+        data: true,      // ✅ CORRECT: Données 2D du tableau
+        columns: true,   // Noms des colonnes
+        rows: true,      // Noms des lignes (pour info)
+        nodeId: true,
+      },
+    });
+
+    if (!tableData) {
+      console.log(`[table/lookup] 404 - Table référencée ${tableReference} non trouvée`);
+      return res.status(404).json({ error: 'Table de référence non trouvée.' });
+    }
+
+    // Vérifier l'accès à l'arbre parent (sécurité)
+    const parentNode = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: tableData.nodeId },
+      select: { TreeBranchLeafTree: { select: { organizationId: true } } }
+    });
+
+    const nodeOrg = parentNode?.TreeBranchLeafTree?.organizationId;
+    if (!isSuperAdmin && organizationId && nodeOrg && nodeOrg !== organizationId) {
+      console.log(`[table/lookup] 403 - Accès non autorisé. Org user: ${organizationId}, Org node: ${nodeOrg}`);
+      return res.status(403).json({ error: 'Accès non autorisé à cette ressource.' });
+    }
+
+    // 3. Extraire les colonnes et les données
+    const _tableDataArray = Array.isArray(tableData.data) ? tableData.data : []; // Pour info (non utilisé en mode dynamique)
+    const dataColumns = Array.isArray(tableData.columns) ? tableData.columns : [];
+    const rowNames = Array.isArray(tableData.rows) ? tableData.rows : [];
+
+    console.log(`[table/lookup] 🔍 DEBUG - Colonnes:`, dataColumns);
+    console.log(`[table/lookup] 🔍 DEBUG - Noms des lignes:`, rowNames);
+
+    // 🎯 Récupérer le mode et la configuration depuis le champ SELECT
+    const selectFieldNode = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: tableNodeId },
+      select: {
+        table_instances: true,
+        table_activeId: true,
+      }
+    });
+
+    let isRowBased = false;
+    let isColumnBased = false;
+    let tableMode: 'columns' | 'matrix' = 'columns';
+    let keyColumnFromLookup: string | undefined;
+    
+    if (selectFieldNode?.table_instances && typeof selectFieldNode.table_instances === 'object') {
+      const instances = selectFieldNode.table_instances as Record<string, any>;
+      const activeInstance = selectFieldNode.table_activeId ? instances[selectFieldNode.table_activeId] : null;
+      
+      if (activeInstance) {
+        isRowBased = activeInstance.rowBased === true;
+        isColumnBased = activeInstance.columnBased === true;
+        tableMode = activeInstance.mode || 'columns';
+        
+        // 🎯 CRITIQUE: Lire keyColumn depuis l'instance active
+        keyColumnFromLookup = activeInstance.keyColumn || activeInstance.valueColumn || activeInstance.displayColumn;
+        
+        console.log(`[table/lookup] 🔍 Configuration complète:`, { 
+          isRowBased, 
+          isColumnBased,
+          tableMode,
+          keyColumnFromLookup,
+          activeId: selectFieldNode.table_activeId,
+          activeInstance 
+        });
+      }
+    }
+
+    // 4. Transformer selon le mode (rowBased ou columnBased)
+    let options: Array<{ label: string; value: string }>;
+
+    if (isRowBased) {
+      // Mode LIGNE: Retourner les noms des lignes
+      console.log(`[table/lookup] 🎯 Mode LIGNE activé - Génération des options depuis les lignes`);
+      options = rowNames.map((rowName: string) => ({
+        label: String(rowName),
+        value: String(rowName)
+      }));
+    } else if (tableMode === 'columns' && keyColumnFromLookup) {
+      // ✅ Mode COLONNE avec keyColumn: Retourner les VALEURS de la colonne choisie
+      console.log(`[table/lookup] 🎯 Mode COLONNE activé - Génération des options depuis la colonne "${keyColumnFromLookup}"`);
+      
+      const columnIndex = dataColumns.indexOf(keyColumnFromLookup);
+      if (columnIndex === -1) {
+        console.warn(`[table/lookup] ⚠️ Colonne "${keyColumnFromLookup}" introuvable dans:`, dataColumns);
+        options = [];
+      } else {
+        // Extraire les valeurs de la colonne
+        const tableDataArray = Array.isArray(tableData.data) ? tableData.data : [];
+        options = tableDataArray
+          .map((row: unknown) => {
+            if (!Array.isArray(row)) return null;
+            const value = row[columnIndex];
+            if (value === null || value === undefined || value === '') return null;
+            return {
+              label: String(value),
+              value: String(value)
+            };
+          })
+          .filter((opt): opt is { label: string; value: string } => opt !== null);
+        
+        console.log(`[table/lookup] ✅ ${options.length} valeurs extraites de la colonne "${keyColumnFromLookup}":`, options);
+      }
+    } else {
+      // Mode COLONNE par défaut (ancien comportement): Retourner les noms des colonnes
+      console.log(`[table/lookup] 🎯 Mode COLONNE (legacy) activé - Génération des options depuis les noms de colonnes`);
+      options = dataColumns.map((columnName: string) => ({
+        label: String(columnName),
+        value: String(columnName)
+      }));
+    }
+
+    console.log(`[table/lookup] Succès - ${options.length} options ${isRowBased ? 'LIGNES' : 'COLONNES'} générées pour ${tableNodeId}`);
+    res.json({ options });
+
+  } catch (error) {
+    console.error(`[API] 💥 Critical error in /table/lookup for tableNodeId: ${tableNodeId}`, error);
+    if (error instanceof Error) {
+        console.error(`[API] Error Name: ${error.name}`);
+        console.error(`[API] Error Message: ${error.message}`);
+        console.error(`[API] Error Stack: ${error.stack}`);
+    }
+    res.status(500).json({ 
+        message: 'Internal Server Error', 
+        error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error) 
+    });
+  }
+});
+*/
+// ⚠️ FIN DE L'ANCIEN ENDPOINT /table/lookup - Utiliser maintenant l'endpoint moderne ligne ~6339
+
+
 // =============================================================================
 // �🔢 NODE DATA (VARIABLE EXPOSÉE) - Donnée d'un nœud
 // =============================================================================
@@ -2636,6 +2882,64 @@ router.get('/reusables/conditions/:id', async (req, res) => {
   }
 });
 
+// GET /api/treebranchleaf/reusables/tables
+// Liste TOUTES les tables réutilisables de TOUS les nœuds (avec filtrage organisation)
+router.get('/reusables/tables', async (req, res) => {
+  try {
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+    const hasOrg = typeof organizationId === 'string' && organizationId.length > 0;
+
+    // Tables de nœuds (toutes sont réutilisables)
+    const whereFilter = isSuperAdmin
+      ? {}
+      : {
+          node: {
+            OR: [
+              { organizationId: null },
+              ...(hasOrg ? [{ organizationId }] : [])
+            ]
+          }
+        };
+
+    const allTables = await prisma.treeBranchLeafNodeTable.findMany({
+      where: whereFilter,
+      include: {
+        node: {
+          select: {
+            label: true,
+            treeId: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Ajouter les métadonnées pour le frontend
+    const items = allTables.map(t => ({
+      id: t.id,
+      name: t.name,
+      type: t.type,
+      description: t.description,
+      nodeLabel: t.node?.label || 'Nœud inconnu',
+      treeId: t.node?.treeId || null,
+      nodeId: t.nodeId,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt
+    }));
+
+    console.log('[TreeBranchLeaf API] All tables listing', { 
+      org: organizationId, 
+      isSuperAdmin, 
+      totalCount: items.length 
+    });
+
+    return res.json({ items });
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error listing reusable tables:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des tables réutilisables' });
+  }
+});
+
 // =============================================================================
 // ⚖️ NODE CONDITIONS - Conditions spécifiques à un nœud (nouvelle table dédiée)
 // =============================================================================
@@ -2940,6 +3244,238 @@ router.delete('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
 // 🗂️ NODE TABLES - Gestion des instances de tableaux dédiées
 // =============================================================================
 
+type TableJsonValue = Prisma.JsonValue;
+type TableJsonObject = Prisma.JsonObject;
+
+const isJsonObject = (value: TableJsonValue | null | undefined): value is TableJsonObject =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value ?? null)) as T;
+
+const readStringArray = (value: TableJsonValue | null | undefined): string[] => {
+  if (!value) return [];
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (item === null || item === undefined) return '';
+      if (typeof item === 'string') return item;
+      if (typeof item === 'number' || typeof item === 'boolean') return String(item);
+      try {
+        return JSON.stringify(item);
+      } catch {
+        return String(item);
+      }
+    })
+    .map((str) => str.trim())
+    .filter((str) => str.length > 0);
+};
+
+const readMatrix = (
+  value: TableJsonValue | null | undefined
+): (string | number | boolean | null)[][] => {
+  if (!value) return [];
+  const matrixSource =
+    isJsonObject(value) && Array.isArray((value as { matrix?: unknown }).matrix)
+      ? (value as { matrix?: unknown }).matrix
+      : value;
+  if (!Array.isArray(matrixSource)) return [];
+  return matrixSource.map((row) => {
+    if (!Array.isArray(row)) return [];
+    return row.map((cell) => {
+      if (cell === undefined) return null;
+      if (cell === null) return null;
+      if (typeof cell === 'number' || typeof cell === 'string' || typeof cell === 'boolean') {
+        return cell;
+      }
+      try {
+        return JSON.parse(JSON.stringify(cell));
+      } catch {
+        return String(cell);
+      }
+    });
+  });
+};
+
+const readMeta = (value: TableJsonValue | null | undefined): Record<string, unknown> => {
+  if (!value) return {};
+  if (!isJsonObject(value)) return {};
+  return jsonClone(value);
+};
+
+const buildRecordRows = (
+  columns: string[],
+  matrix: (string | number | boolean | null)[][]
+): Record<string, string | number | boolean | null>[] => {
+  return matrix.map((row) => {
+    const obj: Record<string, string | number | boolean | null> = {};
+    columns.forEach((col, index) => {
+      obj[col] = index < row.length ? row[index] ?? null : null;
+    });
+    return obj;
+  });
+};
+
+type NormalizedTableInstance = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string;
+  columns: string[];
+  rows: string[];
+  matrix: (string | number | boolean | null)[][];
+  data: { matrix: (string | number | boolean | null)[][] };
+  records: Record<string, string | number | boolean | null>[];
+  meta: Record<string, unknown>;
+  order: number;
+  isDefault: boolean;
+};
+
+const normalizeTableInstance = (
+  table: Prisma.TreeBranchLeafNodeTable
+): NormalizedTableInstance => {
+  const columns = readStringArray(table.columns);
+  const rows = readStringArray(table.rows);
+  const matrix = readMatrix(table.data);
+  const meta = readMeta(table.meta);
+
+  return {
+    id: table.id,
+    name: table.name,
+    description: table.description ?? null,
+    type: table.type ?? 'columns',
+    columns,
+    rows,
+    matrix,
+    data: { matrix },
+    records: buildRecordRows(columns, matrix),
+    meta,
+    order: table.order ?? 0,
+    isDefault: Boolean(table.isDefault),
+  };
+};
+
+const syncNodeTableCapability = async (
+  nodeId: string,
+  client: PrismaClient | Prisma.TransactionClient = prisma
+) => {
+  const node = await client.treeBranchLeafNode.findUnique({
+    where: { id: nodeId },
+    select: { id: true, table_activeId: true },
+  });
+
+  if (!node) return;
+
+  const tables = await client.treeBranchLeafNodeTable.findMany({
+    where: { nodeId },
+    orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+  });
+
+  if (tables.length === 0) {
+    await client.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        hasTable: false,
+        table_instances: null,
+        table_activeId: null,
+        table_name: null,
+        table_type: null,
+        table_columns: null,
+        table_rows: null,
+        table_data: null,
+        table_meta: null,
+        table_isImported: false,
+        table_importSource: null,
+      },
+    });
+    return;
+  }
+
+  const normalizedList = tables.map(normalizeTableInstance);
+  const instances = normalizedList.reduce<Record<string, unknown>>((acc, instance) => {
+    acc[instance.id] = {
+      id: instance.id,
+      name: instance.name,
+      description: instance.description,
+      type: instance.type,
+      columns: instance.columns,
+      rows: instance.rows,
+      matrix: instance.matrix,
+      data: instance.data,
+      records: instance.records,
+      meta: instance.meta,
+      order: instance.order,
+      isDefault: instance.isDefault,
+    };
+    return acc;
+  }, {});
+
+  const active =
+    normalizedList.find((tbl) => tbl.id === node.table_activeId) ??
+    normalizedList.find((tbl) => tbl.isDefault) ??
+    normalizedList[0];
+
+  const activeMeta = (active?.meta ?? {}) as Record<string, unknown>;
+  const inferredIsImported =
+    typeof (activeMeta as { isImported?: unknown }).isImported === 'boolean'
+      ? (activeMeta as { isImported: boolean }).isImported
+      : Boolean((activeMeta as { isImported?: unknown }).isImported);
+  const inferredImportSource =
+    typeof (activeMeta as { importSource?: unknown }).importSource === 'string'
+      ? (activeMeta as { importSource: string }).importSource
+      : null;
+
+  await client.treeBranchLeafNode.update({
+    where: { id: nodeId },
+    data: {
+      hasTable: true,
+      table_instances: instances as Prisma.InputJsonValue,
+      table_activeId: active?.id ?? null,
+      table_name: active?.name ?? null,
+      table_type: active?.type ?? null,
+      table_columns: (active?.columns ?? null) as Prisma.InputJsonValue,
+      table_rows: (active?.rows ?? null) as Prisma.InputJsonValue,
+      table_data: (active?.matrix ?? null) as Prisma.InputJsonValue,
+      table_meta: (active?.meta ?? null) as Prisma.InputJsonValue,
+      table_isImported: inferredIsImported,
+      table_importSource: inferredImportSource,
+    },
+  });
+};
+
+const fetchNormalizedTable = async (
+  nodeId: string,
+  options: { tableId?: string } = {},
+  client: PrismaClient | Prisma.TransactionClient = prisma
+): Promise<{ table: NormalizedTableInstance; tables: NormalizedTableInstance[] } | null> => {
+  const tablesRaw = await client.treeBranchLeafNodeTable.findMany({
+    where: { nodeId },
+    orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+  });
+
+  if (!tablesRaw.length) {
+    return null;
+  }
+
+  const tables = tablesRaw.map(normalizeTableInstance);
+
+  let target = options.tableId ? tables.find((tbl) => tbl.id === options.tableId) : undefined;
+
+  if (!target) {
+    const nodeInfo = await client.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { table_activeId: true },
+    });
+
+    if (nodeInfo?.table_activeId) {
+      target = tables.find((tbl) => tbl.id === nodeInfo.table_activeId) ?? target;
+    }
+  }
+
+  const table = target ?? tables[0];
+
+  return { table, tables };
+};
+
 // Récupérer toutes les instances de tableaux d'un nœud
 router.get('/nodes/:nodeId/tables', async (req, res) => {
   try {
@@ -2955,8 +3491,10 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       orderBy: [{ order: 'asc' }, { createdAt: 'asc' }]
     });
 
-    console.log(`[TreeBranchLeaf API] Retrieved ${tables.length} tables for node ${nodeId}`);
-    return res.json(tables);
+    const normalized = tables.map(normalizeTableInstance);
+
+    console.log(`[TreeBranchLeaf API] Retrieved ${normalized.length} tables for node ${nodeId}`);
+    return res.json(normalized);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node tables:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des tableaux' });
@@ -3005,8 +3543,12 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       }
     });
 
+    await syncNodeTableCapability(nodeId);
+
+    const normalized = normalizeTableInstance(newTable);
+
     console.log(`[TreeBranchLeaf API] Created table ${newTable.id} for node ${nodeId}`);
-    return res.status(201).json(newTable);
+    return res.status(201).json(normalized);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating node table:', error);
     res.status(500).json({ error: 'Erreur lors de la création du tableau' });
@@ -3058,8 +3600,10 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       }
     });
 
+    await syncNodeTableCapability(nodeId);
+
     console.log(`[TreeBranchLeaf API] Updated table ${tableId} for node ${nodeId}`);
-    return res.json(updatedTable);
+    return res.json(normalizeTableInstance(updatedTable));
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node table:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour du tableau' });
@@ -3087,11 +3631,341 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       where: { id: tableId }
     });
 
+    await syncNodeTableCapability(nodeId);
+
     console.log(`[TreeBranchLeaf API] Deleted table ${tableId} for node ${nodeId}`);
     return res.json({ success: true, message: 'Tableau supprimé avec succès' });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting node table:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du tableau' });
+  }
+});
+
+// Récupérer les options (colonnes, lignes, enregistrements) pour une instance
+router.get('/nodes/:nodeId/tables/options', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+    const { tableId, dimension = 'columns' } = req.query as {
+      tableId?: string;
+      dimension?: string;
+    };
+
+    const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+    const normalized = await fetchNormalizedTable(nodeId, {
+      tableId: typeof tableId === 'string' && tableId ? tableId : undefined,
+    });
+
+    if (!normalized) {
+      return res.json({ items: [], table: null });
+    }
+
+    const { table, tables } = normalized;
+
+    if (dimension === 'rows') {
+      const items = table.rows.map((label, index) => ({ value: label, label, index }));
+      return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
+    }
+
+    if (dimension === 'records') {
+      return res.json({
+        items: table.records,
+        table: { id: table.id, type: table.type, name: table.name },
+        tables,
+      });
+    }
+
+    // Par défaut: colonnes
+    const items = table.columns.map((label, index) => ({ value: label, label, index }));
+    return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error fetching table options:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des options du tableau' });
+  }
+});
+
+// Lookup dynamique dans une instance de tableau
+router.get('/nodes/:nodeId/tables/lookup', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+    const {
+      tableId,
+      column,
+      row,
+      key,
+      keyColumn,
+      keyValue,
+      valueColumn,
+    } = req.query as Record<string, string | undefined>;
+
+    const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+    const normalized = await fetchNormalizedTable(nodeId, {
+      tableId: tableId && tableId.length ? tableId : undefined,
+    });
+
+    if (!normalized) {
+      return res.status(404).json({ error: 'Aucun tableau disponible pour ce nœud' });
+    }
+
+    const { table } = normalized;
+    const rawLookup = (table.meta && typeof table.meta.lookup === 'object')
+      ? (table.meta.lookup as Record<string, unknown>)
+      : undefined;
+
+    if (table.type === 'matrix') {
+      const colLabel = column || (valueColumn && valueColumn === 'column' ? valueColumn : undefined);
+      const rowLabel = row;
+
+      if (!colLabel || !rowLabel) {
+        return res.status(400).json({ error: 'Paramètres column et row requis pour un tableau croisé' });
+      }
+
+      const columnIndex = table.columns.findIndex((c) => c === colLabel);
+      const rowIndex = table.rows.findIndex((r) => r === rowLabel);
+
+      if (columnIndex === -1) {
+        return res.status(404).json({ error: `Colonne "${colLabel}" introuvable` });
+      }
+      if (rowIndex === -1) {
+        return res.status(404).json({ error: `Ligne "${rowLabel}" introuvable` });
+      }
+
+      const value = table.matrix[rowIndex]?.[columnIndex] ?? null;
+
+      return res.json({
+        value,
+        rowIndex,
+        columnIndex,
+        column: table.columns[columnIndex],
+        row: table.rows[rowIndex],
+        table: { id: table.id, name: table.name, type: table.type },
+        meta: table.meta,
+      });
+    }
+
+    const resolvedKeyColumn =
+      (keyColumn && keyColumn.length ? keyColumn : undefined) ??
+      (rawLookup && typeof rawLookup.keyColumn === 'string' ? (rawLookup.keyColumn as string) : undefined);
+
+    if (!resolvedKeyColumn) {
+      return res.status(400).json({ error: 'Colonne clé non définie pour ce tableau' });
+    }
+
+    const lookupValue =
+      (keyValue && keyValue.length ? keyValue : undefined) ??
+      (key && key.length ? key : undefined) ??
+      (column && !table.columns.includes(column) ? column : undefined);
+
+    if (lookupValue === undefined) {
+      return res.status(400).json({ error: 'Valeur de clé requise' });
+    }
+
+    const keyIndex = table.columns.findIndex((colName) => colName === resolvedKeyColumn);
+    if (keyIndex === -1) {
+      return res.status(404).json({ error: `Colonne clé "${resolvedKeyColumn}" introuvable` });
+    }
+
+    let matchedIndex = -1;
+    for (let i = 0; i < table.matrix.length; i += 1) {
+      const current = table.matrix[i]?.[keyIndex];
+      if (current != null && String(current) === String(lookupValue)) {
+        matchedIndex = i;
+        break;
+      }
+    }
+
+    if (matchedIndex === -1) {
+      return res.status(404).json({ error: 'Aucune ligne correspondant à cette clé' });
+    }
+
+    const matchedRow = table.matrix[matchedIndex] ?? [];
+    const matchedRecord = table.records[matchedIndex] ?? null;
+
+    const resolvedValueColumn =
+      (valueColumn && valueColumn.length ? valueColumn : undefined) ??
+      (rawLookup && typeof rawLookup.valueColumn === 'string' ? (rawLookup.valueColumn as string) : undefined);
+
+    let resolvedValue: unknown = matchedRecord;
+
+    if (resolvedValueColumn) {
+      const valueIdx = table.columns.findIndex((colName) => colName === resolvedValueColumn);
+      if (valueIdx === -1) {
+        return res.status(404).json({ error: `Colonne "${resolvedValueColumn}" introuvable` });
+      }
+      resolvedValue = matchedRow[valueIdx] ?? null;
+    }
+
+    const exposeColumns = Array.isArray(rawLookup?.exposeColumns)
+      ? (rawLookup?.exposeColumns as Array<Record<string, unknown>>)
+      : [];
+
+    return res.json({
+      value: resolvedValue ?? null,
+      row: matchedRecord,
+      rowIndex: matchedIndex,
+      keyColumn: resolvedKeyColumn,
+      keyValue: lookupValue,
+      table: { id: table.id, name: table.name, type: table.type },
+      meta: table.meta,
+      exposeColumns,
+    });
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error performing table lookup:', error);
+    res.status(500).json({ error: 'Erreur lors du lookup dans le tableau' });
+  }
+});
+
+// Générer automatiquement des champs SELECT dépendants d'un tableau
+router.post('/nodes/:nodeId/table/generate-selects', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+    const {
+      tableId: requestedTableId,
+      labelColumns,
+      labelRows,
+    } = (req.body || {}) as {
+      tableId?: string;
+      labelColumns?: string;
+      labelRows?: string;
+    };
+
+    const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+    const normalized = await fetchNormalizedTable(nodeId, {
+      tableId:
+        typeof requestedTableId === 'string' && requestedTableId.trim().length
+          ? requestedTableId.trim()
+          : undefined,
+    });
+
+    if (!normalized) {
+      return res.status(404).json({ error: 'Aucun tableau disponible pour ce nœud' });
+    }
+
+    const { table } = normalized;
+
+    if (!table.columns.length) {
+      return res.status(400).json({ error: 'Le tableau ne contient aucune colonne exploitable' });
+    }
+
+    const baseNode = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true, treeId: true, parentId: true },
+    });
+
+    if (!baseNode) {
+      return res.status(404).json({ error: 'Nœud de base introuvable' });
+    }
+
+    const parentId = baseNode.parentId ?? null;
+    const siblingsCount = await prisma.treeBranchLeafNode.count({
+      where: { treeId: baseNode.treeId, parentId },
+    });
+
+    const tableMeta = table.meta || {};
+    const metaNameRaw = typeof tableMeta['name'] === 'string' ? (tableMeta['name'] as string) : undefined;
+    const baseLabel = (metaNameRaw && metaNameRaw.trim()) || (table.name && table.name.trim()) || 'Tableau';
+
+    const fallbackColumnsLabel = typeof labelColumns === 'string' && labelColumns.trim().length
+      ? labelColumns.trim()
+      : `${baseLabel} - colonne`;
+    const fallbackRowsLabel = typeof labelRows === 'string' && labelRows.trim().length
+      ? labelRows.trim()
+      : `${baseLabel} - ligne`;
+
+    const toCreate: Array<{ label: string; dimension: 'columns' | 'rows' }> = [];
+
+    if (table.columns.length) {
+      toCreate.push({ label: fallbackColumnsLabel, dimension: 'columns' });
+    }
+
+    if (table.rows.length) {
+      toCreate.push({ label: fallbackRowsLabel, dimension: 'rows' });
+    }
+
+    if (!toCreate.length) {
+      return res.status(400).json({ error: 'Aucune dimension exploitable pour générer des champs SELECT' });
+    }
+
+    const created: Array<{ id: string; label: string; dimension: 'columns' | 'rows' }> = [];
+    let insertOrder = siblingsCount;
+    const now = new Date();
+
+    for (const item of toCreate) {
+      const newNodeId = randomUUID();
+
+      const nodeMetadata = {
+        generatedFrom: 'table_lookup',
+        tableNodeId: baseNode.id,
+        tableId: table.id,
+        tableDimension: item.dimension,
+      } as Record<string, unknown>;
+
+      const newNode = await prisma.treeBranchLeafNode.create({
+        data: {
+          id: newNodeId,
+          treeId: baseNode.treeId,
+          parentId,
+          type: 'leaf_select',
+          subType: 'SELECT',
+          fieldType: 'SELECT',
+          fieldSubType: 'SELECT',
+          label: item.label,
+          order: insertOrder,
+          isVisible: true,
+          isActive: true,
+          hasData: false,
+          hasFormula: false,
+          hasCondition: false,
+          hasTable: false,
+          hasAPI: false,
+          hasLink: false,
+          hasMarkers: false,
+          select_allowClear: true,
+          select_defaultValue: null,
+          select_multiple: false,
+          select_options: [] as Prisma.InputJsonValue,
+          select_searchable: false,
+          metadata: nodeMetadata as Prisma.InputJsonValue,
+          tbl_auto_generated: true,
+          updatedAt: now,
+        },
+      });
+
+      await prisma.treeBranchLeafSelectConfig.create({
+        data: {
+          id: randomUUID(),
+          nodeId: newNode.id,
+          options: [] as Prisma.InputJsonValue,
+          multiple: false,
+          searchable: false,
+          allowCustom: false,
+          optionsSource: `table_${item.dimension}`,
+          tableReference: `node-table:${table.id}`,
+          dependsOnNodeId: baseNode.id,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+
+      created.push({ id: newNode.id, label: newNode.label, dimension: item.dimension });
+      insertOrder += 1;
+    }
+
+    return res.json({
+      created,
+      table: { id: table.id, name: table.name, type: table.type },
+    });
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error generating selects from table:', error);
+    res.status(500).json({ error: 'Erreur lors de la génération des champs dépendants' });
   }
 });
 
@@ -4533,38 +5407,6 @@ router.get('/submissions/:id/operations', async (req, res) => {
     const { id } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // Fonction pour calculer les expressions mathématiques
-    function calculateResult(expression: string): number | null {
-      try {
-        // Extraire seulement la partie mathématique (avant le " = " s'il existe)
-        const mathPart = expression.split(' = ')[0];
-        
-        // Extraire les valeurs numériques entre parenthèses
-        const valueMatches = mathPart.match(/\(([0-9.]+)\)/g);
-        if (!valueMatches || valueMatches.length < 2) {
-          return null;
-        }
-        
-        const values = valueMatches.map(match => parseFloat(match.slice(1, -1)));
-        
-        // Détecter l'opérateur - supporter les formats avec parenthèses et avec espaces
-        if (mathPart.includes('(+)') || mathPart.includes(' + ')) {
-          return values.reduce((a, b) => a + b, 0);
-        } else if (mathPart.includes('(-)') || mathPart.includes(' - ')) {
-          return values.reduce((a, b) => a - b);
-        } else if (mathPart.includes('(*)') || mathPart.includes(' * ')) {
-          return values.reduce((a, b) => a * b, 1);
-        } else if (mathPart.includes('(/)') || mathPart.includes(' / ')) {
-          return values.reduce((a, b) => a / b);
-        }
-        
-        return null;
-      } catch (error) {
-        console.error('Erreur lors du calcul:', error);
-        return null;
-      }
-    }
-
     // Charger la soumission pour contrôle d'accès
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
@@ -5332,7 +6174,532 @@ router.delete('/submissions/:id', async (req, res) => {
   }
 });
 
-export default router;
+// =============================================================================
+// 🔗 TABLE LOOKUP - Récupération de la configuration SELECT pour les champs
+// =============================================================================
+
+// GET /api/treebranchleaf/nodes/:fieldId/select-config
+// Récupère la configuration TreeBranchLeafSelectConfig d'un champ
+router.get('/nodes/:fieldId/select-config', async (req, res) => {
+  try {
+    const { fieldId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    console.log(`[TreeBranchLeaf API] 🔍 GET select-config for field: ${fieldId}`);
+
+    // Vérifier l'accès au nœud
+    const access = await ensureNodeOrgAccess(prisma, fieldId, { organizationId, isSuperAdmin });
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    // Récupérer la configuration SELECT
+    let selectConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
+      where: { nodeId: fieldId },
+    });
+
+    if (!selectConfig) {
+      console.log(`[TreeBranchLeaf API] ⚠️ Pas de configuration SELECT pour le champ ${fieldId}`);
+      
+      // 🎯 CRÉATION DYNAMIQUE : Vérifier si le champ a une capacité Table avec lookup
+      const node = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: fieldId },
+        select: { 
+          id: true,
+          hasTable: true,
+          table_activeId: true,
+          table_instances: true
+        }
+      });
+
+      if (node?.hasTable && node.table_activeId && node.table_instances) {
+        const instances = node.table_instances as Record<string, any>;
+        const activeInstance = instances[node.table_activeId];
+        
+        const isRowBased = activeInstance?.rowBased === true;
+        const isColumnBased = activeInstance?.columnBased === true;
+        
+        if (isRowBased || isColumnBased) {
+          console.log(`[TreeBranchLeaf API] 🔧 Création dynamique de la config SELECT pour lookup ${isRowBased ? 'LIGNE' : 'COLONNE'}`);
+          
+          // Créer automatiquement la configuration SELECT
+          selectConfig = await prisma.treeBranchLeafSelectConfig.create({
+            data: {
+              id: randomUUID(),
+              nodeId: fieldId,
+              options: [] as Prisma.InputJsonValue,
+              multiple: false,
+              searchable: true,
+              allowCustom: false,
+              optionsSource: 'table',
+              tableReference: node.table_activeId,
+              keyColumn: null,
+              valueColumn: null,
+              displayColumn: null,
+              dependsOnNodeId: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+          });
+          
+          console.log(`[TreeBranchLeaf API] ✅ Configuration SELECT créée dynamiquement:`, selectConfig.id);
+        }
+      }
+      
+      if (!selectConfig) {
+        return res.status(404).json({ error: 'Configuration SELECT introuvable' });
+      }
+    }
+
+    console.log(`[TreeBranchLeaf API] ✅ Configuration SELECT trouvée:`, selectConfig);
+    return res.json(selectConfig);
+
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error fetching select config:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération de la configuration SELECT' });
+  }
+});
+
+// POST /api/treebranchleaf/nodes/:fieldId/select-config
+// Crée ou met à jour la configuration TreeBranchLeafSelectConfig d'un champ
+router.post('/nodes/:fieldId/select-config', async (req, res) => {
+  try {
+    const { fieldId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+    const {
+      optionsSource,
+      tableReference,
+      keyColumn,
+      keyRow,
+      valueColumn,
+      valueRow,
+      displayColumn,
+      displayRow,
+      dependsOnNodeId,
+    } = req.body;
+
+    console.log(`[TreeBranchLeaf API] 📝 POST select-config for field: ${fieldId}`, {
+      keyColumn,
+      keyRow,
+      valueColumn,
+      valueRow,
+      displayColumn,
+      displayRow,
+    });
+
+    // Vérifier l'accès au nœud
+    const access = await ensureNodeOrgAccess(prisma, fieldId, { organizationId, isSuperAdmin });
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    // Upsert la configuration SELECT
+    const selectConfig = await prisma.treeBranchLeafSelectConfig.upsert({
+      where: { nodeId: fieldId },
+      create: {
+        id: randomUUID(),
+        nodeId: fieldId,
+        options: [] as Prisma.InputJsonValue,
+        multiple: false,
+        searchable: true,
+        allowCustom: false,
+        optionsSource: optionsSource || 'table',
+        tableReference: tableReference || null,
+        keyColumn: keyColumn || null,
+        keyRow: keyRow || null,
+        valueColumn: valueColumn || null,
+        valueRow: valueRow || null,
+        displayColumn: displayColumn || null,
+        displayRow: displayRow || null,
+        dependsOnNodeId: dependsOnNodeId || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      update: {
+        optionsSource: optionsSource || 'table',
+        tableReference: tableReference || null,
+        keyColumn: keyColumn || null,
+        keyRow: keyRow || null,
+        valueColumn: valueColumn || null,
+        valueRow: valueRow || null,
+        displayColumn: displayColumn || null,
+        displayRow: displayRow || null,
+        dependsOnNodeId: dependsOnNodeId || null,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log(`[TreeBranchLeaf API] ✅ Configuration SELECT créée/mise à jour:`, selectConfig);
+    return res.json(selectConfig);
+
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error creating select config:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de la configuration SELECT' });
+  }
+});
+
+// GET /api/treebranchleaf/nodes/:nodeId/table/lookup
+// Récupère le tableau ACTIF d'un noeud pour lookup (utilisé par useTBLTableLookup)
+router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    console.log(`[TreeBranchLeaf API] 🔍 GET active table/lookup for node: ${nodeId}`);
+
+    // Vérifier l'accès au nœud
+    const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    // 🎯 ÉTAPE 1: Récupérer la configuration SELECT pour savoir QUEL tableau charger
+    const selectConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
+      where: { nodeId },
+      select: {
+        tableReference: true,
+        keyColumn: true,
+        keyRow: true,
+        valueColumn: true,
+        valueRow: true,
+        displayColumn: true,
+        displayRow: true,
+      }
+    });
+
+    console.log(`[TreeBranchLeaf API] 📋 Configuration SELECT:`, selectConfig);
+
+    if (!selectConfig?.tableReference) {
+      console.log(`[TreeBranchLeaf API] ⚠️ Pas de tableReference dans la config SELECT`);
+      return res.status(404).json({ error: 'Pas de tableau référencé pour ce lookup' });
+    }
+
+    // 🎯 ÉTAPE 2: Charger le TABLEAU référencé (pas le tableau du nœud lui-même !)
+    const table = await prisma.treeBranchLeafNodeTable.findUnique({
+      where: { id: selectConfig.tableReference },
+      select: {
+        id: true,
+        nodeId: true,
+        name: true,
+        type: true,
+        columns: true,
+        rows: true,
+        data: true,
+        meta: true,
+      }
+    });
+
+    if (!table) {
+      console.log(`[TreeBranchLeaf API] ⚠️ Tableau introuvable: ${selectConfig.tableReference}`);
+      return res.status(404).json({ error: 'Tableau introuvable' });
+    }
+
+    console.log(`[TreeBranchLeaf API] ✅ Tableau chargé:`, {
+      id: table.id,
+      name: table.name,
+      type: table.type,
+      columnsCount: (table.columns as any[])?.length || 0,
+      rowsCount: (table.rows as any[])?.length || 0,
+    });
+
+    // 🎯 ÉTAPE 3: Générer les options selon la configuration
+    if (table.type === 'matrix') {
+      const columns = (table.columns || []) as string[];
+      const rows = (table.rows || []) as string[];
+      const data = (table.data || []) as any[][];
+
+      // CAS 1: keyRow défini → Extraire les VALEURS de cette ligne
+      if (selectConfig?.keyRow) {
+        const rowIndex = rows.indexOf(selectConfig.keyRow);
+        
+        if (rowIndex === -1) {
+          console.warn(`⚠️ [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
+          return res.json({ options: [] });
+        }
+
+        // 🎯 RÈGLE A1: rows[0] = A1 ("Orientation"), rows[1] = "Nord", etc.
+        // data[0] correspond à rows[1], donc il faut décaler : dataRowIndex = rowIndex - 1
+        // Si rowIndex === 0 (A1), on doit extraire les en-têtes de colonnes (columns[]), pas data[]
+        let options;
+        
+        if (rowIndex === 0) {
+          // Ligne A1 sélectionnée → Extraire les en-têtes de colonnes (SANS A1 lui-même)
+          options = columns.slice(1).map((colName) => {
+            return {
+              value: colName,
+              label: selectConfig.displayRow ? colName : colName,
+            };
+          }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
+        } else {
+          // Autre ligne → Extraire depuis data[rowIndex - 1]
+          const dataRowIndex = rowIndex - 1;
+          const rowData = data[dataRowIndex] || [];
+          options = columns.slice(1).map((colName, colIdx) => {
+            const value = rowData[colIdx];
+            return {
+              value: String(value),
+              label: selectConfig.displayRow ? `${colName}: ${value}` : String(value),
+            };
+          }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
+        }
+
+        console.log(`[TreeBranchLeaf API] ✅ Options extraites depuis ligne "${selectConfig.keyRow}":`, {
+          rowIndex,
+          isRowA1: rowIndex === 0,
+          optionsCount: options.length,
+          sample: options.slice(0, 3)
+        });
+
+        return res.json({ options });
+      }
+
+      // CAS 2: keyColumn défini → Extraire les VALEURS de cette colonne
+      if (selectConfig?.keyColumn) {
+        const colIndex = columns.indexOf(selectConfig.keyColumn);
+        
+        if (colIndex === -1) {
+          console.warn(`⚠️ [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
+          return res.json({ options: [] });
+        }
+
+        // 🎯 RÈGLE A1 EXCEL: Si colIndex = 0, c'est la colonne A (labels des lignes)
+        // Ces labels sont dans rows[], PAS dans data[][0] !
+        // ⚠️ IMPORTANT: rows[0] = A1 (ex: "Orientation"), rows[1...] = labels de lignes réels
+        let options;
+        if (colIndex === 0) {
+          // Colonne A = labels des lignes → Extraire depuis rows[] SAUF rows[0] (qui est A1)
+          options = rows.slice(1).map((rowLabel) => {
+            return {
+              value: rowLabel,
+              label: selectConfig.displayColumn ? rowLabel : rowLabel,
+            };
+          }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
+        } else {
+          // Autre colonne → Extraire depuis data[][colIndex - 1]
+          // ⚠️ ATTENTION: data ne contient PAS la colonne 0, donc colIndex doit être décalé de -1
+          const dataColIndex = colIndex - 1;
+          options = data.map((row, rowIdx) => {
+            const value = row[dataColIndex];
+            const rowLabel = rows[rowIdx] || '';
+            return {
+              value: String(value),
+              label: selectConfig.displayColumn ? `${rowLabel}: ${value}` : String(value),
+            };
+          }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
+        }
+
+        console.log(`[TreeBranchLeaf API] ✅ Options extraites depuis colonne "${selectConfig.keyColumn}" (index ${colIndex}):`, {
+          colIndex,
+          isColumnA: colIndex === 0,
+          optionsCount: options.length,
+          sample: options.slice(0, 3)
+        });
+
+        return res.json({ options });
+      }
+    }
+
+    // Fallback: Si pas de keyRow/keyColumn, retourner le tableau complet
+    console.log(`[TreeBranchLeaf API] ⚠️ Aucun keyRow/keyColumn configuré, retour tableau brut`);
+    return res.json(table);
+
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error fetching table for lookup:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération du tableau' });
+  }
+});
+
+// PATCH /api/treebranchleaf/nodes/:nodeId
+// Met à jour les propriétés d'un nœud (type, fieldType, etc.)
+router.patch('/nodes/:nodeId', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    console.log(`[TreeBranchLeaf API] 🔧 PATCH node: ${nodeId}`, req.body);
+
+    // Vérifier l'accès au nœud
+    const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    // Mettre à jour le nœud
+    const updatedNode = await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        ...req.body,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log(`[TreeBranchLeaf API] ✅ Nœud mis à jour:`, updatedNode.id);
+    return res.json(updatedNode);
+
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error updating node:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du nœud' });
+  }
+});
+
+/**
+ * 🎯 PUT /nodes/:nodeId/capabilities/table
+ * Active/désactive la capacité Table sur un champ
+ * Appelé depuis TablePanel quand on sélectionne un champ dans le lookup
+ */
+router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { enabled, activeId, currentTable } = req.body;
+
+    console.log(`🎯 [TablePanel API] PUT /nodes/${nodeId}/capabilities/table`, { enabled, activeId, currentTable });
+
+    // Récupérer le nœud existant
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { 
+        id: true,
+        hasTable: true,
+        metadata: true
+      }
+    });
+
+    if (!node) {
+      return res.status(404).json({ error: 'Nœud non trouvé' });
+    }
+
+    // Construire le nouvel objet metadata avec capabilities.table mis à jour
+    const oldMetadata = (node.metadata || {}) as Record<string, unknown>;
+    const oldCapabilities = (oldMetadata.capabilities || {}) as Record<string, unknown>;
+    
+    // 🎯 CRITICAL FIX: Créer une instance dans table_instances pour que le hook détecte enabled=true
+    const tableInstances = enabled && activeId ? {
+      [activeId]: currentTable || { mode: 'matrix', tableId: activeId }
+    } : null;
+    
+    const newCapabilities = {
+      ...oldCapabilities,
+      table: {
+        enabled: enabled === true,
+        activeId: enabled ? (activeId || null) : null,
+        instances: tableInstances,
+        currentTable: enabled ? (currentTable || null) : null,
+      }
+    };
+
+    const newMetadata = {
+      ...oldMetadata,
+      capabilities: newCapabilities
+    };
+
+    console.log(`✅ [TablePanel API] Nouvelle metadata.capabilities.table:`, newCapabilities.table);
+
+    // Mettre à jour le nœud avec metadata seulement - FORCE JSON serialization
+    await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        hasTable: enabled === true,
+        table_activeId: enabled ? (activeId || null) : null,
+        table_instances: tableInstances ? JSON.parse(JSON.stringify(tableInstances)) : null,
+        metadata: JSON.parse(JSON.stringify(newMetadata)), // Force serialization
+        updatedAt: new Date()
+      }
+    });
+
+    console.log(`✅ [TablePanel API] Capacité Table mise à jour pour nœud ${nodeId}`);
+    
+    // 🎯 CRÉATION/UPDATE AUTOMATIQUE DE LA CONFIGURATION SELECT pour le lookup dynamique
+    if (enabled && activeId) {
+      const keyColumn = currentTable?.keyColumn || null;
+      const keyRow = currentTable?.keyRow || null;
+      const valueColumn = currentTable?.valueColumn || null;
+      const valueRow = currentTable?.valueRow || null;
+      const displayColumn = currentTable?.displayColumn || null;
+      const displayRow = currentTable?.displayRow || null;
+      
+      console.log(`🔧 [TablePanel API] Upsert configuration SELECT`, {
+        nodeId,
+        activeId,
+        keyColumn,
+        keyRow,
+        valueColumn,
+        valueRow,
+        displayColumn,
+        displayRow,
+      });
+      
+      try {
+        // UPSERT la configuration SELECT avec tous les champs
+        await prisma.treeBranchLeafSelectConfig.upsert({
+          where: { nodeId },
+          create: {
+            id: randomUUID(),
+            nodeId: nodeId,
+            options: [] as Prisma.InputJsonValue,
+            multiple: false,
+            searchable: true,
+            allowCustom: false,
+            optionsSource: 'table',
+            tableReference: activeId,
+            keyColumn,
+            keyRow,
+            valueColumn,
+            valueRow,
+            displayColumn,
+            displayRow,
+            dependsOnNodeId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          update: {
+            tableReference: activeId,
+            keyColumn,
+            keyRow,
+            valueColumn,
+            valueRow,
+            displayColumn,
+            displayRow,
+            updatedAt: new Date(),
+          },
+        });
+        console.log(`✅ [TablePanel API] Configuration SELECT upsertée pour ${nodeId}`, {
+          keyColumn,
+          keyRow,
+          displayColumn,
+          displayRow,
+        });
+      } catch (selectConfigError) {
+        console.error(`⚠️ [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
+        // Non-bloquant : on continue même si la création échoue
+      }
+    }
+    
+    // 🔍 VÉRIFICATION IMMÉDIATE : Relire depuis la DB pour confirmer persistance
+    const verifyNode = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { metadata: true, hasTable: true }
+    });
+    
+    console.log(`🔍 [TablePanel API] VÉRIFICATION après UPDATE:`, {
+      nodeId,
+      hasTable: verifyNode?.hasTable,
+      metadataCapabilitiesTable: (verifyNode?.metadata as any)?.capabilities?.table
+    });
+
+    return res.json({ 
+      success: true, 
+      nodeId, 
+      capabilities: {
+        table: newCapabilities.table
+      }
+    });
+
+  } catch (error) {
+    console.error('[TablePanel API] ❌ Erreur PUT /nodes/:nodeId/capabilities/table:', error);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour de la capacité Table' });
+  }
+});
+
 // PUT /api/treebranchleaf/submissions/:id - Mettre à jour les données d'une soumission (upsert champs + backfill variables)
 router.put('/submissions/:id', async (req, res) => {
   const { id } = req.params;
@@ -5809,3 +7176,5 @@ router.put('/submissions/:id', async (req, res) => {
     return res.status(500).json({ error: 'Erreur lors de la mise à jour de la soumission' });
   }
 });
+
+export default router;

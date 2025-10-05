@@ -16,7 +16,7 @@
  * - Virtualisation pour les performances
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { 
   Input, 
@@ -98,24 +98,22 @@ const Structure: React.FC<StructureProps> = ({
   onMoveNodeToRoot
 }) => {
   // 🐛 DEBUG: Logs optimisés pour éviter les re-rendus excessifs
-  const debugData = useMemo(() => ({
+  const _debugData = useMemo(() => ({
     tree: tree?.label || 'aucun arbre',
     nodesCount: nodes?.length || 0,
     nodesData: nodes?.slice(0, 3), // Premiers 3 nœuds pour debug
     selectedNode: selectedNode?.label || 'aucun nœud sélectionné'
   }), [tree?.label, nodes, selectedNode?.label]);
 
-  // Logs uniquement quand les données changent
-  useEffect(() => {
-    console.log('🌲 [Structure] Debug données:', debugData);
-    if (nodes && nodes.length > 0) {
-      console.log('🌲 [Structure] Détail complet nodes:', nodes);
-    }
-  }, [debugData, nodes]);
+  // Debug logs temporairement supprimés
 
   const [searchQuery, setSearchQuery] = useState(searchState.query);
   const [filters, setFilters] = useState<SearchOptions>(searchState.filters);
+  const lastFiltersSignature = useRef<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const _expandedSignatureRef = useRef<string>('');
+
+  // ExpandedNodes monitoring temporairement supprimé
 
   // Zone de drop principale pour la Structure
   const {
@@ -168,7 +166,11 @@ const Structure: React.FC<StructureProps> = ({
 
   // Sync des filtres depuis l'état global si changé ailleurs
   useEffect(() => {
-    setFilters(searchState.filters as SearchOptions);
+    const nextSignature = JSON.stringify(searchState.filters ?? {});
+    if (lastFiltersSignature.current !== nextSignature) {
+      lastFiltersSignature.current = nextSignature;
+      setFilters(searchState.filters as SearchOptions);
+    }
   }, [searchState.filters]);
 
   const legacyTypes: NodeTypeKey[] | undefined = (searchState.filters as unknown as { type?: NodeTypeKey[] })?.type;
@@ -233,11 +235,11 @@ const Structure: React.FC<StructureProps> = ({
       if (!ok) continue;
 
       result.push({ node, level });
-      console.log(`🔧 [Structure flattenNodes] Added ${node.label} at level ${level}, hasChildren: ${!!node.children?.length}, isExpanded: ${expandedNodes.has(node.id)}`);
+      // flattenNodes log temporairement supprimé
 
   // Récursion pour les enfants uniquement si le nœud est marqué comme étendu
   if (node.children && expandedNodes.has(node.id)) {
-        console.log(`🔧 [Structure flattenNodes] Recursing into ${node.children.length} children of ${node.label}`);
+        // Recursion log temporairement supprimé
         flattenNodes(node.children, level + 1, result);
       }
     }
@@ -249,6 +251,8 @@ const Structure: React.FC<StructureProps> = ({
   const flattenedNodes = useMemo(() => {
     return flattenNodes(nodes);
   }, [flattenNodes, nodes]);
+
+  // FlattenedNodes recalculated log temporairement supprimé
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);

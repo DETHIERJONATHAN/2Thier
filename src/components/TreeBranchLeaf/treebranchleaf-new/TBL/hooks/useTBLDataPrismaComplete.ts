@@ -977,6 +977,18 @@ const transformPrismaNodeToField = (
       description: node.description,
       order: node.order,
       isSelect: true,
+      // 💡 Propriétés tooltip depuis les colonnes TBL
+      text_helpTooltipType: node.text_helpTooltipType,
+      text_helpTooltipText: node.text_helpTooltipText,
+      text_helpTooltipImage: node.text_helpTooltipImage,
+      // 🎯 APPARENCE CONFIG avec tooltips intégrés
+      appearanceConfig: {
+        ...(node.appearanceConfig || {}),
+        // ✅ Ajouter les tooltips dans appearanceConfig
+        helpTooltipType: node.text_helpTooltipType,
+        helpTooltipText: node.text_helpTooltipText,
+        helpTooltipImage: node.text_helpTooltipImage
+      },
       options,
       config: {
         size: node.appearance_size,
@@ -1010,6 +1022,18 @@ const transformPrismaNodeToField = (
       order: node.order,
       // 🎯 NOUVEAU: Marquer si le champ a besoin de résolution de valeur
       needsValueResolution: node.hasData,
+      // 💡 Propriétés tooltip depuis les colonnes TBL
+      text_helpTooltipType: node.text_helpTooltipType,
+      text_helpTooltipText: node.text_helpTooltipText,
+      text_helpTooltipImage: node.text_helpTooltipImage,
+      // 🎯 APPARENCE CONFIG avec tooltips intégrés
+      appearanceConfig: {
+        ...(node.appearanceConfig || {}),
+        // ✅ Ajouter les tooltips dans appearanceConfig
+        helpTooltipType: node.text_helpTooltipType,
+        helpTooltipText: node.text_helpTooltipText,
+        helpTooltipImage: node.text_helpTooltipImage
+      },
       config: {
         size: node.appearance_size,
         width: node.appearance_width,
@@ -1419,6 +1443,23 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
     }
     fetchData();
   }, [fetchData, disabled]);
+
+  // 🔄 Écouter les changements de capacité pour recharger les données
+  useEffect(() => {
+    const handleCapabilityUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined }>;
+      const { treeId: eventTreeId } = customEvent.detail;
+      
+      // Recharger uniquement si c'est notre arbre
+      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
+        console.log('🔄 [TBL Hook OLD] Capacité mise à jour détectée, rechargement des données...', customEvent.detail);
+        fetchData();
+      }
+    };
+
+    window.addEventListener('tbl-capability-updated', handleCapabilityUpdate);
+    return () => window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
+  }, [fetchData, disabled, tree_id]);
 
   return {
     tree,

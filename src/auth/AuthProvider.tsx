@@ -17,6 +17,7 @@ declare global {
     __lastModulesKey?: string; // Ajouté pour le cache des modules
     __googleAutoConnectCooldownUntil?: number; // Cooldown anti-spam auto Google connect
     __googleAutoConnectInFlight?: boolean; // Single-flight auto Google connect
+    __googleAutoConnectAttemptCount?: number; // Nombre de tentatives successives
   }
 }
 
@@ -354,6 +355,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else if (window.__googleAutoConnectInFlight) {
             console.log('[AuthProvider] 🔄 Connexion Google auto déjà en cours – ignoré');
           } else {
+            // PREMIÈRE VÉRIFICATION : Sommes-nous sur une page de callback Google avec erreur ?
+            const currentUrl = window.location.href;
+            if (currentUrl.includes('/google-auth/callback') || window.location.search.includes('google_error')) {
+              const urlParams = new URLSearchParams(window.location.search);
+              const googleError = urlParams.get('google_error');
+              if (googleError) {
+                console.warn('[AuthProvider] 🚫 Page de callback Google avec erreur détectée – ARRÊT auto-connect:', googleError);
+                // Définir un cooldown immédiat de 10 minutes pour cette erreur
+                window.__googleAutoConnectCooldownUntil = now + 600_000;
+                return; // STOP - ne pas tenter la connexion auto
+              }
+            }
+
             // Vérifier si un callback Google vient juste d'être complété pour cette org
             try {
               const raw = sessionStorage.getItem('google_auth_just_completed');
@@ -375,6 +389,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch {
               // ignore
             }
+
+            // Vérifier si une erreur Google récente empêche la tentative automatique
+            try {
+              const errorRaw = sessionStorage.getItem('google_auth_error');
+              if (errorRaw) {
+                const errorInfo = JSON.parse(errorRaw) as { ts?: number; error?: string; organizationId?: string | null };
+                if (errorInfo?.ts && (now - errorInfo.ts) < 600_000) { // 10 minutes de cooldown après erreur
+                  console.warn('[AuthProvider] 🚫 Erreur Google récente détectée – on évite l\'auto-connect:', errorInfo.error);
+                  // Définir un cooldown prolongé après erreur
+                  window.__googleAutoConnectCooldownUntil = now + 600_000;
+                  return; // on ne lance pas la connexion auto
+                }
+                // Si l'erreur est ancienne (>10min), on peut nettoyer
+                if (errorInfo?.ts && (now - errorInfo.ts) > 600_000) {
+                  sessionStorage.removeItem('google_auth_error');
+                }
+              }
+            } catch {
+              // ignore
+            }
+            // Comptabiliser les tentatives pour éviter les boucles
+            if (typeof window.__googleAutoConnectAttemptCount !== 'number') {
+              window.__googleAutoConnectAttemptCount = 0;
+            }
+            window.__googleAutoConnectAttemptCount += 1;
+            if (window.__googleAutoConnectAttemptCount > 3) {
+              console.warn('[AuthProvider] 🚫 Trop de tentatives auto Google consécutives – pause forcée');
+              window.__googleAutoConnectCooldownUntil = now + 900_000; // 15 min
+              return;
+            }
+
             console.log('[AuthProvider] 🚀 Tentative de connexion automatique à Google pour:', currentUser.id);
             window.__googleAutoConnectInFlight = true;
             
@@ -399,14 +444,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
               // Si une authentification manuelle est requise, on redirige l'utilisateur
               if (response.needsManualAuth && response.authUrl) {
+                // VÉRIFICATION FINALE AVANT REDIRECTION : pas d'erreur Google récente
+                const urlParams = new URLSearchParams(window.location.search);
+                const googleError = urlParams.get('google_error');
+                const hasRecentError = sessionStorage.getItem('google_auth_error');
+                
+                if (googleError || hasRecentError) {
+                  console.warn('[AuthProvider] 🚫 REDIRECTION BLOQUÉE - Erreur Google détectée, évite la boucle');
+                  window.__googleAutoConnectCooldownUntil = Date.now() + 600_000; // 10 min
+                  return;
+                }
+                
                 console.log('[AuthProvider] 🔐 Redirection vers Google pour autorisation...');
                 msgApi.info("Redirection vers Google pour l'autorisation...", 3);
+                window.__googleAutoConnectAttemptCount = 0;
                 // On attend un court instant pour que le message soit visible
                 setTimeout(() => {
-                  window.location.href = response.authUrl;
+                  // Ultime vérification avant redirection
+                  const finalCheck = new URLSearchParams(window.location.search).get('google_error');
+                  if (!finalCheck && !sessionStorage.getItem('google_auth_error')) {
+                    window.location.href = response.authUrl;
+                  } else {
+                    console.warn('[AuthProvider] 🚫 REDIRECTION ANNULÉE au dernier moment');
+                  }
                 }, 2000);
               } else if (response.isConnected) {
                 console.log('[AuthProvider] ✅ Connexion Google déjà active.');
+                window.__googleAutoConnectAttemptCount = 0;
                 // On peut optionnellement rafraîchir l'état si nécessaire
               }
             }).catch((error: unknown) => {
@@ -494,6 +558,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentOrganization(null);
       setPermissions([]);
       setModules([]);
+
+      // 🔁 Réinitialiser les protections anti-boucle modules
+      delete window.__lastModulesKey;
+      delete window.lastModulesFetch;
       
       console.log('[AuthProvider] Déconnexion effectuée, toutes les données d\'authentification ont été supprimées');
     };
@@ -625,7 +693,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [fetchMe]);
 
     // ✨ Ref pour éviter les boucles infinies dans fetchModules
-    const fetchModulesRef = useRef<(force?: boolean) => Promise<void>>();
+  const fetchModulesRef = useRef<(force?: boolean) => Promise<boolean>>();
 
     // ✨ FONCTION POUR LE RECHARGEMENT DES MODULES - Version avec ref pour stabilité
     fetchModulesRef.current = useCallback(async (force = false) => {
@@ -633,13 +701,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const now = Date.now();
       if (!force && window.lastModulesFetch && (now - window.lastModulesFetch) < 3000) {
         console.log('[AuthProvider] 🛡️ Protection anti-boucle: appel ignoré (< 3s)');
-        return;
+        return true;
       }
       window.lastModulesFetch = now;
       
       if (!user?.id || !currentOrganization?.id) {
         setModules([]);
-        return;
+        return false;
       }
       
       try {
@@ -655,9 +723,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const rawModules = fetchedModules && fetchedModules.success && Array.isArray(fetchedModules.data) ? fetchedModules.data : [];
         const activeModules = rawModules.filter((module: ModuleAccess) => {
+          const isOrgSpecific = !!module.organizationId;
+          const activeForOrg = module.isActiveForOrg !== false;
+
+          if (isOrgSpecific) {
+            // Modules scoped à une organisation : on respecte le statut spécifique, même si "active" est false globalement.
+            return activeForOrg;
+          }
+
+          // Modules globaux : ils doivent être actifs globalement ET pas explicitement désactivés pour l'organisation.
           const globallyActive = module.active !== false;
-          const activeInOrg = module.isActiveForOrg === undefined ? true : module.isActiveForOrg === true;
-          return globallyActive && activeInOrg;
+          return globallyActive && activeForOrg;
         });
         
         const mappedModules = activeModules.map((module: ModuleAccess) => ({
@@ -667,38 +743,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           feature: module.feature || module.key || module.name
         }));
         
+        console.log('[AuthProvider] ✅ Modules actifs chargés:', mappedModules.length);
         setModules(mappedModules);
+        return true;
       } catch (error) {
         console.error("Erreur lors de la récupération des modules:", error);
         setModules([]);
+        return false;
       }
     }, [user?.id, currentOrganization?.id, isSuperAdmin]);
 
     // Effect simplifié qui appelle la fonction via ref - SANS BOUCLE INFINIE
     useEffect(() => {
-      // Protection anti-boucle supplémentaire avec clé de cache
       const cacheKey = `${user?.id || 'no-user'}-${currentOrganization?.id || 'no-org'}-${isSuperAdmin}`;
-      
-      if (window.__lastModulesKey === cacheKey) {
+
+      if (!user?.id || !currentOrganization?.id || !fetchModulesRef.current) {
+        console.log('[AuthProvider] ⏸️ Pas de user/org pour charger les modules');
+        return;
+      }
+
+      const modulesLoaded = modules.length > 0;
+      const lastKeyMatches = window.__lastModulesKey === cacheKey;
+
+      if (modulesLoaded && lastKeyMatches) {
         console.log('[AuthProvider] 🛡️ Modules déjà chargés pour cette combinaison, ignoré');
         return;
       }
-      
-      if (user?.id && currentOrganization?.id && fetchModulesRef.current) {
-        console.log('[AuthProvider] 📦 Chargement modules pour:', cacheKey);
-        window.__lastModulesKey = cacheKey;
-        fetchModulesRef.current();
-      } else {
-        console.log('[AuthProvider] ⏸️ Pas de user/org pour charger les modules');
-      }
-    }, [user?.id, currentOrganization?.id, isSuperAdmin]);
+
+      let isCancelled = false;
+      const forceFetch = !modulesLoaded;
+
+      console.log('[AuthProvider] 📦 Chargement modules pour:', cacheKey, forceFetch ? '(force initial)' : '(rafraîchissement)');
+      fetchModulesRef.current(forceFetch).then(success => {
+        if (isCancelled) return;
+        if (success) {
+          window.__lastModulesKey = cacheKey;
+        } else if (window.__lastModulesKey === cacheKey) {
+          delete window.__lastModulesKey;
+        }
+      });
+
+      return () => {
+        isCancelled = true;
+      };
+    }, [user?.id, currentOrganization?.id, isSuperAdmin, modules.length]);
 
     // Fonction publique pour forcer le rechargement
     const refreshModules = useCallback(() => {
-      if (fetchModulesRef.current) {
-        fetchModulesRef.current(true); // force = true
+      if (!fetchModulesRef.current) {
+        return;
       }
-    }, []);
+
+      const cacheKey = `${user?.id || 'no-user'}-${currentOrganization?.id || 'no-org'}-${isSuperAdmin}`;
+      delete window.__lastModulesKey;
+
+      fetchModulesRef.current(true).then(success => {
+        if (success) {
+          window.__lastModulesKey = cacheKey;
+        }
+      });
+    }, [currentOrganization?.id, isSuperAdmin, user?.id]);
 
     // 🔄 Écouter les événements de mise à jour des modules
     useEffect(() => {

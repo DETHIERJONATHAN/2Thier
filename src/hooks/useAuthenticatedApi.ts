@@ -70,16 +70,13 @@ export function useAuthenticatedApi() {
       }
     }
 
+    // 🌐 Par défaut, on reste en relatif pour profiter du proxy Vite et conserver les cookies same-origin.
     if (!base || base.length === 0) {
-      if (import.meta.env.DEV) {
+      if (typeof window !== 'undefined') {
+        base = '';
+      } else {
         base = 'http://localhost:4000';
-      } else if (typeof window !== 'undefined') {
-        base = window.location.origin;
       }
-    }
-
-    if (!base || base.length === 0) {
-      base = 'http://localhost:4000';
     }
 
     return base.replace(/\/$/, '');

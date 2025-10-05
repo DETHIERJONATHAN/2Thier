@@ -18,6 +18,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { googleOAuthConfig, isGoogleOAuthConfigured } from '../auth/googleConfig';
 
 export class GoogleTokenRefreshScheduler {
   private intervalId: NodeJS.Timeout | null = null;
@@ -146,6 +147,12 @@ export class GoogleTokenRefreshScheduler {
         return false;
       }
 
+      if (!isGoogleOAuthConfigured()) {
+        throw new Error('Configuration Google OAuth manquante pour GoogleTokenRefreshScheduler.');
+      }
+
+      const { clientId, clientSecret } = googleOAuthConfig;
+
       // Appeler l'API Google pour refresher le token
       const response = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -153,8 +160,8 @@ export class GoogleTokenRefreshScheduler {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          client_id: process.env.GOOGLE_CLIENT_ID || '',
-          client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+          client_id: clientId,
+          client_secret: clientSecret,
           refresh_token: token.refreshToken,
           grant_type: 'refresh_token',
         }),

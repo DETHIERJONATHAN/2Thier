@@ -3,57 +3,18 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
+import {
+  googleOAuthConfig,
+  GOOGLE_OAUTH_SCOPES,
+  describeGoogleOAuthConfig,
+  isGoogleOAuthConfigured,
+} from '../../auth/googleConfig';
+
 const prisma = new PrismaClient();
 
-// Configuration OAuth2 Google
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const GOOGLE_REDIRECT_URI = (() => {
-  const explicit = process.env.GOOGLE_REDIRECT_URI?.trim();
-  if (explicit) return explicit;
-  const base = process.env.API_URL || process.env.BACKEND_URL || process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production'
-    ? 'https://api.2thier.com'
-    : 'http://localhost:4000');
-  return `${base.replace(/\/$/, '')}/api/google-auth/callback`;
-})();
+const { clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI } = googleOAuthConfig;
 
-// Scopes Google Workspace nécessaires COMPLETS
-export const GOOGLE_SCOPES_LIST = [
-  // Authentification de base
-  'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/userinfo.profile',
-  
-  // Gmail COMPLET
-  'https://mail.google.com/', // SCOPE COMPLET pour suppression définitive
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/gmail.labels',
-  
-  // Calendar COMPLET
-  'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/calendar.events',
-  
-  // Google Workspace Apps
-  'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/documents',
-  'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/presentations',
-  
-  // Communication
-  'https://www.googleapis.com/auth/meetings',
-  'https://www.googleapis.com/auth/contacts',
-  
-  // Formulaires et automation
-  'https://www.googleapis.com/auth/forms',
-  'https://www.googleapis.com/auth/script.projects',
-  
-  // Administration
-  'https://www.googleapis.com/auth/admin.directory.user',
-  'https://www.googleapis.com/auth/admin.directory.group',
-  'https://www.googleapis.com/auth/admin.directory.orgunit',
-  'https://www.googleapis.com/auth/admin.directory.resource.calendar'
-];
+export const GOOGLE_SCOPES_LIST = [...GOOGLE_OAUTH_SCOPES];
 
 const SCOPES = GOOGLE_SCOPES_LIST;
 
@@ -72,11 +33,14 @@ export class GoogleOAuthService {
   private oauth2Client: OAuth2Client;
 
   constructor() {
-    console.log('[GoogleOAuthService] Initialisation avec:');
-    console.log('[GoogleOAuthService] GOOGLE_CLIENT_ID:', GOOGLE_CLIENT_ID ? 'Défini' : 'MANQUANT');
-    console.log('[GoogleOAuthService] GOOGLE_CLIENT_SECRET:', GOOGLE_CLIENT_SECRET ? 'Défini' : 'MANQUANT');
+    console.log('[GoogleOAuthService] Initialisation configuration Google OAuth (core)');
+    if (!isGoogleOAuthConfigured()) {
+      console.warn('[GoogleOAuthService] ⚠️ Configuration Google OAuth incomplète', describeGoogleOAuthConfig());
+    } else {
+      console.log('[GoogleOAuthService] ✅ Configuration détectée', describeGoogleOAuthConfig());
+    }
     console.log('[GoogleOAuthService] GOOGLE_REDIRECT_URI:', GOOGLE_REDIRECT_URI);
-    
+
     this.oauth2Client = new google.auth.OAuth2(
       GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET,
