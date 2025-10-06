@@ -196,8 +196,9 @@ if (process.env.NODE_ENV === 'production') {
         }
       }
     }));
-    // Fallback SPA: toutes les routes non-API renvoient index.html
-    app.get(/^(?!\/api\/).*/, (_req, res) => {
+    // Fallback SPA: toutes les routes non-API et non-assets renvoient index.html
+    // Exclut /api/ et /assets/ pour éviter de servir index.html au lieu des fichiers statiques
+    app.get(/^(?!\/api\/|\/assets\/).*/, (_req, res) => {
       res.sendFile(indexHtml);
     });
   } else {
