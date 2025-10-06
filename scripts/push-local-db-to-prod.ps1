@@ -98,9 +98,9 @@ Write-Host "📊 Résumé:" -ForegroundColor Cyan
 Write-Host "   - Code: Déployé via GitHub → Cloud Run" -ForegroundColor Gray
 Write-Host "   - Base de données: Locale → Cloud SQL" -ForegroundColor Gray
 Write-Host ""
-Write-Host "🌐 Ton site en production contient maintenant:" -ForegroundColor Yellow
+Write-Host "Ton site en production contient maintenant:" -ForegroundColor Yellow
 Write-Host "   - Toutes tes configurations" -ForegroundColor Gray
 Write-Host "   - Tous tes favoris" -ForegroundColor Gray
-Write-Host "   - Toutes tes données de test" -ForegroundColor Gray
+Write-Host "   - Toutes tes donnees de test" -ForegroundColor Gray
 Write-Host ""
-Write-Host "🔗 Vérifie sur: https://app.2thier.be" -ForegroundColor Cyan
+Write-Host "Verifie sur: https://app.2thier.be" -ForegroundColor Cyan

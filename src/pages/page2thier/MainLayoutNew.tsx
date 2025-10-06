@@ -628,24 +628,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     items: [
       {
         key: '2thier-vitrine',
-        label: '🏢 2Thier Énergétique',
-        onClick: () => navigate('/site-vitrine')
-      },
-      {
-        key: 'devis1minute-vitrine',
-        label: '🚀 Devis1minute Vitrine',
-        onClick: () => navigate('/devis1minute-vitrine')
+        label: '🏢 Site Vitrine 2Thier',
+        onClick: () => navigate('/site-vitrine-2thier')
       },
       { type: 'divider' },
       {
         key: 'devis1minute-public',
         label: '🌐 Devis1minute Public',
         onClick: () => window.open('/devis1minute', '_blank')
-      },
-      {
-        key: 'admin-sites',
-        label: '⚙️ Gestion Sites',
-        onClick: () => navigate('/admin/sites')
       }
     ]
   }), [navigate]);

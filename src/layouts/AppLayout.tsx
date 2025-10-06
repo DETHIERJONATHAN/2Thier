@@ -51,6 +51,7 @@ const EmailSettings = React.lazy(() => import('../pages/Settings/EmailSettings')
 
 // Pages Marketing & Ventes
 const SiteVitrinePage = React.lazy(() => import('../pages/SiteVitrinePage'));
+const SiteVitrine2Thier = React.lazy(() => import('../pages/SiteVitrine2Thier'));
 const Devis1minuteVitrinePage = React.lazy(() => import('../pages/Devis1minuteVitrinePage'));
 const PublicitesIntegrationPage = React.lazy(() => import('../pages/devis1minute/PublicitesIntegrationPage'));
 const EcommerceIntegrationPage = React.lazy(() => import('../pages/EcommerceIntegrationPage'));
@@ -127,6 +128,7 @@ export const AppLayout: React.FC = () => {
                   {hasFeature('google_contacts_access') && <Route path="/google-contacts" element={<GoogleContactsPage />} />}
 
                   {/* Routes Marketing & Ventes */}
+                  <Route path="/site-vitrine-2thier" element={<SiteVitrine2Thier />} />
                   {hasFeature('site_vitrine_energetique') && <Route path="/site-vitrine" element={<SiteVitrinePage />} />}
                   {hasFeature('devis1minute_vitrine') && <Route path="/devis1minute-vitrine" element={<Devis1minuteVitrinePage />} />}
                   {hasFeature('integrations_publicitaires') && <Route path="/publicites" element={<PublicitesIntegrationPage />} />}
