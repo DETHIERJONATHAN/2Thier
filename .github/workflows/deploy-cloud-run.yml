@@ -1,2 +1,0 @@
-# Ce workflow est obsolète. Le déploiement Cloud Run est désormais géré par
-# `.github/workflows/deploy-production.yml`.
