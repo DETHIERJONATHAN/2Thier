@@ -5,6 +5,8 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // 🚀 Connection pooling géré via DATABASE_URL avec pgbouncer
+  // Exemple: postgresql://user:pass@host:5432/db?connection_limit=20&pool_timeout=30
 }
 
 model AIRecommendation {
