@@ -37,3 +37,6 @@ build
 **/Thumbs.db
 Oracle/
 backup*.sql
+
+# Scripts archivés
+archived-scripts/

@@ -1,0 +1,64 @@
+# This file specifies files that should *not* be uploaded to Google Cloud
+# See: https://cloud.google.com/sdk/gcloud/reference/topic/gcloudignore
+
+.gcloudignore
+.git
+.gitignore
+
+# Node modules
+node_modules/
+
+# Local development files
+.env
+.env.*
+.vscode/
+.idea/
+
+# Build artifacts
+dist/
+dist-ssr/
+build/
+coverage/
+
+# Database backups and exports
+db-backups/
+backups/
+backup*/
+sauvegarde*/
+database-export.*
+*.sql
+
+# Documentation and test files
+*.md
+docs/
+Oracle/
+
+# Scripts archivés
+archived-scripts/
+
+# Scripts de développement à la racine (non nécessaires pour le build)
+/*.js
+/*.cjs
+/*.mjs
+/*.sh
+/*.ps1
+/*.bat
+
+# Garder seulement les fichiers de configuration essentiels
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.ts
+!tailwind.config.js
+!postcss.config.cjs
+
+# Secrets
+Google JSON/
+donnees-service-account.txt
+
+# Fichiers temporaires
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
