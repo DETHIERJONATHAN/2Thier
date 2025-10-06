@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Card, 
   Row, 
@@ -6,31 +6,17 @@ import {
   Typography, 
   Button, 
   Space, 
-  Divider,
   Tag,
-  Statistic,
   List,
   Avatar,
   Badge,
-  Timeline,
-  Carousel,
   Alert,
-  Modal,
-  Form,
-  Input
+  Modal
 } from 'antd';
 import {
   RocketOutlined,
-  UserOutlined,
-  ShopOutlined,
   TeamOutlined,
-  PhoneOutlined,
-  MailOutlined,
-  EnvironmentOutlined,
   StarFilled,
-  TrophyOutlined,
-  SafetyCertificateOutlined,
-  CustomerServiceOutlined,
   CheckCircleOutlined,
   EuroOutlined,
   ClockCircleOutlined,
@@ -56,7 +42,7 @@ interface Stats {
 }
 
 const Devis1minuteVitrinePage: React.FC = () => {
-  const [stats, setStats] = useState<Stats>({
+  const [stats] = useState<Stats>({
     totalLeads: 15420,
     activePartners: 847,
     avgValue: 2850,
@@ -73,287 +59,398 @@ const Devis1minuteVitrinePage: React.FC = () => {
   const [partnerModalVisible, setPartnerModalVisible] = useState(false);
 
   const getStatusColor = (status: Lead['status']) => {
-    switch (status) {
-      case 'nouveau': return '#52c41a';
-      case 'en_cours': return '#1890ff';
-      case 'converti': return '#faad14';
-      case 'perdu': return '#ff4d4f';
-      default: return '#d9d9d9';
-    }
+    const colors = {
+      'nouveau': '#52c41a',
+      'en_cours': '#1890ff',
+      'converti': '#faad14',
+      'perdu': '#ff4d4f'
+    };
+    return colors[status] || '#d9d9d9';
   };
 
   const getStatusText = (status: Lead['status']) => {
-    switch (status) {
-      case 'nouveau': return 'Nouveau';
-      case 'en_cours': return 'En cours';
-      case 'converti': return 'Converti';
-      case 'perdu': return 'Perdu';
-      default: return 'Inconnu';
-    }
-  };
-
-  const handleDevenirPartenaire = () => {
-    // Rediriger vers le formulaire de devenir partenaire
-    window.open('/devis1minute/devenir-partenaire', '_blank');
-  };
-
-  const handleContactLead = () => {
-    setPartnerModalVisible(true);
+    const texts = {
+      'nouveau': 'Nouveau',
+      'en_cours': 'En cours',
+      'converti': 'Converti',
+      'perdu': 'Perdu'
+    };
+    return texts[status] || 'Inconnu';
   };
 
   return (
-    <div style={{ padding: '20px', background: '#f5f5f5', minHeight: '100vh' }}>
-      {/* Header Hero */}
-      <Card style={{ marginBottom: '20px', background: 'linear-gradient(135deg, #ff7a00 0%, #ff4757 100%)', border: 'none' }}>
-        <Row align="middle" justify="center" style={{ textAlign: 'center', padding: '40px 0' }}>
-          <Col span={24}>
-            <Title level={1} style={{ color: 'white', fontSize: '48px', fontWeight: 'bold' }}>
-              <RocketOutlined style={{ marginRight: '16px' }} />
-              DEVIS1MINUTE
-            </Title>
-            <Title level={2} style={{ color: 'white', fontWeight: 'normal', marginTop: '10px' }}>
-              Marketplace de Leads Énergétiques
-            </Title>
-            <Paragraph style={{ color: 'white', fontSize: '18px', marginTop: '20px' }}>
-              La plateforme #1 pour connecter clients et professionnels de l'énergie
-            </Paragraph>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* Statistiques en temps réel */}
-      <Card style={{ marginBottom: '20px' }}>
-        <Title level={3} style={{ textAlign: 'center', marginBottom: '30px' }}>
-          📊 Statistiques en Temps Réel
-        </Title>
-        <Row gutter={[16, 16]}>
-          <Col xs={12} md={6}>
-            <Statistic
-              title="Total Leads"
-              value={stats.totalLeads}
-              prefix={<RocketOutlined style={{ color: '#ff7a00' }} />}
-              suffix="leads"
-              valueStyle={{ color: '#ff7a00' }}
-            />
-          </Col>
-          <Col xs={12} md={6}>
-            <Statistic
-              title="Partenaires Actifs"
-              value={stats.activePartners}
-              prefix={<TeamOutlined style={{ color: '#52c41a' }} />}
-              suffix="pros"
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Col>
-          <Col xs={12} md={6}>
-            <Statistic
-              title="Valeur Moyenne"
-              value={stats.avgValue}
-              prefix={<EuroOutlined style={{ color: '#1890ff' }} />}
-              suffix="€"
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Col>
-          <Col xs={12} md={6}>
-            <Statistic
-              title="Taux Conversion"
-              value={stats.conversionRate}
-              prefix={<TrophyOutlined style={{ color: '#faad14' }} />}
-              suffix="%"
-              valueStyle={{ color: '#faad14' }}
-            />
-          </Col>
-        </Row>
-      </Card>
-
-      <Row gutter={[20, 20]}>
-        {/* Leads récents */}
-        <Col xs={24} lg={12}>
-          <Card title="🔥 Leads Récents" extra={<Badge count={recentLeads.length} />}>
-            <List
-              itemLayout="horizontal"
-              dataSource={recentLeads}
-              renderItem={(lead) => (
-                <List.Item
-                  actions={[
-                    <Button type="primary" size="small" onClick={handleContactLead}>
-                      Contacter
-                    </Button>
-                  ]}
-                >
-                  <List.Item.Meta
-                    avatar={<Avatar style={{ backgroundColor: getStatusColor(lead.status) }}>
-                      {lead.type.charAt(0).toUpperCase()}
-                    </Avatar>}
-                    title={<span>{lead.type} - {lead.client}</span>}
-                    description={
-                      <Space>
-                        <Text strong style={{ color: '#52c41a' }}>
-                          {lead.value.toLocaleString()}€
-                        </Text>
-                        <Tag color={getStatusColor(lead.status)}>
-                          {getStatusText(lead.status)}
-                        </Tag>
-                        <Text type="secondary">{lead.date}</Text>
-                      </Space>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
-
-        {/* Types de projets disponibles */}
-        <Col xs={24} lg={12}>
-          <Card title="🎯 Types de Projets">
-            <Row gutter={[16, 16]}>
-              {[
-                { name: 'Pompes à Chaleur', color: '#ff7a00', leads: '2,450' },
-                { name: 'Panneaux Solaires', color: '#faad14', leads: '3,120' },
-                { name: 'Isolation', color: '#52c41a', leads: '1,890' },
-                { name: 'Chaudières', color: '#1890ff', leads: '1,640' },
-                { name: 'Ventilation', color: '#722ed1', leads: '780' },
-                { name: 'Autres', color: '#eb2f96', leads: '540' }
-              ].map((type) => (
-                <Col xs={12} md={8} key={type.name}>
-                  <Card size="small" style={{ textAlign: 'center', borderColor: type.color }}>
-                    <Title level={5} style={{ color: type.color, margin: '8px 0' }}>
-                      {type.name}
-                    </Title>
-                    <Text strong>{type.leads} leads</Text>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Section devenir partenaire */}
-      <Card style={{ marginTop: '20px', textAlign: 'center' }}>
-        <Title level={3}>
-          <TeamOutlined style={{ color: '#ff7a00', marginRight: '12px' }} />
-          Rejoignez Notre Réseau de Partenaires
-        </Title>
-        <Paragraph style={{ fontSize: '16px', marginBottom: '30px' }}>
-          Accédez à des leads qualifiés dans votre zone géographique
-        </Paragraph>
-        <Row gutter={[20, 20]} justify="center">
-          <Col xs={24} sm={8}>
-            <Card size="small">
-              <CheckCircleOutlined style={{ fontSize: '24px', color: '#52c41a', marginBottom: '8px' }} />
-              <Title level={4}>Leads Qualifiés</Title>
-              <Text>Clients déjà intéressés</Text>
-            </Card>
-          </Col>
-          <Col xs={24} sm={8}>
-            <Card size="small">
-              <ClockCircleOutlined style={{ fontSize: '24px', color: '#1890ff', marginBottom: '8px' }} />
-              <Title level={4}>Réactivité</Title>
-              <Text>Leads transmis en temps réel</Text>
-            </Card>
-          </Col>
-          <Col xs={24} sm={8}>
-            <Card size="small">
-              <GlobalOutlined style={{ fontSize: '24px', color: '#faad14', marginBottom: '8px' }} />
-              <Title level={4}>Zone Locale</Title>
-              <Text>Projets près de chez vous</Text>
-            </Card>
-          </Col>
-        </Row>
-        <div style={{ marginTop: '30px' }}>
-          <Button 
-            type="primary" 
-            size="large" 
-            icon={<TeamOutlined />}
-            onClick={handleDevenirPartenaire}
-            style={{ backgroundColor: '#ff7a00', borderColor: '#ff7a00' }}
+    <div style={{ 
+      background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%)',
+      minHeight: '100vh',
+      paddingBottom: '40px'
+    }}>
+      {/* Header Hero - Ant Design Card */}
+      <Card 
+        bordered={false}
+        style={{ 
+          background: 'rgba(0, 0, 0, 0.3)',
+          borderRadius: 0,
+          marginBottom: '20px'
+        }}
+        bodyStyle={{ padding: '30px 16px', textAlign: 'center' }}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Title 
+            level={1}
+            style={{ 
+              color: 'white',
+              margin: 0,
+              fontSize: 'clamp(24px, 8vw, 44px)',
+              fontWeight: 'bold'
+            }}
           >
-            Devenir Partenaire
+            <RocketOutlined /> Devis1Minute
+          </Title>
+          
+          <Title 
+            level={3}
+            style={{ 
+              color: 'rgba(255, 255, 255, 0.95)',
+              fontWeight: 'normal',
+              margin: 0,
+              fontSize: 'clamp(16px, 5vw, 22px)',
+              lineHeight: '1.4'
+            }}
+          >
+            Obtenez 3 devis qualifiés en moins de 24h
+          </Title>
+          
+          <Paragraph 
+            style={{ 
+              color: 'rgba(255, 255, 255, 0.85)',
+              maxWidth: '600px',
+              margin: '0 auto',
+              fontSize: 'clamp(13px, 3.5vw, 15px)',
+              lineHeight: '1.6'
+            }}
+          >
+            Notre IA connecte votre projet aux meilleurs artisans de votre région. Gratuit, rapide et sans engagement.
+          </Paragraph>
+          
+          <Button 
+            type="primary"
+            size="large"
+            icon={<RocketOutlined />}
+            style={{ 
+              backgroundColor: '#10b981',
+              borderColor: '#10b981',
+              height: 'auto',
+              padding: '14px 28px',
+              fontSize: 'clamp(14px, 3.5vw, 16px)',
+              fontWeight: '600',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+            }}
+          >
+            Démarrer ma demande GRATUITE
           </Button>
-        </div>
+          
+          <Text style={{ 
+            color: 'rgba(255, 255, 255, 0.8)',
+            fontSize: 'clamp(12px, 3vw, 14px)'
+          }}>
+            <CheckCircleOutlined /> Plus de 15 000 demandes traitées • 4.8/5 de satisfaction
+          </Text>
+        </Space>
       </Card>
 
-      {/* Témoignages */}
-      <Card style={{ marginTop: '20px' }} title="🌟 Témoignages Partenaires">
-        <Row gutter={[20, 20]}>
-          {[
-            {
-              name: "Jean Dupont",
-              company: "Énergie Solutions Pro",
-              text: "Excellent service ! J'ai converti 15 leads ce mois-ci.",
-              rating: 5
-            },
-            {
-              name: "Marie Martin",
-              company: "Chauffage Expert",
-              text: "Les leads sont de qualité, clients vraiment motivés.",
-              rating: 5
-            },
-            {
-              name: "Pierre Bernard",
-              company: "Solaire Avenir",
-              text: "Interface simple, support réactif. Je recommande !",
-              rating: 4
-            }
-          ].map((temoignage, index) => (
-            <Col xs={24} md={8} key={index}>
-              <Card size="small">
-                <div style={{ textAlign: 'center', marginBottom: '12px' }}>
-                  <Avatar size={48} style={{ backgroundColor: '#ff7a00' }}>
-                    {temoignage.name.split(' ').map(n => n[0]).join('')}
-                  </Avatar>
-                  <div style={{ marginTop: '8px' }}>
-                    <Title level={5} style={{ margin: 0 }}>{temoignage.name}</Title>
-                    <Text type="secondary">{temoignage.company}</Text>
-                  </div>
-                </div>
-                <Paragraph style={{ textAlign: 'center', fontStyle: 'italic' }}>
-                  "{temoignage.text}"
-                </Paragraph>
-                <div style={{ textAlign: 'center' }}>
-                  {[...Array(temoignage.rating)].map((_, i) => (
-                    <StarFilled key={i} style={{ color: '#faad14', marginRight: '4px' }} />
-                  ))}
-                </div>
-              </Card>
-            </Col>
-          ))}
+      {/* Statistiques - 100% Ant Design responsive */}
+      <div style={{ padding: '0 16px', marginBottom: '20px' }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={12} sm={12} md={6}>
+            <Card 
+              bordered={false}
+              style={{ 
+                background: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                borderRadius: '12px',
+                textAlign: 'center',
+                height: '100%',
+                minHeight: '110px'
+              }}
+              bodyStyle={{ 
+                padding: '16px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}
+            >
+              <Text 
+                style={{ 
+                  color: 'rgba(255, 255, 255, 0.75)',
+                  fontSize: '13px',
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '500'
+                }}
+              >
+                Demandes traitées
+              </Text>
+              <Title 
+                level={2}
+                style={{ 
+                  color: 'white',
+                  margin: 0,
+                  fontSize: 'clamp(24px, 7vw, 32px)',
+                  fontWeight: 'bold',
+                  lineHeight: '1.1'
+                }}
+              >
+                {stats.totalLeads.toLocaleString()}
+              </Title>
+            </Card>
+          </Col>
+
+          <Col xs={12} sm={12} md={6}>
+            <Card 
+              bordered={false}
+              style={{ 
+                background: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                borderRadius: '12px',
+                textAlign: 'center',
+                height: '100%',
+                minHeight: '110px'
+              }}
+              bodyStyle={{ 
+                padding: '16px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}
+            >
+              <Text 
+                style={{ 
+                  color: 'rgba(255, 255, 255, 0.75)',
+                  fontSize: '13px',
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '500'
+                }}
+              >
+                Professionnels partenaires
+              </Text>
+              <Title 
+                level={2}
+                style={{ 
+                  color: 'white',
+                  margin: 0,
+                  fontSize: 'clamp(24px, 7vw, 32px)',
+                  fontWeight: 'bold',
+                  lineHeight: '1.1'
+                }}
+              >
+                {stats.activePartners.toLocaleString()}
+              </Title>
+            </Card>
+          </Col>
+
+          <Col xs={12} sm={12} md={6}>
+            <Card 
+              bordered={false}
+              style={{ 
+                background: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                borderRadius: '12px',
+                textAlign: 'center',
+                height: '100%',
+                minHeight: '110px'
+              }}
+              bodyStyle={{ 
+                padding: '16px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}
+            >
+              <Text 
+                style={{ 
+                  color: 'rgba(255, 255, 255, 0.75)',
+                  fontSize: '13px',
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '500'
+                }}
+              >
+                Économie moyenne
+              </Text>
+              <Title 
+                level={2}
+                style={{ 
+                  color: 'white',
+                  margin: 0,
+                  fontSize: 'clamp(24px, 7vw, 32px)',
+                  fontWeight: 'bold',
+                  lineHeight: '1.1'
+                }}
+              >
+                {stats.avgValue.toLocaleString()}€
+              </Title>
+            </Card>
+          </Col>
+
+          <Col xs={12} sm={12} md={6}>
+            <Card 
+              bordered={false}
+              style={{ 
+                background: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                borderRadius: '12px',
+                textAlign: 'center',
+                height: '100%',
+                minHeight: '110px'
+              }}
+              bodyStyle={{ 
+                padding: '16px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}
+            >
+              <Text 
+                style={{ 
+                  color: 'rgba(255, 255, 255, 0.75)',
+                  fontSize: '13px',
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '500'
+                }}
+              >
+                Satisfaction
+              </Text>
+              <Title 
+                level={2}
+                style={{ 
+                  color: 'white',
+                  margin: 0,
+                  fontSize: 'clamp(24px, 7vw, 32px)',
+                  fontWeight: 'bold',
+                  lineHeight: '1.1'
+                }}
+              >
+                <StarFilled style={{ color: '#fbbf24', fontSize: '0.8em' }} /> 4.8/5
+              </Title>
+            </Card>
+          </Col>
         </Row>
-      </Card>
+      </div>
 
-      {/* Modal contact lead */}
+      {/* Reste du contenu (leads, projets, etc.) */}
+      <div style={{ padding: '0 16px' }}>
+        <Row gutter={[16, 16]}>
+          {/* Leads récents */}
+          <Col xs={24} lg={12}>
+            <Card 
+              title={<span style={{ fontWeight: 'bold' }}>🔥 Leads Récents</span>}
+              extra={<Badge count={recentLeads.length} style={{ backgroundColor: '#10b981' }} />}
+              style={{ borderRadius: '12px' }}
+            >
+              <List
+                itemLayout="horizontal"
+                dataSource={recentLeads}
+                renderItem={(lead) => (
+                  <List.Item
+                    actions={[
+                      <Button 
+                        type="primary" 
+                        size="small" 
+                        onClick={() => setPartnerModalVisible(true)}
+                        style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                      >
+                        Contacter
+                      </Button>
+                    ]}
+                  >
+                    <List.Item.Meta
+                      avatar={<Avatar style={{ backgroundColor: getStatusColor(lead.status) }}>
+                        {lead.type.charAt(0).toUpperCase()}
+                      </Avatar>}
+                      title={<span style={{ fontSize: '14px' }}>{lead.type} - {lead.client}</span>}
+                      description={
+                        <Space wrap size="small">
+                          <Text strong style={{ color: '#10b981' }}>{lead.value.toLocaleString()}€</Text>
+                          <Tag color={getStatusColor(lead.status)}>{getStatusText(lead.status)}</Tag>
+                          <Text type="secondary" style={{ fontSize: '12px' }}>{lead.date}</Text>
+                        </Space>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            </Card>
+          </Col>
+
+          {/* Types de projets */}
+          <Col xs={24} lg={12}>
+            <Card title={<span style={{ fontWeight: 'bold' }}>🎯 Types de Projets</span>} style={{ borderRadius: '12px' }}>
+              <Row gutter={[12, 12]}>
+                {[
+                  { name: 'Pompes à Chaleur', color: '#10b981', leads: '2,450' },
+                  { name: 'Panneaux Solaires', color: '#f59e0b', leads: '3,120' },
+                  { name: 'Isolation', color: '#3b82f6', leads: '1,890' },
+                  { name: 'Chaudières', color: '#8b5cf6', leads: '1,640' },
+                  { name: 'Ventilation', color: '#ec4899', leads: '780' },
+                  { name: 'Autres', color: '#6366f1', leads: '540' }
+                ].map((type) => (
+                  <Col xs={12} sm={8} key={type.name}>
+                    <Card 
+                      size="small"
+                      style={{ 
+                        textAlign: 'center',
+                        borderColor: type.color,
+                        borderWidth: '2px',
+                        borderRadius: '8px'
+                      }}
+                      bodyStyle={{ padding: '12px' }}
+                    >
+                      <Title 
+                        level={5}
+                        style={{ 
+                          color: type.color,
+                          margin: '0 0 4px 0',
+                          fontSize: 'clamp(12px, 3vw, 14px)'
+                        }}
+                      >
+                        {type.name}
+                      </Title>
+                      <Text strong style={{ fontSize: '12px' }}>{type.leads} leads</Text>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            </Card>
+          </Col>
+        </Row>
+      </div>
+
+      {/* Modal */}
       <Modal
-        title="📞 Contacter un Lead"
+        title="📞 Accès Partenaire Requis"
         open={partnerModalVisible}
         onCancel={() => setPartnerModalVisible(false)}
         footer={[
-          <Button key="cancel" onClick={() => setPartnerModalVisible(false)}>
-            Annuler
-          </Button>,
-          <Button key="contact" type="primary" onClick={handleDevenirPartenaire}>
-            Devenir Partenaire
-          </Button>
+          <Button key="cancel" onClick={() => setPartnerModalVisible(false)}>Fermer</Button>
         ]}
       >
         <Alert
-          message="🚀 Accès Partenaire Requis"
-          description="Pour contacter nos leads, vous devez d'abord devenir partenaire Devis1minute. Rejoignez notre réseau de professionnels qualifiés !"
+          message="Devenez partenaire pour accéder aux leads"
+          description="Rejoignez notre réseau de professionnels qualifiés !"
           type="info"
           showIcon
-          style={{ marginBottom: '20px' }}
         />
-        
-        <div style={{ textAlign: 'center' }}>
-          <Title level={4}>Avantages Partenaire :</Title>
-          <List size="small">
-            <List.Item>✅ Accès aux leads qualifiés de votre région</List.Item>
-            <List.Item>✅ Notifications en temps réel</List.Item>
-            <List.Item>✅ Système de scoring des prospects</List.Item>
-            <List.Item>✅ Support commercial dédié</List.Item>
-          </List>
-        </div>
       </Modal>
     </div>
   );
