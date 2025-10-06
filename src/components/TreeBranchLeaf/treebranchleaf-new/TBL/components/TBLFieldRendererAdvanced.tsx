@@ -459,11 +459,23 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   const { isValidation } = useTBLValidationContext();
   
   // ✅ NOUVEAU: Calculer hasTable AVANT d'appeler le hook pour pouvoir le passer en paramètre
+  // 🔧 PRIORITÉ: field.hasTable (base de données) > capabilities.table.enabled (cache) > metadata.hasTable
   const hasTableCapability = useMemo(() => {
+    // 1. Priorité absolue : field.hasTable vient directement de la DB après mise à jour
+    if (typeof field.hasTable === 'boolean') {
+      return field.hasTable;
+    }
+    
+    // 2. Fallback : capabilities (peut être en cache)
     const capabilities = field.capabilities || {};
+    if (capabilities.table?.enabled !== undefined) {
+      return capabilities.table.enabled;
+    }
+    
+    // 3. Dernier recours : metadata
     const metadata = treeMetadata || {};
-    return capabilities.table?.enabled || metadata.hasTable || false;
-  }, [field.capabilities, treeMetadata]);
+    return metadata.hasTable || false;
+  }, [field.hasTable, field.capabilities, treeMetadata]);
   
   // 🔗 Hook pour charger les options depuis un tableau lookup (si configuré)
   // ✅ NOUVEAU: On passe hasTableCapability pour que le hook vide les options quand le lookup est désactivé

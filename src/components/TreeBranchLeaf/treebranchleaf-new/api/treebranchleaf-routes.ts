@@ -26,6 +26,11 @@ import {
 } from '../shared/hierarchyRules';
 import { randomUUID, createHash } from 'crypto';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎯 NOUVEAU SYSTÈME UNIVERSEL D'INTERPRÉTATION TBL
+// ═══════════════════════════════════════════════════════════════════════════
+import { evaluateVariableOperation } from './operation-interpreter.js';
+
 const router = Router();
 const prisma = new PrismaClient();
 
@@ -409,7 +414,9 @@ async function calculateConditionResult(
   if (firstWhen) {
     conditionResult = evaluateCondition(firstWhen, values);
   }
+  console.log(`[CALC-CONDITION-RESULT] ===== DÉBUT ÉVALUATION =====`);
   console.log(`[CALC-CONDITION-RESULT] Condition évaluée:`, conditionResult);
+  console.log(`[CALC-CONDITION-RESULT] ValuesMap contient:`, Array.from(values.entries()));
   
   // Déterminer quelle branche utiliser
   const branches = Array.isArray(setObj.branches) ? setObj.branches : [];
@@ -425,50 +432,138 @@ async function calculateConditionResult(
       if (Array.isArray(aa.nodeIds)) {
         for (const nid of aa.nodeIds as string[]) {
           const normalizedId = normalizeRefId(nid);
-          const directValue = values.get(normalizedId);
-          if (directValue !== null && directValue !== undefined) {
-            finalResult = String(directValue);
-            console.log(`[CALC-CONDITION-RESULT] Valeur directe ALORS:`, finalResult);
-            break;
+          
+          console.log(`[CALC-CONDITION-RESULT] Node ALORS "${nid}", normalizedId:`, normalizedId);
+          
+          // IMPORTANT: Vérifier si c'est une FORMULE (commence par "node-formula:")
+          if (nid.startsWith('node-formula:')) {
+            // C'est une formule → la calculer
+            console.log(`[CALC-CONDITION-RESULT] 🧮 Détection FORMULE dans ALORS`);
+            
+            const formula = await dbClient.treeBranchLeafNodeFormula.findUnique({
+              where: { id: normalizedId },
+              select: { id: true, nodeId: true, tokens: true }
+            });
+            
+            if (formula) {
+              // Créer un labelMap pour cette formule
+              const tempLabelMap = new Map<string, string | null>();
+              const tokenIds = extractNodeIdsFromTokens(formula.tokens);
+              
+              if (tokenIds.size > 0) {
+                const nodes = await dbClient.treeBranchLeafNode.findMany({
+                  where: { id: { in: Array.from(tokenIds) } },
+                  select: { id: true, label: true }
+                });
+                for (const n of nodes) tempLabelMap.set(n.id, n.label || null);
+              }
+              
+              const expr = buildTextFromTokens(formula.tokens, tempLabelMap, values);
+              const calculatedResult = calculateResult(expr);
+              
+              if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
+                finalResult = String(calculatedResult);
+                console.log(`[CALC-CONDITION-RESULT] ✓ Formule ALORS calculée:`, finalResult, 'depuis expression:', expr);
+                break;
+              }
+            }
+          } else {
+            // C'est un champ normal → chercher sa valeur
+            const directValue = values.get(normalizedId);
+            
+            console.log(`[CALC-CONDITION-RESULT] 📝 Champ normal ALORS, valeur:`, directValue);
+            
+            if (directValue !== null && directValue !== undefined && directValue !== '') {
+              finalResult = String(directValue);
+              console.log(`[CALC-CONDITION-RESULT] ✓ Valeur directe ALORS:`, finalResult);
+            } else {
+              const node = await dbClient.treeBranchLeafNode.findUnique({
+                where: { id: normalizedId },
+                select: { label: true }
+              });
+              finalResult = `${node?.label || normalizedId} (aucune donnée)`;
+              console.log(`[CALC-CONDITION-RESULT] ✗ Aucune valeur ALORS:`, finalResult);
+            }
           }
+          break; // On sort après le premier nodeId traité
         }
       }
     }
   } else if (!conditionResult) {
-    // Condition fausse → utiliser le fallback (SINON) et calculer les formules
+    // Condition fausse → utiliser le fallback (SINON)
     console.log(`[CALC-CONDITION-RESULT] Utilisation branche SINON (fallback)`);
     
-    const fIds = extractFormulaIdsFromConditionSet(conditionSet);
-    console.log(`[CALC-CONDITION-RESULT] Formula IDs extraits:`, Array.from(fIds));
+    const fallbackObj = (setObj.fallback && typeof setObj.fallback === 'object') 
+      ? (setObj.fallback as Record<string, unknown>) 
+      : {};
     
-    if (fIds.size > 0) {
-      const formulas = await dbClient.treeBranchLeafNodeFormula.findMany({
-        where: { id: { in: Array.from(fIds) } },
-        select: { id: true, nodeId: true, tokens: true }
-      });
-      console.log(`[CALC-CONDITION-RESULT] Formules trouvées:`, formulas.length);
-      
-      for (const f of formulas) {
-        // Créer un labelMap minimal juste pour cette formule
-        const tempLabelMap = new Map<string, string | null>();
-        const tokenIds = extractNodeIdsFromTokens(f.tokens);
-        
-        // Récupérer les labels des nodes référencés
-        if (tokenIds.size > 0) {
-          const nodes = await dbClient.treeBranchLeafNode.findMany({
-            where: { id: { in: Array.from(tokenIds) } },
-            select: { id: true, label: true }
-          });
-          for (const n of nodes) tempLabelMap.set(n.id, n.label || null);
+    const fallbackActions = Array.isArray(fallbackObj.actions) ? (fallbackObj.actions as unknown[]) : [];
+    
+    // D'abord, chercher les valeurs directes de champs dans le fallback
+    for (const a of fallbackActions) {
+      const aa = a as Record<string, unknown>;
+      if (Array.isArray(aa.nodeIds)) {
+        for (const nid of aa.nodeIds as string[]) {
+          const normalizedId = normalizeRefId(nid);
+          
+          // Si c'est un nœud normal (pas une formule)
+          if (!nid.startsWith('node-formula:')) {
+            const directValue = values.get(normalizedId);
+            console.log(`[CALC-CONDITION-RESULT] Node SINON "${normalizedId}", valeur:`, directValue);
+            
+            if (directValue !== null && directValue !== undefined && directValue !== '') {
+              finalResult = String(directValue);
+              console.log(`[CALC-CONDITION-RESULT] ✓ Valeur directe SINON:`, finalResult);
+              break;
+            } else {
+              const node = await dbClient.treeBranchLeafNode.findUnique({
+                where: { id: normalizedId },
+                select: { label: true }
+              });
+              finalResult = `${node?.label || normalizedId} (aucune donnée)`;
+              console.log(`[CALC-CONDITION-RESULT] ✗ Aucune valeur SINON:`, finalResult);
+              break;
+            }
+          }
         }
+        if (finalResult !== '∅') break;
+      }
+    }
+    
+    // Si pas de valeur directe trouvée, chercher les formules
+    if (finalResult === '∅') {
+      const fIds = extractFormulaIdsFromConditionSet(conditionSet);
+      console.log(`[CALC-CONDITION-RESULT] Formula IDs extraits:`, Array.from(fIds));
+      
+      if (fIds.size > 0) {
+        const formulas = await dbClient.treeBranchLeafNodeFormula.findMany({
+          where: { id: { in: Array.from(fIds) } },
+          select: { id: true, nodeId: true, tokens: true }
+        });
+        console.log(`[CALC-CONDITION-RESULT] Formules trouvées:`, formulas.length);
         
-        const expr = buildTextFromTokens(f.tokens, tempLabelMap, values);
-        const calculatedResult = calculateResult(expr);
-        
-        if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
-          finalResult = String(calculatedResult);
-          console.log(`[CALC-CONDITION-RESULT] Résultat calculé SINON:`, finalResult, 'depuis expression:', expr);
-          break;
+        for (const f of formulas) {
+          // Créer un labelMap minimal juste pour cette formule
+          const tempLabelMap = new Map<string, string | null>();
+          const tokenIds = extractNodeIdsFromTokens(f.tokens);
+          
+          // Récupérer les labels des nodes référencés
+          if (tokenIds.size > 0) {
+            const nodes = await dbClient.treeBranchLeafNode.findMany({
+              where: { id: { in: Array.from(tokenIds) } },
+              select: { id: true, label: true }
+            });
+            for (const n of nodes) tempLabelMap.set(n.id, n.label || null);
+          }
+          
+          const expr = buildTextFromTokens(f.tokens, tempLabelMap, values);
+          const calculatedResult = calculateResult(expr);
+          
+          if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
+            finalResult = String(calculatedResult);
+            console.log(`[CALC-CONDITION-RESULT] Résultat calculé SINON:`, finalResult, 'depuis expression:', expr);
+            break;
+          }
         }
       }
     }
@@ -871,30 +966,37 @@ async function buildConditionExpressionReadable(
   
   if (conditionId) {
     try {
-      // 🔥 UTILISER VRAIMENT LE CAPACITYCALCULATOR DIRECTEMENT !
-      console.log('🧮 [TBL DYNAMIC] Évaluation condition avec CapacityCalculator:', conditionId);
+      // 🔥 UTILISER LE SYSTÈME UNIFIÉ operation-interpreter !
+      console.log('🧮 [TBL DYNAMIC] Évaluation condition avec operation-interpreter:', conditionId);
       
-      // Import dynamique du CapacityCalculator
-      const { CapacityCalculator } = await import('../tbl-prisma/conditions/capacity-calculator');
+      // Import du système unifié
+      const { evaluateVariableOperation } = await import('./operation-interpreter');
+      
+      // Trouver le nodeId de la condition
+      const conditionNode = await dbClient.treeBranchLeafNodeCondition.findUnique({
+        where: { id: conditionId },
+        select: { nodeId: true }
+      });
+      
+      if (!conditionNode?.nodeId) {
+        return `⚠️ Condition ${conditionId}: nodeId introuvable`;
+      }
       
       // Créer le calculateur avec Prisma
-      const calculator = new CapacityCalculator(dbClient);
+      const submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182';
       
       // Préparer le contexte avec la VRAIE organisation !
       const organizationId = (req as any).user?.organizationId || 'unknown-org';
       const userId = (req as any).user?.userId || 'unknown-user';
       
-      const context = {
-        submissionId: 'df833cac-0b44-4b2b-bb1c-de3878f00182',
-        organizationId, // ✅ VRAIE ORGANISATION!
-        userId // ✅ VRAI UTILISATEUR!
-      };
+      // ✨ Calculer avec le système unifié
+      const calculationResult = await evaluateVariableOperation(
+        conditionNode.nodeId,
+        submissionId,
+        dbClient
+      );
       
-      // Calculer la capacité condition avec le sourceRef complet
-      const sourceRef = `condition:${conditionId}`;
-      const calculationResult = await calculator.calculateCapacity(sourceRef, context);
-      
-      console.log('🧮 [TBL DYNAMIC] Résultat CapacityCalculator:', calculationResult);
+      console.log('🧮 [TBL DYNAMIC] Résultat operation-interpreter:', calculationResult);
       
       // Retourner la traduction intelligente au lieu du message d'attente
       if (calculationResult && calculationResult.operationResult) {
@@ -904,7 +1006,7 @@ async function buildConditionExpressionReadable(
       }
       
     } catch (error) {
-      console.error('❌ [TBL DYNAMIC] Erreur CapacityCalculator:', error);
+      console.error('❌ [TBL DYNAMIC] Erreur operation-interpreter:', error);
       return `⚠️ Condition ${conditionId}: Erreur évaluation TBL - ${error instanceof Error ? error.message : 'unknown'}`;
     }
   }
@@ -3018,37 +3120,25 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé à cette condition' });
     }
 
-    // 🚀 UTILISATION DU NOUVEAU SYSTÈME CAPACITY-CALCULATOR
+    // 🚀 UTILISATION DU SYSTÈME UNIFIÉ operation-interpreter
     try {
-      const { CapacityCalculator } = await import('../tbl-prisma/conditions/capacity-calculator');
+      const { evaluateVariableOperation } = await import('./operation-interpreter');
       
-      // Convertir allValues en Maps pour le contexte TBL
-      const labelMap = new Map<string, string>();
-      const valueMap = new Map<string, unknown>();
-      
-      // Enrichir avec les valeurs fournies (temporaire)
+      // Convertir allValues en Map pour le mode preview
+      const valueMapLocal = new Map<string, unknown>();
       Object.entries(allValues).forEach(([nodeId, value]) => {
-        valueMap.set(nodeId, value);
-        labelMap.set(nodeId, `Nœud ${nodeId}`); // TBL-PRISMA va enrichir automatiquement
+        valueMapLocal.set(nodeId, value);
       });
       
-      // Créer le contexte TBL
-      const context = {
-        submissionId: submissionId || conditionId, // ✅ Utiliser submissionId si fourni, sinon conditionId en fallback
-        labelMap,
-        valueMap,
-        organizationId: organizationId || '',
-        userId: 'test-user' // TODO: récupérer le vrai userId
-      };
+      console.log('[TBL-PRISMA] 🧮 Évaluation avec operation-interpreter:', { conditionId, values: Object.fromEntries(valueMapLocal) });
       
-      console.log('[TBL-PRISMA] 🧮 Évaluation avec calculateur:', { conditionId, values: Object.fromEntries(valueMap) });
-      
-      // Créer le calculateur universel
-      const calculator = new CapacityCalculator(prisma);
-      
-      // Calculer la capacité condition avec le sourceRef complet
-      const sourceRef = `condition:${conditionId}`;
-      const calculationResult = await calculator.calculateCapacity(sourceRef, context);
+      // ✨ Calculer avec le système unifié (passe valueMapLocal pour mode preview)
+      const calculationResult = await evaluateVariableOperation(
+        condition.nodeId,
+        submissionId || conditionId,
+        prisma,
+        valueMapLocal
+      );
       
       console.log('[TBL-PRISMA] ✅ Résultat évaluation:', calculationResult);
       
@@ -6672,6 +6762,17 @@ router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
         console.error(`⚠️ [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
         // Non-bloquant : on continue même si la création échoue
       }
+    } else if (!enabled) {
+      // 🔴 DÉSACTIVATION : Supprimer la configuration SELECT
+      console.log(`🔴 [TablePanel API] Suppression configuration SELECT pour ${nodeId}`);
+      try {
+        await prisma.treeBranchLeafSelectConfig.deleteMany({
+          where: { nodeId }
+        });
+        console.log(`✅ [TablePanel API] Configuration SELECT supprimée pour ${nodeId}`);
+      } catch (deleteError) {
+        console.error(`⚠️ [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
+      }
     }
     
     // 🔍 VÉRIFICATION IMMÉDIATE : Relire depuis la DB pour confirmer persistance
@@ -7118,28 +7219,58 @@ router.put('/submissions/:id', async (req, res) => {
         valuesMapTxAll.set(row.nodeId, valueStr);
         let opRes: Prisma.InputJsonValue = meta?.unit && valueStr ? `${display}: ${valueStr} ${meta.unit}` : `${display}: ${valueStr ?? ''}`;
         const opDetail = isVar ? (await resolveOperationDetail(row.sourceRef || null)) : (label as Prisma.InputJsonValue | undefined);
+        
         if (isVar && (row.sourceRef || meta?.sourceRef)) {
-          const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
-          if (parsed?.type === 'condition') {
-            const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
-            const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
-            const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
-            const human = `${display}`;
-            opRes = { type: 'condition', label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) } as const;
-          } else if (parsed?.type === 'formula') {
-            const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
-            const ids = extractNodeIdsFromTokens(rec?.tokens);
-            const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
-            const human = `${display}`;
-            opRes = { type: 'formula', label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) } as const;
-          } else if (parsed?.type === 'table') {
-            const rec = await tx.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
-            const str = JSON.stringify(rec);
-            const ids = new Set<string>();
-            if (str) { let m: RegExpExecArray | null; const re = /@value\.([a-f0-9-]{36})/gi; while ((m = re.exec(str)) !== null) ids.add(m[1]); }
-            const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
-            const human = `${display}`;
-            opRes = { type: 'table', label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) } as const;
+          // ═══════════════════════════════════════════════════════════════════
+          // 🎯 NOUVEAU : Utiliser le système universel d'interprétation
+          // ═══════════════════════════════════════════════════════════════════
+          try {
+            console.log(`[UNIVERSAL] 🔄 Évaluation de la variable: ${row.nodeId} (${display})`);
+            
+            // Appeler le système universel
+            const evaluation = await evaluateVariableOperation(
+              row.nodeId,
+              id, // submissionId
+              tx as any // Utiliser la transaction Prisma
+            );
+            
+            console.log(`[UNIVERSAL] ✅ Résultat: ${evaluation.value}`);
+            
+            // Utiliser le résultat du système universel
+            opRes = evaluation.operationResult;
+            
+            // Mettre à jour la valeur calculée dans la base
+            await tx.treeBranchLeafSubmissionData.updateMany({
+              where: { submissionId: id, nodeId: row.nodeId },
+              data: { value: evaluation.value }
+            });
+            
+          } catch (error) {
+            console.error(`[UNIVERSAL] ❌ Erreur évaluation variable ${row.nodeId}:`, error);
+            
+            // Fallback vers l'ancien système en cas d'erreur
+            const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
+            if (parsed?.type === 'condition') {
+              const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
+              const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
+              const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
+              const human = `${display}`;
+              opRes = { type: 'condition', label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) } as const;
+            } else if (parsed?.type === 'formula') {
+              const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
+              const ids = extractNodeIdsFromTokens(rec?.tokens);
+              const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
+              const human = `${display}`;
+              opRes = { type: 'formula', label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) } as const;
+            } else if (parsed?.type === 'table') {
+              const rec = await tx.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+              const str = JSON.stringify(rec);
+              const ids = new Set<string>();
+              if (str) { let m: RegExpExecArray | null; const re = /@value\.([a-f0-9-]{36})/gi; while ((m = re.exec(str)) !== null) ids.add(m[1]); }
+              const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
+              const human = `${display}`;
+              opRes = { type: 'table', label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) } as const;
+            }
           }
         }
         await tx.treeBranchLeafSubmissionData.updateMany({
@@ -7176,5 +7307,454 @@ router.put('/submissions/:id', async (req, res) => {
     return res.status(500).json({ error: 'Erreur lors de la mise à jour de la soumission' });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎯 NOUVELLES ROUTES - SYSTÈME UNIVERSEL D'INTERPRÉTATION TBL
+// ═══════════════════════════════════════════════════════════════════════════
+// Ces routes utilisent le système moderne operation-interpreter.ts
+// Elles sont INDÉPENDANTES des anciens systèmes (CapacityCalculator, etc.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * 🎯 POST /api/treebranchleaf/v2/variables/:variableNodeId/evaluate
+ * 
+ * ÉVALUE UNE VARIABLE avec le système universel d'interprétation
+ * 
+ * Cette route est le POINT D'ENTRÉE PRINCIPAL pour évaluer n'importe quelle
+ * variable (condition, formule, table) de manière récursive et complète.
+ * 
+ * PARAMÈTRES :
+ * ------------
+ * - variableNodeId : ID du nœud TreeBranchLeafNode qui contient la Variable
+ * - submissionId (body) : ID de la soumission en cours
+ * 
+ * RETOUR :
+ * --------
+ * {
+ *   success: true,
+ *   variable: { nodeId, displayName, exposedKey },
+ *   result: {
+ *     value: "73",              // Valeur calculée finale
+ *     operationDetail: {...},    // Structure détaillée complète
+ *     operationResult: "Si...",  // Texte explicatif en français
+ *     operationSource: "table"   // Type d'opération source
+ *   },
+ *   evaluation: {
+ *     mode: 'universal-interpreter',
+ *     timestamp: "2025-01-06T...",
+ *     depth: 0
+ *   }
+ * }
+ * 
+ * EXEMPLES D'UTILISATION :
+ * ------------------------
+ * 1. Variable qui pointe vers une condition :
+ *    POST /api/treebranchleaf/v2/variables/10bfb6d2.../evaluate
+ *    Body: { submissionId: "tbl-1759750447813-xxx" }
+ *    → Évalue récursivement la condition et retourne le résultat
+ * 
+ * 2. Variable qui pointe vers une table :
+ *    POST /api/treebranchleaf/v2/variables/abc123.../evaluate
+ *    Body: { submissionId: "tbl-xxx" }
+ *    → Effectue le lookup dans la table et retourne la valeur
+ * 
+ * 3. Variable qui pointe vers une formule :
+ *    POST /api/treebranchleaf/v2/variables/def456.../evaluate
+ *    Body: { submissionId: "tbl-xxx" }
+ *    → Calcule la formule et retourne le résultat
+ */
+router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
+  try {
+    const { variableNodeId } = req.params;
+    const { submissionId } = req.body;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    console.log('\n' + '═'.repeat(80));
+    console.log('🎯 [V2 API] ÉVALUATION VARIABLE UNIVERSELLE');
+    console.log('═'.repeat(80));
+    console.log('📋 Paramètres:');
+    console.log('   - variableNodeId:', variableNodeId);
+    console.log('   - submissionId:', submissionId);
+    console.log('   - organizationId:', organizationId);
+    console.log('   - isSuperAdmin:', isSuperAdmin);
+    console.log('═'.repeat(80) + '\n');
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ✅ ÉTAPE 1 : Validation des paramètres
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!variableNodeId) {
+      console.error('❌ [V2 API] variableNodeId manquant');
+      return res.status(400).json({
+        success: false,
+        error: 'variableNodeId requis'
+      });
+    }
+
+    if (!submissionId) {
+      console.error('❌ [V2 API] submissionId manquant');
+      return res.status(400).json({
+        success: false,
+        error: 'submissionId requis dans le body'
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔍 ÉTAPE 2 : Vérifier que le nœud existe et est accessible
+    // ═══════════════════════════════════════════════════════════════════════
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: variableNodeId },
+      include: {
+        TreeBranchLeafTree: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true
+          }
+        },
+        TreeBranchLeafNodeVariable: {
+          select: {
+            id: true,
+            nodeId: true,
+            exposedKey: true,
+            displayName: true,
+            sourceType: true,
+            sourceRef: true,
+            fixedValue: true,
+            defaultValue: true
+          }
+        }
+      }
+    });
+
+    if (!node) {
+      console.error('❌ [V2 API] Nœud introuvable:', variableNodeId);
+      return res.status(404).json({
+        success: false,
+        error: 'Nœud introuvable'
+      });
+    }
+
+    console.log('✅ [V2 API] Nœud trouvé:', node.label);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔒 ÉTAPE 3 : Vérifier les permissions d'organisation
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!isSuperAdmin && node.TreeBranchLeafTree?.organizationId !== organizationId) {
+      console.error('❌ [V2 API] Accès refusé - mauvaise organisation');
+      return res.status(403).json({
+        success: false,
+        error: 'Accès refusé à ce nœud'
+      });
+    }
+
+    console.log('✅ [V2 API] Permissions validées');
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📊 ÉTAPE 4 : Vérifier qu'il y a bien une Variable associée
+    // ═══════════════════════════════════════════════════════════════════════
+    const variable = node.TreeBranchLeafNodeVariable?.[0];
+
+    if (!variable) {
+      console.error('❌ [V2 API] Pas de variable associée à ce nœud');
+      return res.status(400).json({
+        success: false,
+        error: 'Ce nœud ne contient pas de variable'
+      });
+    }
+
+    console.log('✅ [V2 API] Variable trouvée:', variable.displayName);
+    console.log('   - sourceType:', variable.sourceType);
+    console.log('   - sourceRef:', variable.sourceRef);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔍 ÉTAPE 5 : Vérifier que la soumission existe et est accessible
+    // ═══════════════════════════════════════════════════════════════════════
+    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      select: {
+        id: true,
+        treeId: true,
+        leadId: true,
+        status: true
+      }
+    });
+
+    if (!submission) {
+      console.error('❌ [V2 API] Soumission introuvable:', submissionId);
+      return res.status(404).json({
+        success: false,
+        error: 'Soumission introuvable'
+      });
+    }
+
+    console.log('✅ [V2 API] Soumission trouvée:', submissionId);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🚀 ÉTAPE 6 : ÉVALUATION UNIVERSELLE avec operation-interpreter
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log('\n' + '─'.repeat(80));
+    console.log('🚀 [V2 API] Démarrage évaluation universelle...');
+    console.log('─'.repeat(80) + '\n');
+
+    const startTime = Date.now();
+
+    // Appel de la fonction principale du système universel
+    const evaluationResult = await evaluateVariableOperation(
+      variableNodeId,
+      submissionId,
+      prisma
+    );
+
+    const duration = Date.now() - startTime;
+
+    console.log('\n' + '─'.repeat(80));
+    console.log('✅ [V2 API] Évaluation terminée avec succès !');
+    console.log('   - Durée:', duration, 'ms');
+    console.log('   - Résultat:', evaluationResult.value);
+    console.log('   - OperationSource:', evaluationResult.operationSource);
+    console.log('─'.repeat(80) + '\n');
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 💾 ÉTAPE 7 : Sauvegarder le résultat dans SubmissionData
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log('💾 [V2 API] Sauvegarde dans SubmissionData...');
+
+    await prisma.treeBranchLeafSubmissionData.upsert({
+      where: {
+        submissionId_nodeId: {
+          submissionId,
+          nodeId: variableNodeId
+        }
+      },
+      update: {
+        value: evaluationResult.value,
+        operationDetail: evaluationResult.operationDetail as Prisma.InputJsonValue,
+        operationResult: evaluationResult.operationResult,
+        operationSource: evaluationResult.operationSource,
+        lastResolved: new Date(),
+        updatedAt: new Date()
+      },
+      create: {
+        submissionId,
+        nodeId: variableNodeId,
+        value: evaluationResult.value,
+        operationDetail: evaluationResult.operationDetail as Prisma.InputJsonValue,
+        operationResult: evaluationResult.operationResult,
+        operationSource: evaluationResult.operationSource,
+        lastResolved: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+
+    console.log('✅ [V2 API] Sauvegarde effectuée\n');
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📤 ÉTAPE 8 : Retourner la réponse complète
+    // ═══════════════════════════════════════════════════════════════════════
+    const response = {
+      success: true,
+      variable: {
+        nodeId: variable.nodeId,
+        displayName: variable.displayName,
+        exposedKey: variable.exposedKey,
+        sourceType: variable.sourceType,
+        sourceRef: variable.sourceRef
+      },
+      result: {
+        value: evaluationResult.value,
+        operationDetail: evaluationResult.operationDetail,
+        operationResult: evaluationResult.operationResult,
+        operationSource: evaluationResult.operationSource,
+        sourceRef: evaluationResult.sourceRef
+      },
+      evaluation: {
+        mode: 'universal-interpreter',
+        version: '1.0.0',
+        timestamp: new Date().toISOString(),
+        duration: `${duration}ms`,
+        submissionId,
+        nodeLabel: node.label
+      }
+    };
+
+    console.log('═'.repeat(80));
+    console.log('📤 [V2 API] Réponse envoyée avec succès');
+    console.log('═'.repeat(80) + '\n');
+
+    return res.json(response);
+
+  } catch (error) {
+    console.error('\n' + '═'.repeat(80));
+    console.error('❌ [V2 API] ERREUR CRITIQUE');
+    console.error('═'.repeat(80));
+    console.error(error);
+    console.error('═'.repeat(80) + '\n');
+
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de l\'évaluation de la variable',
+      details: error instanceof Error ? error.message : 'Erreur inconnue',
+      stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
+    });
+  }
+});
+
+/**
+ * 🔍 GET /api/treebranchleaf/v2/submissions/:submissionId/variables
+ * 
+ * RÉCUPÈRE TOUTES LES VARIABLES d'une soumission avec leurs valeurs évaluées
+ * 
+ * Cette route permet d'obtenir un aperçu complet de toutes les variables
+ * d'une soumission, avec leurs valeurs calculées et leurs textes explicatifs.
+ * 
+ * RETOUR :
+ * --------
+ * {
+ *   success: true,
+ *   submissionId: "tbl-xxx",
+ *   tree: { id, name },
+ *   variables: [
+ *     {
+ *       nodeId: "xxx",
+ *       displayName: "Prix Kw/h test",
+ *       exposedKey: "prix_kwh_test",
+ *       value: "73",
+ *       operationResult: "Si Prix > 10...",
+ *       operationSource: "condition",
+ *       lastResolved: "2025-01-06T..."
+ *     },
+ *     ...
+ *   ]
+ * }
+ */
+router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    console.log('\n🔍 [V2 API] RÉCUPÉRATION VARIABLES:', submissionId);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔍 ÉTAPE 1 : Récupérer la soumission avec son tree
+    // ═══════════════════════════════════════════════════════════════════════
+    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        TreeBranchLeafTree: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true
+          }
+        }
+      }
+    });
+
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        error: 'Soumission introuvable'
+      });
+    }
+
+    // Vérifier les permissions
+    if (!isSuperAdmin && submission.TreeBranchLeafTree?.organizationId !== organizationId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Accès refusé à cette soumission'
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📊 ÉTAPE 2 : Récupérer toutes les variables du tree
+    // ═══════════════════════════════════════════════════════════════════════
+    const variables = await prisma.treeBranchLeafNodeVariable.findMany({
+      where: {
+        TreeBranchLeafNode: {
+          treeId: submission.treeId
+        }
+      },
+      include: {
+        TreeBranchLeafNode: {
+          select: {
+            id: true,
+            label: true,
+            type: true
+          }
+        }
+      }
+    });
+
+    console.log('✅ [V2 API] Variables trouvées:', variables.length);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 💾 ÉTAPE 3 : Récupérer les valeurs depuis SubmissionData
+    // ═══════════════════════════════════════════════════════════════════════
+    const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
+      where: {
+        submissionId,
+        nodeId: {
+          in: variables.map(v => v.nodeId)
+        }
+      }
+    });
+
+    // Créer un Map pour lookup rapide
+    const dataMap = new Map(
+      submissionData.map(d => [d.nodeId, d])
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📋 ÉTAPE 4 : Construire la réponse
+    // ═══════════════════════════════════════════════════════════════════════
+    const variablesResponse = variables.map(variable => {
+      const data = dataMap.get(variable.nodeId);
+
+      return {
+        nodeId: variable.nodeId,
+        displayName: variable.displayName,
+        exposedKey: variable.exposedKey,
+        sourceType: variable.sourceType,
+        sourceRef: variable.sourceRef,
+        value: data?.value || null,
+        operationResult: data?.operationResult || null,
+        operationSource: data?.operationSource || null,
+        operationDetail: data?.operationDetail || null,
+        lastResolved: data?.lastResolved || null,
+        nodeLabel: variable.TreeBranchLeafNode?.label || 'Inconnu',
+        nodeType: variable.TreeBranchLeafNode?.type || 'unknown'
+      };
+    });
+
+    console.log('✅ [V2 API] Réponse construite\n');
+
+    return res.json({
+      success: true,
+      submissionId,
+      tree: {
+        id: submission.TreeBranchLeafTree?.id,
+        name: submission.TreeBranchLeafTree?.name
+      },
+      variables: variablesResponse,
+      meta: {
+        totalVariables: variables.length,
+        evaluatedVariables: submissionData.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [V2 API] Erreur récupération variables:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des variables',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 📤 FIN DU SYSTÈME UNIVERSEL V2
+// ═══════════════════════════════════════════════════════════════════════════
 
 export default router;

@@ -1,18 +1,23 @@
 /**
  * 🌐 TBL API V2.0 - ROUTES INTELLIGENTES
  * 
+ * ⚠️ AVERTISSEMENT : Ce fichier contient du code obsolète utilisant l'ancien CapacityCalculator.
+ * Il a été partiellement migré vers operation-interpreter mais nécessite une refonte complète.
+ * 
  * Nouvelles routes API qui remplacent TOUT l'ancien système !
  * - Évaluation par codes TBL
  * - Résolution intelligente des dépendances
  * - Support complet formules/conditions/tableaux
+ * 
+ * TODO: Refactoriser complètement pour utiliser operation-interpreter partout
  */
 
 import express from 'express';
 import TBLEvaluationEngine from '../intelligence/TBLEvaluationEngine';
-import { CapacityCalculator } from '../../treebranchleaf-new/TBL-prisma/conditions/capacity-calculator';
+import { evaluateVariableOperation } from '../../treebranchleaf-new/api/operation-interpreter';
 
 const router = express.Router();
-console.log('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes');
+console.log('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)');
 const evaluationEngine = new TBLEvaluationEngine();
 
 // Petit helper interne pour log
@@ -392,45 +397,54 @@ router.post('/condition', async (req, res) => {
 router.post('/evaluate/condition/:tblCode', async (req, res) => {
   logRouteHit('POST /api/tbl/evaluate/condition/:tblCode');
   
+  const { tblCode } = req.params;
+  const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.body || {};
+  
+  if (!tblCode) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'tblCode requis' 
+    });
+  }
+
+  console.log('🔧 [TBL EVALUATE CONDITION] Évaluation avec operation-interpreter:', tblCode);
+  
+  // ✨ Utiliser le système unifié operation-interpreter
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
+  
   try {
-    const { tblCode } = req.params;
-    const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.body || {};
+    // Trouver le nodeId de la condition
+    const conditionRecord = await prisma.treeBranchLeafNodeCondition.findUnique({
+      where: { id: tblCode },
+      select: { nodeId: true }
+    });
     
-    if (!tblCode) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'tblCode requis' 
+    if (!conditionRecord?.nodeId) {
+      return res.status(404).json({
+        success: false,
+        error: `Condition ${tblCode} introuvable`
       });
     }
-
-    console.log('🔧 [TBL EVALUATE CONDITION] Évaluation avec CapacityCalculator:', tblCode);
     
-    // Utiliser le CapacityCalculator corrigé avec traductions intelligentes
-    const { CapacityCalculator } = await import('../../treebranchleaf-new/TBL-prisma/conditions/capacity-calculator');
-    const calculator = new CapacityCalculator();
+    // Évaluer avec operation-interpreter
+    const result = await evaluateVariableOperation(
+      conditionRecord.nodeId,
+      submissionId || tblCode,
+      prisma
+    );
     
-    const context = {
-      submissionId,
-      organizationId: 'test-org',
-      userId: 'test-user'
-    };
-
-    // 🔥 UTILISER calculateCapacity pour avoir les traductions intelligentes !
-    const sourceRef = `condition:${tblCode}`;
-    const result = await calculator.calculateCapacity(sourceRef, context);
-    
-    console.log('✅ [TBL EVALUATE CONDITION] Résultat CapacityCalculator avec traductions:', result);
+    console.log('✅ [TBL EVALUATE CONDITION] Résultat operation-interpreter:', result);
     
     return res.json({
       success: true,
       evaluation: result,
-      operationResult: result.operationResult, // 🔥 TRADUCTION INTELLIGENTE !
+      operationResult: result.operationResult,
       operationDetail: result.operationDetail,
       operationSource: result.operationSource,
       tblCode,
       timestamp: new Date().toISOString()
     });
-    
   } catch (error) {
     console.error('❌ [TBL EVALUATE CONDITION] Erreur:', error);
     return res.status(500).json({ 
@@ -438,6 +452,8 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
       error: 'Erreur interne', 
       details: error instanceof Error ? error.message : 'unknown' 
     });
+  } finally {
+    await prisma.$disconnect();
   }
 });
 

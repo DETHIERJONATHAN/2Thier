@@ -2,19 +2,8 @@
  * 🎯 TBL PRISMA SUBMISSION EVALUATOR - ENDPOINT POUR ÉVALUATION COMPLÈTE
  * 
  * Endpoint qui évalue TOUTES les capacités (conditions, formules, tableaux) 
- * d'une soumission avec le CapacityCalculator et sauvegarde les traductions intelligentes
- * directement en base de données TreeBranchLeafSubm        // Créer un lead par défaut
-        const defaultLead = await prisma.lead.create({
-          data: {
-            id: `lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            firstName: "Client",
-            lastName: "Défaut",
-            email: `client-${Date.now()}@example.com`,
-            phone: "",
-            organizationId: organizationId!,
-            updatedAt: new Date()
-          }
-        });operationResult
+ * d'une soumission avec operation-interpreter.ts (système unifié) et sauvegarde
+ * les traductions intelligentes directement en base TreeBranchLeafSubmissionData.
  */
 
 import { Router, Request } from 'express';
@@ -34,7 +23,7 @@ interface SubmissionDataEntry {
   operationResult?: Prisma.InputJsonValue | null;
   lastResolved?: Date | null;
 }
-import { CapacityCalculator } from '../../treebranchleaf-new/TBL-prisma/conditions/capacity-calculator';
+import { evaluateVariableOperation } from '../../treebranchleaf-new/api/operation-interpreter';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -45,7 +34,6 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 const prisma = new PrismaClient();
-const capacityCalculator = new CapacityCalculator(prisma);
 
 // Mémoire: staging des modifications (par session) pour ne pas écrire en base tant que non validé
 type StageRecord = {
@@ -189,7 +177,12 @@ async function evaluateCapacitiesForSubmission(
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
     try {
-      const capacityResult = await capacityCalculator.calculateCapacity(sourceRef, tblContext);
+      // ✨ UTILISATION DU SYSTÈME UNIFIÉ operation-interpreter.ts
+      const capacityResult = await evaluateVariableOperation(
+        capacity.nodeId,
+        submissionId,
+        prisma
+      );
       const normalizedOperationSource: OperationSourceType = (typeof capacityResult.operationSource === 'string'
         ? (capacityResult.operationSource as string).toLowerCase()
         : 'neutral') as OperationSourceType;
@@ -306,11 +299,7 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
       });
     }
     
-    // 2. Import dynamique du CapacityCalculator
-    const { CapacityCalculator } = await import('../../treebranchleaf-new/TBL-prisma/conditions/capacity-calculator');
-    const calculator = new CapacityCalculator(prisma);
-    
-    // 3. Contexte d'évaluation
+    // 2. Contexte d'évaluation (Maps initialisées)
     const context = {
       submissionId,
       organizationId, // ✅ VRAIE ORGANISATION!
@@ -334,8 +323,12 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
         
         console.log(`🔄 [TBL EVALUATE ALL] Évaluation ${data.sourceRef}...`);
         
-        // Calculer avec CapacityCalculator
-        const calculationResult = await calculator.calculateCapacity(data.sourceRef, context);
+        // ✨ Calculer avec operation-interpreter (système unifié)
+        const calculationResult = await evaluateVariableOperation(
+          data.nodeId,
+          submissionId,
+          prisma
+        );
         
         console.log(`✅ [TBL EVALUATE ALL] Résultat pour ${data.sourceRef}:`, calculationResult.operationResult);
 
@@ -668,7 +661,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées`);
     }
     
-    // 3. Évaluation immédiate déjà effectuée via CapacityCalculator ci-dessus.
+    // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
     //    On évite une seconde passe redondante qui réécrit inutilement en base.
     
     // 4. Retourner la soumission complète
@@ -832,6 +825,13 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
     // 5) Contexte d'évaluation (submissionId fictif)
     const submissionId = baseSubmissionId || `preview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    
+    // 🔍 DEBUG: Afficher le contenu du valueMap
+    console.log(`[UNIVERSAL] 📦 valueMap contient ${valueMap.size} entrées:`);
+    for (const [key, val] of valueMap.entries()) {
+      console.log(`  - ${key} = ${val}`);
+    }
+    
     const context = {
       submissionId,
       organizationId,
@@ -845,17 +845,30 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     let evaluated = 0;
     for (const cap of capacities) {
       try {
-        const r = await capacityCalculator.calculateCapacity(cap.sourceRef!, context);
+        console.log(`[UNIVERSAL] 🚀 Évaluation preview pour nodeId: ${cap.nodeId}, sourceRef: ${cap.sourceRef}`);
+        
+        // NOUVEAU : Utiliser le système universel operation-interpreter
+        // La fonction attend maintenant 4 paramètres : (variableNodeId, submissionId, prisma, valueMap)
+        const evaluation = await evaluateVariableOperation(
+          cap.nodeId,              // variableNodeId
+          context.submissionId,     // submissionId
+          prisma,                   // prismaClient
+          context.valueMap          // valueMap (données temporaires du formulaire)
+        );
+        
+        console.log(`[UNIVERSAL] ✅ Résultat: value="${evaluation.value}", operationResult="${evaluation.operationResult}"`);
+        
         results.push({
           nodeId: cap.nodeId,
           nodeLabel: cap.TreeBranchLeafNode?.label || null,
           sourceRef: cap.sourceRef!,
-          operationSource: (r.operationSource || 'neutral') as string,
-          operationResult: r.operationResult,
-          operationDetail: r.operationDetail
+          operationSource: evaluation.operationSource as string,
+          operationResult: evaluation.operationResult,
+          operationDetail: evaluation.operationDetail
         });
         evaluated++;
       } catch (e) {
+        console.error(`[UNIVERSAL] ❌ Erreur évaluation pour nodeId ${cap.nodeId}:`, e);
         // Ne bloque pas l'ensemble de la prévisualisation
         results.push({
           nodeId: cap.nodeId,
@@ -943,7 +956,12 @@ router.post('/submissions/stage/preview', async (req, res) => {
     const results = [] as Array<{ nodeId: string; nodeLabel: string | null; sourceRef: string; operationSource: string; operationResult: unknown; operationDetail: unknown }>;
     for (const c of capacities) {
       try {
-        const r = await capacityCalculator.calculateCapacity(c.sourceRef!, context);
+        // ✨ Utilisation du système unifié operation-interpreter
+        const r = await evaluateVariableOperation(
+          c.nodeId,
+          context.submissionId,
+          prisma
+        );
         results.push({ nodeId: c.nodeId, nodeLabel: c.TreeBranchLeafNode?.label || null, sourceRef: c.sourceRef!, operationSource: (r.operationSource || 'neutral') as string, operationResult: r.operationResult, operationDetail: r.operationDetail });
       } catch (e) {
         results.push({ nodeId: c.nodeId, nodeLabel: c.TreeBranchLeafNode?.label || null, sourceRef: c.sourceRef!, operationSource: 'error', operationResult: { error: e instanceof Error ? e.message : 'Erreur' }, operationDetail: null });

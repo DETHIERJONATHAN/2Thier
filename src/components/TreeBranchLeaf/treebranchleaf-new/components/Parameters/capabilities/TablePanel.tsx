@@ -200,11 +200,13 @@ type TableLookupSelectors = {
 
 type TableLookupConfig = {
   enabled?: boolean;
+  columnLookupEnabled?: boolean; // NOUVEAU: contrôle affichage section COLONNE
+  rowLookupEnabled?: boolean;    // NOUVEAU: contrôle affichage section LIGNE
   extractFrom?: 'column' | 'row'; // NOUVEAU : choix unifié
   keyColumn?: string; // Si extractFrom='column'
   keyRow?: string; // Si extractFrom='row'
-  displayColumn?: string; // Champs de réponse pour colonne
-  displayRow?: string; // Champs de réponse pour ligne
+  displayColumn?: string | string[]; // ✅ Accepter string OU array
+  displayRow?: string | string[]; // ✅ Accepter string OU array
   valueColumn?: string; // Valeur stockée pour colonne (futur)
   valueRow?: string; // Valeur stockée pour ligne (futur)
   exposeColumns?: TableLookupExpose[];
@@ -515,11 +517,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   // 🎯 Options pour SELECT : Toutes les colonnes et lignes AVEC A1 disponibles
   const columnOptions = useMemo(() => {
     return (cfg.columns || []).map((col) => ({ value: col, label: col }));
-  }, [cfg.columns]);
+  }, [cfg]);
   
   const rowOptions = useMemo(() => {
     return (cfg.rows || []).map((row) => ({ value: row, label: row }));
-  }, [cfg.rows]);
+  }, [cfg]);
   
   const fieldSelectOptions = useMemo(
     () =>
@@ -542,7 +544,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   //   [fieldOptions]
   // );
 
-  // Lookup config UNIFIÃ‰
+  // Lookup config UNIFIÉ
   const lookupConfig = useMemo<TableLookupConfig>(() => {
     const raw = (cfg.meta?.lookup ?? {}) as TableLookupConfig;
     const exposeColumns = Array.isArray(raw?.exposeColumns)
@@ -556,9 +558,12 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
 
     return {
       ...raw,
-      extractFrom: raw.extractFrom || 'column', // Par dÃ©faut: colonne
-      displayColumn: typeof raw.displayColumn === 'string' ? raw.displayColumn : undefined,
+      extractFrom: raw.extractFrom || 'column', // Par défaut: colonne
+      displayColumn: Array.isArray(raw.displayColumn) ? raw.displayColumn : (typeof raw.displayColumn === 'string' ? raw.displayColumn : undefined),
+      displayRow: Array.isArray(raw.displayRow) ? raw.displayRow : (typeof raw.displayRow === 'string' ? raw.displayRow : undefined),
       exposeColumns,
+      columnLookupEnabled: raw.columnLookupEnabled ?? (!!raw.selectors?.columnFieldId),
+      rowLookupEnabled: raw.rowLookupEnabled ?? (!!raw.selectors?.rowFieldId),
     };
   }, [cfg.meta]);
 
@@ -1074,279 +1079,301 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
             <Divider style={{ margin: '8px 0' }} />
             <Space direction="vertical" style={{ width: '100%' }} size="small">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
-                <Text strong>ðŸ”— Lookup & liaisons</Text>
-                <Switch
-                  size="small"
-                  checked={lookupConfig.enabled !== false}
-                  onChange={(checked) => updateLookupConfig((prev) => ({ ...prev, enabled: checked }))}
-                  disabled={readOnly}
-                />
-                <Tooltip title="Transforme ce tableau en source de donnÃ©es pour un champ SELECT. Extrayez les valeurs depuis une colonne ou une ligne.">
+                <Text strong>Lookup & liaisons</Text>
+                <Tooltip title="Transforme ce tableau en source de donnees pour un champ SELECT. Extrayez les valeurs depuis une colonne ou une ligne.">
                   <InfoCircleOutlined style={{ color: '#999' }} />
                 </Tooltip>
               </div>
 
-              {lookupConfig.enabled !== false && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {/* 1ï¸âƒ£ Champ Ã  transformer */}
-                  <div style={{ minWidth: 280 }}>
-                    <Text type="secondary" strong>ðŸ“ Champ Ã  transformer en liste</Text>
-                    <Select
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* SECTION 1: LOOKUP COLONNE */}
+                <div style={{ padding: '12px', background: '#f0f9ff', border: '1px solid #91d5ff', borderRadius: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Text strong style={{ fontSize: 13 }}>📊 Lookup COLONNE</Text>
+                    <Switch
                       size="small"
-                      showSearch
-                      placeholder={fieldsLoading ? 'Chargementâ€¦' : 'SÃ©lectionner un champ'}
-                      value={lookupConfig.selectors?.columnFieldId || undefined}
-                      options={fieldSelectOptions}
-                      onChange={(value) => {
-                        console.log('ï¿½ [TablePanel][UNIFIED] SÃ©lection champ:', { 
-                          value, 
-                          activeId, 
-                          nodeId,
-                          prevRowFieldId: lookupConfig.selectors?.rowFieldId,
-                          prevColumnFieldId: lookupConfig.selectors?.columnFieldId
-                        });
+                      checked={lookupConfig.columnLookupEnabled === true}
+                      onChange={async (checked) => {
+                        console.log('[TablePanel] Toggle lookup COLONNE:', checked);
                         
-                        updateLookupConfig((prev) => {
-                          const newConfig = {
+                        if (!checked) {
+                          // DESACTIVATION : nettoyer TOUS les champs pour ce tableau
+                          console.log('[TablePanel] Desactivation lookup COLONNE - nettoyage complet');
+                          const fieldsToDisable: string[] = [];
+                          
+                          // 1. Champ dans lookupConfig.selectors
+                          if (lookupConfig.selectors?.columnFieldId) {
+                            fieldsToDisable.push(lookupConfig.selectors.columnFieldId);
+                          }
+                          
+                          // 2. Chercher champs orphelins (avec table active mais pas dans selectors)
+                          const allFields = fieldOptions || [];
+                          const orphanFields = allFields.filter(f => 
+                            f.capabilities?.table?.enabled === true && 
+                            f.capabilities?.table?.activeId === activeId &&
+                            f.id !== lookupConfig.selectors?.rowFieldId && // Ne pas toucher LIGNE actif
+                            !fieldsToDisable.includes(f.id) // Éviter les doublons
+                          );
+                          orphanFields.forEach(f => {
+                            console.log(`[TablePanel] Orphelin COLONNE détecté: ${f.label} (${f.id})`);
+                            fieldsToDisable.push(f.id);
+                          });
+                          
+                          console.log(`[TablePanel] Champs a desactiver: ${fieldsToDisable.length}`, fieldsToDisable);
+                          
+                          // Désactiver tous les champs
+                          for (const fieldId of fieldsToDisable) {
+                            try {
+                              await api.put(`/api/treebranchleaf/nodes/${fieldId}/capabilities/table`, { enabled: false });
+                              window.dispatchEvent(new CustomEvent('tbl-capability-updated', { detail: { nodeId: fieldId, treeId: initialTreeId } }));
+                            } catch (error) {
+                              console.error(`Erreur desactivation ${fieldId}:`, error);
+                            }
+                          }
+                          
+                          updateLookupConfig((prev) => ({
                             ...prev,
-                            selectors: { ...(prev.selectors || {}), columnFieldId: value || null },
-                          };
-                          console.log('ðŸ”µ [TablePanel][MATRIX][COLUMN] Nouvelle config aprÃ¨s update:', newConfig);
-                          return newConfig;
-                        });
-
-                        // ðŸŽ¯ ACTIVER LA CAPACITÃ‰ TABLE SUR LE CHAMP SÃ‰LECTIONNÃ‰
-                        if (value && activeId) {
-                          console.log('âœ… [TablePanel][COLUMN] Activation capacitÃ© Table pour champ:', value);
-                          (async () => {
-                            try {
-                              const payload = {
-                                enabled: true,
-                                activeId: activeId,
-                                currentTable: {
-                                  type: 'columns',  // âœ… FORCE columns
-                                  tableId: activeId,
-                                  mode: 'columns',  // âœ… FORCE columns
-                                  columnBased: true,
-                                  rowBased: false,  // âœ… EXPLICITE
-                                  keyColumn: null,  // Sera mis Ã  jour aprÃ¨s sÃ©lection de la colonne
-                                  valueColumn: null,
-                                  displayColumn: null,
-                                },
-                              };
-                              console.log('ðŸ“¤ [TablePanel][COLUMN] Payload PUT initial:', payload);
-                              await api.put(`/api/treebranchleaf/nodes/${value}/capabilities/table`, payload);
-                              console.log('âœ… [TablePanel][COLUMN] CapacitÃ© Table activÃ©e pour:', value);
-                              
-                              // ðŸ”„ Ã‰mettre Ã©vÃ©nement pour invalider le cache TBL
-                              window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                                detail: { nodeId: value, treeId: initialTreeId } 
-                              }));
-                              console.log('ðŸ“¡ [TablePanel] Ã‰vÃ©nement tbl-capability-updated Ã©mis');
-                              
-                              message.success('âœ… Champ transformÃ© en liste !');
-                            } catch (error) {
-                              console.error('âŒ [TablePanel][COLUMN] Erreur activation capacitÃ©:', error);
-                              message.error('Erreur activation de la capacitÃ© Table');
-                            }
-                          })();
-                        } else if (!value && lookupConfig.selectors?.columnFieldId) {
-                          // DÃ©sactiver la capacitÃ© si on dÃ©sÃ©lectionne
-                          const prevFieldId = lookupConfig.selectors.columnFieldId;
-                          console.log('ðŸ”´ [TablePanel][MATRIX][COLUMN] DÃ©sactivation capacitÃ© Table pour:', prevFieldId);
-                          (async () => {
-                            try {
-                              await api.put(`/api/treebranchleaf/nodes/${prevFieldId}/capabilities/table`, {
-                                enabled: false,
-                              });
-                              console.log('âœ… [TablePanel][MATRIX][COLUMN] CapacitÃ© Table dÃ©sactivÃ©e');
-                              
-                              // ðŸ”„ Ã‰mettre Ã©vÃ©nement pour invalider le cache TBL
-                              window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                                detail: { nodeId: prevFieldId, treeId: initialTreeId } 
-                              }));
-                              console.log('ðŸ“¡ [TablePanel] Ã‰vÃ©nement tbl-capability-updated Ã©mis (dÃ©sactivation)');
-                            } catch (error) {
-                              console.error('âŒ [TablePanel][MATRIX][COLUMN] Erreur dÃ©sactivation:', error);
-                            }
-                          })();
+                            columnLookupEnabled: false,
+                            selectors: { ...(prev.selectors || {}), columnFieldId: null },
+                            keyColumn: undefined,
+                            valueColumn: undefined,
+                            displayColumn: undefined
+                          }));
+                          
+                          message.success(`Lookup COLONNE desactive (${fieldsToDisable.length} champ(s))`);
+                        } else if (checked) {
+                          // ACTIVATION : juste mettre le flag enabled
+                          updateLookupConfig((prev) => ({ ...prev, columnLookupEnabled: true }));
+                          message.info('Selectionnez un champ colonne ci-dessous');
+                        } else {
+                          // Désactivation simple (pas de champ configuré)
+                          updateLookupConfig((prev) => ({ ...prev, columnLookupEnabled: false }));
                         }
                       }}
-                      disabled={readOnly || fieldsLoading}
-                      allowClear
-                      optionFilterProp="label"
-                      loading={fieldsLoading}
+                      disabled={readOnly}
                     />
-                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                      Ce champ deviendra une liste déroulante
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      Extraire valeurs d'une colonne
                     </Text>
                   </div>
+                  <Text type="secondary" style={{ fontSize: 11, marginTop: 4 }}>
+                    Un champ SELECT sera cree avec les valeurs d'une colonne du tableau
+                  </Text>
+                </div>
 
-                  {/* 2️⃣ BLOC COLONNE - Configuration complète */}
-                  {lookupConfig.selectors?.columnFieldId && (
-                    <>
-                      <Divider style={{ margin: '12px 0' }} />
-                      <div style={{ padding: '12px', background: '#f0f9ff', border: '1px solid #bae7ff', borderRadius: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                          <span style={{ fontSize: 18 }}>📊</span>
-                          <Text strong style={{ fontSize: 14 }}>Configuration Lookup COLONNE</Text>
-                        </div>
-                        
-                        {/* Quelle colonne extraire ? */}
-                        <div style={{ marginBottom: 12 }}>
-                          <Text type="secondary" strong style={{ fontSize: 12 }}>🔍 Quelle colonne extraire ?</Text>
-                          <Select
-                            size="small"
-                            placeholder="Sélectionner une colonne..."
-                            value={lookupConfig.keyColumn}
-                            options={columnOptions}
-                            allowClear
-                            onChange={(value) => {
-                              updateLookupConfig((prev) => ({ ...prev, keyColumn: value || undefined }));
-                              
-                              if (lookupConfig.selectors?.columnFieldId && activeId) {
-                                (async () => {
-                                  try {
-                                    await api.put(`/api/treebranchleaf/nodes/${lookupConfig.selectors.columnFieldId}/capabilities/table`, {
-                                      enabled: true,
-                                      activeId,
-                                      currentTable: {
-                                        type: cfg.type,
-                                        tableId: activeId,
-                                        keyColumn: value || null,
-                                        valueColumn: lookupConfig.valueColumn || null,
-                                        displayColumn: lookupConfig.displayColumn || null,
-                                      },
-                                    });
-                                    window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                                      detail: { nodeId: lookupConfig.selectors.columnFieldId, treeId: initialTreeId } 
-                                    }));
-                                  } catch (error) {
-                                    console.error('❌ Erreur keyColumn:', error);
-                                  }
-                                })();
-                              }
-                            }}
-                            disabled={readOnly}
-                            style={{ width: '100%', marginTop: 4 }}
-                          />
-                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                            {lookupConfig.keyColumn ? `✅ Affichera: ${lookupConfig.keyColumn}` : 'Ex: Janvier'}
-                          </Text>
-                        </div>
-
-                        {/* Champs de réponse colonne */}
-                        {lookupConfig.keyColumn && (
-                          <div style={{ paddingLeft: 12, borderLeft: '3px solid #1890ff' }}>
-                            <Text type="secondary" strong style={{ fontSize: 12 }}>🎯 Ligne(s) à afficher</Text>
-                            <Select
-                              size="small"
-                              mode="multiple"
-                              placeholder="Sélectionner ligne(s)..."
-                              value={lookupConfig.displayColumn ? [lookupConfig.displayColumn] : []}
-                              options={rowOptions}
-                              allowClear
-                              onChange={(values) => {
-                                updateLookupConfig((prev) => ({ ...prev, displayColumn: values[0] }));
-                              }}
-                              disabled={readOnly}
-                              style={{ width: '100%', marginTop: 4 }}
-                            />
-                            <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block' }}>
-                              Ex: Ventes, Coûts...
-                            </Text>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-
-                  {/* 3️⃣ BLOC LIGNE - Nouveau champ SELECT + Configuration */}
-                  <Divider style={{ margin: '12px 0' }} />
-                  <div style={{ minWidth: 280 }}>
-                    <Text type="secondary" strong>📝 Champ à transformer en liste (LIGNE)</Text>
-                    <Select
+                {/* SECTION 2: LOOKUP LIGNE */}
+                <div style={{ padding: '12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Text strong style={{ fontSize: 13 }}>📝 Lookup LIGNE</Text>
+                    <Switch
                       size="small"
-                      showSearch
-                      placeholder={fieldsLoading ? 'Chargement…' : 'Sélectionner un champ'}
-                      value={lookupConfig.selectors?.rowFieldId}
-                      options={fieldSelectOptions}
-                      onChange={(value) => {
-                        updateLookupConfig((prev) => ({
-                          ...prev,
-                          selectors: { ...(prev.selectors || {}), rowFieldId: value || null },
-                        }));
-
-                        if (value && activeId) {
-                          (async () => {
+                      checked={lookupConfig.rowLookupEnabled === true}
+                      onChange={async (checked) => {
+                        console.log('[TablePanel] Toggle lookup LIGNE:', checked);
+                        
+                        if (!checked) {
+                          // DESACTIVATION : nettoyer TOUS les champs pour ce tableau
+                          console.log('[TablePanel] Desactivation lookup LIGNE - nettoyage complet');
+                          const fieldsToDisable: string[] = [];
+                          
+                          // 1. Champ dans lookupConfig.selectors
+                          if (lookupConfig.selectors?.rowFieldId) {
+                            fieldsToDisable.push(lookupConfig.selectors?.rowFieldId);
+                          }
+                          
+                          // 2. Chercher champs orphelins (avec table active mais pas dans selectors)
+                          const allFields = fieldOptions || [];
+                          
+                          // 🔍 DEBUG: Afficher TOUS les champs avec table active
+                          const fieldsWithTable = allFields.filter(f => f.capabilities?.table?.enabled === true);
+                          console.log('[TablePanel] 🔍 DEBUG Champs avec table active:', fieldsWithTable.map(f => ({
+                            label: f.label,
+                            id: f.id,
+                            activeId: f.capabilities?.table?.activeId,
+                            rowBased: f.capabilities?.table?.rowBased,
+                            columnBased: f.capabilities?.table?.columnBased
+                          })));
+                          
+                          const orphanFields = allFields.filter(f => 
+                            f.capabilities?.table?.enabled === true && 
+                            f.capabilities?.table?.activeId === activeId &&
+                            f.id !== lookupConfig.selectors?.columnFieldId && // Ne pas toucher COLONNE actif
+                            !fieldsToDisable.includes(f.id) // Éviter les doublons
+                          );
+                          orphanFields.forEach(f => {
+                            console.log(`[TablePanel] Orphelin LIGNE détecté: ${f.label} (${f.id})`);
+                            fieldsToDisable.push(f.id);
+                          });
+                          
+                          console.log(`[TablePanel] Champs a desactiver: ${fieldsToDisable.length}`, fieldsToDisable);
+                          
+                          // Désactiver tous les champs
+                          for (const fieldId of fieldsToDisable) {
                             try {
-                              await api.put(`/api/treebranchleaf/nodes/${value}/capabilities/table`, {
-                                enabled: true,
-                                activeId,
-                                currentTable: {
-                                  type: cfg.type,
-                                  tableId: activeId,
-                                  rowBased: true,
-                                },
-                              });
-                              window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                                detail: { nodeId: value, treeId: initialTreeId } 
-                              }));
-                              message.success('✅ Champ ligne activé !');
+                              await api.put(`/api/treebranchleaf/nodes/${fieldId}/capabilities/table`, { enabled: false });
+                              window.dispatchEvent(new CustomEvent('tbl-capability-updated', { detail: { nodeId: fieldId, treeId: initialTreeId } }));
                             } catch (error) {
-                              console.error('❌ Erreur rowFieldId:', error);
+                              console.error(`Erreur desactivation ${fieldId}:`, error);
                             }
-                          })();
+                          }
+                          
+                          updateLookupConfig((prev) => ({
+                            ...prev,
+                            rowLookupEnabled: false,
+                            selectors: { ...(prev.selectors || {}), rowFieldId: null },
+                            keyRow: undefined,
+                            valueRow: undefined,
+                            displayRow: undefined
+                          }));
+                          
+                          message.success(`Lookup LIGNE desactive (${fieldsToDisable.length} champ(s))`);
+                        } else if (checked) {
+                          // ACTIVATION : juste mettre le flag enabled
+                          updateLookupConfig((prev) => ({ ...prev, rowLookupEnabled: true }));
+                          message.info('Selectionnez un champ ligne ci-dessous');
+                        } else {
+                          // Désactivation simple (pas de champ configuré)
+                          updateLookupConfig((prev) => ({ ...prev, rowLookupEnabled: false }));
                         }
                       }}
-                      disabled={readOnly || fieldsLoading}
-                      allowClear
-                      optionFilterProp="label"
-                      loading={fieldsLoading}
+                      disabled={readOnly}
                     />
-                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                      Ce champ deviendra une liste déroulante (ligne)
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      Extraire valeurs d'une ligne
                     </Text>
                   </div>
+                  <Text type="secondary" style={{ fontSize: 11, marginTop: 4 }}>
+                    Un champ SELECT sera cree avec les valeurs d'une ligne du tableau
+                  </Text>
+                </div>
+              </div>
 
-                  {lookupConfig.selectors?.rowFieldId && (
-                    <div style={{ padding: '12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '6px', marginTop: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Configuration COLONNE - visible uniquement si switch ON */}
+                {lookupConfig.columnLookupEnabled && (
+                <div style={{ minWidth: 280 }}>
+                  <Text type="secondary" strong>Champ colonne a transformer en liste</Text>
+                  <Select
+                    size="small"
+                    showSearch
+                    placeholder={fieldsLoading ? 'Chargement...' : 'Selectionner un champ'}
+                    value={lookupConfig.selectors?.columnFieldId || undefined}
+                    options={fieldSelectOptions}
+                    onChange={(value) => {
+                      console.log('[TablePanel][COLUMN] Selection champ:', { value, activeId, nodeId });
+                      
+                      updateLookupConfig((prev) => ({
+                        ...prev,
+                        selectors: { ...(prev.selectors || {}), columnFieldId: value || null },
+                      }));
+
+                      // Activer la capacite Table sur le champ selectionne
+                      if (value && activeId) {
+                        console.log('[TablePanel][COLUMN] Activation capacite Table pour champ:', value);
+                        (async () => {
+                          try {
+                            const payload = {
+                              enabled: true,
+                              activeId: activeId,
+                              currentTable: {
+                                type: 'columns',
+                                tableId: activeId,
+                                mode: 'columns',
+                                columnBased: true,
+                                rowBased: false,
+                                keyColumn: null,
+                                valueColumn: null,
+                                displayColumn: null,
+                              },
+                            };
+                            console.log('[TablePanel][COLUMN] Payload PUT initial:', payload);
+                            await api.put(`/api/treebranchleaf/nodes/${value}/capabilities/table`, payload);
+                            console.log('[TablePanel][COLUMN] Capacite Table activee pour:', value);
+                            
+                            window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
+                              detail: { nodeId: value, treeId: initialTreeId } 
+                            }));
+                            console.log('[TablePanel] Evenement tbl-capability-updated emis');
+                            
+                            message.success('Champ transforme en liste !');
+                          } catch (error) {
+                            console.error('[TablePanel][COLUMN] Erreur activation capacite:', error);
+                            message.error('Erreur activation de la capacite Table');
+                          }
+                        })();
+                      } else if (!value && lookupConfig.selectors?.columnFieldId) {
+                        // Desactiver la capacite si on deselectionne
+                        const prevFieldId = lookupConfig.selectors.columnFieldId;
+                        console.log('[TablePanel][COLUMN] Desactivation capacite Table pour:', prevFieldId);
+                        (async () => {
+                          try {
+                            await api.put(`/api/treebranchleaf/nodes/${prevFieldId}/capabilities/table`, {
+                              enabled: false,
+                            });
+                            console.log('[TablePanel][COLUMN] Capacite Table desactivee');
+                            
+                            window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
+                              detail: { nodeId: prevFieldId, treeId: initialTreeId } 
+                            }));
+                            console.log('[TablePanel] Evenement tbl-capability-updated emis (desactivation)');
+                          } catch (error) {
+                            console.error('[TablePanel][COLUMN] Erreur desactivation:', error);
+                          }
+                        })();
+                      }
+                    }}
+                    disabled={readOnly || fieldsLoading}
+                    allowClear
+                    optionFilterProp="label"
+                    loading={fieldsLoading}
+                  />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Ce champ deviendra une liste deroulante
+                  </Text>
+                </div>
+                )}
+
+                {/* Configuration BLOC COLONNE */}
+                {lookupConfig.selectors?.columnFieldId && (
+                  <>
+                    <Divider style={{ margin: '12px 0' }} />
+                    <div style={{ padding: '12px', background: '#f0f9ff', border: '1px solid #bae7ff', borderRadius: '6px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <span style={{ fontSize: 18 }}>📈</span>
-                        <Text strong style={{ fontSize: 14 }}>Configuration Lookup LIGNE</Text>
+                        <span style={{ fontSize: 18 }}>📊</span>
+                        <Text strong style={{ fontSize: 14 }}>Configuration Lookup COLONNE</Text>
                       </div>
                       
-                      {/* Quelle ligne extraire ? */}
+                      {/* Quelle colonne extraire ? */}
                       <div style={{ marginBottom: 12 }}>
-                        <Text type="secondary" strong style={{ fontSize: 12 }}>🔍 Quelle ligne extraire ?</Text>
+                        <Text type="secondary" strong style={{ fontSize: 12 }}>Quelle colonne extraire ?</Text>
                         <Select
                           size="small"
-                          placeholder="Sélectionner une ligne..."
-                          value={lookupConfig.keyRow}
-                          options={rowOptions}
+                          placeholder="Selectionner une colonne..."
+                          value={lookupConfig.keyColumn}
+                          options={columnOptions}
                           allowClear
                           onChange={(value) => {
-                            updateLookupConfig((prev) => ({ ...prev, keyRow: value || undefined }));
+                            updateLookupConfig((prev) => ({ ...prev, keyColumn: value || undefined }));
                             
-                            if (lookupConfig.selectors?.rowFieldId && activeId) {
+                            if (lookupConfig.selectors?.columnFieldId && activeId) {
                               (async () => {
                                 try {
-                                  await api.put(`/api/treebranchleaf/nodes/${lookupConfig.selectors.rowFieldId}/capabilities/table`, {
+                                  await api.put(`/api/treebranchleaf/nodes/${lookupConfig.selectors.columnFieldId}/capabilities/table`, {
                                     enabled: true,
                                     activeId,
                                     currentTable: {
                                       type: cfg.type,
                                       tableId: activeId,
-                                      keyRow: value || null,
-                                      valueRow: lookupConfig.valueRow || null,
-                                      displayRow: lookupConfig.displayRow || null,
+                                      keyColumn: value || null,
+                                      valueColumn: lookupConfig.valueColumn || null,
+                                      displayColumn: lookupConfig.displayColumn || null,
                                     },
                                   });
                                   window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                                    detail: { nodeId: lookupConfig.selectors.rowFieldId, treeId: initialTreeId } 
+                                    detail: { nodeId: lookupConfig.selectors.columnFieldId, treeId: initialTreeId } 
                                   }));
                                 } catch (error) {
-                                  console.error('❌ Erreur keyRow:', error);
+                                  console.error('Erreur keyColumn:', error);
                                 }
                               })();
                             }
@@ -1355,51 +1382,182 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           style={{ width: '100%', marginTop: 4 }}
                         />
                         <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                          {lookupConfig.keyRow ? `✅ Affichera: ${lookupConfig.keyRow}` : 'Ex: Ventes'}
+                          {lookupConfig.keyColumn ? `Affichera: ${lookupConfig.keyColumn}` : 'Ex: Janvier'}
                         </Text>
                       </div>
 
-                      {/* Champs de réponse ligne */}
-                      {lookupConfig.keyRow && (
-                        <div style={{ paddingLeft: 12, borderLeft: '3px solid #fa8c16' }}>
-                          <Text type="secondary" strong style={{ fontSize: 12 }}>🎯 Colonne(s) à afficher</Text>
+                      {/* Champs de reponse colonne */}
+                      {lookupConfig.keyColumn && (
+                        <div style={{ paddingLeft: 12, borderLeft: '3px solid #1890ff' }}>
+                          <Text type="secondary" strong style={{ fontSize: 12 }}>Colonne(s) a afficher</Text>
                           <Select
                             size="small"
                             mode="multiple"
-                            placeholder="Sélectionner colonne(s)..."
-                            value={lookupConfig.displayRow ? [lookupConfig.displayRow] : []}
+                            placeholder="Selectionner colonne(s)..."
+                            value={Array.isArray(lookupConfig.displayColumn) ? lookupConfig.displayColumn : (lookupConfig.displayColumn ? [lookupConfig.displayColumn] : [])}
                             options={columnOptions}
                             allowClear
                             onChange={(values) => {
-                              updateLookupConfig((prev) => ({ ...prev, displayRow: values[0] }));
+                              // Stocker TOUTES les valeurs sélectionnées (array)
+                              updateLookupConfig((prev) => ({ ...prev, displayColumn: values }));
                             }}
                             disabled={readOnly}
                             style={{ width: '100%', marginTop: 4 }}
                           />
                           <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block' }}>
-                            Ex: Janvier, Février...
+                            Ex: Janvier, Fevrier... (plusieurs possibles)
                           </Text>
                         </div>
                       )}
                     </div>
-                  )}
+                  </>
+                )}
 
-                  {/* Aperçu global */}
-                  {(lookupConfig.keyColumn || lookupConfig.keyRow) && (
-                    <div style={{ padding: '12px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '4px', marginTop: 12 }}>
-                      <Text strong style={{ color: '#52c41a' }}>✅ Résumé</Text>
-                      <div style={{ marginTop: 8, fontSize: 12 }}>
-                        {lookupConfig.keyColumn && (
-                          <div>📊 Colonne "{lookupConfig.keyColumn}" {lookupConfig.displayColumn && `→ ${lookupConfig.displayColumn}`}</div>
-                        )}
-                        {lookupConfig.keyRow && (
-                          <div>📈 Ligne "{lookupConfig.keyRow}" {lookupConfig.displayRow && `→ ${lookupConfig.displayRow}`}</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                {/* Configuration LIGNE - visible uniquement si switch ON */}
+                {lookupConfig.rowLookupEnabled && (
+                <>
+                <Divider style={{ margin: '12px 0' }} />
+                <div style={{ minWidth: 280 }}>
+                  <Text type="secondary" strong>Champ ligne a transformer en liste</Text>
+                  <Select
+                    size="small"
+                    showSearch
+                    placeholder={fieldsLoading ? 'Chargement...' : 'Selectionner un champ'}
+                    value={lookupConfig.selectors?.rowFieldId}
+                    options={fieldSelectOptions}
+                    onChange={(value) => {
+                      updateLookupConfig((prev) => ({
+                        ...prev,
+                        selectors: { ...(prev.selectors || {}), rowFieldId: value || null },
+                      }));
+
+                      if (value && activeId) {
+                        (async () => {
+                          try {
+                            await api.put(`/api/treebranchleaf/nodes/${value}/capabilities/table`, {
+                              enabled: true,
+                              activeId,
+                              currentTable: {
+                                type: cfg.type,
+                                tableId: activeId,
+                                rowBased: true,
+                                columnBased: false, // ✅ Désactiver le flag colonne
+                              },
+                            });
+                            window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
+                              detail: { nodeId: value, treeId: initialTreeId } 
+                            }));
+                            message.success('Champ ligne active !');
+                          } catch (error) {
+                            console.error('Erreur rowFieldId:', error);
+                          }
+                        })();
+                      }
+                    }}
+                    disabled={readOnly || fieldsLoading}
+                    allowClear
+                    optionFilterProp="label"
+                    loading={fieldsLoading}
+                  />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Ce champ deviendra une liste deroulante (ligne)
+                  </Text>
                 </div>
-              )}
+
+                {/* Configuration BLOC LIGNE */}
+                {lookupConfig.selectors?.rowFieldId && (
+                  <div style={{ padding: '12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '6px', marginTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 18 }}>📈</span>
+                      <Text strong style={{ fontSize: 14 }}>Configuration Lookup LIGNE</Text>
+                    </div>
+                    
+                    {/* Quelle ligne extraire ? */}
+                    <div style={{ marginBottom: 12 }}>
+                      <Text type="secondary" strong style={{ fontSize: 12 }}>Quelle ligne extraire ?</Text>
+                      <Select
+                        size="small"
+                        placeholder="Selectionner une ligne..."
+                        value={lookupConfig.keyRow}
+                        options={rowOptions}
+                        allowClear
+                        onChange={(value) => {
+                          updateLookupConfig((prev) => ({ ...prev, keyRow: value || undefined }));
+                          
+                          if (lookupConfig.selectors?.rowFieldId && activeId) {
+                            (async () => {
+                              try {
+                                await api.put(`/api/treebranchleaf/nodes/${lookupConfig.selectors.rowFieldId}/capabilities/table`, {
+                                  enabled: true,
+                                  activeId,
+                                  currentTable: {
+                                    type: cfg.type,
+                                    tableId: activeId,
+                                    keyRow: value || null,
+                                    valueRow: lookupConfig.valueRow || null,
+                                    displayRow: lookupConfig.displayRow || null,
+                                  },
+                                });
+                                window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
+                                  detail: { nodeId: lookupConfig.selectors.rowFieldId, treeId: initialTreeId } 
+                                }));
+                              } catch (error) {
+                                console.error('Erreur keyRow:', error);
+                              }
+                            })();
+                          }
+                        }}
+                        disabled={readOnly}
+                        style={{ width: '100%', marginTop: 4 }}
+                      />
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                        {lookupConfig.keyRow ? `Affichera: ${lookupConfig.keyRow}` : 'Ex: Ventes'}
+                      </Text>
+                    </div>
+
+                    {/* Champs de reponse ligne */}
+                    {lookupConfig.keyRow && (
+                      <div style={{ paddingLeft: 12, borderLeft: '3px solid #fa8c16' }}>
+                        <Text type="secondary" strong style={{ fontSize: 12 }}>Ligne(s) a afficher</Text>
+                        <Select
+                          size="small"
+                          mode="multiple"
+                          placeholder="Selectionner ligne(s)..."
+                          value={Array.isArray(lookupConfig.displayRow) ? lookupConfig.displayRow : (lookupConfig.displayRow ? [lookupConfig.displayRow] : [])}
+                          options={rowOptions}
+                          allowClear
+                          onChange={(values) => {
+                            // Stocker TOUTES les valeurs sélectionnées (array)
+                            updateLookupConfig((prev) => ({ ...prev, displayRow: values }));
+                          }}
+                          disabled={readOnly}
+                          style={{ width: '100%', marginTop: 4 }}
+                        />
+                        <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block' }}>
+                          Ex: Ventes, Couts... (plusieurs possibles)
+                        </Text>
+                      </div>
+                    )}
+                  </div>
+                )}
+                </>
+                )}
+
+                {/* Apercu global */}
+                {(lookupConfig.keyColumn || lookupConfig.keyRow) && (
+                  <div style={{ padding: '12px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '4px', marginTop: 12 }}>
+                    <Text strong style={{ color: '#52c41a' }}>Resume</Text>
+                    <div style={{ marginTop: 8, fontSize: 12 }}>
+                      {lookupConfig.keyColumn && (
+                        <div>Colonne "{lookupConfig.keyColumn}" {lookupConfig.displayColumn && `→ ${lookupConfig.displayColumn}`}</div>
+                      )}
+                      {lookupConfig.keyRow && (
+                        <div>Ligne "{lookupConfig.keyRow}" {lookupConfig.displayRow && `→ ${lookupConfig.displayRow}`}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </Space>
 
       <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 6 }}>
