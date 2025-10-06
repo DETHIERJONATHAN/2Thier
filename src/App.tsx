@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { useAuth } from './auth/useAuth';
 import { useFormulasVersionWatcher, onFormulasVersionChange } from './hooks/useFormulasVersionWatcher';
+import { DomainRouter } from './hooks/useDomainRouter';
 
 // TreeBranchLeaf System V2 - AVEC DRAG & DROP FONCTIONNEL DE PALETTE À STRUCTURE !
 import TreeBranchLeafWrapper from './components/TreeBranchLeaf/treebranchleaf-new/TreeBranchLeafWrapper';
@@ -81,8 +82,10 @@ const App: React.FC = () => {
     const off = onFormulasVersionChange(() => { /* hook d'écoute prêt pour actions futures */ });
     return () => off();
   }, []);
+  
   return (
-    <Routes>
+    <DomainRouter>
+      <Routes>
       {/* Page de test Oracle */}
       <Route 
         path="/test" 
@@ -303,9 +306,12 @@ const App: React.FC = () => {
             </Suspense>
           </ProtectedRoute>
         } 
-      />      {/* Redirection par défaut */}
+      />
+      
+      {/* Redirection par défaut */}
       <Route path="*" element={<Navigate to="/dashboard" />} />
     </Routes>
+    </DomainRouter>
   );
 };
 
