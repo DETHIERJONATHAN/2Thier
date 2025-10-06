@@ -27,6 +27,9 @@ const ThankYouPage = lazy(() => import('./pages/public/ThankYouPage'));
 const DevenirPartenaireePage = lazy(() => import('./pages/devis1minute/DevenirPartenaireePage'));
 const LandingRenderer = lazy(() => import('./pages/public/LandingRenderer'));
 
+// Pages publiques Site Vitrine 2Thier
+const SiteVitrine2Thier = lazy(() => import('./pages/SiteVitrine2Thier'));
+
 // Composant Loading
 const LoadingSpinner = () => (
   <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
@@ -176,6 +179,14 @@ const App: React.FC = () => {
         element={
           <Suspense fallback={<LoadingSpinner />}>
             <LandingPage />
+          </Suspense>
+        } 
+      />
+      <Route 
+        path="/site-vitrine-2thier" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <SiteVitrine2Thier />
           </Suspense>
         } 
       />
