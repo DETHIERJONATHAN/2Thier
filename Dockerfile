@@ -29,6 +29,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY ./src ./src
 COPY ./prisma ./prisma
+COPY ./scripts ./scripts
 
 # Expose port
 EXPOSE 4000
