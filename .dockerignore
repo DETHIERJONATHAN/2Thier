@@ -9,17 +9,31 @@ Google JSON/
 **/*.local.*
 .vscode/
 coverage/
-distnode_modules
-npm-debug.log
+
+# Fichiers de build/config
 Dockerfile
 .dockerignore
-.git
-.gitignore
-.vscode
-.env
-.env.*
 dist
 build
-coverage
+
+# Scripts de maintenance/migration (non nécessaires en prod)
+*.js
+*.cjs
+*.mjs
+!vite.config.ts
+!postcss.config.cjs
+!tailwind.config.js
+
+# Garder seulement les dossiers essentiels
+!src/**/*.js
+!scripts/add-missing-columns.cjs
+!scripts/migrate-and-start.sh
+
+# Documentation et backups
+*.md
+*.txt
+*.log
 **/.DS_Store
 **/Thumbs.db
+Oracle/
+backup*.sql
