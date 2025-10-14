@@ -204,9 +204,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     return organized;
   }, [sharedSections, modules]);
 
-  const secondaryNavHeight = !isMobile && sectionsWithModules.length > 0 ? SUBNAV_HEIGHT : 0;
-  const contentTopOffset = headerHeight + secondaryNavHeight + (isMobile ? 8 : 16);
-
   // Fermer le menu avec la touche Échap
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -953,9 +950,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       {CustomHamburgerMenu}
 
       <Content style={{ 
-        backgroundColor: 'white',  /* CHANGÉ: blanc au lieu de #004445 */
+        backgroundColor: 'white',
         minHeight: '100vh',
-        marginTop: `${contentTopOffset}px`,
+        paddingTop: `${headerHeight}px`,
         overflow: 'auto'
       }}>
         {children}
