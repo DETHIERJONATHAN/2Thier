@@ -184,6 +184,12 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
   try {
     const website = req.websiteData;
 
+    console.log(`🎨 [WEBSITE-RENDERER] Données reçues:`, {
+      hasWebsite: !!website,
+      name: website?.name,
+      sectionsCount: website?.sections?.length
+    });
+
     if (!website) {
       return res.status(404).send(`
         <!DOCTYPE html>
