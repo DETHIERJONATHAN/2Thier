@@ -28,18 +28,20 @@ jobs:
       
       - name: Build and Deploy
         run: |
-          gcloud builds submit --tag europe-west1-docker.pkg.dev/thiernew/crm/crm-api:$(git rev-parse --short HEAD)
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          gcloud builds submit --tag europe-west1-docker.pkg.dev/thiernew/crm/crm-api:${COMMIT_SHA}
           gcloud run deploy crm-api \
-            --image europe-west1-docker.pkg.dev/thiernew/crm/crm-api:$(git rev-parse --short HEAD) \
+            --image europe-west1-docker.pkg.dev/thiernew/crm/crm-api:${COMMIT_SHA} \
             --region europe-west1 \
             --platform managed \
             --port 8080 \
             --set-cloudsql-instances thiernew:europe-west1:crm-db \
-            --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-db,PGDATABASE=2thier,PGUSER=postgres" \
+            --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-db,PGDATABASE=2thier,PGUSER=postgres,COMMIT_SHA=${COMMIT_SHA}" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,SESSION_SECRET=SESSION_SECRET:latest,SUPERADMIN_EMAIL=SUPERADMIN_EMAIL:latest,SUPERADMIN_PASSWORD=SUPERADMIN_PASSWORD:latest,SUPERADMIN_CODE=SUPERADMIN_CODE:latest" \
             --allow-unauthenticated \
             --min-instances 1 \
             --max-instances 10 \
             --memory 2Gi \
             --cpu 2 \
-            --timeout 300
+            --timeout 300 \
+            --update-labels "git-commit=${COMMIT_SHA}"
