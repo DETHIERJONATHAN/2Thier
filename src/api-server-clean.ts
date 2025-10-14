@@ -32,7 +32,7 @@ import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
 
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
-import { detectWebsite } from './middleware/websiteDetection';
+import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
 import { renderWebsite } from './middleware/websiteRenderer';
 
 // 🛡️ IMPORTS SÉCURITÉ ENTERPRISE
@@ -220,6 +220,7 @@ app.get('/health', (_req, res) => {
 // 🌐 MIDDLEWARE DE DÉTECTION AUTOMATIQUE DES SITES VITRINES
 // Doit être AVANT le serveur de fichiers statiques pour intercepter les domaines
 app.use(detectWebsite);
+app.use(websiteInterceptor); // ⚡ INTERCEPTE ET REND LES SITES VITRINES DIRECTEMENT
 
 //  Production: servir le frontend statique (dist) si présent
 if (process.env.NODE_ENV === 'production') {
