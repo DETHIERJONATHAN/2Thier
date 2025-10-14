@@ -227,6 +227,8 @@ if (process.env.NODE_ENV === 'production') {
   const indexHtml = path.join(distDir, 'index.html');
   if (fs.existsSync(indexHtml)) {
     console.log('🗂️ [STATIC] Distribution front détectée, activation du serveur statique');
+    
+    // ⚡ IMPORTANT: Servir les assets statiques (CSS, JS, images)
     app.use(express.static(distDir, {
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('index.html')) {
@@ -238,15 +240,18 @@ if (process.env.NODE_ENV === 'production') {
         }
       }
     }));
-    // Fallback SPA: toutes les routes non-API et non-assets renvoient index.html
-    // SAUF si c'est un site vitrine détecté (alors on rend le site SSR)
+    
+    // 🌐 RENDU DES SITES VITRINES OU FALLBACK CRM
+    // Cette route attrape TOUT ce qui n'est pas /api/ ou /assets/
     app.get(/^(?!\/api\/|\/assets\/).*/, (req: any, res, _next) => {
-      // 🌐 SI C'EST UN SITE VITRINE, RENDRE LE SITE AU LIEU DU CRM
-      if (req.isWebsiteRoute && req.websiteData) {
-        console.log(`🎨 [WEBSITE-RENDER] Site détecté: ${req.websiteData.name}, rendu SSR`);
+      // � SI UN SITE VITRINE A ÉTÉ DÉTECTÉ, LE RENDRE EN SSR
+      if (req.isWebsiteRoute === true && req.websiteData) {
+        console.log(`🎨 [WEBSITE-RENDER] Rendu SSR pour: ${req.websiteData.name} (${req.hostname})`);
         return renderWebsite(req, res);
       }
-      // Sinon, servir le CRM React
+      
+      // 📱 SINON, SERVIR LE CRM REACT
+      console.log(`📱 [CRM-SPA] Serving React app for: ${req.hostname}${req.url}`);
       res.sendFile(indexHtml);
     });
   } else {
