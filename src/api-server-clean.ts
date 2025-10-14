@@ -229,18 +229,26 @@ if (process.env.NODE_ENV === 'production') {
   if (fs.existsSync(indexHtml)) {
     console.log('🗂️ [STATIC] Distribution front détectée, activation du serveur statique');
     
-    // ⚡ IMPORTANT: Servir les assets statiques (CSS, JS, images)
-    app.use(express.static(distDir, {
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith('index.html')) {
-          res.setHeader('Cache-Control', 'no-cache');
-        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        } else {
-          res.setHeader('Cache-Control', 'public, max-age=3600');
-        }
+    // ⚡ CRITIQUE: Servir UNIQUEMENT /assets/* pour ne PAS intercepter la route racine /
+    // Cela permet à websiteInterceptor de gérer / pour les sites vitrines
+    const assetsDir = path.join(distDir, 'assets');
+    app.use('/assets', express.static(assetsDir, {
+      setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
     }));
+    
+    // Servir aussi les fichiers PWA et favicon à la racine du dist
+    app.get('/pwa-*', (req, res) => {
+      const filePath = path.join(distDir, req.path);
+      if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+      } else {
+        res.status(404).end();
+      }
+    });
+    app.get('/favicon.ico', (req, res) => res.sendFile(path.join(distDir, 'favicon.ico')));
+    app.get('/manifest.json', (req, res) => res.sendFile(path.join(distDir, 'manifest.json')));
     
     // 🌐 RENDU DES SITES VITRINES OU FALLBACK CRM
     // Cette route attrape TOUT ce qui n'est pas /api/ ou /assets/
