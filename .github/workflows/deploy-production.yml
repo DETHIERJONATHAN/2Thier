@@ -37,7 +37,7 @@ jobs:
             --port 8080 \
             --set-cloudsql-instances thiernew:europe-west1:crm-db \
             --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-db,PGDATABASE=2thier,PGUSER=postgres,COMMIT_SHA=${COMMIT_SHA}" \
-            --set-secrets "DATABASE_URL=DATABASE_URL:latest,PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,SESSION_SECRET=SESSION_SECRET:latest,SUPERADMIN_EMAIL=SUPERADMIN_EMAIL:latest,SUPERADMIN_PASSWORD=SUPERADMIN_PASSWORD:latest,SUPERADMIN_CODE=SUPERADMIN_CODE:latest" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,SESSION_SECRET=SESSION_SECRET:latest,SUPERADMIN_EMAIL=SUPERADMIN_EMAIL:latest,SUPERADMIN_PASSWORD=SUPERADMIN_PASSWORD:latest,SUPERADMIN_CODE=SUPERADMIN_CODE:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest" \
             --allow-unauthenticated \
             --min-instances 1 \
             --max-instances 10 \
