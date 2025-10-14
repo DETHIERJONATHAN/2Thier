@@ -92,13 +92,13 @@ export async function detectWebsite(
     });
 
     if (website) {
-      console.log(`✅ [WEBSITE-DETECTION] Site trouvé: ${website.name} (${website.slug})`);
+      console.log(`✅ [WEBSITE-DETECTION] Site trouvé: ${website.siteName} (${website.slug})`);
       
       req.websiteData = {
         id: website.id,
         slug: website.slug,
         domain: website.domain || cleanDomain,
-        name: website.name,
+        name: website.siteName, // ← Correction: utiliser siteName au lieu de name
         config: website.config,
         sections: website.sections
       };
