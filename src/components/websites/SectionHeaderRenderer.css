@@ -1,0 +1,74 @@
+/**
+ * 📋 SectionHeaderRenderer CSS - Styles pour le header de section
+ */
+
+.section-header {
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  animation: headerFadeIn 0.6s ease-out;
+}
+
+@keyframes headerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.section-header-title {
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  transition: color 0.3s ease;
+}
+
+.section-header-subtitle {
+  opacity: 0.8;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+.section-header-description {
+  opacity: 0.7;
+  transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+.section-header-divider {
+  transition: all 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .section-header {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .section-header-title {
+    font-size: clamp(1.5rem, 5vw, 2rem) !important;
+  }
+
+  .section-header-subtitle {
+    font-size: clamp(0.875rem, 3vw, 1rem) !important;
+  }
+
+  .section-header-description {
+    font-size: 0.875rem;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .section-header-subtitle {
+    opacity: 0.9;
+  }
+
+  .section-header-description {
+    opacity: 0.8;
+  }
+}

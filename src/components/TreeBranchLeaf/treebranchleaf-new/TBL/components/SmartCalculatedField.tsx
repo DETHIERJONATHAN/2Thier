@@ -17,6 +17,7 @@ const isSmartDebug = () => {
 const diagMode = () => { try { return typeof localStorage !== 'undefined' && localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } };
 import { shortHash } from '../utils/stableHash';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { useAuth } from '../../../../../auth/useAuth';
 
 // 🚦 Readiness globale: aucune évaluation tant que données de base non chargées (variables + fields + tree)
 // (Ces flags pourront être positionnés ailleurs dans l'app une fois les hooks dispos; placeholder léger ici.)
@@ -223,6 +224,8 @@ async function evaluateFormulaDynamically(
 
 function useUniversalTranslator() {
   const { enqueue } = useEvalBridge();
+  const { currentUser } = useAuth(); // 🔥 Récupérer organizationId pour les appels API
+  const organizationId = currentUser?.organizationId; // 🔥 Disponible dans toutes les closures
 
   // 🧮 Moteur de traduction universel
   const translateAndExecute = useCallback(async (
@@ -260,6 +263,377 @@ function useUniversalTranslator() {
         const direct = (formData || {})[key];
         calculationCache.set(cacheKey, { result: direct, timestamp: Date.now(), dependencies: Object.keys(formData) });
         return direct;
+      }
+
+      // 🔥 3. NOUVEAU: Gestion des références @table.xxx (lookups de table)
+      // Inspiré d'operation-interpreter.ts qui gère les 3 modes de lookup
+      if (sourceRef.startsWith('@table.')) {
+        try {
+          console.log(`📊 [TABLE] Détection référence table: ${sourceRef}`);
+          
+          // Extraire l'ID de la table
+          const tableId = sourceRef.replace('@table.', '');
+          console.log(`📊 [TABLE] TableId extrait: ${tableId}`);
+          
+          // Récupérer les informations de la table depuis l'API
+          const tableResponse = await fetch(`/api/tbl/tables/${tableId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-organization-id': organizationId || '',
+            },
+          });
+          
+          if (!tableResponse.ok) {
+            console.error(`❌ [TABLE] Erreur récupération table: ${tableResponse.statusText}`);
+            return null;
+          }
+          
+          const tableData = await tableResponse.json();
+          const table = tableData.table;
+          
+          if (!table) {
+            console.error(`❌ [TABLE] Table introuvable: ${tableId}`);
+            return null;
+          }
+          
+          console.log(`✅ [TABLE] Table trouvée: ${table.name} (type: ${table.type})`);
+          
+          // Extraire la configuration de lookup
+          const meta = table.meta || {};
+          const lookup = meta.lookup;
+          
+          if (!lookup || !lookup.enabled) {
+            console.error(`❌ [TABLE] Lookup non configuré ou désactivé`);
+            return null;
+          }
+          
+          const rowFieldId = lookup.selectors?.rowFieldId;
+          const colFieldId = lookup.selectors?.columnFieldId;
+          const rowEnabled = lookup.rowLookupEnabled === true;
+          const colEnabled = lookup.columnLookupEnabled === true;
+          
+          console.log(`📋 [TABLE] Config lookup:`, {
+            rowEnabled,
+            colEnabled,
+            rowFieldId,
+            colFieldId,
+            displayColumn: lookup.displayColumn,
+            displayRow: lookup.displayRow
+          });
+          
+          const columns = table.columns || [];
+          const rows = table.rows || [];
+          const data = table.data || [];
+          
+          // 🔍 DEBUG: Vérification des conditions MODE 1
+          const allConditionsMet = colEnabled && !rowEnabled && colFieldId && lookup.displayColumn;
+          console.log(`🧪 [TABLE] Conditions MODE 1:`, {
+            colEnabled,
+            rowEnabled,
+            colFieldId,
+            hasDisplayColumn: !!lookup.displayColumn,
+            displayColumnValue: lookup.displayColumn,
+            displayColumnType: typeof lookup.displayColumn,
+            displayColumnIsArray: Array.isArray(lookup.displayColumn),
+            allConditionsMet
+          });
+          
+          if (!allConditionsMet) {
+            console.error(`❌ [TABLE] MODE 1 conditions NOT MET - Arrêt !`, {
+              'colEnabled && !rowEnabled': colEnabled && !rowEnabled,
+              'colFieldId exists': !!colFieldId,
+              'lookup.displayColumn exists': !!lookup.displayColumn
+            });
+          }
+          
+          // 🎯 MODE 1: Seulement COLONNE activée (colonne dynamique × displayColumn fixe)
+          // On CROISE: colonne sélectionnée × chaque displayColumn (lignes fixes)
+          if (colEnabled && !rowEnabled && colFieldId && lookup.displayColumn) {
+            if (isSmartDebug()) console.log(`🎯 [TABLE] MODE 1: Colonne dynamique × displayColumn fixe (CROISEMENT)`);
+            
+            // Récupérer la valeur de colonne sélectionnée (depuis formData ou mirrors)
+            const colValue = formData[colFieldId] || formData[`__mirror_data_${colFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${colFieldId}`]);
+            
+            if (!colValue) {
+              if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 1: Aucune valeur colonne`);
+              return null;
+            }
+            
+            const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
+            const results = [];
+            
+            if (isSmartDebug()) {
+              console.log(`📊 [TABLE] MODE 1 - Croisement:`, {
+                colonneSélectionnée: colValue,
+                lignesFixesÀCroiser: displayColumns,
+                colonnesTableau: columns.slice(0, 5),
+                lignesTableau: rows.slice(0, 5)
+              });
+            }
+            
+            for (const fixedRowValue of displayColumns) {
+              const normalizedCol = String(colValue).trim().toLowerCase();
+              const normalizedRow = String(fixedRowValue).trim().toLowerCase();
+              
+              console.log(`🔍 [TABLE] MODE 1 - Recherche pour fixedRowValue:`, {
+                fixedRowValue,
+                fixedRowValueType: typeof fixedRowValue,
+                normalizedRow,
+                colValue,
+                normalizedCol,
+                rowsComplet: rows,
+                columnsComplet: columns
+              });
+              
+              // 🔄 INVERSION DÉTECTÉE : Dans ce tableau, Orientations = rows[], Inclinaisons = columns[]
+              // Donc on cherche colValue (Orientation) dans ROWS et fixedRowValue (Inclinaison) dans COLUMNS
+              
+              // Chercher l'orientation (colValue) dans les LIGNES du tableau
+              const colSelectorInRows = rows.findIndex(r => {
+                const normalized = String(r).trim().toLowerCase();
+                const match = normalized === normalizedCol || r === colValue || String(r) === String(colValue);
+                console.log(`  🔎 [ORIENTATION_IN_ROWS] Test ligne "${r}" (normalized="${normalized}") vs "${colValue}" (normalized="${normalizedCol}"): ${match}`);
+                return match;
+              });
+              
+              // Chercher les inclinaisons (fixedRowValue = 25, 45) dans les COLONNES du tableau
+              const fixedRowInCols = columns.findIndex(c => {
+                const normalized = String(c).trim().toLowerCase();
+                const numericMatch = Number(c) === Number(fixedRowValue);
+                const stringMatch = normalized === normalizedRow || String(c) === String(fixedRowValue);
+                const match = numericMatch || stringMatch;
+                console.log(`  🔎 [INCLINAISON_IN_COLS] Test colonne "${c}" (type=${typeof c}, normalized="${normalized}") vs "${fixedRowValue}" (type=${typeof fixedRowValue}, normalized="${normalizedRow}"): numericMatch=${numericMatch}, stringMatch=${stringMatch}, FINAL=${match}`);
+                return match;
+              });
+              
+              // Pour compatibilité avec le code existant, on garde les anciennes variables mais inversées
+              const colSelectorInCols = -1; // Non utilisé dans ce cas
+              const fixedRowInRows = -1;    // Non utilisé dans ce cas
+              
+              console.log(`📊 [TABLE] MODE 1 - Résultats findIndex (INVERSÉS):`, {
+                orientationDansRows: colSelectorInRows,    // Est Nord-Est cherché dans rows[]
+                inclinaisonDansCols: fixedRowInCols,      // 25/45 cherché dans columns[]
+                colSelectorInCols,    // -1 (non utilisé car inversé)
+                fixedRowInRows        // -1 (non utilisé car inversé)
+              });
+              
+              // LOGIQUE INVERSÉE : Orientation (colValue) dans rows[], Inclinaison (fixedRowValue) dans columns[]
+              if (colSelectorInRows !== -1 && fixedRowInCols !== -1) {
+                // data[rowIndex][colIndex] où :
+                // rowIndex = colSelectorInRows (index de "Est Nord-Est" dans rows[])
+                // colIndex = fixedRowInCols (index de "25" ou "45" dans columns[])
+                const value = data[colSelectorInRows]?.[fixedRowInCols];
+                console.log(`✅ [TABLE] MODE 1 INVERSÉ - Valeur trouvée: data[${colSelectorInRows}][${fixedRowInCols}] = ${value} (Orientation="${colValue}" × Inclinaison="${fixedRowValue}")`);
+                if (value !== undefined && value !== null) {
+                  results.push(value);
+                }
+              } else {
+                console.warn(`⚠️ [TABLE] MODE 1 INVERSÉ - Index non trouvé:`, {
+                  orientation: colValue,
+                  orientationTrouvéeÀLindex: colSelectorInRows,
+                  rowsDisponibles: rows,
+                  inclinaison: fixedRowValue,
+                  inclinaisonTrouvéeÀLindex: fixedRowInCols,
+                  columnsDisponibles: columns
+                });
+              }
+            }
+            
+            const finalResult = results.length === 1 ? results[0] : results;
+            calculationCache.set(cacheKey, { result: finalResult, timestamp: Date.now(), dependencies: [colFieldId] });
+            return finalResult;
+          }
+          
+          // 🎯 MODE 2: Seulement LIGNE activée (displayRow fixe × ligne dynamique)
+          // On CROISE: chaque displayRow (colonnes fixes) × ligne sélectionnée
+          if (rowEnabled && !colEnabled && rowFieldId && lookup.displayRow) {
+            if (isSmartDebug()) console.log(`🎯 [TABLE] MODE 2: displayRow fixe × ligne dynamique (CROISEMENT)`);
+            
+            // Récupérer la valeur de ligne sélectionnée (depuis formData ou mirrors)
+            const rowValue = formData[rowFieldId] || formData[`__mirror_data_${rowFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${rowFieldId}`]);
+            
+            if (!rowValue) {
+              if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 2: Aucune valeur ligne`);
+              return null;
+            }
+            
+            const displayRows = Array.isArray(lookup.displayRow) ? lookup.displayRow : [lookup.displayRow];
+            const results = [];
+            
+            if (isSmartDebug()) {
+              console.log(`📊 [TABLE] MODE 2 - Croisement:`, {
+                ligneSélectionnée: rowValue,
+                colonnesFixesÀCroiser: displayRows,
+                colonnesTableau: columns.slice(0, 5),
+                lignesTableau: rows.slice(0, 5)
+              });
+            }
+            
+            for (const fixedColValue of displayRows) {
+              const normalizedRow = String(rowValue).trim().toLowerCase();
+              const normalizedCol = String(fixedColValue).trim().toLowerCase();
+              
+              if (isSmartDebug()) {
+                console.log(`🔍 [TABLE] MODE 2 - Recherche pour fixedColValue:`, {
+                  fixedColValue,
+                  fixedColValueType: typeof fixedColValue,
+                  normalizedCol,
+                  rows: rows.map((r, i) => `[${i}] ${typeof r} "${r}"`),
+                  columns: columns.map((c, i) => `[${i}] ${typeof c} "${c}"`)
+                });
+              }
+              
+              // Auto-détection : chercher la ligne sélectionnée ET la colonne fixe
+              // Comparaison flexible : string OU nombre
+              const rowSelectorInRows = rows.findIndex(r => {
+                const normalized = String(r).trim().toLowerCase();
+                return normalized === normalizedRow || r === rowValue;
+              });
+              const rowSelectorInCols = columns.findIndex(c => {
+                const normalized = String(c).trim().toLowerCase();
+                return normalized === normalizedRow || c === rowValue;
+              });
+              const fixedColInCols = columns.findIndex(c => {
+                const normalized = String(c).trim().toLowerCase();
+                return normalized === normalizedCol || c === fixedColValue || String(c) === String(fixedColValue);
+              });
+              const fixedColInRows = rows.findIndex(r => {
+                const normalized = String(r).trim().toLowerCase();
+                return normalized === normalizedCol || r === fixedColValue || String(r) === String(fixedColValue);
+              });
+              
+              let finalRowIdx = -1;
+              let finalColIdx = -1;
+              
+              // Configuration normale : ligne dans rows[], colonne fixe dans columns[]
+              if (rowSelectorInRows !== -1 && fixedColInCols !== -1) {
+                finalRowIdx = rowSelectorInRows;
+                finalColIdx = fixedColInCols;
+                if (isSmartDebug()) console.log(`✅ [TABLE] MODE 2 - Config normale: row="${rowValue}" (idx=${finalRowIdx}), col="${fixedColValue}" (idx=${finalColIdx})`);
+              }
+              // Configuration inversée : ligne dans columns[], colonne fixe dans rows[]
+              else if (rowSelectorInCols !== -1 && fixedColInRows !== -1) {
+                finalRowIdx = fixedColInRows;
+                finalColIdx = rowSelectorInCols;
+                if (isSmartDebug()) console.log(`🔄 [TABLE] MODE 2 - Inversion détectée: row="${rowValue}" (idx=${finalRowIdx}), col="${fixedColValue}" (idx=${finalColIdx})`);
+              }
+              
+              if (finalRowIdx !== -1 && finalColIdx !== -1) {
+                const dataRowIdx = finalRowIdx - 1;
+                const dataColIdx = finalColIdx - 1;
+                const result = data[dataRowIdx]?.[dataColIdx];
+                results.push(result);
+                if (isSmartDebug()) console.log(`✅ [TABLE] MODE 2: "${fixedColValue}" × "${rowValue}" = ${result} (data[${dataRowIdx}][${dataColIdx}])`);
+              } else {
+                if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 2: Impossible de croiser "${fixedColValue}" × "${rowValue}"`);
+              }
+            }
+            
+            const finalResult = results.length === 1 ? results[0] : results;
+            calculationCache.set(cacheKey, { result: finalResult, timestamp: Date.now(), dependencies: [rowFieldId] });
+            return finalResult;
+          }
+          
+          // 🎯 MODE 3: Les DEUX activés (croisement dynamique colonne × ligne)
+          if (rowEnabled && colEnabled && rowFieldId && colFieldId) {
+            if (isSmartDebug()) console.log(`🎯 [TABLE] MODE 3: Croisement dynamique colonne × ligne`);
+            
+            // Récupérer les deux valeurs sélectionnées (depuis formData ou mirrors)
+            const rowValue = formData[rowFieldId] || formData[`__mirror_data_${rowFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${rowFieldId}`]);
+            const colValue = formData[colFieldId] || formData[`__mirror_data_${colFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${colFieldId}`]);
+            
+            if (isSmartDebug()) {
+              console.log(`📊 [TABLE] MODE 3 - Valeurs:`, {
+                rowFieldId,
+                rowValue,
+                colFieldId,
+                colValue
+              });
+            }
+            
+            if (!rowValue || !colValue) {
+              if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 3: Valeur manquante`);
+              return null;
+            }
+            
+            // Normalisation pour matching robuste
+            const normalizedRow = String(rowValue).trim().toLowerCase();
+            const normalizedCol = String(colValue).trim().toLowerCase();
+            
+            if (isSmartDebug()) {
+              console.log(`🔍 [TABLE] MODE 3 - Recherche:`, {
+                rowValue,
+                rowValueType: typeof rowValue,
+                normalizedRow,
+                colValue,
+                colValueType: typeof colValue,
+                normalizedCol,
+                rows: rows.map((r, i) => `[${i}] ${typeof r} "${r}"`),
+                columns: columns.map((c, i) => `[${i}] ${typeof c} "${c}"`)
+              });
+            }
+            
+            // Auto-détection : chercher dans les deux sens (en cas d'inversion)
+            // Comparaison flexible : string OU nombre
+            const rowInRows = rows.findIndex(r => {
+              const normalized = String(r).trim().toLowerCase();
+              return normalized === normalizedRow || r === rowValue || String(r) === String(rowValue);
+            });
+            const rowInCols = columns.findIndex(c => {
+              const normalized = String(c).trim().toLowerCase();
+              return normalized === normalizedRow || c === rowValue || String(c) === String(rowValue);
+            });
+            const colInCols = columns.findIndex(c => {
+              const normalized = String(c).trim().toLowerCase();
+              return normalized === normalizedCol || c === colValue || String(c) === String(colValue);
+            });
+            const colInRows = rows.findIndex(r => {
+              const normalized = String(r).trim().toLowerCase();
+              return normalized === normalizedCol || r === colValue || String(r) === String(colValue);
+            });
+            
+            let finalRowIdx = -1;
+            let finalColIdx = -1;
+            
+            // Déterminer les index (avec auto-correction d'inversion)
+            if (rowInRows !== -1 && colInCols !== -1) {
+              finalRowIdx = rowInRows;
+              finalColIdx = colInCols;
+              if (isSmartDebug()) console.log(`✅ [TABLE] MODE 3: Configuration normale`);
+            } else if (rowInCols !== -1 && colInRows !== -1) {
+              finalRowIdx = colInRows;
+              finalColIdx = rowInCols;
+              if (isSmartDebug()) console.log(`🔄 [TABLE] MODE 3: Inversion détectée et corrigée`);
+            } else {
+              finalRowIdx = rowInRows !== -1 ? rowInRows : colInRows;
+              finalColIdx = colInCols !== -1 ? colInCols : rowInCols;
+            }
+            
+            if (finalRowIdx !== -1 && finalColIdx !== -1) {
+              const dataRowIdx = finalRowIdx - 1;
+              const dataColIdx = finalColIdx - 1;
+              const result = data[dataRowIdx]?.[dataColIdx];
+              
+              if (isSmartDebug()) {
+                console.log(`✅ [TABLE] MODE 3: Résultat[${dataRowIdx}][${dataColIdx}] = ${result}`);
+              }
+              
+              calculationCache.set(cacheKey, { result, timestamp: Date.now(), dependencies: [rowFieldId, colFieldId] });
+              return result;
+            } else {
+              console.error(`❌ [TABLE] MODE 3: Index introuvables`);
+              return null;
+            }
+          }
+          
+          console.error(`❌ [TABLE] Configuration lookup invalide`);
+          return null;
+          
+        } catch (error) {
+          console.error(`❌ [TABLE] Erreur lors du lookup:`, error);
+          return null;
+        }
       }
 
       // 🎯 NOUVEAU: TRADUCTION AUTOMATIQUE TREEBRANGLEAF → MIRRORS
@@ -483,6 +857,9 @@ export function SmartCalculatedField({
 }: SmartCalculatedFieldProps) {
   const { translateAndExecute } = useUniversalTranslator();
   const { api } = useAuthenticatedApi(); // Récupérer l'instance API authentifiée
+  const { currentUser } = useAuth(); // 🔥 Récupérer organizationId depuis le contexte
+  const organizationId = currentUser?.organizationId; // 🔥 Extraire organizationId
+  
   const [result, setResult] = useState<unknown | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 

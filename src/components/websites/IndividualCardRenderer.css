@@ -1,0 +1,261 @@
+/**
+ * 🎴 IndividualCardRenderer - Styles CSS
+ * 
+ * Styles pour les cartes individuelles configurables
+ */
+
+.individual-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+/* HOVER EFFECTS */
+.individual-card--hoverable:hover {
+  transform: scale(var(--hover-scale, 1.02)) translateY(var(--hover-translate-y, -4px));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, calc(0.15 * var(--hover-shadow-intensity, 1.5)));
+  border-color: var(--hover-border-color, #3b82f6) !important;
+}
+
+/* BADGE */
+.individual-card__badge {
+  position: absolute;
+  z-index: 10;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.individual-card__badge--top-left {
+  top: 12px;
+  left: 12px;
+}
+
+.individual-card__badge--top-right {
+  top: 12px;
+  right: 12px;
+}
+
+.individual-card__badge--bottom-left {
+  bottom: 12px;
+  left: 12px;
+}
+
+.individual-card__badge--bottom-right {
+  bottom: 12px;
+  right: 12px;
+}
+
+/* HEADER */
+.individual-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.individual-card__header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.individual-card__header-icon--left {
+  order: 1;
+}
+
+.individual-card__header-icon--top {
+  order: 0;
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.individual-card__header-icon--right {
+  order: 3;
+}
+
+.individual-card__header-title {
+  margin: 0;
+  flex: 1;
+  order: 2;
+}
+
+.individual-card__header-title--xs {
+  font-size: 12px;
+}
+
+.individual-card__header-title--sm {
+  font-size: 14px;
+}
+
+.individual-card__header-title--md {
+  font-size: 16px;
+}
+
+.individual-card__header-title--lg {
+  font-size: 18px;
+}
+
+.individual-card__header-title--xl {
+  font-size: 20px;
+}
+
+/* IMAGE */
+.individual-card__image {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.individual-card__image--top {
+  order: 1;
+}
+
+.individual-card__image--left {
+  order: 1;
+  max-width: 40%;
+}
+
+.individual-card__image--right {
+  order: 3;
+  max-width: 40%;
+}
+
+.individual-card__image--bottom {
+  order: 4;
+}
+
+.individual-card__image img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* IMAGE BACKGROUND */
+.individual-card--image-background {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.individual-card__image-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+}
+
+.individual-card__image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.individual-card--image-background .individual-card__header,
+.individual-card--image-background .individual-card__content,
+.individual-card--image-background .individual-card__footer {
+  position: relative;
+  z-index: 1;
+  color: white;
+}
+
+/* CONTENT */
+.individual-card__content {
+  flex: 1;
+  order: 2;
+}
+
+.individual-card__title {
+  margin: 0 0 12px 0;
+}
+
+.individual-card__title--sm {
+  font-size: 16px;
+}
+
+.individual-card__title--md {
+  font-size: 18px;
+}
+
+.individual-card__title--lg {
+  font-size: 20px;
+}
+
+.individual-card__title--xl {
+  font-size: 24px;
+}
+
+.individual-card__title--2xl {
+  font-size: 28px;
+}
+
+.individual-card__description {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.individual-card__description--xs {
+  font-size: 12px;
+}
+
+.individual-card__description--sm {
+  font-size: 14px;
+}
+
+.individual-card__description--md {
+  font-size: 16px;
+}
+
+.individual-card__description--lg {
+  font-size: 18px;
+}
+
+/* FOOTER */
+.individual-card__footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  order: 3;
+}
+
+.individual-card__footer-link {
+  display: inline-block;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.individual-card__footer-link:hover {
+  opacity: 0.8;
+}
+
+.individual-card__footer-text {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .individual-card__image--left,
+  .individual-card__image--right {
+    max-width: 100%;
+    order: 1;
+  }
+
+  .individual-card__title--2xl {
+    font-size: 24px;
+  }
+
+  .individual-card__title--xl {
+    font-size: 20px;
+  }
+}

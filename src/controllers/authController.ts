@@ -63,9 +63,19 @@ export const login = async (req: Request, res: Response) => {
       originalUser: null,
     };
 
-    // Créer le token JWT
+    // Récupérer l'organizationId de la première organisation active (ou première organisation si super admin)
+    const primaryOrganization = user.UserOrganization.find(uo => uo.status === 'active') || user.UserOrganization[0];
+    const organizationId = primaryOrganization?.organizationId;
+
+    // Créer le token JWT avec TOUTES les informations nécessaires
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { 
+        userId: user.id, 
+        email: user.email,
+        organizationId: organizationId,
+        isSuperAdmin: isSuperAdmin,
+        role: isSuperAdmin ? 'super_admin' : (userRoles[0]?.name || user.role || 'user')
+      },
       JWT_SECRET,
       { expiresIn: '24h' }
     );

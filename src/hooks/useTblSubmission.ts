@@ -15,7 +15,19 @@ export interface UseTblSubmissionOptions {
   initialTreeId?: string;
   initialSubmissionId?: string | null;
   initialFormData?: Record<string, unknown>;
+  initialLeadId?: string; // Pour récupération auto des brouillons
   debounceMs?: number;
+  autoRecoverDrafts?: boolean; // Active la récupération auto (default: true)
+}
+
+export interface DraftInfo {
+  stageId: string;
+  treeId: string;
+  leadId: string;
+  leadName: string;
+  lastActivity: Date;
+  expiresAt: Date;
+  formData: Record<string, unknown>;
 }
 
 export interface UseTblSubmissionApi {
@@ -30,6 +42,7 @@ export interface UseTblSubmissionApi {
   committing: boolean;
   dirty: boolean;
   error: string | null;
+  availableDrafts: DraftInfo[]; // Brouillons disponibles
 
   // setters
   setTreeId: (id: string) => void;
@@ -44,13 +57,22 @@ export interface UseTblSubmissionApi {
   commitAsNew: () => Promise<{ submissionId: string } | void>;
   discardStage: () => Promise<void>;
   reset: () => void;
+  checkForDrafts: () => Promise<DraftInfo[]>; // Vérifier brouillons disponibles
+  restoreDraft: (stageId: string) => Promise<void>; // Restaurer un brouillon
 
   // helpers
   getNodeResult: (nodeId: string) => TblResultItem | undefined;
 }
 
 export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblSubmissionApi {
-  const { initialTreeId, initialSubmissionId = null, initialFormData = {}, debounceMs = 500 } = options;
+  const { 
+    initialTreeId, 
+    initialSubmissionId = null, 
+    initialFormData = {}, 
+    initialLeadId,
+    debounceMs = 500,
+    autoRecoverDrafts = true 
+  } = options;
   const { api } = useAuthenticatedApi();
 
   const [treeId, setTreeIdState] = useState<string | undefined>(initialTreeId);
@@ -63,8 +85,10 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
   const [committing, setCommitting] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableDrafts, setAvailableDrafts] = useState<DraftInfo[]>([]);
 
   const debounceRef = useRef<number | null>(null);
+  const draftCheckDoneRef = useRef(false);
 
   const setTreeId = useCallback((id: string) => setTreeIdState(id), []);
   const setSubmissionId = useCallback((id: string | null) => setSubmissionIdState(id), []);
@@ -211,6 +235,89 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
     setStageId(null);
   }, [initialFormData]);
 
+  /**
+   * 🔍 Vérifier les brouillons disponibles
+   */
+  const checkForDrafts = useCallback(async (): Promise<DraftInfo[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (initialLeadId) params.append('leadId', initialLeadId);
+      if (treeId) params.append('treeId', treeId);
+
+      const response = await api.get(`/api/tbl/submissions/my-drafts?${params.toString()}`);
+      const drafts = response.data?.drafts || [];
+      
+      setAvailableDrafts(drafts);
+      return drafts;
+    } catch (error) {
+      console.error('[useTblSubmission] Erreur checkForDrafts:', error);
+      return [];
+    }
+  }, [api, initialLeadId, treeId]);
+
+  /**
+   * 🔄 Restaurer un brouillon
+   */
+  const restoreDraft = useCallback(async (draftStageId: string) => {
+    try {
+      setLoading(true);
+      
+      // Récupérer le brouillon via l'API
+      const drafts = await checkForDrafts();
+      const draft = drafts.find(d => d.stageId === draftStageId);
+      
+      if (!draft) {
+        throw new Error('Brouillon non trouvé');
+      }
+
+      // Restaurer les données
+      setStageId(draft.stageId);
+      setFormData(draft.formData);
+      setTreeIdState(draft.treeId);
+      setDirty(true);
+
+      // Lancer une preview
+      const previewResponse = await api.post('/api/tbl/submissions/stage/preview', { 
+        stageId: draft.stageId 
+      });
+      setResults(Array.isArray(previewResponse.data?.results) ? previewResponse.data.results : []);
+      
+      console.log('✅ [useTblSubmission] Brouillon restauré:', draftStageId);
+    } catch (error) {
+      console.error('[useTblSubmission] Erreur restoreDraft:', error);
+      setError('Erreur lors de la restauration du brouillon');
+    } finally {
+      setLoading(false);
+    }
+  }, [api, checkForDrafts]);
+
+  /**
+   * 🚀 Vérification automatique des brouillons au montage
+   */
+  useEffect(() => {
+    if (!autoRecoverDrafts || draftCheckDoneRef.current || !initialLeadId) {
+      return;
+    }
+
+    draftCheckDoneRef.current = true;
+
+    const checkAndPromptDrafts = async () => {
+      try {
+        const drafts = await checkForDrafts();
+        
+        if (drafts.length > 0 && !stageId) {
+          // Il y a des brouillons disponibles - on pourrait afficher une modal
+          // Pour l'instant, on les stocke juste dans availableDrafts
+          console.log('📋 [useTblSubmission] Brouillons disponibles:', drafts.length);
+        }
+      } catch (error) {
+        console.error('[useTblSubmission] Erreur vérification brouillons:', error);
+      }
+    };
+
+    checkAndPromptDrafts();
+  }, [autoRecoverDrafts, initialLeadId, checkForDrafts, stageId]);
+
   const hasRunInitialPreview = useRef(false);
   // Preview initial si souhaité (si initialFormData ou submissionId)
   useEffect(() => {
@@ -264,6 +371,7 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
     committing,
     dirty,
     error,
+    availableDrafts,
     setTreeId,
     setSubmissionId,
     setField,
@@ -274,8 +382,10 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
     commitAsNew,
     discardStage,
     reset,
+    checkForDrafts,
+    restoreDraft,
     getNodeResult,
-  }), [treeId, submissionId, stageId, formData, results, loading, previewing, committing, dirty, error, setTreeId, setSubmissionId, setField, setMany, previewNow, stageNow, commitToExisting, commitAsNew, discardStage, reset, getNodeResult]);
+  }), [treeId, submissionId, stageId, formData, results, loading, previewing, committing, dirty, error, availableDrafts, setTreeId, setSubmissionId, setField, setMany, previewNow, stageNow, commitToExisting, commitAsNew, discardStage, reset, checkForDrafts, restoreDraft, getNodeResult]);
 
   return apiValue;
 }

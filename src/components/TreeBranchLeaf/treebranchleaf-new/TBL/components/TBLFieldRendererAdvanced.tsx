@@ -38,7 +38,7 @@ import {
   UploadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { SmartCalculatedField } from './SmartCalculatedField';
+import { CalculatedFieldDisplay } from './CalculatedFieldDisplay';
 import { HelpTooltip } from '../../../../common/HelpTooltip';
 import { useTBLTooltip } from '../../../../../hooks/useTBLTooltip';
 import { useTBLValidationContext } from '../contexts/TBLValidationContext';
@@ -292,6 +292,7 @@ interface TBLFieldAdvancedProps {
   disabled?: boolean;
   formData?: Record<string, unknown>;
   treeMetadata?: Record<string, unknown>; // Métadonnées du nœud TreeBranchLeaf
+  treeId?: string; // ID de l'arbre TreeBranchLeaf pour les appels backend
   // 🎯 Props de validation pour les couleurs dynamiques
   isValidating?: boolean;
   hasValidationError?: boolean;
@@ -442,6 +443,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   disabled = false,
   formData = {},
   treeMetadata = {},
+  treeId,
   isValidating = false,
   hasValidationError = false
 }) => {
@@ -952,20 +954,19 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         || (caps?.formula?.instances && Object.keys(caps.formula.instances).length > 0 ? Object.keys(caps.formula.instances)[0] : undefined);
       const hasFormulaConfig = Boolean(formulaId || caps?.formula?.currentFormula);
       if (hasFormulaConfig && formulaId) {
-        const sourceRef = `formula:${formulaId}`;
-  const currentFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
-  const rawExpression = currentFormula?.expression;
-  const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
+        if (!treeId) {
+          return <span style={{ color: '#888' }}>---</span>;
+        }
+        
         return (
-          <SmartCalculatedField
-            sourceRef={sourceRef}
+          <CalculatedFieldDisplay
+            nodeId={formulaId}
+            treeId={treeId}
             formData={formData}
             displayFormat="number"
             unit={field.config?.unit}
             precision={field.config?.decimals || 2}
             placeholder="Calcul automatique..."
-            rawExpression={rawExpression}
-            variablesDefinition={variablesDef}
           />
         );
       }
@@ -978,42 +979,41 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         const dataInstance = caps?.data?.instances?.[variableId] as { metadata?: { sourceType?: string; sourceRef?: string; fixedValue?: unknown } } | undefined;
         const meta = dataInstance?.metadata;
         if (meta?.sourceType === 'tree' && typeof meta.sourceRef === 'string' && meta.sourceRef) {
-          const resolvedRef = meta.sourceRef.startsWith('condition:') || meta.sourceRef.startsWith('formula:') || meta.sourceRef.startsWith('@value.')
-            ? meta.sourceRef
-            : `variable:${variableId}`;
+          // Extraire le nodeId depuis sourceRef (format: "formula:id" ou "condition:id")
+          const extractedNodeId = meta.sourceRef.includes(':') 
+            ? meta.sourceRef.split(':')[1] 
+            : variableId;
           
-          // ✅ CORRECTION: Utiliser les mêmes propriétés que "Prix Kw/h test"
-          const currentFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
-          const rawExpression = currentFormula?.expression;
-          const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
+          if (!treeId || !extractedNodeId) {
+            return <span style={{ color: '#888' }}>---</span>;
+          }
           
           return (
-            <SmartCalculatedField
-              sourceRef={resolvedRef}
+            <CalculatedFieldDisplay
+              nodeId={extractedNodeId}
+              treeId={treeId}
               formData={formData}
               displayFormat="number"
               unit={field.config?.unit}
               precision={field.config?.decimals || 2}
               placeholder="Calcul automatique..."
-              rawExpression={rawExpression}
-              variablesDefinition={variablesDef}
             />
           );
         }
-        const sourceRef = `variable:${variableId}`;
-  const currentFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
-  const rawExpression = currentFormula?.expression;
-  const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
+        
+        if (!treeId) {
+          return <span style={{ color: '#888' }}>---</span>;
+        }
+        
         return (
-          <SmartCalculatedField
-            sourceRef={sourceRef}
+          <CalculatedFieldDisplay
+            nodeId={variableId}
+            treeId={treeId}
             formData={formData}
             displayFormat="number"
             unit={field.config?.unit}
             precision={field.config?.decimals || 2}
             placeholder="Calcul automatique..."
-            rawExpression={rawExpression}
-            variablesDefinition={variablesDef}
           />
         );
       }
@@ -1057,19 +1057,23 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           const dv = (dataInstance as { metadata?: { variables?: Record<string, { sourceField: string; type?: string }> } }).metadata?.variables || {};
           variablesDef = Object.fromEntries(Object.entries(dv).map(([k,v]) => [k,{ sourceField: v.sourceField, type: v.type }]));
         }
-          return (
-            <SmartCalculatedField
-              sourceRef={`variable:${instanceId}`}
-              formData={formData}
-              displayFormat={dataInstance.displayFormat}
-              unit={dataInstance.unit}
-              precision={dataInstance.precision}
-              placeholder="Calcul en cours..."
-              rawExpression={rawExpression}
-              variablesDefinition={variablesDef}
-            />
-          );
+        
+        if (!treeId) {
+          return <span style={{ color: '#888' }}>---</span>;
         }
+        
+        return (
+          <CalculatedFieldDisplay
+            nodeId={instanceId}
+            treeId={treeId}
+            formData={formData}
+            displayFormat={dataInstance.displayFormat as 'number' | 'currency' | 'percentage' | undefined}
+            unit={dataInstance.unit as string | undefined}
+            precision={dataInstance.precision as number | undefined}
+            placeholder="Calcul en cours..."
+          />
+        );
+      }
         
         // Mode valeur fixe
         if (configSourceType === 'fixed' && fixedValue !== undefined) {
@@ -1085,20 +1089,20 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
     
     // ✨ PRIORITÉ 2: Capacité Formula (formules directes)
-    if (capabilities.formula?.enabled && capabilities.formula.currentFormula) {
-      const currentFormula = capabilities.formula.currentFormula as FormulaConfigLocal | undefined;
-  const rawExpression = currentFormula?.expression;
-  const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
+    if (capabilities.formula?.enabled && capabilities.formula.currentFormula && capabilities.formula.activeId) {
+      if (!treeId) {
+        return <span style={{ color: '#888' }}>---</span>;
+      }
+      
       return (
-        <SmartCalculatedField
-          sourceRef={`formula:${capabilities.formula.activeId}`}
+        <CalculatedFieldDisplay
+          nodeId={capabilities.formula.activeId}
+          treeId={treeId}
           formData={formData}
           displayFormat="number"
           unit={fieldConfig.unit}
           precision={fieldConfig.decimals || 4}
           placeholder="Calcul en cours..."
-          rawExpression={rawExpression}
-          variablesDefinition={variablesDef}
         />
       );
     }
@@ -1635,3 +1639,4 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 };
 
 export default TBLFieldRendererAdvanced;
+

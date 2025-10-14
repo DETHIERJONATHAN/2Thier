@@ -1756,6 +1756,7 @@ const TBL: React.FC<TBLProps> = ({
                         fields={tab.fields || []}
                         formData={formData}
                         onChange={handleFieldChange}
+                        treeId={tree?.id}
                         disabled={saving}
                         validationState={validationState}
                         validationActions={validationActions}
@@ -2163,6 +2164,7 @@ interface TBLTabContentWithSectionsProps {
   fields: TBLField[]; // fallback à plat
   formData: TBLFormData;
   onChange: (fieldId: string, value: string | number | boolean | string[] | null | undefined) => void;
+  treeId?: string; // ID de l'arbre pour les appels backend
   disabled?: boolean;
   validationState?: any;
   validationActions?: any;
@@ -2173,6 +2175,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
   fields,
   formData,
   onChange,
+  treeId,
   validationState,
   validationActions,
   disabled = false
@@ -2218,6 +2221,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
               section={section}
               formData={formData}
               onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
+              treeId={treeId}
               disabled={disabled}
             />
           ))}
@@ -2237,6 +2241,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
           section={synthetic}
           formData={formData}
           onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
+          treeId={treeId}
           disabled={disabled}
         />
       );

@@ -96,13 +96,15 @@ async function saveUserEntriesNeutral(
     const isValidNodeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key) ||
                           /^node_[0-9]+_[a-z0-9]+$/i.test(key);
     if (!isValidNodeId) continue;
-    if (value === null || value === undefined || value === '') continue;
+    // ✅ CORRECTIF : Sauvegarder TOUTES les valeurs (même null/undefined/vide)
+    // pour que operation-interpreter.ts puisse les récupérer depuis TreeBranchLeafSubmissionData
+    // if (value === null || value === undefined || value === '') continue;  // ❌ LIGNE SUPPRIMÉE
 
     entries.push({
       id: `${submissionId}-${key}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       submissionId,
       nodeId: key,
-      value: typeof value === 'string' ? value : JSON.stringify(value),
+      value: value === null || value === undefined ? null : (typeof value === 'string' ? value : JSON.stringify(value)),
       operationSource: 'neutral',
       operationDetail: {
         inputValue: value,
@@ -758,7 +760,6 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
   }
 });
 
-export default router;
 /**
  * 🧪 POST /api/tbl/submissions/preview-evaluate
  *
@@ -806,13 +807,14 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         select: { nodeId: true, value: true }
       });
       for (const row of existingData) {
-        if (row.value !== null && row.value !== undefined) valueMap.set(row.nodeId, row.value);
+        // ✅ Inclure TOUTES les valeurs (même null) pour evaluation correcte
+        valueMap.set(row.nodeId, row.value);
       }
     }
     if (formData && typeof formData === 'object') {
       for (const [k, v] of Object.entries(formData as Record<string, unknown>)) {
         if (k.startsWith('__')) continue; // ignorer champs techniques
-        if (v === null || v === undefined || v === '') continue;
+        // ✅ Inclure TOUTES les valeurs (même null/undefined/'') pour evaluation correcte
         valueMap.set(k, v);
       }
     }
@@ -863,8 +865,19 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
           nodeLabel: cap.TreeBranchLeafNode?.label || null,
           sourceRef: cap.sourceRef!,
           operationSource: evaluation.operationSource as string,
-          operationResult: evaluation.operationResult,
-          operationDetail: evaluation.operationDetail
+          operationResult: {
+            value: evaluation.value,           // ✅ AJOUT: La valeur calculée
+            humanText: evaluation.operationResult,  // ✅ Le texte explicatif
+            detail: evaluation.operationDetail
+          },
+          operationDetail: evaluation.operationDetail,
+          // 🎨 NOUVEAU: Configuration d'affichage depuis TreeBranchLeafNodeVariable
+          displayConfig: {
+            displayFormat: cap.displayFormat || 'number',
+            unit: cap.unit || null,
+            precision: cap.precision ?? 2,
+            visibleToUser: cap.visibleToUser ?? true
+          }
         });
         evaluated++;
       } catch (e) {
@@ -876,10 +889,23 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
           sourceRef: cap.sourceRef!,
           operationSource: 'error',
           operationResult: { error: e instanceof Error ? e.message : 'Erreur inconnue' },
-          operationDetail: null
+          operationDetail: null,
+          // 🎨 Configuration d'affichage même en cas d'erreur
+          displayConfig: {
+            displayFormat: cap.displayFormat || 'number',
+            unit: cap.unit || null,
+            precision: cap.precision ?? 2,
+            visibleToUser: cap.visibleToUser ?? true
+          }
         });
       }
     }
+
+    // 🔍 DEBUG: Log final des résultats avant envoi
+    console.log(`[PREVIEW-EVALUATE] 📤 Envoi réponse avec ${results.length} résultats:`);
+    results.forEach((r, i) => {
+      console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value=${JSON.stringify(r.operationResult?.value ?? 'N/A')}`);
+    });
 
     return res.json({
       success: true,
@@ -1011,3 +1037,96 @@ router.post('/submissions/stage/discard', (req, res) => {
   stagingStore.delete(stageId);
   return res.json({ success: true, discarded: true });
 });
+
+/**
+ * 🔥 GET /api/tbl/tables/:tableId
+ * 
+ * Récupère les informations complètes d'une table (structure + lookup config)
+ * Utilisé par SmartCalculatedField pour les références @table.xxx
+ */
+router.get('/tables/:tableId', async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    
+    console.log(`📊 [GET TABLE] Récupération table: ${tableId}`);
+    
+    // ✅ CORRIGÉ: Récupérer la table depuis TreeBranchLeafNodeTable
+    const table = await prisma.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      select: {
+        id: true,
+        name: true,
+        nodeId: true,
+        meta: true,
+      }
+    });
+    
+    if (!table) {
+      console.log(`❌ [GET TABLE] Table introuvable: ${tableId}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Table introuvable'
+      });
+    }
+    
+    console.log(`✅ [GET TABLE] Table trouvée: ${table.name || tableId}`);
+    
+    // Extraire la configuration de lookup depuis meta
+    const meta = table.meta as any;
+    const lookupConfig = meta?.lookup || {};
+    
+    // Extraire les données de la table (colonnes, lignes, data matrix)
+    const tableData = meta?.data || {};
+    const columns = tableData.columns || [];
+    const rows = tableData.rows || [];
+    const data = tableData.matrix || [];
+    
+    console.log(`📊 [GET TABLE] Données extraites:`, {
+      columnsCount: columns.length,
+      rowsCount: rows.length,
+      dataRowsCount: data.length,
+      lookupEnabled: lookupConfig.rowLookupEnabled || lookupConfig.columnLookupEnabled
+    });
+    
+    // Retourner les informations de la table AVEC les données
+    return res.json({
+      success: true,
+      table: {
+        id: table.id,
+        nodeId: table.nodeId,
+        name: table.name || null,
+        type: 'matrix', // Type de table
+        sourceRef: `@table.${table.id}`,
+        // 🔥 DONNÉES DE LA TABLE (colonnes, lignes, data)
+        columns: columns,
+        rows: rows,
+        data: data,
+        // 🔥 CONFIGURATION DE LOOKUP
+        meta: {
+          lookup: {
+            enabled: lookupConfig.rowLookupEnabled || lookupConfig.columnLookupEnabled || false,
+            mode: lookupConfig.mode || 'columns',
+            rowLookupEnabled: lookupConfig.rowLookupEnabled || false,
+            columnLookupEnabled: lookupConfig.columnLookupEnabled || false,
+            selectors: {
+              rowFieldId: lookupConfig.selectors?.rowFieldId || null,
+              columnFieldId: lookupConfig.selectors?.columnFieldId || null,
+            },
+            displayRow: lookupConfig.displayRow || null,
+            displayColumn: lookupConfig.displayColumn || null
+          }
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ [GET TABLE] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération de la table',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+export default router;

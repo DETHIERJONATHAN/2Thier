@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { 
   Layout,
   Card, 
@@ -17,7 +17,9 @@ import {
   Divider,
   Form,
   Input,
-  Select
+  Select,
+  Spin,
+  Alert
 } from 'antd';
 import {
   RocketOutlined,
@@ -36,12 +38,29 @@ import {
   CloudOutlined,
   ToolOutlined,
   SafetyCertificateOutlined,
-  CustomerServiceOutlined
+  CustomerServiceOutlined,
+  LoadingOutlined
 } from '@ant-design/icons';
+import { useWebSite } from '../hooks/useWebSite';
 
 const { Header, Content, Footer } = Layout;
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
+
+// Mapping des icônes Ant Design par nom
+const iconMap: Record<string, React.ReactNode> = {
+  ThunderboltOutlined: <ThunderboltOutlined style={{ fontSize: '32px', color: '#10b981' }} />,
+  BulbOutlined: <BulbOutlined style={{ fontSize: '32px', color: '#f59e0b' }} />,
+  CarOutlined: <CarOutlined style={{ fontSize: '32px', color: '#3b82f6' }} />,
+  FireOutlined: <FireOutlined style={{ fontSize: '32px', color: '#ef4444' }} />,
+  HomeOutlined: <HomeOutlined style={{ fontSize: '32px', color: '#8b5cf6' }} />,
+  CloudOutlined: <CloudOutlined style={{ fontSize: '32px', color: '#06b6d4' }} />,
+  ToolOutlined: <ToolOutlined style={{ fontSize: '32px', color: '#64748b' }} />,
+  SafetyCertificateOutlined: <SafetyCertificateOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
+  StarFilled: <StarFilled style={{ fontSize: '48px', color: '#10b981' }} />,
+  CustomerServiceOutlined: <CustomerServiceOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
+  CheckCircleOutlined: <CheckCircleOutlined style={{ fontSize: '48px', color: '#10b981' }} />
+};
 
 interface Service {
   key: string;
@@ -75,216 +94,56 @@ interface Project {
 
 const SiteVitrine2Thier: React.FC = () => {
   const [form] = Form.useForm();
+  
+  // 🔥 RÉCUPÉRATION DES DONNÉES DYNAMIQUES
+  const { data: website, loading, error } = useWebSite('site-vitrine-2thier');
+
+  // Affichage du loader pendant le chargement
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+      }}>
+        <Space direction="vertical" align="center">
+          <Spin indicator={<LoadingOutlined style={{ fontSize: 48, color: 'white' }} spin />} />
+          <Text style={{ color: 'white', fontSize: '18px' }}>Chargement du site...</Text>
+        </Space>
+      </div>
+    );
+  }
+
+  // Affichage d'une erreur si le site n'est pas trouvé
+  if (error || !website) {
+    return (
+      <div style={{ padding: '50px' }}>
+        <Alert
+          message="Erreur de chargement"
+          description={error || "Le site web n'a pas pu être chargé."}
+          type="error"
+          showIcon
+        />
+      </div>
+    );
+  }
+
+  // Extraction des données
+  const config = website.config || {};
+  const services = website.services || [];
+  const projects = website.projects || [];
+  const testimonials = website.testimonials || [];
+  const stats = config.stats || { installations: 500, powerMW: 15, satisfaction: 4.9, region: 'Wallonie' };
+  const values = config.valuesJson || [];
 
   // Données des statistiques
-  const stats = [
-    { title: '+500', subtitle: 'Installations réalisées', icon: <HomeOutlined /> },
-    { title: '15 MW', subtitle: 'Puissance installée', icon: <ThunderboltOutlined /> },
-    { title: '4.9/5', subtitle: 'Satisfaction client', icon: <StarFilled /> },
-    { title: 'Wallonie', subtitle: 'Région couverte', icon: <EnvironmentOutlined /> }
-  ];
-
-  // Services offerts
-  const services: Service[] = [
-    {
-      key: 'photovoltaique',
-      icon: <ThunderboltOutlined style={{ fontSize: '32px', color: '#10b981' }} />,
-      title: 'Panneaux Photovoltaïques',
-      description: 'Installation de panneaux solaires haute performance pour réduire vos factures d\'énergie',
-      features: [
-        'Panneaux jusqu\'à 440 Wp',
-        'Garantie 25-30 ans',
-        'Monitoring en temps réel',
-        'Primes et déductions fiscales'
-      ],
-      cta: 'Configurer mon installation'
-    },
-    {
-      key: 'batteries',
-      icon: <BulbOutlined style={{ fontSize: '32px', color: '#f59e0b' }} />,
-      title: 'Batteries de Stockage',
-      description: 'Stockez votre énergie solaire pour l\'utiliser quand vous en avez besoin',
-      features: [
-        'Capacité 10-20 kWh',
-        'Compatible tous systèmes',
-        'Gestion intelligente',
-        'Autonomie maximale'
-      ],
-      cta: 'Calculer mes besoins'
-    },
-    {
-      key: 'bornes',
-      icon: <CarOutlined style={{ fontSize: '32px', color: '#3b82f6' }} />,
-      title: 'Bornes de Recharge',
-      description: 'Rechargez votre véhicule électrique à domicile avec l\'énergie verte',
-      features: [
-        'Jusqu\'à 22 kW',
-        'Charge intelligente',
-        'Application mobile',
-        'Installation certifiée'
-      ],
-      cta: 'Demander un devis'
-    },
-    {
-      key: 'pac',
-      icon: <FireOutlined style={{ fontSize: '32px', color: '#ef4444' }} />,
-      title: 'Pompes à Chaleur',
-      description: 'Chauffage et climatisation écologique pour votre confort toute l\'année',
-      features: [
-        'Air/Air et Air/Eau',
-        'COP jusqu\'à 4.5',
-        'Économies jusqu\'à 70%',
-        'Primes disponibles'
-      ],
-      cta: 'Découvrir les modèles'
-    },
-    {
-      key: 'isolation',
-      icon: <HomeOutlined style={{ fontSize: '32px', color: '#8b5cf6' }} />,
-      title: 'Isolation Complète',
-      description: 'Isolation thermique des murs, toits et sols pour réduire vos pertes d\'énergie',
-      features: [
-        'Murs / Toiture / Sols',
-        'Amélioration PEB',
-        'Économies durables',
-        'Subventions régionales'
-      ],
-      cta: 'Audit énergétique gratuit'
-    },
-    {
-      key: 'toiture',
-      icon: <CloudOutlined style={{ fontSize: '32px', color: '#06b6d4' }} />,
-      title: 'Toiture',
-      description: 'Construction et rénovation de tous types de toitures avec zinguerie',
-      features: [
-        'Toiture plate et versants',
-        'Charpente complète',
-        'Zinguerie',
-        'Garantie décennale'
-      ],
-      cta: 'Devis toiture'
-    },
-    {
-      key: 'electricite',
-      icon: <ThunderboltOutlined style={{ fontSize: '32px', color: '#eab308' }} />,
-      title: 'Électricité Générale',
-      description: 'Mise en conformité et installation électrique complète par des experts',
-      features: [
-        'Mise en conformité',
-        'Tableau électrique',
-        'Domotique',
-        'Contrôle RGIE'
-      ],
-      cta: 'Consultation électrique'
-    },
-    {
-      key: 'gros-oeuvre',
-      icon: <ToolOutlined style={{ fontSize: '32px', color: '#64748b' }} />,
-      title: 'Gros Œuvre',
-      description: 'Fondations, maçonnerie et rénovation complète par nos équipes',
-      features: [
-        'Fondations solides',
-        'Maçonnerie',
-        'Extension',
-        'Rénovation complète'
-      ],
-      cta: 'Projet de construction'
-    }
-  ];
-
-  // Témoignages
-  const testimonials: Testimonial[] = [
-    {
-      id: '1',
-      name: 'Marie Dupont',
-      location: 'Charleroi',
-      service: 'Panneaux solaires 10 kWp',
-      rating: 5,
-      text: 'Installation impeccable réalisée en une journée. L\'équipe était professionnelle et a pris le temps de tout m\'expliquer. Je recommande vivement 2Thier !',
-      date: 'Septembre 2025'
-    },
-    {
-      id: '2',
-      name: 'Jean Martin',
-      location: 'Namur',
-      service: 'Pompe à chaleur Air/Eau',
-      rating: 5,
-      text: 'Excellent service du début à la fin. La pompe à chaleur fonctionne parfaitement et nos factures de chauffage ont été divisées par deux !',
-      date: 'Août 2025'
-    },
-    {
-      id: '3',
-      name: 'Sophie Lambert',
-      location: 'Liège',
-      service: 'Isolation toiture + PV',
-      rating: 5,
-      text: 'Projet complet géré par 2Thier : isolation de notre toiture et installation de panneaux solaires. Travail soigné et délais respectés.',
-      date: 'Juillet 2025'
-    }
-  ];
-
-  // Projets récents
-  const recentProjects: Project[] = [
-    {
-      id: '1',
-      title: '12.5 kWp + Batterie 15 kWh',
-      location: 'Charleroi',
-      details: '30 panneaux + batterie de stockage + borne de recharge',
-      image: 'https://via.placeholder.com/400x300/10b981/ffffff?text=Projet+PV',
-      date: 'Octobre 2025',
-      tags: ['Photovoltaïque', 'Batterie', 'Borne']
-    },
-    {
-      id: '2',
-      title: 'Pompe à Chaleur 12 kW',
-      location: 'Namur',
-      details: 'PAC Air/Eau avec système de chauffage au sol',
-      image: 'https://via.placeholder.com/400x300/ef4444/ffffff?text=PAC',
-      date: 'Septembre 2025',
-      tags: ['Pompe à chaleur']
-    },
-    {
-      id: '3',
-      title: 'Isolation Complète 180m²',
-      location: 'Liège',
-      details: 'Isolation toiture + murs + installation PV 8 kWp',
-      image: 'https://via.placeholder.com/400x300/8b5cf6/ffffff?text=Isolation',
-      date: 'Septembre 2025',
-      tags: ['Isolation', 'Photovoltaïque']
-    },
-    {
-      id: '4',
-      title: 'Toiture Plate 120m²',
-      location: 'Mons',
-      details: 'Rénovation toiture plate avec EPDM + panneaux PV',
-      image: 'https://via.placeholder.com/400x300/06b6d4/ffffff?text=Toiture',
-      date: 'Août 2025',
-      tags: ['Toiture', 'Photovoltaïque']
-    }
-  ];
-
-  // Valeurs de l'entreprise
-  const values = [
-    {
-      icon: <SafetyCertificateOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-      title: 'Expertise',
-      description: 'Un seul partenaire pour tous vos projets énergétiques et de construction'
-    },
-    {
-      icon: <StarFilled style={{ fontSize: '48px', color: '#10b981' }} />,
-      title: 'Qualité',
-      description: 'Produits premium et installations réalisées par des techniciens certifiés'
-    },
-    {
-      icon: <CustomerServiceOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-      title: 'Service',
-      description: 'Suivi personnalisé de A à Z, même après installation'
-    },
-    {
-      icon: <CheckCircleOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-      title: 'Garanties',
-      description: 'Garanties étendues et service après-vente réactif'
-    }
+  const statsData = [
+    { title: `+${stats.installations}`, subtitle: 'Installations réalisées', icon: <HomeOutlined /> },
+    { title: `${stats.powerMW} MW`, subtitle: 'Puissance installée', icon: <ThunderboltOutlined /> },
+    { title: `${stats.satisfaction}/5`, subtitle: 'Satisfaction client', icon: <StarFilled /> },
+    { title: stats.region, subtitle: 'Région couverte', icon: <EnvironmentOutlined /> }
   ];
 
   // Processus en 5 étapes
@@ -421,7 +280,7 @@ const SiteVitrine2Thier: React.FC = () => {
         {/* STATISTIQUES */}
         <div style={{ background: '#f9fafb', padding: '60px 24px' }}>
           <Row gutter={[24, 24]} justify="center">
-            {stats.map((stat, index) => (
+            {statsData.map((stat, index) => (
               <Col xs={12} sm={12} md={6} key={index}>
                 <Card 
                   bordered={false}
@@ -465,7 +324,7 @@ const SiteVitrine2Thier: React.FC = () => {
                     borderRadius: '12px',
                     border: '2px solid #f1f5f9'
                   }}
-                  bodyStyle={{ padding: '24px' }}
+                  styles={{ body: { padding: '24px' } }}
                 >
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <div>{service.icon}</div>
@@ -542,7 +401,7 @@ const SiteVitrine2Thier: React.FC = () => {
           </div>
 
           <Row gutter={[24, 24]}>
-            {recentProjects.map((project) => (
+            {projects.map((project) => (
               <Col xs={24} sm={12} md={6} key={project.id}>
                 <Card
                   hoverable

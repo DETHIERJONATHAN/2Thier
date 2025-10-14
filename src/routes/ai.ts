@@ -135,6 +135,584 @@ async function logAiUsage(params: AiUsageParams) {
 }
 
 /**
+ * 🤖 POST /api/ai/analyze-section
+ * Analyse une section de site web et propose des optimisations
+ */
+router.post('/analyze-section', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const { sectionType, content, prompt } = req.body;
+    
+    console.log('🎨 [AI] Analyse section:', sectionType);
+    console.log('📝 [AI] Contenu longueur:', JSON.stringify(content).length, 'caractères');
+    
+    // Construire le prompt pour Gemini
+    const analysisPrompt = prompt || buildSectionAnalysisPrompt(sectionType, content);
+    
+    // Appel service Gemini
+    const serviceResp = await geminiSingleton.chat({ prompt: analysisPrompt });
+    const isLive = serviceResp.mode === 'live';
+    
+    // Si mode mock, générer une réponse simulée
+    const analysis = isLive ? parseSectionAnalysis(serviceResp.content) : generateMockSectionAnalysis(sectionType, content);
+    
+    const latency = Date.now() - t0;
+    res.json({
+      success: true,
+      data: analysis,
+      metadata: {
+        mode: serviceResp.mode,
+        model: isLive ? (process.env.GEMINI_MODEL || 'gemini-1.5-flash') : 'mock',
+        latencyMs: latency,
+        fallbackError: serviceResp.error
+      }
+    });
+    
+    void logAiUsage({ 
+      req, 
+      endpoint: 'analyze-section', 
+      success: true, 
+      latencyMs: latency, 
+      model: isLive ? (process.env.GEMINI_MODEL || 'gemini-1.5-flash') : 'mock', 
+      mode: serviceResp.mode,
+      error: serviceResp.error ? String(serviceResp.error) : null
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur route analyze-section:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de l\'analyse de la section',
+      details: (error as Error).message
+    });
+    void logAiUsage({ 
+      req, 
+      endpoint: 'analyze-section', 
+      success: false, 
+      latencyMs: Date.now() - t0, 
+      model: null, 
+      mode: null, 
+      error: (error as Error).message 
+    });
+  }
+});
+
+// Helper: Construire le prompt d'analyse de section
+function buildSectionAnalysisPrompt(sectionType: string, content: any): string {
+  // Déterminer les champs spécifiques selon le type de section
+  const sectionTypeGuide = getSectionTypeGuide(sectionType);
+  
+  return `Tu es un expert en UX/UI et design web spécialisé dans les sites de transition énergétique.
+
+🎯 **IMPORTANT : Analyse UNIQUEMENT cette section isolée, PAS le site complet.**
+
+**Type de section à analyser :** ${sectionType}
+${sectionTypeGuide}
+
+**Contenu actuel de CETTE section :**
+${JSON.stringify(content, null, 2).slice(0, 3000)}
+
+**Ta mission :**
+1. Analyser UNIQUEMENT les éléments présents dans cette section spécifique
+2. Proposer des améliorations CONCRÈTES pour cette section
+3. Ne PAS faire de suggestions globales sur le site
+4. Se concentrer sur ce qui est modifiable dans CETTE section
+
+**Format de réponse (JSON uniquement) :**
+{
+  "score": <nombre entre 0 et 100 pour CETTE section>,
+  "suggestions": [
+    {
+      "id": "<id unique ex: ${sectionType}-suggestion-1>",
+      "category": "<layout|design|content|ux>",
+      "type": "<improvement|warning|best-practice>",
+      "title": "<titre court et actionnable>",
+      "description": "<explication détaillée SPÉCIFIQUE à cette section>",
+      "impact": "<low|medium|high>",
+      "changes": { 
+        "<nomDuChamp>": "<valeurProposée>",
+        "// Exemple: title": "Nouveau titre optimisé",
+        "// Exemple: backgroundColor": "#10b981"
+      },
+      "preview": {
+        "before": "<valeur actuelle dans CETTE section>",
+        "after": "<valeur proposée pour CETTE section>"
+      }
+    }
+  ],
+  "summary": {
+    "strengths": ["<point fort de CETTE section>"],
+    "weaknesses": ["<faiblesse de CETTE section>"],
+    "opportunities": ["<amélioration possible dans CETTE section>"]
+  }
+}
+
+**Critères d'analyse pour CETTE section :**
+- 📐 **LAYOUT**: disposition des éléments dans cette section, grille, espacement interne
+- 🎨 **DESIGN**: couleurs utilisées ici, typographie de cette section, contraste
+- 📝 **CONTENU**: textes présents dans cette section, CTA de cette section
+- ⚡ **UX**: navigation dans cette section, hiérarchie visuelle interne
+
+**Exemples de suggestions VALIDES (spécifiques à la section) :**
+✅ "Le titre de cette section manque de contraste - passer de #666666 à #1f2937"
+✅ "Le CTA de cette section est peu visible - augmenter la taille du bouton"
+✅ "L'espacement entre le titre et la description est trop serré - passer à 24px"
+
+**Exemples de suggestions INVALIDES (trop générales) :**
+❌ "Améliorer la navigation du site"
+❌ "Ajouter un footer au site"
+❌ "Optimiser le SEO global"
+
+Réponds UNIQUEMENT avec le JSON, sans \`\`\`json ni texte additionnel.`;
+}
+
+// Helper: Guide spécifique par type de section
+function getSectionTypeGuide(sectionType: string): string {
+  const guides: Record<string, string> = {
+    'hero': `
+**Éléments typiques d'une section Hero :**
+- title (titre principal)
+- subtitle/description (sous-titre)
+- ctaText/buttonText (texte du bouton d'action)
+- backgroundImage/image (image de fond)
+- backgroundColor (couleur de fond)
+- textColor (couleur du texte)
+- alignment (alignement du contenu)`,
+    
+    'hero-split': `
+**Éléments typiques d'une section Hero Split :**
+- title, subtitle
+- image (côté visuel)
+- ctaText
+- layout (left/right split)
+- backgroundColor, textColor`,
+    
+    'card': `
+**Éléments typiques d'une section Card :**
+- cards[] (liste de cartes)
+- Chaque carte : title, description, icon, link
+- gridColumns (nombre de colonnes)
+- backgroundColor`,
+    
+    'cta': `
+**Éléments typiques d'une section CTA :**
+- title (appel à l'action)
+- description (description courte)
+- buttonText (texte du bouton)
+- buttonLink (lien du bouton)
+- backgroundColor, buttonColor`,
+    
+    'footer': `
+**Éléments typiques d'un Footer :**
+- companyInfo (infos entreprise)
+- links[] (liens footer)
+- socialLinks[] (réseaux sociaux)
+- copyright (texte copyright)`,
+    
+    'testimonials': `
+**Éléments typiques d'une section Témoignages :**
+- testimonials[] (liste de témoignages)
+- Chaque témoignage : name, company, text, avatar
+- layout (carousel/grid)`,
+    
+    'pricing': `
+**Éléments typiques d'une section Tarifs :**
+- plans[] (liste de forfaits)
+- Chaque plan : name, price, features[], highlighted
+- currency, interval (mois/an)`,
+    
+    'faq': `
+**Éléments typiques d'une section FAQ :**
+- questions[] (liste de questions)
+- Chaque question : question, answer
+- layout (accordion/list)`,
+    
+    'contact-form': `
+**Éléments typiques d'un Formulaire de Contact :**
+- fields[] (champs du formulaire)
+- submitText (texte du bouton)
+- successMessage (message de succès)`
+  };
+  
+  return guides[sectionType] || `**Section de type : ${sectionType}**
+Analyser les éléments présents dans le contenu fourni.`;
+}
+
+// Helper: Parser la réponse Gemini
+function parseSectionAnalysis(content: string | null): any {
+  if (!content) return generateMockSectionAnalysis('unknown', {});
+  
+  try {
+    // Nettoyer le contenu (enlever les markdown code blocks si présents)
+    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    
+    // Valider la structure
+    if (!parsed.score || !parsed.suggestions || !parsed.summary) {
+      throw new Error('Structure invalide');
+    }
+    
+    return parsed;
+  } catch (error) {
+    console.warn('⚠️ Impossible de parser la réponse Gemini, utilisation du mock');
+    return generateMockSectionAnalysis('unknown', {});
+  }
+}
+
+// Helper: Générer une analyse mock spécifique à la section
+function generateMockSectionAnalysis(sectionType: string, content: any): any {
+  const hasTitle = content?.title || content?.heading;
+  const hasDescription = content?.description || content?.subtitle;
+  const hasImage = content?.image || content?.backgroundImage;
+  const hasCTA = content?.ctaText || content?.buttonText;
+  const hasBackgroundColor = content?.backgroundColor;
+  const hasTextColor = content?.textColor;
+  
+  const suggestions: any[] = [];
+  let score = 75; // Score de base pour une section
+  
+  // === SUGGESTIONS SPÉCIFIQUES AU TYPE DE SECTION ===
+  
+  if (sectionType === 'hero' || sectionType === 'hero-split') {
+    // Hero Section - L'image est cruciale
+    if (!hasImage) {
+      suggestions.push({
+        id: `${sectionType}-img-missing`,
+        category: 'design',
+        type: 'warning',
+        title: 'Image de fond manquante dans cette Hero',
+        description: 'Cette section Hero nécessite une image de fond impactante pour capter l\'attention. Les Hero avec image convertissent 45% mieux.',
+        impact: 'high',
+        changes: { 
+          backgroundImage: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=1920',
+          overlayOpacity: '0.4'
+        },
+        preview: { 
+          before: 'Aucune image de fond', 
+          after: 'Image panoramique transition énergétique avec overlay' 
+        }
+      });
+      score -= 15;
+    }
+    
+    if (!hasCTA) {
+      suggestions.push({
+        id: `${sectionType}-cta-missing`,
+        category: 'content',
+        type: 'warning',
+        title: 'Bouton d\'action manquant dans cette Hero',
+        description: 'Cette section Hero doit avoir un CTA clair et visible pour guider l\'utilisateur. Suggestion : "Demander un devis gratuit"',
+        impact: 'high',
+        changes: { 
+          ctaText: 'Demander un devis gratuit',
+          ctaStyle: 'primary',
+          ctaSize: 'large'
+        },
+        preview: { 
+          before: 'Pas de bouton d\'action', 
+          after: 'Bouton "Demander un devis gratuit" visible' 
+        }
+      });
+      score -= 12;
+    }
+    
+    if (hasTitle && hasTitle.length < 20) {
+      suggestions.push({
+        id: `${sectionType}-title-short`,
+        category: 'content',
+        type: 'improvement',
+        title: 'Titre de cette Hero trop court',
+        description: `Le titre actuel "${hasTitle}" est trop court. Un titre Hero impactant fait 30-60 caractères pour être mémorable.`,
+        impact: 'medium',
+        changes: { 
+          title: 'Transformez votre consommation énergétique dès aujourd\'hui'
+        },
+        preview: { 
+          before: hasTitle, 
+          after: 'Transformez votre consommation énergétique dès aujourd\'hui' 
+        }
+      });
+      score -= 8;
+    }
+  }
+  
+  else if (sectionType === 'card' || sectionType === 'card-icon' || sectionType === 'card-service') {
+    // Card Section - Le nombre de cartes et la grille sont importants
+    const cards = content?.cards || [];
+    const gridColumns = content?.gridColumns || 3;
+    
+    if (cards.length === 0) {
+      suggestions.push({
+        id: `${sectionType}-no-cards`,
+        category: 'content',
+        type: 'warning',
+        title: 'Aucune carte dans cette section Cards',
+        description: 'Cette section de cartes est vide. Ajoutez au moins 3 cartes pour présenter vos services/avantages.',
+        impact: 'high',
+        changes: { 
+          cards: [
+            { title: 'Service 1', description: 'Description du service', icon: 'star' },
+            { title: 'Service 2', description: 'Description du service', icon: 'rocket' },
+            { title: 'Service 3', description: 'Description du service', icon: 'check' }
+          ]
+        },
+        preview: { 
+          before: 'Section vide', 
+          after: '3 cartes de services avec icônes' 
+        }
+      });
+      score -= 20;
+    } else if (cards.length % gridColumns !== 0) {
+      suggestions.push({
+        id: `${sectionType}-grid-uneven`,
+        category: 'layout',
+        type: 'improvement',
+        title: 'Grille déséquilibrée dans cette section',
+        description: `Vous avez ${cards.length} cartes en ${gridColumns} colonnes, ce qui crée une dernière ligne incomplète. Ajoutez ${gridColumns - (cards.length % gridColumns)} carte(s) ou passez à ${cards.length} colonnes.`,
+        impact: 'medium',
+        changes: { 
+          gridColumns: cards.length === 4 ? 2 : Math.min(cards.length, 4)
+        },
+        preview: { 
+          before: `${cards.length} cartes en ${gridColumns} colonnes`, 
+          after: 'Grille équilibrée' 
+        }
+      });
+      score -= 5;
+    }
+  }
+  
+  else if (sectionType === 'cta' || sectionType === 'cta-banner') {
+    // CTA Section - Le bouton doit être ultra-visible
+    if (!hasCTA) {
+      suggestions.push({
+        id: `${sectionType}-no-button`,
+        category: 'content',
+        type: 'warning',
+        title: 'Bouton manquant dans cette section CTA',
+        description: 'Une section CTA DOIT avoir un bouton d\'action visible. C\'est l\'élément central de cette section.',
+        impact: 'high',
+        changes: { 
+          buttonText: 'Commencer maintenant',
+          buttonSize: 'large',
+          buttonColor: '#10b981'
+        },
+        preview: { 
+          before: 'Pas de bouton', 
+          after: 'Bouton "Commencer maintenant" vert vif' 
+        }
+      });
+      score -= 25;
+    }
+    
+    if (!hasBackgroundColor || hasBackgroundColor === '#ffffff') {
+      suggestions.push({
+        id: `${sectionType}-bg-bland`,
+        category: 'design',
+        type: 'improvement',
+        title: 'Fond de cette CTA trop neutre',
+        description: 'Cette section CTA doit se démarquer visuellement. Utilisez un fond coloré ou un gradient pour attirer l\'attention.',
+        impact: 'high',
+        changes: { 
+          backgroundColor: '#f0fdf4',
+          borderColor: '#10b981',
+          borderWidth: '2px'
+        },
+        preview: { 
+          before: 'Fond blanc neutre', 
+          after: 'Fond vert clair avec bordure verte' 
+        }
+      });
+      score -= 10;
+    }
+  }
+  
+  else if (sectionType === 'footer') {
+    // Footer - Doit avoir les infos légales
+    const hasCopyright = content?.copyright;
+    const hasLinks = content?.links && content.links.length > 0;
+    
+    if (!hasCopyright) {
+      suggestions.push({
+        id: `${sectionType}-no-copyright`,
+        category: 'content',
+        type: 'warning',
+        title: 'Copyright manquant dans ce Footer',
+        description: 'Ce footer doit inclure le copyright pour la conformité légale.',
+        impact: 'medium',
+        changes: { 
+          copyright: `© ${new Date().getFullYear()} 2Thier. Tous droits réservés.`
+        },
+        preview: { 
+          before: 'Pas de mention légale', 
+          after: '© 2025 2Thier. Tous droits réservés.' 
+        }
+      });
+      score -= 8;
+    }
+    
+    if (!hasLinks) {
+      suggestions.push({
+        id: `${sectionType}-no-links`,
+        category: 'content',
+        type: 'improvement',
+        title: 'Liens manquants dans ce Footer',
+        description: 'Ce footer devrait inclure des liens utiles (CGV, Mentions légales, Contact, etc.)',
+        impact: 'medium',
+        changes: { 
+          links: [
+            { text: 'Mentions légales', url: '/legal' },
+            { text: 'CGV', url: '/cgv' },
+            { text: 'Contact', url: '/contact' }
+          ]
+        },
+        preview: { 
+          before: 'Aucun lien', 
+          after: '3 liens légaux essentiels' 
+        }
+      });
+      score -= 7;
+    }
+  }
+  
+  // === SUGGESTIONS GÉNÉRIQUES POUR TOUS LES TYPES ===
+  
+  if (!hasTitle) {
+    suggestions.push({
+      id: `${sectionType}-no-title`,
+      category: 'content',
+      type: 'warning',
+      title: 'Titre manquant dans cette section',
+      description: `Cette section ${sectionType} nécessite un titre clair pour guider le visiteur.`,
+      impact: 'high',
+      changes: { 
+        title: sectionType === 'hero' ? 'Votre titre impactant ici' : `Titre de la section ${sectionType}`
+      },
+      preview: { 
+        before: 'Pas de titre', 
+        after: 'Titre explicite ajouté' 
+      }
+    });
+    score -= 12;
+  }
+  
+  if (!hasDescription && sectionType !== 'footer') {
+    suggestions.push({
+      id: `${sectionType}-no-desc`,
+      category: 'content',
+      type: 'improvement',
+      title: 'Description manquante dans cette section',
+      description: `Un sous-titre ou description dans cette section ${sectionType} améliore la clarté du message.`,
+      impact: 'medium',
+      changes: { 
+        description: 'Description engageante de cette section'
+      },
+      preview: { 
+        before: 'Pas de description', 
+        after: 'Sous-titre explicatif ajouté' 
+        }
+    });
+    score -= 6;
+  }
+  
+  // Contraste des couleurs
+  if (hasBackgroundColor && hasTextColor) {
+    const bgColor = hasBackgroundColor.replace('#', '');
+    const txtColor = hasTextColor.replace('#', '');
+    // Heuristique simple : si fond clair et texte clair, problème
+    const bgLight = parseInt(bgColor.substring(0, 2), 16) > 200;
+    const txtLight = parseInt(txtColor.substring(0, 2), 16) > 200;
+    
+    if (bgLight && txtLight) {
+      suggestions.push({
+        id: `${sectionType}-contrast-low`,
+        category: 'design',
+        type: 'warning',
+        title: 'Contraste insuffisant dans cette section',
+        description: 'Le texte clair sur fond clair de cette section pose un problème d\'accessibilité (WCAG). Assombrir le texte.',
+        impact: 'medium',
+        changes: { 
+          textColor: '#1f2937'
+        },
+        preview: { 
+          before: `Texte ${hasTextColor} sur fond ${hasBackgroundColor}`, 
+          after: 'Texte #1f2937 (gris foncé) sur fond clair' 
+        }
+      });
+      score -= 8;
+    }
+  }
+  
+  // Espacement
+  const padding = content?.padding;
+  if (!padding || padding === '0px' || padding === '0') {
+    suggestions.push({
+      id: `${sectionType}-no-padding`,
+      category: 'layout',
+      type: 'best-practice',
+      title: 'Espacement insuffisant dans cette section',
+      description: 'Cette section manque de "breathing room". Ajouter du padding pour un design aéré (règle des 8px).',
+      impact: 'low',
+      changes: { 
+        padding: '48px 24px'
+      },
+      preview: { 
+        before: 'Section collée aux bords', 
+        after: 'Section avec espacement confortable' 
+      }
+    });
+    score -= 4;
+  }
+  
+  // Si aucune suggestion spécifique, ajouter des best practices
+  if (suggestions.length === 0) {
+    suggestions.push({
+      id: `${sectionType}-optimize-mobile`,
+      category: 'ux',
+      type: 'best-practice',
+      title: 'Optimiser cette section pour mobile',
+      description: 'Vérifier que cette section s\'adapte bien aux petits écrans (responsive design).',
+      impact: 'medium',
+      changes: { 
+        responsiveSettings: {
+          mobile: { fontSize: '14px', padding: '24px 16px' }
+        }
+      },
+      preview: { 
+        before: 'Paramètres desktop uniquement', 
+        after: 'Adapté aux mobiles' 
+      }
+    });
+  }
+  
+  return {
+    score: Math.max(40, Math.min(95, score)),
+    suggestions: suggestions.slice(0, 8), // Max 8 suggestions pour ne pas surcharger
+    summary: {
+      strengths: [
+        hasTitle && `Titre présent dans cette section`,
+        hasDescription && `Description claire dans cette section`,
+        hasImage && `Visuel présent dans cette section`,
+        hasCTA && `Appel à l'action dans cette section`,
+        hasBackgroundColor && hasBackgroundColor !== '#ffffff' && `Fond personnalisé dans cette section`
+      ].filter(Boolean),
+      weaknesses: [
+        !hasTitle && `Titre manquant dans cette section ${sectionType}`,
+        !hasDescription && sectionType !== 'footer' && `Description absente de cette section`,
+        !hasCTA && (sectionType === 'hero' || sectionType === 'cta') && `Bouton d'action manquant dans cette section`,
+        suggestions.length > 3 && `${suggestions.length} améliorations possibles identifiées pour cette section`
+      ].filter(Boolean),
+      opportunities: [
+        `Ajouter des animations d'entrée pour cette section`,
+        `Tester des variantes A/B de cette section`,
+        `Améliorer l'accessibilité (WCAG AA) de cette section`,
+        `Optimiser le poids des images de cette section`
+      ].slice(0, 3)
+    }
+  };
+}
+
+/**
  * 💬 POST /api/ai/generate-response
  * Génère une réponse de l'assistant IA
  */

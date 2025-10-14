@@ -5,9 +5,6 @@ import { useAuth } from './auth/useAuth';
 import { useFormulasVersionWatcher, onFormulasVersionChange } from './hooks/useFormulasVersionWatcher';
 import { DomainRouter } from './hooks/useDomainRouter';
 
-// TreeBranchLeaf System V2 - AVEC DRAG & DROP FONCTIONNEL DE PALETTE À STRUCTURE !
-import TreeBranchLeafWrapper from './components/TreeBranchLeaf/treebranchleaf-new/TreeBranchLeafWrapper';
-
 // Lazy imports
 const Connexion = lazy(() => import('./components/Connexion'));
 const RegisterPage = lazy(() => import('./components/RegisterPage'));
@@ -30,6 +27,7 @@ const LandingRenderer = lazy(() => import('./pages/public/LandingRenderer'));
 
 // Pages publiques Site Vitrine 2Thier
 const SiteVitrine2Thier = lazy(() => import('./pages/SiteVitrine2Thier'));
+const SiteVitrine2ThierDynamic = lazy(() => import('./pages/SiteVitrine2ThierDynamic'));
 
 // Composant Loading
 const LoadingSpinner = () => (
@@ -96,20 +94,6 @@ const App: React.FC = () => {
         } 
       />
       
-      {/* 🌟 ROUTE TREEBRANCHLEAF NOUVEAU SYSTÈME - INTERFACE COMPLÈTE 3 COLONNES */}
-      <Route 
-        path="/formulaire/treebranchleaf" 
-        element={
-          <Suspense fallback={<LoadingSpinner />}>
-            <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-              <ProtectedRoute>
-                <TreeBranchLeafWrapper />
-              </ProtectedRoute>
-            </div>
-          </Suspense>
-        } 
-      />
-      
       {/* 🚀 DEMO PUBLIQUE: TBL-New (UI uniquement, données mock si non authentifié) */}
       <Route 
         path="/demo/tbl-new" 
@@ -128,32 +112,6 @@ const App: React.FC = () => {
           <Suspense fallback={<LoadingSpinner />}>
             <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
               <TblNew />
-            </div>
-          </Suspense>
-        } 
-      />
-      
-      {/* 🌟 ROUTE TREEBRANCHLEAF ÉDITEUR AVEC ID - NOUVEAU SYSTÈME + LEAD */}
-      <Route 
-        path="/formulaire/treebranchleaf/:id" 
-        element={
-          <Suspense fallback={<LoadingSpinner />}>
-            <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-              <ProtectedRoute>
-                <TreeBranchLeafWrapper />
-              </ProtectedRoute>
-            </div>
-          </Suspense>
-        } 
-      />
-      <Route 
-        path="/formulaire/treebranchleaf/:id/:leadId" 
-        element={
-          <Suspense fallback={<LoadingSpinner />}>
-            <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-              <ProtectedRoute>
-                <TreeBranchLeafWrapper />
-              </ProtectedRoute>
             </div>
           </Suspense>
         } 
@@ -187,6 +145,14 @@ const App: React.FC = () => {
       />
       <Route 
         path="/site-vitrine-2thier" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <SiteVitrine2ThierDynamic />
+          </Suspense>
+        } 
+      />
+      <Route 
+        path="/site-vitrine-2thier-old" 
         element={
           <Suspense fallback={<LoadingSpinner />}>
             <SiteVitrine2Thier />

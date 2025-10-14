@@ -1,0 +1,3216 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Drawer,
+  Form,
+  Input,
+  Button,
+  Select,
+  ColorPicker,
+  InputNumber,
+  Space,
+  Divider,
+  Typography,
+  message,
+  Tabs,
+  Switch,
+  Tag,
+  Card,
+  Row,
+  Col,
+  Slider,
+} from 'antd';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  SaveOutlined,
+  CloseOutlined,
+  BgColorsOutlined,
+  FontSizeOutlined,
+  LinkOutlined,
+  PictureOutlined,
+  StarOutlined,
+  TrophyOutlined,
+  ThunderboltOutlined
+} from '@ant-design/icons';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { ImageUploader } from './ImageUploader';
+import { IconPicker } from './IconPicker';
+import GridLayoutEditor from './GridLayoutEditor';
+import SectionHeaderEditor from './SectionHeaderEditor';
+import AIAssistant from './AIAssistant';
+import ServicesManager from './ServicesManager';
+import ProjectsManager from './ProjectsManager';
+import TestimonialsManager from './TestimonialsManager';
+import type { Color } from 'antd/es/color-picker';
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
+
+interface SectionEditorProps {
+  visible: boolean;
+  onClose: () => void;
+  section: any; // Section complète avec id, type, content, etc.
+  websiteId: number;
+  onSave: () => void;
+}
+
+export const SectionEditor: React.FC<SectionEditorProps> = ({
+  visible,
+  onClose,
+  section,
+  websiteId,
+  onSave,
+}) => {
+  const { api } = useAuthenticatedApi();
+  const [form] = Form.useForm();
+  const [showAI, setShowAI] = useState(false);
+  const [aiContext, setAIContext] = useState('');
+  const [aiCurrentValue, setAICurrentValue] = useState('');
+  const [gridLayout, setGridLayout] = useState<any>(null);
+  const [sectionHeader, setSectionHeader] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [showImageUploader, setShowImageUploader] = useState(false);
+  const [currentImageField, setCurrentImageField] = useState<string>('');
+
+  // Charger le contenu de la section dans le formulaire
+  useEffect(() => {
+    if (section && visible) {
+      form.setFieldsValue(section.content || {});
+    }
+  }, [section, visible, form]);
+
+  // Sauvegarder les modifications
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      const values = await form.validateFields();
+      
+      await api.patch(`/api/website-sections/${section.id}`, {
+        content: values,
+      });
+
+      message.success('Section mise à jour avec succès');
+      onSave();
+      onClose();
+    } catch (error: any) {
+      console.error('Erreur lors de la sauvegarde:', error);
+      if (error.errorFields) {
+        message.error('Veuillez remplir tous les champs requis');
+      } else {
+        message.error('Impossible de sauvegarder la section');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Ouvrir l'uploader d'images pour un champ spécifique
+  const openImageUploader = (fieldName: string) => {
+    setCurrentImageField(fieldName);
+    setShowImageUploader(true);
+  };
+
+  // Sélectionner une image uploadée
+  const handleImageSelect = (imageUrl: string) => {
+    form.setFieldValue(currentImageField, `http://localhost:5173${imageUrl}`);
+    setShowImageUploader(false);
+    message.success('Image ajoutée');
+  };
+
+  // Rendu conditionnel selon le type de section
+  const renderSectionFields = () => {
+    if (!section) return null;
+
+    switch (section.type) {
+      case 'hero':
+        return renderHeroFields();
+      case 'stats':
+        return renderStatsFields();
+      case 'services':
+        return renderServicesFields();
+      case 'projects':
+        return renderProjectsFields();
+      case 'values':
+        return renderValuesFields();
+      case 'testimonials':
+        return renderTestimonialsFields();
+      case 'contact':
+        return renderContactFields();
+      case 'faq':
+        return renderFaqFields();
+      case 'steps':
+        return renderStepsFields();
+      case 'cta':
+        return renderCtaFields();
+      default:
+        return <Text type="secondary">Éditeur non disponible pour ce type de section</Text>;
+    }
+  };
+
+  // ========== HERO SECTION ==========
+  const renderHeroFields = () => (
+    <>
+      <Title level={5}>🎯 Section Hero</Title>
+      <Divider />
+
+      {/* IMAGE DE FOND & OVERLAY */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🖼️ Image de Fond & Overlay</Title>
+        
+        <Form.Item label="Image de fond" name="backgroundImage">
+          <Input
+            placeholder="URL de l'image"
+            suffix={
+              <Button
+                type="link"
+                icon={<PictureOutlined />}
+                onClick={() => openImageUploader('backgroundImage')}
+              >
+                Uploader
+              </Button>
+            }
+          />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Position image" name="backgroundPosition">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="center">Center</Select.Option>
+                <Select.Option value="top">Top</Select.Option>
+                <Select.Option value="bottom">Bottom</Select.Option>
+                <Select.Option value="left">Left</Select.Option>
+                <Select.Option value="right">Right</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Taille image" name="backgroundSize">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="cover">Cover (remplir)</Select.Option>
+                <Select.Option value="contain">Contain</Select.Option>
+                <Select.Option value="auto">Auto</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Attachment" name="backgroundAttachment">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="scroll">Scroll</Select.Option>
+                <Select.Option value="fixed">Fixed (Parallax)</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Overlay sur l'image</Divider>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur overlay" name="overlayColor">
+              <Input type="color" placeholder="#000000" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Opacité overlay (0-1)" name="overlayOpacity">
+              <Input placeholder="Ex: 0.5" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item label="Gradient overlay" name="overlayGradient">
+          <Input placeholder="Ex: linear-gradient(to bottom, transparent, rgba(0,0,0,0.7))" />
+        </Form.Item>
+      </Card>
+
+      {/* LAYOUT & DIMENSIONS */}
+      <Card style={{ backgroundColor: '#fef3f2', marginBottom: 16 }}>
+        <Title level={5}>📐 Layout & Dimensions</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Hauteur minimale" name="minHeight">
+              <Input placeholder="Ex: 600px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 100px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Alignement texte" name="textAlign">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Justification verticale" name="justifyContent">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="flex-start">⬆️ Haut</Select.Option>
+                <Select.Option value="flex-end">⬇️ Bas</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* CARTE CONTENU (OPTIONNEL) */}
+      <Card style={{ backgroundColor: '#f0fdf4', marginBottom: 16 }}>
+        <Title level={5}>🎴 Carte Contenu (Optionnel)</Title>
+        
+        <Form.Item label="Utiliser une carte" name={['contentCard', 'enabled']}>
+          <Select placeholder="Sélectionner">
+            <Select.Option value={true}>✅ Oui (glassmorphism)</Select.Option>
+            <Select.Option value={false}>❌ Non (texte direct)</Select.Option>
+          </Select>
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur fond carte" name={['contentCard', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Opacité fond (0-1)" name={['contentCard', 'backgroundOpacity']}>
+              <Input placeholder="Ex: 0.9" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Largeur max" name={['contentCard', 'maxWidth']}>
+              <Input placeholder="Ex: 800px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding" name={['contentCard', 'padding']}>
+              <Input placeholder="Ex: 60px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['contentCard', 'borderRadius']}>
+              <Input placeholder="Ex: 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Ombre" name={['contentCard', 'boxShadow']}>
+              <Input placeholder="Ex: 0 20px 60px rgba(0,0,0,0.3)" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Backdrop blur" name={['contentCard', 'backdropBlur']}>
+              <Input placeholder="Ex: 10px (glassmorphism)" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* BADGE */}
+      <Card style={{ backgroundColor: '#faf5ff', marginBottom: 16 }}>
+        <Title level={5}>🏷️ Badge (optionnel)</Title>
+        
+        <Form.Item label="Texte du badge" name={['badge', 'text']}>
+          <Input placeholder="Ex: ⚡ Nouveau service" />
+        </Form.Item>
+        
+        <Form.Item label="Icône" name={['badge', 'icon']}>
+          <IconPicker placeholder="Choisir une icône pour le badge" />
+        </Form.Item>
+        
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Couleur texte" name={['badge', 'color']}>
+              <Input type="color" placeholder="#10b981" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Couleur fond" name={['badge', 'backgroundColor']}>
+              <Input type="color" placeholder="#f0fdf4" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Taille police" name={['badge', 'fontSize']}>
+              <Input placeholder="Ex: 14px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Padding" name={['badge', 'padding']}>
+              <Input placeholder="Ex: 8px 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Rayon bordure" name={['badge', 'borderRadius']}>
+              <Input placeholder="Ex: 20px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* TITRE PRINCIPAL */}
+      <Card style={{ backgroundColor: '#fef3f2', marginBottom: 16 }}>
+        <Title level={5}>📝 Titre principal</Title>
+        
+        <Form.Item label="Texte" name={['title', 'text']} rules={[{ required: true }]}>
+          <Input placeholder="Ex: Votre Partenaire en Transition Énergétique" />
+        </Form.Item>
+        
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Couleur" name={['title', 'color']}>
+              <Input type="color" placeholder="#1f2937" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Taille police" name={['title', 'fontSize']}>
+              <Input placeholder="Ex: clamp(32px, 8vw, 56px)" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Poids police" name={['title', 'fontWeight']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="normal">Normal</Select.Option>
+                <Select.Option value="bold">Gras</Select.Option>
+                <Select.Option value="800">Extra Gras</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Ombre texte" name={['title', 'textShadow']}>
+              <Input placeholder="Ex: 2px 2px 4px rgba(0,0,0,0.3)" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Espacement lettres" name={['title', 'letterSpacing']}>
+              <Input placeholder="Ex: -1px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* SOUS-TITRE */}
+      <Card style={{ backgroundColor: '#f0fdf4', marginBottom: 16 }}>
+        <Title level={5}>💬 Sous-titre</Title>
+        
+        <Form.Item label="Texte" name={['subtitle', 'text']} rules={[{ required: true }]}>
+          <TextArea rows={3} placeholder="Ex: Photovoltaïque • Batteries • Bornes de Recharge..." />
+        </Form.Item>
+        
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Couleur" name={['subtitle', 'color']}>
+              <Input type="color" placeholder="#6b7280" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Taille police" name={['subtitle', 'fontSize']}>
+              <Input placeholder="Ex: clamp(16px, 4vw, 20px)" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Largeur max" name={['subtitle', 'maxWidth']}>
+              <Input placeholder="Ex: 700px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Hauteur de ligne" name={['subtitle', 'lineHeight']}>
+              <Input placeholder="Ex: 1.6" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Margin top" name={['subtitle', 'marginTop']}>
+              <Input placeholder="Ex: 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* BOUTONS */}
+      <Card style={{ backgroundColor: '#fef3f2', marginBottom: 16 }}>
+        <Title level={5}>🔘 Boutons d'Action</Title>
+
+        <Divider>Style Global des Boutons</Divider>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Espacement entre boutons" name={['buttonsStyle', 'gap']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Margin top" name={['buttonsStyle', 'marginTop']}>
+              <Input placeholder="Ex: 40px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Boutons Individuels</Divider>
+
+        <Form.List name="buttons">
+          {(fields, { add, remove }) => (
+            <>
+              {fields.map((field, index) => (
+                <Card key={field.key} size="small" style={{ marginBottom: 16, backgroundColor: '#fafafa' }}>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Text strong>Bouton {index + 1}</Text>
+
+                    <Form.Item
+                      name={[field.name, 'text']}
+                      label="Texte"
+                      rules={[{ required: true }]}
+                      fieldKey={[field.fieldKey, 'text']}
+                    >
+                      <Input placeholder="Ex: DEMANDER UN DEVIS GRATUIT" />
+                    </Form.Item>
+
+                    <Form.Item
+                      name={[field.name, 'href']}
+                      label="Lien"
+                      rules={[{ required: true }]}
+                      fieldKey={[field.fieldKey, 'href']}
+                    >
+                      <Input prefix={<LinkOutlined />} placeholder="/contact ou #contact" />
+                    </Form.Item>
+
+                    <Form.Item name={[field.name, 'icon']} label="Icône" fieldKey={[field.fieldKey, 'icon']}>
+                      <IconPicker placeholder="Choisir une icône pour le bouton" />
+                    </Form.Item>
+
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Form.Item name={[field.name, 'backgroundColor']} label="Couleur fond" fieldKey={[field.fieldKey, 'backgroundColor']}>
+                          <Input type="color" placeholder="#10b981" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item name={[field.name, 'textColor']} label="Couleur texte" fieldKey={[field.fieldKey, 'textColor']}>
+                          <Input type="color" placeholder="#ffffff" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Form.Item name={[field.name, 'hoverBackgroundColor']} label="Fond (hover)" fieldKey={[field.fieldKey, 'hoverBackgroundColor']}>
+                          <Input type="color" placeholder="#059669" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item name={[field.name, 'borderColor']} label="Couleur bordure" fieldKey={[field.fieldKey, 'borderColor']}>
+                          <Input type="color" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                      <Col span={8}>
+                        <Form.Item name={[field.name, 'fontSize']} label="Taille police" fieldKey={[field.fieldKey, 'fontSize']}>
+                          <Input placeholder="Ex: 18px" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item name={[field.name, 'padding']} label="Padding" fieldKey={[field.fieldKey, 'padding']}>
+                          <Input placeholder="Ex: 16px 32px" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item name={[field.name, 'borderRadius']} label="Rayon bordure" fieldKey={[field.fieldKey, 'borderRadius']}>
+                          <Input placeholder="Ex: 8px" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Form.Item name={[field.name, 'fontWeight']} label="Poids police" fieldKey={[field.fieldKey, 'fontWeight']}>
+                          <Select placeholder="Sélectionner">
+                            <Select.Option value="normal">Normal</Select.Option>
+                            <Select.Option value="bold">Gras</Select.Option>
+                            <Select.Option value="600">Semi-Gras</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item name={[field.name, 'boxShadow']} label="Ombre" fieldKey={[field.fieldKey, 'boxShadow']}>
+                          <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.15)" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                      Supprimer ce bouton
+                    </Button>
+                  </Space>
+                </Card>
+              ))}
+              {fields.length < 3 && (
+                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                  Ajouter un bouton
+                </Button>
+              )}
+            </>
+          )}
+        </Form.List>
+      </Card>
+
+      {/* ANIMATIONS */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎬 Animations</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Animation entrée" name="animation">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="none">Aucune</Select.Option>
+                <Select.Option value="fadeIn">Fade In</Select.Option>
+                <Select.Option value="slideUp">Slide Up</Select.Option>
+                <Select.Option value="slideDown">Slide Down</Select.Option>
+                <Select.Option value="zoomIn">Zoom In</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Durée animation" name="animationDuration">
+              <Input placeholder="Ex: 1s" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== STATS SECTION ==========
+  const renderStatsFields = () => (
+    <>
+      <Title level={5}>📊 Section Statistiques</Title>
+      <Divider />
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🎨 Configuration de la section</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name="backgroundColor">
+              <Input type="color" placeholder="#f9fafb" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 60px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>🎴 Style des Cartes</Title>
+        
+        <Divider>Disposition des cartes</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Largeur maximale" name={['cardStyle', 'maxWidth']}>
+              <Input placeholder="Ex: 300px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Hauteur minimale" name={['cardStyle', 'minHeight']}>
+              <Input placeholder="Ex: 200px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Espacement" name={['cardStyle', 'gap']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Nombre de colonnes" name={['cardStyle', 'columns']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={2}>2 colonnes</Select.Option>
+                <Select.Option value={3}>3 colonnes</Select.Option>
+                <Select.Option value={4}>4 colonnes</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Alignement du contenu" name={['cardStyle', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Bordure des cartes" name={['cardStyle', 'bordered']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Avec bordure</Select.Option>
+                <Select.Option value={false}>❌ Sans bordure</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Couleurs & Bordures</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Couleur de fond carte" name={['cardStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['cardStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding carte" name={['cardStyle', 'padding']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Ombre (box-shadow)" name={['cardStyle', 'boxShadow']}>
+              <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.1)" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Effet hover" name={['cardStyle', 'hoverable']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Activé</Select.Option>
+                <Select.Option value={false}>❌ Désactivé</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Icônes (Options Globales)</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille icône par défaut" name={['cardStyle', 'iconSize']}>
+              <Input placeholder="Ex: 48px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur icône par défaut" name={['cardStyle', 'iconColor']}>
+              <Input type="color" placeholder="#10b981" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Typographie</Divider>
+        <Row gutter={16}>
+          <Col span={6}>
+            <Form.Item label="Taille valeur" name={['cardStyle', 'valueFontSize']}>
+              <Input placeholder="Ex: 40px" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Couleur valeur" name={['cardStyle', 'valueColor']}>
+              <Input type="color" placeholder="#1f2937" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Taille label" name={['cardStyle', 'labelFontSize']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Couleur label" name={['cardStyle', 'labelColor']}>
+              <Input type="color" placeholder="#6b7280" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Divider orientation="left">Statistiques</Divider>
+
+      <Form.List name="stats">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Statistique {index + 1}</Text>
+
+                  <Form.Item name={[field.name, 'icon']} label="Icône" fieldKey={[field.fieldKey, 'icon']}>
+                    <IconPicker placeholder="Choisir une icône pour la statistique" />
+                  </Form.Item>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'iconSize']} label="Taille icône (override)" fieldKey={[field.fieldKey, 'iconSize']}>
+                        <Input placeholder="Ex: 56px (optionnel)" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'iconColor']} label="Couleur icône" fieldKey={[field.fieldKey, 'iconColor']}>
+                        <Input type="color" placeholder="#10b981" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Form.Item
+                    name={[field.name, 'value']}
+                    label="Valeur"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'value']}
+                  >
+                    <Input placeholder="Ex: 500+" />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'label']}
+                    label="Label"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'label']}
+                  >
+                    <Input placeholder="Ex: Projets réalisés" />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'description']} label="Description (optionnelle)" fieldKey={[field.fieldKey, 'description']}>
+                    <TextArea rows={2} placeholder="Description supplémentaire..." />
+                  </Form.Item>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            {fields.length < 6 && (
+              <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                Ajouter une statistique
+              </Button>
+            )}
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== SERVICES SECTION ==========
+  const renderServicesFields = () => (
+    <>
+      <Title level={5}>⚡ Section Services</Title>
+      <Divider />
+
+      {/* GESTION DES SERVICES */}
+      <Card style={{ marginBottom: 24, backgroundColor: '#fff7ed' }}>
+        <Title level={5}>📋 Gestion des Services</Title>
+        <ServicesManager
+          websiteId={websiteId}
+          siteName={section?.name || 'Services'}
+          industry="transition énergétique"
+        />
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>📝 En-tête de la section</Title>
+        
+        <Form.Item label="Titre de la section" name={['heading', 'title']}>
+          <Input placeholder="Ex: Nos Services" />
+        </Form.Item>
+
+        <Form.Item label="Sous-titre" name={['heading', 'subtitle']}>
+          <TextArea rows={2} placeholder="Description de vos services" />
+        </Form.Item>
+
+        <Form.Item label="Icône décorative" name={['heading', 'emoji']}>
+          <IconPicker placeholder="Choisir une icône pour le titre de section" />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Alignement du texte" name={['heading', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Taille du titre" name={['heading', 'titleSize']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="24px">Petit (24px)</Select.Option>
+                <Select.Option value="32px">Moyen (32px)</Select.Option>
+                <Select.Option value="42px">Grand (42px)</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>🎨 Style de la section</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name="backgroundColor">
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 80px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Disposition des cartes</Divider>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Largeur maximale" name={['cardStyle', 'maxWidth']}>
+              <Input placeholder="Ex: 350px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Hauteur" name={['cardStyle', 'height']}>
+              <Input placeholder="Ex: 100%" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Espacement" name={['cardStyle', 'gap']}>
+              <Input placeholder="Ex: 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Alignement du contenu" name={['cardStyle', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Effet hover" name={['cardStyle', 'hoverable']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Activé</Select.Option>
+                <Select.Option value={false}>❌ Désactivé</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['cardStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 12px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Bordure" name={['cardStyle', 'border']}>
+              <Input placeholder="Ex: 2px solid #e5e7eb" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Ombre" name={['cardStyle', 'boxShadow']}>
+              <Input placeholder="0 2px 8px rgba(0,0,0,0.1)" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille icône par défaut" name={['cardStyle', 'iconSize']}>
+              <Input placeholder="Ex: 48px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur icône par défaut" name={['cardStyle', 'iconColor']}>
+              <Input type="color" placeholder="#10b981" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Divider orientation="left">Services</Divider>
+
+      <Form.List name="services">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Service {index + 1}</Text>
+
+                  <Form.Item name={[field.name, 'icon']} label="Icône" fieldKey={[field.fieldKey, 'icon']}>
+                    <IconPicker placeholder="Choisir une icône pour ce service" />
+                  </Form.Item>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'iconSize']} label="Taille icône" fieldKey={[field.fieldKey, 'iconSize']}>
+                        <Input placeholder="Ex: 56px (optionnel)" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'iconColor']} label="Couleur icône" fieldKey={[field.fieldKey, 'iconColor']}>
+                        <Input type="color" placeholder="#10b981" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Form.Item
+                    name={[field.name, 'title']}
+                    label="Titre"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'title']}
+                  >
+                    <Input placeholder="Ex: Installation solaire" />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'description']} label="Description" fieldKey={[field.fieldKey, 'description']}>
+                    <TextArea rows={3} placeholder="Décrivez ce service..." />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'imageUrl']} label="Image (optionnelle)" fieldKey={[field.fieldKey, 'imageUrl']}>
+                    <Input
+                      placeholder="URL de l'image"
+                      suffix={
+                        <Button
+                          type="link"
+                          icon={<PictureOutlined />}
+                          onClick={() => openImageUploader(`services.${index}.imageUrl`)}
+                        >
+                          Uploader
+                        </Button>
+                      }
+                    />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'features']} label="Caractéristiques" fieldKey={[field.fieldKey, 'features']}>
+                    <Select mode="tags" placeholder="Ex: Rapide, Économique, Durable">
+                      <Select.Option value="Rapide">⚡ Rapide</Select.Option>
+                      <Select.Option value="Économique">💰 Économique</Select.Option>
+                      <Select.Option value="Durable">🌱 Durable</Select.Option>
+                      <Select.Option value="Garanti">✅ Garanti</Select.Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer ce service
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+              Ajouter un service
+            </Button>
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== PROJECTS SECTION ==========
+  const renderProjectsFields = () => (
+    <>
+      <Title level={5}>🏗️ Section Projets</Title>
+      <Divider />
+
+      {/* GESTION DES PROJETS */}
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef9e7' }}>
+        <Title level={5}>📋 Gestion des Projets</Title>
+        <ProjectsManager
+          websiteId={websiteId}
+          siteName={section?.name || 'Projets'}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🎨 Configuration de la section</Title>
+        
+        <Form.Item label="Titre de la section" name="sectionTitle">
+          <Input placeholder="Ex: Nos Réalisations" />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name="backgroundColor">
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 80px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>🎴 Style des Cartes</Title>
+        
+        <Divider>Disposition des cartes</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Largeur maximale" name={['cardStyle', 'maxWidth']}>
+              <Input placeholder="Ex: 400px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Hauteur minimale" name={['cardStyle', 'minHeight']}>
+              <Input placeholder="Ex: 450px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Espacement" name={['cardStyle', 'gap']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Nombre de colonnes" name={['cardStyle', 'columns']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={2}>2 colonnes</Select.Option>
+                <Select.Option value={3}>3 colonnes</Select.Option>
+                <Select.Option value={4}>4 colonnes</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Alignement du texte" name={['cardStyle', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Couleurs & Bordures</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['cardStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Ombre (box-shadow)" name={['cardStyle', 'boxShadow']}>
+              <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.1)" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding contenu" name={['cardStyle', 'contentPadding']}>
+              <Input placeholder="Ex: 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Effet hover" name={['cardStyle', 'hoverable']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Activé (scale + shadow)</Select.Option>
+                <Select.Option value={false}>❌ Désactivé</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name={['cardStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Images</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Hauteur image" name={['cardStyle', 'imageHeight']}>
+              <Input placeholder="Ex: 250px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Object-fit" name={['cardStyle', 'imageObjectFit']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="cover">Cover (remplir)</Select.Option>
+                <Select.Option value="contain">Contain (contenir)</Select.Option>
+                <Select.Option value="fill">Fill (étirer)</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Overlay sur image" name={['cardStyle', 'imageOverlay']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="none">❌ Aucun</Select.Option>
+                <Select.Option value="dark">🌑 Sombre</Select.Option>
+                <Select.Option value="light">☀️ Clair</Select.Option>
+                <Select.Option value="gradient">🌈 Gradient</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Opacité overlay (0-1)" name={['cardStyle', 'imageOverlayOpacity']}>
+              <Input placeholder="Ex: 0.3" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Effet hover image" name={['cardStyle', 'imageHoverEffect']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="none">Aucun</Select.Option>
+                <Select.Option value="zoom">🔍 Zoom</Select.Option>
+                <Select.Option value="darken">🌑 Assombrir</Select.Option>
+                <Select.Option value="brighten">💡 Éclaircir</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Typographie</Divider>
+        <Row gutter={16}>
+          <Col span={6}>
+            <Form.Item label="Taille titre" name={['cardStyle', 'titleFontSize']}>
+              <Input placeholder="Ex: 20px" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Couleur titre" name={['cardStyle', 'titleColor']}>
+              <Input type="color" placeholder="#1f2937" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Taille détails" name={['cardStyle', 'detailsFontSize']}>
+              <Input placeholder="Ex: 14px" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Couleur détails" name={['cardStyle', 'detailsColor']}>
+              <Input type="color" placeholder="#6b7280" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Divider orientation="left">Projets</Divider>
+
+      <Form.List name="projects">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Projet {index + 1}</Text>
+
+                  <Form.Item
+                    name={[field.name, 'imageUrl']}
+                    label="Image"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'imageUrl']}
+                  >
+                    <Input
+                      placeholder="URL de l'image du projet"
+                      suffix={
+                        <Button
+                          type="link"
+                          icon={<PictureOutlined />}
+                          onClick={() => openImageUploader(`projects.${index}.imageUrl`)}
+                        >
+                          Uploader
+                        </Button>
+                      }
+                    />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'title']}
+                    label="Titre"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'title']}
+                  >
+                    <Input placeholder="Ex: Installation 10kWc - Bruxelles" />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'location']} label="Localisation" fieldKey={[field.fieldKey, 'location']}>
+                    <Input placeholder="Ex: Bruxelles, Belgique" />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'details']} label="Détails" fieldKey={[field.fieldKey, 'details']}>
+                    <TextArea rows={2} placeholder="Détails techniques ou description..." />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'tags']} label="Tags" fieldKey={[field.fieldKey, 'tags']}>
+                    <Select mode="tags" placeholder="Ex: Résidentiel, Commercial">
+                      <Select.Option value="Résidentiel">🏠 Résidentiel</Select.Option>
+                      <Select.Option value="Commercial">🏢 Commercial</Select.Option>
+                      <Select.Option value="Industriel">🏭 Industriel</Select.Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'completedAt']} label="Date de réalisation" fieldKey={[field.fieldKey, 'completedAt']}>
+                    <Input type="date" />
+                  </Form.Item>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'backgroundColor']} label="Couleur fond (override)" fieldKey={[field.fieldKey, 'backgroundColor']}>
+                        <Input type="color" placeholder="#ffffff" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'badgeColor']} label="Couleur badge/tag" fieldKey={[field.fieldKey, 'badgeColor']}>
+                        <Input type="color" placeholder="#10b981" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer ce projet
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+              Ajouter un projet
+            </Button>
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== VALUES SECTION ==========
+  const renderValuesFields = () => (
+    <>
+      <Title level={5}>💎 Section Valeurs</Title>
+      <Divider />
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>📝 En-tête de la section</Title>
+        
+        <Form.Item label="Titre de la section" name={['heading', 'title']}>
+          <Input placeholder="Ex: Nos Valeurs" />
+        </Form.Item>
+
+        <Form.Item label="Icône décorative" name={['heading', 'emoji']}>
+          <IconPicker placeholder="Choisir une icône pour le titre de section" />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Alignement du texte" name={['heading', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Taille du titre" name={['heading', 'titleSize']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="24px">Petit (24px)</Select.Option>
+                <Select.Option value="32px">Moyen (32px)</Select.Option>
+                <Select.Option value="42px">Grand (42px)</Select.Option>
+                <Select.Option value="52px">Très grand (52px)</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item label="Couleur du titre" name={['heading', 'titleColor']}>
+          <Input type="color" />
+        </Form.Item>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>🎨 Style de la section</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name="backgroundColor">
+              <Input type="color" placeholder="#f9fafb" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 80px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Disposition des cartes</Divider>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Largeur maximale" name={['cardStyle', 'maxWidth']}>
+              <Input placeholder="Ex: 300px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Hauteur minimale" name={['cardStyle', 'minHeight']}>
+              <Input placeholder="Ex: 280px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Espacement" name={['cardStyle', 'gap']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Alignement du contenu" name={['cardStyle', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Bordure des cartes" name={['cardStyle', 'bordered']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Avec bordure</Select.Option>
+                <Select.Option value={false}>❌ Sans bordure</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Couleur de fond carte" name={['cardStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['cardStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding carte" name={['cardStyle', 'padding']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille icône" name={['cardStyle', 'iconSize']}>
+              <Input placeholder="Ex: 64px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur icône par défaut" name={['cardStyle', 'iconColor']}>
+              <Input type="color" placeholder="#10b981" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item label="Ombre (box-shadow)" name={['cardStyle', 'boxShadow']}>
+          <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.1)" />
+        </Form.Item>
+      </Card>
+
+      <Divider orientation="left">Valeurs (4 maximum)</Divider>
+
+      <Form.List name="values">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Valeur {index + 1}</Text>
+
+                  <Form.Item name={[field.name, 'emoji']} label="Icône" fieldKey={[field.fieldKey, 'emoji']}>
+                    <IconPicker placeholder="Choisir une icône pour cette valeur" />
+                  </Form.Item>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'iconSize']} label="Taille icône" fieldKey={[field.fieldKey, 'iconSize']}>
+                        <Input placeholder="Ex: 64px (optionnel)" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={[field.name, 'color']} label="Couleur icône" fieldKey={[field.fieldKey, 'color']}>
+                        <Input type="color" placeholder="#10b981" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Form.Item
+                    name={[field.name, 'title']}
+                    label="Titre"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'title']}
+                  >
+                    <Input placeholder="Ex: Écologique" />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'description']} label="Description" fieldKey={[field.fieldKey, 'description']}>
+                    <TextArea rows={2} placeholder="Décrivez cette valeur..." />
+                  </Form.Item>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            {fields.length < 4 && (
+              <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                Ajouter une valeur
+              </Button>
+            )}
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== TESTIMONIALS SECTION ==========
+  const renderTestimonialsFields = () => (
+    <>
+      <Title level={5}>⭐ Section Témoignages</Title>
+      <Divider />
+
+      {/* GESTION DES TÉMOIGNAGES */}
+      <Card style={{ marginBottom: 24, backgroundColor: '#eff6ff' }}>
+        <Title level={5}>📋 Gestion des Témoignages</Title>
+        <TestimonialsManager
+          websiteId={websiteId}
+          siteName={section?.name || 'Témoignages'}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🎨 Configuration de la section</Title>
+        
+        <Form.Item label="Titre de la section" name="sectionTitle">
+          <Input placeholder="Ex: Ce qu'ils disent de nous" />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name="backgroundColor">
+              <Input type="color" placeholder="#f9fafb" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 80px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>🎴 Style des Cartes</Title>
+        
+        <Divider>Disposition des cartes</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Largeur maximale" name={['cardStyle', 'maxWidth']}>
+              <Input placeholder="Ex: 400px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Hauteur minimale" name={['cardStyle', 'minHeight']}>
+              <Input placeholder="Ex: 300px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Espacement" name={['cardStyle', 'gap']}>
+              <Input placeholder="Ex: 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Alignement du texte" name={['cardStyle', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Nombre de colonnes" name={['cardStyle', 'columns']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={1}>1 colonne</Select.Option>
+                <Select.Option value={2}>2 colonnes</Select.Option>
+                <Select.Option value={3}>3 colonnes</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Couleurs & Bordures</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Couleur de fond carte" name={['cardStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['cardStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Bordure" name={['cardStyle', 'border']}>
+              <Input placeholder="Ex: 1px solid #e5e7eb" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Ombre (box-shadow)" name={['cardStyle', 'boxShadow']}>
+              <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.1)" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding carte" name={['cardStyle', 'padding']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Avatars</Divider>
+        <Row gutter={16}>
+          <Col span={6}>
+            <Form.Item label="Afficher avatar" name={['cardStyle', 'showAvatar']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Oui</Select.Option>
+                <Select.Option value={false}>❌ Non</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Taille avatar" name={['cardStyle', 'avatarSize']}>
+              <Input placeholder="Ex: 60px" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Position" name={['cardStyle', 'avatarPosition']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="top">⬆️ Haut</Select.Option>
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Forme" name={['cardStyle', 'avatarBorderRadius']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="50%">⭕ Cercle</Select.Option>
+                <Select.Option value="8px">◻️ Carré arrondi</Select.Option>
+                <Select.Option value="0">◾ Carré</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item label="Bordure avatar" name={['cardStyle', 'avatarBorder']}>
+          <Input placeholder="Ex: 3px solid #10b981" />
+        </Form.Item>
+
+        <Divider>Notes/Étoiles</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Afficher notes" name={['cardStyle', 'showRating']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Oui</Select.Option>
+                <Select.Option value={false}>❌ Non</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Taille étoiles" name={['cardStyle', 'starSize']}>
+              <Input placeholder="Ex: 18px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Couleur étoiles" name={['cardStyle', 'starColor']}>
+              <Input type="color" placeholder="#fbbf24" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Typographie</Divider>
+        <Row gutter={16}>
+          <Col span={6}>
+            <Form.Item label="Taille texte" name={['cardStyle', 'quoteFontSize']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Couleur texte" name={['cardStyle', 'quoteColor']}>
+              <Input type="color" placeholder="#374151" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Taille nom" name={['cardStyle', 'nameFontSize']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={6}>
+            <Form.Item label="Couleur nom" name={['cardStyle', 'nameColor']}>
+              <Input type="color" placeholder="#1f2937" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille rôle" name={['cardStyle', 'roleFontSize']}>
+              <Input placeholder="Ex: 14px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur rôle" name={['cardStyle', 'roleColor']}>
+              <Input type="color" placeholder="#6b7280" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0fdf4' }}>
+        <Title level={5}>🎠 Options Carousel (Mode Défilement)</Title>
+        
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Mode carousel" name={['carouselSettings', 'enabled']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Activé</Select.Option>
+                <Select.Option value={false}>❌ Désactivé (grille)</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Défilement auto" name={['carouselSettings', 'autoplay']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Oui</Select.Option>
+                <Select.Option value={false}>❌ Non</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Vitesse (ms)" name={['carouselSettings', 'autoplaySpeed']}>
+              <Input placeholder="Ex: 5000" type="number" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Points navigation" name={['carouselSettings', 'dots']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Afficher</Select.Option>
+                <Select.Option value={false}>❌ Masquer</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Flèches navigation" name={['carouselSettings', 'arrows']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Afficher</Select.Option>
+                <Select.Option value={false}>❌ Masquer</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Divider orientation="left">Témoignages</Divider>
+
+      <Form.List name="testimonials">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Témoignage {index + 1}</Text>
+
+                  <Form.Item
+                    name={[field.name, 'avatarUrl']}
+                    label="Photo (Avatar)"
+                    fieldKey={[field.fieldKey, 'avatarUrl']}
+                  >
+                    <Input
+                      placeholder="URL de l'avatar"
+                      suffix={
+                        <Button
+                          type="link"
+                          icon={<PictureOutlined />}
+                          onClick={() => openImageUploader(`testimonials.${index}.avatarUrl`)}
+                        >
+                          Uploader
+                        </Button>
+                      }
+                    />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'name']}
+                    label="Nom du client"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'name']}
+                  >
+                    <Input placeholder="Ex: Jean Dupont" />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'rating']}
+                    label="Note"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'rating']}
+                  >
+                    <Slider min={1} max={5} marks={{ 1: '1★', 2: '2★', 3: '3★', 4: '4★', 5: '5★' }} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'text']}
+                    label="Témoignage"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'text']}
+                  >
+                    <TextArea rows={4} placeholder="Le témoignage complet..." />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'location']} label="Localisation" fieldKey={[field.fieldKey, 'location']}>
+                    <Input placeholder="Ex: Bruxelles" />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'service']} label="Service utilisé" fieldKey={[field.fieldKey, 'service']}>
+                    <Input placeholder="Ex: Installation solaire" />
+                  </Form.Item>
+
+                  <Form.Item name={[field.name, 'date']} label="Date" fieldKey={[field.fieldKey, 'date']}>
+                    <Input type="date" />
+                  </Form.Item>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer ce témoignage
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+              Ajouter un témoignage
+            </Button>
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== CONTACT SECTION ==========
+  const renderContactFields = () => (
+    <>
+      <Title level={5}>📧 Section Contact</Title>
+      <Divider />
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🎨 Configuration de la Section</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name="backgroundColor">
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 80px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Largeur max formulaire" name="maxWidth">
+              <Input placeholder="Ex: 800px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Alignement" name="textAlign">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>📝 Contenu & Textes</Title>
+        
+        <Form.Item label="Titre du formulaire" name="formTitle">
+          <Input placeholder="Ex: Contactez-nous" />
+        </Form.Item>
+
+        <Form.Item label="Description" name="formDescription">
+          <TextArea rows={2} placeholder="Texte d'introduction..." />
+        </Form.Item>
+
+        <Form.Item label="Email de réception" name="recipientEmail" rules={[{ type: 'email' }]}>
+          <Input placeholder="contact@2thier.be" />
+        </Form.Item>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0fdf4' }}>
+        <Title level={5}>🎴 Style de la Carte Formulaire</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur fond carte" name={['formCardStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Bordure" name={['formCardStyle', 'bordered']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>✅ Avec bordure</Select.Option>
+                <Select.Option value={false}>❌ Sans bordure</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['formCardStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Ombre" name={['formCardStyle', 'boxShadow']}>
+              <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.1)" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding" name={['formCardStyle', 'padding']}>
+              <Input placeholder="Ex: 40px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#faf5ff' }}>
+        <Title level={5}>✍️ Typography</Title>
+        
+        <Divider>Titre</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Taille titre" name={['typography', 'titleFontSize']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Couleur titre" name={['typography', 'titleColor']}>
+              <Input type="color" placeholder="#1f2937" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Poids titre" name={['typography', 'titleFontWeight']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="normal">Normal</Select.Option>
+                <Select.Option value="bold">Gras</Select.Option>
+                <Select.Option value="600">Semi-Gras</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Description</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille description" name={['typography', 'descriptionFontSize']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur description" name={['typography', 'descriptionColor']}>
+              <Input type="color" placeholder="#6b7280" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Labels des champs</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille labels" name={['typography', 'labelFontSize']}>
+              <Input placeholder="Ex: 14px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur labels" name={['typography', 'labelColor']}>
+              <Input type="color" placeholder="#374151" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🔘 Style du Bouton</Title>
+        
+        <Form.Item label="Texte du bouton" name="submitButtonText">
+          <Input placeholder="Ex: Envoyer ma demande" />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur fond" name={['submitButtonStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#10b981" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur fond (hover)" name={['submitButtonStyle', 'hoverBackgroundColor']}>
+              <Input type="color" placeholder="#059669" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Taille" name={['submitButtonStyle', 'size']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="small">Petit</Select.Option>
+                <Select.Option value="middle">Moyen</Select.Option>
+                <Select.Option value="large">Grand</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Largeur" name={['submitButtonStyle', 'block']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={true}>Pleine largeur</Select.Option>
+                <Select.Option value={false}>Auto</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['submitButtonStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 8px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Ombre" name={['submitButtonStyle', 'boxShadow']}>
+              <Input placeholder="Ex: 0 4px 12px rgba(16,185,129,0.3)" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Taille police" name={['submitButtonStyle', 'fontSize']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>📋 Champs du Formulaire</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Layout" name={['formLayout', 'layout']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="vertical">Vertical</Select.Option>
+                <Select.Option value="horizontal">Horizontal</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Colonnes" name={['formLayout', 'columns']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value={1}>1 colonne</Select.Option>
+                <Select.Option value={2}>2 colonnes</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Champs standards</Divider>
+        
+        <Form.Item label="Champ téléphone" name="showPhone" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+
+        <Form.Item label="Champ service" name="showService" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+
+        <Form.Item label="Champ entreprise" name="showCompany" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+
+        <Form.Item label="Champ adresse" name="showAddress" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+
+        <Form.Item label="Champ budget" name="showBudget" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+      </Card>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== FAQ SECTION ==========
+  const renderFaqFields = () => (
+    <>
+      <Title level={5}>❓ Section FAQ</Title>
+      <Divider />
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🎨 Configuration de la Section</Title>
+        
+        <Form.Item label="Titre de la section" name="sectionTitle">
+          <Input placeholder="Ex: Questions fréquentes" />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name={['sectionStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name={['sectionStyle', 'padding']}>
+              <Input placeholder="Ex: 80px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Largeur max" name={['sectionStyle', 'maxWidth']}>
+              <Input placeholder="Ex: 900px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Alignement" name={['sectionStyle', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>🎴 Style de l'Accordion</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Fond des panneaux" name={['accordionStyle', 'panelBackgroundColor']}>
+              <Input type="color" placeholder="#f9fafb" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Rayon bordure" name={['accordionStyle', 'panelBorderRadius']}>
+              <Input placeholder="Ex: 12px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Bordure panneau" name={['accordionStyle', 'panelBorder']}>
+              <Input placeholder="Ex: 1px solid #e5e7eb" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Marge entre panneaux" name={['accordionStyle', 'panelMargin']}>
+              <Input placeholder="Ex: 12px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Ombre" name={['accordionStyle', 'panelBoxShadow']}>
+              <Input placeholder="Ex: 0 2px 8px rgba(0,0,0,0.05)" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur icône" name={['accordionStyle', 'expandIconColor']}>
+              <Input type="color" placeholder="#3b82f6" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Afficher icônes perso" name={['accordionStyle', 'showCustomIcons']} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0fdf4' }}>
+        <Title level={5}>✍️ Typography</Title>
+        
+        <Divider>Titre de section</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Taille titre" name={['typography', 'titleFontSize']}>
+              <Input placeholder="Ex: 36px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Couleur titre" name={['typography', 'titleColor']}>
+              <Input type="color" placeholder="#1f2937" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Poids titre" name={['typography', 'titleFontWeight']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="normal">Normal</Select.Option>
+                <Select.Option value="bold">Gras</Select.Option>
+                <Select.Option value="700">Extra-Gras</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Question</Divider>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Taille question" name={['typography', 'questionFontSize']}>
+              <Input placeholder="Ex: 18px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Couleur question" name={['typography', 'questionColor']}>
+              <Input type="color" placeholder="#111827" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Poids question" name={['typography', 'questionFontWeight']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="normal">Normal</Select.Option>
+                <Select.Option value="600">Semi-Gras</Select.Option>
+                <Select.Option value="bold">Gras</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Réponse</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille réponse" name={['typography', 'answerFontSize']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur réponse" name={['typography', 'answerColor']}>
+              <Input type="color" placeholder="#6b7280" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#faf5ff' }}>
+        <Title level={5}>⚙️ Comportement</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Mode accordion" name={['behavior', 'accordion']} valuePropName="checked">
+              <Switch checkedChildren="Une seule ouverte" unCheckedChildren="Multiples ouvertes" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Première question ouverte" name={['behavior', 'defaultActiveFirst']} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Divider orientation="left">Questions</Divider>
+
+      <Form.List name="faqs">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16, backgroundColor: '#f9fafb' }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Question {index + 1}</Text>
+
+                  <Form.Item
+                    name={[field.name, 'question']}
+                    label="Question"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'question']}
+                  >
+                    <Input placeholder="Ex: Combien coûte une installation ?" />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'answer']}
+                    label="Réponse"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'answer']}
+                  >
+                    <TextArea rows={3} placeholder="La réponse détaillée..." />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'icon']}
+                    label="Icône personnalisée"
+                  >
+                    <IconPicker />
+                  </Form.Item>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer cette question
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+              Ajouter une question
+            </Button>
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== STEPS SECTION ==========
+  const renderStepsFields = () => (
+    <>
+      <Title level={5}>📋 Section Steps/Timeline</Title>
+      <Divider />
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🎨 Configuration de la Section</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur de fond" name={['sectionStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Padding" name={['sectionStyle', 'padding']}>
+              <Input placeholder="Ex: 80px 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Largeur max" name={['sectionStyle', 'maxWidth']}>
+              <Input placeholder="Ex: 1200px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Alignement texte" name={['sectionStyle', 'textAlign']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>📝 Contenu</Title>
+        
+        <Form.Item label="Titre de la section" name={['heading', 'title']}>
+          <Input placeholder="Ex: Notre processus en 4 étapes" />
+        </Form.Item>
+
+        <Form.Item label="Emoji/Icône titre" name={['heading', 'emoji']}>
+          <Input placeholder="Ex: 🚀" />
+        </Form.Item>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0fdf4' }}>
+        <Title level={5}>🎴 Style des Cartes Steps</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur fond carte" name={['stepCardStyle', 'backgroundColor']}>
+              <Input type="color" placeholder="#f9fafb" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Rayon bordure" name={['stepCardStyle', 'borderRadius']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Ombre" name={['stepCardStyle', 'boxShadow']}>
+              <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.1)" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding" name={['stepCardStyle', 'padding']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Gap entre steps" name={['stepCardStyle', 'gap']}>
+              <Input placeholder="Ex: 24px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Bordure" name={['stepCardStyle', 'border']}>
+              <Input placeholder="Ex: 1px solid #e5e7eb" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Effet hover" name={['stepCardStyle', 'hoverable']} valuePropName="checked">
+              <Switch checkedChildren="Activé" unCheckedChildren="Désactivé" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#faf5ff' }}>
+        <Title level={5}>🎯 Style des Icônes/Numéros</Title>
+        
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Type d'icône" name={['iconStyle', 'iconType']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="number">🔢 Numéro</Select.Option>
+                <Select.Option value="icon">🎨 Icône custom</Select.Option>
+                <Select.Option value="emoji">😀 Emoji</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Taille icône" name={['iconStyle', 'iconSize']}>
+              <Input placeholder="Ex: 48px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Couleur icône" name={['iconStyle', 'iconColor']}>
+              <Input type="color" placeholder="#3b82f6" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Fond icône" name={['iconStyle', 'iconBackgroundColor']}>
+              <Input type="color" placeholder="#dbeafe" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['iconStyle', 'iconBorderRadius']}>
+              <Input placeholder="Ex: 50% (cercle)" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding icône" name={['iconStyle', 'iconPadding']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fff7ed' }}>
+        <Title level={5}>↔️ Connecteurs entre steps</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Afficher connecteurs" name={['connectorStyle', 'showConnector']} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur connecteur" name={['connectorStyle', 'connectorColor']}>
+              <Input type="color" placeholder="#e5e7eb" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Style ligne" name={['connectorStyle', 'connectorStyle']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="solid">━━ Solid</Select.Option>
+                <Select.Option value="dashed">- - Dashed</Select.Option>
+                <Select.Option value="dotted">· · Dotted</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Largeur ligne" name={['connectorStyle', 'connectorWidth']}>
+              <Input placeholder="Ex: 2px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f5f3ff' }}>
+        <Title level={5}>✍️ Typography</Title>
+        
+        <Divider>Titre</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille titre" name={['typography', 'titleFontSize']}>
+              <Input placeholder="Ex: 20px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur titre" name={['typography', 'titleColor']}>
+              <Input type="color" placeholder="#111827" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Poids titre" name={['typography', 'titleFontWeight']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="normal">Normal</Select.Option>
+                <Select.Option value="600">Semi-Gras</Select.Option>
+                <Select.Option value="bold">Gras</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Description</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille description" name={['typography', 'descriptionFontSize']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur description" name={['typography', 'descriptionColor']}>
+              <Input type="color" placeholder="#6b7280" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#ecfdf5' }}>
+        <Title level={5}>📐 Layout</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Direction" name={['layout', 'direction']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="horizontal">↔️ Horizontal</Select.Option>
+                <Select.Option value="vertical">↕️ Vertical</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Type affichage" name={['layout', 'layout']}>
+              <Select placeholder="Sélectionner">
+                <Select.Option value="cards">🎴 Cartes</Select.Option>
+                <Select.Option value="timeline">📅 Timeline</Select.Option>
+                <Select.Option value="minimal">📝 Minimal</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Divider orientation="left">Étapes</Divider>
+
+      <Form.List name="steps">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16, backgroundColor: '#f9fafb' }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Étape {index + 1}</Text>
+
+                  <Form.Item
+                    name={[field.name, 'title']}
+                    label="Titre"
+                    rules={[{ required: true }]}
+                    fieldKey={[field.fieldKey, 'title']}
+                  >
+                    <Input placeholder="Ex: Analyse de votre projet" />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'description']}
+                    label="Description"
+                    fieldKey={[field.fieldKey, 'description']}
+                  >
+                    <TextArea rows={2} placeholder="Description détaillée..." />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'icon']}
+                    label="Icône personnalisée"
+                  >
+                    <IconPicker />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={[field.name, 'emoji']}
+                    label="Emoji (si pas d'icône)"
+                    fieldKey={[field.fieldKey, 'emoji']}
+                  >
+                    <Input placeholder="Ex: 🔍" />
+                  </Form.Item>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer cette étape
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+              Ajouter une étape
+            </Button>
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  // ========== CTA SECTION ==========
+  const renderCtaFields = () => (
+    <>
+      <Title level={5}>🚀 Section CTA (Call To Action)</Title>
+      <Divider />
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0f9ff' }}>
+        <Title level={5}>🖼️ Image de Fond & Overlay</Title>
+        
+        <Form.Item label="Image de fond">
+          <Input 
+            value={form.getFieldValue('backgroundImage')}
+            placeholder="URL de l'image de fond"
+            suffix={
+              <Button 
+                type="link" 
+                icon={<PictureOutlined />}
+                onClick={() => openImageUploader('backgroundImage')}
+              >
+                Upload
+              </Button>
+            }
+          />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Position" name="backgroundPosition">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="center">🎯 Centré</Select.Option>
+                <Select.Option value="top">⬆️ Haut</Select.Option>
+                <Select.Option value="bottom">⬇️ Bas</Select.Option>
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Taille" name="backgroundSize">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="cover">📐 Cover</Select.Option>
+                <Select.Option value="contain">📦 Contain</Select.Option>
+                <Select.Option value="auto">🔄 Auto</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Gradient/Couleur fond" name="backgroundGradient">
+              <Input placeholder="Ex: linear-gradient(...)" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur overlay" name="overlayColor">
+              <Input type="color" placeholder="#000000" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Opacité overlay" name="overlayOpacity">
+              <Input placeholder="Ex: 0.5 (0 à 1)" type="number" step="0.1" min="0" max="1" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fef3f2' }}>
+        <Title level={5}>🎴 Carte de Contenu (optionnelle)</Title>
+        
+        <Form.Item label="Utiliser une carte" name={['contentCard', 'enabled']} valuePropName="checked">
+          <Switch checkedChildren="Activé" unCheckedChildren="Désactivé" />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Couleur fond" name={['contentCard', 'backgroundColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Opacité fond" name={['contentCard', 'backgroundOpacity']}>
+              <Input placeholder="Ex: 0.95" type="number" step="0.05" min="0" max="1" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Rayon bordure" name={['contentCard', 'borderRadius']}>
+              <Input placeholder="Ex: 24px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Ombre" name={['contentCard', 'boxShadow']}>
+              <Input placeholder="Ex: 0 8px 32px rgba(0,0,0,0.15)" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Padding" name={['contentCard', 'padding']}>
+              <Input placeholder="Ex: 60px" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Largeur max" name={['contentCard', 'maxWidth']}>
+              <Input placeholder="Ex: 700px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Effet glassmorphism" name={['contentCard', 'backdropBlur']}>
+              <Input placeholder="Ex: 10px (0 = désactivé)" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#f0fdf4' }}>
+        <Title level={5}>📝 Contenu</Title>
+        
+        <Form.Item label="Titre principal" name={['heading', 'title']}>
+          <Input placeholder="Ex: Prêt à passer à l'action ?" />
+        </Form.Item>
+
+        <Form.Item label="Sous-titre" name={['heading', 'subtitle']}>
+          <TextArea rows={2} placeholder="Description convaincante..." />
+        </Form.Item>
+
+        <Form.Item label="Emoji titre" name={['heading', 'emoji']}>
+          <Input placeholder="Ex: 🚀" />
+        </Form.Item>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#faf5ff' }}>
+        <Title level={5}>✍️ Typography</Title>
+        
+        <Divider>Titre</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille titre" name={['typography', 'titleFontSize']}>
+              <Input placeholder="Ex: 48px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur titre" name={['typography', 'titleColor']}>
+              <Input type="color" placeholder="#ffffff" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider>Sous-titre</Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Taille sous-titre" name={['typography', 'subtitleFontSize']}>
+              <Input placeholder="Ex: 20px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Couleur sous-titre" name={['typography', 'subtitleColor']}>
+              <Input type="color" placeholder="#e5e7eb" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#fff7ed' }}>
+        <Title level={5}>🎨 Configuration Générale</Title>
+        
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item label="Padding" name="padding">
+              <Input placeholder="Ex: 100px 24px" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Alignement" name="textAlign">
+              <Select placeholder="Sélectionner">
+                <Select.Option value="left">⬅️ Gauche</Select.Option>
+                <Select.Option value="center">⬆️ Centré</Select.Option>
+                <Select.Option value="right">➡️ Droite</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="Hauteur min" name="minHeight">
+              <Input placeholder="Ex: 600px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card style={{ marginBottom: 24, backgroundColor: '#ecfdf5' }}>
+        <Title level={5}>🔘 Boutons</Title>
+        
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Gap entre boutons" name={['buttonsStyle', 'gap']}>
+              <Input placeholder="Ex: 16px" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Marge top" name={['buttonsStyle', 'marginTop']}>
+              <Input placeholder="Ex: 32px" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+
+      <Divider orientation="left">Boutons CTA</Divider>
+
+      <Form.List name="buttons">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map((field, index) => (
+              <Card key={field.key} size="small" style={{ marginBottom: 16, backgroundColor: '#f9fafb' }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Bouton {index + 1}</Text>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item
+                        name={[field.name, 'text']}
+                        label="Texte"
+                        rules={[{ required: true }]}
+                        fieldKey={[field.fieldKey, 'text']}
+                      >
+                        <Input placeholder="Ex: Commencer maintenant" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        name={[field.name, 'href']}
+                        label="Lien"
+                        fieldKey={[field.fieldKey, 'href']}
+                      >
+                        <Input placeholder="https://..." />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Form.Item
+                    name={[field.name, 'icon']}
+                    label="Icône"
+                  >
+                    <IconPicker />
+                  </Form.Item>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item
+                        name={[field.name, 'backgroundColor']}
+                        label="Couleur fond"
+                        fieldKey={[field.fieldKey, 'backgroundColor']}
+                      >
+                        <Input type="color" placeholder="#ffffff" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        name={[field.name, 'textColor']}
+                        label="Couleur texte"
+                        fieldKey={[field.fieldKey, 'textColor']}
+                      >
+                        <Input type="color" placeholder="#10b981" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Row gutter={16}>
+                    <Col span={8}>
+                      <Form.Item
+                        name={[field.name, 'fontSize']}
+                        label="Taille police"
+                        fieldKey={[field.fieldKey, 'fontSize']}
+                      >
+                        <Input placeholder="Ex: 18px" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item
+                        name={[field.name, 'padding']}
+                        label="Padding"
+                        fieldKey={[field.fieldKey, 'padding']}
+                      >
+                        <Input placeholder="Ex: 16px 32px" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item
+                        name={[field.name, 'borderRadius']}
+                        label="Rayon bordure"
+                        fieldKey={[field.fieldKey, 'borderRadius']}
+                      >
+                        <Input placeholder="Ex: 8px" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item
+                        name={[field.name, 'boxShadow']}
+                        label="Ombre"
+                        fieldKey={[field.fieldKey, 'boxShadow']}
+                      >
+                        <Input placeholder="Ex: 0 4px 12px rgba(0,0,0,0.15)" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        name={[field.name, 'size']}
+                        label="Taille"
+                        fieldKey={[field.fieldKey, 'size']}
+                      >
+                        <Select placeholder="Sélectionner">
+                          <Select.Option value="small">Petit</Select.Option>
+                          <Select.Option value="middle">Moyen</Select.Option>
+                          <Select.Option value="large">Grand</Select.Option>
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                    Supprimer ce bouton
+                  </Button>
+                </Space>
+              </Card>
+            ))}
+            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+              Ajouter un bouton
+            </Button>
+          </>
+        )}
+      </Form.List>
+    
+
+      {/* 🎨 GRID LAYOUT */}
+      <Card style={{ backgroundColor: '#f0f9ff', marginBottom: 16 }}>
+        <Title level={5}>🎨 Grid Layout</Title>
+        <GridLayoutEditor
+          value={gridLayout}
+          onChange={setGridLayout}
+        />
+      </Card>
+
+      {/* 🔆 SECTION HEADER */}
+      <Card style={{ backgroundColor: '#fff7ed', marginBottom: 16 }}>
+        <Title level={5}>🔆 Section Header</Title>
+        <SectionHeaderEditor
+          value={sectionHeader}
+          onChange={setSectionHeader}
+        />
+      </Card>
+
+      </>
+  );
+
+  return (
+    <>
+      <Drawer
+        title={
+          <Space>
+            <BgColorsOutlined />
+            <span>Éditer la section : {section?.type?.toUpperCase()}</span>
+          </Space>
+        }
+        width={720}
+        open={visible}
+        onClose={onClose}
+        extra={
+          <Space>
+            <Button onClick={onClose} icon={<CloseOutlined />}>
+              Annuler
+            </Button>
+            <Button type="primary" onClick={handleSave} loading={loading} icon={<SaveOutlined />}>
+              Sauvegarder
+            </Button>
+          </Space>
+        }
+      >
+        <Form form={form} layout="vertical">
+          {renderSectionFields()}
+        </Form>
+      </Drawer>
+
+      {/* Modal d'upload d'images */}
+      <Drawer
+        title="📸 Uploader une image"
+        width={900}
+        open={showImageUploader}
+        onClose={() => setShowImageUploader(false)}
+      >
+        <ImageUploader
+          websiteId={websiteId}
+          category={section?.type === 'hero' ? 'general' : section?.type || 'general'}
+          onImageSelect={handleImageSelect}
+          maxCount={1}
+          showGrid={true}
+        />
+      </Drawer>
+
+      {/* ⚡ ASSISTANT IA */}
+      <AIAssistant
+        visible={showAI}
+        onClose={() => setShowAI(false)}
+        context={aiContext}
+        currentValue={aiCurrentValue}
+        siteName={section?.name || 'Section'}
+        onContentGenerated={(newContent) => {
+          form.setFieldsValue({ [aiContext]: newContent });
+          setShowAI(false);
+        }}
+      />
+    </>
+  );
+};

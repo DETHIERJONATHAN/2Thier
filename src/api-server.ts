@@ -18,9 +18,12 @@ import passport from 'passport';
 console.log('✅ [DEBUG] Passport importé');
 import mainApiRouter from './routes/index'; // ✅ Router principal complet
 import aiInternalRouter from './routes/ai-internal';
+import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION DE CONTENU
 import treebranchleafRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes';
 import centralizedOperationsRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/centralized-operations-routes';
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
+import websitesRouter from './api/websites'; // 🌐 GESTION DES SITES WEB
+import imageUploadRouter from './api/image-upload'; // 📸 UPLOAD D'IMAGES
 console.log('✅ [DEBUG] Router minimal importé');
 // import analyticsRouter from './routes/analytics.ts'; // 📊 ANALYTICS - FUTUR
 import { setupSecurity } from './middlewares/security';
@@ -199,16 +202,230 @@ app.get('/force-clean', (_req, res) => {
     `);
 });
 
+// 🔧 ENDPOINT TEMPORAIRE POUR MISE À JOUR DES SERVICES
+app.post('/update-services-temp', async (req, res) => {
+    try {
+        console.log('🔄 Mise à jour du contenu de la section Services...');
+        
+        const { PrismaClient } = await import('@prisma/client');
+        const prisma = new PrismaClient();
+
+        // Trouver la section Services
+        const section = await prisma.websiteSection.findFirst({
+            where: {
+                websiteId: 11,
+                type: 'services'
+            }
+        });
+
+        if (!section) {
+            console.error('❌ Section Services non trouvée !');
+            return res.status(404).json({ error: 'Section Services non trouvée' });
+        }
+
+        console.log(`✅ Section trouvée : ID ${section.id}`);
+
+        // Nouveau contenu avec les 8 vrais services de 2Thier
+        const newContent = {
+            title: '🏠 Nos Services',
+            subtitle: 'Des solutions complètes pour votre habitat et votre autonomie énergétique',
+            items: [
+                {
+                    icon: 'ThunderboltOutlined',
+                    iconColor: '#f59e0b',
+                    iconSize: '36px',
+                    title: 'Panneaux Photovoltaïques',
+                    description: 'Installation de panneaux solaires haute performance pour produire votre propre électricité verte et réduire vos factures.',
+                    features: [
+                        'Installation professionnelle',
+                        'Rendement optimal',
+                        'Garantie 25 ans',
+                        'Maintenance incluse'
+                    ],
+                    ctaText: 'En savoir plus',
+                    ctaUrl: '/services/photovoltaique'
+                },
+                {
+                    icon: 'HomeOutlined',
+                    iconColor: '#10b981',
+                    iconSize: '36px',
+                    title: 'Isolation (Murs, Sols, Toits)',
+                    description: 'Isolation thermique et acoustique de qualité pour améliorer votre confort et réaliser jusqu\'à 40% d\'économies d\'énergie.',
+                    features: [
+                        'Isolation par l\'extérieur',
+                        'Isolation par l\'intérieur',
+                        'Matériaux écologiques',
+                        'Primes disponibles'
+                    ],
+                    ctaText: 'Découvrir',
+                    ctaUrl: '/services/isolation'
+                },
+                {
+                    icon: 'FireOutlined',
+                    iconColor: '#ef4444',
+                    iconSize: '36px',
+                    title: 'Pompes à Chaleur',
+                    description: 'Systèmes de chauffage et climatisation économiques et écologiques avec un rendement jusqu\'à 4 fois supérieur.',
+                    features: [
+                        'Air-eau et air-air',
+                        'Économies jusqu\'à 70%',
+                        'Primes énergie',
+                        'Installation rapide'
+                    ],
+                    ctaText: 'Demander un devis',
+                    ctaUrl: '/services/pompes-chaleur'
+                },
+                {
+                    icon: 'BuildOutlined',
+                    iconColor: '#3b82f6',
+                    iconSize: '36px',
+                    title: 'Toitures',
+                    description: 'Rénovation, réparation et pose de toitures neuves avec des matériaux durables et une garantie décennale.',
+                    features: [
+                        'Tous types de couverture',
+                        'Étanchéité garantie',
+                        'Isolation intégrée',
+                        'Zinguerie incluse'
+                    ],
+                    ctaText: 'Voir nos réalisations',
+                    ctaUrl: '/services/toitures'
+                },
+                {
+                    icon: 'WindowsOutlined',
+                    iconColor: '#8b5cf6',
+                    iconSize: '36px',
+                    title: 'Châssis',
+                    description: 'Châssis PVC, aluminium et bois sur mesure pour une isolation optimale et un confort thermique et acoustique.',
+                    features: [
+                        'Triple vitrage',
+                        'Sur mesure',
+                        'Pose professionnelle',
+                        'Excellent rapport qualité-prix'
+                    ],
+                    ctaText: 'Configurateur',
+                    ctaUrl: '/services/chassis'
+                },
+                {
+                    icon: 'BulbOutlined',
+                    iconColor: '#f59e0b',
+                    iconSize: '36px',
+                    title: 'Électricité Générale',
+                    description: 'Installation, rénovation et dépannage électrique pour votre maison ou entreprise, en conformité avec les normes.',
+                    features: [
+                        'Conformité RGIE',
+                        'Domotique',
+                        'Bornes de recharge',
+                        'Intervention rapide'
+                    ],
+                    ctaText: 'Demander un électricien',
+                    ctaUrl: '/services/electricite'
+                },
+                {
+                    icon: 'ToolOutlined',
+                    iconColor: '#64748b',
+                    iconSize: '36px',
+                    title: 'Gros Œuvre',
+                    description: 'Travaux de construction, extension et transformation de bâtiments avec une équipe expérimentée et qualifiée.',
+                    features: [
+                        'Extensions',
+                        'Transformations',
+                        'Fondations',
+                        'Maçonnerie générale'
+                    ],
+                    ctaText: 'Nos chantiers',
+                    ctaUrl: '/services/gros-oeuvre'
+                },
+                {
+                    icon: 'CloudOutlined',
+                    iconColor: '#06b6d4',
+                    iconSize: '36px',
+                    title: 'Traitement de l\'Eau',
+                    description: 'Solutions de filtration, adoucissement et purification pour une eau saine et de qualité dans toute votre habitation.',
+                    features: [
+                        'Adoucisseurs',
+                        'Filtration complète',
+                        'Osmose inverse',
+                        'Entretien régulier'
+                    ],
+                    ctaText: 'Analyse gratuite',
+                    ctaUrl: '/services/traitement-eau'
+                }
+            ],
+            layout: {
+                grid: {
+                    columns: {
+                        mobile: 1,
+                        tablet: 2,
+                        desktop: 4
+                    },
+                    gap: '24px',
+                    alignment: 'stretch',
+                    justifyContent: 'start'
+                },
+                cardStyle: 'elevated',
+                maxWidth: '1400px'
+            },
+            style: {
+                backgroundColor: '#f9fafb',
+                padding: '80px 24px',
+                titleColor: '#111827',
+                titleFontSize: '42px',
+                subtitleColor: '#64748b',
+                subtitleFontSize: '18px',
+                cardBackground: '#ffffff',
+                cardBorderRadius: '16px',
+                cardBorder: '1px solid #f1f5f9',
+                cardPadding: '24px',
+                serviceTitleColor: '#111827',
+                serviceTitleFontSize: '20px',
+                serviceDescriptionColor: '#64748b',
+                serviceDescriptionFontSize: '15px',
+                featureCheckColor: '#10b981',
+                ctaBackgroundColor: '#10b981',
+                ctaBorderColor: '#10b981',
+                ctaTextColor: '#ffffff'
+            }
+        };
+
+        // Mettre à jour la section
+        await prisma.websiteSection.update({
+            where: {
+                id: section.id
+            },
+            data: {
+                content: newContent as any
+            }
+        });
+
+        console.log('✅ Contenu mis à jour avec succès !');
+        console.log(`📝 ${newContent.items.length} services ont été ajoutés`);
+
+        await prisma.$disconnect();
+
+        res.json({ 
+            success: true, 
+            message: 'Services mis à jour avec succès',
+            services: newContent.items.map(s => s.title)
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur lors de la mise à jour:', error);
+        res.status(500).json({ error: 'Erreur lors de la mise à jour', details: error });
+    }
+});
+
 // Utiliser le routeur principal pour TOUTES les routes /api
 // Ce routeur contient maintenant les routes gmail, qui seront donc protégées
 // par les mêmes middlewares d'authentification que les autres.
 app.use('/api', mainApiRouter);
 app.use('/api/ai/internal', aiInternalRouter);
+app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
 app.use('/api/treebranchleaf', treebranchleafRouter);
 app.use('/api/treebranchleaf-ops', centralizedOperationsRouter);
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 console.log('✅ Routes TreeBranchLeaf NOUVEAU système montées sur /treebranchleaf');
 console.log('✅ Routes TreeBranchLeaf Opérations Centralisées montées sur /treebranchleaf-ops');
+console.log('✅ Routes IA Génération de Contenu montées sur /api/ai');
 
 // ✅ PAGE D'ACCUEIL: Simple page d'accueil de l'API
 app.get('/', (req, res) => {

@@ -10,6 +10,7 @@ import { TableauConfigEditor } from '../../components/TableauConfigEditor';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAdvancedSelectCache } from '../../hooks/useAdvancedSelectCache';
 import { GenealogyExplorer } from '../../components/GenealogyExplorer/exports';
+import { cleanColor } from '../../utils/colorUtils';
 
 const slugify = (text: string) =>
   text
@@ -505,7 +506,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     <div>
                       <label className="block text-xs font-medium mb-1 text-indigo-700">Couleur de fond</label>
                       <div className="flex items-center gap-2">
-                        <input type="color" className="w-10 h-10 p-0 border-none rounded" value={localValues.color ?? advancedConfig.color ?? '#f4f4f4'} onChange={e => handleAdvancedChange('color', e.target.value)} />
+                        <input type="color" className="w-10 h-10 p-0 border-none rounded" value={cleanColor(localValues.color ?? advancedConfig.color, '#f4f4f4')} onChange={e => handleAdvancedChange('color', e.target.value)} />
                         <input type="text" className="input input-bordered flex-1 h-10 text-xs font-mono" value={localValues.color ?? advancedConfig.color ?? '#f4f4f4'} onChange={e => handleAdvancedChange('color', e.target.value)} />
                         {saving.color && <span className="animate-spin text-blue-500">⏳</span>}
                         {saveError.color && <span className="text-red-500" title={saveError.color}>⚠️</span>}
@@ -515,7 +516,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     <div>
                       <label className="block text-xs font-medium mb-1 text-indigo-700">Couleur du texte</label>
                       <div className="flex items-center gap-2">
-                        <input type="color" className="w-10 h-10 p-0 border-none rounded" value={localValues.textColor ?? advancedConfig.textColor ?? '#000000'} onChange={e => handleAdvancedChange('textColor', e.target.value)} />
+                        <input type="color" className="w-10 h-10 p-0 border-none rounded" value={cleanColor(localValues.textColor ?? advancedConfig.textColor, '#000000')} onChange={e => handleAdvancedChange('textColor', e.target.value)} />
                         <input type="text" className="input input-bordered flex-1 h-10 text-xs font-mono" value={localValues.textColor ?? advancedConfig.textColor ?? '#000000'} onChange={e => handleAdvancedChange('textColor', e.target.value)} />
                         {saving.textColor && <span className="animate-spin text-blue-500">⏳</span>}
                         {saveError.textColor && <span className="text-red-500" title={saveError.textColor}>⚠️</span>}

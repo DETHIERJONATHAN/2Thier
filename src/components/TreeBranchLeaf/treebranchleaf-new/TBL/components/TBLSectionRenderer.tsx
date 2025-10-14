@@ -10,7 +10,7 @@
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { dlog as globalDlog } from '../../../../../utils/debug';
-import { SmartCalculatedField } from './SmartCalculatedField';
+import { CalculatedFieldDisplay } from './CalculatedFieldDisplay';
 import { useBatchEvaluation } from '../hooks/useBatchEvaluation';
 import { 
   Card, 
@@ -89,6 +89,7 @@ interface TBLSectionRendererProps {
   section: TBLSection;
   formData: TBLFormData;
   onChange: (fieldId: string, value: unknown) => void;
+  treeId?: string; // ID de l'arbre TreeBranchLeaf
   disabled?: boolean;
   level?: number; // Niveau de profondeur pour le style
   parentConditions?: Record<string, unknown>; // Conditions héritées du parent
@@ -98,6 +99,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   section,
   formData,
   onChange,
+  treeId,
   disabled = false,
   level = 0,
   parentConditions = {}
@@ -399,7 +401,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   console.log(`🔬 [DATA SECTION FIELD] Field ID: ${field.id}`);
   console.log(`🔬 [DATA SECTION FIELD] Field Type: ${field.fieldType}`);
   console.log(`🔬 [DATA SECTION FIELD] Has Capabilities:`, !!field.capabilities);
-  console.log(`🔬 [DATA SECTION FIELD] Capabilities:`, field.capabilities);
+  console.log(`🔬 [DATA SECTION FIELD] Capabilities COMPLET:`, JSON.stringify(field.capabilities, null, 2));
   console.log(`🔬 [DATA SECTION FIELD] FormData Value:`, formData[field.id]);
     
     // 🔥 CORRECTION CRITIQUE : Si le champ a une capacité Table (lookup ou matrix), utiliser le renderer éditable
@@ -408,9 +410,24 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                field.capabilities?.table?.currentTable?.columnBased === true;
     const isMatrixMode = field.capabilities?.table?.currentTable?.mode === 'matrix';
     
-    // 🔬 DIAGNOSTIC APPROFONDI
+    // 🔬 DIAGNOSTIC APPROFONDI - ORIENTATION INCLINAISON
     console.log(`🔬 [DATA SECTION FIELD] "${field.label}" - currentTable COMPLET:`, field.capabilities?.table?.currentTable);
     console.log(`🔬 [DATA SECTION FIELD] "${field.label}" - hasTableCapability: ${hasTableCapability}, hasRowOrColumnMode: ${hasRowOrColumnMode}, isMatrixMode: ${isMatrixMode}`);
+    
+    // 🚨 DEBUG SPÉCIFIQUE POUR ORIENTATION - INCLINAISON
+    if (field.label === 'Orientation - Inclinaison') {
+      console.log(`🚨🚨🚨 [ORIENTATION DEBUG] CHAMP TROUVÉ !`);
+      console.log(`🚨 [ORIENTATION] Has Data Capability:`, field.capabilities?.data?.enabled);
+      console.log(`🚨 [ORIENTATION] Data activeId:`, field.capabilities?.data?.activeId);
+      console.log(`🚨 [ORIENTATION] Data instances:`, field.capabilities?.data?.instances);
+      console.log(`🚨 [ORIENTATION] Has Table Capability:`, hasTableCapability);
+      console.log(`🚨 [ORIENTATION] Table activeId:`, field.capabilities?.table?.activeId);
+      console.log(`🚨 [ORIENTATION] currentTable type:`, field.capabilities?.table?.currentTable?.type);
+      console.log(`🚨 [ORIENTATION] currentTable mode:`, field.capabilities?.table?.currentTable?.mode);
+      console.log(`🚨 [ORIENTATION] currentTable rowBased:`, field.capabilities?.table?.currentTable?.rowBased);
+      console.log(`🚨 [ORIENTATION] currentTable columnBased:`, field.capabilities?.table?.currentTable?.columnBased);
+      console.log(`🚨 [ORIENTATION] Va rendre éditable?`, hasTableCapability && (hasRowOrColumnMode || isMatrixMode));
+    }
     
     // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un résultat de matrice
     if (hasTableCapability && (hasRowOrColumnMode || isMatrixMode)) {
@@ -444,6 +461,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             }}
             isValidation={isValidation}
             formData={formData}
+            treeId={treeId}
           />
         </Col>
       );
@@ -462,7 +480,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const hasDynamicCapabilities = Boolean(field.capabilities?.data?.instances || field.capabilities?.formula);
       // 🔍 Recherche variantes si pas trouvé
       let effectiveMirrorValue = mirrorValue;
-      if (!hasDynamicCapabilities && (effectiveMirrorValue === undefined || effectiveMirrorValue === null || effectiveMirrorValue === '')) {
+      // 🔥 MODIFICATION: Rechercher les variantes MÊME SI hasDynamicCapabilities = true
+      // Car le champ peut avoir une capacité mais la valeur calculée peut être vide
+      if (effectiveMirrorValue === undefined || effectiveMirrorValue === null || effectiveMirrorValue === '') {
         try {
           const variantKeys = buildMirrorKeys(field.label || '').map(k => k); // déjà préfixés
           let variantHit: string | null = null;
@@ -474,7 +494,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               break;
             }
           }
-          if (!variantHit) {
+          if (!variantHit && !hasDynamicCapabilities) {
             // Log agressif UNIQUE par champ (limité via ref ? simplif: log à chaque rendu si debug actif)
             const diag = (() => { try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } })();
             if (diag) {
@@ -491,6 +511,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           console.warn('[MIRROR][VARIANT][ERROR]', e);
         }
       }
+      
+      // 🔥 MODIFICATION: Afficher la valeur miroir SI elle existe, MÊME AVEC capacités dynamiques
+      // On laisse quand même les capacités s'exécuter après, et si elles retournent une valeur,
+      // elle remplacera la valeur miroir. Mais si les capacités retournent null, au moins on a une valeur.
+      // POUR L'INSTANT: On garde le comportement où on n'affiche QUE si pas de capacités dynamiques
+      // Car sinon BackendCalculatedField va s'exécuter et peut écraser la valeur miroir
       if (!hasDynamicCapabilities && effectiveMirrorValue !== undefined && effectiveMirrorValue !== null && effectiveMirrorValue !== '') {
         const precision = (field.config as { decimals?: number } | undefined)?.decimals ?? 2;
         const unit = (field.config as { unit?: string } | undefined)?.unit;
@@ -502,7 +528,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   dlog(`🪞 [MIRROR] Affichage via valeur miroir pour "${field.label}" (${mirrorKey}) (pas de capacité dynamique):`, formatted);
         return formatted ?? String(valueToFormat);
       } else if (effectiveMirrorValue !== undefined && effectiveMirrorValue !== null && effectiveMirrorValue !== '' && hasDynamicCapabilities) {
-  dlog(`🪞 [MIRROR] Valeur miroir ignorée pour "${field.label}" car capacités dynamiques présentes.`);
+  dlog(`🪞 [MIRROR] Valeur miroir DÉTECTÉE pour "${field.label}" mais capacités dynamiques présentes - on laisse les capacités s'exécuter`);
       }
 
       // ✨ Pré-évaluation: si la capacité Donnée pointe vers une condition et qu'une formule est dispo,
@@ -517,7 +543,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const dataSourceType = candidateDataInstance?.metadata?.sourceType;
         const dataSourceRef = candidateDataInstance?.metadata?.sourceRef as string | undefined;
         // 🚫 Suppression de la préférence forcée formule : on suit exactement la sourceRef.
-        // Si la sourceRef cible une condition -> on affiche la condition (bool / valeur) via SmartCalculatedField.
+        // Si la sourceRef cible une condition -> on affiche la condition (bool / valeur) via BackendCalculatedField.
         // Si l'utilisateur veut une formule, la sourceRef doit explicitement être "formula:<id>".
         if (dataSourceType === 'tree' && typeof dataSourceRef === 'string') {
           const r = dataSourceRef;
@@ -527,9 +553,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             const allowedFormats: Array<'number' | 'currency' | 'percentage'> = ['number','currency','percentage'];
             const rawFormat = dMeta.displayFormat;
             const displayFormat: 'number' | 'currency' | 'percentage' = (typeof rawFormat === 'string' && (allowedFormats as string[]).includes(rawFormat)) ? rawFormat as ('number' | 'currency' | 'percentage') : 'number';
+            
+            // Récupérer le nodeId depuis dataActiveId
+            if (!dataActiveId || !treeId) {
+              return <span style={{ color: '#888' }}>---</span>;
+            }
+            
             return (
-              <SmartCalculatedField
-                sourceRef={r}
+              <CalculatedFieldDisplay
+                nodeId={dataActiveId}
+                treeId={treeId}
                 formData={formData}
                 displayFormat={displayFormat}
                 unit={dMeta.unit}
@@ -564,15 +597,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           dlog(`🔬 [TEST METADATA] sourceRef: "${configSourceRef}"`);
           dlog(`🔬 [TEST METADATA] fixedValue:`, fixedValue);
           
-          // Mode arborescence (router selon la vraie référence: condition:, formula:, @value.)
+          // Mode arborescence (router selon la vraie référence: condition:, formula:, @value., @table.)
           if (configSourceType === 'tree' && configSourceRef) {
             const ref = String(configSourceRef);
             const isCondition = ref.startsWith('condition:');
             const isFormula = ref.startsWith('formula:');
             const isValue = ref.startsWith('@value.');
-            dlog(`🔬 [TEST TREE SOURCE] Router direct: condition=${isCondition}, formula=${isFormula}, value=${isValue}`);
+            const isTable = ref.startsWith('@table.'); // 🔥 AJOUT: Support des références @table
+            dlog(`🔬 [TEST TREE SOURCE] Router direct: condition=${isCondition}, formula=${isFormula}, value=${isValue}, table=${isTable}`);
 
-            if (isCondition || isFormula || isValue) {
+            if (isCondition || isFormula || isValue || isTable) { // 🔥 AJOUT: isTable
               // Si batch pré-chargé et c'est une variable nodeId connue => montrer la valeur batch si existante
               if (batchLoaded && ref.startsWith('condition:')) {
                 const nodeId = (capabilities?.data?.activeId) || (capabilities?.data?.instances ? Object.keys(capabilities.data.instances)[0] : undefined);
@@ -581,13 +615,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   return <span style={{ fontWeight: 'bold', color: '#047857' }}>{formatValueWithConfig(val, dataInstance)}</span>;
                 }
               }
+              
+              // Récupérer le nodeId pour le composant
+              const variableNodeId = (capabilities?.data?.activeId) || (capabilities?.data?.instances ? Object.keys(capabilities.data.instances)[0] : undefined);
+              
+              if (!variableNodeId || !treeId) {
+                return <span style={{ color: '#888' }}>---</span>;
+              }
+              
               return (
-                <SmartCalculatedField
-                  sourceRef={ref}
+                <CalculatedFieldDisplay
+                  nodeId={variableNodeId}
+                  treeId={treeId}
                   formData={formData}
-                  displayFormat={dataInstance?.displayFormat}
-                  unit={dataInstance?.unit}
-                  precision={dataInstance?.precision}
+                  displayFormat={dataInstance?.displayFormat as 'number' | 'currency' | 'percentage' | undefined}
+                  unit={dataInstance?.unit as string | undefined}
+                  precision={dataInstance?.precision as number | undefined}
                   placeholder={batchLoaded ? '---' : 'Calcul...'}
                 />
               );
@@ -602,13 +645,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               if (batchLoaded && preVal != null) {
                 return <span style={{ fontWeight: 'bold', color: '#047857' }}>{formatValueWithConfig(preVal, dataInstance)}</span>;
               }
+              
+              if (!treeId) {
+                return <span style={{ color: '#888' }}>---</span>;
+              }
+              
               return (
-                <SmartCalculatedField
-                  sourceRef={`variable:${instanceId}`}
+                <CalculatedFieldDisplay
+                  nodeId={instanceId}
+                  treeId={treeId}
                   formData={formData}
-                  displayFormat={dataInstance?.displayFormat}
-                  unit={dataInstance?.unit}
-                  precision={dataInstance?.precision}
+                  displayFormat={dataInstance?.displayFormat as 'number' | 'currency' | 'percentage' | undefined}
+                  unit={dataInstance?.unit as string | undefined}
+                  precision={dataInstance?.precision as number | undefined}
                   placeholder={batchLoaded ? '---' : 'Calcul...'}
                 />
               );
@@ -643,16 +692,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         dlog(`🔬 [TEST FORMULA ENHANCED] Formule avec expression: ${rawExpression}`);
         dlog(`🔬 [TEST FORMULA ENHANCED] Variables définies:`, variablesDef);
         
+        if (!formulaId || !treeId) {
+          return <span style={{ color: '#888' }}>---</span>;
+        }
+        
         return (
-          <SmartCalculatedField
-            sourceRef={`formula:${formulaId ?? ''}`}
+          <CalculatedFieldDisplay
+            nodeId={formulaId}
+            treeId={treeId}
             formData={formData}
             displayFormat="number"
             unit={field.config?.unit}
             precision={field.config?.decimals || 4}
             placeholder="Calcul en cours..."
-            rawExpression={rawExpression}
-            variablesDefinition={variablesDef}
           />
         );
       }
@@ -662,12 +714,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   // 🔍 Si aucune capacité configurée, afficher la valeur brute du formulaire
       const rawValue = formData[field.id];
   dlog(`🔬 [TEST FALLBACK] Aucune capacité - valeur brute: ${rawValue}`);
-      // 🧩 Nouveau: si metadata/config contient un sourceRef exploitable, utiliser SmartCalculatedField
+      // 🧩 Nouveau: si metadata/config contient un sourceRef exploitable, utiliser CalculatedFieldDisplay
       try {
         const metaLike = (field.treeMetadata || field.config || {}) as Record<string, unknown>;
         const metaSourceRef = (metaLike.sourceRef as string | undefined) || (metaLike['source_ref'] as string | undefined);
         if (metaSourceRef && typeof metaSourceRef === 'string' && /^(formula:|condition:|variable:|@value\.)/.test(metaSourceRef)) {
-          dlog(`🧪 [FALLBACK SMART] Utilisation SmartCalculatedField via metaSourceRef='${metaSourceRef}'`);
+          dlog(`🧪 [FALLBACK SMART] Utilisation CalculatedFieldDisplay via metaSourceRef='${metaSourceRef}'`);
           if (localStorage.getItem('TBL_DIAG') === '1') {
             console.log('[TBL_DIAG][fallback-smart]', {
               fieldId: field.id,
@@ -676,10 +728,21 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               hasCapabilities: !!field.capabilities
             });
           }
+          
+          // Extraire le nodeId depuis metaSourceRef (format: "formula:id" ou "condition:id")
+          const extractedNodeId = metaSourceRef.includes(':') 
+            ? metaSourceRef.split(':')[1] 
+            : metaSourceRef;
+          
+          if (!extractedNodeId || !treeId) {
+            return <span style={{ color: '#888' }}>---</span>;
+          }
+          
           const cfg = field.config as { displayFormat?: 'number'|'currency'|'percentage'; unit?: string; decimals?: number } | undefined;
           return (
-            <SmartCalculatedField
-              sourceRef={metaSourceRef}
+            <CalculatedFieldDisplay
+              nodeId={extractedNodeId}
+              treeId={treeId}
               formData={formData}
               displayFormat={cfg?.displayFormat || 'number'}
               unit={cfg?.unit}
@@ -696,9 +759,37 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         return '---';
       }
 
-      // ✅ Afficher la valeur brute (l'utilisateur saisit ce qu'il veut)
+      // ✅ Afficher la valeur brute avec formatage défensif (protection contre [object Object])
       dlog(`🔬 [TEST FALLBACK] Retour valeur brute: ${rawValue}`);
-      return rawValue.toString();
+      
+      // 🛡️ PROTECTION : Si rawValue est un objet, extraire la valeur intelligemment
+      if (typeof rawValue === 'object' && rawValue !== null) {
+        console.warn('⚠️ [FALLBACK OBJECT] Détection d\'un objet dans rawValue:', rawValue);
+        
+        // Tentative d'extraction de propriétés communes
+        const obj = rawValue as Record<string, unknown>;
+        const extracted = obj.text || obj.value || obj.result || obj.operationResult || obj.humanText || 
+                         obj.calculatedValue || obj.displayValue || obj.label;
+        
+        if (extracted !== undefined) {
+          console.log('✅ [FALLBACK OBJECT] Valeur extraite:', extracted);
+          return String(extracted);
+        }
+        
+        // Si c'est un tableau, joindre les éléments
+        if (Array.isArray(rawValue)) {
+          return rawValue.join(', ');
+        }
+        
+        // Dernier recours: JSON.stringify pour un affichage lisible
+        try {
+          return JSON.stringify(rawValue);
+        } catch {
+          return String(rawValue);
+        }
+      }
+      
+      return String(rawValue);
     };
 
     // 🎨 Style de la carte selon le type de champ
@@ -892,6 +983,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       disabled={disabled}
                       formData={formData}
                       treeMetadata={field.treeMetadata}
+                      treeId={treeId}
                     />
                   </Col>
                 ))}
@@ -916,6 +1008,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     section={subsection}
                     formData={formData}
                     onChange={onChange}
+                    treeId={treeId}
                     disabled={disabled}
                     level={level + 1}
                     parentConditions={parentConditions}
@@ -942,6 +1035,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       section={subsection}
                       formData={formData}
                       onChange={onChange}
+                      treeId={treeId}
                       disabled={disabled}
                       level={level + 1}
                       parentConditions={parentConditions}

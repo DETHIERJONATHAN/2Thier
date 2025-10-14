@@ -237,7 +237,14 @@ const TblContainer: React.FC<TblContainerProps> = ({ treeId }) => {
                 items={operations.map(op => ({
                   children: (
                     <div>
-                      <Typography.Text strong>{op.operationResult}</Typography.Text>
+                      <Typography.Text strong>
+                        {/* ✅ FIX: Formatter operationResult comme SmartCalculatedField */}
+                        {typeof op.operationResult === 'string' 
+                          ? op.operationResult 
+                          : typeof op.operationResult === 'object' && op.operationResult !== null
+                            ? String(op.operationResult) 
+                            : String(op.operationResult ?? '---')}
+                      </Typography.Text>
                       <div className="text-slate-500 text-xs">
                         {op.operationSource}{op.operationDetail ? ` · ${op.operationDetail}` : ''} · {new Date(op.lastResolved).toLocaleString('fr-BE')}
                       </div>

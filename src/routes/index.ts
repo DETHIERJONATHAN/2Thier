@@ -328,6 +328,9 @@ console.log('[ROUTER] Routes Partner Portal montées sur /partner');
 apiRouter.use('/forms', publicFormsRoutes);
 console.log('[ROUTER] Routes Public Forms montées sur /forms');
 
+apiRouter.use('/public-forms', publicFormsRoutes);
+console.log('[ROUTER] Routes Public Forms montées sur /public-forms');
+
 apiRouter.use('/landing-pages', landingPagesRoutes);
 console.log('[ROUTER] Routes Landing Pages montées sur /landing-pages');
 

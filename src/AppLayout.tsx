@@ -34,8 +34,14 @@ const DevisPage = lazy(() => import('./pages/DevisPage'));
 // TBL - Nouveau système de formulaires connectés
 const TBLPage = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL'));
 
+// TreeBranchLeaf Wrapper - Interface 3 colonnes complète
+const TreeBranchLeafWrapper = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TreeBranchLeafWrapper'));
+
 // Test TBL Tooltips
 const TestTBLTooltips = lazy(() => import('./pages/TestTBLTooltips'));
+
+// Admin - Gestion des sites web
+const WebsitesAdminPage = lazy(() => import('./pages/admin/WebsitesAdminPage'));
 
 // Pages Devis1Minute
 const MarketplacePage = lazy(() => import('./pages/devis1minute/MarketplacePage'));
@@ -43,6 +49,9 @@ const PartnerPortalPage = lazy(() => import('./pages/devis1minute/PartnerPortalP
 const PartnerLeadsPage = lazy(() => import('./pages/devis1minute/PartnerLeadsPage'));
 const PartnerBillingPage = lazy(() => import('./pages/devis1minute/PartnerBillingPage'));
 const LeadGenerationPage = lazy(() => import('./pages/devis1minute/LeadGenerationPage'));
+
+// Gestion des formulaires publics
+const PublicFormsManagementPage = lazy(() => import('./pages/PublicFormsManagementPage'));
 const CampaignAnalyticsPage = lazy(() => import('./pages/devis1minute/CampaignAnalyticsPage'));
 const PublicFormsPage = lazy(() => import('./pages/devis1minute/PublicFormsPage'));
 const LandingPagesPage = lazy(() => import('./pages/devis1minute/LandingPagesPage'));
@@ -194,10 +203,18 @@ export default function AppLayout() {
             {/* Alias pour le module TBL (route définie en BDD: /module-tbl) */}
             <Route path="/module-tbl" element={<TBLPage />} />
             <Route path="/module-tbl/:leadId" element={<TBLPage />} />
+            
+            {/* 🌟 TreeBranchLeaf Wrapper - Interface complète 3 colonnes */}
+            <Route path="/formulaire/treebranchleaf" element={<TreeBranchLeafWrapper />} />
+            <Route path="/formulaire/treebranchleaf/:id" element={<TreeBranchLeafWrapper />} />
+            <Route path="/formulaire/treebranchleaf/:id/:leadId" element={<TreeBranchLeafWrapper />} />
             {/* TBL routes supprimées - utiliser /demo/tbl-new */}
             
             
             {hasFeature('Agenda') && <Route path="/agenda" element={<AgendaWrapper />} />}
+            
+            {/* Admin - Gestion des sites web (Super Admin uniquement) */}
+            {isSuperAdmin && <Route path="/admin/sites-web" element={<WebsitesAdminPage />} />}
             
             {/* Devis - Accessible si module présent ou super admin */}
             {(hasFeature('devis') || isSuperAdmin) && <Route path="/devis" element={<DevisPage />} />}
@@ -217,6 +234,7 @@ export default function AppLayout() {
             <Route path="/campaign-analytics" element={<CampaignAnalyticsPage />} />
             {(hasFeature('public_forms') || isSuperAdmin) && <Route path="/public-forms" element={<PublicFormsPage />} />}
             {(hasFeature('public_forms') || isSuperAdmin) && <Route path="/forms" element={<PublicFormsPage />} />}
+            {(hasFeature('public_forms') || isSuperAdmin) && <Route path="/public-forms-management" element={<PublicFormsManagementPage />} />}
             <Route path="/landing-pages" element={<LandingPagesPage />} />
             
             {/* Routes Devis1Minute avec préfixe */}

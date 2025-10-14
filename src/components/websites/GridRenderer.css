@@ -1,0 +1,207 @@
+/**
+ * 🎨 GridRenderer CSS - Styles pour le système de grille responsive
+ */
+
+/* Grille de base */
+.grid-layout {
+  width: 100%;
+  transition: all 0.3s ease;
+}
+
+/* Items de grille */
+.grid-item {
+  width: 100%;
+  height: 100%;
+  transition: all 0.3s ease;
+  /* GPU acceleration */
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Animation d'entrée des items */
+.grid-item.stagger-item {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: gridItemFadeIn 0.5s ease forwards;
+}
+
+@keyframes gridItemFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Délais d'animation en cascade */
+.grid-item.stagger-item:nth-child(1) { animation-delay: 0.05s; }
+.grid-item.stagger-item:nth-child(2) { animation-delay: 0.1s; }
+.grid-item.stagger-item:nth-child(3) { animation-delay: 0.15s; }
+.grid-item.stagger-item:nth-child(4) { animation-delay: 0.2s; }
+.grid-item.stagger-item:nth-child(5) { animation-delay: 0.25s; }
+.grid-item.stagger-item:nth-child(6) { animation-delay: 0.3s; }
+.grid-item.stagger-item:nth-child(7) { animation-delay: 0.35s; }
+.grid-item.stagger-item:nth-child(8) { animation-delay: 0.4s; }
+.grid-item.stagger-item:nth-child(9) { animation-delay: 0.45s; }
+.grid-item.stagger-item:nth-child(10) { animation-delay: 0.5s; }
+
+/* Responsive breakpoints */
+
+/* Mobile (< 576px) */
+@media (max-width: 575.98px) {
+  .grid-responsive {
+    grid-template-columns: repeat(var(--grid-mobile-cols, 1), 1fr) !important;
+  }
+  
+  .grid-layout {
+    gap: calc(var(--grid-gap, 24px) * 0.5) !important;
+  }
+}
+
+/* Tablet (576px - 992px) */
+@media (min-width: 576px) and (max-width: 991.98px) {
+  .grid-responsive {
+    grid-template-columns: repeat(var(--grid-tablet-cols, 2), 1fr) !important;
+  }
+  
+  .grid-layout {
+    gap: calc(var(--grid-gap, 24px) * 0.75) !important;
+  }
+}
+
+/* Desktop (> 992px) */
+@media (min-width: 992px) {
+  .grid-responsive {
+    grid-template-columns: repeat(var(--grid-desktop-cols, 3), 1fr) !important;
+  }
+}
+
+/* Large Desktop (> 1200px) */
+@media (min-width: 1200px) {
+  .grid-layout {
+    max-width: var(--grid-max-width, 1200px);
+  }
+}
+
+/* Effets hover sur les items */
+.grid-item.hover-lift:hover {
+  transform: translateY(-8px) translateZ(0);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.grid-item.hover-scale:hover {
+  transform: scale(1.05) translateZ(0);
+}
+
+.grid-item.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+}
+
+.grid-item.hover-rotate:hover {
+  transform: rotate(2deg) translateZ(0);
+}
+
+/* Masonry layout (Pinterest style) */
+.grid-layout.masonry {
+  grid-auto-rows: 10px;
+}
+
+.grid-layout.masonry .grid-item {
+  grid-row-end: span var(--row-span, 20);
+}
+
+/* Dense packing (remplit les trous) */
+.grid-layout.dense {
+  grid-auto-flow: dense;
+}
+
+/* Lazy loading des images */
+.grid-item img {
+  loading: lazy;
+  decoding: async;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+/* États de chargement */
+.grid-item.loading {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s ease-in-out infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Position custom pour items spécifiques */
+.grid-item[data-col-start] {
+  grid-column-start: attr(data-col-start number);
+}
+
+.grid-item[data-col-end] {
+  grid-column-end: attr(data-col-end number);
+}
+
+.grid-item[data-row-start] {
+  grid-row-start: attr(data-row-start number);
+}
+
+.grid-item[data-row-end] {
+  grid-row-end: attr(data-row-end number);
+}
+
+/* Support pour position absolue dans les items */
+.grid-item.relative {
+  position: relative;
+}
+
+.grid-item .absolute-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Print styles */
+@media print {
+  .grid-layout {
+    display: block !important;
+  }
+  
+  .grid-item {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+}
+
+/* Accessibilité */
+.grid-item:focus-visible {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .grid-item.loading {
+    background: linear-gradient(
+      90deg,
+      #2a2a2a 25%,
+      #1a1a1a 50%,
+      #2a2a2a 75%
+    );
+    background-size: 200% 100%;
+  }
+}

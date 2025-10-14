@@ -4,7 +4,7 @@
  */
 
 // Import pour l'API Google Generative AI
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerativeModel } from '@google/generative-ai';
 
 // Types légers partagés
 export interface LeadLike { name?: string; company?: string; industry?: string; sector?: string; service?: string; notes?: string }
@@ -50,7 +50,11 @@ export class GoogleGeminiService {
   private isDemoMode: boolean;
   private apiKey: string | undefined;
   private genAI: GoogleGenerativeAI | null = null;
-  private modelName: string;
+  private model: GenerativeModel | null = null;
+  private primaryModelName: string;
+  private fallbackModelNames: string[] = [];
+  private modelCache: Map<string, GenerativeModel> = new Map();
+  private modelName: string; // compat héritage routes existantes
   // Observabilité / Résilience
   private consecutiveFailures = 0;
   private lastError: string | null = null;
@@ -66,21 +70,34 @@ export class GoogleGeminiService {
     this.apiKey = process.env.GOOGLE_AI_API_KEY;
     const forcedMode = process.env.AI_MODE; // force-mock | force-live | auto
     this.isDemoMode = forcedMode === 'force-mock' ? true : (!this.apiKey && forcedMode !== 'force-live');
-    this.modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-    
-  // Paramètres par défaut (surchageables via .env)
-  this.maxRetries = Math.max(0, parseInt(process.env.AI_MAX_RETRIES || '2', 10) || 2);
-  this.baseTimeoutMs = Math.max(2000, parseInt(process.env.AI_TIMEOUT_MS || '12000', 10) || 12000);
-  this.perAttemptExtraTimeoutMs = Math.max(0, parseInt(process.env.AI_RETRY_TIMEOUT_INCREMENT_MS || '2000', 10) || 2000);
+    const explicitDefaultModel = process.env.GEMINI_MODEL?.trim();
+    const fastModel = process.env.GEMINI_FAST_MODEL?.trim();
+    this.primaryModelName = fastModel || explicitDefaultModel || 'gemini-2.5-flash';
+    const fallbackEnv = process.env.GEMINI_MODEL_FALLBACKS || explicitDefaultModel || 'gemini-2.5-pro';
+    this.fallbackModelNames = fallbackEnv
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => !!name && name !== this.primaryModelName);
+    // Compatibilité héritage (certaines routes lisent encore this.modelName)
+    this.modelName = this.primaryModelName;
 
-  if (this.isDemoMode) {
+    // Paramètres par défaut (surchageables via .env)
+    this.maxRetries = Math.max(0, parseInt(process.env.AI_MAX_RETRIES || '2', 10) || 2);
+    this.baseTimeoutMs = Math.max(2000, parseInt(process.env.AI_TIMEOUT_MS || '12000', 10) || 12000);
+    this.perAttemptExtraTimeoutMs = Math.max(0, parseInt(process.env.AI_RETRY_TIMEOUT_INCREMENT_MS || '2000', 10) || 2000);
+
+    if (this.isDemoMode) {
       console.log('🤖 GoogleGeminiService initialisé (mode développement - démo)');
       console.log('ℹ️  Pour activer l\'API réelle, configurez GOOGLE_AI_API_KEY dans .env');
     } else {
       console.log('🤖 GoogleGeminiService initialisé (mode production - API réelle)');
-      console.log(`✅ Clé API Gemini détectée, modèle: ${this.modelName}`);
-      // Initialiser l'instance Gemini
       this.genAI = new GoogleGenerativeAI(this.apiKey!);
+      this.model = this.getModelInstance(this.primaryModelName);
+      this.modelCache.set(this.primaryModelName, this.model);
+      console.log(`✅ Clé API Gemini détectée, modèle rapide: ${this.primaryModelName} (API v1beta)`);
+      if (this.fallbackModelNames.length > 0) {
+        console.log(`↪️  Modèles de secours configurés: ${this.fallbackModelNames.join(', ')}`);
+      }
     }
   }
 
@@ -88,27 +105,45 @@ export class GoogleGeminiService {
   public isLive(): boolean { return !this.isDemoMode; }
 
   /** Chat générique multi-modules */
-  public async chat(params: { prompt: string; raw?: boolean }): Promise<{ success: boolean; content?: string; mode: 'live' | 'mock'; error?: string }> {
+  public async chat(params: { prompt: string; raw?: boolean }): Promise<{ success: boolean; content?: string; mode: 'live' | 'mock'; error?: string; model?: string }> {
     const { prompt } = params;
     if (this.isDemoMode) {
-      return { success: true, mode: 'mock', content: this.buildDemoChat(prompt) };
+      return { success: true, mode: 'mock', content: this.buildDemoChat(prompt), model: 'demo' };
     }
     // Circuit breaker actif ?
     if (this.degradedUntil && Date.now() < this.degradedUntil) {
-      return { success: true, mode: 'mock', content: this.buildDemoChat(prompt), error: this.lastError || 'circuit-breaker-active' };
+      return {
+        success: true,
+        mode: 'mock',
+        content: this.buildDemoChat(prompt),
+        error: this.lastError || 'circuit-breaker-active',
+        model: 'fallback-mock'
+      };
     }
     try {
-      const result = await this.callGeminiAPIWithRetries(prompt, this.modelName);
+      const result = await this.callGeminiAPIWithFallbacks(prompt);
       if (result.success) {
         this.recordSuccess();
-        return { success: true, content: result.content, mode: 'live' };
+        return { success: true, content: result.content, mode: 'live', model: result.modelUsed };
       }
       this.recordFailure(result.error || 'unknown-error');
-      return { success: true, content: this.buildDemoChat(prompt), mode: 'mock', error: result.error };
+      return {
+        success: true,
+        content: this.buildDemoChat(prompt),
+        mode: 'mock',
+        error: result.error,
+        model: result.modelUsed || this.primaryModelName
+      };
     } catch (e) {
       const msg = (e as Error).message;
       this.recordFailure(msg);
-      return { success: true, content: this.buildDemoChat(prompt), mode: 'mock', error: msg };
+      return {
+        success: true,
+        content: this.buildDemoChat(prompt),
+        mode: 'mock',
+        error: msg,
+        model: this.primaryModelName
+      };
     }
   }
 
@@ -130,19 +165,20 @@ export class GoogleGeminiService {
       
       // Utilisation de l'API Gemini réelle
       const prompt = this.buildEmailPrompt(leadData, emailType);
-  const result = await this.callGeminiAPIWithRetries(prompt);
-      
-      if (result.success) {
+      const result = await this.callGeminiAPIWithFallbacks(prompt, emailType === 'initial' ? undefined : [this.primaryModelName, ...this.fallbackModelNames]);
+
+      if (result.success && result.content) {
         return {
           success: true,
           email: this.parseEmailResponse(result.content),
-          source: 'gemini-api'
+          source: 'gemini-api',
+          model: result.modelUsed
         };
       }
       
       // Fallback en cas d'erreur API
       console.warn('⚠️ Erreur API Gemini, fallback vers démo');
-      return this.generateDemoEmail(leadData, emailType);
+      return { ...this.generateDemoEmail(leadData, emailType), model: 'demo' };
       
     } catch (error) {
       console.error('❌ Erreur génération email:', error);
@@ -499,34 +535,79 @@ Bien à vous`;
   /**
    * 🚀 MÉTHODES POUR L'API GEMINI RÉELLE
    */
+
+  private ensureLiveMode() {
+    if (!this.genAI) {
+      throw new Error('API Gemini non initialisée');
+    }
+  }
+
+  private getModelInstance(modelName: string): GenerativeModel {
+    this.ensureLiveMode();
+    const cached = this.modelCache.get(modelName);
+    if (cached) {
+      return cached;
+    }
+    const model = this.genAI!.getGenerativeModel({ model: modelName }, { apiVersion: 'v1beta' });
+    this.modelCache.set(modelName, model);
+    return model;
+  }
+
+  private async callGeminiAPIWithFallbacks(
+    prompt: string,
+    modelCandidates?: string[]
+  ): Promise<{ success: boolean; content?: string; error?: string; modelUsed?: string }> {
+    const candidates = (modelCandidates && modelCandidates.length > 0)
+      ? modelCandidates
+      : [this.primaryModelName, ...this.fallbackModelNames];
+
+    let lastError: string | undefined;
+    for (const candidate of candidates) {
+      const result = await this.callGeminiAPIWithRetries(prompt, candidate);
+      if (result.success) {
+        if (candidate !== this.primaryModelName) {
+          console.warn(`↪️  [Gemini API] Basculé sur le modèle de secours ${candidate}`);
+        }
+        return result;
+      }
+      lastError = result.error;
+      console.warn(`⚠️ [Gemini API] Échec avec ${candidate}: ${lastError || 'erreur inconnue'}`);
+    }
+
+    return {
+      success: false,
+      error: lastError || 'no-model-available',
+      modelUsed: candidates[candidates.length - 1]
+    };
+  }
   
-  private async callGeminiAPI(prompt: string, modelOverride?: string): Promise<{ success: boolean; content?: string; error?: string }> {
+  private async callGeminiAPI(prompt: string, modelName: string): Promise<{ success: boolean; content?: string; error?: string; modelUsed: string }> {
     try {
       if (!this.genAI) {
-        return { success: false, error: 'API Gemini non initialisée' };
+        return { success: false, error: 'API Gemini non initialisée', modelUsed: modelName };
       }
-      const modelName = modelOverride || this.modelName || 'gemini-1.5-flash';
-      const model = this.genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(prompt);
+
+      const modelToUse = this.getModelInstance(modelName);
+      const result = await modelToUse.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
 
-      console.log('✅ [Gemini API] Réponse reçue');
-      return { success: true, content: text };
+      console.log(`✅ [Gemini API] Réponse reçue (${modelName})`);
+      return { success: true, content: text, modelUsed: modelName };
       
     } catch (error) {
       console.error('❌ [Gemini API] Erreur:', error);
-      return { success: false, error: (error as Error).message };
+      return { success: false, error: (error as Error).message, modelUsed: modelName };
     }
   }
 
   /** Appel API avec timeout et retries exponentiels (backoff + jitter) */
-  private async callGeminiAPIWithRetries(prompt: string, modelOverride?: string): Promise<{ success: boolean; content?: string; error?: string }> {
+  private async callGeminiAPIWithRetries(prompt: string, modelName: string): Promise<{ success: boolean; content?: string; error?: string; modelUsed: string }> {
     const attempts = this.maxRetries + 1; // tentative initiale + retries
     for (let i = 0; i < attempts; i++) {
       const timeoutMs = this.baseTimeoutMs + i * this.perAttemptExtraTimeoutMs;
       try {
-        const res = await this.withTimeout(this.callGeminiAPI(prompt, modelOverride), timeoutMs);
+        const res = await this.withTimeout(this.callGeminiAPI(prompt, modelName), timeoutMs);
         if (res.success) return res;
         // Si erreur non transitoire, on arrête
         if (!this.isTransientError(res.error || '')) return res;
@@ -534,7 +615,7 @@ Bien à vous`;
       } catch (err) {
         const msg = (err as Error).message || String(err);
         if (!this.isTransientError(msg)) {
-          return { success: false, error: msg };
+          return { success: false, error: msg, modelUsed: modelName };
         }
       }
       // Backoff exponentiel avec jitter
@@ -542,7 +623,7 @@ Bien à vous`;
       const jitter = Math.floor(Math.random() * 200);
       await new Promise(r => setTimeout(r, base + jitter));
     }
-    return { success: false, error: 'timeout-or-retry-exceeded' };
+    return { success: false, error: 'timeout-or-retry-exceeded', modelUsed: modelName };
   }
 
   private async withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -580,7 +661,8 @@ Bien à vous`;
     const degraded = !!(this.degradedUntil && now < this.degradedUntil);
     return {
       mode: this.isDemoMode ? 'mock' : 'live',
-      model: this.modelName,
+  model: this.primaryModelName,
+  fallbackModels: this.fallbackModelNames,
       hasApiKey: !!this.apiKey,
       consecutiveFailures: this.consecutiveFailures,
       lastError: this.lastError,

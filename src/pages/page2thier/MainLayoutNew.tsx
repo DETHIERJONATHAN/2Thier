@@ -636,6 +636,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         key: 'devis1minute-public',
         label: '🌐 Devis1minute Public',
         onClick: () => window.open('/devis1minute', '_blank')
+      },
+      { type: 'divider' },
+      {
+        key: 'admin-sites',
+        label: '⚙️ Gérer les sites web',
+        onClick: () => navigate('/admin/sites-web')
       }
     ]
   }), [navigate]);

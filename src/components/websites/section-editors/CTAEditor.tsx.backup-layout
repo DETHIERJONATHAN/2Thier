@@ -1,0 +1,253 @@
+/**
+ * 🎨 Éditeur de CTA (Call-to-Action)
+ * Bandeau avec texte et bouton(s) d'action
+ */
+
+import React, { useState, useEffect } from 'react';
+import { Form, Input, Button, Space, Upload, ColorPicker, Radio, message } from 'antd';
+import { UploadOutlined, PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import type { UploadFile } from 'antd';
+import { AIAssistant } from '../AIAssistant';
+
+const { TextArea } = Input;
+
+interface CTAEditorProps {
+  section: any;
+  onSave: (content: any) => void;
+  onCancel: () => void;
+}
+
+export const CTAEditor: React.FC<CTAEditorProps> = ({ section, onSave, onCancel }) => {
+  const [form] = Form.useForm();
+    const [showAI, setShowAI] = useState(false);
+  const [aiContext, setAIContext] = useState('');
+  const [aiCurrentValue, setAICurrentValue] = useState('');
+  const [backgroundFile, setBackgroundFile] = useState<UploadFile[]>([]);
+  const [buttons, setButtons] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (section) {
+      form.setFieldsValue({
+        name: section.name,
+        backgroundColor: section.backgroundColor || '#dc2626',
+        textColor: section.textColor || '#ffffff',
+        ...section.content
+      });
+      setButtons(section.content?.buttons || []);
+      if (section.content?.backgroundImage) {
+        setBackgroundFile([{
+          uid: '-1',
+          name: 'bg.jpg',
+          status: 'done',
+          url: section.content.backgroundImage
+        }]);
+      }
+    } else {
+      // Valeurs par défaut
+      form.setFieldsValue({
+        title: 'Prêt à passer à l\'avenir vert ?',
+        description: 'Obtenez votre devis personnalisé en quelques clics',
+        alignment: 'center',
+        size: 'large'
+      });
+      setButtons([
+        { label: 'Demander un devis gratuit', url: '/contact', icon: '📞' }
+      ]);
+    }
+  }, [section]);
+
+  const handleAddButton = () => {
+    setButtons([...buttons, { label: '', url: '', icon: '' }]);
+  };
+
+  const handleRemoveButton = (index: number) => {
+    setButtons(buttons.filter((_, i) => i !== index));
+  };
+
+  const handleButtonChange = (index: number, field: string, value: string) => {
+    const newButtons = [...buttons];
+    newButtons[index][field] = value;
+    setButtons(newButtons);
+  };
+
+  const handleSubmit = (values: any) => {
+    onSave({
+      name: values.name,
+      content: {
+        title: values.title,
+        description: values.description,
+        backgroundImage: backgroundFile[0]?.url || backgroundFile[0]?.response?.url || '',
+        alignment: values.alignment,
+        size: values.size,
+        buttons,
+        phoneNumber: values.phoneNumber,
+        showPattern: values.showPattern
+      },
+      backgroundColor: values.backgroundColor,
+      textColor: values.textColor
+    });
+  };
+
+  const uploadProps = {
+    beforeUpload: (file: File) => {
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('Vous ne pouvez uploader que des images !');
+      }
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('L\'image doit faire moins de 5MB !');
+      }
+      return isImage && isLt5M;
+    },
+    onChange: (info: any) => {
+      setBackgroundFile(info.fileList);
+    },
+    maxCount: 1
+  };
+
+  return (
+    <Form form={form} layout="vertical" onFinish={handleSubmit}>
+      <Form.Item label="Nom de la section" name="name" rules={[{ required: true }]}>
+        <Input placeholder="Ex: CTA Principal" />
+      </Form.Item>
+
+      <Form.Item label="Titre" name="title" rules={[{ required: true }]}>
+        <Input placeholder="Prêt à passer à l'avenir vert ?"
+          suffix={
+            <Button
+              type="link"
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={() => {
+                setAIContext('title');
+                setAICurrentValue(form.getFieldValue('title') || '');
+                setShowAI(true);
+              }}
+            />
+          }
+         />
+      </Form.Item>
+
+      <Form.Item label="Description" name="description">
+        <TextArea rows={2} placeholder="Obtenez votre devis personnalisé..."
+          suffix={
+            <Button
+              type="link"
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={() => {
+                setAIContext('description');
+                setAICurrentValue(form.getFieldValue('description') || '');
+                setShowAI(true);
+              }}
+            />
+          }
+         />
+      </Form.Item>
+
+      <Form.Item label="Taille du bandeau" name="size">
+        <Radio.Group>
+          <Radio.Button value="small">Compact</Radio.Button>
+          <Radio.Button value="medium">Moyen</Radio.Button>
+          <Radio.Button value="large">Grand</Radio.Button>
+        </Radio.Group>
+      </Form.Item>
+
+      <Form.Item label="Alignement" name="alignment">
+        <Radio.Group>
+          <Radio.Button value="left">Gauche</Radio.Button>
+          <Radio.Button value="center">Centre</Radio.Button>
+          <Radio.Button value="right">Droite</Radio.Button>
+        </Radio.Group>
+      </Form.Item>
+
+      <Form.Item label="Image de fond (optionnel)" help="Pour un effet visuel plus riche">
+        <Upload
+          {...uploadProps}
+          fileList={backgroundFile}
+          listType="picture-card"
+          action="/api/upload"
+        >
+          {backgroundFile.length === 0 && <div><UploadOutlined /> Upload</div>}
+        </Upload>
+      </Form.Item>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+          Boutons d'action
+        </label>
+        {buttons.map((button, index) => (
+          <Space key={index} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+            <Input
+              placeholder="Icône"
+              value={button.icon}
+              onChange={(e) => handleButtonChange(index, 'icon', e.target.value)}
+              style={{ width: 60 }}
+            />
+            <Input
+              placeholder="Label"
+              value={button.label}
+              onChange={(e) => handleButtonChange(index, 'label', e.target.value)}
+              style={{ width: 200 }}
+            />
+            <Input
+              placeholder="URL"
+              value={button.url}
+              onChange={(e) => handleButtonChange(index, 'url', e.target.value)}
+              style={{ width: 200 }}
+            />
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleRemoveButton(index)}
+            />
+          </Space>
+        ))}
+        <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddButton}>
+          Ajouter un bouton
+        </Button>
+      </div>
+
+      <Form.Item label="Numéro de téléphone (affiché)" name="phoneNumber">
+        <Input placeholder="+32 XXX XX XX XX" />
+      </Form.Item>
+
+      <Form.Item label="Couleur de fond" name="backgroundColor">
+        <ColorPicker format="hex" showText />
+      </Form.Item>
+
+      <Form.Item label="Couleur du texte" name="textColor">
+        <ColorPicker format="hex" showText />
+      </Form.Item>
+
+      <Form.Item>
+        <Space>
+          <Button type="primary" htmlType="submit">
+            Sauvegarder
+          </Button>
+          <Button onClick={onCancel}>
+            Annuler
+          </Button>
+        </Space>
+      </Form.Item>
+    
+
+      {/* ASSISTANT IA */}
+      {showAI && (
+        <AIAssistant
+          visible={showAI}
+          onClose={() => setShowAI(false)}
+          context={aiContext}
+          sectionType="cta"
+          currentValue={aiCurrentValue}
+          onApply={(value) => {
+            form.setFieldsValue({ [aiContext]: value });
+            setShowAI(false);
+          }}
+        />
+      )}
+    </Form>
+  );
+};

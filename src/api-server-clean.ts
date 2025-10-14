@@ -13,6 +13,24 @@ import apiRouter from './routes/index';
 // 🔥 ROUTES TBL SPÉCIALISÉES
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
 
+// 🌐 ROUTES GESTION SITES WEB
+// 🔄 FORCE RELOAD - Timestamp: 2025-10-09 20:05
+import websitesRouter from './api/websites';
+
+// 🌐 ROUTES CRUD CONTENU SITES WEB
+import websiteServicesRouter from './api/website-services';
+import websiteProjectsRouter from './api/website-projects';
+import websiteTestimonialsRouter from './api/website-testimonials';
+import websiteSectionsRouter from './api/website-sections';
+import websiteThemesRouter from './api/website-themes';
+import contactFormRouter from './api/contact-form';
+import imageUploadRouter from './api/image-upload';
+
+// 🤖 ROUTES GÉNÉRATION CONTENU IA
+import aiContentRouter from './api/ai-content';
+import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
+import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
+
 // 🛡️ IMPORTS SÉCURITÉ ENTERPRISE
 import { securityLogger, logSecurityEvent } from './security/securityLogger';
 import { 
@@ -158,6 +176,11 @@ app.use(session({
 
 console.log('✅ [ENTERPRISE-SECURITY] Configuration sécurité niveau Enterprise activée');
 
+// 📸 Servir les fichiers uploadés en statique
+const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
+app.use('/uploads', express.static(uploadsDir));
+console.log('📸 [UPLOADS] Dossier uploads configuré:', uploadsDir);
+
 // Configuration Passport
 console.log('🔧 [API-SERVER-CLEAN] Configuration Passport...');
 app.use(passport.initialize());
@@ -169,6 +192,17 @@ console.log('🔧 [API-SERVER-CLEAN] Configuration des routes...');
 // Limiteur spécialisé auth uniquement sur bloc /api/auth
 app.use('/api/auth', authRateLimit);
 app.use('/api', apiRouter); // Utilise TOUTES les routes existantes !
+app.use('/api', websitesRouter); // 🌐 GESTION DES SITES WEB (Site Vitrine, Devis1Minute)
+app.use('/api', websiteServicesRouter); // 🌐 CRUD SERVICES
+app.use('/api', websiteProjectsRouter); // 🌐 CRUD PROJECTS
+app.use('/api', websiteTestimonialsRouter); // 🌐 CRUD TESTIMONIALS
+app.use('/api', websiteSectionsRouter); // 🎨 CRUD SECTIONS (PAGE BUILDER)
+app.use('/api/website-themes', websiteThemesRouter); // 🎨 GESTION THÈMES SITES WEB
+app.use('/api/ai-content', aiContentRouter); // 🤖 GÉNÉRATION CONTENU IA (Gemini)
+app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE (generate-field, status)
+app.use('/api/ai', aiRouter); // 🤖 GEMINI AI (suggestions, optimisations)
+app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
+app.use('/api', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 console.log('✅ [API-SERVER-CLEAN] Routes configurées');
 

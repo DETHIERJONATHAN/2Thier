@@ -577,7 +577,7 @@ const UsersAdminPageNew: React.FC = () => {
     const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
 
     return (
-      <Card key={user.id} size="small" bodyStyle={{ padding: 16 }}>
+      <Card key={user.id} size="small" styles={{ body: { padding: 16 } }}>
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <Text strong style={{ fontSize: 16 }}>{fullName || user.email}</Text>
@@ -729,7 +729,7 @@ const UsersAdminPageNew: React.FC = () => {
     const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
 
     return (
-      <Card key={`free-${user.id}`} size="small" bodyStyle={{ padding: 16 }}>
+      <Card key={`free-${user.id}`} size="small" styles={{ body: { padding: 16 } }}>
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <Text strong>{fullName || user.email}</Text>
@@ -777,7 +777,7 @@ const UsersAdminPageNew: React.FC = () => {
   };
 
   const renderInvitationMobileCard = (invitation: UiInvitation) => (
-    <Card key={`invite-${invitation.id}`} size="small" bodyStyle={{ padding: 16 }}>
+    <Card key={`invite-${invitation.id}`} size="small" styles={{ body: { padding: 16 } }}>
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <Text strong>{invitation.email}</Text>

@@ -17,7 +17,6 @@ import {
 } from './formulaEngine.js';
 import { evaluateFormulaOrchestrated } from './evaluation/orchestrator.js';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { TBLOrchestrator } from '../TBL-prisma/index.js';
 // import { authenticateToken } from '../../../../middleware/auth'; // Temporairement désactivé
 import { 
   validateParentChildRelation, 
@@ -2818,7 +2817,7 @@ router.get('/reusables/formulas', async (req, res) => {
     const allFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
       where: whereFilter,
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true
@@ -2832,8 +2831,8 @@ router.get('/reusables/formulas', async (req, res) => {
     const items = allFormulas.map(f => ({
       ...f,
       type: 'node',
-      nodeLabel: f.node?.label || 'Nœud inconnu',
-      treeId: f.node?.treeId || null
+      nodeLabel: f.TreeBranchLeafNode?.label || 'Nœud inconnu',
+      treeId: f.TreeBranchLeafNode?.treeId || null
     }));
 
   console.log('[TreeBranchLeaf API] All formulas listing', { 
@@ -2858,7 +2857,7 @@ router.get('/reusables/formulas/:id', async (req, res) => {
     const item = await prisma.treeBranchLeafNodeFormula.findUnique({ 
       where: { id },
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true
@@ -2879,8 +2878,8 @@ router.get('/reusables/formulas/:id', async (req, res) => {
     return res.json({
       ...item,
       type: 'node',
-      nodeLabel: item.node?.label || 'Nœud inconnu',
-      treeId: item.node?.treeId || null
+      nodeLabel: item.TreeBranchLeafNode?.label || 'Nœud inconnu',
+      treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting formula:', error);
@@ -2912,7 +2911,7 @@ router.get('/reusables/conditions', async (req, res) => {
     const allConditions = await prisma.treeBranchLeafNodeCondition.findMany({
       where: whereFilter,
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true
@@ -2926,8 +2925,8 @@ router.get('/reusables/conditions', async (req, res) => {
     const items = allConditions.map(c => ({
       ...c,
       type: 'node',
-      nodeLabel: c.node?.label || 'Nœud inconnu',
-      treeId: c.node?.treeId || null,
+      nodeLabel: c.TreeBranchLeafNode?.label || 'Nœud inconnu',
+      treeId: c.TreeBranchLeafNode?.treeId || null,
       nodeId: c.nodeId
     }));
 
@@ -2954,7 +2953,7 @@ router.get('/reusables/conditions/:id', async (req, res) => {
     const item = await prisma.treeBranchLeafNodeCondition.findUnique({ 
       where: { id },
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true
@@ -2975,8 +2974,8 @@ router.get('/reusables/conditions/:id', async (req, res) => {
     return res.json({
       ...item,
       type: 'node',
-      nodeLabel: item.node?.label || 'Nœud inconnu',
-      treeId: item.node?.treeId || null
+      nodeLabel: item.TreeBranchLeafNode?.label || 'Nœud inconnu',
+      treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting condition:', error);
@@ -2995,18 +2994,16 @@ router.get('/reusables/tables', async (req, res) => {
     const whereFilter = isSuperAdmin
       ? {}
       : {
-          node: {
-            OR: [
-              { organizationId: null },
-              ...(hasOrg ? [{ organizationId }] : [])
-            ]
-          }
+          OR: [
+            { organizationId: null },
+            ...(hasOrg ? [{ organizationId }] : [])
+          ]
         };
 
     const allTables = await prisma.treeBranchLeafNodeTable.findMany({
       where: whereFilter,
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true
@@ -3022,8 +3019,8 @@ router.get('/reusables/tables', async (req, res) => {
       name: t.name,
       type: t.type,
       description: t.description,
-      nodeLabel: t.node?.label || 'Nœud inconnu',
-      treeId: t.node?.treeId || null,
+      nodeLabel: t.TreeBranchLeafNode?.label || 'Nœud inconnu',
+      treeId: t.TreeBranchLeafNode?.treeId || null,
       nodeId: t.nodeId,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt
@@ -3102,7 +3099,7 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
     const condition = await prisma.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true
@@ -3146,7 +3143,7 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
       const result = {
         conditionId: condition.id,
         conditionName: condition.name,
-        nodeLabel: condition.node?.label || 'Nœud inconnu',
+        nodeLabel: condition.TreeBranchLeafNode?.label || 'Nœud inconnu',
         operationSource: calculationResult.operationSource,
         operationDetail: calculationResult.operationDetail,
         operationResult: calculationResult.operationResult,
@@ -4308,7 +4305,7 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
     const formula = await prisma.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true,
@@ -4325,7 +4322,7 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
     }
 
     // Vérifier l'accès organisation
-    const nodeOrg = formula.node?.TreeBranchLeafTree?.organizationId;
+    const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
       return res.status(403).json({ error: 'Accès refusé à cette formule' });
     }
@@ -4771,7 +4768,7 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
       const responseData = {
         formulaId: formula.id,
         formulaName: formula.name,
-        nodeLabel: formula.node?.label || 'Nœud inconnu',
+        nodeLabel: formula.TreeBranchLeafNode?.label || 'Nœud inconnu',
         evaluation: {
           success: result !== null,
           result: result,
@@ -4881,7 +4878,7 @@ router.post('/evaluate/batch', async (req, res) => {
         const formula = await prisma.treeBranchLeafNodeFormula.findUnique({
           where: { id: formulaId },
           include: {
-            node: {
+            TreeBranchLeafNode: {
               select: {
                 label: true,
                 treeId: true,
@@ -4903,7 +4900,7 @@ router.post('/evaluate/batch', async (req, res) => {
         }
 
         // Vérifier l'accès organisation
-        const nodeOrg = formula.node?.TreeBranchLeafTree?.organizationId;
+        const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
         if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
           results.push({
             formulaId,
@@ -4982,7 +4979,7 @@ router.post('/evaluate/batch', async (req, res) => {
         results.push({
           formulaId: formula.id,
           formulaName: formula.name,
-          nodeLabel: formula.node?.label || 'Nœud inconnu',
+          nodeLabel: formula.TreeBranchLeafNode?.label || 'Nœud inconnu',
           success: true,
           evaluation: {
             success: result !== null,
@@ -5084,7 +5081,7 @@ router.get('/conditions/:conditionId', async (req, res) => {
     const condition = await prisma.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true,
@@ -5102,7 +5099,7 @@ router.get('/conditions/:conditionId', async (req, res) => {
     }
 
     // Vérifier l'accès organisation
-    const nodeOrg = condition.node?.TreeBranchLeafTree?.organizationId;
+    const nodeOrg = condition.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
       console.log(`[TreeBranchLeaf API] ❌ Accès refusé à condition ${conditionId} (org: ${nodeOrg} vs ${organizationId})`);
       return res.status(403).json({ error: 'Accès refusé à cette condition' });
@@ -5129,7 +5126,7 @@ router.get('/formulas/:formulaId', async (req, res) => {
     const formula = await prisma.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
-        node: {
+        TreeBranchLeafNode: {
           select: {
             label: true,
             treeId: true,
@@ -5147,7 +5144,7 @@ router.get('/formulas/:formulaId', async (req, res) => {
     }
 
     // Vérifier l'accès organisation
-    const nodeOrg = formula.node?.TreeBranchLeafTree?.organizationId;
+    const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
       console.log(`[TreeBranchLeaf API] ❌ Accès refusé à formule ${formulaId} (org: ${nodeOrg} vs ${organizationId})`);
       return res.status(403).json({ error: 'Accès refusé à cette formule' });
@@ -5226,7 +5223,7 @@ router.get('/submissions', async (req, res) => {
             company: true
           }
         },
-        User: {
+        User_TreeBranchLeafSubmission_userIdToUser: {
           select: {
             id: true,
             email: true,
@@ -7755,6 +7752,799 @@ router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 📤 FIN DU SYSTÈME UNIVERSEL V2
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💾 SYSTÈME DE SAUVEGARDE TBL AVANCÉ - Brouillons & Versioning
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * 🎯 POST /api/tbl/submissions/stage
+ * Crée ou met à jour un brouillon temporaire (stage)
+ * TTL: 24h - Auto-renouvelé lors des modifications
+ */
+router.post('/submissions/stage', async (req, res) => {
+  try {
+    const { stageId, treeId, submissionId, leadId, formData, baseVersion } = req.body;
+    const userId = (req as any).user?.id || 'system';
+
+    console.log('📝 [STAGE] Création/Update brouillon:', { stageId, treeId, submissionId, leadId, userId });
+
+    // Calculer expiration (+24h)
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    let stage;
+
+    if (stageId) {
+      // Mise à jour d'un stage existant
+      stage = await prisma.treeBranchLeafStage.update({
+        where: { id: stageId },
+        data: {
+          formData: formData || {},
+          lastActivity: new Date(),
+          expiresAt, // Renouvelle l'expiration
+        }
+      });
+      console.log('✅ [STAGE] Brouillon mis à jour:', stage.id);
+    } else {
+      // Création d'un nouveau stage
+      if (!treeId || !leadId) {
+        return res.status(400).json({
+          success: false,
+          error: 'treeId et leadId sont requis pour créer un stage'
+        });
+      }
+
+      // Récupérer la version de base si submissionId fourni
+      let currentBaseVersion = baseVersion || 1;
+      if (submissionId && !baseVersion) {
+        const submission = await prisma.treeBranchLeafSubmission.findUnique({
+          where: { id: submissionId },
+          select: { currentVersion: true }
+        });
+        currentBaseVersion = submission?.currentVersion || 1;
+      }
+
+      stage = await prisma.treeBranchLeafStage.create({
+        data: {
+          id: randomUUID(),
+          treeId,
+          submissionId,
+          leadId,
+          userId,
+          formData: formData || {},
+          baseVersion: currentBaseVersion,
+          expiresAt
+        }
+      });
+      console.log('✅ [STAGE] Nouveau brouillon créé:', stage.id);
+    }
+
+    return res.json({
+      success: true,
+      stage: {
+        id: stage.id,
+        expiresAt: stage.expiresAt,
+        lastActivity: stage.lastActivity
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [STAGE] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la gestion du brouillon',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * 🔍 POST /api/tbl/submissions/stage/preview
+ * Prévisualise les calculs d'un stage sans sauvegarder
+ * Utilise operation-interpreter pour évaluer toutes les formules
+ */
+router.post('/submissions/stage/preview', async (req, res) => {
+  try {
+    const { stageId } = req.body;
+
+    if (!stageId) {
+      return res.status(400).json({
+        success: false,
+        error: 'stageId requis'
+      });
+    }
+
+    console.log('🔍 [STAGE PREVIEW] Prévisualisation pour:', stageId);
+
+    // Récupérer le stage
+    const stage = await prisma.treeBranchLeafStage.findUnique({
+      where: { id: stageId }
+    });
+
+    if (!stage) {
+      return res.status(404).json({
+        success: false,
+        error: 'Stage non trouvé'
+      });
+    }
+
+    // ✨ Évaluer tous les nœuds variables avec operation-interpreter
+    const { evaluateVariableOperation } = await import('./operation-interpreter');
+    
+    // Récupérer tous les nœuds variables de l'arbre
+    const variableNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { 
+        treeId: stage.treeId,
+        subType: 'variable'
+      },
+      select: { id: true, label: true }
+    });
+
+    // Créer une valueMap à partir du formData du stage
+    const valueMapLocal = new Map<string, unknown>();
+    Object.entries(stage.formData as Record<string, unknown>).forEach(([nodeId, value]) => {
+      valueMapLocal.set(nodeId, value);
+    });
+
+    // Évaluer chaque variable
+    const results = await Promise.all(
+      variableNodes.map(async (node) => {
+        try {
+          const evalResult = await evaluateVariableOperation(
+            node.id,
+            stage.submissionId || stage.id,
+            prisma,
+            valueMapLocal
+          );
+          return {
+            nodeId: node.id,
+            nodeLabel: node.label,
+            sourceRef: evalResult.sourceRef,
+            operationSource: evalResult.operationSource,
+            operationResult: evalResult.operationResult,
+            operationDetail: evalResult.operationDetail
+          };
+        } catch (error) {
+          console.error(`❌ Erreur évaluation ${node.id}:`, error);
+          return {
+            nodeId: node.id,
+            nodeLabel: node.label,
+            sourceRef: '',
+            operationSource: 'field' as const,
+            operationResult: 'ERROR',
+            operationDetail: null
+          };
+        }
+      })
+    );
+
+    console.log('✅ [STAGE PREVIEW] Résultats:', results.length, 'noeuds évalués');
+
+    return res.json({
+      success: true,
+      stageId: stage.id,
+      results: results.map(r => ({
+        nodeId: r.nodeId,
+        nodeLabel: r.nodeLabel,
+        sourceRef: r.sourceRef,
+        operationSource: r.operationSource,
+        operationResult: r.operationResult,
+        operationDetail: r.operationDetail
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ [STAGE PREVIEW] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la prévisualisation',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * 💾 POST /api/tbl/submissions/stage/commit
+ * Commit un stage vers une submission définitive
+ * Gère les conflits multi-utilisateurs et le versioning
+ */
+router.post('/submissions/stage/commit', async (req, res) => {
+  try {
+    const { stageId, asNew } = req.body;
+    const userId = (req as any).user?.id || 'system';
+
+    if (!stageId) {
+      return res.status(400).json({
+        success: false,
+        error: 'stageId requis'
+      });
+    }
+
+    console.log('💾 [STAGE COMMIT] Commit brouillon:', { stageId, asNew, userId });
+
+    // Récupérer le stage
+    const stage = await prisma.treeBranchLeafStage.findUnique({
+      where: { id: stageId }
+    });
+
+    if (!stage) {
+      return res.status(404).json({
+        success: false,
+        error: 'Stage non trouvé'
+      });
+    }
+
+    // Vérifier si le stage n'a pas expiré
+    if (stage.expiresAt < new Date()) {
+      return res.status(410).json({
+        success: false,
+        error: 'Ce brouillon a expiré',
+        expired: true
+      });
+    }
+
+    let submissionId: string;
+    let newVersion = 1;
+
+    if (asNew || !stage.submissionId) {
+      // ═══ CRÉATION NOUVELLE SUBMISSION ═══
+      console.log('🆕 [STAGE COMMIT] Création nouvelle submission');
+
+      // ✨ Évaluer avec operation-interpreter
+      const { evaluateVariableOperation } = await import('./operation-interpreter');
+      
+      // Récupérer tous les nœuds variables de l'arbre
+      const variableNodes = await prisma.treeBranchLeafNode.findMany({
+        where: { 
+          treeId: stage.treeId,
+          subType: 'variable'
+        },
+        select: { id: true, label: true }
+      });
+
+      // Créer une valueMap à partir du formData du stage
+      const valueMapLocal = new Map<string, unknown>();
+      Object.entries(stage.formData as Record<string, unknown>).forEach(([nodeId, value]) => {
+        valueMapLocal.set(nodeId, value);
+      });
+
+      // Évaluer chaque variable
+      const results = await Promise.all(
+        variableNodes.map(async (node) => {
+          try {
+            const evalResult = await evaluateVariableOperation(
+              node.id,
+              stage.id,
+              prisma,
+              valueMapLocal
+            );
+            return {
+              nodeId: node.id,
+              nodeLabel: node.label,
+              value: evalResult.value,
+              operationSource: evalResult.operationSource,
+              operationResult: evalResult.operationResult,
+              operationDetail: evalResult.operationDetail
+            };
+          } catch (error) {
+            console.error(`❌ Erreur évaluation ${node.id}:`, error);
+            return null;
+          }
+        })
+      ).then(res => res.filter(r => r !== null));
+
+      // Créer la submission dans une transaction
+      const result = await prisma.$transaction(async (tx) => {
+        // Créer la submission
+        const submission = await tx.treeBranchLeafSubmission.create({
+          data: {
+            id: randomUUID(),
+            treeId: stage.treeId,
+            userId: stage.userId,
+            leadId: stage.leadId,
+            status: 'draft',
+            currentVersion: 1,
+            lastEditedBy: userId,
+            summary: {},
+            updatedAt: new Date()
+          }
+        });
+
+        // Créer les données de soumission
+        if (results.length > 0) {
+          await tx.treeBranchLeafSubmissionData.createMany({
+            data: results.map(r => ({
+              id: randomUUID(),
+              submissionId: submission.id,
+              nodeId: r.nodeId,
+              value: String(r.operationResult || ''),
+              fieldLabel: r.nodeLabel,
+              sourceRef: r.sourceRef,
+              operationSource: r.operationSource,
+              operationResult: r.operationResult as Prisma.JsonValue,
+              operationDetail: r.operationDetail as Prisma.JsonValue,
+              lastResolved: new Date()
+            }))
+          });
+        }
+
+        // Créer la première version
+        await tx.treeBranchLeafSubmissionVersion.create({
+          data: {
+            id: randomUUID(),
+            submissionId: submission.id,
+            version: 1,
+            formData: stage.formData,
+            summary: 'Version initiale',
+            createdBy: userId
+          }
+        });
+
+        // Supprimer le stage
+        await tx.treeBranchLeafStage.delete({
+          where: { id: stageId }
+        });
+
+        return submission;
+      });
+
+      submissionId = result.id;
+      newVersion = 1;
+
+      console.log('✅ [STAGE COMMIT] Nouvelle submission créée:', submissionId);
+
+    } else {
+      // ═══ MISE À JOUR SUBMISSION EXISTANTE ═══
+      console.log('🔄 [STAGE COMMIT] Mise à jour submission existante:', stage.submissionId);
+
+      // Récupérer la submission actuelle
+      const currentSubmission = await prisma.treeBranchLeafSubmission.findUnique({
+        where: { id: stage.submissionId },
+        select: {
+          id: true,
+          currentVersion: true,
+          lastEditedBy: true,
+          updatedAt: true,
+          lockedBy: true,
+          lockedAt: true
+        }
+      });
+
+      if (!currentSubmission) {
+        return res.status(404).json({
+          success: false,
+          error: 'Submission originale non trouvée'
+        });
+      }
+
+      // ═══ DÉTECTION CONFLITS ═══
+      if (currentSubmission.currentVersion > stage.baseVersion) {
+        console.log('⚠️ [STAGE COMMIT] Conflit détecté!', {
+          baseVersion: stage.baseVersion,
+          currentVersion: currentSubmission.currentVersion
+        });
+
+        // Récupérer les données actuelles pour comparaison
+        const currentData = await prisma.treeBranchLeafSubmissionData.findMany({
+          where: { submissionId: stage.submissionId },
+          select: { nodeId: true, value: true }
+        });
+
+        const currentDataMap = new Map(currentData.map(d => [d.nodeId, d.value]));
+        const stageFormData = stage.formData as Record<string, unknown>;
+
+        // Détecter les conflits champ par champ
+        const conflicts = [];
+        for (const [nodeId, stageValue] of Object.entries(stageFormData)) {
+          const currentValue = currentDataMap.get(nodeId);
+          // Conflit si la valeur a changé des deux côtés
+          if (currentValue !== undefined && String(stageValue) !== currentValue) {
+            conflicts.push({
+              nodeId,
+              yourValue: stageValue,
+              theirValue: currentValue
+            });
+          }
+        }
+
+        if (conflicts.length > 0) {
+          console.log('❌ [STAGE COMMIT] Conflits à résoudre:', conflicts.length);
+          return res.status(409).json({
+            success: false,
+            conflict: true,
+            conflicts,
+            lastEditedBy: currentSubmission.lastEditedBy,
+            lastEditedAt: currentSubmission.updatedAt,
+            message: 'Des modifications ont été faites par un autre utilisateur'
+          });
+        }
+
+        console.log('✅ [STAGE COMMIT] Pas de conflit réel - merge automatique');
+      }
+
+      // Vérifier le verrouillage
+      if (currentSubmission.lockedBy && currentSubmission.lockedBy !== userId) {
+        const lockAge = currentSubmission.lockedAt ? 
+          Date.now() - new Date(currentSubmission.lockedAt).getTime() : 0;
+        
+        // Lock expire après 1h
+        if (lockAge < 60 * 60 * 1000) {
+          return res.status(423).json({
+            success: false,
+            locked: true,
+            lockedBy: currentSubmission.lockedBy,
+            message: 'Ce devis est en cours d\'édition par un autre utilisateur'
+          });
+        }
+      }
+
+      // ═══ COMMIT AVEC VERSIONING ═══
+      const result = await prisma.$transaction(async (tx) => {
+        // ✨ Évaluer avec operation-interpreter
+        const { evaluateVariableOperation } = await import('./operation-interpreter');
+        
+        // Récupérer tous les nœuds variables de l'arbre
+        const variableNodes = await tx.treeBranchLeafNode.findMany({
+          where: { 
+            treeId: stage.treeId,
+            subType: 'variable'
+          },
+          select: { id: true, label: true }
+        });
+
+        // Créer une valueMap à partir du formData du stage
+        const valueMapLocal = new Map<string, unknown>();
+        Object.entries(stage.formData as Record<string, unknown>).forEach(([nodeId, value]) => {
+          valueMapLocal.set(nodeId, value);
+        });
+
+        // Évaluer chaque variable
+        const results = await Promise.all(
+          variableNodes.map(async (node) => {
+            try {
+              const evalResult = await evaluateVariableOperation(
+                node.id,
+                stage.submissionId!,
+                tx as any,
+                valueMapLocal
+              );
+              return {
+                nodeId: node.id,
+                nodeLabel: node.label,
+                value: evalResult.value,
+                operationSource: evalResult.operationSource,
+                operationResult: evalResult.operationResult,
+                operationDetail: evalResult.operationDetail
+              };
+            } catch (error) {
+              console.error(`❌ Erreur évaluation ${node.id}:`, error);
+              return null;
+            }
+          })
+        ).then(res => res.filter(r => r !== null));
+
+        const nextVersion = currentSubmission.currentVersion + 1;
+
+        // Mettre à jour la submission
+        const updated = await tx.treeBranchLeafSubmission.update({
+          where: { id: stage.submissionId },
+          data: {
+            currentVersion: nextVersion,
+            lastEditedBy: userId,
+            lockedBy: null, // Libérer le lock
+            lockedAt: null,
+            updatedAt: new Date()
+          }
+        });
+
+        // Supprimer les anciennes données
+        await tx.treeBranchLeafSubmissionData.deleteMany({
+          where: { submissionId: stage.submissionId }
+        });
+
+        // Créer les nouvelles données
+        if (results.length > 0) {
+          await tx.treeBranchLeafSubmissionData.createMany({
+            data: results.map(r => ({
+              id: randomUUID(),
+              submissionId: updated.id,
+              nodeId: r.nodeId,
+              value: String(r.operationResult || ''),
+              fieldLabel: r.nodeLabel,
+              sourceRef: r.sourceRef,
+              operationSource: r.operationSource,
+              operationResult: r.operationResult as Prisma.JsonValue,
+              operationDetail: r.operationDetail as Prisma.JsonValue,
+              lastResolved: new Date()
+            }))
+          });
+        }
+
+        // Créer la nouvelle version
+        await tx.treeBranchLeafSubmissionVersion.create({
+          data: {
+            id: randomUUID(),
+            submissionId: updated.id,
+            version: nextVersion,
+            formData: stage.formData,
+            createdBy: userId
+          }
+        });
+
+        // Nettoyer les vieilles versions (garder 20 dernières)
+        const versions = await tx.treeBranchLeafSubmissionVersion.findMany({
+          where: { submissionId: updated.id },
+          orderBy: { version: 'desc' },
+          skip: 20,
+          select: { id: true }
+        });
+
+        if (versions.length > 0) {
+          await tx.treeBranchLeafSubmissionVersion.deleteMany({
+            where: { id: { in: versions.map(v => v.id) } }
+          });
+          console.log(`🗑️ [STAGE COMMIT] ${versions.length} anciennes versions supprimées`);
+        }
+
+        // Supprimer le stage
+        await tx.treeBranchLeafStage.delete({
+          where: { id: stageId }
+        });
+
+        return { submission: updated, version: nextVersion };
+      });
+
+      submissionId = result.submission.id;
+      newVersion = result.version;
+
+      console.log('✅ [STAGE COMMIT] Submission mise à jour:', submissionId, 'v' + newVersion);
+    }
+
+    return res.json({
+      success: true,
+      submissionId,
+      version: newVersion,
+      message: 'Devis enregistré avec succès'
+    });
+
+  } catch (error) {
+    console.error('❌ [STAGE COMMIT] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la sauvegarde',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * 🗑️ POST /api/tbl/submissions/stage/discard
+ * Supprime un brouillon (annulation)
+ */
+router.post('/submissions/stage/discard', async (req, res) => {
+  try {
+    const { stageId } = req.body;
+
+    if (!stageId) {
+      return res.status(400).json({
+        success: false,
+        error: 'stageId requis'
+      });
+    }
+
+    console.log('🗑️ [STAGE DISCARD] Suppression brouillon:', stageId);
+
+    await prisma.treeBranchLeafStage.delete({
+      where: { id: stageId }
+    });
+
+    console.log('✅ [STAGE DISCARD] Brouillon supprimé');
+
+    return res.json({
+      success: true,
+      message: 'Brouillon supprimé'
+    });
+
+  } catch (error) {
+    console.error('❌ [STAGE DISCARD] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la suppression du brouillon',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * 📋 GET /api/tbl/submissions/my-drafts
+ * Récupère les brouillons non sauvegardés de l'utilisateur
+ * Pour récupération automatique au retour
+ */
+router.get('/submissions/my-drafts', async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 'system';
+    const { leadId, treeId } = req.query;
+
+    console.log('📋 [MY DRAFTS] Récupération brouillons:', { userId, leadId, treeId });
+
+    const where: any = {
+      userId,
+      expiresAt: { gt: new Date() } // Seulement les non-expirés
+    };
+
+    if (leadId) where.leadId = leadId;
+    if (treeId) where.treeId = treeId;
+
+    const drafts = await prisma.treeBranchLeafStage.findMany({
+      where,
+      orderBy: { lastActivity: 'desc' },
+      include: {
+        Lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            company: true
+          }
+        }
+      }
+    });
+
+    console.log('✅ [MY DRAFTS] Trouvé:', drafts.length, 'brouillons');
+
+    return res.json({
+      success: true,
+      drafts: drafts.map(d => ({
+        stageId: d.id,
+        treeId: d.treeId,
+        submissionId: d.submissionId,
+        leadId: d.leadId,
+        leadName: d.Lead ? 
+          `${d.Lead.firstName || ''} ${d.Lead.lastName || ''}`.trim() || d.Lead.company || 'Lead' 
+          : 'Lead',
+        lastActivity: d.lastActivity,
+        expiresAt: d.expiresAt,
+        formData: d.formData
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ [MY DRAFTS] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des brouillons',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * 📜 GET /api/tbl/submissions/:id/versions
+ * Récupère l'historique des versions d'une submission
+ */
+router.get('/submissions/:id/versions', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('📜 [VERSIONS] Récupération historique:', id);
+
+    const versions = await prisma.treeBranchLeafSubmissionVersion.findMany({
+      where: { submissionId: id },
+      orderBy: { version: 'desc' },
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    console.log('✅ [VERSIONS] Trouvé:', versions.length, 'versions');
+
+    return res.json({
+      success: true,
+      submissionId: id,
+      versions: versions.map(v => ({
+        id: v.id,
+        version: v.version,
+        summary: v.summary,
+        createdAt: v.createdAt,
+        createdBy: {
+          id: v.User.id,
+          name: `${v.User.firstName || ''} ${v.User.lastName || ''}`.trim() || v.User.email
+        }
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ [VERSIONS] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération de l\'historique',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+/**
+ * 🔙 POST /api/tbl/submissions/:id/restore/:version
+ * Restaure une version antérieure d'une submission
+ */
+router.post('/submissions/:id/restore/:version', async (req, res) => {
+  try {
+    const { id, version } = req.params;
+    const userId = (req as any).user?.id || 'system';
+
+    console.log('🔙 [RESTORE] Restauration version:', { id, version, userId });
+
+    // Récupérer la version à restaurer
+    const versionToRestore = await prisma.treeBranchLeafSubmissionVersion.findUnique({
+      where: {
+        submissionId_version: {
+          submissionId: id,
+          version: parseInt(version)
+        }
+      }
+    });
+
+    if (!versionToRestore) {
+      return res.status(404).json({
+        success: false,
+        error: 'Version non trouvée'
+      });
+    }
+
+    // Créer un stage avec les données de cette version
+    const submission = await prisma.treeBranchLeafSubmission.findUnique({
+      where: { id },
+      select: { treeId: true, leadId: true, currentVersion: true }
+    });
+
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        error: 'Submission non trouvée'
+      });
+    }
+
+    const stage = await prisma.treeBranchLeafStage.create({
+      data: {
+        id: randomUUID(),
+        treeId: submission.treeId,
+        submissionId: id,
+        leadId: submission.leadId || 'unknown',
+        userId,
+        formData: versionToRestore.formData,
+        baseVersion: submission.currentVersion,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      }
+    });
+
+    console.log('✅ [RESTORE] Stage créé pour restauration:', stage.id);
+
+    return res.json({
+      success: true,
+      stageId: stage.id,
+      message: `Version ${version} chargée en brouillon. Enregistrez pour confirmer la restauration.`
+    });
+
+  } catch (error) {
+    console.error('❌ [RESTORE] Erreur:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la restauration',
+      details: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💾 FIN DU SYSTÈME DE SAUVEGARDE TBL AVANCÉ
 // ═══════════════════════════════════════════════════════════════════════════
 
 export default router;
