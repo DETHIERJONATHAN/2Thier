@@ -21,9 +21,6 @@ import {
 } from 'antd';
 import {
   PlusOutlined,
-  SaveOutlined,
-  EyeOutlined,
-  MoreOutlined,
   EditOutlined,
   CopyOutlined,
   ExportOutlined,
@@ -220,7 +217,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
     await onAction('duplicate');
   }, [onAction, tree]);
 
-  const handleSave = useCallback(() => {
+  const _handleSave = useCallback(() => {
     if (!tree) {
       console.warn('🌳 [TreeManager] handleSave without tree');
       return;
@@ -234,7 +231,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
     }
   }, [onAction, onSave, tree]);
 
-  const handlePreview = useCallback(() => {
+  const _handlePreview = useCallback(() => {
     if (!tree) {
       message.warning('Aucun arbre sélectionné pour l\'aperçu');
       return;
@@ -284,7 +281,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
     };
   }, [actionsMenuOpen]);
 
-  const treeMenuItems = useMemo(() => ([
+  const _treeMenuItems = useMemo(() => ([
     {
       key: 'edit',
       label: 'Modifier',
@@ -395,111 +392,6 @@ const TreeManager: React.FC<TreeManagerProps> = ({
               Nouveau
             </Button>
           </Tooltip>
-
-          {tree && (
-            <>
-              <Tooltip title="Sauvegarder les modifications">
-                <Button
-                  icon={<SaveOutlined />}
-                  size="middle"
-                  onClick={handleSave}
-                  disabled={readOnly}
-                >
-                  Sauver
-                </Button>
-              </Tooltip>
-
-              <Tooltip title="Prévisualiser l'arbre">
-                <Button icon={<EyeOutlined />} size="middle" onClick={handlePreview}>
-                  Aperçu
-                </Button>
-              </Tooltip>
-
-              <div style={{ position: 'relative' }}>
-                <Button
-                  ref={actionsTriggerRef}
-                  icon={<MoreOutlined />}
-                  size="middle"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    // console.log('🌳 [TreeManager] trigger click -> toggling menu');
-                    setActionsMenuOpen((open) => !open);
-                  }}
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                />
-                {actionsMenuOpen && (
-                  <div
-                    ref={actionsMenuRef}
-                    style={{
-                      position: 'absolute',
-                      top: '110%',
-                      right: 0,
-                      background: '#fff',
-                      border: '1px solid #d9d9d9',
-                      borderRadius: 6,
-                      boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
-                      padding: '4px 0',
-                      minWidth: 200,
-                      zIndex: 2000
-                    }}
-                  >
-                    {treeMenuItems.map((item, index) => {
-                      if ('type' in item) {
-                        return (
-                          <div
-                            key={`divider-${index}`}
-                            style={{
-                              height: 1,
-                              margin: '4px 0',
-                              backgroundColor: '#f0f0f0'
-                            }}
-                          />
-                        );
-                      }
-
-                      const { key, icon, label, disabled, danger, onClick } = item;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => {
-                            // console.log('🌳 [TreeManager] menu click', key);
-                            setActionsMenuOpen(false);
-                            if (!disabled) {
-                              onClick?.();
-                            }
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            width: '100%',
-                            padding: '6px 12px',
-                            gap: 8,
-                            background: 'transparent',
-                            border: 'none',
-                            color: danger ? '#ff4d4f' : disabled ? '#aaa' : '#333',
-                            fontSize: 13,
-                            cursor: disabled ? 'not-allowed' : 'pointer',
-                            textAlign: 'left'
-                          }}
-                        >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 14 }}>
-                            {icon}
-                          </span>
-                          <span style={{ flex: 1 }}>{label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
         </Space>
       </div>
 
