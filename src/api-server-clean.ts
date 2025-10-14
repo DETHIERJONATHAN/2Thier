@@ -31,6 +31,10 @@ import aiContentRouter from './api/ai-content';
 import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
 
+// 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
+import { detectWebsite } from './middleware/websiteDetection';
+import { renderWebsite } from './middleware/websiteRenderer';
+
 // 🛡️ IMPORTS SÉCURITÉ ENTERPRISE
 import { securityLogger, logSecurityEvent } from './security/securityLogger';
 import { 
@@ -213,7 +217,29 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// 🎯 Production: servir le frontend statique (dist) si présent
+// � MIDDLEWARE DE DÉTECTION AUTOMATIQUE DES SITES VITRINES
+// Doit être AVANT le serveur de fichiers statiques pour intercepter les domaines
+app.use(detectWebsite);
+
+// 🌐 ROUTE CATCH-ALL POUR SITES VITRINES
+// Si c'est un domaine de site vitrine, rendre le site en HTML
+app.get('*', (req: any, res, next) => {
+  // Si c'est une route API ou assets, passer au suivant
+  if (req.url.startsWith('/api/') || req.url.startsWith('/assets/') || req.url.startsWith('/health')) {
+    return next();
+  }
+  
+  // Si un site vitrine a été détecté, le rendre
+  if (req.isWebsiteRoute && req.websiteData) {
+    console.log(`🎨 [WEBSITE-RENDER] Rendu du site: ${req.websiteData.name}`);
+    return renderWebsite(req, res);
+  }
+  
+  // Sinon, continuer vers le serveur statique du CRM
+  next();
+});
+
+// �🎯 Production: servir le frontend statique (dist) si présent
 if (process.env.NODE_ENV === 'production') {
   const distDir = path.resolve(process.cwd(), 'dist');
   const indexHtml = path.join(distDir, 'index.html');
