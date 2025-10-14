@@ -86,7 +86,7 @@ export async function detectWebsite(
         config: true,
         sections: {
           where: { isActive: true },
-          orderBy: { order: 'asc' }
+          orderBy: { displayOrder: 'asc' }
         }
       }
     });
