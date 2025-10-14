@@ -46,14 +46,23 @@ export async function detectWebsite(
   next: NextFunction
 ) {
   try {
-    // 🌐 IMPORTANT: En production, Cloud Run utilise X-Forwarded-Host pour le domaine réel
+    // 🌐 DÉTECTER LE DOMAINE: utiliser plusieurs sources
+    // Cloud Run envoie le domaine dans req.hostname via les domain mappings
     const forwardedHost = req.headers['x-forwarded-host'] as string;
-    const hostname = forwardedHost || req.hostname || req.headers.host?.split(':')[0] || '';
+    const hostHeader = req.headers.host as string;
     
-    console.log(`🔍 [WEBSITE-DETECTION] X-Forwarded-Host: ${forwardedHost}, hostname: ${req.hostname}, host: ${req.headers.host}`);
+    // Priorité: X-Forwarded-Host > Host header > req.hostname
+    let hostname = forwardedHost || hostHeader || req.hostname || '';
+    
+    // Enlever le port si présent (ex: localhost:5173)
+    hostname = hostname.split(':')[0];
+    
+    console.log(`🔍 [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req.hostname}`);
+    console.log(`🔍 [WEBSITE-DETECTION] Domaine détecté: ${hostname}`);
     
     // Si c'est un domaine CRM, passer au suivant
     if (CRM_DOMAINS.some(crm => hostname.includes(crm))) {
+      console.log(`📱 [WEBSITE-DETECTION] Domaine CRM détecté: ${hostname}`);
       req.isWebsiteRoute = false;
       return next();
     }
@@ -61,7 +70,7 @@ export async function detectWebsite(
     // Nettoyer le hostname (enlever www. si présent)
     const cleanDomain = hostname.replace(/^www\./, '');
 
-    console.log(`🌐 [WEBSITE-DETECTION] Hostname détecté: ${hostname} → Domain: ${cleanDomain}`);
+    console.log(`🌐 [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
 
     // Chercher le site dans la base de données
     const website = await prisma.webSite.findFirst({
