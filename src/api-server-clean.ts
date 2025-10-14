@@ -32,7 +32,8 @@ import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
 
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
-import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
+import { detectWebsite } from './middleware/websiteDetection';
+import { renderWebsite } from './middleware/websiteRenderer';
 
 // 🛡️ IMPORTS SÉCURITÉ ENTERPRISE
 import { securityLogger, logSecurityEvent } from './security/securityLogger';
@@ -220,10 +221,7 @@ app.get('/health', (_req, res) => {
 // Doit être AVANT le serveur de fichiers statiques pour intercepter les domaines
 app.use(detectWebsite);
 
-// 🌐 INTERCEPTOR POUR SITES VITRINES (AVANT serveur statique)
-app.use(websiteInterceptor);
-
-// 🎯 Production: servir le frontend statique (dist) si présent
+//  Production: servir le frontend statique (dist) si présent
 if (process.env.NODE_ENV === 'production') {
   const distDir = path.resolve(process.cwd(), 'dist');
   const indexHtml = path.join(distDir, 'index.html');
@@ -241,8 +239,14 @@ if (process.env.NODE_ENV === 'production') {
       }
     }));
     // Fallback SPA: toutes les routes non-API et non-assets renvoient index.html
-    // Exclut /api/ et /assets/ pour éviter de servir index.html au lieu des fichiers statiques
-    app.get(/^(?!\/api\/|\/assets\/).*/, (_req, res) => {
+    // SAUF si c'est un site vitrine détecté (alors on rend le site SSR)
+    app.get(/^(?!\/api\/|\/assets\/).*/, (req: any, res, _next) => {
+      // 🌐 SI C'EST UN SITE VITRINE, RENDRE LE SITE AU LIEU DU CRM
+      if (req.isWebsiteRoute && req.websiteData) {
+        console.log(`🎨 [WEBSITE-RENDER] Site détecté: ${req.websiteData.name}, rendu SSR`);
+        return renderWebsite(req, res);
+      }
+      // Sinon, servir le CRM React
       res.sendFile(indexHtml);
     });
   } else {
