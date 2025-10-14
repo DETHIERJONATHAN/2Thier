@@ -46,8 +46,11 @@ export async function detectWebsite(
   next: NextFunction
 ) {
   try {
-    // Récupérer le hostname (ex: 2thier.be, devis1min.be)
-    const hostname = req.hostname || req.headers.host?.split(':')[0] || '';
+    // 🌐 IMPORTANT: En production, Cloud Run utilise X-Forwarded-Host pour le domaine réel
+    const forwardedHost = req.headers['x-forwarded-host'] as string;
+    const hostname = forwardedHost || req.hostname || req.headers.host?.split(':')[0] || '';
+    
+    console.log(`🔍 [WEBSITE-DETECTION] X-Forwarded-Host: ${forwardedHost}, hostname: ${req.hostname}, host: ${req.headers.host}`);
     
     // Si c'est un domaine CRM, passer au suivant
     if (CRM_DOMAINS.some(crm => hostname.includes(crm))) {
