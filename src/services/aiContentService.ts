@@ -3,7 +3,7 @@
  * Utilise Google Gemini pour créer du contenu optimisé
  */
 
-import { GoogleGeminiService } from './googleGeminiService';
+import { GoogleGeminiService } from './GoogleGeminiService';
 
 export interface ServiceContent {
   key: string;
