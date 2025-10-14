@@ -12,6 +12,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { renderWebsite } from './websiteRenderer';
 
 const prisma = new PrismaClient();
 
@@ -90,6 +91,9 @@ export async function detectWebsite(
         sections: website.sections
       };
       req.isWebsiteRoute = true;
+      
+      // 🌐 SI C'EST UN SITE VITRINE, NE PAS ROUTER, IGNORER COMPLÈTEMENT LA REQUÊTE
+      // ET LA LAISSER PASSER AU RENDERER
     } else {
       console.log(`⚠️ [WEBSITE-DETECTION] Aucun site trouvé pour: ${cleanDomain}`);
       req.isWebsiteRoute = false;
@@ -101,4 +105,28 @@ export async function detectWebsite(
     req.isWebsiteRoute = false;
     next();
   }
+}
+
+/**
+ * Middleware qui intercepte les requêtes de sites vitrines
+ * et les rend directement AVANT le serveur statique
+ */
+export function websiteInterceptor(
+  req: WebsiteRequest,
+  res: Response,
+  next: NextFunction
+) {
+  // Si c'est une route API, health ou assets, passer au suivant
+  if (req.url.startsWith('/api/') || req.url.startsWith('/assets/') || req.url.startsWith('/health')) {
+    return next();
+  }
+  
+  // Si un site vitrine a été détecté, ne PAS continuer, rendre le site
+  if (req.isWebsiteRoute && req.websiteData) {
+    console.log(`🎨 [WEBSITE-INTERCEPTOR] Interception pour site: ${req.websiteData.name}`);
+    return renderWebsite(req, res);
+  }
+  
+  // Sinon, continuer vers le serveur statique du CRM
+  next();
 }

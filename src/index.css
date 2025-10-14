@@ -1,9 +1,9 @@
+/* Import du système responsive global (DOIT être avant @tailwind) */
+@import './styles/site-responsive.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import du système responsive global */
-@import './styles/site-responsive.css';
 
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
