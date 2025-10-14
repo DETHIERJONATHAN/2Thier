@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle, useRef, useCallback } from 'react';
-import { Row, Col, Layout, Card, Spin, Switch, Space, Tooltip, Segmented, Grid } from 'antd';
+import { Row, Col, Layout, Card, Spin, Space, Segmented, Grid } from 'antd';
 import { DndContext } from '@dnd-kit/core';
 
 // Composants
@@ -1188,16 +1188,6 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
               flexShrink: 0
             }}
           >
-            <Tooltip title="Aperçu simple du formulaire">
-              <span style={{ fontSize: 12, color: '#888' }}>Aperçu</span>
-            </Tooltip>
-            <Switch
-              checked={uiState.panelState.previewMode}
-              onChange={(checked) => setUIState(prev => ({
-                ...prev,
-                panelState: { ...prev.panelState, previewMode: checked }
-              }))}
-            />
           </Space>
         </Layout.Header>
 
