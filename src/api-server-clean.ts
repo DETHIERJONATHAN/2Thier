@@ -57,6 +57,10 @@ logSecurityEvent('SERVER_STARTUP', {
 }, 'info');
 
 const app = express();
+
+// 🌐 Configuration pour Cloud Run / reverse proxies
+app.set('trust proxy', true);
+
 const port = Number(process.env.PORT || 4000);
 // 📦 Métadonnées build (injectées par le script de déploiement)
 const BUILD_VERSION = process.env.BUILD_VERSION || 'dev-local';
@@ -239,7 +243,7 @@ if (process.env.NODE_ENV === 'production') {
     }));
     
     // Servir aussi les fichiers PWA et favicon à la racine du dist
-    app.get('/pwa-*', (req, res) => {
+    app.get(/^\/pwa-.*/, (req, res) => {
       const filePath = path.join(distDir, req.path);
       if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
