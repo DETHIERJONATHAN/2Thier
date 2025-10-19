@@ -182,6 +182,15 @@ type TreeFieldOption = {
   label: string;
   type?: string | null;
   path?: string | null;
+  capabilities?: {
+    table?: {
+      enabled?: boolean;
+      activeId?: string;
+      rowBased?: boolean;
+      columnBased?: boolean;
+    };
+  };
+  id?: string; // Assurer que l'ID est toujours présent
 };
 
 type TableLookupExpose = {
@@ -239,7 +248,7 @@ type TableInstance = {
   description?: string;
   type: string;
   columns: string[];
-  rows: string[];
+  rows: (string | number)[][]; // ✅ Lignes complètes pour architecture normalisée
   matrix?: (number | string | null)[][];
   data?: { matrix?: (number | string | null)[][] };
   records?: Record<string, unknown>[];
@@ -255,7 +264,7 @@ type NormalizedTableInstanceResponse = {
   description?: string | null;
   type?: string | null;
   columns?: string[] | null;
-  rows?: string[] | null;
+  rows?: (string | number)[][] | null; // ✅ Lignes complètes
   matrix?: (string | number | boolean | null)[][] | null;
   data?: { matrix?: (string | number | boolean | null)[][] | null } | null;
   records?: Record<string, unknown>[] | null;
@@ -264,21 +273,82 @@ type NormalizedTableInstanceResponse = {
 };
 
 const normalizedToInstance = (raw: NormalizedTableInstanceResponse): TableInstance => {
+  console.log('🔍 [normalizedToInstance] RAW DATA:', {
+    columns: raw.columns,
+    rowsType: Array.isArray(raw.rows) ? 'array' : typeof raw.rows,
+    rowsLength: Array.isArray(raw.rows) ? raw.rows.length : 0,
+    firstRow: Array.isArray(raw.rows) && raw.rows[0],
+    matrix: raw.matrix,
+    dataMatrix: raw.data?.matrix
+  });
+
   const safeColumns = Array.isArray(raw.columns) ? raw.columns.map(String) : [];
-  const safeRows = Array.isArray(raw.rows) ? raw.rows.map(String) : [];
-  const matrix = Array.isArray(raw.matrix)
-    ? (raw.matrix as (number | string | boolean | null)[][])
-    : Array.isArray(raw.data?.matrix)
-      ? (raw.data?.matrix as (number | string | boolean | null)[][])
-      : [];
+  
+  // ✅ Les `rows` contiennent les lignes complètes (chaque ligne = array de cellules)
+  let fullRows = Array.isArray(raw.rows) ? raw.rows : [];
+
+  console.log('🔍 [normalizedToInstance] FULL ROWS:', fullRows.slice(0, 3));
+
+  // 🛠️ DÉTECTION ET RECONSTRUCTION si les rows sont corrompues (strings au lieu d'arrays)
+  const firstRow = fullRows[0];
+  const isCorrupted = typeof firstRow === 'string'; // Si c'est un string, c'est corrompu !
+  
+  if (isCorrupted) {
+    console.warn('🚨 [normalizedToInstance] ROWS CORROMPUES DÉTECTÉES ! Reconstruction...');
+    console.log('🚨 [normalizedToInstance] Ancien format (strings):', fullRows.slice(0, 3));
+    
+    // Reconstruire les rows complètes à partir des colonnes + matrix
+    const reconstructed: (string | number | null)[][] = [];
+    
+    // Ligne 0 = colonnes (header)
+    reconstructed.push([...safeColumns]);
+    
+    // Lignes suivantes = label + data depuis matrix
+    const matrix = raw.matrix || [];
+    for (let i = 0; i < fullRows.length - 1; i++) { // -1 car première ligne = header
+      const label = fullRows[i + 1]; // +1 car fullRows[0] = "Orientation" (header)
+      const rowData = matrix[i] || [];
+      reconstructed.push([label, ...rowData]);
+    }
+    
+    fullRows = reconstructed;
+    console.log('✅ [normalizedToInstance] ROWS RECONSTRUITES:', fullRows.slice(0, 3));
+  }
+
+  // ✅ IMPORTANT : TOUTES les lignes doivent être traitées, y compris la première !
+  // rows[0] = ["Orientation", "0", "5", ...] → label = "Orientation", data = ["0", "5", ...]
+  // rows[1] = ["Nord", 86, 82, ...] → label = "Nord", data = [86, 82, ...]
+
+  // Extraire les labels de ligne (première colonne de TOUTES les lignes)
+  const rowLabels = fullRows.map(row => {
+    if (Array.isArray(row)) {
+      return String(row[0] || '');
+    }
+    return String(row || '');
+  });
+
+  // ✅ Extraire la matrice de données (toutes les colonnes sauf la première)
+  const matrix = fullRows.map(row => {
+    if (Array.isArray(row)) {
+      return row.slice(1); // Enlever la première colonne (le label)
+    }
+    return []; // Si ce n'est pas un array, retourner vide
+  });
+
+  console.log('🔍 [normalizedToInstance] EXTRACTED:', {
+    rowLabels: rowLabels.slice(0, 3),
+    matrixRows: matrix.length,
+    firstMatrixRow: matrix[0],
+    lastMatrixRow: matrix[matrix.length - 1]
+  });
 
   return {
     id: String(raw.id),
     name: (raw.name ?? 'Sans nom') || 'Sans nom',
     description: raw.description ?? undefined,
-    type: (raw.type as string) || 'columns',
+    type: (raw.type as string) || 'matrix',
     columns: safeColumns,
-    rows: safeRows,
+    rows: rowLabels,
     matrix,
     data: { matrix },
     records: Array.isArray(raw.records) ? raw.records : [],
@@ -289,25 +359,41 @@ const normalizedToInstance = (raw: NormalizedTableInstanceResponse): TableInstan
 
 const instanceToConfig = (instance?: TableInstance | null): TableConfig => {
   if (!instance) {
-    return { type: 'columns', columns: [] };
+    return { type: 'matrix', columns: [], rows: [], data: [] };
   }
 
   const columns = Array.isArray(instance.columns) ? instance.columns.map(String) : [];
-  const rows = Array.isArray(instance.rows) ? instance.rows.map(String) : undefined;
+  const rowLabels = Array.isArray(instance.rows) ? instance.rows.map(String) : [];
+  
+  // Utiliser `instance.matrix` directement
   const matrix = Array.isArray(instance.matrix)
     ? (instance.matrix as (number | string | null)[][])
-    : Array.isArray(instance.data?.matrix)
-      ? (instance.data?.matrix as (number | string | null)[][])
-      : undefined;
+    : [];
+    
   const meta = (instance.meta || {}) as TableMeta;
 
+  // 🛠️ RECONSTRUCTION: Reconstruire les full rows (arrays) à partir de rowLabels + matrix
+  // rowLabels = ["Orientation", "Nord", "Nord Nord-Est", ...]
+  // matrix[0] = [0, 5, 15, ...] (données de la ligne "Orientation" SANS le label)
+  // matrix[1] = [86, 82, 73, ...] (données de la ligne "Nord" SANS le label)
+  const fullRows: (string | number | null)[][] = [];
+  
+  // Pour CHAQUE rowLabel, combiner le label avec les données correspondantes de matrix
+  for (let i = 0; i < rowLabels.length; i++) {
+    const label = rowLabels[i];
+    const rowData = matrix[i] || [];
+    fullRows.push([label, ...rowData]);
+  }
+  
+  console.log('🔄 [instanceToConfig] Full rows reconstruites:', fullRows.slice(0, 3));
+
   return {
-    type: (instance.type as 'columns' | 'matrix') || 'columns',
+    type: (instance.type as 'columns' | 'matrix') || 'matrix',
     columns,
-    rows,
-    data: matrix,
+    rows: fullRows, // ✅ Retourner les full rows (arrays), pas les strings !
+    data: matrix, // Utiliser la matrice de données
     meta,
-    isImported: meta.isImported === true || meta.isImported === 'true',
+    isImported: meta.isImported === true || String(meta.isImported) === 'true',
     importSource: typeof meta.importSource === 'string' ? meta.importSource : undefined,
   };
 };
@@ -326,6 +412,8 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   );
   const [fieldOptions, setFieldOptions] = useState<TreeFieldOption[]>([]);
   const [fieldsLoading, setFieldsLoading] = useState<boolean>(false);
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+  const [isLoadingTable, setIsLoadingTable] = useState<boolean>(false);
 
   // Fonction de sauvegarde debounced
   const debouncedSave = useDebouncedCallback(async (config: TableConfig) => {
@@ -400,6 +488,21 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         const nodes = await api.get(`/api/treebranchleaf/trees/${nodeTreeId}/nodes`) as Array<Record<string, unknown>>;
         if (cancelled) return;
 
+        // Champs du Lead disponibles pour lookup
+        const leadFields: TreeFieldOption[] = [
+          { value: 'lead.firstName', label: 'Lead - Prénom', type: 'lead_field', path: null },
+          { value: 'lead.lastName', label: 'Lead - Nom', type: 'lead_field', path: null },
+          { value: 'lead.fullName', label: 'Lead - Nom complet', type: 'lead_field', path: null },
+          { value: 'lead.email', label: 'Lead - Email', type: 'lead_field', path: null },
+          { value: 'lead.phone', label: 'Lead - Téléphone', type: 'lead_field', path: null },
+          { value: 'lead.street', label: 'Lead - Rue', type: 'lead_field', path: null },
+          { value: 'lead.streetNumber', label: 'Lead - Numéro', type: 'lead_field', path: null },
+          { value: 'lead.postalCode', label: 'Lead - Code postal', type: 'lead_field', path: null },
+          { value: 'lead.city', label: 'Lead - Localité', type: 'lead_field', path: null },
+          { value: 'lead.fullAddress', label: 'Lead - Adresse complète', type: 'lead_field', path: null },
+          { value: 'lead.company', label: 'Lead - Entreprise', type: 'lead_field', path: null },
+        ];
+
         const options: TreeFieldOption[] = (Array.isArray(nodes) ? nodes : [])
           .filter((node) => {
             const nodeIdCandidate = node.id as string | undefined;
@@ -415,7 +518,10 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           }))
           .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
 
-        setFieldOptions(options);
+        // Fusionner les champs Lead + champs du formulaire
+        const allOptions = [...leadFields, ...options];
+        
+        setFieldOptions(allOptions);
         console.log('ðŸ” [TablePanel] fieldOptions chargÃ©es:', { 
           count: options.length, 
           firstThree: options.slice(0, 3),
@@ -499,11 +605,46 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   useEffect(() => {
     if (!activeId) {
       setCfg({ type: 'columns', columns: [] });
+      setIsLoadingTable(false);
       return;
     }
 
     const instance = instances.find((item) => item.id === activeId);
-    setCfg(instanceToConfig(instance));
+    
+    // ✅ Pour les gros tableaux, afficher un indicateur de chargement
+    const rowCount = instance?.rows?.length || 0;
+    
+    // 🚀 OPTIMISATION : Pour les TRÈS gros tableaux (>10000 lignes), ne pas afficher le contenu
+    if (rowCount > 10000) {
+      setIsLoadingTable(true);
+      console.log(`🗂️ TablePanel: ⚠️ Tableau TRÈS volumineux (${rowCount} lignes) - Affichage limité`);
+      
+      // Ne charger QUE les métadonnées, pas le contenu complet
+      setTimeout(() => {
+        setCfg({
+          type: instance?.type || 'columns',
+          columns: instance?.columns || [],
+          rows: [], // ❌ NE PAS CHARGER LES LIGNES
+          data: [], // ❌ NE PAS CHARGER LES DONNÉES
+          meta: { ...instance?.meta, isTooBig: true, fullRowCount: rowCount }
+        });
+        setIsLoadingTable(false);
+        console.log(`🗂️ TablePanel: ✅ Métadonnées chargées (${rowCount} lignes masquées)`);
+      }, 500);
+    } else if (rowCount > 1000) {
+      setIsLoadingTable(true);
+      console.log(`🗂️ TablePanel: ⏳ Chargement d'un gros tableau (${rowCount} lignes)...`);
+      
+      // Utiliser setTimeout avec délai plus long pour permettre à React de rendre l'indicateur
+      setTimeout(() => {
+        setCfg(instanceToConfig(instance));
+        setIsLoadingTable(false);
+        console.log(`🗂️ TablePanel: ✅ Tableau chargé (${rowCount} lignes)`);
+      }, 500);
+    } else {
+      setCfg(instanceToConfig(instance));
+      setIsLoadingTable(false);
+    }
   }, [activeId, instances]);
 
   const ensureDataHeight = useCallback((data: (number | string | null)[][] | undefined, height: number, width: number): (number | string | null)[][] | undefined => {
@@ -516,11 +657,17 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
 
   // 🎯 Options pour SELECT : Toutes les colonnes et lignes AVEC A1 disponibles
   const columnOptions = useMemo(() => {
+    // ✅ Les colonnes sont déjà des strings simples, pas besoin de transformation
     return (cfg.columns || []).map((col) => ({ value: col, label: col }));
   }, [cfg]);
   
   const rowOptions = useMemo(() => {
-    return (cfg.rows || []).map((row) => ({ value: row, label: row }));
+    // ✅ FIX: cfg.rows contient des arrays complets ["Nord", 86, 82, ...]
+    // On extrait uniquement le premier élément (le label) pour l'affichage
+    return (cfg.rows || []).map((row) => {
+      const label = Array.isArray(row) ? String(row[0]) : String(row);
+      return { value: label, label: label };
+    });
   }, [cfg]);
   
   const fieldSelectOptions = useMemo(
@@ -690,16 +837,17 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       dataIndex: 'row',
       key: 'row',
       fixed: 'left' as const,
-      render: (_: unknown, __: unknown, rIdx: number) => {
-        // ✅ rows[0] = A1 ("Orientation"), rows[1] = "Nord", etc.
-        // Pour afficher dans le tableau, on skip rows[0] donc on affiche rows[rIdx + 1]
-        const actualRowIndex = rIdx + 1;
+      // Use record.rowIndex which references the actual index in cfg.rows/cfg.data (includes header at index 0)
+      render: (_: unknown, record: any) => {
+        const idx = typeof record?.rowIndex === 'number' ? record.rowIndex : 0;
+        // Afficher le label correspondant (cfg.rows peut contenir arrays ou strings)
+        const label = Array.isArray((cfg.rows || [])[idx]) ? String((cfg.rows || [])[idx][0]) : String((cfg.rows || [])[idx] ?? '');
         return (
-          <Input 
-            size="small" 
-            value={(cfg.rows || [])[actualRowIndex] || ''} 
-            onChange={(e) => renameRow(actualRowIndex, e.target.value)} 
-            disabled={readOnly} 
+          <Input
+            size="small"
+            value={label}
+            onChange={(e) => renameRow(idx, e.target.value)}
+            disabled={readOnly}
           />
         );
       }
@@ -708,14 +856,19 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       title: c,
       dataIndex: String(cIdx),
       key: String(cIdx),
-      render: (_: unknown, __: unknown, rIdx: number) => (
-        <Input
-          size="small"
-          value={(cfg.data?.[rIdx]?.[cIdx] ?? '') as string | number}
-          onChange={(e) => setCellMatrix(rIdx, cIdx, e.target.value)}
-          disabled={readOnly}
-        />
-      )
+      // Use record.rowIndex to resolve the correct row in cfg.data (which may include header at index 0)
+      render: (_: unknown, record: any) => {
+        const idx = typeof record?.rowIndex === 'number' ? record.rowIndex : 0;
+  const value = (cfg.data?.[idx]?.[cIdx] ?? '') as string | number;
+        return (
+          <Input
+            size="small"
+            value={value}
+            onChange={(e) => setCellMatrix(idx, cIdx, e.target.value)}
+            disabled={readOnly}
+          />
+        );
+      }
     }));
     return [firstCol, ...rest];
   }, [cfg, readOnly, renameRow, setCellMatrix]);
@@ -785,10 +938,12 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   }, [api, nodeId, instances, activeId]);
 
   const deleteTableInstance = useCallback(async () => {
-    if (!activeId || instances.length <= 1) return;
+    if (!activeId) return;
     
     const userConfirmed = window.confirm(
-      `Supprimer dÃ©finitivement cette instance de tableau ?`
+      instances.length > 1
+        ? `Supprimer définitivement cette instance de tableau ?`
+        : `Supprimer définitivement ce tableau ? Cette action est irréversible.`
     );
     
     if (!userConfirmed) return;
@@ -810,10 +965,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       if (nextActive) {
         setCfg(instanceToConfig(nextActive));
       } else {
-        setCfg({ type: 'columns', columns: [] });
+        // Réinitialiser avec un tableau vide
+        setCfg({ type: 'matrix', columns: ['Colonne 1'], rows: ['Ligne 1'], data: [[null]] });
       }
       
-      message.success('Instance supprimÃ©e');
+      message.success(instances.length > 1 ? 'Instance supprimée' : 'Tableau supprimé');
     } catch (error) {
       console.error('ðŸ—‚ï¸ TablePanel: Erreur suppression instance:', error);
       message.error('Impossible de supprimer l\'instance');
@@ -840,9 +996,16 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       ];
 
       // Lignes suivantes = [Label de ligne, ...valeurs de données]
-      cfg.rows.forEach((rowLabel, rowIdx) => {
-        const rowData = cfg.data?.[rowIdx] || [];
-        excelData.push([rowLabel, ...rowData]); // ["Nord", 82, 88, 93, ...]
+      // Supporter cfg.rows qui peut contenir soit des labels simples (string)
+      // soit des arrays complets ([label, ...cells])
+      cfg.rows.forEach((row, rowIdx) => {
+        if (Array.isArray(row)) {
+          // row est déjà une array complète -> l'ajouter telle quelle
+          excelData.push(row.map(cell => (cell === null || cell === undefined ? '' : cell)));
+        } else {
+          const rowData = cfg.data?.[rowIdx] || [];
+          excelData.push([row, ...rowData]); // ["Nord", 82, 88, 93, ...]
+        }
       });
 
       // Créer le fichier Excel
@@ -866,14 +1029,26 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   // Gestionnaire de fichier choisi
   const handleFileChosen = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log('🗂️ TablePanel: Pas de fichier sélectionné');
+      return;
+    }
+    
+    console.log('🗂️ TablePanel: 📂 Début import fichier:', file.name);
     
     try {
+      console.log('🗂️ TablePanel: 📖 Lecture du fichier...');
       const data = await file.arrayBuffer();
+      console.log('🗂️ TablePanel: ✅ Fichier lu, taille:', data.byteLength);
+      
       const workbook = XLSX.read(data, { type: 'array' });
+      console.log('🗂️ TablePanel: 📊 Workbook parsé, feuilles:', workbook.SheetNames);
+      
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as (string | number | null)[][];
+      
+      console.log('🗂️ TablePanel: 📋 Données extraites:', jsonData.length, 'lignes');
       
       if (jsonData.length === 0) {
         message.warning('Le fichier est vide');
@@ -885,7 +1060,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       const type: 'columns' | 'matrix' = 'matrix';
       
       let columns: string[] = [];
-      let rows: string[] | undefined;
+      let rows: (string | number)[][] | undefined; // ✅ Changé: array de arrays!
       let tableData: (number | string | null)[][] = [];
       
       if (type === 'matrix') {
@@ -902,14 +1077,14 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           return String(col);
         });
         
-        // ✅ Lignes = Première colonne COMPLÈTE (AVEC A1) pour pouvoir le sélectionner
-        rows = jsonData.map((row, idx) => {
-          const val = row[0];
-          if (val === null || val === undefined) return `Ligne ${idx + 1}`;
-          return String(val);
+        // ✅ FIX CRITIQUE: Backend attend rows = array de arrays (lignes complètes)
+        // PAS un array de strings (juste les labels)!
+        rows = jsonData.map((row) => {
+          // Retourner la ligne COMPLÈTE avec toutes les cellules
+          return row.map(val => val === null || val === undefined ? '' : val);
         });
         
-        // Data = Corps SANS première ligne NI première colonne
+        // Data = Corps SANS première ligne NI première colonne (pour affichage)
         tableData = jsonData.slice(1).map(row => row.slice(1));
       } else {
         // Mode columns: TOUTES les colonnes sont importÃ©es (y compris la premiÃ¨re)
@@ -924,12 +1099,93 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         columns,
         rows,
         data: tableData,
-        meta: { ...cfg.meta, isImported: true, importSource: file.name },
+        meta: { 
+          ...cfg.meta, 
+          isImported: true, 
+          importSource: file.name,
+          // 🔧 FIX: Initialiser lookup avec enabled:true par défaut
+          lookup: {
+            ...cfg.meta?.lookup,
+            enabled: true,
+            columnLookupEnabled: false,
+            rowLookupEnabled: false,
+            extractFrom: 'row',
+            keyRow: rows?.[0] || null, // Par défaut: première ligne (A1)
+            selectors: cfg.meta?.lookup?.selectors || {},
+            exposeColumns: cfg.meta?.lookup?.exposeColumns || [],
+          },
+        },
       };
       
+      console.log('🗂️ TablePanel: ========================================');
+      console.log('🗂️ TablePanel: 📊 CONFIG CRÉÉE');
+      console.log('🗂️ TablePanel: Type:', next.type);
+      console.log('🗂️ TablePanel: Colonnes:', next.columns.length, next.columns);
+      console.log('🗂️ TablePanel: Lignes (rows):', next.rows?.length, next.rows?.slice(0, 10), '...');
+      console.log('🗂️ TablePanel: Data (matrix):', next.data.length, 'lignes');
+      console.log('🗂️ TablePanel: 📋 Lookup config initiale:', next.meta.lookup);
+      console.log('🗂️ TablePanel: Data[0]:', next.data[0]);
+      console.log('🗂️ TablePanel: Data[dernière]:', next.data[next.data.length - 1]);
+      console.log('🗂️ TablePanel: ========================================');
+      
       setCfg(next);
-      debouncedSave(next);
-      message.success(`Fichier importÃ©: ${jsonData.length - 1} lignes`);
+      
+      // ✅ Si instance temporaire, créer d'abord puis MAJ, sinon sauvegarder directement
+      if (!activeId || activeId.startsWith('temp_')) {
+        console.log('🗂️ TablePanel: 🎯 Instance temporaire détectée, création puis import...');
+        setIsImporting(true);
+        try {
+          const payload = {
+            name: `Import ${file.name}`,
+            description: `Importé depuis ${file.name}`,
+            type: next.type,
+            columns: next.columns,
+            rows: next.rows || [],
+            data: next.data || [],
+            meta: next.meta || {},
+          };
+          
+          console.log('🗂️ TablePanel: ========================================');
+          console.log('🗂️ TablePanel: 📤 PAYLOAD À ENVOYER AU SERVEUR');
+          console.log('🗂️ TablePanel: name:', payload.name);
+          console.log('🗂️ TablePanel: type:', payload.type);
+          console.log('🗂️ TablePanel: columns:', payload.columns.length, 'items');
+          console.log('🗂️ TablePanel: rows:', payload.rows.length, 'items');
+          console.log('🗂️ TablePanel: data:', payload.data.length, 'lignes');
+          console.log('🗂️ TablePanel: Premières rows:', payload.rows.slice(0, 10));
+          console.log('🗂️ TablePanel: Dernières rows:', payload.rows.slice(-10));
+          console.log('🗂️ TablePanel: Première ligne data:', payload.data[0]);
+          console.log('🗂️ TablePanel: Dernière ligne data:', payload.data[payload.data.length - 1]);
+          console.log('🗂️ TablePanel: ========================================');
+          
+          console.log('🗂️ TablePanel: 🚀 Envoi POST vers /api/treebranchleaf/nodes/' + nodeId + '/tables');
+          const created = await api.post(`/api/treebranchleaf/nodes/${nodeId}/tables`, payload);
+          console.log('🗂️ TablePanel: ✅ RÉPONSE SERVEUR REÇUE:', created);
+          const savedInstance = normalizedToInstance(created as NormalizedTableInstanceResponse);
+          console.log('[IMPORT] ✅ Instance sauvegardée, ID:', savedInstance.id);
+
+          // Mettre à jour la liste des instances et l'ID actif.
+          // L'useEffect [activeId, instances] se chargera de mettre à jour cfg.
+          console.log('[IMPORT] 🔄 Mise à jour de la liste des instances et de l\'ID actif.');
+          setInstances((prev) => {
+            const newInstances = prev.filter(item => item.id !== activeId);
+            newInstances.push(savedInstance);
+            return newInstances.sort((a, b) => a.order - b.order);
+          });
+          setActiveId(savedInstance.id);
+          
+          message.success('Tableau importé et sélectionné avec succès !');
+          console.log('🎉 Import terminé, l\'interface va se mettre à jour.');
+        } catch (error) {
+          console.error('🗂️ TablePanel: Erreur création instance import:', error);
+          message.error('Erreur lors de la création du tableau importé');
+        } finally {
+          setIsImporting(false);
+        }
+      } else {
+        debouncedSave(next);
+        message.success(`Fichier importÃ©: ${jsonData.length - 1} lignes, ${next.columns.length} colonnes`);
+      }
     } catch (error) {
       console.error('ðŸ—‚ï¸ TablePanel: Erreur import fichier:', error);
       message.error('Erreur lors de l\'import du fichier');
@@ -939,7 +1195,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [cfg, debouncedSave]);
+  }, [cfg, debouncedSave, activeId, api, nodeId]);
 
   return (
     <Card size="small" variant="outlined">
@@ -964,11 +1220,9 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         <Button size="small" icon={<PlusOutlined />} onClick={addTableInstance} disabled={readOnly}>
           Ajouter
         </Button>
-        {instances.length > 1 && (
-          <Button size="small" icon={<DeleteOutlined />} onClick={deleteTableInstance} disabled={readOnly} danger>
-            Supprimer
-          </Button>
-        )}
+        <Button size="small" icon={<DeleteOutlined />} onClick={deleteTableInstance} disabled={readOnly} danger>
+          Supprimer{instances.length > 1 ? ' cette instance' : ' le tableau'}
+        </Button>
       </div>
       
       {/* Nom de l'instance et rÃ©sumÃ© test */}
@@ -1021,14 +1275,17 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           </Tooltip>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
-          <Button onClick={triggerFilePicker} disabled={readOnly}>Importer Excel/CSV (fichier)</Button>
+          <Button onClick={triggerFilePicker} disabled={readOnly || isImporting} loading={isImporting}>
+            {isImporting ? 'Import en cours...' : 'Importer Excel/CSV (fichier)'}
+          </Button>
           <Button 
             icon={<DownloadOutlined />} 
             onClick={handleDownloadExcel} 
-            disabled={readOnly || !cfg.columns?.length || !cfg.rows?.length}
+            disabled={readOnly || !cfg.columns?.length || !cfg.rows?.length || isImporting}
           >
             Télécharger Excel
           </Button>
+          {isImporting && <Text type="secondary">⏳ Import de {cfg.rows?.length || 0} lignes en cours, veuillez patienter...</Text>}
         </div>
       <input
         ref={fileInputRef}
@@ -1038,13 +1295,58 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         onChange={handleFileChosen}
       />
 
-        {/* âœ… TOUJOURS afficher colonnes et lignes */}
+        {/* ✅ Indicateur de chargement pour gros tableaux */}
+        {isLoadingTable && (
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <Text type="secondary">⏳ Chargement du tableau ({cfg.rows?.length || 0} lignes)...</Text>
+          </div>
+        )}
+
+        {/* ⚠️ Message pour tableaux TROP volumineux */}
+        {!isLoadingTable && cfg.meta?.isTooBig && (
+          <div style={{ padding: '20px', textAlign: 'center', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '4px', marginBottom: '16px' }}>
+            <Text strong style={{ color: '#d46b08' }}>⚠️ Tableau très volumineux ({cfg.meta.fullRowCount} lignes)</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              Pour des raisons de performance, seules les colonnes sont affichées. 
+              Les données sont bien enregistrées et utilisables dans les lookups.
+            </Text>
+          </div>
+        )}
+
+        {/* ✅ Afficher UNIQUEMENT les colonnes pour les très gros tableaux */}
+        {!isLoadingTable && cfg.meta?.isTooBig && (
         <Space direction="vertical" style={{ width: '100%' }} size="small">
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' as const }}>
             <div style={{ minWidth: 260, flex: 1 }}>
-              <Text strong>Colonnes</Text>
+              <Text strong>Colonnes ({cfg.columns?.length || 0})</Text>
               <Space direction="vertical" style={{ width: '100%' }}>
-                {(cfg.columns || []).map((c, idx) => (
+                {(cfg.columns || []).slice(0, 20).map((c, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                    <Input
+                      size="small"
+                      value={c}
+                      placeholder={`Colonne ${idx + 1}`}
+                      disabled={true}
+                    />
+                  </div>
+                ))}
+                {(cfg.columns?.length || 0) > 20 && <Text type="secondary" style={{ fontSize: 11 }}>... et {(cfg.columns?.length || 0) - 20} autres colonnes</Text>}
+              </Space>
+            </div>
+          </div>
+          <Text type="secondary">0 lignes affichées × {(cfg.columns?.length || 0)} colonnes • ⚠️ {cfg.meta.fullRowCount} lignes totales (en base de données)</Text>
+        </Space>
+        )}
+
+        {/* ✅ Affichage NORMAL pour tableaux raisonnables */}
+        {!isLoadingTable && !cfg.meta?.isTooBig && (
+        <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' as const }}>
+            <div style={{ minWidth: 260, flex: 1 }}>
+              <Text strong>Colonnes ({cfg.columns?.length || 0})</Text>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {(cfg.columns || []).slice(0, 20).map((c, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: 8 }}>
                     <Input
                       size="small"
@@ -1056,24 +1358,28 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                   <Button icon={<DeleteOutlined />} danger size="small" onClick={() => removeColumn(idx)} disabled={readOnly} />
                 </div>
               ))}
+              {(cfg.columns?.length || 0) > 20 && <Text type="secondary" style={{ fontSize: 11 }}>... et {(cfg.columns?.length || 0) - 20} autres colonnes</Text>}
               <Button icon={<PlusOutlined />} onClick={addColumn} size="small" disabled={readOnly}>Ajouter une colonne</Button>
             </Space>
             </div>
             <div style={{ minWidth: 260, flex: 1 }}>
-              <Text strong>Lignes</Text>
+              <Text strong>Lignes ({cfg.rows?.length || 0})</Text>
               <Space direction="vertical" style={{ width: '100%' }}>
-                {(cfg.rows || []).map((r, idx) => (
+                {/* Afficher TOUTES les lignes (y compris l'entête) comme des champs normaux */}
+                {(cfg.rows || []).slice(0, 20).map((r, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: 8 }}>
-                    <Input size="small" value={r} placeholder={`Ligne ${idx + 1}`} onChange={(e) => renameRow(idx, e.target.value)} disabled={readOnly} />
+                    <Input size="small" value={Array.isArray(r) ? String(r[0]) : String(r)} placeholder={`Ligne ${idx + 1}`} onChange={(e) => renameRow(idx, e.target.value)} disabled={readOnly} />
                     <Button icon={<DeleteOutlined />} danger size="small" onClick={() => removeRow(idx)} disabled={readOnly} />
                   </div>
                 ))}
+                {(cfg.rows?.length || 0) > 20 && <Text type="secondary" style={{ fontSize: 11 }}>... et {(cfg.rows?.length || 0) - 20} autres lignes</Text>}
                 <Button icon={<PlusOutlined />} onClick={addRow} size="small" disabled={readOnly}>Ajouter une ligne</Button>
               </Space>
             </div>
           </div>
-          <Text type="secondary">{(cfg.rows?.length || 0)} lignes Ã— {(cfg.columns?.length || 0)} colonnes</Text>
+          <Text type="secondary">{(cfg.rows?.length || 0)} lignes × {(cfg.columns?.length || 0)} colonnes{cfg.meta?.isImported ? ` • 📥 Importé depuis ${cfg.meta.importSource || 'Excel'}` : ''}</Text>
         </Space>
+        )}
 
 
             <Divider style={{ margin: '8px 0' }} />
@@ -1272,6 +1578,32 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                         console.log('[TablePanel][COLUMN] Activation capacite Table pour champ:', value);
                         (async () => {
                           try {
+                            // 🔧 FIX CRITIQUE : Mettre à jour la config lookup dans meta pour l'interpreter
+                            const updatedLookupConfig = {
+                              ...lookupConfig,
+                              enabled: true,
+                              columnLookupEnabled: true,
+                              // ✅ PRÉSERVER rowLookupEnabled (ne pas écraser si déjà activé)
+                              rowLookupEnabled: lookupConfig.rowLookupEnabled ?? false,
+                              selectors: {
+                                ...lookupConfig.selectors,
+                                columnFieldId: value,
+                              },
+                            };
+                            
+                            // Sauvegarder la config lookup dans l'instance de table
+                            const updatedCfg = {
+                              ...cfg,
+                              meta: {
+                                ...cfg.meta,
+                                lookup: updatedLookupConfig,
+                              },
+                            };
+                            setCfg(updatedCfg);
+                            
+                            // Sauvegarder dans la base (table instance)
+                            await debouncedSave(updatedCfg);
+                            
                             const payload = {
                               enabled: true,
                               activeId: activeId,
@@ -1281,9 +1613,10 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                 mode: 'columns',
                                 columnBased: true,
                                 rowBased: false,
-                                keyColumn: null,
-                                valueColumn: null,
-                                displayColumn: null,
+                                // 🔧 FIX: Ajouter keyColumn pour que l'interpréteur sache quelle colonne extraire
+                                keyColumn: lookupConfig.keyColumn || null,
+                                valueColumn: lookupConfig.valueColumn || null,
+                                displayColumn: lookupConfig.displayColumn || null,
                               },
                             };
                             console.log('[TablePanel][COLUMN] Payload PUT initial:', payload);
@@ -1306,19 +1639,12 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                         const prevFieldId = lookupConfig.selectors.columnFieldId;
                         console.log('[TablePanel][COLUMN] Desactivation capacite Table pour:', prevFieldId);
                         (async () => {
-                          try {
-                            await api.put(`/api/treebranchleaf/nodes/${prevFieldId}/capabilities/table`, {
-                              enabled: false,
-                            });
-                            console.log('[TablePanel][COLUMN] Capacite Table desactivee');
-                            
-                            window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                              detail: { nodeId: prevFieldId, treeId: initialTreeId } 
-                            }));
-                            console.log('[TablePanel] Evenement tbl-capability-updated emis (desactivation)');
-                          } catch (error) {
-                            console.error('[TablePanel][COLUMN] Erreur desactivation:', error);
-                          }
+                            try {
+                              // Tentative de désactivation - rien à faire si l'appel n'est pas nécessaire
+                              // (placeholder pour futures actions)
+                            } catch (error) {
+                              console.error('[TablePanel][COLUMN] Erreur desactivation:', error);
+                            }
                         })();
                       }
                     }}
@@ -1434,6 +1760,32 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                       if (value && activeId) {
                         (async () => {
                           try {
+                            // 🔧 FIX CRITIQUE : Mettre à jour la config lookup dans meta pour l'interpreter
+                            const updatedLookupConfig = {
+                              ...lookupConfig,
+                              enabled: true,
+                              // ✅ PRÉSERVER columnLookupEnabled (ne pas écraser si déjà activé)
+                              columnLookupEnabled: lookupConfig.columnLookupEnabled ?? false,
+                              rowLookupEnabled: true,
+                              selectors: {
+                                ...lookupConfig.selectors,
+                                rowFieldId: value,
+                              },
+                            };
+                            
+                            // Sauvegarder la config lookup dans l'instance de table
+                            const updatedCfg = {
+                              ...cfg,
+                              meta: {
+                                ...cfg.meta,
+                                lookup: updatedLookupConfig,
+                              },
+                            };
+                            setCfg(updatedCfg);
+                            
+                            // Sauvegarder dans la base (table instance)
+                            await debouncedSave(updatedCfg);
+                            
                             await api.put(`/api/treebranchleaf/nodes/${value}/capabilities/table`, {
                               enabled: true,
                               activeId,
@@ -1441,7 +1793,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                 type: cfg.type,
                                 tableId: activeId,
                                 rowBased: true,
-                                columnBased: false, // ✅ Désactiver le flag colonne
+                                columnBased: false,
+                                // 🔧 FIX: Ajouter keyRow pour que l'interpréteur sache quelle ligne extraire
+                                keyRow: lookupConfig.keyRow || null,
+                                valueRow: lookupConfig.valueRow || null,
+                                displayRow: lookupConfig.displayRow || null,
                               },
                             });
                             window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
@@ -1566,8 +1922,9 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                 sticky
                 pagination={false}
                 scroll={{ x: true }}
-        columns={matrixEditableColumns}
-        dataSource={(cfg.rows || []).slice(1).map((_, rIdx) => ({ key: String(rIdx) }))}
+                columns={matrixEditableColumns}
+                // dataSource: skip header row (index 0) and provide rowIndex referencing actual cfg.rows/cfg.data
+                dataSource={(cfg.rows || []).slice(1).map((_, rIdx) => ({ key: String(rIdx + 1), rowIndex: rIdx + 1 }))}
               />
             </div>
             <Divider style={{ margin: '8px 0' }} />

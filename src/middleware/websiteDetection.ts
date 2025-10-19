@@ -1,5 +1,5 @@
 /**
- * 🌐 MIDDLEWARE DE DÉTECTION AUTOMATIQUE DES SITES VITRINES
+ * 🌐 MIDDLEWARE DE DÉTECTION AUTOMATIQUE DES SITES VITRINES v2.0
  * 
  * Détecte le domaine appelé et charge automatiquement le site correspondant
  * depuis la base de données. Fonctionne pour TOUS les sites créés dans le CRM.
@@ -8,6 +8,8 @@
  * - 2thier.be → Charge le site avec domain="2thier.be"
  * - devis1min.be → Charge le site avec domain="devis1min.be"
  * - monsite.com → Charge le site avec domain="monsite.com"
+ * 
+ * Updated: 14/10/2025 - Fix siteName loading
  */
 
 import { Request, Response, NextFunction } from 'express';

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { dlog } from '../../../../../utils/debug';
 import { buildMirrorKeys } from '../utils/mirrorNormalization';
 
@@ -414,6 +414,9 @@ interface TreeBranchLeafNode {
   select_options?: Array<{ label: string; value: string }> | Record<string, unknown>;
   select_defaultValue?: string;
   
+  // Choix multiple pour branches SELECT (niveau 2+)
+  isMultiple?: boolean;
+  
   // Configuration booléen COMPLÈTE
   bool_trueLabel?: string;
   bool_falseLabel?: string;
@@ -506,6 +509,7 @@ export interface TBLField {
     minLength?: number;
     maxLength?: number;
     rows?: number;
+  mask?: string;
     regex?: string;
     textDefaultValue?: string;
     
@@ -523,6 +527,8 @@ export interface TBLField {
     format?: string;
     showTime?: boolean;
     dateDefaultValue?: string;
+  minDate?: string;
+  maxDate?: string;
     
     // Sélection
     multiple?: boolean;
@@ -651,11 +657,45 @@ export interface TBLTree {
 
 // 🔄 TRANSFORMATION PRISMA → TBL (COMPLÈTE AVEC TOUTES LES CAPACITÉS)
 const transformPrismaNodeToField = (
-  node: TreeBranchLeafNode, 
-  childrenMap: Map<string, TreeBranchLeafNode[]>
+  node: TreeBranchLeafNode,
+  childrenMap: Map<string, TreeBranchLeafNode[]>,
+  nodeLookup: Map<string, TreeBranchLeafNode>,
+  activeSharedReferences?: Map<string, string[]>, // 🔗 NOUVEAU: Références partagées actives
+  _formData?: Record<string, any> // 🔗 NOUVEAU: Pour vérifier les sélections
 ): TBLField => {
+  // 🔗 RÉSOLUTION DES RÉFÉRENCES PARTAGÉES
+  let resolvedNode = node;
+  if (node.sharedReferenceId && !node.isSharedReference) {
+    // Ce nœud utilise une référence partagée → récupérer la source
+    const sourceTemplate = nodeLookup.get(node.sharedReferenceId);
+    if (sourceTemplate && sourceTemplate.isSharedReference) {
+      if (verbose()) {
+        dlog(`🔗 [SHARED REF] Résolution: "${node.label}" → "${sourceTemplate.label}" (${sourceTemplate.id})`);
+      }
+      // Merger les configurations (⚡ UTILISER L'ID DU TEMPLATE POUR PARTAGER LES DONNÉES)
+      resolvedNode = {
+        ...sourceTemplate,
+        id: sourceTemplate.id, // ⚡ MÊME ID = MÊMES DONNÉES PARTOUT
+        label: node.label || sourceTemplate.label, // Garde le label local si défini
+        description: node.description || sourceTemplate.description,
+        order: node.order,
+        parentId: node.parentId,
+        treeId: node.treeId,
+        // Marquer comme référence résolue
+        metadata: {
+          ...sourceTemplate.metadata,
+          isResolvedReference: true,
+          referenceSourceId: sourceTemplate.id,
+          referenceSourceLabel: sourceTemplate.label,
+          // Garder trace de l'ID du nœud de référence (pour le rendu dans l'arbre)
+          referenceNodeId: node.id
+        }
+      };
+    }
+  }
+  
   // 1️⃣ Déterminer si c'est une sous-branche (liste déroulante) ou un champ simple
-  const children = childrenMap.get(node.id) || [];
+  const children = childrenMap.get(resolvedNode.id) || [];
   const hasOptions = children.some(child => child.type === 'leaf_option' || child.type === 'leaf_option_field');
   
   // 🎯 FONCTION HELPER: Extraire la capacité active depuis les instances
@@ -947,6 +987,111 @@ const transformPrismaNodeToField = (
             });
           });
         
+        // 🔗 NOUVEAU: Ajouter les RÉFÉRENCES PARTAGÉES comme champs conditionnels
+        const sharedRefIds = activeSharedReferences.get(optionNode.id);
+        if (sharedRefIds && sharedRefIds.length > 0) {
+          if (verbose()) dlog(`  🔗 Toujours inclure les ${sharedRefIds.length} références partagées pour l'option "${optionNode.label}" pour un rendu dynamique.`);
+
+          sharedRefIds.forEach(refId => {
+            const refNode = nodeLookup.get(refId);
+            if (refNode) {
+              if (verbose()) dlog(`    ➕ Ajout référence partagée: "${refNode.label}"`);
+              
+              const finalRefFieldType = refNode.subType || refNode.fieldType || refNode.type || 'TEXT';
+              
+              conditionalFields.push({
+                id: refNode.id,
+                name: refNode.label,
+                label: refNode.label,
+                type: finalRefFieldType,
+                required: refNode.isRequired,
+                visible: refNode.isVisible,
+                placeholder: refNode.text_placeholder,
+                description: refNode.description,
+                order: refNode.order || 9999, // Ordre élevé par défaut
+                // 🎯 AJOUT CRITIQUE: Nom de la référence partagée pour l'affichage dans TBLSectionRenderer
+                sharedReferenceName: refNode.label,
+                config: {
+                size: refNode.appearance_size,
+                width: refNode.appearance_width,
+                variant: refNode.appearance_variant,
+                minLength: refNode.text_minLength,
+                maxLength: refNode.text_maxLength,
+                rows: refNode.text_rows,
+                mask: refNode.text_mask,
+                regex: refNode.text_regex,
+                textDefaultValue: refNode.text_defaultValue,
+                min: refNode.number_min,
+                max: refNode.number_max,
+                step: refNode.number_step,
+                decimals: refNode.number_decimals,
+                prefix: refNode.number_prefix,
+                suffix: refNode.number_suffix,
+                unit: refNode.number_unit,
+                numberDefaultValue: refNode.number_defaultValue,
+                format: refNode.date_format,
+                showTime: refNode.date_showTime,
+                dateDefaultValue: refNode.date_defaultValue,
+                minDate: refNode.date_minDate,
+                maxDate: refNode.date_maxDate,
+                multiple: refNode.select_multiple,
+                searchable: refNode.select_searchable,
+                allowClear: refNode.select_allowClear,
+                selectDefaultValue: refNode.select_defaultValue,
+                trueLabel: refNode.bool_trueLabel,
+                falseLabel: refNode.bool_falseLabel,
+                boolDefaultValue: refNode.bool_defaultValue,
+              },
+              capabilities: {
+                data: {
+                  enabled: !!refNode.data_instances && Object.keys(refNode.data_instances || {}).length > 0,
+                  activeId: refNode.data_activeId,
+                  instances: refNode.data_instances,
+                },
+                formula: {
+                  enabled: !!refNode.formula_instances && Object.keys(refNode.formula_instances || {}).length > 0,
+                  activeId: refNode.formula_activeId,
+                  instances: refNode.formula_instances,
+                  currentFormula: extractActiveCapability(refNode.formula_instances, refNode.formula_activeId) as FormulaCapability,
+                },
+                condition: {
+                  enabled: !!refNode.condition_instances && Object.keys(refNode.condition_instances || {}).length > 0,
+                  activeId: refNode.condition_activeId,
+                  instances: refNode.condition_instances,
+                  currentConditions: extractActiveCapability(refNode.condition_instances, refNode.condition_activeId) as ConditionCapability,
+                },
+                table: {
+                  enabled: !!refNode.table_instances && Object.keys(refNode.table_instances || {}).length > 0,
+                  activeId: refNode.table_activeId,
+                  instances: refNode.table_instances,
+                  currentTable: extractActiveCapability(refNode.table_instances, refNode.table_activeId) as TableCapability,
+                },
+                api: {
+                  enabled: !!refNode.api_instances && Object.keys(refNode.api_instances || {}).length > 0,
+                  activeId: refNode.api_activeId,
+                  instances: refNode.api_instances,
+                  currentAPI: extractActiveCapability(refNode.api_instances, refNode.api_activeId) as APICapability,
+                },
+                link: {
+                  enabled: !!refNode.link_instances && Object.keys(refNode.link_instances || {}).length > 0,
+                  activeId: refNode.link_activeId,
+                  instances: refNode.link_instances,
+                  currentLinks: extractActiveCapability(refNode.link_instances, refNode.link_activeId) as LinkCapability,
+                },
+                markers: {
+                  enabled: !!refNode.markers_instances && Object.keys(refNode.markers_instances || {}).length > 0,
+                  activeId: refNode.markers_activeId,
+                  instances: refNode.markers_instances,
+                  currentMarkers: extractActiveCapability(refNode.markers_instances, refNode.markers_activeId) as MarkersCapability,
+                },
+              }
+            });
+          } else {
+            if (verbose()) dlog(`    ⚠️ Référence partagée "${refId}" introuvable`);
+          }
+        });
+        }
+        
   if (verbose()) dlog(`  📊 Total champs conditionnels pour "${optionNode.label}": ${conditionalFields.length}`);
         
         return {
@@ -994,13 +1139,140 @@ const transformPrismaNodeToField = (
         size: node.appearance_size,
         width: node.appearance_width,
         variant: node.appearance_variant,
-        multiple: node.select_multiple,
+        // ✅ Support du choix multiple : select_multiple OU isMultiple (pour branches SELECT)
+        multiple: node.select_multiple || node.isMultiple,
         searchable: node.select_searchable,
         allowClear: node.select_allowClear,
         selectDefaultValue: node.select_defaultValue,
       },
       capabilities
     };
+  } else if (node.type === 'leaf_repeater') {
+    // 🔁 C'EST UN RÉPÉTABLE
+    if (verbose()) dlog(`🔁 [REPEATER] Transformation répétable: "${node.label}"`);
+    
+    // Extraire les metadata.repeater depuis les colonnes Prisma
+    // 🛡️ S'assurer que templateNodeIds est toujours un tableau
+    let templateNodeIds = node.repeater_templateNodeIds || [];
+    if (!Array.isArray(templateNodeIds)) {
+      // Si c'est un objet JSON ou une chaîne, essayer de parser
+      if (typeof templateNodeIds === 'string') {
+        try {
+          templateNodeIds = JSON.parse(templateNodeIds);
+        } catch (e) {
+          console.error('❌ [REPEATER] Impossible de parser repeater_templateNodeIds:', e);
+          templateNodeIds = [];
+        }
+      } else {
+        templateNodeIds = [];
+      }
+    }
+
+    if (templateNodeIds.length === 0 && node.metadata && typeof node.metadata === 'object') {
+      const legacyRepeater = (node.metadata as Record<string, unknown>).repeater as { templateNodeIds?: unknown } | undefined;
+      if (legacyRepeater?.templateNodeIds && Array.isArray(legacyRepeater.templateNodeIds)) {
+        // ⚡️ Fallback legacy: réutiliser les IDs définis dans metadata.repeater
+        templateNodeIds = legacyRepeater.templateNodeIds as string[];
+      }
+    }
+    
+    // 🏷️ Extraire templateNodeLabels depuis la colonne Prisma
+    let templateNodeLabels = node.repeater_templateNodeLabels || null;
+    if (typeof templateNodeLabels === 'string') {
+      try {
+        templateNodeLabels = JSON.parse(templateNodeLabels);
+      } catch (e) {
+        console.error('❌ [REPEATER] Impossible de parser repeater_templateNodeLabels:', e);
+        templateNodeLabels = null;
+      }
+    }
+
+    if (!templateNodeLabels && node.metadata && typeof node.metadata === 'object') {
+      const legacyRepeater = (node.metadata as Record<string, unknown>).repeater as { templateNodeLabels?: unknown } | undefined;
+      if (legacyRepeater?.templateNodeLabels && typeof legacyRepeater.templateNodeLabels === 'object') {
+        // ⚡️ Fallback legacy: récupérer les labels conservés dans metadata.repeater
+        templateNodeLabels = legacyRepeater.templateNodeLabels;
+      }
+    }
+
+    if (Array.isArray(templateNodeLabels)) {
+      const templateLabelsArray = templateNodeLabels;
+      templateNodeLabels = templateNodeIds.reduce<Record<string, string>>((acc, templateId, index) => {
+        const maybeLabel = templateLabelsArray?.[index];
+        if (typeof maybeLabel === 'string' && maybeLabel.trim().length > 0) {
+          acc[templateId] = maybeLabel;
+        }
+        return acc;
+      }, {});
+    }
+
+    if ((!templateNodeLabels || Object.keys(templateNodeLabels).length === 0) && templateNodeIds.length > 0) {
+      const derivedLabels: Record<string, string> = {};
+
+      const pickLabel = (templateId: string): string | undefined => {
+        const candidateNode = nodeLookup.get(templateId) || children.find(child => child.id === templateId);
+        if (!candidateNode) return undefined;
+
+        const metadata = typeof candidateNode.metadata === 'object' ? candidateNode.metadata as Record<string, unknown> : undefined;
+        const metadataLabelCandidate = metadata
+          ? (metadata['originalLabel'] ?? metadata['label'] ?? metadata['displayName'])
+          : undefined;
+        const metadataLabel = typeof metadataLabelCandidate === 'string' ? metadataLabelCandidate : undefined;
+
+        return (
+          candidateNode.label ||
+          (candidateNode as { field_label?: string }).field_label ||
+          (candidateNode as { option_label?: string }).option_label ||
+          metadataLabel
+        );
+      };
+
+      templateNodeIds.forEach(templateId => {
+        const label = pickLabel(templateId);
+        if (label) {
+          derivedLabels[templateId] = label;
+        }
+      });
+
+      if (Object.keys(derivedLabels).length > 0) {
+        templateNodeLabels = derivedLabels;
+      }
+    }
+    
+    const repeaterMetadata = {
+      templateNodeIds,
+      templateNodeLabels, // ✅ AJOUT DES LABELS
+      minItems: node.repeater_minItems || 0,
+      maxItems: node.repeater_maxItems || null,
+      addButtonLabel: node.repeater_addButtonLabel || 'Ajouter une entrée'
+    };
+    
+    if (verbose()) dlog(`🔁 [REPEATER] Metadata:`, repeaterMetadata);
+    
+    return {
+      id: node.id,
+      name: node.label,
+      label: node.label,
+      type: 'leaf_repeater', // ⬅️ TYPE SPÉCIFIQUE POUR LE RÉPÉTABLE
+      required: node.isRequired,
+      visible: node.isVisible,
+      description: node.description,
+      order: node.order,
+      // 🎯 APPARENCE CONFIG pour le repeater
+      appearanceConfig: {
+        ...(node.appearanceConfig || {}),
+        // ✅ Ajouter les tooltips dans appearanceConfig
+        helpTooltipType: node.text_helpTooltipType,
+        helpTooltipText: node.text_helpTooltipText,
+        helpTooltipImage: node.text_helpTooltipImage
+      },
+      // 🎯 METADATA RÉPÉTABLE
+      metadata: {
+        repeater: repeaterMetadata
+      },
+      capabilities
+    };
+    
   } else if (node.type.includes('leaf_field')) {
     // 🎯 C'EST UN CHAMP SIMPLE
     
@@ -1093,7 +1365,10 @@ const transformPrismaNodeToField = (
 };
 
 // 🌳 FONCTION PRINCIPALE: Transformation hiérarchique DYNAMIQUE PRISMA
-const transformNodesToTBLComplete = (nodes: TreeBranchLeafNode[]): {
+const transformNodesToTBLComplete = (
+  nodes: TreeBranchLeafNode[],
+  formData?: Record<string, any> // 🔗 NOUVEAU: Pour vérifier les sélections d'options
+): {
   tree: TBLTree;
   tabs: TBLTab[];
   fieldsByTab: Record<string, TBLField[]>;
@@ -1114,9 +1389,35 @@ const transformNodesToTBLComplete = (nodes: TreeBranchLeafNode[]): {
     childrenMap.get(parentId)!.push(node);
   });
   
+  // ✅ 1.5️⃣ NOUVELLE LOGIQUE : Stocker TOUTES les références partagées (activation conditionnelle dans transformPrismaNodeToField)
+  // On ne modifie PAS childrenMap, on stocke juste quelles options ont des refs actives
+  const activeSharedReferences = new Map<string, string[]>(); // optionId -> [refNodeIds]
+  
+  nodes.forEach(node => {
+    if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
+      const isOption = node.type === 'leaf_option' || node.type === 'leaf_option_field';
+      
+      if (isOption) {
+        // 🎯 STOCKER TOUTES les options avec références, la sélection sera vérifiée dynamiquement
+        activeSharedReferences.set(node.id, node.sharedReferenceIds);
+        if (verbose()) dlog(`🔗 [TBL-PRISMA] Option "${node.label}" stockée avec ${node.sharedReferenceIds.length} références partagées`);
+      }
+    }
+  });
+  
   // 2️⃣ Identifier les niveaux selon votre architecture EXACTE
-  const niveau1Nodes = childrenMap.get('root') || []; // Niveau 1 = Onglets (branches)
-  if (verbose()) dlog('🔍 [TBL-PRISMA] Onglets (Niveau 1):', niveau1Nodes.length, niveau1Nodes.map(n => `${n.label} (order: ${n.order})`));
+  // ❌ FILTRER LES RÉFÉRENCES PARTAGÉES - Elles ne sont PAS des onglets !
+  const allRootChildren = childrenMap.get('root') || [];
+  const niveau1Nodes = allRootChildren.filter(node => !node.isSharedReference);
+  
+  if (verbose()) {
+    const filteredCount = allRootChildren.length - niveau1Nodes.length;
+    if (filteredCount > 0) {
+      dlog(`🚫 [TBL-PRISMA] ${filteredCount} références partagées EXCLUES des onglets:`, 
+        allRootChildren.filter(n => n.isSharedReference).map(n => n.label));
+    }
+    dlog('🔍 [TBL-PRISMA] Onglets (Niveau 1):', niveau1Nodes.length, niveau1Nodes.map(n => `${n.label} (order: ${n.order})`));
+  }
   
   // 3️⃣ Fonction récursive pour traiter TOUS les niveaux selon TreeBranchLeaf
   const processedNodeIds = new Set<string>(); // 🎯 ÉVITER LES DOUBLONS
@@ -1144,7 +1445,7 @@ const transformNodesToTBLComplete = (nodes: TreeBranchLeafNode[]): {
         if (child.type === 'section') {
           // 🏗️ C'EST UNE SECTION = CRÉER UNE SOUS-SECTION TBL
           if (verbose()) dlog(`      📦 Section détectée: "${child.label}" - traitement des champs de la section`);
-          const sectionFields = processNodeRecursively(child.id, currentLevel + 1);
+      const sectionFields = processNodeRecursively(child.id, currentLevel + 1);
           detectedSections.set(child.id, { node: child, fields: sectionFields });
           if (verbose()) dlog(`      ✅ Section "${child.label}" créée avec ${sectionFields.length} champs`);
           // ⚡ IMPORTANT: Ajouter aussi les champs à la liste principale pour qu'ils soient disponibles
@@ -1158,7 +1459,7 @@ const transformNodesToTBLComplete = (nodes: TreeBranchLeafNode[]): {
           
           if (hasOptions) {
             // 🎯 BRANCHE AVEC OPTIONS = LISTE DÉROULANTE
-            const selectField = transformPrismaNodeToField(child, childrenMap);
+            const selectField = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
             processedFields.push(selectField);
             if (verbose()) dlog(`      ✅ Liste déroulante: "${selectField.label}" avec ${selectField.options?.length || 0} options`);
           } else {
@@ -1172,7 +1473,7 @@ const transformNodesToTBLComplete = (nodes: TreeBranchLeafNode[]): {
           
         } else if (child.type.includes('leaf_field')) {
           // 🍃 C'EST UNE FEUILLE = CHAMP SIMPLE
-          const field = transformPrismaNodeToField(child, childrenMap);
+          const field = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
           processedFields.push(field);
           processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
           if (verbose()) dlog(`      🍃 Champ simple: "${field.label}" (${field.type})`);
@@ -1183,6 +1484,23 @@ const transformNodesToTBLComplete = (nodes: TreeBranchLeafNode[]): {
             if (verbose()) dlog(`        🔗 LIENS depuis champ "${child.label}": ${linkedChildren.length} éléments`);
             const linkedFields = processNodeRecursively(child.id, currentLevel + 1);
             processedFields.push(...linkedFields);
+          }
+          
+        } else if (child.type === 'leaf_repeater') {
+          // 🔁 C'EST UN RÉPÉTABLE = AJOUTER COMME CHAMP SPÉCIAL
+          const repeaterField = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
+          processedFields.push(repeaterField);
+          processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
+          if (verbose()) dlog(`      🔁 Répétable: "${repeaterField.label}" avec metadata.repeater:`, repeaterField.metadata?.repeater);
+          
+          // Les templates du répétable sont traités comme des enfants mais ne sont pas affichés directement
+          const templateChildren = childrenMap.get(child.id) || [];
+          if (templateChildren.length > 0) {
+            if (verbose()) dlog(`        🔗 Templates du répétable "${child.label}": ${templateChildren.length} nœuds`);
+            // Marquer les templates comme traités pour éviter qu'ils apparaissent en double
+            templateChildren.forEach(templateChild => {
+              processedNodeIds.add(templateChild.id);
+            });
           }
           
         } else if (child.type === 'leaf_option' || child.type === 'leaf_option_field') {
@@ -1323,6 +1641,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
   const [sectionsByTab, setSectionsByTab] = useState<Record<string, TBLSection[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rawNodes, setRawNodes] = useState<TreeBranchLeafNode[]>([]); // 🔄 NOUVEAU: Garder les données brutes pour retransformation
+  const rawNodesRef = useRef<TreeBranchLeafNode[]>([]); // 🔄 NOUVEAU: Ref stable pour éviter recréation callback
+  
+  // Synchroniser le ref avec le state
+  useEffect(() => {
+    rawNodesRef.current = rawNodes;
+  }, [rawNodes]);
 
   const fetchData = useCallback(async () => {
     if (!tree_id || disabled) return;
@@ -1336,7 +1661,12 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
       const response = await api.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
       
       if (response && Array.isArray(response)) {
-        const transformedData = transformNodesToTBLComplete(response);
+        // 🔄 NOUVEAU: Sauvegarder les données brutes pour retransformation dynamique
+        setRawNodes(response);
+        
+        // ✅ Récupérer formData depuis le global store TBL
+        const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
+        const transformedData = transformNodesToTBLComplete(response, formData);
         
         // 🎯 PHASE 2: Résolution asynchrone des valeurs pour les champs qui en ont besoin
   if (verbose()) dlog('🔄 [TBL-PRISMA] Phase 2: Résolution des valeurs dynamiques...');
@@ -1444,6 +1774,139 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
     fetchData();
   }, [fetchData, disabled]);
 
+  // 🔄 FONCTION: Retransformer les données avec le formData actuel (SANS recharger depuis l'API)
+  const retransformWithCurrentFormData = useCallback(async () => {
+    const currentRawNodes = rawNodesRef.current;
+    
+    if (!currentRawNodes || currentRawNodes.length === 0) {
+      console.warn('⚠️ [TBL Hook] Pas de données brutes disponibles pour retransformation');
+      return;
+    }
+
+    try {
+      console.log('🔄 [TBL Hook] Retransformation avec formData actuel...', 'rawNodes:', currentRawNodes.length);
+      
+      // ✅ Récupérer formData depuis le global store TBL
+      const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
+      const transformedData = transformNodesToTBLComplete(currentRawNodes, formData);
+      
+      // 🎯 PHASE 2: Résolution asynchrone des valeurs pour les champs qui en ont besoin
+      const resolvedFieldsByTab: Record<string, TBLField[]> = {};
+      
+      for (const [tabId, fields] of Object.entries(transformedData.fieldsByTab)) {
+        const resolvedFields = await Promise.all(
+          fields.map(async (field) => {
+            if (field.needsValueResolution) {
+              try {
+                const originalNode = currentRawNodes.find(node => node.id === field.id);
+                if (originalNode) {
+                  const { value: resolvedValue, variableConfig } = await resolveFieldValue(originalNode, api, tree_id);
+
+                  let nextCapabilities = field.capabilities;
+                  const variableId = originalNode.id;
+                  if (variableConfig) {
+                    nextCapabilities = {
+                      ...(field.capabilities || {}),
+                      data: {
+                        enabled: true,
+                        activeId: variableId,
+                        instances: {
+                          ...(field.capabilities?.data?.instances || {}),
+                          [variableId]: { metadata: { ...(variableConfig as Record<string, unknown>) } }
+                        }
+                      }
+                    } as TBLField['capabilities'];
+                  }
+
+                  if (resolvedValue !== null) {
+                    return { ...field, value: resolvedValue, capabilities: nextCapabilities };
+                  }
+
+                  if (variableConfig) {
+                    return { ...field, capabilities: nextCapabilities };
+                  }
+                }
+              } catch (valueError) {
+                console.error(`❌ [TBL-PRISMA] Erreur résolution valeur pour "${field.label}":`, valueError);
+              }
+            }
+            return field;
+          })
+        );
+        
+        resolvedFieldsByTab[tabId] = resolvedFields;
+      }
+      
+      // 🎯 MISE À JOUR des sections avec les champs résolus
+      const resolvedSectionsByTab: Record<string, TBLSection[]> = {};
+      
+      for (const [tabId, sections] of Object.entries(transformedData.sectionsByTab)) {
+        const resolvedSections = sections.map(section => ({
+          ...section,
+          fields: resolvedFieldsByTab[tabId]?.filter(field => 
+            section.fields.some(sectionField => sectionField.id === field.id)
+          ) || section.fields
+        }));
+        
+        resolvedSectionsByTab[tabId] = resolvedSections;
+      }
+      
+      // 🎯 MISE À JOUR de l'arbre avec les onglets résolus
+      const resolvedTabs = transformedData.tabs.map(tab => ({
+        ...tab,
+        allFields: resolvedFieldsByTab[tab.id] || tab.allFields,
+        sections: resolvedSectionsByTab[tab.id] || tab.sections
+      }));
+      
+      console.log('✅ [TBL Hook] Retransformation terminée, mise à jour du state...');
+      
+      setTree({ ...transformedData.tree, tabs: resolvedTabs });
+      setTabs(resolvedTabs);
+      setFieldsByTab(resolvedFieldsByTab);
+      setSectionsByTab(resolvedSectionsByTab);
+      console.log('✅ [TBL Hook] Retransformation terminée');
+    } catch (err) {
+      console.error('❌ [TBL Hook] Erreur lors de la retransformation:', err);
+    }
+  }, [api, tree_id]);
+
+  // 🔄 NOUVEAU: Écouter les changements de formData pour réinjecter les références partagées
+  // ⚠️ ATTENTION: NE PAS recharger fetchData() qui réinitialise tout le formulaire !
+  // → On retransforme les données déjà chargées avec le nouveau formData
+  useEffect(() => {
+    console.log('🎯 [TBL Hook] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
+    
+    const handleFormDataChange = () => {
+      console.log('🔔 [TBL Hook] Event TBL_FORM_DATA_CHANGED reçu !');
+      
+      if (disabled) {
+        console.log('⚠️ [TBL Hook] Hook désactivé, ignoré');
+        return;
+      }
+      
+      if (!tree_id) {
+        console.log('⚠️ [TBL Hook] Pas de tree_id, ignoré');
+        return;
+      }
+      
+      if (rawNodesRef.current.length === 0) {
+        console.log('⚠️ [TBL Hook] rawNodes vide, ignoré');
+        return;
+      }
+      
+      console.log('🔄 [TBL Hook] FormData modifié, rechargement pour références partagées...');
+      retransformWithCurrentFormData();
+    };
+
+    console.log('✅ [TBL Hook] Event listener TBL_FORM_DATA_CHANGED attaché');
+    window.addEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+    
+    return () => {
+      console.log('🧹 [TBL Hook] Event listener TBL_FORM_DATA_CHANGED détaché');
+      window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+    };
+  }, [disabled, tree_id, retransformWithCurrentFormData]);
+
   // 🔄 Écouter les changements de capacité pour recharger les données
   useEffect(() => {
     const handleCapabilityUpdate = (event: Event) => {
@@ -1468,6 +1931,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
     sectionsByTab,
     loading,
     error,
-    refetch: fetchData
+    refetch: fetchData,
+    rawNodes // 🔥 NOUVEAU: Exposer rawNodes pour Cascader (contient leaf_option)
   };
 };

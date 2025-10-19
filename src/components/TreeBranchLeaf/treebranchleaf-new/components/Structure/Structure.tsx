@@ -74,7 +74,7 @@ interface StructureProps {
   onMoveNodeToRoot?: (node: TreeBranchLeafNode) => Promise<void>;
 }
 
-const Structure: React.FC<StructureProps> = ({
+const StructureComponent: React.FC<StructureProps> = ({
   tree,
   nodes,
   selectedNode,
@@ -252,7 +252,15 @@ const Structure: React.FC<StructureProps> = ({
     return flattenNodes(nodes);
   }, [flattenNodes, nodes]);
 
-  // FlattenedNodes recalculated log temporairement supprimé
+  const allNodesForMemo = useMemo(() => flattenedNodes.map(fn => fn.node), [flattenedNodes]);
+
+  const handleDoubleClick = useCallback((node: TreeBranchLeafNode) => {
+    onToggleExpanded(node.id);
+  }, [onToggleExpanded]);
+
+  const handleToggleExpandNode = useCallback((node: TreeBranchLeafNode) => {
+    onToggleExpanded(node.id);
+  }, [onToggleExpanded]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
@@ -442,10 +450,10 @@ const Structure: React.FC<StructureProps> = ({
                   isSelected={isSelected}
                   isExpanded={isExpanded}
                   hasChildren={hasChildren}
-                  allNodes={flattenedNodes.map(fn => fn.node)}
+                  allNodes={allNodesForMemo}
                   onSelect={onSelectNode}
                   onToggleExpanded={onToggleExpanded}
-                  onDoubleClick={(node) => onToggleExpanded(node.id)}
+                  onDoubleClick={handleDoubleClick}
                   readOnly={readOnly}
                   onEditNode={onEditNode}
                   onDuplicateNode={onDuplicateNode}
@@ -455,7 +463,7 @@ const Structure: React.FC<StructureProps> = ({
                   onToggleNodeVisibility={onToggleNodeVisibility}
                   onOpenNodeSettings={onOpenNodeSettings}
                   onMoveNodeToRoot={onMoveNodeToRoot}
-                  onToggleExpandNode={(n)=> onToggleExpanded(n.id)}
+                  onToggleExpandNode={handleToggleExpandNode}
                 />
               );
             })}
@@ -483,5 +491,8 @@ const Structure: React.FC<StructureProps> = ({
     </div>
   );
 };
+
+// `React.memo` pour empêcher le re-rendu si les props n'ont pas changé
+const Structure = React.memo(StructureComponent);
 
 export default Structure;

@@ -70,7 +70,11 @@ const PaletteItem: React.FC<PaletteItemProps> = ({
   };
 
   return (
-    <Tooltip title={`${emoji} ${label} - ${description}`} placement="right">
+    <Tooltip 
+      title={`${emoji} ${label} - ${description}`} 
+      placement="right"
+      open={isDragging ? false : undefined}
+    >
       <div
         ref={setNodeRef}
         style={style}
@@ -147,8 +151,13 @@ const Palette: React.FC<PaletteProps> = ({
   ];
 
   return (
-    <div style={{ height: '100%', overflow: 'auto' }}>
-      
+    <div 
+      style={{ 
+        height: '100%', 
+        overflow: 'auto',
+        overscrollBehavior: 'contain'
+      }}
+    >
       {/* Titre et instructions */}
       <div style={{ marginBottom: '16px', padding: '8px' }}>
         <Text type="secondary" style={{ fontSize: '12px' }}>

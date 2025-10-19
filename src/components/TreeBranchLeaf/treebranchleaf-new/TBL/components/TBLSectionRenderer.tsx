@@ -20,16 +20,26 @@ import {
   Divider,
   Tag,
   Collapse,
-  Grid
+  Grid,
+  Button
 } from 'antd';
 import { 
   BranchesOutlined,
-  EyeInvisibleOutlined
+  EyeInvisibleOutlined,
+  PlusOutlined,
+  MinusCircleOutlined
 } from '@ant-design/icons';
 import TBLFieldRendererAdvanced from './TBLFieldRendererAdvanced';
 import type { TBLSection, TBLField } from '../hooks/useTBLDataPrismaComplete';
 import type { TBLFormData } from '../hooks/useTBLSave';
 import { buildMirrorKeys } from '../utils/mirrorNormalization';
+import type { RawTreeNode } from '../types';
+
+declare global {
+  interface Window {
+    TBL_CASCADER_NODE_IDS?: Record<string, string>;
+  }
+}
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -90,9 +100,11 @@ interface TBLSectionRendererProps {
   formData: TBLFormData;
   onChange: (fieldId: string, value: unknown) => void;
   treeId?: string; // ID de l'arbre TreeBranchLeaf
+  allNodes?: RawTreeNode[]; // 🔥 NOUVEAU: Tous les nœuds pour Cascader
   disabled?: boolean;
   level?: number; // Niveau de profondeur pour le style
   parentConditions?: Record<string, unknown>; // Conditions héritées du parent
+  isValidation?: boolean; // Mode validation (affichage des erreurs)
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -100,14 +112,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   formData,
   onChange,
   treeId,
+  allNodes = [],
   disabled = false,
   level = 0,
-  parentConditions = {}
+  parentConditions = {},
+  isValidation = false
 }) => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   const formRowGutter: [number, number] = useMemo(() => [
-    isMobile ? 12 : 16,
+    isMobile ? 12 : 24,
     isMobile ? 12 : 24
   ], [isMobile]);
   const dataRowGutter: [number, number] = useMemo(() => [
@@ -123,6 +137,92 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       globalDlog('[TBLSectionRenderer]', ...args);
     }
   }, [debugEnabled]);
+
+  const buildConditionalFieldFromNode = useCallback((node: RawTreeNode): TBLField => {
+    const finalFieldType = (node.subType || node.fieldType || node.type || 'TEXT') as string;
+
+    const buildBaseCapability = (
+      instances?: Record<string, unknown> | null,
+      activeId?: string | null
+    ) => {
+      const hasInstances = !!instances && Object.keys(instances).length > 0;
+      return {
+        enabled: hasInstances,
+        activeId: hasInstances && activeId ? activeId : undefined,
+        instances: hasInstances ? instances : undefined,
+      };
+    };
+
+    const extractActiveInstance = (
+      instances?: Record<string, unknown> | null,
+      activeId?: string | null
+    ) => {
+      if (!instances || !activeId) return undefined;
+      return (instances as Record<string, unknown>)[activeId];
+    };
+
+    const formulaInstances = node.formula_instances as Record<string, unknown> | null;
+    const conditionInstances = node.condition_instances as Record<string, unknown> | null;
+
+    return {
+      id: node.id,
+      name: (node.field_label as string) || (node.name as string) || node.label,
+      label: node.label,
+      type: finalFieldType,
+      required: Boolean(node.isRequired),
+      visible: node.isVisible !== false,
+      placeholder: node.text_placeholder ?? undefined,
+      description: node.description ?? undefined,
+      order: typeof node.order === 'number' ? node.order : 9999,
+      sharedReferenceName: node.sharedReferenceName || node.label,
+      config: {
+        size: node.appearance_size ?? undefined,
+        width: node.appearance_width ?? undefined,
+        variant: node.appearance_variant ?? undefined,
+        minLength: node.text_minLength ?? undefined,
+        maxLength: node.text_maxLength ?? undefined,
+        rows: node.text_rows ?? undefined,
+        mask: node.text_mask ?? undefined,
+        regex: node.text_regex ?? undefined,
+        textDefaultValue: node.text_defaultValue ?? undefined,
+        min: node.number_min ?? undefined,
+        max: node.number_max ?? undefined,
+        step: node.number_step ?? undefined,
+        decimals: node.number_decimals ?? undefined,
+        prefix: node.number_prefix ?? undefined,
+        suffix: node.number_suffix ?? undefined,
+        unit: node.number_unit ?? undefined,
+        numberDefaultValue: node.number_defaultValue ?? undefined,
+        format: node.date_format ?? undefined,
+        showTime: node.date_showTime ?? undefined,
+        dateDefaultValue: node.date_defaultValue ?? undefined,
+        minDate: node.date_minDate ?? undefined,
+        maxDate: node.date_maxDate ?? undefined,
+        multiple: node.select_multiple ?? undefined,
+        searchable: node.select_searchable ?? undefined,
+        allowClear: node.select_allowClear ?? undefined,
+        selectDefaultValue: node.select_defaultValue ?? undefined,
+        trueLabel: node.bool_trueLabel ?? undefined,
+        falseLabel: node.bool_falseLabel ?? undefined,
+        boolDefaultValue: node.bool_defaultValue ?? undefined,
+      },
+      capabilities: {
+        data: buildBaseCapability(node.data_instances as Record<string, unknown> | null, node.data_activeId as string | null),
+        formula: {
+          ...buildBaseCapability(formulaInstances, node.formula_activeId as string | null),
+          currentFormula: extractActiveInstance(formulaInstances, node.formula_activeId as string | null) as unknown,
+        },
+        condition: {
+          ...buildBaseCapability(conditionInstances, node.condition_activeId as string | null),
+          currentConditions: extractActiveInstance(conditionInstances, node.condition_activeId as string | null) as unknown,
+        },
+        table: buildBaseCapability(node.table_instances as Record<string, unknown> | null, node.table_activeId as string | null),
+        api: buildBaseCapability(node.api_instances as Record<string, unknown> | null, node.api_activeId as string | null),
+        link: buildBaseCapability(node.link_instances as Record<string, unknown> | null, node.link_activeId as string | null),
+        markers: buildBaseCapability(node.markers_instances as Record<string, unknown> | null, node.markers_activeId as string | null),
+      },
+    } as TBLField;
+  }, []);
 
   // Cache de logs pour éviter répétitions massives
   const lastInjectionHashRef = useRef<string>('');
@@ -158,7 +258,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     }
   }, [section.conditions, formData]);
 
-  // 🔄 Réorganiser l'ordre des champs selon les conditions + injection des champs conditionnels
+  // 🔄 Réorganiser l'ordre des champs selon les conditions + injection des champs conditionnels + DÉPLOIEMENT DES REPEATERS
   const orderedFields = useMemo(() => {
     const fields = [...section.fields];
     
@@ -170,6 +270,121 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     const allFieldsSorted = fields.sort((a, b) => a.order - b.order);
     
     allFieldsSorted.forEach(field => {
+      // 🔁 REPEATER : Déplier les instances du repeater dans le flux
+      const isRepeater = field.type === 'leaf_repeater' || 
+                         field.type === 'LEAF_REPEATER' ||
+                         (field as any).fieldType === 'leaf_repeater' ||
+                         (field as any).fieldType === 'LEAF_REPEATER';
+      
+      if (isRepeater) {
+        const repeaterMetadata = field.metadata?.repeater;
+        const templateNodeIds = repeaterMetadata?.templateNodeIds || [];
+        const maxItems = repeaterMetadata?.maxItems;
+        const repeaterLabel = field.label || 'Entrée';
+        
+        // Récupérer le nombre d'instances depuis formData (clé spéciale)
+        const instanceCountKey = `${field.id}_instanceCount`;
+        // 🎯 Commencer à 0 instances - l'utilisateur doit cliquer sur "Ajouter" pour en créer
+        const instanceCount = (formData[instanceCountKey] as number) ?? 0;
+        
+        // Récupérer les labels des champs template - chercher dans TOUTES les sections récursivement
+        const findFieldInAllSections = (sections: TBLSection[], fieldId: string): TBLField | undefined => {
+          for (const sec of sections) {
+            // Chercher dans les champs de cette section
+            const found = sec.fields?.find(f => f.id === fieldId);
+            if (found) return found;
+            
+            // Chercher récursivement dans les sous-sections
+            if (sec.subsections && sec.subsections.length > 0) {
+              const foundInSub = findFieldInAllSections(sec.subsections, fieldId);
+              if (foundInSub) return foundInSub;
+            }
+          }
+          return undefined;
+        };
+        
+        const getTemplateFieldLabel = (templateNodeId: string) => {
+          // PRIORITÉ 1: Essayer de récupérer depuis les métadonnées du repeater EN PREMIER
+          if (repeaterMetadata?.templateNodeLabels) {
+            const labelFromMeta = (repeaterMetadata.templateNodeLabels as Record<string, string>)[templateNodeId];
+            if (labelFromMeta) {
+              return labelFromMeta;
+            }
+          }
+          
+          // PRIORITÉ 2: Chercher le champ dans la section actuelle
+          let templateField = section.fields.find(f => f.id === templateNodeId);
+          
+          // PRIORITÉ 3: Si pas trouvé, chercher dans toutes les sous-sections
+          if (!templateField && section.subsections) {
+            templateField = findFieldInAllSections(section.subsections, templateNodeId);
+          }
+          
+          const label = templateField?.label || templateNodeId;
+          return label;
+        };
+        
+        // Pour chaque instance, ajouter les champs template + bouton suppression
+        for (let i = 0; i < instanceCount; i++) {
+          templateNodeIds.forEach((templateNodeId) => {
+            const templateLabel = getTemplateFieldLabel(templateNodeId);
+            
+            // Créer un champ virtuel pour cette instance
+            const instanceField: TBLField = {
+              ...field,
+              id: `${field.id}_${i}_${templateNodeId}`,
+              label: `${repeaterLabel} - ${templateLabel}`, // Format: "Nom du repeater - Nom du champ"
+              type: 'TEXT', // Type par défaut, devrait être récupéré depuis l'arbre
+              order: nextOrder,
+              isRepeaterInstance: true,
+              repeaterParentId: field.id,
+              repeaterInstanceIndex: i,
+              repeaterTemplateNodeId: templateNodeId
+            } as TBLField & { isRepeaterInstance?: boolean; repeaterParentId?: string; repeaterInstanceIndex?: number; repeaterTemplateNodeId?: string };
+            
+            finalFields.push(instanceField);
+            nextOrder++;
+          });
+          
+          // Ajouter un bouton de suppression pour cette instance spécifique
+          // 🎯 Permettre la suppression dès qu'il y a au moins 1 instance
+          if (instanceCount > 0) {
+            const removeInstanceButtonField: TBLField = {
+              ...field,
+              id: `${field.id}_removeInstance_${i}`,
+              type: 'REPEATER_REMOVE_INSTANCE_BUTTON' as any,
+              label: `Supprimer ${repeaterLabel} #${i + 1}`,
+              order: nextOrder,
+              isRepeaterButton: true,
+              repeaterParentId: field.id,
+              repeaterInstanceIndex: i,
+              repeaterInstanceCount: instanceCount
+            } as TBLField & { isRepeaterButton?: boolean; repeaterParentId?: string; repeaterInstanceIndex?: number; repeaterInstanceCount?: number };
+            
+            finalFields.push(removeInstanceButtonField);
+            nextOrder++;
+          }
+        }
+        
+        // Ajouter un champ spécial "bouton +" qui sera rendu différemment
+        const addButtonField: TBLField = {
+          ...field,
+          id: `${field.id}_addButton`,
+          type: 'REPEATER_ADD_BUTTON' as any,
+          label: repeaterMetadata?.addButtonLabel || 'Ajouter une entrée',
+          order: nextOrder,
+          isRepeaterButton: true,
+          repeaterParentId: field.id,
+          repeaterCanAdd: !maxItems || instanceCount < maxItems,
+          repeaterInstanceCount: instanceCount
+        } as TBLField & { isRepeaterButton?: boolean; repeaterParentId?: string; repeaterCanAdd?: boolean; repeaterInstanceCount?: number };
+        
+        finalFields.push(addButtonField);
+        nextOrder++;
+        
+        return; // Passer au champ suivant
+      }
+      
       if (field.conditions && field.conditions.length > 0) {
         // Champ conditionnel : vérifier s'il doit être affiché
         const condition = field.conditions[0];
@@ -199,10 +414,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         nextOrder++;
         
         // 🎯 INJECTER LES CHAMPS CONDITIONNELS juste après le champ select/radio
-        if (field.isSelect && field.options) {
+        // 🔧 CORRECTION: Détecter SELECT même si isSelect pas défini (basé sur field.options)
+        const isSelectField = field.isSelect || Array.isArray(field.options);
+        if (isSelectField && field.options) {
           const rawSelectedValue = formData[field.id];
           // 🔧 CORRECTION: Normaliser les valeurs undefined pour éviter les problèmes de comparaison
           const selectedValue = rawSelectedValue === "undefined" ? undefined : rawSelectedValue;
+          
+          console.log('🔍🔍🔍 [SECTION RENDERER] ========== DÉBUT INJECTION CONDITIONNELS ==========');
+          console.log('🔍🔍🔍 [SECTION RENDERER] Champ SELECT:', {
+            fieldId: field.id,
+            fieldLabel: field.label,
+            rawSelectedValue,
+            selectedValue,
+            typeRaw: typeof rawSelectedValue,
+            typeNormalized: typeof selectedValue
+          });
           
           dlog(`🔍 [SECTION RENDERER] Champ select "${field.label}" - valeur sélectionnée: "${rawSelectedValue}" -> normalisée: "${selectedValue}"`);
           dlog(`🔍 [SECTION RENDERER] Type de rawSelectedValue: ${typeof rawSelectedValue}`);
@@ -221,6 +448,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           // Normalisation forte: tout en string sauf null/undefined
           const norm = (v: unknown) => (v === null || v === undefined ? v : String(v));
           const selectedNorm = norm(selectedValue);
+          
+          // 🎯 ÉTAPE 1 : Chercher dans field.options (niveau 1)
           let selectedOption = field.options.find(opt => {
             if (selectedValue === undefined || selectedValue === null) {
               return opt.value === undefined || opt.value === null;
@@ -230,12 +459,116 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           if (!selectedOption) {
             selectedOption = field.options.find(opt => norm(opt.value) === selectedNorm);
             if (selectedOption) {
-              dlog('🟡 [SECTION RENDERER] Correspondance option trouvée via comparaison loose (string).');
-            } else {
-              dlog('🔴 [SECTION RENDERER] Aucune option match strict ou loose. selectedValue=', selectedValue, 'selectedNorm=', selectedNorm, 'options=', field.options.map(o => ({ value:o.value, norm:norm(o.value) })));
+              dlog('🟡 [SECTION RENDERER] Correspondance option niveau 1 trouvée via comparaison loose (string).');
             }
           }
-          dlog(`🔍 [SECTION RENDERER] Option trouvée:`, selectedOption);
+          
+          // 🎯 ÉTAPE 2 : Si pas trouvé, chercher dans allNodes (sous-options niveau 2+)
+          if (!selectedOption && allNodes && allNodes.length > 0) {
+            let matchingNode: RawTreeNode | undefined;
+            let cascaderNodeId: string | undefined;
+
+            if (typeof window !== 'undefined' && window.TBL_CASCADER_NODE_IDS) {
+              cascaderNodeId = window.TBL_CASCADER_NODE_IDS[field.id];
+            }
+
+            if (cascaderNodeId) {
+              matchingNode = allNodes.find(node => node.id === cascaderNodeId);
+              console.log('🔍🔍🔍 [SECTION RENDERER] Recherche prioritaire via nodeId', {
+                fieldLabel: field.label,
+                cascaderNodeId,
+                found: !!matchingNode
+              });
+            }
+
+            if (!matchingNode) {
+              console.log('🔍🔍🔍 [SECTION RENDERER] Option non trouvée niveau 1, recherche dans allNodes...', {
+                fieldLabel: field.label,
+                selectedValue,
+                allNodesCount: allNodes.length,
+                leafOptionNodes: allNodes.filter(n => n.type === 'leaf_option').length
+              });
+              
+              // Chercher dans les nodes de type leaf_option qui ont le bon label/value
+              matchingNode = allNodes.find(node => 
+                (node.type === 'leaf_option' || node.type === 'leaf_option_field') &&
+                (node.label === selectedValue || norm(node.label) === selectedNorm)
+              );
+              
+              console.log('🔍🔍🔍 [SECTION RENDERER] Résultat recherche matchingNode:', {
+                found: !!matchingNode,
+                matchingNode: matchingNode ? { id: matchingNode.id, label: matchingNode.label, type: matchingNode.type } : null
+              });
+            }
+            
+            if (matchingNode) {
+              console.log('✅✅✅ [SECTION RENDERER] Option trouvée dans allNodes:', matchingNode);
+
+              const reconstructedOption: { id: string; value: string; label: string; conditionalFields?: TBLField[]; metadata?: Record<string, unknown> | null } = {
+                id: matchingNode.id,
+                value: matchingNode.label,
+                label: matchingNode.label,
+                metadata: matchingNode.metadata || null
+              };
+
+              const conditionalFields: TBLField[] = [];
+              const existingIds = new Set<string>();
+
+              const childFields = allNodes.filter(childNode =>
+                childNode.parentId === matchingNode.id &&
+                childNode.type === 'leaf_option_field'
+              );
+
+              console.log('🔍🔍🔍 [SECTION RENDERER] Recherche childFields:', {
+                matchingNodeId: matchingNode.id,
+                childFieldsCount: childFields.length,
+                childFields: childFields.map(c => ({ id: c.id, label: c.label, type: c.type, fieldType: c.fieldType, sharedReferenceName: c.sharedReferenceName }))
+              });
+
+              if (childFields.length > 0) {
+                console.log(`🎯🎯🎯 [SECTION RENDERER] Trouvé ${childFields.length} champs enfants (références partagées)`);
+                childFields.forEach(childNode => {
+                  const fieldFromChild = buildConditionalFieldFromNode(childNode);
+                  conditionalFields.push(fieldFromChild);
+                  existingIds.add(fieldFromChild.id);
+                });
+              }
+
+              const sharedReferenceIds = Array.isArray(matchingNode.sharedReferenceIds) ? matchingNode.sharedReferenceIds : [];
+              if (sharedReferenceIds.length > 0) {
+                console.log('🔗🔗🔗 [SECTION RENDERER] Références partagées détectées pour le nœud sélectionné:', {
+                  matchingNodeId: matchingNode.id,
+                  sharedReferenceIds
+                });
+
+                sharedReferenceIds.forEach(refId => {
+                  const refNode = allNodes.find(node => node.id === refId);
+                  if (!refNode) {
+                    dlog('⚠️ [SECTION RENDERER] Référence partagée introuvable', { refId, matchingNodeId: matchingNode.id });
+                    return;
+                  }
+                  if (existingIds.has(refNode.id)) {
+                    return;
+                  }
+                  const refField = buildConditionalFieldFromNode(refNode);
+                  conditionalFields.push(refField);
+                  existingIds.add(refField.id);
+                });
+              }
+
+              if (conditionalFields.length > 0) {
+                reconstructedOption.conditionalFields = conditionalFields;
+              }
+
+              selectedOption = reconstructedOption;
+            } else {
+              dlog('🔴 [SECTION RENDERER] Aucune option match dans field.options ni allNodes. selectedValue=', selectedValue, 'selectedNorm=', selectedNorm);
+            }
+          } else if (!selectedOption) {
+            dlog('🔴 [SECTION RENDERER] Aucune option match strict ou loose. selectedValue=', selectedValue, 'selectedNorm=', selectedNorm, 'options=', field.options.map(o => ({ value:o.value, norm:norm(o.value) })));
+          }
+          
+          dlog(`🔍 [SECTION RENDERER] Option finale trouvée:`, selectedOption);
           
           if (selectedOption?.conditionalFields && selectedOption.conditionalFields.length > 0) {
             const injSignatureObj = {
@@ -261,9 +594,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             
             // Injecter TOUS les champs conditionnels avec des ordres séquentiels
             selectedOption.conditionalFields.forEach((conditionalField, index) => {
+              // 🔥 CORRECTION : Utiliser le nom de la référence partagée au lieu du label de l'option
+              const sharedRefName = conditionalField.sharedReferenceName || conditionalField.label;
+              const fieldLabel = sharedRefName || `${selectedOption.label} ${index + 1}`;
+              
               const fieldWithOrder = {
                 ...conditionalField,
-                label: conditionalField.label || `${selectedOption.label} ${index + 1}`,
+                label: fieldLabel,
                 order: nextOrder,
                 // Marquer comme champ conditionnel pour la logique interne seulement
                 isConditional: true,
@@ -330,7 +667,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     });
     
     return finalFields.sort((a, b) => a.order - b.order);
-  }, [dlog, formData, section]);
+  }, [dlog, formData, section, allNodes, buildConditionalFieldFromNode]);
 
   // 🎨 Déterminer le style selon le niveau
   const getSectionStyle = () => {
@@ -364,15 +701,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     const [batchLoaded, setBatchLoaded] = useState(false);
     const isDataSection = section.isDataSection || section.title === 'Données' || section.title.includes('Données');
 
-    // 🔍 DEBUG LOG pour comprendre la logique
-    console.log(`🔍 [TBLSectionRenderer] Section "${section.title || section.name}" -> isDataSection: ${isDataSection}`, {
-      'section.isDataSection': section.isDataSection,
-      'section.title': section.title,
-      'section.title === "Données"': section.title === 'Données',
-      'section.title.includes("Données")': section.title?.includes('Données'),
-      'isDataSection final': isDataSection
-    });
-
     // Pré-chargement batch pour les cartes de la section Données
     useEffect(() => {
       if (!isDataSection) return;
@@ -397,54 +725,33 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     }, [isDataSection, formData, section.fields, evaluateBatch]);
 
     const renderDataSectionField = (field: TBLField) => {
-  console.log(`🔬🔬🔬 [DATA SECTION FIELD] DÉBUT RENDER "${field.label}" ==========`);
-  console.log(`🔬 [DATA SECTION FIELD] Field ID: ${field.id}`);
-  console.log(`🔬 [DATA SECTION FIELD] Field Type: ${field.fieldType}`);
-  console.log(`🔬 [DATA SECTION FIELD] Has Capabilities:`, !!field.capabilities);
-  console.log(`🔬 [DATA SECTION FIELD] Capabilities COMPLET:`, JSON.stringify(field.capabilities, null, 2));
-  console.log(`🔬 [DATA SECTION FIELD] FormData Value:`, formData[field.id]);
-    
     // 🔥 CORRECTION CRITIQUE : Si le champ a une capacité Table (lookup ou matrix), utiliser le renderer éditable
     const hasTableCapability = field.capabilities?.table?.enabled;
     const hasRowOrColumnMode = field.capabilities?.table?.currentTable?.rowBased === true || 
                                field.capabilities?.table?.currentTable?.columnBased === true;
     const isMatrixMode = field.capabilities?.table?.currentTable?.mode === 'matrix';
     
-    // 🔬 DIAGNOSTIC APPROFONDI - ORIENTATION INCLINAISON
-    console.log(`🔬 [DATA SECTION FIELD] "${field.label}" - currentTable COMPLET:`, field.capabilities?.table?.currentTable);
-    console.log(`🔬 [DATA SECTION FIELD] "${field.label}" - hasTableCapability: ${hasTableCapability}, hasRowOrColumnMode: ${hasRowOrColumnMode}, isMatrixMode: ${isMatrixMode}`);
+    //  Détection des champs répétables
+    const isRepeater = field.type === 'leaf_repeater' || 
+                       field.type === 'LEAF_REPEATER' ||
+                       (field as any).fieldType === 'leaf_repeater' ||
+                       (field as any).fieldType === 'LEAF_REPEATER';
     
-    // 🚨 DEBUG SPÉCIFIQUE POUR ORIENTATION - INCLINAISON
-    if (field.label === 'Orientation - Inclinaison') {
-      console.log(`🚨🚨🚨 [ORIENTATION DEBUG] CHAMP TROUVÉ !`);
-      console.log(`🚨 [ORIENTATION] Has Data Capability:`, field.capabilities?.data?.enabled);
-      console.log(`🚨 [ORIENTATION] Data activeId:`, field.capabilities?.data?.activeId);
-      console.log(`🚨 [ORIENTATION] Data instances:`, field.capabilities?.data?.instances);
-      console.log(`🚨 [ORIENTATION] Has Table Capability:`, hasTableCapability);
-      console.log(`🚨 [ORIENTATION] Table activeId:`, field.capabilities?.table?.activeId);
-      console.log(`🚨 [ORIENTATION] currentTable type:`, field.capabilities?.table?.currentTable?.type);
-      console.log(`🚨 [ORIENTATION] currentTable mode:`, field.capabilities?.table?.currentTable?.mode);
-      console.log(`🚨 [ORIENTATION] currentTable rowBased:`, field.capabilities?.table?.currentTable?.rowBased);
-      console.log(`🚨 [ORIENTATION] currentTable columnBased:`, field.capabilities?.table?.currentTable?.columnBased);
-      console.log(`🚨 [ORIENTATION] Va rendre éditable?`, hasTableCapability && (hasRowOrColumnMode || isMatrixMode));
-    }
-    
-    // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un résultat de matrice
-    if (hasTableCapability && (hasRowOrColumnMode || isMatrixMode)) {
-      console.log(`✅✅✅ [DATA SECTION FIX] Champ "${field.label}" a une capacité Table -> Utilisation TBLFieldRendererAdvanced`);
+    // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un résultat de matrice OU un répétable
+    if ((hasTableCapability && (hasRowOrColumnMode || isMatrixMode)) || isRepeater) {
       return (
         <Col
           key={field.id}
           xs={24}
           sm={12}
-          lg={8}
+          lg={6}
           className="mb-2"
         >
           <TBLFieldRendererAdvanced
             field={field}
             value={formData[field.id]}
+            allNodes={allNodes}
             onChange={(value) => {
-              console.log(`🔄🔄🔄 [SECTION RENDERER][DATA SECTION] onChange appelé pour ${field.id}:`, value);
               onChange(field.id, value);
 
               // Synchronisation miroir
@@ -452,7 +759,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 const label = (field.label || '').toString();
                 if (label) {
                   const mirrorKey = `__mirror_data_${label}`;
-                  console.log(`🪞 [MIRROR][DATA SECTION] Synchronisation: "${label}" -> ${mirrorKey} = ${value}`);
                   onChange(mirrorKey, value);
                 }
               } catch (e) {
@@ -462,6 +768,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             isValidation={isValidation}
             formData={formData}
             treeId={treeId}
+            allNodes={allNodes}
           />
         </Col>
       );
@@ -721,7 +1028,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         if (metaSourceRef && typeof metaSourceRef === 'string' && /^(formula:|condition:|variable:|@value\.)/.test(metaSourceRef)) {
           dlog(`🧪 [FALLBACK SMART] Utilisation CalculatedFieldDisplay via metaSourceRef='${metaSourceRef}'`);
           if (localStorage.getItem('TBL_DIAG') === '1') {
-            console.log('[TBL_DIAG][fallback-smart]', {
+            dlog('[TBL_DIAG][fallback-smart]', {
               fieldId: field.id,
               label: field.label,
               metaSourceRef,
@@ -764,7 +1071,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       
       // 🛡️ PROTECTION : Si rawValue est un objet, extraire la valeur intelligemment
       if (typeof rawValue === 'object' && rawValue !== null) {
-        console.warn('⚠️ [FALLBACK OBJECT] Détection d\'un objet dans rawValue:', rawValue);
+  dlog('⚠️ [FALLBACK OBJECT] Détection d\'un objet dans rawValue:', rawValue);
         
         // Tentative d'extraction de propriétés communes
         const obj = rawValue as Record<string, unknown>;
@@ -772,7 +1079,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                          obj.calculatedValue || obj.displayValue || obj.label;
         
         if (extracted !== undefined) {
-          console.log('✅ [FALLBACK OBJECT] Valeur extraite:', extracted);
+          dlog('✅ [FALLBACK OBJECT] Valeur extraite:', extracted);
           return String(extracted);
         }
         
@@ -822,7 +1129,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     };
 
     return (
-      <Col key={field.id} xs={24} sm={12} lg={8}>
+      <Col key={field.id} xs={24} sm={12} lg={6}>
         <Card
           size="small"
           style={getCardStyle()}
@@ -921,19 +1228,94 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               </div>
             ) : orderedFields.length > 0 ? (
               <Row gutter={formRowGutter} className="tbl-form-row">
-                {orderedFields.map((field) => (
-                  <Col
-                    key={field.id}
-                    xs={24}
-                    sm={24}
-                    md={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 12}
-                    lg={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 12}
-                    className="mb-2 tbl-form-col"
-                  >
-                    <TBLFieldRendererAdvanced
-                      field={field}
-                      value={formData[field.id]}
-                      onChange={(value) => {
+                {orderedFields.map((field) => {
+                  // 🔁 Gestion spéciale des boutons repeater
+                  if ((field as any).isRepeaterButton) {
+                    const isAddButton = field.type === 'REPEATER_ADD_BUTTON';
+                    const isRemoveInstanceButton = field.type === 'REPEATER_REMOVE_INSTANCE_BUTTON';
+                    const repeaterParentId = (field as any).repeaterParentId;
+                    const instanceCountKey = `${repeaterParentId}_instanceCount`;
+                    const instanceCount = (field as any).repeaterInstanceCount || 0;
+                    const instanceIndex = (field as any).repeaterInstanceIndex;
+                    
+                    if (isAddButton && !(field as any).repeaterCanAdd) {
+                      return null; // Ne pas afficher le bouton + si on a atteint le max
+                    }
+                    
+                    return (
+                      <Col key={field.id} xs={24} className="mb-2">
+                        <Button
+                          type="dashed"
+                          block
+                          danger={isRemoveInstanceButton}
+                          icon={isAddButton ? <PlusOutlined /> : <MinusCircleOutlined />}
+                          onClick={() => {
+                            if (isAddButton) {
+                              // Ajouter une nouvelle instance
+                              const newCount = instanceCount + 1;
+                              dlog(`🔁 [REPEATER] Ajout instance:`, {
+                                repeaterParentId,
+                                oldCount: instanceCount,
+                                newCount
+                              });
+                              onChange(instanceCountKey, newCount);
+                            } else if (isRemoveInstanceButton) {
+                              // Supprimer une instance spécifique
+                              dlog(`🔁 [REPEATER] Suppression instance #${instanceIndex + 1}:`, {
+                                repeaterParentId,
+                                instanceIndex,
+                                oldCount: instanceCount
+                              });
+                              
+                              // 🎯 Diminuer immédiatement le compteur
+                              const newCount = instanceCount - 1;
+                              onChange(instanceCountKey, newCount);
+                              
+                              // Récupérer les IDs des champs template depuis les métadonnées
+                              const parentField = section.fields.find(f => f.id === repeaterParentId);
+                              const templateNodeIds = parentField?.metadata?.repeater?.templateNodeIds || [];
+                              
+                              // Décaler toutes les instances après celle supprimée
+                              for (let i = instanceIndex + 1; i < instanceCount; i++) {
+                                templateNodeIds.forEach(templateId => {
+                                  const currentKey = `${repeaterParentId}_${i}_${templateId}`;
+                                  const previousKey = `${repeaterParentId}_${i - 1}_${templateId}`;
+                                  const currentValue = formData[currentKey];
+                                  onChange(previousKey, currentValue);
+                                });
+                              }
+                              
+                              // Supprimer les clés de la dernière instance (maintenant obsolète)
+                              templateNodeIds.forEach(templateId => {
+                                const lastKey = `${repeaterParentId}_${instanceCount - 1}_${templateId}`;
+                                onChange(lastKey, undefined);
+                              });
+                            }
+                          }}
+                          disabled={disabled}
+                        >
+                          {field.label}
+                        </Button>
+                      </Col>
+                    );
+                  }
+                  
+                  // Rendu normal des champs
+                  return (
+                    <Col
+                      key={field.id}
+                      xs={24}
+                      sm={12}
+                      md={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 8}
+                      lg={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
+                      xl={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
+                      className="mb-2 tbl-form-col"
+                    >
+                      <TBLFieldRendererAdvanced
+                        field={field}
+                        value={formData[field.id]}
+                        allNodes={allNodes}
+                        onChange={(value) => {
                         dlog(`🔄 [SECTION RENDERER] onChange appelé pour ${field.id}:`, value);
                         dlog(`🔄 [SECTION RENDERER] Ancienne valeur:`, formData[field.id]);
                         onChange(field.id, value);
@@ -945,7 +1327,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           // 🎯 TOUJOURS créer le miroir par label (plus seulement les conditionnels)
                           if (label) {
                             const mirrorKey = `__mirror_data_${label}`;
-                            console.log(`🪞 [MIRROR][UNIVERSAL] Synchronisation: "${label}" -> ${mirrorKey} = ${value}`);
+                            dlog(`🪞 [MIRROR][UNIVERSAL] Synchronisation: "${label}" -> ${mirrorKey} = ${value}`);
                             onChange(mirrorKey, value);
                             
                             // Synchroniser aussi vers window.TBL_FORM_DATA
@@ -959,7 +1341,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                      key.includes(label.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()) ||
                                      key === mirrorKey)) {
                                   window.TBL_FORM_DATA[key] = value;
-                                  console.log(`🔄 [MIRROR][VARIANT] ${key} = ${value}`);
+                                  dlog(`🔄 [MIRROR][VARIANT] ${key} = ${value}`);
                                 }
                               });
                             }
@@ -986,7 +1368,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       treeId={treeId}
                     />
                   </Col>
-                ))}
+                  );
+                })}
               </Row>
             ) : null}
             
@@ -1009,6 +1392,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     formData={formData}
                     onChange={onChange}
                     treeId={treeId}
+                    allNodes={allNodes}
                     disabled={disabled}
                     level={level + 1}
                     parentConditions={parentConditions}
@@ -1036,6 +1420,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       formData={formData}
                       onChange={onChange}
                       treeId={treeId}
+                      allNodes={allNodes}
                       disabled={disabled}
                       level={level + 1}
                       parentConditions={parentConditions}

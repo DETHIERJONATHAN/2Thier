@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTBLCapabilitiesPreload, PreloadedTBLCapability } from './useTBLCapabilitiesPreload';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { dlog } from '../../../../../utils/debug';
@@ -294,6 +294,12 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
   const [rawNodes, setRawNodes] = useState<TreeBranchLeafNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rawNodesRef = useRef<TreeBranchLeafNode[]>([]); // 🔄 Ref stable pour éviter recréation callback
+  
+  // Synchroniser le ref avec le state
+  useEffect(() => {
+    rawNodesRef.current = rawNodes;
+  }, [rawNodes]);
 
   // Préload capabilities (tree_id converti string)
   const preload = useTBLCapabilitiesPreload({
@@ -377,13 +383,52 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     return () => window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
   }, [fetchData, disabled, tree_id]);
 
-  const { tree, tabs, fieldsByTab, sectionsByTab } = useMemo(() => {
-    if (!rawNodes.length) return { tree: null, tabs: [], fieldsByTab: {}, sectionsByTab: {} };
-    // Reprise code buildHierarchy avec injection capabilities
+  // 🔄 NOUVEAU: Écouter les changements de formData pour retransformer avec références partagées
+  useEffect(() => {
+    console.log('🎯 [TBL Hook FIXED] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
+    
+    const handleFormDataChange = () => {
+      console.error('🔔🔔🔔🔔🔔 [TBL HOOK FIXED] ===== EVENT REÇU ===== TBL_FORM_DATA_CHANGED');
+      console.log('🔔 [TBL Hook FIXED] Event TBL_FORM_DATA_CHANGED reçu !');
+      
+      if (disabled) {
+        console.log('⚠️ [TBL Hook FIXED] Hook désactivé, ignoré');
+        return;
+      }
+      
+      if (!tree_id) {
+        console.log('⚠️ [TBL Hook FIXED] Pas de tree_id, ignoré');
+        return;
+      }
+      
+      if (rawNodesRef.current.length === 0) {
+        console.log('⚠️ [TBL Hook FIXED] rawNodes vide, ignoré');
+        return;
+      }
+      
+      console.log('🔄 [TBL Hook FIXED] FormData modifié, rechargement pour références partagées...');
+      // Forcer la retransformation en rechargeant les données depuis l'API
+      fetchData();
+    };
+
+    console.error('✅✅✅✅✅ [TBL HOOK FIXED] ===== LISTENER ATTACHÉ À WINDOW =====');
+    console.log('✅ [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED attaché');
+    window.addEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+    
+    return () => {
+      console.log('🧹 [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED détaché');
+      window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+    };
+  }, [disabled, tree_id, fetchData]);
+
+  // Actions mutation (optimistes simples + refetch)
+  const transformRawNodes = useCallback((nodes: TreeBranchLeafNode[]) => {
+    if (!nodes.length) return { tree: null, tabs: [], fieldsByTab: {}, sectionsByTab: {} };
+    
     const nodeMap = new Map<string, TreeBranchLeafNode>();
-    rawNodes.forEach(n => nodeMap.set(n.id, n));
+    nodes.forEach(n => nodeMap.set(n.id, n));
     const childrenMap = new Map<string | null, TreeBranchLeafNode[]>();
-    rawNodes.forEach(n => {
+    nodes.forEach(n => {
       const key = n.parentId;
       if (!childrenMap.has(key)) childrenMap.set(key, []);
       childrenMap.get(key)!.push(n);
@@ -394,6 +439,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     const fieldsByTabLocal: Record<string, TBLField[]> = {};
     const sectionsByTabLocal: Record<string, TBLSection[]> = {};
     const preloadedByNodeId = preload.byNodeId;
+    
     const makeSection = (branchNode: TreeBranchLeafNode): TBLSection => {
       const rawChildren = childrenMap.get(branchNode.id) || [];
       const subsections: TBLSection[] = [];
@@ -414,6 +460,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
         subsections: subsections.sort((a, b) => (a.order || 0) - (b.order || 0))
       };
     };
+    
     topBranches.forEach(tabBranch => {
       const level2 = childrenMap.get(tabBranch.id) || [];
       const sections: TBLSection[] = [];
@@ -427,9 +474,14 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       fieldsByTabLocal[tab.id] = [...directFields].sort((a, b) => a.order - b.order);
       sectionsByTabLocal[tab.id] = tab.sections;
     });
-    const treeObj: TBLTree = { id: rawNodes[0].treeId, name: 'Arbre TreeBranchLeaf', tabs: tabsLocal.sort((a, b) => a.order - b.order) };
+    
+    const treeObj: TBLTree = { id: nodes[0].treeId, name: 'Arbre TreeBranchLeaf', tabs: tabsLocal.sort((a, b) => a.order - b.order) };
     return { tree: treeObj, tabs: treeObj.tabs, fieldsByTab: fieldsByTabLocal, sectionsByTab: sectionsByTabLocal };
-  }, [rawNodes, preload.byNodeId]);
+  }, [preload.byNodeId]);
+
+  const { tree, tabs, fieldsByTab, sectionsByTab } = useMemo(() => {
+    return transformRawNodes(rawNodes);
+  }, [rawNodes, transformRawNodes]);
 
   // Actions mutation (optimistes simples + refetch)
   const updateNodeValue = useCallback(async (nodeId: string, value: string | number | boolean) => {
@@ -468,6 +520,44 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     }
   }, [api, fetchData]);
 
+  // Event listener pour TBL_FORM_DATA_CHANGED
+  useEffect(() => {
+    console.error('🎯🎯🎯🎯🎯 [TBL HOOK FIXED] ===== EVENT LISTENER USEEFFECT DÉCLENCHÉ =====');
+    console.log('🎯 [TBL Hook FIXED] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
+    
+    const handleFormDataChange = () => {
+      console.error('🔔🔔🔔🔔🔔 [TBL HOOK FIXED] ===== EVENT REÇU ===== TBL_FORM_DATA_CHANGED');
+      console.log('🔔 [TBL Hook FIXED] Event TBL_FORM_DATA_CHANGED reçu !');
+      
+      if (disabled) {
+        console.log('⚠️ [TBL Hook FIXED] Hook désactivé, ignoré');
+        return;
+      }
+      
+      if (!tree_id) {
+        console.log('⚠️ [TBL Hook FIXED] Pas de tree_id, ignoré');
+        return;
+      }
+      
+      if (rawNodesRef.current.length === 0) {
+        console.log('⚠️ [TBL Hook FIXED] rawNodes vide, ignoré');
+        return;
+      }
+      
+      console.log('🔄 [TBL Hook FIXED] FormData modifié, rechargement pour références partagées...');
+      fetchData();
+    };
+
+    console.error('✅✅✅✅✅ [TBL HOOK FIXED] ===== LISTENER ATTACHÉ À WINDOW =====');
+    console.log('✅ [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED attaché');
+    window.addEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+    
+    return () => {
+      console.log('🧹 [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED détaché');
+      window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+    };
+  }, [disabled, tree_id, fetchData]);
+
   return {
     tree,
     tabs,
@@ -478,7 +568,8 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     updateNodeValue,
     toggleNodeVisibility,
     addOption,
-    deleteOption
+    deleteOption,
+    rawNodes // 🔥 NOUVEAU: Exposer rawNodes pour Cascader (contient leaf_option)
   };
 }
 

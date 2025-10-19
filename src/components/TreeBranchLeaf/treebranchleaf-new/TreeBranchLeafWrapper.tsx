@@ -48,17 +48,23 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
       return [];
     }
     
+    // ✅ Filtrer uniquement les nœuds TEMPLATES (parentId: null, isSharedReference: true)
+    // Les options SELECT qui UTILISENT des références ne doivent PAS être filtrées
+    const visibleNodes = flatNodes.filter(node => 
+      !(node.isSharedReference === true && node.sharedReferenceId === null && node.parentId === null)
+    );
+    
     // Créer une map pour un accès rapide
     const nodeMap = new Map<string, TreeBranchLeafNode>();
     const rootNodes: TreeBranchLeafNode[] = [];
     
     // D'abord, créer tous les nœuds avec une propriété children vide
-    flatNodes.forEach(node => {
+    visibleNodes.forEach(node => {
       nodeMap.set(node.id, { ...node, children: [] });
     });
     
     // Ensuite, construire la hiérarchie
-    flatNodes.forEach(node => {
+    visibleNodes.forEach(node => {
       const nodeWithChildren = nodeMap.get(node.id)!;
       
       if (node.parentId && nodeMap.has(node.parentId)) {
@@ -119,7 +125,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
 
       // 🚨 DEBUG DÉTAILLÉ: Affichons TOUS les nœuds avec leurs parentId
       // console.log('🔍 [TreeBranchLeafWrapper] DÉTAIL COMPLET des nœuds plats:'); // ✨ Log réduit
-      flatNodesData?.forEach((node, index) => {
+      flatNodesData?.forEach((_node, _index) => {
         // console.log(`  ${index + 1}. ${node.label} (${node.type}) - ID: ${node.id.substring(0, 8)}... - ParentID: ${node.parentId ? node.parentId.substring(0, 8) + '...' : 'NULL'}`); // ✨ Log réduit
       });
       
@@ -188,10 +194,74 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
     setTrees(updatedTrees);
   };
 
+  const flattenNodes = useCallback((input: TreeBranchLeafNode[] | undefined | null): TreeBranchLeafNode[] => {
+    if (!input || input.length === 0) return [];
+
+    const flat: TreeBranchLeafNode[] = [];
+    const stack: TreeBranchLeafNode[] = [...input];
+
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      const childNodes = current.children;
+
+      flat.push({ ...current, children: undefined });
+
+      if (childNodes && childNodes.length > 0) {
+        for (let i = childNodes.length - 1; i >= 0; i -= 1) {
+          stack.push(childNodes[i]);
+        }
+      }
+    }
+
+    return flat;
+  }, []);
+
   const handleNodesUpdate = (updatedNodes: TreeBranchLeafNode[]) => {
-    // Mettre à jour l'état local avec la nouvelle hiérarchie
-    const newHierarchy = buildNodeHierarchy(updatedNodes);
-    setNodes(newHierarchy);
+    // 🔍 DEBUG : Voir ce que le serveur renvoie
+    console.log('🔄 [handleNodesUpdate] Reçu:', {
+      count: updatedNodes.length,
+      premier: updatedNodes[0],
+      hasChildren: updatedNodes.some(n => n.children && n.children.length > 0)
+    });
+    
+    // 🔍 AFFICHER LES ORDERS EN CLAIR
+    console.table(updatedNodes.slice(0, 15).map(n => ({ 
+      label: n.label, 
+      order: n.order, 
+      parentId: n.parentId?.substring(0, 8) || 'ROOT'
+    })));
+    
+    // ✅ OPTIMISATION AMÉLIORÉE :
+    // Si les nœuds ont déjà une hiérarchie (children présents), c'est un reload serveur
+    // → Utiliser directement sans reconstruction
+    const hasHierarchy = updatedNodes.some(n => n.children && n.children.length > 0);
+    
+    if (hasHierarchy) {
+      // Données déjà hiérarchisées (reload après drag & drop) → utiliser telles quelles
+      console.log('✅ [handleNodesUpdate] Données hiérarchisées détectées, pas de reconstruction');
+      setNodes(updatedNodes);
+      return;
+    }
+    
+    console.log('🔨 [handleNodesUpdate] Pas de hiérarchie, reconstruction nécessaire');
+    
+    // Sinon, vérifier si c'est juste une mise à jour de propriétés
+    const currentFlatNodes = flattenNodes(nodes);
+    const newFlatNodes = flattenNodes(updatedNodes);
+    
+    const sameStructure = currentFlatNodes.length === newFlatNodes.length &&
+      currentFlatNodes.every(n => newFlatNodes.some(nn => nn.id === n.id));
+    
+    if (sameStructure) {
+      // Simple mise à jour sans reconstruction
+      setNodes(updatedNodes);
+    } else {
+      // Reconstruction complète nécessaire (ajout/suppression de nœuds)
+      const normalizedFlatNodes = flattenNodes(updatedNodes);
+      const newHierarchy = buildNodeHierarchy(normalizedFlatNodes);
+      console.log('✅ [handleNodesUpdate] Hiérarchie reconstruite:', newHierarchy.slice(0, 3).map(n => ({ label: n.label, order: n.order })));
+      setNodes(newHierarchy);
+    }
   };
 
   const handleNodeCreate = useCallback(async (data: {

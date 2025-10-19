@@ -21,6 +21,8 @@ import {
   InfoCircleOutlined,
   CalculatorOutlined,
   SaveOutlined,
+  PlusOutlined,
+  MinusCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
@@ -29,7 +31,7 @@ const { TextArea } = Input;
 
 interface TreeBranchLeafNode {
   id: string;
-  type: 'branch' | 'leaf' | 'condition' | 'formula' | 'api' | 'link';
+  type: 'branch' | 'leaf' | 'condition' | 'formula' | 'api' | 'link' | 'leaf_repeater';
   subType?: 'option' | 'field' | 'data' | 'table' | 'calculation';
   label: string;
   description?: string;
@@ -56,6 +58,14 @@ interface TreeBranchLeafNode {
   formulaConfig?: {
     formula: string;
     variables: string[];
+  };
+  metadata?: {
+    repeater?: {
+      templateNodeIds: string[];
+      minItems?: number;
+      maxItems?: number;
+      addButtonLabel?: string;
+    };
   };
 }
 
@@ -422,6 +432,159 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
                 <CalculatorOutlined style={{ marginRight: '4px' }} />
                 {formulaResult !== undefined ? formulaResult : 'Calcul...'}
               </Tag>
+            </div>
+          </Card>
+        );
+      }
+
+      case 'leaf_repeater': {
+        // Récupérer la configuration du repeater depuis metadata
+        const repeaterMeta = node.metadata?.repeater || {};
+        const templateNodeIds = repeaterMeta.templateNodeIds || [];
+        const minItems = repeaterMeta.minItems ?? 1;
+        const maxItems = repeaterMeta.maxItems ?? 10;
+        const addButtonLabel = repeaterMeta.addButtonLabel || 'Ajouter une entrée';
+
+        // État local du repeater (nombre d'instances actuelles)
+        const currentInstances = (formData[`${node.id}_instances`] as number) || minItems;
+
+        const handleAddInstance = () => {
+          if (currentInstances < maxItems) {
+            handleValueChange(`${node.id}_instances`, currentInstances + 1);
+          }
+        };
+
+        const handleRemoveInstance = (instanceIndex: number) => {
+          if (currentInstances > minItems) {
+            handleValueChange(`${node.id}_instances`, currentInstances - 1);
+            // Supprimer les valeurs de cette instance
+            templateNodeIds.forEach((templateId: string) => {
+              handleValueChange(`${node.id}_${instanceIndex}_${templateId}`, undefined);
+            });
+          }
+        };
+
+        // Trouver les nœuds templates dans l'arbre
+        const findNodeById = (id: string, nodes: TreeBranchLeafNode[]): TreeBranchLeafNode | null => {
+          for (const n of nodes) {
+            if (n.id === id) return n;
+            if (n.children) {
+              const found = findNodeById(id, n.children);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const templateNodes = templateNodeIds
+          .map((id: string) => findNodeById(id, nodesData || []))
+          .filter(Boolean) as TreeBranchLeafNode[];
+
+        return (
+          <Card 
+            key={node.id} 
+            style={{ marginBottom: '16px', borderColor: '#722ed1', borderWidth: 2 }}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ marginRight: 8 }}>➕</span>
+                <Text strong>{node.label}</Text>
+              </div>
+            }
+          >
+            {node.description && (
+              <div style={{ marginBottom: '16px' }}>
+                <Text type="secondary">{node.description}</Text>
+              </div>
+            )}
+
+            {/* Rendu de chaque instance */}
+            {Array.from({ length: currentInstances }).map((_, instanceIndex) => (
+              <Card
+                key={`instance-${instanceIndex}`}
+                type="inner"
+                style={{ marginBottom: '12px', backgroundColor: '#fafafa' }}
+                title={`Entrée ${instanceIndex + 1}`}
+                extra={
+                  currentInstances > minItems && (
+                    <Button 
+                      size="small" 
+                      danger 
+                      type="text"
+                      icon={<MinusCircleOutlined />}
+                      onClick={() => handleRemoveInstance(instanceIndex)}
+                    >
+                      Supprimer
+                    </Button>
+                  )
+                }
+              >
+                {templateNodes.map((templateNode) => {
+                  const instanceFieldId = `${node.id}_${instanceIndex}_${templateNode.id}`;
+                  const fieldValue = formData[instanceFieldId];
+
+                  return (
+                    <div key={templateNode.id} style={{ marginBottom: '12px' }}>
+                      <Text strong>
+                        {templateNode.label}
+                        {templateNode.isRequired && <span style={{ color: 'red' }}> *</span>}
+                      </Text>
+                      {templateNode.description && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <Text type="secondary">{templateNode.description}</Text>
+                        </div>
+                      )}
+                      {/* Rendu selon le type de champ template */}
+                      {templateNode.fieldConfig?.fieldType === 'text' && (
+                        <Input
+                          placeholder={templateNode.fieldConfig?.placeholder || 'Saisissez votre réponse'}
+                          value={fieldValue as string}
+                          onChange={(e) => handleValueChange(instanceFieldId, e.target.value)}
+                        />
+                      )}
+                      {templateNode.fieldConfig?.fieldType === 'number' && (
+                        <InputNumber
+                          style={{ width: '100%' }}
+                          placeholder={templateNode.fieldConfig?.placeholder || 'Saisissez un nombre'}
+                          min={templateNode.fieldConfig?.min}
+                          max={templateNode.fieldConfig?.max}
+                          value={fieldValue as number}
+                          onChange={(value) => handleValueChange(instanceFieldId, value || 0)}
+                        />
+                      )}
+                      {(!templateNode.fieldConfig?.fieldType || templateNode.fieldConfig?.fieldType === 'text') && (
+                        <Input
+                          placeholder={templateNode.fieldConfig?.placeholder || 'Saisissez votre réponse'}
+                          value={fieldValue as string}
+                          onChange={(e) => handleValueChange(instanceFieldId, e.target.value)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </Card>
+            ))}
+
+            {/* Bouton d'ajout */}
+            {currentInstances < maxItems && (
+              <Button
+                type="dashed"
+                block
+                icon={<PlusOutlined />}
+                onClick={handleAddInstance}
+                style={{ marginTop: '12px' }}
+              >
+                {addButtonLabel}
+              </Button>
+            )}
+
+            {/* Info min/max */}
+            <div style={{ marginTop: '8px', textAlign: 'center' }}>
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                {minItems === maxItems 
+                  ? `Exactement ${minItems} ${minItems === 1 ? 'entrée' : 'entrées'} requise${minItems === 1 ? '' : 's'}`
+                  : `Entre ${minItems} et ${maxItems} entrées`
+                }
+              </Text>
             </div>
           </Card>
         );

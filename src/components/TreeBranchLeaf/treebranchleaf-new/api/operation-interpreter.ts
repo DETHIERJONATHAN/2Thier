@@ -1091,6 +1091,12 @@ function calculateExpression(expr: string): number {
     
     console.log(`[CALCUL] 🧮 Expression nettoyée: ${cleanExpr}`);
     
+    // Vérifier si l'expression est valide (contient au moins un chiffre)
+    if (!/\d/.test(cleanExpr)) {
+      console.log(`[CALCUL] ⚠️ Expression invalide (aucun nombre détecté), retour 0`);
+      return 0;
+    }
+    
     // Évaluer de manière sécurisée
     const result = Function(`"use strict"; return (${cleanExpr})`)();
     
@@ -1158,11 +1164,30 @@ async function interpretTable(
       id: true,
       name: true,
       type: true,
-      columns: true,
-      rows: true,
-      data: true,
+      rowCount: true,
+      columnCount: true,
       meta: true,
-      nodeId: true
+      nodeId: true,
+      tableColumns: {
+        orderBy: { columnIndex: 'asc' },
+        select: {
+          id: true,
+          columnIndex: true,
+          name: true,
+          type: true,
+          width: true,
+          format: true,
+          metadata: true
+        }
+      },
+      tableRows: {
+        orderBy: { rowIndex: 'asc' },
+        select: {
+          id: true,
+          rowIndex: true,
+          cells: true
+        }
+      }
     }
   });
   
@@ -1172,12 +1197,31 @@ async function interpretTable(
     try {
       const byNode = await prisma.treeBranchLeafNodeTable.findFirst({
         where: { nodeId: cleanId },
-        select: { id: true, name: true, type: true, columns: true, rows: true, data: true, meta: true, nodeId: true },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          rowCount: true,
+          columnCount: true,
+          meta: true,
+          nodeId: true,
+          tableColumns: {
+            orderBy: { columnIndex: 'asc' },
+            select: { id: true, columnIndex: true, name: true, type: true, width: true, format: true, metadata: true }
+          },
+          tableRows: {
+            orderBy: { rowIndex: 'asc' },
+            select: { id: true, rowIndex: true, cells: true }
+          }
+        },
         orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }]
       });
+      console.log(`[TABLE] 🔍 Résultat findFirst par nodeId:`, byNode ? `TROUVÉ id=${byNode.id}` : 'NULL');
       if (byNode) {
         table = byNode;
         console.log(`[TABLE] ✅ Table résolue via nodeId → table:${table.id}`);
+      } else {
+        console.log(`[TABLE] ⚠️ Aucune table avec nodeId="${cleanId}" trouvée`);
       }
     } catch (e) {
       console.warn('[TABLE] ⚠️ Résolution implicite échouée:', e instanceof Error ? e.message : e);
@@ -1196,7 +1240,60 @@ async function interpretTable(
   console.log(`[TABLE] ✅ Table trouvée: ${table.name} (type: ${table.type})`);
   
   // ═══════════════════════════════════════════════════════════════════════
-  // 🔍 ÉTAPE 2 : Extraire la configuration de lookup
+  // � RECONSTRUCTION DES DONNÉES depuis la structure normalisée
+  // ═══════════════════════════════════════════════════════════════════════
+  // Reconstituer columns, rows, data depuis les relations
+  const columns = table.tableColumns.map(col => col.name);
+  const rows: string[] = [];
+  const data: any[][] = [];
+  
+  // 🔄 Parser cells avec support hybride (JSON array OU plain string)
+  table.tableRows.forEach(row => {
+    try {
+      let cellsData: any;
+      
+      // 🔍 Tentative 1: Parse JSON si c'est une string
+      if (typeof row.cells === 'string') {
+        try {
+          cellsData = JSON.parse(row.cells);
+        } catch {
+          // 🔧 Fallback: Si ce n'est PAS du JSON, c'est juste une valeur simple (première colonne uniquement)
+          // Cela arrive pour les anciennes données où cells = "Orientation" au lieu de ["Orientation", ...]
+          cellsData = [row.cells]; // Envelopper dans un array
+        }
+      } else {
+        cellsData = row.cells || [];
+      }
+      
+      // ⚠️ IMPORTANT: IGNORER rowIndex=0 car c'est la ligne HEADER (noms de colonnes)
+      // Dans le nouveau système normalisé, rowIndex=0 contient ["Orientation", "0°", "5°", ...]
+      // qui sont déjà extraits dans tableColumns
+      if (row.rowIndex === 0) {
+        console.log(`[TABLE] 🔍 Header row détecté (rowIndex=0), ignoré. Cells:`, JSON.stringify(cellsData).substring(0, 100));
+        return; // Skip cette ligne
+      }
+      
+      if (Array.isArray(cellsData) && cellsData.length > 0) {
+        // 🔑 cellsData[0] = label de ligne (colonne A) : "Nord", "Sud", etc.
+        // 📊 cellsData[1...] = données (colonnes B, C, D...) : [86, 82, 73, ...]
+        const rowLabel = String(cellsData[0] || '');
+        const rowData = cellsData.slice(1); // Données sans le label
+        
+        rows.push(rowLabel);
+        data.push(rowData);
+      } else {
+        rows.push(`Row ${row.rowIndex}`);
+        data.push([]);
+      }
+    } catch (error) {
+      console.error('[TABLE] ⚠️ Erreur parsing cells:', error);
+      rows.push(`Row ${row.rowIndex}`);
+      data.push([]);
+    }
+  });
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // �🔍 ÉTAPE 2 : Extraire la configuration de lookup
   // ═══════════════════════════════════════════════════════════════════════
   const meta = table.meta as any;
   const lookup = meta?.lookup;
@@ -1210,8 +1307,6 @@ async function interpretTable(
     };
   }
   
-  console.log(`[TABLE] 🔍 Lookup config:`, JSON.stringify(lookup));
-  
   // ═══════════════════════════════════════════════════════════════════════
   // 📊 ÉTAPE 3 : Récupérer les selectors (champs de sélection) et les toggles
   // ═══════════════════════════════════════════════════════════════════════
@@ -1219,15 +1314,6 @@ async function interpretTable(
   const colFieldId = lookup.selectors?.columnFieldId;
   const rowEnabled = lookup.rowLookupEnabled === true;
   const colEnabled = lookup.columnLookupEnabled === true;
-  
-  console.log(`[TABLE] 📋 Configuration détectée:`, {
-    rowEnabled,
-    colEnabled,
-    rowFieldId,
-    colFieldId,
-    displayColumn: lookup.displayColumn,
-    displayRow: lookup.displayRow
-  });
   
   // ═══════════════════════════════════════════════════════════════════════
   // 🎯 DÉTECTION DU MODE (3 modes possibles)
@@ -1252,8 +1338,6 @@ async function interpretTable(
       ? lookup.displayColumn 
       : [lookup.displayColumn];
     
-    console.log(`[TABLE] 📊 MODE 1 - Croisement: colonne=${colLabel}(${colSelectorValue}) × lignes=${displayColumns.join(', ')} (fixes)`);
-    
     if (!colSelectorValue) {
       return {
         result: '∅',
@@ -1263,9 +1347,7 @@ async function interpretTable(
     }
     
     // Faire le lookup avec colSelectorValue et CHAQUE displayColumn
-    const columns = table.columns as string[];
-    const rows = table.rows as string[];
-    const data = table.data as any[][];
+    // columns, rows, data déjà reconstruits plus haut
     
     const results: Array<{ row: string; value: any }> = [];
     
@@ -1357,9 +1439,7 @@ async function interpretTable(
     }
     
     // Faire le lookup avec rowSelectorValue et CHAQUE displayRow
-    const columns = table.columns as string[];
-    const rows = table.rows as string[];
-    const data = table.data as any[][];
+    // columns, rows, data déjà reconstruits plus haut
     
     const results: Array<{ column: string; value: any }> = [];
     
@@ -1470,9 +1550,7 @@ async function interpretTable(
   // � AUTO-DÉTECTION : On cherche chaque valeur dans rows ET columns pour déterminer
   //    automatiquement où elle se trouve (inversion automatique si nécessaire)
   // ═══════════════════════════════════════════════════════════════════════
-  const columns = table.columns as string[];
-  const rows = table.rows as string[];
-  const data = table.data as any[][];
+  // columns, rows, data déjà reconstruits plus haut
   
   // �🐛 DEBUG : Afficher toutes les valeurs AVANT la normalisation
   console.log(`[TABLE] 🔍 DEBUG rowSelectorValue:`, {
@@ -1565,11 +1643,14 @@ async function interpretTable(
   // ═══════════════════════════════════════════════════════════════════════
   // 📍 ÉTAPE 6 : Faire le lookup dans data[][]
   // ═══════════════════════════════════════════════════════════════════════
-  // IMPORTANT : data[0] correspond à rows[1] (décalage car rows[0] = header)
-  const dataRowIndex = finalRowIndex - 1;
+  // IMPORTANT : rows[] a été construit en SKIPPANT rowIndex=0 (header) → pas de décalage
+  // MAIS columns[] contient TOUTES les colonnes y compris columns[0]="Orientation" (label)
+  // alors que data[][] a été construit avec cellsData.slice(1) → décalage de -1 sur les colonnes
+  // Exemple : "25" trouvé à columns[4] → data[x][3] car data ne contient pas la colonne de labels
+  const dataRowIndex = finalRowIndex;
   const dataColIndex = finalColIndex - 1;
   
-  console.log(`[TABLE] 📍 Index dans data[][]: [${dataRowIndex}][${dataColIndex}]`);
+  console.log(`[TABLE] 📍 Index dans data[][]: [${dataRowIndex}][${dataColIndex}] (finalRow=${finalRowIndex}, finalCol=${finalColIndex})`);
   
   if (dataRowIndex < 0 || dataColIndex < 0 || !data[dataRowIndex]) {
     console.error(`[TABLE] ❌ Index hors limites`);

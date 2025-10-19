@@ -52,7 +52,7 @@ interface UseTreeDataReturn {
   refresh: () => Promise<void>;
   getNode: (nodeId: string) => TreeBranchLeafNode | null;
   getChildren: (nodeId?: string) => TreeBranchLeafNode[];
-  getPath: (nodeId: string) => TreeBranchLeafNode[];,
+  getPath: (nodeId: string) => TreeBranchLeafNode[];
 }
 
 export const useTreeData = (
@@ -156,6 +156,7 @@ export const useTreeData = (
         organizationId,
         status: 'draft',
         version: '1.0.0'
+      });
       message.success('Arbre créé avec succès');
       return newTree;
 
@@ -238,8 +239,14 @@ export const useTreeData = (
         isVisible: true,
         isActive: true,
         metadata: {}
-      // Mettre à jour la liste locale
-      setNodes(prev => prev ? [...prev, newNode] : [newNode]);
+      });
+      // Mettre à jour la liste locale de manière immuable et intelligente
+      setNodes(currentNodes => {
+        if (!currentNodes) return [newNode];
+        // Crée une nouvelle copie pour la modification
+        const newNodes = [...currentNodes, newNode];
+        return newNodes;
+      });
       message.success(`${data.type === 'branch' ? 'Branche' : 'Feuille'} créée`);
       return newNode;
 
@@ -302,6 +309,7 @@ export const useTreeData = (
       await api.patch(`/api/treebranchleaf/trees/${tree.id}/nodes/${nodeId}/move`, {
         targetId,
         position
+      });
       // Recharger les données pour avoir l'ordre correct
       await refresh();
       message.success('Nœud déplacé');
@@ -330,6 +338,7 @@ export const useTreeData = (
       const result = await api.post(`/api/treebranchleaf/trees/${tree.id}/nodes/${copiedNodeId}/duplicate`, {
         targetId,
         position
+      });
       await refresh();
       setCopiedNodeId(null);
       message.success('Nœud collé avec succès');
@@ -365,6 +374,7 @@ export const useTreeData = (
         id: nodeId,
         ...capabilityFlags,
         [configField]: config
+      });
       message.success(`Capacité ${capability} activée`);
       return true;
 
@@ -390,6 +400,7 @@ export const useTreeData = (
         id: nodeId,
         ...capabilityFlags,
         [configField]: null
+      });
       message.success(`Capacité ${capability} désactivée`);
       return true;
 

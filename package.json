@@ -82,7 +82,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/passport": "^1.0.17",
     "@types/react-toastify": "^4.0.2",
-    "antd": "^5.26.1",
+    "antd": "^5.27.5",
     "array-move": "^4.0.0",
     "autoprefixer": "^10.4.21",
     "axios": "^1.12.2",

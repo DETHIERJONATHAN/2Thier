@@ -395,6 +395,19 @@ export const NODE_TYPES: Record<string, NodeType> = {
     fieldRequired: true
   },
 
+  leaf_repeater: {
+    key: 'leaf_repeater',
+    label: 'Bloc répétable',
+    icon: 'PlusSquareOutlined',
+    emoji: '➕',
+    description: 'Permet à l’utilisateur d’ajouter plusieurs occurrences d’un groupe de champs.',
+    color: '#eb2f96',
+    canHaveChildren: true,
+    canBeChild: true,
+    acceptsDropFrom: ['palette', 'structure'],
+    capabilities: ['markers']
+  },
+
   // 📋 SECTION CALCULATRICE
   section: {
     key: 'section',
@@ -422,7 +435,9 @@ export const FieldAppearancePanels = {
   MULTISELECT: () => import('../components/Parameters/panels/FieldAppearance/MultiSelectPanel'),
   DATE: () => import('../components/Parameters/panels/FieldAppearance/DateTimePanel'),
   FILE: () => import('../components/Parameters/panels/FieldAppearance/FilePanel'),
-  IMAGE: () => import('../components/Parameters/panels/FieldAppearance/ImagePanel')
+  IMAGE: () => import('../components/Parameters/panels/FieldAppearance/ImagePanel'),
+  DATA: () => import('../components/Parameters/panels/FieldAppearance/RepeaterPanel'),
+  LEAF_REPEATER: () => import('../components/Parameters/panels/FieldAppearance/RepeaterPanel')
 };
 
 export const CapabilityPanels = {

@@ -13,7 +13,7 @@
 // 🎯 TYPES DE BASE
 // =============================================================================
 
-export type NodeType = 'tree' | 'branch' | 'section' | 'leaf_field' | 'leaf_option' | 'leaf_option_field';
+export type NodeType = 'tree' | 'branch' | 'section' | 'leaf_field' | 'leaf_option' | 'leaf_option_field' | 'leaf_repeater';
 export type NodeSubType = 'data' | 'SELECT' | 'TEXT' | 'NUMBER' | 'EMAIL' | 'TEL' | 'DATE' | 'TEXTAREA' | 'CHECKBOX' | 'RADIO';
 
 export interface TreeNode {
@@ -141,7 +141,8 @@ export function getTreeStatistics(nodesMap: Map<string, TreeNode>): {
       branch: 0,
       leaf_field: 0,
       leaf_option: 0,
-      leaf_option_field: 0
+      leaf_option_field: 0,
+      leaf_repeater: 0
     } as Record<NodeType, number>,
     maxDepth: 0,
     rootNodes: 0,
@@ -198,6 +199,10 @@ export function validateNodeTypeAtLevel(nodeType: NodeType, level: number): bool
       // Les champs sont autorisés à partir du niveau 1 (sous une branche/section)
       return level >= 1;
     
+    case 'leaf_repeater':
+      // Les blocs répétables sont autorisés à partir du niveau 1 (sous une branche/section)
+      return level >= 1;
+    
     default:
       return false;
   }
@@ -218,6 +223,8 @@ function getDetailedLevelRule(nodeType: NodeType): string {
       return 'Les options doivent être créées au niveau 2 ou plus (sous des branches)';
     case 'leaf_option_field':
       return 'Les champs+options doivent être créés au niveau 2 ou plus (sous des branches)';
+    case 'leaf_repeater':
+      return 'Les blocs répétables doivent être créés au niveau 2 ou plus (sous des branches/sections)';
     case 'leaf_select':
       return 'Les sélecteurs doivent être créés au niveau 2 ou plus (sous des branches)';
     case 'leaf_text':
@@ -404,6 +411,32 @@ export function validateParentChildRelation(
     case 'leaf_radio':
       return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'boutons radio');
     
+    case 'leaf_repeater':
+      // Le repeater est un conteneur qui peut être sous une branche/section
+      if (parentType === 'tree') {
+        return {
+          isValid: false,
+          reason: 'Les blocs répétables ne peuvent pas être créés directement sous l\'arbre',
+          level: childLevel,
+          errorCode: 'REPEATER_NEEDS_BRANCH_PARENT',
+          suggestion: 'Créez d\'abord une branche, puis ajoutez le bloc répétable dedans'
+        };
+      }
+      // Sous une branche, section ou autre leaf_* : OK
+      if (parentType === 'branch' || parentType === 'section' || parentType.startsWith('leaf_')) {
+        return {
+          isValid: true,
+          level: childLevel,
+          errorCode: undefined
+        };
+      }
+      return {
+        isValid: false,
+        reason: 'Les blocs répétables ne peuvent être créés que sous des branches ou sections',
+        level: childLevel,
+        errorCode: 'REPEATER_INVALID_PARENT'
+      };
+    
     default:
       return {
         isValid: false,
@@ -488,7 +521,7 @@ export function getAllowedChildTypes(
 ): NodeType[] {
   
   const allowedTypes: NodeType[] = [];
-  const allTypes: NodeType[] = ['tree', 'branch', 'leaf_field', 'leaf_option', 'leaf_option_field'];
+  const allTypes: NodeType[] = ['tree', 'branch', 'section', 'leaf_field', 'leaf_option', 'leaf_option_field', 'leaf_repeater'];
   
   for (const childType of allTypes) {
     const validation = validateParentChildRelation(

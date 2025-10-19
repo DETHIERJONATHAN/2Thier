@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button } from 'antd';
+import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, InputNumber, Alert } from 'antd';
 import type { InputRef } from 'antd';
 import { 
   SettingOutlined, 
@@ -21,12 +21,15 @@ import {
   TagsOutlined
 } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../hooks/useDebouncedCallback';
+import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { CapabilityPanels, FieldAppearancePanels, TreeBranchLeafRegistry } from '../../core/registry';
+import SharedReferencePanel from './capabilities/SharedReferencePanel';
 import type { 
   TreeBranchLeafTree, 
   TreeBranchLeafNode, 
   UIState,
-  TreeBranchLeafRegistry as TreeBranchLeafRegistryType 
+  TreeBranchLeafRegistry as TreeBranchLeafRegistryType,
+  NodeTypeKey
 } from '../../types';
 
 // const { Title, Text } = Typography; // TEMPORAIREMENT DÉSACTIVÉ POUR DEBUG ELLIPSISMEASURE
@@ -34,6 +37,7 @@ import type {
 interface ParametersProps {
   tree: TreeBranchLeafTree | null;
   selectedNode: TreeBranchLeafNode | null;
+  nodes: TreeBranchLeafNode[];
   panelState: UIState['panelState'];
   onNodeUpdate: (node: Partial<TreeBranchLeafNode> & { id: string }) => Promise<TreeBranchLeafNode | null>;
   onCapabilityConfig: (node: Partial<TreeBranchLeafNode> & { id: string }) => Promise<TreeBranchLeafNode | null>;
@@ -42,10 +46,13 @@ interface ParametersProps {
 }
 
 const Parameters: React.FC<ParametersProps> = (props) => {
-  const { tree, selectedNode, panelState, registry, onNodeUpdate } = props;
+  const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate } = props;
   
   // Refs pour cleanup
   const mountedRef = useRef<boolean>(true);
+
+  // 🔐 Hook API authentifié
+  const { api } = useAuthenticatedApi();
 
   const capabilities = useMemo(() => registry.getAllCapabilities(), [registry]);
   const [openCaps, setOpenCaps] = useState<Set<string>>(new Set<string>(Array.from(panelState.openCapabilities || [])));
@@ -61,15 +68,25 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const [description, setDescription] = useState<string>('');
   const [isRequired, setIsRequired] = useState<boolean>(false);
   const [isVisible, setIsVisible] = useState<boolean>(true);
+  const [isMultiple, setIsMultiple] = useState<boolean>(false);
   // Repliable supprimé: état supprimé pour simplifier l'UI
   const [fieldType, setFieldType] = useState<string | undefined>(undefined);
   const [capsState, setCapsState] = useState<Record<string, boolean>>({});
   // Mémorise l'état précédent des capacités pour détecter les activations externes
   const prevCapsRef = useRef<Record<string, boolean>>({});
   const lastNodeIdRef = useRef<string | null>(null);
-  const defaultAppearanceAppliedRef = useRef<string | null>(null);
   const panelStateOpenCapabilities = panelState.openCapabilities;
   const selectedNodeId = selectedNode?.id ?? null;
+
+  const REPEATER_DEFAULT_LABEL = 'Ajouter une entrée';
+  const [repeaterTemplateIds, setRepeaterTemplateIds] = useState<string[]>([]);
+  const [repeaterMinItems, setRepeaterMinItems] = useState<number | undefined>(undefined);
+  const [repeaterMaxItems, setRepeaterMaxItems] = useState<number | undefined>(undefined);
+  const [repeaterAddLabel, setRepeaterAddLabel] = useState<string>(REPEATER_DEFAULT_LABEL);
+  
+  // 🆕 Bloquer l'hydratation temporairement après une modification utilisateur
+  const skipNextHydrationRef = useRef(false);
+  const hydrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cleanup au démontage
   useEffect(() => {
@@ -79,15 +96,42 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     };
   }, []);
 
+  // 🔁 FONCTION DE DUPLICATION PHYSIQUE DES TEMPLATES
+  const duplicateTemplatesPhysically = useCallback(async (templateNodeIds: string[]) => {
+    if (!selectedNode?.id || !api) return;
+    
+    try {
+      console.log('🔁 [duplicateTemplatesPhysically] Début duplication:', templateNodeIds);
+      
+      const response = await api.post(`/api/treebranchleaf/nodes/${selectedNode.id}/duplicate-templates`, {
+        templateNodeIds
+      });
+      
+      console.log('✅ [duplicateTemplatesPhysically] Duplication réussie:', response);
+      
+      // Rafraîchir l'arbre pour afficher les nouveaux enfants
+      if (typeof refreshTree === 'function') {
+        refreshTree();
+      }
+    } catch (error) {
+      console.error('❌ [duplicateTemplatesPhysically] Erreur:', error);
+    }
+  }, [selectedNode, api]);
+
+  // 🆕 Référence stable pour onNodeUpdate (évite de recréer le debounce)
+  const onNodeUpdateRef = useRef(onNodeUpdate);
+  useEffect(() => {
+    onNodeUpdateRef.current = onNodeUpdate;
+  }, [onNodeUpdate]);
+
   // Sauvegarde debounced avec l'API optimisée
   const patchNode = useDebouncedCallback(async (payload: Record<string, unknown>) => {
     if (!selectedNodeId) return;
     
-    console.log('🔄 [Parameters] Sauvegarde avec debounce:', {
-      nodeId: selectedNodeId,
-      payload: payload,
-      hasAppearanceConfig: !!payload.appearanceConfig
-    });
+    // ✅ Log réduit : seulement en mode debug
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 [Parameters] Sauvegarde:', selectedNodeId);
+    }
     
     try {
       // 🔄 NOUVEAU : Flatten appearanceConfig vers metadata.appearance pour compatibilité API
@@ -97,19 +141,151 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           ...(apiData.metadata as Record<string, unknown> || {}),
           appearance: payload.appearanceConfig
         };
-        
-        console.log('🔄 [Parameters] Transformation appearanceConfig vers metadata.appearance:', {
-          original: payload.appearanceConfig,
-          metadata: apiData.metadata
-        });
       }
       
-      await onNodeUpdate({ ...apiData, id: selectedNodeId });
-      console.log('✅ [Parameters] Sauvegarde réussie');
+      // ✅ Utiliser la ref pour toujours avoir la dernière version
+      await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
+      
+      // ✅ Log de succès réduit
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Sauvegarde OK');
+      }
     } catch (error) {
       console.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
     }
-  }, [selectedNodeId, onNodeUpdate]);
+  }, 800); // ✅ 800ms = assez pour éviter spam, assez rapide pour sauvegarder chaque champ
+
+  const selectedNodeFromTree = useMemo(() => {
+    if (!selectedNode) return null;
+    const stack: TreeBranchLeafNode[] = [...nodes];
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (current.id === selectedNode.id) {
+        return current;
+      }
+      if (current.children && current.children.length > 0) {
+        for (const child of current.children) {
+          stack.push(child);
+        }
+      }
+    }
+    return null;
+  }, [nodes, selectedNode]);
+
+  type RepeaterMetadata = {
+    templateNodeIds?: string[];
+    templateNodeLabels?: Record<string, string>;
+    minItems?: number | null;
+    maxItems?: number | null;
+    addButtonLabel?: string;
+  };
+
+  const commitRepeaterMetadata = useCallback((partial: Partial<RepeaterMetadata>) => {
+    if (!selectedNode) return;
+    // ✅ Autoriser les repeaters sur tous les types de nœuds (branch, section, leaf_repeater, etc.)
+    
+    console.log('📝 [commitRepeaterMetadata] ENTRÉE:', {
+      partial,
+      'selectedNode.type': selectedNode.type,
+      'selectedNode.metadata': selectedNode.metadata
+    });
+    
+    // 🆕 IMPORTANT : Utiliser l'état local actuel au lieu de selectedNode.metadata
+    // pour éviter d'écraser les valeurs qui viennent d'être modifiées
+    const currentMeta: RepeaterMetadata = {
+      templateNodeIds: repeaterTemplateIds,
+      minItems: repeaterMinItems ?? undefined,
+      maxItems: repeaterMaxItems ?? undefined,
+      addButtonLabel: repeaterAddLabel !== REPEATER_DEFAULT_LABEL ? repeaterAddLabel : undefined
+    };
+    
+    const merged: RepeaterMetadata = { ...currentMeta, ...partial };
+
+    console.log('📝 [commitRepeaterMetadata] APRÈS MERGE:', {
+      currentMeta,
+      merged
+    });
+
+    if (!Array.isArray(merged.templateNodeIds)) {
+      delete merged.templateNodeIds;
+    }
+
+    if (merged.minItems === undefined) {
+      delete merged.minItems;
+    }
+
+    if (merged.maxItems === undefined) {
+      delete merged.maxItems;
+    }
+
+    if (typeof merged.addButtonLabel === 'string') {
+      const trimmed = merged.addButtonLabel.trim();
+      if (trimmed.length === 0 || trimmed === REPEATER_DEFAULT_LABEL) {
+        delete merged.addButtonLabel;
+      } else {
+        merged.addButtonLabel = trimmed;
+      }
+    }
+
+    const nextMetadata = {
+      ...(selectedNode.metadata || {}),
+      repeater: merged
+    };
+
+    console.log('📝 [commitRepeaterMetadata] METADATA FINALE:', nextMetadata);
+
+    patchNode({ metadata: nextMetadata });
+    
+    // 🔁 DUPLICATION PHYSIQUE : Si des templateNodeIds sont définis, dupliquer les templates
+    if (merged.templateNodeIds && merged.templateNodeIds.length > 0) {
+      duplicateTemplatesPhysically(merged.templateNodeIds);
+    }
+  }, [patchNode, selectedNode, repeaterTemplateIds, repeaterMinItems, repeaterMaxItems, repeaterAddLabel, REPEATER_DEFAULT_LABEL, duplicateTemplatesPhysically]);
+
+  const handleMinItemsChange = useCallback((value: number | null) => {
+    const numeric = typeof value === 'number' ? value : undefined;
+    setRepeaterMinItems(numeric);
+
+    // 🆕 Bloquer l'hydratation pendant la modification
+    skipNextHydrationRef.current = true;
+    if (hydrationTimeoutRef.current) clearTimeout(hydrationTimeoutRef.current);
+    hydrationTimeoutRef.current = setTimeout(() => {
+      skipNextHydrationRef.current = false;
+    }, 1000);
+
+    if (typeof numeric === 'number' && typeof repeaterMaxItems === 'number' && repeaterMaxItems < numeric) {
+      setRepeaterMaxItems(numeric);
+      commitRepeaterMetadata({ minItems: numeric, maxItems: numeric });
+      return;
+    }
+
+    commitRepeaterMetadata({ minItems: numeric });
+  }, [commitRepeaterMetadata, repeaterMaxItems]);
+
+  const handleMaxItemsChange = useCallback((value: number | null) => {
+    const numeric = typeof value === 'number' ? value : undefined;
+    setRepeaterMaxItems(numeric);
+
+    // 🆕 Bloquer l'hydratation pendant la modification
+    skipNextHydrationRef.current = true;
+    if (hydrationTimeoutRef.current) clearTimeout(hydrationTimeoutRef.current);
+    hydrationTimeoutRef.current = setTimeout(() => {
+      skipNextHydrationRef.current = false;
+    }, 1000);
+
+    if (typeof numeric === 'number' && typeof repeaterMinItems === 'number' && repeaterMinItems > numeric) {
+      setRepeaterMinItems(numeric);
+      commitRepeaterMetadata({ minItems: numeric, maxItems: numeric });
+      return;
+    }
+
+    commitRepeaterMetadata({ maxItems: numeric });
+  }, [commitRepeaterMetadata, repeaterMinItems]);
+
+  const handleAddLabelChange = useCallback((value: string) => {
+    setRepeaterAddLabel(value);
+    commitRepeaterMetadata({ addButtonLabel: value });
+  }, [commitRepeaterMetadata]);
 
   // Hydratation à la sélection
   useEffect(() => {
@@ -122,45 +298,23 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     setDescription(selectedNode.description || '');
     setIsRequired(!!selectedNode.isRequired);
     setIsVisible(selectedNode.isVisible !== false);
+    setIsMultiple(!!selectedNode.isMultiple);
 
     if (isNewNode) {
       setAppearanceOpen(false);
     }
 
-    // Repliable supprimé: on ignore metadata.collapsible
     const nodeType = registry.getNodeType(selectedNode.type);
     const ft = (selectedNode.subType as string | undefined)
-        || (selectedNode.metadata?.fieldType as string | undefined)
-        || nodeType?.defaultFieldType;
+      || (selectedNode.metadata?.fieldType as string | undefined)
+      || nodeType?.defaultFieldType;
     setFieldType(ft);
-    
-    // Initialiser l'apparence par défaut si elle n'existe pas et que c'est un champ
-    const shouldApplyDefaultAppearance = Boolean(
-      ft &&
-      !selectedNode.appearanceConfig &&
-      selectedNode.type !== 'branch' &&
-      selectedNode.type !== 'section'
-    );
 
-    if (shouldApplyDefaultAppearance && defaultAppearanceAppliedRef.current !== selectedNode.id) {
-      defaultAppearanceAppliedRef.current = selectedNode.id;
-      const defaultAppearance = TreeBranchLeafRegistry.getDefaultAppearanceConfig(ft!);
-      const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(defaultAppearance);
-      
-      // Mettre à jour le nœud avec l'apparence par défaut
-      patchNode({ 
-        appearanceConfig: defaultAppearance,
-        ...tblMapping
-      });
-    }
-    if (!shouldApplyDefaultAppearance && defaultAppearanceAppliedRef.current === selectedNode.id) {
-      defaultAppearanceAppliedRef.current = null;
-    }
+    // ❌ DÉSACTIVÉ : Ne pas appliquer l'apparence par défaut ici car ça crée une boucle infinie
+    // L'apparence par défaut doit être appliquée uniquement lors de la CRÉATION du nœud, pas lors de l'hydratation
+    // Le TreeBranchLeafEditor applique déjà les valeurs par défaut lors de la création
 
-    // 🔧 FIX: Détecter si des conditions existent via l'API et hasCondition
-    // Note: Les conditions sont maintenant dans une table séparée, pas dans conditionConfig
     const conditionActive = !!selectedNode.hasCondition;
-    // Init état local des capacités pour rendu instantané des toggles
     setCapsState({
       data: !!selectedNode.hasData,
       formula: !!selectedNode.hasFormula,
@@ -174,7 +328,47 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (isNewNode) {
       setOpenCaps(new Set<string>(Array.from(panelStateOpenCapabilities || [])));
     }
-  }, [selectedNode, registry, panelStateOpenCapabilities]); // 🔧 FIX: Retirer patchNode des dépendances pour éviter la boucle infinie
+
+    if (selectedNode.type === 'leaf_repeater') {
+      // 🆕 Ignorer l'hydratation si on vient de modifier
+      if (skipNextHydrationRef.current) {
+        console.log('⏭️ [Parameters] Hydratation ignorée (modification en cours)');
+        return;
+      }
+      
+      console.log('🔍 [Parameters] Hydratation repeater:', {
+        'selectedNode.metadata': JSON.stringify(selectedNode.metadata, null, 2),
+        'selectedNode.metadata?.repeater': JSON.stringify(selectedNode.metadata?.repeater, null, 2)
+      });
+      
+      const repeaterMeta = (selectedNode.metadata?.repeater as RepeaterMetadata) || {};
+      console.log('🔍 [Parameters] repeaterMeta après cast:', JSON.stringify(repeaterMeta, null, 2));
+      
+      const templateIds = Array.isArray(repeaterMeta.templateNodeIds)
+        ? repeaterMeta.templateNodeIds
+        : (selectedNodeFromTree?.children?.map(child => child.id) ?? []);
+
+      console.log('🔍 [Parameters] Template IDs extraits:', {
+        templateIds,
+        'Array.isArray(repeaterMeta.templateNodeIds)': Array.isArray(repeaterMeta.templateNodeIds),
+        'repeaterMeta.templateNodeIds': repeaterMeta.templateNodeIds
+      });
+      
+      setRepeaterTemplateIds(templateIds);
+      setRepeaterMinItems(typeof repeaterMeta.minItems === 'number' ? repeaterMeta.minItems : undefined);
+      setRepeaterMaxItems(typeof repeaterMeta.maxItems === 'number' ? repeaterMeta.maxItems : undefined);
+      setRepeaterAddLabel(
+        typeof repeaterMeta.addButtonLabel === 'string' && repeaterMeta.addButtonLabel.trim().length > 0
+          ? repeaterMeta.addButtonLabel
+          : REPEATER_DEFAULT_LABEL
+      );
+    } else {
+      setRepeaterTemplateIds([]);
+      setRepeaterMinItems(undefined);
+      setRepeaterMaxItems(undefined);
+      setRepeaterAddLabel(REPEATER_DEFAULT_LABEL);
+    }
+  }, [selectedNode, registry, panelStateOpenCapabilities, selectedNodeFromTree]);
 
   // Auto-focus sur le libellé pour édition rapide
   useEffect(() => {
@@ -222,6 +416,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     patchNode({ isRequired: value });
   }, [patchNode]);
 
+  const handleMultipleChange = useCallback((value: boolean) => {
+    setIsMultiple(value);
+    patchNode({ isMultiple: value });
+  }, [patchNode]);
+
   // Gestionnaire de changement de fieldType
   const handleFieldTypeChange = useCallback((value: string) => {
     setFieldType(value);
@@ -250,6 +449,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     );
   }
 
+  const isContainerNode = selectedNode.type === 'branch' || selectedNode.type === 'section';
+
   return (
     <Card
       title={
@@ -261,7 +462,6 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       size="small"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        
         {/* Section Apparence */}
         <div>
           <h5 style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, margin: 0 }}>
@@ -304,11 +504,26 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     size="small"
                     style={{ width: 24, height: 24, padding: 0 }}
                     onClick={() => handleRequiredChange(!isRequired)}
-                    disabled={props.readOnly}
+                    disabled={props.readOnly || isContainerNode}
                   >
                     *
                   </Button>
                 </Tooltip>
+                
+                {/* Bouton Multiple pour branches SELECT (niveau 2+) */}
+                {selectedNode?.type === 'branch' && selectedNode?.parentId !== null && (
+                  <Tooltip title="Choix multiple">
+                    <Button
+                      type={isMultiple ? "primary" : "default"}
+                      size="small"
+                      style={{ width: 24, height: 24, padding: 0, fontSize: 10 }}
+                      onClick={() => handleMultipleChange(!isMultiple)}
+                      disabled={props.readOnly}
+                    >
+                      ✓
+                    </Button>
+                  </Tooltip>
+                )}
               </div>
             </div>
             
@@ -327,7 +542,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ flex: 1 }}>
                 <strong style={{ fontSize: 12 }}>Type de champ</strong>
-                {selectedNode?.type === 'branch' || selectedNode?.type === 'section' ? (
+                {isContainerNode ? (
                   <div style={{ 
                     padding: '4px 8px', 
                     backgroundColor: '#f0f0f0', 
@@ -338,7 +553,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     textAlign: 'center',
                     marginTop: '4px'
                   }}>
-                    {selectedNode.type === 'branch' ? '🌿 Branche (pas de champ)' : '📋 Section (pas de champ)'}
+                    {selectedNode.type === 'branch'
+                      ? '🌿 Branche (pas de champ)'
+                      : selectedNode.type === 'section'
+                        ? '📋 Section (pas de champ)'
+                        : '➕ Bloc répétable (conteneur)'}
                   </div>
                 ) : (
                   <Select
@@ -364,8 +583,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               {/* Bouton Apparence à droite */}
               <div style={{ marginTop: 20 }}>
                 <Tooltip title={
-                  selectedNode?.type === 'branch' || selectedNode?.type === 'section' 
-                    ? 'Les branches et sections n\'ont pas d\'apparence de champ' 
+                  isContainerNode
+                    ? 'Ce type de nœud n\'a pas de panneau d\'apparence'
                     : 'Apparence du champ'
                 }>
                   <Button
@@ -373,7 +592,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     size="small"
                     icon={<BgColorsOutlined />}
                     style={{ width: 32, height: 24 }}
-                    disabled={props.readOnly || !fieldType || selectedNode?.type === 'branch' || selectedNode?.type === 'section'}
+                    disabled={props.readOnly || !fieldType || isContainerNode}
                     onClick={() => {
                       setAppearanceOpen(!appearanceOpen);
                     }}
@@ -383,6 +602,31 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             </div>
           </Space>
         </div>
+
+        {/* Section Références partagées - Affichée uniquement pour les nœuds réutilisables */}
+        {!isContainerNode && fieldType && (
+          <div style={{ marginTop: 12 }}>
+            <SharedReferencePanel
+              nodeId={selectedNode.id}
+              treeId={tree?.id}
+              value={{
+                isSharedReference: selectedNode.isSharedReference ?? false,
+                sharedReferenceId: selectedNode.sharedReferenceId ?? null,
+                sharedReferenceName: selectedNode.sharedReferenceName ?? null,
+                sharedReferenceDescription: selectedNode.sharedReferenceDescription ?? null,
+                sharedReferenceIds: selectedNode.sharedReferenceIds ?? []
+              }}
+              onChange={(data) => {
+                patchNode(data);
+              }}
+              onNodeUpdate={async (updates) => {
+                console.log('🔗 [Parameters] onNodeUpdate appelé:', updates);
+                patchNode(updates);
+              }}
+              readOnly={props.readOnly}
+            />
+          </div>
+        )}
 
         {/* Panneau d'apparence spécifique au type de champ */}
         {appearanceOpen && fieldType && (
@@ -467,6 +711,121 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 );
               })()}
             </div>
+          </div>
+        )}
+
+        {/* 🔵 SECTION CHAMPS À RÉPÉTER - Spécifique au repeater */}
+        {selectedNode?.type === 'leaf_repeater' && (
+          <div>
+            <h5 style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, margin: 0 }}>
+              🔁 Champs à répéter
+            </h5>
+            <Space direction="vertical" size={10} style={{ width: '100%' }}>
+              <Alert
+                type={repeaterTemplateIds.length === 0 ? 'warning' : 'info'}
+                showIcon
+                message={
+                  repeaterTemplateIds.length === 0
+                    ? 'Sélectionnez des champs existants dans l\'arbre pour qu\'ils soient répétables.'
+                    : 'Les champs sélectionnés seront dupliqués à chaque clic sur le bouton "Ajouter".'
+                }
+              />
+
+              <div>
+                <strong style={{ fontSize: 12 }}>Champs à répéter</strong>
+                <Select
+                  mode="multiple"
+                  size="small"
+                  value={repeaterTemplateIds}
+                  style={{ width: '100%', marginTop: 4 }}
+                  placeholder="Sélectionnez les champs gabarit"
+                  disabled={props.readOnly}
+                  onChange={(values) => {
+                    console.log('🎯 [Select onChange] Valeurs sélectionnées:', values);
+                    setRepeaterTemplateIds(values as string[]);
+                    
+                    skipNextHydrationRef.current = true;
+                    if (hydrationTimeoutRef.current) clearTimeout(hydrationTimeoutRef.current);
+                    hydrationTimeoutRef.current = setTimeout(() => {
+                      skipNextHydrationRef.current = false;
+                      console.log('✅ [Parameters] Hydratation réactivée');
+                    }, 1000);
+                    
+                    // Construire un map des labels pour chaque template node
+                    const templateNodeLabels: Record<string, string> = {};
+                    const selectedIds = values as string[];
+                    
+                    console.log('🏷️ [Parameters] onChange appelé - construction des labels pour:', selectedIds);
+                    console.log('🏷️ [Parameters] Nodes disponibles:', nodes?.length || 0);
+                    
+                    selectedIds.forEach(nodeId => {
+                      // Trouver le nœud dans l'arbre pour récupérer son chemin complet
+                      const findNodePath = (list: TreeBranchLeafNode[] | undefined, targetId: string, trail: string[]): string[] | null => {
+                        if (!list) return null;
+                        for (const child of list) {
+                          const nextTrail = [...trail, child.label || child.id];
+                          if (child.id === targetId) {
+                            return nextTrail;
+                          }
+                          if (child.children && child.children.length > 0) {
+                            const found = findNodePath(child.children, targetId, nextTrail);
+                            if (found) return found;
+                          }
+                        }
+                        return null;
+                      };
+                      
+                      const path = findNodePath(nodes, nodeId, []);
+                      console.log(`🏷️ [Parameters] Node ${nodeId} -> path trouvé:`, path);
+                      if (path) {
+                        templateNodeLabels[nodeId] = path.join(' / ');
+                      }
+                    });
+                    
+                    console.log('🏷️ [Parameters] Template node labels FINAL:', templateNodeLabels);
+                    
+                    commitRepeaterMetadata({ 
+                      templateNodeIds: selectedIds,
+                      templateNodeLabels
+                    });
+                  }}
+                  allowClear
+                >
+                  {(() => {
+                    const allowedTypes: NodeTypeKey[] = ['leaf_field', 'leaf_option', 'leaf_option_field', 'section'];
+                    const options: { node: TreeBranchLeafNode; path: string[] }[] = [];
+
+                    const visit = (list: TreeBranchLeafNode[] | undefined, trail: string[]) => {
+                      if (!list) return;
+                      list.forEach(child => {
+                        const nextTrail = [...trail, child.label || child.id];
+                        if (child.id !== selectedNode?.id) {
+                          options.push({ node: child, path: nextTrail });
+                        }
+                        if (child.children && child.children.length > 0) {
+                          visit(child.children, nextTrail);
+                        }
+                      });
+                    };
+
+                    visit(nodes, []);
+
+                    return options
+                      .filter(opt => allowedTypes.includes(opt.node.type as NodeTypeKey))
+                      .map(opt => {
+                        const nodeType = TreeBranchLeafRegistry.getNodeType(opt.node.type);
+                        const emoji = nodeType?.emoji || '•';
+                        return (
+                          <Select.Option key={opt.node.id} value={opt.node.id}>
+                            <span style={{ marginRight: 6 }}>{emoji}</span>
+                            <span>{opt.path.join(' / ')}</span>
+                          </Select.Option>
+                        );
+                      });
+                  })()}
+                </Select>
+              </div>
+            </Space>
           </div>
         )}
 
@@ -568,3 +927,4 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 };
 
 export default Parameters;
+

@@ -148,6 +148,12 @@ const TBL: React.FC<TBLProps> = ({
             };
             // console.log('🔍 [TBL] Mise à jour clientData:', newClientData);
             setClientData(newClientData);
+            
+            // 🆕 Injecter le leadId dans formData pour les lookups de table
+            setFormData(prev => ({
+              ...prev,
+              __leadId: lead.id
+            }));
           } else {
             console.warn('🔍 [TBL] Lead non trouvé ou invalide');
           }
@@ -335,6 +341,18 @@ const TBL: React.FC<TBLProps> = ({
   const tabs = useFixed ? newData.tabs as unknown as TBLSection[] : oldData.tabs; // cast transitoire
   const dataLoading = useFixed ? newData.loading : oldData.loading;
   const dataError = useFixed ? newData.error : oldData.error;
+  const rawNodes = useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || []); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
+  
+  // 🔥 DEBUG TEMPORAIRE: Vérifier si rawNodes est peuplé
+  console.log('[TBL] 🔥 DEBUG rawNodes:', {
+    useFixed,
+    rawNodesLength: rawNodes.length,
+    oldDataRawNodesLength: oldData.rawNodes?.length || 0,
+    newDataRawNodesLength: newData.rawNodes?.length || 0,
+    oldDataLoading: oldData.loading,
+    newDataLoading: newData.loading,
+    rawNodesSample: rawNodes.slice(0, 3).map(n => ({ id: n.id, type: n.type, label: n.label, parentId: n.parentId }))
+  });
 
   // 🎯 Hook de validation pour les onglets et champs obligatoires
   const { validationState, actions: validationActions } = useTBLValidation({
@@ -711,6 +729,11 @@ const TBL: React.FC<TBLProps> = ({
         // Exposer en debug (lecture) pour analyse miroir
         if (typeof window !== 'undefined') {
           window.TBL_FORM_DATA = next;
+          
+          // ✅ NOUVEAU: Émettre événement pour que useTBLDataPrismaComplete recharge les références partagées
+          const event = new CustomEvent('TBL_FORM_DATA_CHANGED', { detail: { fieldId, value } });
+          window.dispatchEvent(event);
+          console.log('🚀 [TBL] Événement TBL_FORM_DATA_CHANGED dispatché:', { fieldId, value });
         }
       } catch { /* noop */ }
       try {
@@ -1757,6 +1780,8 @@ const TBL: React.FC<TBLProps> = ({
                         formData={formData}
                         onChange={handleFieldChange}
                         treeId={tree?.id}
+                        tree={tree}
+                        rawNodes={rawNodes}
                         disabled={saving}
                         validationState={validationState}
                         validationActions={validationActions}
@@ -2165,6 +2190,8 @@ interface TBLTabContentWithSectionsProps {
   formData: TBLFormData;
   onChange: (fieldId: string, value: string | number | boolean | string[] | null | undefined) => void;
   treeId?: string; // ID de l'arbre pour les appels backend
+  tree?: any; // Arbre structuré
+  rawNodes?: Array<{ id: string; parentId: string | null; type: string; label: string; order: number }>; // 🔥 NOUVEAU: Nœuds bruts pour Cascader
   disabled?: boolean;
   validationState?: any;
   validationActions?: any;
@@ -2176,6 +2203,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
   formData,
   onChange,
   treeId,
+  tree,
+  rawNodes = [],
   validationState,
   validationActions,
   disabled = false
@@ -2222,6 +2251,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
               formData={formData}
               onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
               treeId={treeId}
+              allNodes={rawNodes}
               disabled={disabled}
             />
           ))}
@@ -2242,6 +2272,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
           formData={formData}
           onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
           treeId={treeId}
+          allNodes={rawNodes}
           disabled={disabled}
         />
       );

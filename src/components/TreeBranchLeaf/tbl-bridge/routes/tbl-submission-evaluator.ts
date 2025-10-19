@@ -770,7 +770,7 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
  */
 router.post('/submissions/preview-evaluate', async (req, res) => {
   try {
-    const { treeId, formData, baseSubmissionId } = req.body || {};
+    const { treeId, formData, baseSubmissionId, leadId } = req.body || {};
 
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
     const userId = (req as AuthenticatedRequest).user?.userId || 'unknown-user';
@@ -801,6 +801,75 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
     // 3) Construire valueMap: données existantes (si baseSubmissionId) + overrides formData
     const valueMap = new Map<string, unknown>();
+    
+    // 3a) 🆕 Charger les données du Lead si présent
+    if (leadId) {
+      const lead = await prisma.lead.findUnique({
+        where: { id: leadId as string },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          company: true,
+          leadNumber: true,
+          linkedin: true,
+          website: true,
+          status: true,
+          notes: true,
+          data: true
+        }
+      });
+      
+      if (lead) {
+        // Ajouter les champs du Lead dans le valueMap avec le préfixe "lead."
+        valueMap.set('lead.id', lead.id);
+        valueMap.set('lead.firstName', lead.firstName);
+        valueMap.set('lead.lastName', lead.lastName);
+        valueMap.set('lead.email', lead.email);
+        valueMap.set('lead.phone', lead.phone);
+        valueMap.set('lead.company', lead.company);
+        valueMap.set('lead.leadNumber', lead.leadNumber);
+        valueMap.set('lead.linkedin', lead.linkedin);
+        valueMap.set('lead.website', lead.website);
+        valueMap.set('lead.status', lead.status);
+        valueMap.set('lead.notes', lead.notes);
+        
+        // ✅ Extraire les données de l'objet JSON `data` s'il existe
+        if (lead.data && typeof lead.data === 'object') {
+          const leadData = lead.data as Record<string, unknown>;
+          
+          // Ajouter le code postal s'il existe dans data
+          if (leadData.postalCode) {
+            valueMap.set('lead.postalCode', leadData.postalCode);
+            console.log(`[PREVIEW-EVALUATE] ✅ Code postal Lead: ${leadData.postalCode}`);
+          } else if (leadData.address && typeof leadData.address === 'string') {
+            // 🆕 Extraire le code postal depuis l'adresse (format: "Rue..., 5150 Ville, Pays")
+            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            if (postalCodeMatch) {
+              const extractedPostalCode = postalCodeMatch[1];
+              valueMap.set('lead.postalCode', extractedPostalCode);
+              console.log(`[PREVIEW-EVALUATE] ✅ Code postal extrait: ${extractedPostalCode} depuis "${leadData.address}"`);
+            } else {
+              console.log(`[PREVIEW-EVALUATE] ⚠️ Aucun code postal trouvé dans l'adresse: "${leadData.address}"`);
+            }
+          }
+          
+          if (leadData.address) {
+            valueMap.set('lead.address', leadData.address);
+          }
+          if (leadData.city) {
+            valueMap.set('lead.city', leadData.city);
+          }
+          if (leadData.country) {
+            valueMap.set('lead.country', leadData.country);
+          }
+        }
+      }
+    }
+    
+    // 3b) Charger les données de la submission existante
     if (baseSubmissionId) {
       const existingData = await prisma.treeBranchLeafSubmissionData.findMany({
         where: { submissionId: baseSubmissionId },
@@ -811,6 +880,8 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         valueMap.set(row.nodeId, row.value);
       }
     }
+    
+    // 3c) Appliquer les overrides du formData
     if (formData && typeof formData === 'object') {
       for (const [k, v] of Object.entries(formData as Record<string, unknown>)) {
         if (k.startsWith('__')) continue; // ignorer champs techniques

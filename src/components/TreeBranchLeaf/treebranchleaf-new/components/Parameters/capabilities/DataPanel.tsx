@@ -539,7 +539,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
       try {
         const emptyVals = { exposedKey: undefined, displayFormat: 'number', unit: '', precision: 2, visibleToUser: false } as Record<string, unknown>;
         await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`, emptyVals);
-        try { await api.put(`/api/treebranchleaf/nodes/${nodeId}`, { hasData: false }); } catch { /* optional */ }
+        try { await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { hasData: false }); } catch { /* optional */ }
         form.setFieldsValue(emptyVals);
         onChange?.(emptyVals);
         messageApi.success('Donnée supprimée');

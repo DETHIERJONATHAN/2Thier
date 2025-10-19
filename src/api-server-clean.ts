@@ -252,14 +252,8 @@ if (process.env.NODE_ENV === 'production') {
     
     // 🌐 RENDU DES SITES VITRINES OU FALLBACK CRM
     // Cette route attrape TOUT ce qui n'est pas /api/ ou /assets/
-    // ⚠️ IMPORTANT: Utiliser '*' au lieu d'une regex car path-to-regexp ne supporte pas les lookaheads
-    app.get('*', (req: any, res, _next) => {
-      // ⛔ Ignorer les routes /api/ et /assets/ (déjà gérées)
-      if (req.url.startsWith('/api/') || req.url.startsWith('/assets/')) {
-        return _next();
-      }
-      
-      // ✅ SI UN SITE VITRINE A ÉTÉ DÉTECTÉ, LE RENDRE EN SSR
+    app.get(/^(?!\/api\/|\/assets\/).*/, (req: any, res, _next) => {
+      // � SI UN SITE VITRINE A ÉTÉ DÉTECTÉ, LE RENDRE EN SSR
       if (req.isWebsiteRoute === true && req.websiteData) {
         console.log(`🎨 [WEBSITE-RENDER] Rendu SSR pour: ${req.websiteData.name} (${req.hostname})`);
         return renderWebsite(req, res);

@@ -146,6 +146,8 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
 
   // Flag pour éviter les conflits entre sauvegarde manuelle et debounced
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isRemovingImage, setIsRemovingImage] = useState(false);
+  const [uploadFileList, setUploadFileList] = useState<any[]>([]);
 
   // ✅ INITIALISER le formulaire au montage
   useEffect(() => {
@@ -175,6 +177,18 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
     setLocalValues(newValues);
     // ✅ SYNCHRONISER LE FORMULAIRE avec les nouvelles valeurs
     form.setFieldsValue(newValues);
+    
+    // 🔥 SYNCHRONISER uploadFileList avec l'image
+    if (newValues.helpTooltipImage && typeof newValues.helpTooltipImage === 'string' && newValues.helpTooltipImage.trim()) {
+      setUploadFileList([{
+        uid: '-1',
+        name: 'tooltip-image',
+        status: 'done',
+        url: String(newValues.helpTooltipImage)
+      }]);
+    } else {
+      setUploadFileList([]);
+    }
   }, [value, form]);
 
   // Sauvegarde debounced pour éviter les appels trop fréquents
@@ -186,6 +200,12 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
   // Gestionnaire de changement avec mise à jour locale immédiate
   const handleValuesChange = useCallback((changedValues: Record<string, unknown>, allValues: Record<string, unknown>) => {
     console.log('📝 [TextPanel] Changement:', { changedValues, allValues });
+    
+    // 🛑 BLOQUER si on est en train de supprimer l'image
+    if (isRemovingImage) {
+      console.log('🛑 [TextPanel] Suppression en cours, skip onChange');
+      return;
+    }
     
     // Log spécial pour les images
     if (changedValues.helpTooltipImage) {
@@ -207,7 +227,7 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
     
     // Sauvegarde debounced pour les autres champs
     debouncedSave(allValues);
-  }, [debouncedSave, isUploadingImage]);
+  }, [debouncedSave, isUploadingImage, isRemovingImage]);
 
   return (
     <Card size="small" variant="outlined">
@@ -312,12 +332,7 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
             name="tooltipImage"
             listType="picture"
             maxCount={1}
-            fileList={localValues.helpTooltipImage && typeof localValues.helpTooltipImage === 'string' && localValues.helpTooltipImage.trim() ? [{
-              uid: '-1',
-              name: 'tooltip-image',
-              status: 'done',
-              url: String(localValues.helpTooltipImage)
-            }] : []}
+            fileList={uploadFileList}
             beforeUpload={(file) => {
               // Vérifier le type de fichier
               const isImage = file.type.startsWith('image/');
@@ -341,6 +356,14 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
               reader.onload = (e) => {
                 const base64 = e.target?.result as string;
                 console.log('🖼️ [TextPanel] Image convertie en base64, taille:', base64.length, 'caractères');
+                
+                // 🔥 Mettre à jour uploadFileList avec la nouvelle image
+                setUploadFileList([{
+                  uid: '-1',
+                  name: file.name,
+                  status: 'done',
+                  url: base64
+                }]);
                 
                 // Créer une nouvelle valeur propre sans référence circulaire
                 const cleanValues = {
@@ -381,8 +404,32 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
               showDownloadIcon: false
             }}
             onRemove={() => {
-              // Mettre à jour directement le formulaire qui déclenchera handleValuesChange
-              form.setFieldValue('helpTooltipImage', '');
+              console.log('🗑️ [TextPanel] Suppression de l\'image tooltip');
+              
+              // Activer le flag de blocage
+              setIsRemovingImage(true);
+              
+              // Vider la liste de fichiers Upload IMMÉDIATEMENT
+              setUploadFileList([]);
+              
+              // Mettre à jour l'état local immédiatement pour l'UI
+              setLocalValues(prev => ({ ...prev, helpTooltipImage: null }));
+              
+              // Mettre à null au lieu de chaîne vide pour éviter les problèmes de sérialisation
+              form.setFieldsValue({ helpTooltipImage: null });
+              
+              // Forcer la sauvegarde immédiate
+              const currentValues = { ...form.getFieldsValue(), helpTooltipImage: null };
+              console.log('💾 [TextPanel] Valeurs envoyées pour suppression:', JSON.stringify(currentValues, null, 2));
+              onChange?.(currentValues);
+              
+              // Désactiver le flag après un court délai
+              setTimeout(() => {
+                setIsRemovingImage(false);
+                console.log('✅ [TextPanel] Flag de suppression désactivé');
+              }, 100);
+              
+              return true; // Confirmer la suppression
             }}
           >
             <Button 

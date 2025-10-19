@@ -26,8 +26,9 @@ import { performanceLogger } from './utils/performanceLogger';
 
 // Hooks et utils
 // import { useTreeData } from './hooks/useTreeData';
-import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { DragStartEvent, DragOverEvent, DragEndEvent } from '@dnd-kit/core';
+import { message } from 'antd';
 
 // Helper pour récupérer l'organization courante depuis un global éventuellement injecté
 declare global {
@@ -40,12 +41,28 @@ import type {
   TreeBranchLeafTree, 
   TreeBranchLeafNode, 
   UIState, 
-  // DragItem, 
-  // DropTargetData,
+  DragItem, 
+  DropTargetData,
   NodeTypeKey
 } from './types';
 
 const { Content } = Layout;
+
+/**
+ * 🔧 Utilitaire : Aplatir une hiérarchie de nœuds en tableau plat
+ */
+const flattenNodes = (input: TreeBranchLeafNode[] | undefined | null): TreeBranchLeafNode[] => {
+  if (!input || input.length === 0) return [];
+  const result: TreeBranchLeafNode[] = [];
+  const traverse = (node: TreeBranchLeafNode) => {
+    result.push(node);
+    if (node.children && node.children.length > 0) {
+      node.children.forEach(traverse);
+    }
+  };
+  input.forEach(traverse);
+  return result;
+};
 
 interface TreeBranchLeafEditorProps {
   trees: TreeBranchLeafTree[];
@@ -134,9 +151,10 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   const [activeMobileTab, setActiveMobileTab] = useState<string>('structure');
   // Ref pour accéder aux nœuds courants dans les callbacks sans dépendre de propNodes
   const nodesRef = useRef<TreeBranchLeafNode[]>(propNodes || []);
-  // useEffect(() => {
-    // nodesRef.current = propNodes || [];
-  // }, [propNodes]);
+  useEffect(() => {
+    // ✅ Synchroniser silencieusement (pas de log - c'est normal après drag & drop)
+    nodesRef.current = propNodes || [];
+  }, [propNodes]);
   
   // Actions sur les arbres
   const createTree = useCallback(async (data: Partial<TreeBranchLeafTree>) => {
@@ -194,35 +212,198 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     targetId?: string,
     position: 'before' | 'after' | 'child' = 'child'
   ): Promise<boolean> => {
-    // console.log('🔄 moveNode:', { nodeId, targetId, position }); // ✨ Log réduit
     if (!selectedTree) {
       console.error('❌ Aucun arbre sélectionné');
       return false;
     }
 
     try {
-      // Optimiste minimal: rien de complexe, on laissera le re-fetch refléter l'ordre exact
-      // Appel API avec sémantique de déplacement serveur (targetId + position)
+      // 🎯 OPTIMISTE : Mettre à jour l'ordre LOCALEMENT avant l'appel serveur
+      const currentFlat = flattenNodes(nodesRef.current);
+      const draggedNode = currentFlat.find(n => n.id === nodeId);
+      const targetNode = currentFlat.find(n => n.id === targetId);
+      
+      if (!draggedNode || !targetNode) {
+        console.error('❌ Nœud source ou cible introuvable');
+        return false;
+      }
+      
+      // 🚨 VALIDATION HIÉRARCHIQUE CLIENT-SIDE (avant mise à jour optimiste)
+      let newParentId: string | null;
+      
+      if (position === 'child') {
+        newParentId = targetId!;
+      } else {
+        newParentId = targetNode.parentId || null;
+      }
+      
+      // Récupérer le nouveau parent pour validation
+      const newParent = newParentId ? currentFlat.find(n => n.id === newParentId) : null;
+      
+      // Règles hiérarchiques TreeBranchLeaf
+      if (draggedNode.type === 'leaf_option') {
+        // Les options peuvent être sous :
+        // 1. Des champs SELECT (leaf_ avec subType='SELECT')
+        // 2. Des branches de niveau 2+ (branches sous branches = SELECT)
+        if (newParent) {
+          const isSelectField = newParent.type?.startsWith('leaf_') && newParent.subType === 'SELECT';
+          const isSelectBranch = newParent.type === 'branch' && newParent.parentId !== null;
+          
+          if (!isSelectField && !isSelectBranch) {
+            console.error('❌ Les options ne peuvent être déplacées que sous des champs SELECT ou des branches de niveau 2+');
+            return false;
+          }
+        }
+      } else if (draggedNode.type?.startsWith('leaf_')) {
+        // Les champs peuvent être sous des branches ou d'autres champs
+        if (newParent && newParent.type !== 'branch' && !newParent.type?.startsWith('leaf_')) {
+          console.error('❌ Les champs ne peuvent être déplacés que sous des branches ou d\'autres champs');
+          return false;
+        }
+      } else if (draggedNode.type === 'branch') {
+        // Les branches peuvent être sous l'arbre ou une autre branche
+        if (newParent && !(newParent.type === 'tree' || newParent.type === 'branch')) {
+          console.error('❌ Les branches ne peuvent être déplacées que sous l\'arbre ou une autre branche');
+          return false;
+        }
+      }
+      
+      // Calculer le nouvel order
+      let newOrder: number;
+      
+      if (position === 'child') {
+        const siblings = currentFlat.filter(n => n.parentId === targetId);
+        newOrder = siblings.length; // À la fin
+      } else {
+        const siblings = currentFlat.filter(n => n.parentId === newParentId && n.id !== nodeId);
+        const targetIndex = siblings.findIndex(s => s.id === targetId);
+        newOrder = position === 'before' ? targetIndex : targetIndex + 1;
+      }
+      
+      // Sauvegarder l'état actuel pour rollback en cas d'erreur
+      const previousNodes = nodesRef.current;
+      
+      // Mettre à jour le nœud déplacé LOCALEMENT
+      const optimisticFlat = currentFlat.map(n => {
+        if (n.id === nodeId) {
+          return { ...n, parentId: newParentId, order: newOrder };
+        }
+        // Réindexer les siblings de la destination
+        if (n.parentId === newParentId && n.id !== nodeId) {
+          const siblings = currentFlat.filter(s => s.parentId === newParentId && s.id !== nodeId);
+          const idx = siblings.findIndex(s => s.id === n.id);
+          if (idx >= newOrder) {
+            return { ...n, order: idx + 1 };
+          }
+        }
+        return n;
+      });
+      
+      // Reconstruire la hiérarchie depuis les données optimistes
+      const buildHierarchy = (flatNodes: TreeBranchLeafNode[]): TreeBranchLeafNode[] => {
+        // ✅ Filtrer uniquement les nœuds TEMPLATES (parentId: null, isSharedReference: true)
+        // Les options SELECT qui UTILISENT des références ne doivent PAS être filtrées
+        const visibleNodes = flatNodes.filter(node => 
+          !(node.isSharedReference === true && node.sharedReferenceId === null && node.parentId === null)
+        );
+        
+        const nodeMap = new Map<string, TreeBranchLeafNode>();
+        const rootNodes: TreeBranchLeafNode[] = [];
+        
+        visibleNodes.forEach(node => {
+          nodeMap.set(node.id, { ...node, children: [] });
+        });
+        
+        visibleNodes.forEach(node => {
+          const nodeWithChildren = nodeMap.get(node.id)!;
+          
+          if (node.parentId && nodeMap.has(node.parentId)) {
+            const parent = nodeMap.get(node.parentId)!;
+            parent.children = parent.children || [];
+            parent.children.push(nodeWithChildren);
+          } else {
+            rootNodes.push(nodeWithChildren);
+          }
+        });
+        
+        const sortByOrder = (nodes: TreeBranchLeafNode[]) => {
+          nodes.sort((a, b) => (a.order || 0) - (b.order || 0));
+          nodes.forEach(node => {
+            if (node.children && node.children.length > 0) {
+              sortByOrder(node.children);
+            }
+          });
+        };
+        
+        sortByOrder(rootNodes);
+        return rootNodes;
+      };
+      
+      const optimisticHierarchy = buildHierarchy(optimisticFlat);
+      
+      // ✅ Mise à jour OPTIMISTE immédiate
+      onNodesUpdate(optimisticHierarchy);
+      
+      // Appel API (en arrière-plan)
       try {
         await api.patch(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${nodeId}`, {
           targetId,
           position
         });
-      } catch {
-        // console.warn('⚠️ PATCH a échoué, tentative via PUT...', e); // ✨ Log réduit
-        await api.put(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${nodeId}`, {
-          targetId,
-          position
-        });
+        console.log('✅ DROP RÉUSSI !');
+      } catch (patchError: any) {
+        // Tentative de fallback avec PUT
+        console.warn('⚠️ PATCH échoué, tentative PUT fallback');
+        
+        try {
+          await api.put(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${nodeId}`, {
+            targetId,
+            position
+          });
+          console.log('✅ DROP RÉUSSI (via PUT) !');
+        } catch (putError: any) {
+          // 🔄 ROLLBACK : Les deux appels ont échoué, restaurer l'état précédent
+          console.error('❌ Échec serveur, rollback de la mise à jour optimiste');
+          onNodesUpdate(previousNodes);
+          
+          // Extraire et afficher le message d'erreur du serveur (tester plusieurs formats)
+          const errorMessage = 
+            putError?.data?.error || 
+            putError?.data?.message ||
+            putError?.message ||
+            patchError?.data?.error || 
+            patchError?.data?.message ||
+            patchError?.message ||
+            'Déplacement invalide';
+          
+          console.error(`\n❌❌❌ ERREUR DE DÉPLACEMENT ❌❌❌`);
+          console.error(`Message: ${errorMessage}`);
+          console.error(`Details PATCH:`, patchError);
+          console.error(`Details PUT:`, putError);
+          console.error(`❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌\n`);
+          
+          return false;
+        }
       }
 
-      // Recharger les nœuds pour refléter l’état correct
-      const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
-      onNodesUpdate(updatedNodes || []);
-      // Resynchroniser selectedNode s'il est le nœud déplacé
+      // ✅ PAS de GET après PATCH : on fait confiance à la mise à jour optimiste
+      // Le serveur a confirmé que tout est OK, inutile de tout recharger et perdre la hiérarchie
+      
+      // Resynchroniser selectedNode
       setUIState(prev => {
         if (!prev.selectedNode) return prev;
-        const refreshed = (updatedNodes || []).find((n: TreeBranchLeafNode) => n.id === prev.selectedNode!.id);
+        // Chercher dans la hiérarchie optimiste
+        const findNode = (nodes: TreeBranchLeafNode[]): TreeBranchLeafNode | undefined => {
+          for (const n of nodes) {
+            if (n.id === prev.selectedNode!.id) return n;
+            if (n.children) {
+              const found = findNode(n.children);
+              if (found) return found;
+            }
+          }
+          return undefined;
+        };
+        const refreshed = findNode(optimisticHierarchy);
         let nextState = prev;
         if (refreshed) {
           nextState = { ...nextState, selectedNode: refreshed };
@@ -235,7 +416,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         }
         return nextState;
       });
-      // console.log('✅ Nœud déplacé et arbre rechargé'); // ✨ Log réduit
+      
+      console.log('✅ [TreeBranchLeafEditor] Élément déplacé avec succès');
       return true;
     } catch (error) {
       console.error('❌ Erreur déplacement nœud:', error);
@@ -243,23 +425,41 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     }
   }, [selectedTree, api, onNodesUpdate]);
   
-  const createNode = useCallback(async (data: {
+  type CreateNodePayload = {
     type: NodeTypeKey;
     label: string;
     parentId?: string;
     fieldType?: string;
     order?: number;
-  }): Promise<TreeBranchLeafNode | null> => {
+    metadata?: Record<string, unknown>;
+  };
+
+  const createNode = useCallback(async (data: CreateNodePayload): Promise<TreeBranchLeafNode | null> => {
     // console.log(...) // ✨ Log réduit - objet de debug
     if (!selectedTree) {
       console.error('❌ Aucun arbre sélectionné (createNode)');
       return null;
     }
     try {
+      console.log('[TreeBranchLeafEditor] createNode ▶️ POST', {
+        treeId: selectedTree.id,
+        type: data.type,
+        parentId: data.parentId,
+        label: data.label
+      });
       const newNode = await api.post(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`, data);
       if (newNode) {
+        console.log('[TreeBranchLeafEditor] createNode ✅ POST ok', {
+          id: newNode.id,
+          type: newNode.type,
+          parentId: newNode.parentId
+        });
         // Recharger les données depuis l'API
+        console.log('[TreeBranchLeafEditor] createNode ▶️ GET nodes', { treeId: selectedTree.id });
         const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
+        console.log('[TreeBranchLeafEditor] createNode ✅ GET nodes', {
+          count: (updatedNodes || []).length
+        });
         onNodesUpdate(updatedNodes || []);
         // 🚀 Auto-expand du parent si création d'un enfant & sélection immédiate du nouveau nœud
         setUIState(prev => {
@@ -267,8 +467,21 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           if (data.parentId) {
             const expanded = new Set(prev.expandedNodes);
             expanded.add(data.parentId);
+            // 🔥 AUTO-EXPAND NOUVEAU NŒUD : Ajouter aussi le nouveau nœud pour qu'il puisse avoir des enfants visibles
+            expanded.add(newNode.id);
+            console.log('[TreeBranchLeafEditor] createNode 🔁 expand parent + nouveau nœud', {
+              parentId: data.parentId,
+              newNodeId: newNode.id,
+              expandedCount: expanded.size
+            });
+            next = { ...next, expandedNodes: expanded };
+          } else {
+            // 🔥 Même sans parent (nœud racine), auto-expand le nouveau nœud
+            const expanded = new Set(prev.expandedNodes);
+            expanded.add(newNode.id);
             next = { ...next, expandedNodes: expanded };
           }
+          console.log('[TreeBranchLeafEditor] createNode 🎯 select node', { id: newNode.id });
           return { ...next, selectedNode: newNode };
         });
         // console.log('✅ Nœud créé et arbre rechargé'); // ✨ Log réduit
@@ -281,6 +494,21 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       return null;
     }
   }, [selectedTree, api, onNodesUpdate]);
+
+  const buildDefaultMetadata = useCallback((nodeTypeKey?: NodeTypeKey): Record<string, unknown> | undefined => {
+    if (!nodeTypeKey) return undefined;
+    if (nodeTypeKey === 'leaf_repeater') {
+      return {
+        repeater: {
+          templateNodeIds: [],
+          minItems: 0,
+          maxItems: null,
+          addButtonLabel: 'Ajouter une entrée'
+        }
+      };
+    }
+    return undefined;
+  }, []);
   
   const activateCapability = useCallback(async (nodeId: string, capability: string) => {
     // console.log('⚡ activateCapability:', { nodeId, capability }); // ✨ Log réduit
@@ -340,8 +568,21 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       
       // ⚡ OPTIMISATION TEMPS RÉEL : Utiliser directement la réponse API (buildResponseFromColumns) au lieu de GET supplémentaire
       if (updated) {
-        const updatedNodes = (nodesRef.current || []).map(n => n.id === node.id ? updated : n);
-        onNodesUpdate(updatedNodes);
+        // Mettre à jour le nœud dans la hiérarchie existante (récursif)
+        const updateNodeInHierarchy = (nodes: TreeBranchLeafNode[]): TreeBranchLeafNode[] => {
+          return nodes.map(n => {
+            if (n.id === node.id) {
+              return { ...n, ...updated };
+            }
+            if (n.children && n.children.length > 0) {
+              return { ...n, children: updateNodeInHierarchy(n.children) };
+            }
+            return n;
+          });
+        };
+        
+        const updatedHierarchy = updateNodeInHierarchy(nodesRef.current);
+        onNodesUpdate(updatedHierarchy);
         
         // Re-synchroniser le nœud sélectionné si c'est lui qui a été modifié
         setUIState(prev => {
@@ -753,7 +994,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
 
   // 🐛 DEBUG: Logs pour vérifier les données reçues
   // 🐛 DEBUG: Logs optimisés - seulement si les données changent réellement
-  const debugInfo = useMemo(() => ({
+  const _debugInfo = useMemo(() => ({
     trees: trees?.length || 0,
     selectedTree: selectedTree?.name || selectedTree?.label || 'aucun',
     propNodes: propNodes?.length || 0,
@@ -763,33 +1004,249 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   // Debug logging temporairement désactivé pour éviter les boucles
 
   // =============================================================================
-  // 🎣 HOOKS - Hooks personnalisés OPTIMISÉS
+  // 🎣 DRAG & DROP - Logique intégrée directement (sans hook séparé)
   // =============================================================================
 
-  // Stabiliser les nœuds avec useMemo pour éviter les re-créations
-  const stableNodes = useMemo(() => propNodes || [], [propNodes]);
+  const [draggedItem, setDraggedItem] = useState<DragItem | null>(null);
+  const [, setHoveredTarget] = useState<string | null>(null);
+  const [validDrop, setValidDrop] = useState<boolean>(false);
 
-  // Mémoriser les fonctions de callback pour éviter les re-rendus - OPTIMISÉ
-  const stableMoveNode = useCallback(moveNode, [moveNode]);
-  const stableCreateNode = useCallback(createNode, [createNode]);
-  const stableActivateCapability = useCallback(activateCapability, [activateCapability]);
+  // 🏗️ Validation de la hiérarchie TreeBranchLeaf
+  const validateHierarchicalDrop = useCallback((sourceNodeType: string, target: DropTargetData): boolean => {
+    try {
+      const map = new Map<string, TreeBranchLeafNode>();
+      const stack: TreeBranchLeafNode[] = [];
+      for (const n of propNodes || []) stack.push(n);
+      while (stack.length) {
+        const cur = stack.pop()!;
+        map.set(cur.id, cur);
+        if (cur.children) for (const c of cur.children) stack.push(c);
+      }
 
-  // Mémoriser les handlers pour éviter les re-créations
-  const memoizedHandlers = useMemo(() => ({
-    onNodeMove: stableMoveNode,
-    onNodeCreate: stableCreateNode,
-    onCapabilityActivate: stableActivateCapability,
-    registry: TreeBranchLeafRegistry
-  }), [stableMoveNode, stableCreateNode, stableActivateCapability]);
+      const isRootTypeAllowed = (type: string) => type === 'branch' || type === 'section';
+      const canBeChildOf = (childType: string, parentType: string) => {
+        if (childType === 'branch') return parentType === 'branch' || parentType === 'tree';
+        if (childType === 'section') return parentType === 'branch' || parentType === 'tree' || parentType === 'section';
+        if (childType === 'leaf_repeater') {
+          return parentType === 'branch'
+            || parentType === 'section'
+            || parentType === 'leaf_repeater'
+            || parentType === 'leaf_option'
+            || parentType === 'leaf_option_field';
+        }
+        if (childType.startsWith('leaf_')) {
+          if (parentType === 'leaf_repeater') return true;
+          return parentType === 'branch' || parentType === 'section' || parentType.startsWith('leaf_');
+        }
+        return false;
+      };
 
-  const {
-    handleDragStart,
-    handleDragOver,
-    handleDragEnd
-  } = useDragAndDrop({
-    ...memoizedHandlers,
-    nodes: stableNodes
-  });
+      if (!target.nodeId) {
+        return isRootTypeAllowed(sourceNodeType);
+      }
+
+      let parentNode: TreeBranchLeafNode | undefined;
+      if (target.position === 'before' || target.position === 'after') {
+        const sibling = map.get(String(target.nodeId));
+        if (!sibling) return isRootTypeAllowed(sourceNodeType);
+        parentNode = sibling.parentId ? map.get(String(sibling.parentId)) : undefined;
+        if (!parentNode) return isRootTypeAllowed(sourceNodeType);
+      } else {
+        parentNode = map.get(String(target.nodeId));
+        if (!parentNode) return isRootTypeAllowed(sourceNodeType);
+      }
+
+      return canBeChildOf(sourceNodeType, parentNode.type);
+    } catch (e) {
+      console.warn('[validateHierarchicalDrop] Exception', e);
+      return false;
+    }
+  }, [propNodes]);
+
+  const canDrop = useCallback((source: DragItem, target: DropTargetData): boolean => {
+    if (!source || !target) return false;
+
+    if (source.type === 'palette-item') {
+      if (target.type !== 'structure' || !source.nodeType) return false;
+      const nodeType = TreeBranchLeafRegistry.getNodeType(source.nodeType);
+      if (!nodeType || !nodeType.acceptsDropFrom.includes('palette')) return false;
+      return validateHierarchicalDrop(source.nodeType, target);
+    }
+
+    if (source.type === 'node') {
+      const sourceId = source.data?.id || source.data?.nodeId;
+      if (!sourceId || !source.nodeType || target.type !== 'structure') return false;
+      if (target.nodeId && String(target.nodeId) === String(sourceId)) return false;
+      if ((target.position === 'before' || target.position === 'after') && target.nodeId === sourceId) return false;
+
+      const map = new Map<string, TreeBranchLeafNode>();
+      const stack: TreeBranchLeafNode[] = [];
+      for (const n of propNodes || []) stack.push(n);
+      while (stack.length) {
+        const cur = stack.pop()!;
+        map.set(cur.id, cur);
+        if (cur.children) for (const c of cur.children) stack.push(c);
+      }
+
+      if (target.position === 'child' && target.nodeId) {
+        const start = map.get(String(sourceId));
+        if (start && start.children) {
+          const st: TreeBranchLeafNode[] = [...start.children];
+          while (st.length) {
+            const n = st.pop()!;
+            if (n.id === target.nodeId) return false;
+            if (n.children) for (const c of n.children) st.push(c);
+          }
+        }
+      }
+
+      return validateHierarchicalDrop(source.nodeType, target);
+    }
+
+    return false;
+  }, [propNodes, validateHierarchicalDrop]);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const { active } = event;
+    console.log(`🔥 DRAG START - ID: ${active.id}`);
+    const dragItem: DragItem = {
+      id: String(active.id),
+      type: active.data.current?.type || 'node',
+      nodeType: active.data.current?.nodeType,
+      fieldType: active.data.current?.fieldType,
+      data: active.data.current
+    };
+    setDraggedItem(dragItem);
+    setHoveredTarget(null);
+    setValidDrop(false);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragOverEvent): boolean => {
+    const { over } = event;
+    if (!over || !draggedItem) {
+      setHoveredTarget(null);
+      setValidDrop(false);
+      return false;
+    }
+
+    const targetData: DropTargetData = {
+      type: over.data.current?.type || 'structure',
+      nodeId: over.data.current?.nodeId,
+      capability: over.data.current?.capability,
+      position: over.data.current?.position,
+      accepts: over.data.current?.accepts || [],
+      slot: over.data.current?.slot
+    };
+
+    const canDropHere = canDrop(draggedItem, targetData);
+    setHoveredTarget(String(over.id));
+    setValidDrop(!!canDropHere);
+    return !!canDropHere;
+  }, [draggedItem, canDrop]);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { over } = event;
+    console.log(`🎯 DRAG END - Over: ${over?.id}, Dragged: ${draggedItem?.id}, ValidDrop: ${validDrop}`);
+
+    if (!over || !draggedItem || !validDrop) {
+      setDraggedItem(null);
+      setHoveredTarget(null);
+      setValidDrop(false);
+      return;
+    }
+
+    const targetData: DropTargetData = {
+      type: over.data.current?.type || 'structure',
+      nodeId: over.data.current?.nodeId,
+      capability: over.data.current?.capability,
+      position: over.data.current?.position,
+      accepts: over.data.current?.accepts || [],
+      slot: over.data.current?.slot
+    };
+
+    console.log(`🚀 EXECUTING DROP:`, { draggedItem, targetData });
+
+    try {
+      if (draggedItem.type === 'palette-item') {
+        // Centralisation de la logique de création
+        const nodeType = TreeBranchLeafRegistry.getNodeType(draggedItem.nodeType!);
+        if (!nodeType) {
+          message.error('Type de nœud inconnu.');
+          return;
+        }
+
+        const map = new Map<string, TreeBranchLeafNode>();
+        const stack: TreeBranchLeafNode[] = [];
+        for (const n of propNodes || []) stack.push(n);
+        while (stack.length) {
+          const current = stack.pop()!;
+          map.set(current.id, current);
+          if (current.children) {
+            for (const child of current.children) {
+              stack.push(child);
+            }
+          }
+        }
+
+        let effectiveParentId: string | undefined | null = targetData.nodeId;
+        if (targetData.position === 'before' || targetData.position === 'after') {
+          const sibling = targetData.nodeId ? map.get(String(targetData.nodeId)) : undefined;
+          effectiveParentId = sibling?.parentId || null;
+        }
+
+        const baseLabel = String(draggedItem.data?.label || nodeType.label);
+        const labelToUse = draggedItem.nodeType === 'leaf_field' ? baseLabel : `Nouveau ${nodeType.label}`;
+
+        const payload: CreateNodePayload = {
+          type: draggedItem.nodeType!,
+          label: labelToUse,
+          parentId: effectiveParentId || undefined,
+          fieldType: nodeType.defaultFieldType
+        };
+
+        const defaultMetadata = buildDefaultMetadata(draggedItem.nodeType as NodeTypeKey | undefined);
+        if (defaultMetadata) {
+          payload.metadata = defaultMetadata;
+        }
+
+        // Appel de la fonction centralisée
+        const newNode = await createNode(payload);
+
+        if (newNode && (targetData.position === 'before' || targetData.position === 'after') && targetData.nodeId) {
+          // Le rechargement dans createNode a déjà la bonne position, mais un moveNode peut forcer l'ordre si le backend ne le gère pas à la création.
+          // Pour l'instant, on fait confiance au rechargement. On pourrait ajouter un moveNode ici si nécessaire.
+          console.log('Repositionnement géré par le rechargement des données.');
+        }
+
+      } else if (draggedItem.type === 'node') {
+        // ... (logique de déplacement existante)
+        if (!draggedItem.data?.id) {
+          console.error('❌ Source sans ID');
+          return;
+        }
+
+        const success = await moveNode(
+          draggedItem.data.id,
+          targetData.nodeId,
+          targetData.position
+        );
+
+        if (success) {
+          // ✅ Succès silencieux (évite warning Ant Design sur message statique)
+          console.log('✅ [TreeBranchLeafEditor] Élément déplacé avec succès');
+          console.log('✅ DROP RÉUSSI !');
+        } else {
+          console.error('❌ [TreeBranchLeafEditor] Échec du déplacement');
+        }
+      }
+    } catch (error) {
+      console.error(`💥 ERREUR DANS DROP:`, error);
+    } finally {
+      setDraggedItem(null);
+      setHoveredTarget(null);
+      setValidDrop(false);
+    }
+  }, [draggedItem, validDrop, createNode, moveNode, propNodes, buildDefaultMetadata]);
   // 🎛️ HANDLERS - Gestionnaires d'événements
   // =============================================================================
 
@@ -876,13 +1333,20 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     const nodeTypeConfig = TreeBranchLeafRegistry.getNodeType(nodeType);
     if (!nodeTypeConfig) return;
 
-    createNode({
+    const payload: CreateNodePayload = {
       type: nodeType,
       label: `Nouveau ${nodeTypeConfig.label}`,
       parentId,
       fieldType: nodeTypeConfig.defaultFieldType
-    });
-  }, [createNode]);
+    };
+
+    const defaultMetadata = buildDefaultMetadata(nodeType);
+    if (defaultMetadata) {
+      payload.metadata = defaultMetadata;
+    }
+
+    createNode(payload);
+  }, [createNode, buildDefaultMetadata]);
 
   const handleTreeAction = useCallback(async (
     action: 'create' | 'update' | 'delete' | 'duplicate',
@@ -939,7 +1403,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   // }, [propNodes]);
 
   // 🌿 AUTO-EXPAND INITIALE : ouvrir automatiquement les nœuds racines ayant des enfants (une seule fois)
-  const hasInitializedExpandRef = useRef(false);
+  const _hasInitializedExpandRef = useRef(false);
   // useEffect(() => {
     // if (!propNodes || propNodes.length === 0 || hasInitializedExpandRef.current) return;
     // 
@@ -962,8 +1426,37 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     // }
   // }, [propNodes]);
 
+  // 🔥 AUTO-EXPAND INITIAL : Ouvrir automatiquement les leaf_option qui ont des enfants
+  const hasAutoExpandedRef = useRef(false);
+  useEffect(() => {
+    if (!propNodes || propNodes.length === 0 || hasAutoExpandedRef.current) return;
+    
+    // Collecter tous les leaf_option qui ont des enfants
+    const optionsWithChildren = new Set<string>();
+    
+    for (const node of propNodes) {
+      // Si c'est une option et qu'elle a un parent (donc des enfants potentiels)
+      if (node.type === 'leaf_option' || node.type === 'leaf_option_field') {
+        // Vérifier s'il y a des nœuds qui ont ce node comme parent
+        const hasChildren = propNodes.some(n => n.parentId === node.id);
+        if (hasChildren) {
+          optionsWithChildren.add(node.id);
+        }
+      }
+    }
+    
+    if (optionsWithChildren.size > 0) {
+      console.log(`🔥 [TreeBranchLeafEditor] Auto-expand ${optionsWithChildren.size} leaf_option avec enfants`);
+      setUIState(prev => ({
+        ...prev,
+        expandedNodes: new Set([...prev.expandedNodes, ...optionsWithChildren])
+      }));
+      hasAutoExpandedRef.current = true;
+    }
+  }, [propNodes]);
+
   // Garder l'objet du nœud sélectionné synchronisé lorsque la liste des nœuds change
-  const previousSelectedNodeIdRef = useRef<string | null>(null);
+  const _previousSelectedNodeIdRef = useRef<string | null>(null);
   // useEffect(() => {
     // if (!uiState.selectedNode || !propNodes) return;
     // 
@@ -1076,9 +1569,9 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         <Parameters
           tree={selectedTree}
           selectedNode={uiState.selectedNode}
+          nodes={propNodes || []}
           panelState={uiState.panelState}
           onNodeUpdate={updateNode}
-          onCapabilityToggle={handleCapabilityToggle}
           onCapabilityConfig={updateNode}
           readOnly={readOnly}
           registry={TreeBranchLeafRegistry}

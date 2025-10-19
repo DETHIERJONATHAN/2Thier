@@ -14,7 +14,8 @@ import {
   Form, 
   Input, 
   InputNumber, 
-  Select, 
+  Select,
+  Cascader, 
   Checkbox, 
   DatePicker, 
   Slider,
@@ -24,18 +25,14 @@ import {
   Radio,
   Tag,
   Tooltip,
-  Alert,
   Typography,
   Grid
 } from 'antd';
 import { 
   InfoCircleOutlined, 
-  CalculatorOutlined, 
-  BranchesOutlined,
-  ApiOutlined,
-  TableOutlined,
-  TagOutlined,
-  UploadOutlined
+  UploadOutlined,
+  PlusOutlined,
+  MinusCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { CalculatedFieldDisplay } from './CalculatedFieldDisplay';
@@ -43,6 +40,13 @@ import { HelpTooltip } from '../../../../common/HelpTooltip';
 import { useTBLTooltip } from '../../../../../hooks/useTBLTooltip';
 import { useTBLValidationContext } from '../contexts/TBLValidationContext';
 import { useTBLTableLookup } from '../hooks/useTBLTableLookup';
+import type { RawTreeNode } from '../types';
+
+declare global {
+  interface Window {
+    TBL_CASCADER_NODE_IDS?: Record<string, string>;
+  }
+}
 // Types locaux pour éviter les 'any' lors de l'extraction des formules dynamiques
 interface VariableDefLocal { sourceField: string; type?: string }
 interface FormulaConfigLocal { expression?: string; variables?: Record<string, VariableDefLocal> }
@@ -293,6 +297,7 @@ interface TBLFieldAdvancedProps {
   formData?: Record<string, unknown>;
   treeMetadata?: Record<string, unknown>; // Métadonnées du nœud TreeBranchLeaf
   treeId?: string; // ID de l'arbre TreeBranchLeaf pour les appels backend
+  allNodes?: RawTreeNode[]; // 🔥 NOUVEAU: Tous les nœuds pour hiérarchie Cascader
   // 🎯 Props de validation pour les couleurs dynamiques
   isValidating?: boolean;
   hasValidationError?: boolean;
@@ -444,15 +449,20 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   formData = {},
   treeMetadata = {},
   treeId,
-  isValidating = false,
-  hasValidationError = false
+  allNodes = []
 }) => {
+  
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   const [localValue, setLocalValue] = useState(value);
   const [calculatedValue, setCalculatedValue] = useState<unknown>(null);
   const [conditionMet, setConditionMet] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
+  
+  
+  // 🔁 État pour le repeater (nombre d'instances)
+  // ⚠️ Commencer à 0 instances au lieu de minItems - l'utilisateur clique sur "+" pour ajouter
+  const [repeaterInstanceCount, setRepeaterInstanceCount] = useState(0);
 
   // 🔍 Hook tooltip TBL pour le champ
   const tooltipData = useTBLTooltip(field);
@@ -483,9 +493,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // ✅ NOUVEAU: On passe hasTableCapability pour que le hook vide les options quand le lookup est désactivé
   const tableLookup = useTBLTableLookup(field.id, field.id, hasTableCapability);
   
-  // 🚨 DEBUG: Vérifier si le contexte fonctionne
-  console.log(`🔍 [${field.label}] isValidation:`, isValidation, 'localValue:', localValue, 'tableLookup:', tableLookup);
-
   // Synchronisation avec la valeur externe
   useEffect(() => {
     setLocalValue(value);
@@ -505,17 +512,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const hasTableLookup = capabilities.table?.enabled || metadata.hasTable || false;
     const subType = hasTableLookup ? 'SELECT' : baseSubType; // 🔥 TRANSFORMATION DYNAMIQUE
     
-    // 🔍 DEBUG: Log du type de champ calculé
-    if (field.label === 'Test - liste') {
-      console.log(`🔍 [FIELD TYPE CALC][${field.label}]:`, {
-        baseSubType,
-        hasTableLookup,
-        'capabilities.table?.enabled': capabilities.table?.enabled,
-        'metadata.hasTable': metadata.hasTable,
-        finalSubType: subType
-      });
-    }
-    // 🔥 CORRECTION: Lire l'apparence depuis field.config ET metadata.appearance
+    //  CORRECTION: Lire l'apparence depuis field.config ET metadata.appearance
     const appearance = {
       size: config.size || metadata.appearance?.size,
       width: config.width || metadata.appearance?.width,
@@ -826,15 +823,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
   // Gestionnaire de changement unifié
   const handleChange = (newValue: unknown) => {
-    console.log(`🎯 [${field.label}] handleChange appelé:`, { 
-      newValue, 
-      fieldId: field.id, 
-      hasOnChange: !!onChange,
-      onChangeType: typeof onChange,
-      hasTableCapability: fieldConfig.hasTable,
-      tableLookupOptionsCount: tableLookup.options.length
-    });
-    
     // ⚠️ DIAGNOSTIC : Champ dans section DATA (read-only) ?
     if (!onChange) {
       console.error(`❌ [${field.label}] onChange est undefined - Le champ est probablement dans une SECTION DE DONNÉES (read-only) !`);
@@ -843,9 +831,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
     
     setLocalValue(newValue);
-    console.log(`✅ [${field.label}] APPEL onChange avec:`, newValue);
     onChange(newValue);
-    console.log(`✔️ [${field.label}] onChange terminé`);
   };
 
   // Rendu conditionnel basé sur les conditions TreeBranchLeaf
@@ -855,53 +841,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
   // Affichage des capacités actives TreeBranchLeaf
   const renderCapabilityBadges = () => {
-    const badges = [];
-    
-    if (fieldConfig.hasCondition) {
-      badges.push(
-        <Tag key="condition" icon={<BranchesOutlined />} color="blue" size="small">
-          Condition
-        </Tag>
-      );
-    }
-    
-    if (fieldConfig.hasFormula) {
-      badges.push(
-        <Tag key="formula" icon={<CalculatorOutlined />} color="green" size="small">
-          Formule
-        </Tag>
-      );
-    }
-    
-    if (fieldConfig.hasTable) {
-      badges.push(
-        <Tag key="table" icon={<TableOutlined />} color="purple" size="small">
-          Table
-        </Tag>
-      );
-    }
-    
-    if (fieldConfig.hasAPI) {
-      badges.push(
-        <Tag key="api" icon={<ApiOutlined />} color="orange" size="small">
-          API
-        </Tag>
-      );
-    }
-    
-    if (fieldConfig.hasMarkers) {
-      badges.push(
-        <Tag key="markers" icon={<TagOutlined />} color="cyan" size="small">
-          Markers
-        </Tag>
-      );
-    }
-
-    return badges.length > 0 ? (
-      <div className="mb-2 flex flex-wrap gap-1">
-        {badges}
-      </div>
-    ) : null;
+    // ❌ MASQUÉ : Ces badges ne doivent s'afficher que dans l'éditeur TreeBranchLeaf,
+    // pas dans le formulaire utilisateur final
+    return null;
   };
 
   // Rendu du champ selon le type et la configuration TreeBranchLeaf
@@ -917,7 +859,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           showSearch
           allowClear
           disabled={disabled}
-          style={{ width: '100%' }}
+          style={{ width: '150px' }}
           filterOption={(input, option) =>
             (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
           }
@@ -940,7 +882,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           placeholder="Chargement..."
           loading={true}
           disabled
-          style={{ width: '100%' }}
+          style={{ width: '150px' }}
         />
       );
     }
@@ -1049,8 +991,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           const instanceId = capabilities.data.activeId 
             || (capabilities.data.instances ? Object.keys(capabilities.data.instances)[0] : undefined)
             || field.id;
-        const metaFormula = caps?.formula?.currentFormula as FormulaConfigLocal | undefined;
-        const rawExpression = metaFormula?.expression || (dataInstance as { metadata?: { expression?: string } })?.metadata?.expression;
+        const metaFormula = capabilities?.formula?.currentFormula as FormulaConfigLocal | undefined;
         let variablesDef = metaFormula?.variables ? Object.fromEntries(Object.entries(metaFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
         // Fallback: certaines variables data peuvent exposer un metadata.variables (structure similaire)
         if (!variablesDef && (dataInstance as { metadata?: { variables?: Record<string, { sourceField: string; type?: string }> } })?.metadata?.variables) {
@@ -1114,54 +1055,19 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     // 🎨 Construction du style avec largeur configurée
     const appearanceStyle = fieldConfig.appearance?.style || {};
-    const treeAppearance = treeMetadata?.appearance || {};
     
-    // Appliquer la largeur configurée depuis TreeBranchLeaf
-    const widthStyle: React.CSSProperties = {};
-    // 🔥 LARGEUR DYNAMIQUE PRISMA avec fallback - PRIORITÉ AUX DONNÉES PRISMA
-    const dynamicWidth = fieldConfig.appearance?.width || fieldConfig.width || treeAppearance.width;
-    const dynamicSize = fieldConfig.appearance?.size || fieldConfig.size || treeAppearance.size;
-    
-    // 🎯 FIX CRITICAL: Utiliser aussi les données directes du field pour les propriétés Prisma
-    const prismaWidth = field.appearance_width || field.config?.appearance_width;
-    const prismaSize = field.appearance_size || field.config?.appearance_size;
-    
-    const finalWidth = prismaWidth || dynamicWidth;
-    const finalSize = prismaSize || dynamicSize;
-    
-    if (finalWidth) {
-      widthStyle.width = finalWidth;
-    } else if (finalSize) {
-      // Conversion des tailles prédéfinies
-      switch (finalSize) {
-        case 'sm':
-        case 'small':
-          widthStyle.width = '200px';
-          break;
-        case 'lg':
-        case 'large':
-          widthStyle.width = '400px';
-          break;
-        case 'full':
-          widthStyle.width = '100%';
-          break;
-        case 'md':
-        case 'medium':
-        default:
-          widthStyle.width = '300px'; // medium par défaut
-      }
-    } else {
-      // Par défaut, prendre toute la largeur disponible
-      widthStyle.width = '100%';
-    }
+    // 🎯 FORCE: TOUS LES CHAMPS À 150PX - PAS DE DIFFÉRENCE DE TAILLE
+    const widthStyle: React.CSSProperties = {
+      width: '150px'
+    };
 
     const commonProps = {
       disabled: isDisabled,
       // 🔥 PLACEHOLDER DYNAMIQUE PRISMA - PRIORITÉ AUX DONNÉES DIRECTES
       placeholder: field.text_placeholder || field.placeholder || fieldConfig.textConfig?.placeholder || fieldConfig.placeholder || `Saisissez ${fieldConfig.label.toLowerCase()}`,
       status: validationError && isValidation ? 'error' as const : validationError && !isValidation ? 'success' as const : undefined,
-      // 🔥 TAILLE DYNAMIQUE PRISMA avec fallback - UTILISER LES DONNÉES FINALES
-      size: finalSize || fieldConfig.appearance?.size || 'middle' as const,
+      // 🔥 TAILLE FIXE pour tous les champs
+      size: 'middle' as const,
       style: { 
         ...appearanceStyle, 
         ...widthStyle 
@@ -1258,6 +1164,106 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         const staticOptions = fieldConfig.selectConfig?.options || fieldConfig.options || [];
         const finalOptions = (fieldConfig.hasTable && tableLookup.options.length > 0) ? tableLookup.options : staticOptions;
         
+        // 🔥 NOUVEAU: Détecter si le champ a une hiérarchie (sous-options imbriquées)
+        // Récupérer les IDs des options du champ
+        const optionIds = finalOptions.map((opt: any) => opt.id || opt.value);
+        
+        // Chercher si des leaf_option ont comme parentId un ID d'option du champ
+        const hasHierarchy = allNodes.length > 0 && optionIds.length > 0 && allNodes.some(node => 
+          optionIds.includes(node.parentId) && 
+          (node.type === 'leaf_option' || node.type === 'leaf_option_field')
+        );
+        
+        // 🔥 DEBUG: Log de détection hiérarchie
+        console.log(`🔍 [CASCADER DEBUG] Champ "${field.label}":`, {
+          fieldId: field.id,
+          allNodesLength: allNodes.length,
+          optionIds,
+          hasHierarchy,
+          childrenNodes: allNodes.filter(node => optionIds.includes(node.parentId)),
+          allNodesTypes: [...new Set(allNodes.map(n => n.type))]
+        });
+        
+        // 🔥 CASCADER: Si hiérarchie détectée, utiliser Cascader au lieu de Select
+        if (hasHierarchy) {
+          // Construire les options Cascader : Niveau 1 = options du champ, Niveaux suivants = sous-options depuis allNodes
+          const buildRecursive = (parentId: string, depth = 0): any[] => {
+            if (depth > 20) return []; // Protection anti-boucle
+            
+            return allNodes
+              .filter(node => 
+                node.parentId === parentId && 
+                (node.type === 'leaf_option' || node.type === 'leaf_option_field')
+              )
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map(node => {
+                const children = buildRecursive(node.id, depth + 1);
+                return {
+                  value: node.label || node.id, // ⚠️ Utiliser le label comme valeur (match avec options du champ)
+                  label: node.label || node.id,
+                  nodeId: node.id,
+                  children: children.length > 0 ? children : undefined
+                };
+              });
+          };
+          
+          // Construire l'arbre complet: options du champ + leurs sous-options
+          const cascaderOptions = finalOptions.map((option: any) => {
+            const optionId = option.id || option.value;
+            const children = buildRecursive(optionId);
+            
+            return {
+              value: option.value || option.label,
+              label: option.label || option.value,
+              nodeId: optionId,
+              children: children.length > 0 ? children : undefined
+            };
+          });
+          
+          console.log(`✅ [CASCADER] Options construites pour "${field.label}":`, cascaderOptions);
+          
+          return (
+            <Cascader
+              {...commonProps}
+              value={finalValue ? [finalValue] : undefined}
+              onChange={(selectedValues, selectedOptions) => {
+                // Cascader retourne un tableau de valeurs (chemin complet)
+                // On prend la dernière valeur (feuille sélectionnée)
+                const lastValue = selectedValues && selectedValues.length > 0 
+                  ? selectedValues[selectedValues.length - 1] 
+                  : null;
+                if (typeof window !== 'undefined') {
+                  if (lastValue && selectedOptions && selectedOptions.length > 0) {
+                    const lastOption = selectedOptions[selectedOptions.length - 1] as { nodeId?: string } | undefined;
+                    if (lastOption?.nodeId) {
+                      window.TBL_CASCADER_NODE_IDS = window.TBL_CASCADER_NODE_IDS || {};
+                      window.TBL_CASCADER_NODE_IDS[field.id] = lastOption.nodeId;
+                    } else if (window.TBL_CASCADER_NODE_IDS) {
+                      delete window.TBL_CASCADER_NODE_IDS[field.id];
+                    }
+                  } else if (window.TBL_CASCADER_NODE_IDS) {
+                    delete window.TBL_CASCADER_NODE_IDS[field.id];
+                  }
+                }
+                handleChange(lastValue);
+              }}
+              options={cascaderOptions}
+              style={commonProps.style}
+              placeholder={commonProps.placeholder}
+              disabled={isDisabled}
+              showSearch={{
+                filter: (inputValue, path) =>
+                  path.some(option => 
+                    option.label.toString().toLowerCase().includes(inputValue.toLowerCase())
+                  )
+              }}
+              expandTrigger="hover"
+              changeOnSelect={false}
+              displayRender={(labels) => labels.join(' > ')}
+            />
+          );
+        }
+        
         // 🔥 VARIANT DYNAMIQUE PRISMA SELECT avec fallback
         if ((fieldConfig.appearance?.variant || fieldConfig.variant) === 'radio') {
           return (
@@ -1280,6 +1286,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           );
         }
         
+        // SELECT classique (sans hiérarchie)
         return (
           <Select
             {...commonProps}
@@ -1519,6 +1526,91 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           </Upload>
         );
 
+      case 'leaf_repeater':
+      case 'LEAF_REPEATER': {
+        // 🔁 REPEATER : Gestion des champs répétables avec template
+        // Extraire les métadonnées du répétable depuis field.metadata.repeater
+        const repeaterMetadata = field.metadata?.repeater;
+        const templateNodeIds = repeaterMetadata?.templateNodeIds || [];
+        const maxItems = repeaterMetadata?.maxItems;
+        const addButtonLabel = repeaterMetadata?.addButtonLabel || 'Ajouter une entrée';
+        const minItems = repeaterMetadata?.minItems || 0;
+        
+        // Fonction pour récupérer les nœuds template (même logique que TreeBranchLeafPreviewPage)
+        const getTemplateNodes = () => {
+          // Ici on devrait accéder à l'arbre complet pour récupérer les nœuds par ID
+          // Pour l'instant, on retourne un tableau vide et on affichera juste les IDs
+          return templateNodeIds.map(id => ({ id, label: id, type: 'text' }));
+        };
+        
+        const templateNodes = getTemplateNodes();
+        
+        // Le repeater se rend lui-même avec les boutons et les champs template
+        return (
+          <>
+            {/* Liste des instances - Rendu dans le flux normal du formulaire */}
+            {Array.from({ length: repeaterInstanceCount }).map((_, index) => (
+              <React.Fragment key={`${field.id}_instance_${index}`}>
+                {/* Champs template rendus normalement dans le flux */}
+                {templateNodes.map((templateNode) => {
+                  const fieldKey = `${field.id}_${index}_${templateNode.id}`;
+                  return (
+                    <Form.Item
+                      key={fieldKey}
+                      label={templateNode.label || templateNode.id}
+                      style={{ marginBottom: 16 }}
+                    >
+                      <Input
+                        value={formData[fieldKey] as string || ''}
+                        onChange={(e) => {
+                          handleChange({
+                            ...formData,
+                            [fieldKey]: e.target.value
+                          });
+                        }}
+                        placeholder={`${templateNode.label || templateNode.id}...`}
+                        disabled={disabled}
+                      />
+                    </Form.Item>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+
+            {/* Bouton "+" pour ajouter une instance */}
+            {(!maxItems || repeaterInstanceCount < maxItems) && (
+              <Form.Item style={{ marginBottom: 16 }}>
+                <Button
+                  type="dashed"
+                  block
+                  icon={<PlusOutlined />}
+                  onClick={() => setRepeaterInstanceCount(repeaterInstanceCount + 1)}
+                  disabled={disabled}
+                >
+                  {addButtonLabel}
+                </Button>
+              </Form.Item>
+            )}
+
+            {/* Bouton "-" pour supprimer la dernière instance (si > minItems) */}
+            {repeaterInstanceCount > minItems && (
+              <Form.Item style={{ marginBottom: 16 }}>
+                <Button
+                  type="dashed"
+                  block
+                  danger
+                  icon={<MinusCircleOutlined />}
+                  onClick={() => setRepeaterInstanceCount(repeaterInstanceCount - 1)}
+                  disabled={disabled}
+                >
+                  Supprimer la dernière entrée
+                </Button>
+              </Form.Item>
+            )}
+          </>
+        );
+      }
+
       default:
         return (
           <Input
@@ -1541,7 +1633,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       labelCol={{ span: 24 }}
       wrapperCol={{ span: 24 }}
       colon={false}
-      style={{ width: '100%' }}
+      style={{ width: '150px' }}
       label={
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
           <span className="font-medium text-gray-700 whitespace-normal break-words">
@@ -1597,27 +1689,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       {renderCapabilityBadges()}
       {renderFieldInput()}
       
-      {fieldConfig.hasFormula && (
-        <Alert
-          message="Valeur calculée automatiquement"
-          description={
-            <div>
-              <Text code>{fieldConfig.formulaConfig?.formula || 'Non définie'}</Text>
-              {fieldConfig.formulaConfig?.allowManualOverride && (
-                <div className="mt-1">
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    Vous pouvez modifier manuellement cette valeur
-                  </Text>
-                </div>
-              )}
-            </div>
-          }
-          type="info"
-          showIcon
-          className="mt-2"
-          size="small"
-        />
-      )}
+      {/* ❌ MASQUÉ : Alert formule réservée à l'éditeur TreeBranchLeaf */}
       
       {fieldConfig.hasMarkers && fieldConfig.markersConfig?.markers && (
         <div className="mt-2">

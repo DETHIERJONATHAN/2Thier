@@ -37,6 +37,7 @@ export interface TreeBranchLeafNode {
   isRequired: boolean;
   isVisible: boolean;
   isActive: boolean;
+  isMultiple?: boolean; // Pour les branches SELECT (niveau 2+) - permet sélection multiple
   
   // Configurations spécialisées
   fieldConfig?: Record<string, unknown>;
@@ -150,6 +151,7 @@ export type NodeTypeKey =
   | 'leaf_option' 
   | 'leaf_option_field' 
   | 'leaf_field'
+  | 'leaf_repeater'
   | 'section';
 
 export interface NodeType {

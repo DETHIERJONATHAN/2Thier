@@ -1294,6 +1294,7 @@ model TreeBranchLeafNode {
   isRequired                     Boolean                          @default(false)
   isVisible                      Boolean                          @default(true)
   isActive                       Boolean                          @default(true)
+  isMultiple                     Boolean?                         @default(false)
   fieldConfig                    Json?
   conditionConfig                Json?
   formulaConfig                  Json?
@@ -1401,6 +1402,19 @@ model TreeBranchLeafNode {
   text_helpTooltipType           String?                          @default("none")
   text_helpTooltipText           String?
   text_helpTooltipImage          String?
+  repeater_templateNodeIds       String?
+  repeater_templateNodeLabels    String?
+  repeater_minItems              Int?                             @default(0)
+  repeater_maxItems              Int?
+  repeater_addButtonLabel        String?                          @default("Ajouter une entrée")
+  isSharedReference              Boolean?                         @default(false)
+  sharedReferenceId              String?
+  sharedReferenceName            String?
+  sharedReferenceCategory        String?
+  sharedReferenceDescription     String?
+  sharedReferenceIds             String[]                         @default([])
+  referenceSource                TreeBranchLeafNode?              @relation("SharedReference", fields: [sharedReferenceId], references: [id], onDelete: SetNull)
+  referenceUsages                TreeBranchLeafNode[]             @relation("SharedReference")
   TreeBranchLeafDateConfig       TreeBranchLeafDateConfig?
   TreeBranchLeafFormulaConfig    TreeBranchLeafFormulaConfig?
   TreeBranchLeafFormulaReference TreeBranchLeafFormulaReference[]
@@ -1433,6 +1447,8 @@ model TreeBranchLeafNode {
   @@index([tbl_type])
   @@index([treeId])
   @@index([type, subType])
+  @@index([sharedReferenceId])
+  @@index([isSharedReference])
 }
 
 model TreeBranchLeafNodeCondition {
@@ -1489,29 +1505,56 @@ model TreeBranchLeafNodeMarker {
 }
 
 model TreeBranchLeafNodeTable {
-  id                   String             @id
+  id                   String                          @id
   nodeId               String
   organizationId       String?
   name                 String
   description          String?
-  type                 String             @default("basic")
-  columns              Json               @default("[]")
-  rows                 Json               @default("[]")
-  data                 Json               @default("{}")
-  meta                 Json               @default("{}")
-  isDefault            Boolean            @default(false)
-  order                Int                @default(0)
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime
-  lookupDisplayColumns String[]           @default([])
+  type                 String                          @default("basic")
+  rowCount             Int                             @default(0)
+  columnCount          Int                             @default(0)
+  tableColumns         TreeBranchLeafNodeTableColumn[]
+  tableRows            TreeBranchLeafNodeTableRow[]
+  meta                 Json                            @default("{}")
+  isDefault            Boolean                         @default(false)
+  order                Int                             @default(0)
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+  lookupDisplayColumns String[]                        @default([])
   lookupSelectColumn   String?
-  TreeBranchLeafNode   TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  Organization         Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  TreeBranchLeafNode   TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  Organization         Organization?                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([nodeId, name])
   @@index([lookupSelectColumn])
   @@index([nodeId])
   @@index([organizationId])
+}
+
+model TreeBranchLeafNodeTableColumn {
+  id           String                  @id @default(cuid())
+  tableId      String
+  columnIndex  Int
+  name         String
+  type         String?                 @default("text")
+  width        Int?
+  format       String?
+  metadata     Json                    @default("{}")
+  table        TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, columnIndex])
+  @@index([tableId])
+}
+
+model TreeBranchLeafNodeTableRow {
+  id       String                  @id @default(cuid())
+  tableId  String
+  rowIndex Int
+  cells    Json
+  table    TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, rowIndex])
+  @@index([tableId])
 }
 
 model TreeBranchLeafNodeVariable {

@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 
 /**
  * 🎯 Hook pour récupérer la valeur calculée d'un champ depuis le backend
+ * 
+ * ✅ OPTIMISÉ : Ne recharge QUE si les données métier changent
  * 
  * Appelle `/api/tbl/submissions/preview-evaluate` pour un nodeId donné
  * et retourne la valeur calculée par operation-interpreter.ts
@@ -32,19 +34,28 @@ export const useCalculatedFieldValue = (
   const [humanText, setHumanText] = useState<string>('');
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig | null>(null);
 
+  // 🆕 Stocker formData dans une ref pour toujours avoir la dernière version
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
+
   // 🔧 Stabiliser formData avec JSON.stringify pour éviter les re-rendus inutiles
-  const formDataKey = useMemo(() => JSON.stringify(formData), [formData]);
+  // ✅ OPTIMISATION: Ne recalculer QUE si les valeurs métier changent (pas __leadId, __version, etc.)
+  const formDataKey = useMemo(() => {
+    // Filtrer les champs techniques qui ne doivent PAS déclencher de rechargement
+    const filtered = Object.entries(formData)
+      .filter(([key]) => !key.startsWith('__'))
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+    return JSON.stringify(filtered);
+  }, [formData]);
+
+  // 🆕 Extraire le leadId séparément pour éviter les changements de référence
+  const leadId = useMemo(
+    () => (formData as Record<string, unknown>).__leadId as string | undefined,
+    [formData]
+  );
 
   useEffect(() => {
-    console.log('[useCalculatedFieldValue] 🚀 Hook déclenché:', { 
-      nodeId, 
-      treeId, 
-      hasApi: !!api,
-      formDataKeys: Object.keys(formData).length 
-    });
-
     if (!nodeId || !treeId || !api) {
-      console.log('[useCalculatedFieldValue] ⚠️ Paramètres manquants:', { nodeId, treeId, hasApi: !!api });
       setValue(undefined);
       return;
     }
@@ -54,10 +65,11 @@ export const useCalculatedFieldValue = (
         setLoading(true);
         setError(null);
 
-        console.log('[useCalculatedFieldValue] 📡 Appel API avec:', { treeId, formDataKeys: Object.keys(formData).length });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[useCalculatedFieldValue] 📡 Appel API:', nodeId);
+        }
 
-        // Appel à l'endpoint de preview-evaluate
-        // ⚠️ IMPORTANT: api.post() renvoie DIRECTEMENT les données JSON, pas { data: ... }
+        // ✅ Utiliser formDataRef.current pour toujours avoir la dernière version
         const responseData = await api.post<{ 
           success: boolean; 
           results: Array<{ 
@@ -67,49 +79,28 @@ export const useCalculatedFieldValue = (
           }> 
         }>('/api/tbl/submissions/preview-evaluate', {
           treeId,
-          formData
-        });
-
-        console.log('[useCalculatedFieldValue] 📥 Réponse reçue:', {
-          hasData: !!responseData,
-          dataKeys: responseData ? Object.keys(responseData) : [],
-          success: responseData?.success,
-          resultsLength: responseData?.results?.length
+          formData: formDataRef.current, // ✅ Toujours la dernière version
+          leadId // ✅ Version stable du leadId
         });
 
         if (responseData?.success && responseData?.results) {
-          // 🔍 DEBUG: Log la réponse API
-          console.log('[useCalculatedFieldValue] 🔍 Réponse API complète:', {
-            nodeIdRecherché: nodeId,
-            resultsCount: responseData.results.length,
-            results: responseData.results
-          });
-
-          // Chercher le résultat pour notre nodeId
           const result = responseData.results.find(
             (r: { nodeId: string }) => r.nodeId === nodeId
           );
 
-          console.log('[useCalculatedFieldValue] 🔍 Résultat trouvé:', result);
-
           if (result) {
-            // Récupérer la valeur depuis operationResult
             const calculatedValue = result.operationResult?.value;
-            console.log('[useCalculatedFieldValue] ✅ Valeur extraite:', calculatedValue);
-            console.log('[useCalculatedFieldValue] 🎨 Config affichage:', result.displayConfig);
             setValue(calculatedValue);
             setHumanText(result.operationResult?.humanText || '');
             setDisplayConfig(result.displayConfig || null);
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[useCalculatedFieldValue] ✅ Valeur:', calculatedValue);
+            }
           } else {
-            console.log('[useCalculatedFieldValue] ❌ Aucun résultat trouvé pour nodeId:', nodeId);
             setValue(undefined);
           }
         } else {
-          console.log('[useCalculatedFieldValue] ⚠️ Réponse invalide ou pas de résultats:', {
-            hasSuccess: !!responseData?.success,
-            hasResults: !!responseData?.results,
-            responseData
-          });
           setValue(undefined);
         }
       } catch (err) {
@@ -117,13 +108,12 @@ export const useCalculatedFieldValue = (
         setError(err instanceof Error ? err.message : 'Erreur inconnue');
         setValue(undefined);
       } finally {
-        console.log('[useCalculatedFieldValue] 🏁 Fin du fetch, loading=false');
         setLoading(false);
       }
     };
 
     fetchValue();
-  }, [nodeId, treeId, formDataKey, api]); // ✅ Utiliser formDataKey au lieu de formData
+  }, [nodeId, treeId, formDataKey, leadId, api]); // ✅ Seulement formDataKey (pas formData)
 
   return { value, loading, error, humanText, displayConfig };
 };

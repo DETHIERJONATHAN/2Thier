@@ -49,6 +49,18 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   const [tableSearch, setTableSearch] = useState('');
   const [nodeTables, setNodeTables] = useState<Array<{ id: string; name: string; type?: string }>>([]);
   const [allNodeTables, setAllNodeTables] = useState<Array<{ id: string; name: string; type?: string; nodeLabel?: string; nodeId?: string }>>([]);
+  
+  // États pour les champs répétiteurs
+  const [repeatersLoading, setRepeatersLoading] = useState(false);
+  const [repeaterSearch, setRepeaterSearch] = useState('');
+  const [repeaterFields, setRepeaterFields] = useState<Array<{ 
+    id: string; 
+    label: string; 
+    repeaterLabel: string;
+    repeaterParentId: string;
+    nodeLabel?: string; 
+    nodeId?: string 
+  }>>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -166,6 +178,27 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         // ignore, onglet non bloquant
       } finally {
         if (mounted) setTablesLoading(false);
+      }
+
+      // Charger les champs répétiteurs (instances)
+      try {
+        setRepeatersLoading(true);
+        const info = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { treeId: string };
+        const repeaterFieldsRes = await api.get(`/api/treebranchleaf/trees/${info.treeId}/repeater-fields`) as Array<{
+          id: string;
+          label: string;
+          repeaterLabel: string;
+          repeaterParentId: string;
+          nodeLabel?: string;
+          nodeId?: string;
+        }>;
+        
+        if (!mounted) return;
+        setRepeaterFields(repeaterFieldsRes || []);
+      } catch {
+        // ignore, onglet non bloquant
+      } finally {
+        if (mounted) setRepeatersLoading(false);
       }
     })();
     return () => { mounted = false; };
@@ -677,6 +710,79 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                       <Typography.Text type="secondary">Aucune table disponible.</Typography.Text>
                     )}
                   </Space>
+                )}
+              </Space>
+            )},
+            { key: 'repeaters', label: '🔁 Repeat', children: (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {/* Recherche dans les champs répétiteurs */}
+                <Input.Search
+                  placeholder="Rechercher un champ répétiteur..."
+                  value={repeaterSearch}
+                  onChange={(e) => setRepeaterSearch(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+
+                {repeatersLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Spin size="small" />
+                    <Typography.Text>Chargement des champs répétiteurs...</Typography.Text>
+                  </div>
+                ) : repeaterFields.length === 0 ? (
+                  <Typography.Text type="secondary">Aucun champ répétiteur disponible dans cet arbre.</Typography.Text>
+                ) : (
+                  <>
+                    <Alert
+                      type="info"
+                      message="Champs issus de repeaters"
+                      description="Ces champs sont générés dynamiquement à partir de templates repeater. Format: Nom du repeater - Nom du champ template."
+                      showIcon
+                      style={{ marginBottom: 8 }}
+                    />
+                    <List
+                      size="small"
+                      bordered
+                      dataSource={repeaterFields.filter(f => 
+                        !repeaterSearch || 
+                        f.label.toLowerCase().includes(repeaterSearch.toLowerCase()) ||
+                        f.repeaterLabel.toLowerCase().includes(repeaterSearch.toLowerCase())
+                      )}
+                      renderItem={(item) => {
+                        const isSelected = value === item.id;
+                        return (
+                          <List.Item
+                            onClick={() => setValue(item.id)}
+                            style={{ 
+                              cursor: 'pointer', 
+                              backgroundColor: isSelected ? '#1890ff' : '#f0f0f0',
+                              color: isSelected ? 'white' : 'inherit',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                              <Space>
+                                <span>🔁</span>
+                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                  {item.label}
+                                </Typography.Text>
+                                {isSelected && <span>✓</span>}
+                              </Space>
+                              <Typography.Text 
+                                type="secondary" 
+                                style={{ 
+                                  fontSize: '11px',
+                                  color: isSelected ? 'rgba(255,255,255,0.8)' : '#666',
+                                  paddingLeft: '24px'
+                                }}
+                              >
+                                Repeater: {item.repeaterLabel} {item.nodeLabel ? `(${item.nodeLabel})` : ''}
+                              </Typography.Text>
+                            </Space>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  </>
                 )}
               </Space>
             )}
