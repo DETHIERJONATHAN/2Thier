@@ -59,7 +59,7 @@ export function useAuthenticatedApi() {
   const navigate = useNavigate();
   const { logout: authLogout, currentOrganization } = useAuth();
 
-  const envApiBase = import.meta.env.VITE_API_BASE_URL;
+  const envApiBase = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL;
   const apiBaseUrl = useMemo(() => {
     let base = envApiBase?.trim();
 
@@ -70,11 +70,13 @@ export function useAuthenticatedApi() {
       }
     }
 
-    // 🌐 Par défaut, on reste en relatif pour profiter du proxy Vite et conserver les cookies same-origin.
+    // 🌐 Par défaut, on utilise l'URL courante en relatif (sauf en SSR où on fallback sur localhost)
     if (!base || base.length === 0) {
       if (typeof window !== 'undefined') {
+        // En mode client, utiliser l'URL relative (même domaine que l'app)
         base = '';
       } else {
+        // En mode SSR/build, fallback sur localhost
         base = 'http://localhost:4000';
       }
     }

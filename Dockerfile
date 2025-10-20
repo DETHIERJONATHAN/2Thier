@@ -10,7 +10,14 @@ RUN npm ci --legacy-peer-deps
 # --- Build layer (frontend)
 FROM deps AS build
 COPY . .
+
+# Variables de build pour Vite
+ARG VITE_BACKEND_URL=https://api.2thier.com
+ARG VITE_FRONTEND_URL=https://app.2thier.com
 ENV NODE_ENV=production
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+ENV VITE_FRONTEND_URL=$VITE_FRONTEND_URL
+
 RUN npx prisma generate \
 	&& npm run build \
 	&& npm prune --omit=dev
