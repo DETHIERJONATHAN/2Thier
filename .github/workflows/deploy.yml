@@ -1,0 +1,54 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - "sauvegarde-deploy-final"
+
+env:
+  PROJECT_ID: thiernew
+  GAR_LOCATION: europe-west1
+  API_SERVICE: crm-api
+  API_IMAGE_NAME: crm-api # Nom de l'image dans Artifact Registry
+  DB_INSTANCE_NAME: thiernew:europe-west1:crm-db
+
+jobs:
+  deploy-backend:
+    name: Build and Deploy Backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/864558991714/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-deployer@thiernew.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
+
+      - name: Build and Push Docker image
+        run: |-
+          docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/crm/${{ env.API_IMAGE_NAME }}:${{ github.sha }} .
+          docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/crm/${{ env.API_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy ${{ env.API_SERVICE }} \
+            --region ${{ env.GAR_LOCATION }} \
+            --image ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/crm/${{ env.API_IMAGE_NAME }}:${{ github.sha }} \
+            --set-cloudsql-instances ${{ env.DB_INSTANCE_NAME }} \
+            --set-secrets="DATABASE_URL=DATABASE_URL:latest" \
+            --set-env-vars="NODE_ENV=production" \
+            --platform managed \
+            --allow-unauthenticated
