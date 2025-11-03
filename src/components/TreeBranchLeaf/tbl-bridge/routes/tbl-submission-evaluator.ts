@@ -80,45 +80,137 @@ function sanitizeFormData(input: unknown): unknown {
   return input;
 }
 
+const UUID_NODE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const GENERATED_NODE_REGEX = /^node_[0-9]+_[a-z0-9]+$/i;
+const SHARED_REFERENCE_REGEX = /^shared-ref-[a-z0-9-]+$/i;
+
+function isSharedReferenceId(nodeId: string): boolean {
+  return SHARED_REFERENCE_REGEX.test(nodeId);
+}
+
+function isAcceptedNodeId(nodeId: string): boolean {
+  return UUID_NODE_REGEX.test(nodeId) || GENERATED_NODE_REGEX.test(nodeId) || isSharedReferenceId(nodeId);
+}
+
+async function resolveSharedReferenceAliases(sharedRefs: string[], treeId?: string) {
+  if (!sharedRefs.length) {
+    return new Map<string, string[]>();
+  }
+
+  const where: Prisma.TreeBranchLeafNodeWhereInput = {
+    sharedReferenceId: { in: sharedRefs }
+  };
+
+  if (treeId) {
+    where.treeId = treeId;
+  }
+
+  const aliases = await prisma.treeBranchLeafNode.findMany({
+    where,
+    select: { id: true, sharedReferenceId: true }
+  });
+
+  const map = new Map<string, string[]>();
+  for (const alias of aliases) {
+    if (!alias.sharedReferenceId) continue;
+    if (!map.has(alias.sharedReferenceId)) {
+      map.set(alias.sharedReferenceId, []);
+    }
+    map.get(alias.sharedReferenceId)!.push(alias.id);
+  }
+
+  return map;
+}
+
+async function applySharedReferenceValues(
+  target: Map<string, unknown>,
+  entries: Array<[string, unknown]>,
+  treeId?: string
+) {
+  if (!entries.length) return;
+
+  const sharedRefKeys = entries
+    .map(([key]) => key)
+    .filter(isSharedReferenceId);
+
+  const aliasMap = sharedRefKeys.length
+    ? await resolveSharedReferenceAliases(sharedRefKeys, treeId)
+    : new Map<string, string[]>();
+
+  for (const [key, value] of entries) {
+    target.set(key, value);
+    if (!isSharedReferenceId(key)) continue;
+
+    const aliases = aliasMap.get(key) || [];
+    for (const alias of aliases) {
+      target.set(alias, value);
+    }
+  }
+}
+
 // Réutilisables: sauvegarde des entrées utilisateur (neutral) avec NO-OP
 async function saveUserEntriesNeutral(
   submissionId: string,
-  formData: Record<string, unknown> | undefined
+  formData: Record<string, unknown> | undefined,
+  treeId?: string
 ) {
   if (!formData || typeof formData !== 'object') return 0;
 
   let saved = 0;
-  const entries: SubmissionDataEntry[] = [];
+  const entries = new Map<string, SubmissionDataEntry>();
+
+  const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
+  const sharedRefAliasMap = sharedRefKeys.length
+    ? await resolveSharedReferenceAliases(sharedRefKeys, treeId)
+    : new Map<string, string[]>();
+
   for (const [key, value] of Object.entries(formData)) {
     if (key.startsWith('__mirror_') || key.startsWith('__formula_') || key.startsWith('__condition_')) {
       continue;
     }
-    const isValidNodeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key) ||
-                          /^node_[0-9]+_[a-z0-9]+$/i.test(key);
-    if (!isValidNodeId) continue;
+    if (!isAcceptedNodeId(key)) continue;
     // ✅ CORRECTIF : Sauvegarder TOUTES les valeurs (même null/undefined/vide)
     // pour que operation-interpreter.ts puisse les récupérer depuis TreeBranchLeafSubmissionData
     // if (value === null || value === undefined || value === '') continue;  // ❌ LIGNE SUPPRIMÉE
 
-    entries.push({
-      id: `${submissionId}-${key}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      submissionId,
-      nodeId: key,
-      value: value === null || value === undefined ? null : (typeof value === 'string' ? value : JSON.stringify(value)),
-      operationSource: 'neutral',
-      operationDetail: {
-        inputValue: value,
-        nodeId: key,
-        action: 'user_input'
-      } as Prisma.InputJsonValue,
-      operationResult: {
-        processedValue: value,
-        status: 'stored'
-      } as Prisma.InputJsonValue
-    });
+    const storageIds = isSharedReferenceId(key)
+      ? [key, ...(sharedRefAliasMap.get(key) || [])]
+      : [key];
+
+    for (const nodeId of storageIds) {
+      if (!isAcceptedNodeId(nodeId)) continue;
+
+      const serializedValue =
+        value === null || value === undefined
+          ? null
+          : typeof value === 'string'
+            ? value
+            : JSON.stringify(value);
+
+      const entry: SubmissionDataEntry = {
+        id: `${submissionId}-${nodeId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        submissionId,
+        nodeId,
+        value: serializedValue,
+        operationSource: 'neutral',
+        operationDetail: {
+          inputValue: value,
+          nodeId,
+          action: 'user_input',
+          sourceNodeId: key,
+          aliasResolved: nodeId !== key
+        } as Prisma.InputJsonValue,
+        operationResult: {
+          processedValue: value,
+          status: 'stored'
+        } as Prisma.InputJsonValue
+      };
+
+      entries.set(nodeId, entry);
+    }
   }
 
-  for (const entry of entries) {
+  for (const entry of entries.values()) {
     const key = { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } } as const;
     const existing = await prisma.treeBranchLeafSubmissionData.findUnique({ where: key });
     const normalize = (v: unknown) => {
@@ -165,7 +257,7 @@ async function evaluateCapacitiesForSubmission(
     include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
   });
 
-  const tblContext = {
+  const _tblContext = {
     submissionId,
     labelMap: new Map<string, string | null>(),
     valueMap: new Map<string, unknown>(),
@@ -302,7 +394,7 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
     }
     
     // 2. Contexte d'évaluation (Maps initialisées)
-    const context = {
+  const _context = {
       submissionId,
       organizationId, // ✅ VRAIE ORGANISATION!
       userId, // ✅ VRAI UTILISATEUR!
@@ -638,7 +730,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // 5. Sauvegarder d'abord les données UTILISATEUR en base, puis évaluer et sauvegarder les CAPACITÉS
     if (cleanFormData && typeof cleanFormData === 'object') {
       // A. Sauvegarder les données utilisateur directes (réutilise NO-OP)
-      const savedCount = await saveUserEntriesNeutral(submissionId!, cleanFormData);
+  const savedCount = await saveUserEntriesNeutral(submissionId!, cleanFormData, effectiveTreeId);
       if (savedCount > 0) console.log(`✅ [TBL CREATE-AND-EVALUATE] ${savedCount} entrées utilisateur enregistrées`);
       
       // B. Récupérer toutes les capacités (conditions, formules, tables) depuis TreeBranchLeafNodeVariable
@@ -717,7 +809,7 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
     }
 
     // 1) Sauvegarder les données utilisateur (NO-OP)
-    const saved = await saveUserEntriesNeutral(submissionId, cleanFormData);
+  const saved = await saveUserEntriesNeutral(submissionId, cleanFormData, submission.treeId);
 
     // 2) Option: mettre à jour le statut de la soumission si fourni (NO-OP)
     const updateData: Prisma.TreeBranchLeafSubmissionUpdateInput = {};
@@ -875,19 +967,15 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         where: { submissionId: baseSubmissionId },
         select: { nodeId: true, value: true }
       });
-      for (const row of existingData) {
-        // ✅ Inclure TOUTES les valeurs (même null) pour evaluation correcte
-        valueMap.set(row.nodeId, row.value);
-      }
+
+      const existingEntries = existingData.map(row => [row.nodeId, row.value] as [string, unknown]);
+      await applySharedReferenceValues(valueMap, existingEntries, effectiveTreeId);
     }
     
     // 3c) Appliquer les overrides du formData
     if (formData && typeof formData === 'object') {
-      for (const [k, v] of Object.entries(formData as Record<string, unknown>)) {
-        if (k.startsWith('__')) continue; // ignorer champs techniques
-        // ✅ Inclure TOUTES les valeurs (même null/undefined/'') pour evaluation correcte
-        valueMap.set(k, v);
-      }
+      const overrides = Object.entries(formData as Record<string, unknown>).filter(([k]) => !k.startsWith('__'));
+      await applySharedReferenceValues(valueMap, overrides as Array<[string, unknown]>, effectiveTreeId);
     }
 
     // 4) Récupérer les capacités de l'arbre
@@ -936,8 +1024,11 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
           nodeLabel: cap.TreeBranchLeafNode?.label || null,
           sourceRef: cap.sourceRef!,
           operationSource: evaluation.operationSource as string,
+          // 🔥 STRUCTURE CORRECTE: value directement au niveau racine pour SmartCalculatedField
+          value: evaluation.value,              // ✅ VALEUR CALCULÉE (utilisée par SmartCalculatedField)
+          calculatedValue: evaluation.value,    // ✅ ALIAS pour compatibilité
           operationResult: {
-            value: evaluation.value,           // ✅ AJOUT: La valeur calculée
+            value: evaluation.value,            // ✅ Aussi dans operationResult pour traçabilité
             humanText: evaluation.operationResult,  // ✅ Le texte explicatif
             detail: evaluation.operationDetail
           },
@@ -954,12 +1045,19 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       } catch (e) {
         console.error(`[UNIVERSAL] ❌ Erreur évaluation pour nodeId ${cap.nodeId}:`, e);
         // Ne bloque pas l'ensemble de la prévisualisation
+        const errorMessage = e instanceof Error ? e.message : 'Erreur inconnue';
         results.push({
           nodeId: cap.nodeId,
           nodeLabel: cap.TreeBranchLeafNode?.label || null,
           sourceRef: cap.sourceRef!,
           operationSource: 'error',
-          operationResult: { error: e instanceof Error ? e.message : 'Erreur inconnue' },
+          value: null,                    // ✅ Valeur nulle pour les erreurs
+          calculatedValue: null,          // ✅ ALIAS
+          operationResult: { 
+            value: null,                  // ✅ Valeur nulle
+            humanText: errorMessage,      // ✅ Message d'erreur
+            error: errorMessage 
+          },
           operationDetail: null,
           // 🎨 Configuration d'affichage même en cas d'erreur
           displayConfig: {
@@ -975,7 +1073,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     // 🔍 DEBUG: Log final des résultats avant envoi
     console.log(`[PREVIEW-EVALUATE] 📤 Envoi réponse avec ${results.length} résultats:`);
     results.forEach((r, i) => {
-      console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value=${JSON.stringify(r.operationResult?.value ?? 'N/A')}`);
+      console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value="${r.value}" (calculatedValue="${r.calculatedValue}")`);
     });
 
     return res.json({
@@ -1043,10 +1141,17 @@ router.post('/submissions/stage/preview', async (req, res) => {
     const labelMap = new Map(nodes.map(n => [n.id, n.label] as const));
     const valueMap = new Map<string, unknown>();
     if (stage.submissionId) {
-      const existingData = await prisma.treeBranchLeafSubmissionData.findMany({ where: { submissionId: stage.submissionId }, select: { nodeId: true, value: true } });
-      for (const r of existingData) if (r.value !== null && r.value !== undefined) valueMap.set(r.nodeId, r.value);
+      const existingData = await prisma.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId: stage.submissionId },
+        select: { nodeId: true, value: true }
+      });
+
+      const existingEntries = existingData.map(r => [r.nodeId, r.value] as [string, unknown]);
+      await applySharedReferenceValues(valueMap, existingEntries, stage.treeId);
     }
-    for (const [k, v] of Object.entries(stage.formData)) valueMap.set(k, v);
+
+    const stageEntries = Object.entries(stage.formData) as Array<[string, unknown]>;
+    await applySharedReferenceValues(valueMap, stageEntries, stage.treeId);
 
     const capacities = await prisma.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
     const context = { submissionId: stage.submissionId || `preview-${Date.now()}`, organizationId: stage.organizationId, userId: stage.userId, treeId: stage.treeId, labelMap, valueMap } as const;
@@ -1057,11 +1162,39 @@ router.post('/submissions/stage/preview', async (req, res) => {
         const r = await evaluateVariableOperation(
           c.nodeId,
           context.submissionId,
-          prisma
+          prisma,
+          context.valueMap
         );
-        results.push({ nodeId: c.nodeId, nodeLabel: c.TreeBranchLeafNode?.label || null, sourceRef: c.sourceRef!, operationSource: (r.operationSource || 'neutral') as string, operationResult: r.operationResult, operationDetail: r.operationDetail });
+        results.push({ 
+          nodeId: c.nodeId, 
+          nodeLabel: c.TreeBranchLeafNode?.label || null, 
+          sourceRef: c.sourceRef!, 
+          operationSource: (r.operationSource || 'neutral') as string,
+          value: r.value,                     // ✅ VALEUR CALCULÉE
+          calculatedValue: r.value,           // ✅ ALIAS
+          operationResult: {
+            value: r.value,
+            humanText: r.operationResult,
+            detail: r.operationDetail
+          },
+          operationDetail: r.operationDetail 
+        });
       } catch (e) {
-        results.push({ nodeId: c.nodeId, nodeLabel: c.TreeBranchLeafNode?.label || null, sourceRef: c.sourceRef!, operationSource: 'error', operationResult: { error: e instanceof Error ? e.message : 'Erreur' }, operationDetail: null });
+        const errorMessage = e instanceof Error ? e.message : 'Erreur';
+        results.push({ 
+          nodeId: c.nodeId, 
+          nodeLabel: c.TreeBranchLeafNode?.label || null, 
+          sourceRef: c.sourceRef!, 
+          operationSource: 'error',
+          value: null,                        // ✅ Valeur nulle
+          calculatedValue: null,              // ✅ ALIAS
+          operationResult: { 
+            value: null,
+            humanText: errorMessage,
+            error: errorMessage 
+          }, 
+          operationDetail: null 
+        });
       }
     }
     return res.json({ success: true, stageId: stage.id, results });
@@ -1083,7 +1216,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
       if (!submission) return res.status(404).json({ success: false, error: 'Soumission introuvable' });
       // update exportData (NO-OP) + données neutral + évaluations
       await prisma.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData as unknown as Prisma.InputJsonValue } });
-      const saved = await saveUserEntriesNeutral(stage.submissionId, stage.formData);
+  const saved = await saveUserEntriesNeutral(stage.submissionId, stage.formData, stage.treeId);
       const stats = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId);
       return res.json({ success: true, submissionId: stage.submissionId, saved, stats });
     }
@@ -1091,7 +1224,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
     // commit en nouveau devis
     const submissionId = `tbl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     await prisma.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: 'draft', summary: { name: `Devis TBL ${new Date().toLocaleDateString()}` }, exportData: stage.formData as unknown as Prisma.InputJsonValue, updatedAt: new Date() } });
-    const saved = await saveUserEntriesNeutral(submissionId, stage.formData);
+  const saved = await saveUserEntriesNeutral(submissionId, stage.formData, stage.treeId);
     const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId);
     // attacher l’id créé au stage pour permettre des commit suivants sur ce même devis
     stage.submissionId = submissionId; stage.updatedAt = Date.now(); stagingStore.set(stage.id, stage);

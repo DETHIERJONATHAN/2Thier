@@ -1,9 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'development-secret-key';
 
 export const login = async (req: Request, res: Response) => {
@@ -39,7 +38,7 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Identifiants invalides' });
     }
 
-    const { passwordHash, ...userWithoutPassword } = user;
+    const { passwordHash: _passwordHash, ...userWithoutPassword } = user;
 
     // Extraire les rôles et permissions depuis UserOrganization
     const userRoles = user.UserOrganization.map(uo => uo.Role);
@@ -128,7 +127,7 @@ export const getMe = async (req: Request, res: Response) => {
     }
 
     // Exclure le mot de passe de la réponse
-    const { passwordHash, ...userWithoutPassword } = user;
+    const { passwordHash: _passwordHash2, ...userWithoutPassword } = user;
 
     // Formater les organisations pour le frontend
     const organizations = user.UserOrganization.map(uo => ({

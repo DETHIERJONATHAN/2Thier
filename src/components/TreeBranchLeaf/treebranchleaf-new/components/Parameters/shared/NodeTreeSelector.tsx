@@ -26,6 +26,17 @@ type Props = {
   allowMulti?: boolean;
 };
 
+// Helper pour obtenir la couleur selon la catégorie
+const getCategoryColor = (category: string): string => {
+  const colors: Record<string, string> = {
+    'technique': '#1890ff',
+    'commercial': '#52c41a',
+    'administratif': '#faad14',
+    'client': '#722ed1',
+  };
+  return colors[category.toLowerCase()] || '#8c8c8c';
+};
+
 const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, selectionContext = 'token', allowMulti = false }) => {
   const { api } = useAuthenticatedApi();
   const [nodes, setNodes] = useState<NodeLite[]>([]);
@@ -58,6 +69,19 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     label: string; 
     repeaterLabel: string;
     repeaterParentId: string;
+    nodeLabel?: string; 
+    nodeId?: string 
+  }>>([]);
+  
+  // États pour les références partagées
+  const [sharedReferencesLoading, setSharedReferencesLoading] = useState(false);
+  const [sharedReferenceSearch, setSharedReferenceSearch] = useState('');
+  const [sharedReferences, setSharedReferences] = useState<Array<{ 
+    id: string; 
+    label: string; 
+    category?: string;
+    description?: string;
+    type: string;
     nodeLabel?: string; 
     nodeId?: string 
   }>>([]);
@@ -199,6 +223,29 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         // ignore, onglet non bloquant
       } finally {
         if (mounted) setRepeatersLoading(false);
+      }
+
+      // Charger les références partagées
+      try {
+        setSharedReferencesLoading(true);
+        const info = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { treeId: string };
+        const sharedRefsRes = await api.get(`/api/treebranchleaf/trees/${info.treeId}/shared-references`) as Array<{
+          id: string;
+          label: string;
+          category?: string;
+          description?: string;
+          type: string;
+          nodeLabel?: string;
+          nodeId?: string;
+        }>;
+        
+        if (!mounted) return;
+        setSharedReferences(sharedRefsRes || []);
+      } catch {
+        // ignore, onglet non bloquant - l'API peut ne pas exister encore
+        console.warn('[NodeTreeSelector] Impossible de charger les références partagées');
+      } finally {
+        if (mounted) setSharedReferencesLoading(false);
       }
     })();
     return () => { mounted = false; };
@@ -777,6 +824,97 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                               >
                                 Repeater: {item.repeaterLabel} {item.nodeLabel ? `(${item.nodeLabel})` : ''}
                               </Typography.Text>
+                            </Space>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  </>
+                )}
+              </Space>
+            )},
+            { key: 'sharedReferences', label: '🔗 Références Partagées', children: (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {/* Recherche dans les références partagées */}
+                <Input.Search
+                  placeholder="Rechercher une référence partagée..."
+                  value={sharedReferenceSearch}
+                  onChange={(e) => setSharedReferenceSearch(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+
+                {sharedReferencesLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Spin size="small" />
+                    <Typography.Text>Chargement des références partagées...</Typography.Text>
+                  </div>
+                ) : sharedReferences.length === 0 ? (
+                  <Typography.Text type="secondary">Aucune référence partagée disponible dans cet arbre.</Typography.Text>
+                ) : (
+                  <>
+                    <Alert
+                      type="info"
+                      message="Références partagées"
+                      description="Ces champs sont des références partagées qui peuvent être réutilisées dans vos formules et conditions."
+                      showIcon
+                      style={{ marginBottom: 8 }}
+                    />
+                    <List
+                      size="small"
+                      bordered
+                      dataSource={sharedReferences.filter(ref => 
+                        !sharedReferenceSearch || 
+                        ref.label.toLowerCase().includes(sharedReferenceSearch.toLowerCase()) ||
+                        (ref.category && ref.category.toLowerCase().includes(sharedReferenceSearch.toLowerCase())) ||
+                        (ref.description && ref.description.toLowerCase().includes(sharedReferenceSearch.toLowerCase()))
+                      )}
+                      renderItem={(item) => {
+                        const isSelected = value === item.id;
+                        return (
+                          <List.Item
+                            onClick={() => setValue(item.id)}
+                            style={{ 
+                              cursor: 'pointer', 
+                              backgroundColor: isSelected ? '#1890ff' : '#e6f7ff',
+                              color: isSelected ? 'white' : 'inherit',
+                              transition: 'all 0.2s',
+                              borderLeft: item.category ? `3px solid ${getCategoryColor(item.category)}` : undefined
+                            }}
+                          >
+                            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                              <Space>
+                                <span>🔗</span>
+                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                  {item.label}
+                                </Typography.Text>
+                                {isSelected && <span>✓</span>}
+                              </Space>
+                              {item.category && (
+                                <Typography.Text 
+                                  style={{ 
+                                    fontSize: '10px',
+                                    color: isSelected ? 'rgba(255,255,255,0.9)' : getCategoryColor(item.category),
+                                    fontWeight: 'bold',
+                                    paddingLeft: '24px',
+                                    textTransform: 'uppercase'
+                                  }}
+                                >
+                                  {item.category}
+                                </Typography.Text>
+                              )}
+                              {item.description && (
+                                <Typography.Text 
+                                  type="secondary" 
+                                  style={{ 
+                                    fontSize: '11px',
+                                    color: isSelected ? 'rgba(255,255,255,0.8)' : '#666',
+                                    paddingLeft: '24px',
+                                    fontStyle: 'italic'
+                                  }}
+                                >
+                                  {item.description}
+                                </Typography.Text>
+                              )}
                             </Space>
                           </List.Item>
                         );

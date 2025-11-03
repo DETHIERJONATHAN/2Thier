@@ -383,6 +383,23 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     return () => window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
   }, [fetchData, disabled, tree_id]);
 
+  // 🔄 Écouter les changements de paramètres repeater pour recharger les données
+  useEffect(() => {
+    const handleRepeaterUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined }>;
+      const { treeId: eventTreeId } = customEvent.detail;
+      
+      // Recharger uniquement si c'est notre arbre
+      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
+        console.log('🔄 [TBL Hook FIXED] Paramètres repeater mis à jour, rechargement des données...', customEvent.detail);
+        fetchData();
+      }
+    };
+
+    window.addEventListener('tbl-repeater-updated', handleRepeaterUpdate);
+    return () => window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
+  }, [fetchData, disabled, tree_id]);
+
   // 🔄 NOUVEAU: Écouter les changements de formData pour retransformer avec références partagées
   useEffect(() => {
     console.log('🎯 [TBL Hook FIXED] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
@@ -558,6 +575,12 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     };
   }, [disabled, tree_id, fetchData]);
 
+  // 🔄 Wrapper pour logger les appels à refetch
+  const refetch = useCallback(() => {
+    console.log('🔄 [useTBLDataHierarchicalFixed] refetch() appelé !');
+    return fetchData();
+  }, [fetchData]);
+
   return {
     tree,
     tabs,
@@ -565,6 +588,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     sectionsByTab,
     loading,
     error,
+    refetch,
     updateNodeValue,
     toggleNodeVisibility,
     addOption,

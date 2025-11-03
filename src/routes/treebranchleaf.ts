@@ -289,6 +289,10 @@ router.put('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
     const { nodeId } = req.params;
     const updateData = req.body;
 
+    console.log('🔄 [TreeBranchLeaf API] PUT /nodes/:nodeId');
+    console.log('   NodeId:', nodeId);
+    console.log('   updateData:', JSON.stringify(updateData, null, 2));
+
     // Vérifier que le nœud appartient à un arbre de l'organisation
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: {

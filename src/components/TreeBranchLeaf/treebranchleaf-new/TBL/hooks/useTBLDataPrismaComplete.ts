@@ -627,6 +627,15 @@ export interface TBLField {
       }>;
     };
   };
+  
+  // Propriétés pour la gestion des copies supprimables
+  isDeletableCopy?: boolean;
+  parentRepeaterId?: string;
+  sourceTemplateId?: string;
+  
+  // Propriété pour le bouton d'ajout de nouveau versant
+  canAddNewCopy?: boolean;
+  isLastInCopyGroup?: boolean;
 }
 
 export interface TBLSection {
@@ -884,108 +893,111 @@ const transformPrismaNodeToField = (
         }
         
         // 🎯 NOUVEAU: Récupérer TOUS les enfants de cette option (champs liés)
-        const optionChildren = childrenMap.get(optionNode.id) || [];
-  if (verbose()) dlog(`  🔍 Enfants de l'option "${optionNode.label}": ${optionChildren.length}`);
-        
-        optionChildren
-          .filter(child => child.type.includes('leaf_field'))
-          .sort((a, b) => a.order - b.order)
-          .forEach(childField => {
-            if (verbose()) dlog(`    🍃 Enfant trouvé: "${childField.label}" (${childField.type})`);
-            
-            // 🔥 100% DYNAMIQUE PRISMA: Priorité subType > fieldType > type
-            const finalChildFieldType = childField.subType || childField.fieldType || childField.type || 'text';
-            
-          dlog(`🔍 [TYPE DETECTION ENFANT] ${childField.label}`, { fieldType: childField.fieldType, subType: childField.subType, type: childField.type, final: finalChildFieldType });
-            
-            conditionalFields.push({
-              id: childField.id,
-              name: childField.label,
-              label: childField.label,
-              type: finalChildFieldType,
-              required: childField.isRequired,
-              visible: childField.isVisible,
-              placeholder: childField.text_placeholder,
-              description: childField.description,
-              order: childField.order,
-              config: {
-                size: childField.appearance_size,
-                width: childField.appearance_width,
-                variant: childField.appearance_variant,
-                minLength: childField.text_minLength,
-                maxLength: childField.text_maxLength,
-                rows: childField.text_rows,
-                mask: childField.text_mask, // 🔥 AJOUT: masque
-                regex: childField.text_regex,
-                textDefaultValue: childField.text_defaultValue,
-                min: childField.number_min,
-                max: childField.number_max,
-                step: childField.number_step,
-                decimals: childField.number_decimals,
-                prefix: childField.number_prefix,
-                suffix: childField.number_suffix,
-                unit: childField.number_unit,
-                numberDefaultValue: childField.number_defaultValue,
-                format: childField.date_format,
-                showTime: childField.date_showTime,
-                dateDefaultValue: childField.date_defaultValue,
-                // 🔥 AJOUT PRISMA DYNAMIC MINDATE/MAXDATE
-                minDate: childField.date_minDate,
-                maxDate: childField.date_maxDate,
-                multiple: childField.select_multiple,
-                searchable: childField.select_searchable,
-                allowClear: childField.select_allowClear,
-                selectDefaultValue: childField.select_defaultValue,
-                trueLabel: childField.bool_trueLabel,
-                falseLabel: childField.bool_falseLabel,
-                boolDefaultValue: childField.bool_defaultValue,
-              },
-              // 🎯 NOUVEAU: Capacités pour TOUS les champs enfants
-              capabilities: {
-                data: {
-                  enabled: !!childField.data_instances && Object.keys(childField.data_instances || {}).length > 0,
-                  activeId: childField.data_activeId,
-                  instances: childField.data_instances,
+        // ⚠️ MAIS SEULEMENT si ce n'est PAS un leaf_option_field (pour éviter les doublons)
+        if (optionNode.type !== 'leaf_option_field') {
+          const optionChildren = childrenMap.get(optionNode.id) || [];
+    if (verbose()) dlog(`  🔍 Enfants de l'option "${optionNode.label}": ${optionChildren.length}`);
+          
+          optionChildren
+            .filter(child => child.type.includes('leaf_field'))
+            .sort((a, b) => a.order - b.order)
+            .forEach(childField => {
+              if (verbose()) dlog(`    🍃 Enfant trouvé: "${childField.label}" (${childField.type})`);
+              
+              // 🔥 100% DYNAMIQUE PRISMA: Priorité subType > fieldType > type
+              const finalChildFieldType = childField.subType || childField.fieldType || childField.type || 'text';
+              
+            dlog(`🔍 [TYPE DETECTION ENFANT] ${childField.label}`, { fieldType: childField.fieldType, subType: childField.subType, type: childField.type, final: finalChildFieldType });
+              
+              conditionalFields.push({
+                id: childField.id,
+                name: childField.label,
+                label: childField.label,
+                type: finalChildFieldType,
+                required: childField.isRequired,
+                visible: childField.isVisible,
+                placeholder: childField.text_placeholder,
+                description: childField.description,
+                order: childField.order,
+                config: {
+                  size: childField.appearance_size,
+                  width: childField.appearance_width,
+                  variant: childField.appearance_variant,
+                  minLength: childField.text_minLength,
+                  maxLength: childField.text_maxLength,
+                  rows: childField.text_rows,
+                  mask: childField.text_mask, // 🔥 AJOUT: masque
+                  regex: childField.text_regex,
+                  textDefaultValue: childField.text_defaultValue,
+                  min: childField.number_min,
+                  max: childField.number_max,
+                  step: childField.number_step,
+                  decimals: childField.number_decimals,
+                  prefix: childField.number_prefix,
+                  suffix: childField.number_suffix,
+                  unit: childField.number_unit,
+                  numberDefaultValue: childField.number_defaultValue,
+                  format: childField.date_format,
+                  showTime: childField.date_showTime,
+                  dateDefaultValue: childField.date_defaultValue,
+                  // 🔥 AJOUT PRISMA DYNAMIC MINDATE/MAXDATE
+                  minDate: childField.date_minDate,
+                  maxDate: childField.date_maxDate,
+                  multiple: childField.select_multiple,
+                  searchable: childField.select_searchable,
+                  allowClear: childField.select_allowClear,
+                  selectDefaultValue: childField.select_defaultValue,
+                  trueLabel: childField.bool_trueLabel,
+                  falseLabel: childField.bool_falseLabel,
+                  boolDefaultValue: childField.bool_defaultValue,
                 },
-                formula: {
-                  enabled: !!childField.formula_instances && Object.keys(childField.formula_instances || {}).length > 0,
-                  activeId: childField.formula_activeId,
-                  instances: childField.formula_instances,
-                  currentFormula: extractActiveCapability(childField.formula_instances, childField.formula_activeId) as FormulaCapability,
-                },
-                condition: {
-                  enabled: !!childField.condition_instances && Object.keys(childField.condition_instances || {}).length > 0,
-                  activeId: childField.condition_activeId,
-                  instances: childField.condition_instances,
-                  currentConditions: extractActiveCapability(childField.condition_instances, childField.condition_activeId) as ConditionCapability,
-                },
-                table: {
-                  enabled: !!childField.table_instances && Object.keys(childField.table_instances || {}).length > 0,
-                  activeId: childField.table_activeId,
-                  instances: childField.table_instances,
-                  currentTable: extractActiveCapability(childField.table_instances, childField.table_activeId) as TableCapability,
-                },
-                api: {
-                  enabled: !!childField.api_instances && Object.keys(childField.api_instances || {}).length > 0,
-                  activeId: childField.api_activeId,
-                  instances: childField.api_instances,
-                  currentAPI: extractActiveCapability(childField.api_instances, childField.api_activeId) as APICapability,
-                },
-                link: {
-                  enabled: !!childField.link_instances && Object.keys(childField.link_instances || {}).length > 0,
-                  activeId: childField.link_activeId,
-                  instances: childField.link_instances,
-                  currentLinks: extractActiveCapability(childField.link_instances, childField.link_activeId) as LinkCapability,
-                },
-                markers: {
-                  enabled: !!childField.markers_instances && Object.keys(childField.markers_instances || {}).length > 0,
-                  activeId: childField.markers_activeId,
-                  instances: childField.markers_instances,
-                  currentMarkers: extractActiveCapability(childField.markers_instances, childField.markers_activeId) as MarkersCapability,
-                },
-              }
+                // 🎯 NOUVEAU: Capacités pour TOUS les champs enfants
+                capabilities: {
+                  data: {
+                    enabled: !!childField.data_instances && Object.keys(childField.data_instances || {}).length > 0,
+                    activeId: childField.data_activeId,
+                    instances: childField.data_instances,
+                  },
+                  formula: {
+                    enabled: !!childField.formula_instances && Object.keys(childField.formula_instances || {}).length > 0,
+                    activeId: childField.formula_activeId,
+                    instances: childField.formula_instances,
+                    currentFormula: extractActiveCapability(childField.formula_instances, childField.formula_activeId) as FormulaCapability,
+                  },
+                  condition: {
+                    enabled: !!childField.condition_instances && Object.keys(childField.condition_instances || {}).length > 0,
+                    activeId: childField.condition_activeId,
+                    instances: childField.condition_instances,
+                    currentConditions: extractActiveCapability(childField.condition_instances, childField.condition_activeId) as ConditionCapability,
+                  },
+                  table: {
+                    enabled: !!childField.table_instances && Object.keys(childField.table_instances || {}).length > 0,
+                    activeId: childField.table_activeId,
+                    instances: childField.table_instances,
+                    currentTable: extractActiveCapability(childField.table_instances, childField.table_activeId) as TableCapability,
+                  },
+                  api: {
+                    enabled: !!childField.api_instances && Object.keys(childField.api_instances || {}).length > 0,
+                    activeId: childField.api_activeId,
+                    instances: childField.api_instances,
+                    currentAPI: extractActiveCapability(childField.api_instances, childField.api_activeId) as APICapability,
+                  },
+                  link: {
+                    enabled: !!childField.link_instances && Object.keys(childField.link_instances || {}).length > 0,
+                    activeId: childField.link_activeId,
+                    instances: childField.link_instances,
+                    currentLinks: extractActiveCapability(childField.link_instances, childField.link_activeId) as LinkCapability,
+                  },
+                  markers: {
+                    enabled: !!childField.markers_instances && Object.keys(childField.markers_instances || {}).length > 0,
+                    activeId: childField.markers_activeId,
+                    instances: childField.markers_instances,
+                    currentMarkers: extractActiveCapability(childField.markers_instances, childField.markers_activeId) as MarkersCapability,
+                  },
+                }
+              });
             });
-          });
+        }
         
         // 🔗 NOUVEAU: Ajouter les RÉFÉRENCES PARTAGÉES comme champs conditionnels
         const sharedRefIds = activeSharedReferences.get(optionNode.id);
@@ -1244,7 +1256,10 @@ const transformPrismaNodeToField = (
       templateNodeLabels, // ✅ AJOUT DES LABELS
       minItems: node.repeater_minItems || 0,
       maxItems: node.repeater_maxItems || null,
-      addButtonLabel: node.repeater_addButtonLabel || 'Ajouter une entrée'
+      addButtonLabel: node.repeater_addButtonLabel || null, // ⚡ NULL = utilise le nom du champ
+      buttonSize: node.repeater_buttonSize || 'middle',
+      buttonWidth: node.repeater_buttonWidth || 'auto',
+      iconOnly: node.repeater_iconOnly || false
     };
     
     if (verbose()) dlog(`🔁 [REPEATER] Metadata:`, repeaterMetadata);
@@ -1389,18 +1404,28 @@ const transformNodesToTBLComplete = (
     childrenMap.get(parentId)!.push(node);
   });
   
-  // ✅ 1.5️⃣ NOUVELLE LOGIQUE : Stocker TOUTES les références partagées (activation conditionnelle dans transformPrismaNodeToField)
+  // ✅ 1.5️⃣ NOUVELLE LOGIQUE : Stocker TOUTES les références partagées (single ET multiple)
   // On ne modifie PAS childrenMap, on stocke juste quelles options ont des refs actives
   const activeSharedReferences = new Map<string, string[]>(); // optionId -> [refNodeIds]
-  
+
   nodes.forEach(node => {
-    if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
+    const ids: string[] = [];
+    if (Array.isArray((node as unknown as { sharedReferenceIds?: string[] }).sharedReferenceIds)) {
+      ids.push(...((node as unknown as { sharedReferenceIds?: string[] }).sharedReferenceIds as string[]));
+    }
+    const single = (node as unknown as { sharedReferenceId?: string }).sharedReferenceId;
+    if (typeof single === 'string' && single.trim().length > 0) {
+      ids.push(single);
+    }
+
+    if (ids.length > 0) {
       const isOption = node.type === 'leaf_option' || node.type === 'leaf_option_field';
-      
       if (isOption) {
         // 🎯 STOCKER TOUTES les options avec références, la sélection sera vérifiée dynamiquement
-        activeSharedReferences.set(node.id, node.sharedReferenceIds);
-        if (verbose()) dlog(`🔗 [TBL-PRISMA] Option "${node.label}" stockée avec ${node.sharedReferenceIds.length} références partagées`);
+        // Dédupliquer pour éviter doublons potentiels
+        const uniqueIds = Array.from(new Set(ids));
+        activeSharedReferences.set(node.id, uniqueIds);
+        if (verbose()) dlog(`🔗 [TBL-PRISMA] Option "${node.label}" stockée avec ${uniqueIds.length} références partagées (single/array)`);
       }
     }
   });
@@ -1493,14 +1518,54 @@ const transformNodesToTBLComplete = (
           processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
           if (verbose()) dlog(`      🔁 Répétable: "${repeaterField.label}" avec metadata.repeater:`, repeaterField.metadata?.repeater);
           
-          // Les templates du répétable sont traités comme des enfants mais ne sont pas affichés directement
-          const templateChildren = childrenMap.get(child.id) || [];
-          if (templateChildren.length > 0) {
-            if (verbose()) dlog(`        🔗 Templates du répétable "${child.label}": ${templateChildren.length} nœuds`);
-            // Marquer les templates comme traités pour éviter qu'ils apparaissent en double
-            templateChildren.forEach(templateChild => {
-              processedNodeIds.add(templateChild.id);
-            });
+          // 🆕 NOUVELLE LOGIQUE: Distinguer templates vs copies réelles
+          const allChildren = childrenMap.get(child.id) || [];
+          const templateNodeIds = repeaterField.metadata?.repeater?.templateNodeIds || [];
+          
+          // Séparer templates des copies
+          const templates = allChildren.filter(node => templateNodeIds.includes(node.id));
+          const realCopies = allChildren.filter(node => {
+            const meta = node.metadata as any;
+            return meta?.sourceTemplateId && templateNodeIds.includes(meta.sourceTemplateId);
+          });
+          
+          if (verbose()) dlog(`        � Templates: ${templates.length}, 📋 Copies réelles: ${realCopies.length}`);
+          
+          // Marquer SEULEMENT les templates comme traités (pas les copies)
+          templates.forEach(template => {
+            processedNodeIds.add(template.id);
+          });
+          
+          // 📋 TRAITER LES COPIES RÉELLES comme des champs normaux
+          realCopies.forEach((copyNode, index) => {
+            const copyField = transformPrismaNodeToField(copyNode, childrenMap, nodeMap, activeSharedReferences, formData);
+            
+            // 🗑️ AJOUTER LES MÉTADONNÉES DE SUPPRESSION
+            copyField.isDeletableCopy = true;
+            copyField.parentRepeaterId = child.id;
+            copyField.sourceTemplateId = (copyNode.metadata as any)?.sourceTemplateId;
+            
+            // ➕ AJOUTER LE BOUTON + SUR LA DERNIÈRE COPIE
+            copyField.isLastInCopyGroup = (index === realCopies.length - 1);
+            copyField.canAddNewCopy = copyField.isLastInCopyGroup;
+            
+            processedFields.push(copyField);
+            processedNodeIds.add(copyNode.id);
+            if (verbose()) dlog(`        📋 Copie ajoutée: "${copyField.label}" (sourceTemplate: ${(copyNode.metadata as any)?.sourceTemplateId}) ${copyField.isLastInCopyGroup ? '➕' : ''}`);
+          });
+          
+          // ➕ SI AUCUNE COPIE, LE TEMPLATE PEUT CRÉER UNE NOUVELLE COPIE
+          if (realCopies.length === 0 && templates.length > 0) {
+            // Ajouter le bouton + sur le premier template (original)
+            const originalTemplate = templates[0];
+            const originalTemplateField = transformPrismaNodeToField(originalTemplate, childrenMap, nodeMap, activeSharedReferences, formData);
+            originalTemplateField.canAddNewCopy = true;
+            originalTemplateField.isLastInCopyGroup = true;
+            originalTemplateField.parentRepeaterId = child.id;
+            
+            processedFields.push(originalTemplateField);
+            processedNodeIds.add(originalTemplate.id);
+            if (verbose()) dlog(`        📝 Template original avec bouton +: "${originalTemplateField.label}"`);
           }
           
         } else if (child.type === 'leaf_option' || child.type === 'leaf_option_field') {
@@ -1554,42 +1619,72 @@ const transformNodesToTBLComplete = (
       if (sectionsForTab.length > 0) {
         // Créer une section pour chaque section détectée
         sectionsForTab.forEach(([sectionId, sectionData], index) => {
+          // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (metadata.sourceTemplateId) de chaque section détectée
+          const sectionFieldsFiltered = sectionData.fields.filter(field => {
+            const meta = (field.metadata || {}) as any;
+            const isACopy = !!meta?.sourceTemplateId;
+            if (isACopy) {
+              console.log(`🚫 [TBL-HOOK] Exclusion de copie de répéteur "${field.label}" de la section détectée "${sectionData.node.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+            }
+            return !isACopy;
+          });
+          
           ongletSections.push({
             id: `${sectionId}-section`,
             name: sectionData.node.label,
             title: sectionData.node.label,
             description: sectionData.node.description || undefined,
-            fields: sectionData.fields,
+            fields: sectionFieldsFiltered,
             order: index,
             isDataSection: true // 🎯 TOUTES les sections TreeBranchLeaf sont des sections données
           });
           
           // 🎯 Log pour vérifier la création des sections données
-          dlog(`🎯 [TBL] Section TreeBranchLeaf créée: "${sectionData.node.label}" -> isDataSection: true (${sectionData.fields.length} champs)`);
+          dlog(`🎯 [TBL] Section TreeBranchLeaf créée: "${sectionData.node.label}" -> isDataSection: true (${sectionFieldsFiltered.length} champs)`);
         });
         
         // Ajouter une section pour les champs qui ne sont dans aucune section
         const fieldsInSections = sectionsForTab.flatMap(([, sectionData]) => sectionData.fields.map(f => f.id));
         const fieldsNotInSections = sortedFields.filter(f => !fieldsInSections.includes(f.id));
         
-        if (fieldsNotInSections.length > 0) {
+        // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (metadata.sourceTemplateId) avant de les ajouter aux sections
+        const fieldsNotInSectionsFiltered = fieldsNotInSections.filter(field => {
+          const meta = (field.metadata || {}) as any;
+          const isACopy = !!meta?.sourceTemplateId;
+          if (isACopy) {
+            console.log(`🚫 [TBL-HOOK] Exclusion de copie de répéteur "${field.label}" de la section "${ongletNode.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+          }
+          return !isACopy;
+        });
+        
+        if (fieldsNotInSectionsFiltered.length > 0) {
           ongletSections.push({
             id: `${ongletNode.id}-section`,
             name: ongletNode.label,
             title: ongletNode.label,
             description: ongletNode.description || undefined,
-            fields: fieldsNotInSections,
+            fields: fieldsNotInSectionsFiltered,
             order: sectionsForTab.length
           });
         }
       } else {
+        // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (metadata.sourceTemplateId) avant de créer la section par défaut
+        const sortedFieldsFiltered = sortedFields.filter(field => {
+          const meta = (field.metadata || {}) as any;
+          const isACopy = !!meta?.sourceTemplateId;
+          if (isACopy) {
+            console.log(`🚫 [TBL-HOOK] Exclusion de copie de répéteur "${field.label}" de la section par défaut "${ongletNode.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+          }
+          return !isACopy;
+        });
+        
         // Pas de sections détectées, créer une section par défaut
         ongletSections.push({
           id: `${ongletNode.id}-section`,
           name: ongletNode.label,
           title: ongletNode.label,
           description: ongletNode.description || undefined,
-          fields: sortedFields,
+          fields: sortedFieldsFiltered,
           order: 0
         });
       }
@@ -1924,6 +2019,57 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
     return () => window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
   }, [fetchData, disabled, tree_id]);
 
+  // 🔄 Écouter les changements de paramètres repeater pour recharger les données
+  useEffect(() => {
+    console.warn('🎧 [TBL Hook] Listener tbl-repeater-updated INSTALLÉ', { tree_id, disabled });
+    
+    const handleRepeaterUpdate = (event: Event) => {
+      console.warn('🎉🎉🎉 [TBL Hook] EVENT REÇU - tbl-repeater-updated', {
+        event,
+        detail: (event as CustomEvent).detail,
+        tree_id,
+        disabled
+      });
+      
+      const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined; source?: string; timestamp?: number }>;
+      const { treeId: eventTreeId, nodeId, source, timestamp } = customEvent.detail;
+      
+      console.warn('🔍 [TBL Hook] Vérification treeId', {
+        eventTreeId,
+        localTreeId: tree_id,
+        match: String(eventTreeId) === String(tree_id),
+        disabled,
+        nodeId,
+        source,
+        timestamp: timestamp ? new Date(timestamp).toISOString() : 'N/A'
+      });
+      
+      // Recharger uniquement si c'est notre arbre
+      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
+        console.warn('✅✅✅ [TBL Hook] RECHARGEMENT DES DONNÉES !', customEvent.detail);
+        fetchData();
+      } else {
+        console.warn('❌ [TBL Hook] Rechargement ignoré', { 
+          reason: disabled ? 'disabled=true' : !eventTreeId ? 'no treeId' : 'treeId mismatch',
+          eventTreeId,
+          localTreeId: tree_id
+        });
+      }
+    };
+
+    window.addEventListener('tbl-repeater-updated', handleRepeaterUpdate);
+    return () => {
+      console.warn('🔴 [TBL Hook] Listener tbl-repeater-updated DÉSINSTALLÉ', { tree_id });
+      window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
+    };
+  }, [fetchData, disabled, tree_id]);
+
+  // 🔄 Wrapper pour logger les appels à refetch
+  const refetch = useCallback(() => {
+    console.log('🔄 [useTBLDataPrismaComplete] refetch() appelé !');
+    return fetchData();
+  }, [fetchData]);
+
   return {
     tree,
     tabs,
@@ -1931,7 +2077,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
     sectionsByTab,
     loading,
     error,
-    refetch: fetchData,
+    refetch,
     rawNodes // 🔥 NOUVEAU: Exposer rawNodes pour Cascader (contient leaf_option)
   };
 };

@@ -35,7 +35,7 @@ import {
   MinusCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { CalculatedFieldDisplay } from './CalculatedFieldDisplay';
+import { BackendValueDisplay } from './BackendValueDisplay';
 import { HelpTooltip } from '../../../../common/HelpTooltip';
 import { useTBLTooltip } from '../../../../../hooks/useTBLTooltip';
 import { useTBLValidationContext } from '../contexts/TBLValidationContext';
@@ -470,6 +470,46 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // 🎯 Contexte de validation pour les couleurs dynamiques
   const { isValidation } = useTBLValidationContext();
   
+  // 🧭 INITIALISATION MAPPING CASCADER: si une valeur est déjà présente au montage,
+  // tenter d'initialiser window.TBL_CASCADER_NODE_IDS[field.id] pour permettre
+  // à TBLSectionRenderer de reconstruire les champs conditionnels dès le premier rendu.
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (!value || !Array.isArray(value) || value.length === 0) return;
+      if (window.TBL_CASCADER_NODE_IDS && window.TBL_CASCADER_NODE_IDS[field.id]) return;
+
+      // Fonction de recherche récursive pour trouver le nœud correspondant au chemin
+      const findNodeRecursive = (nodesToSearch, path) => {
+        if (!path || path.length === 0) return null;
+        
+        const [currentLabel, ...restPath] = path;
+        const foundNode = nodesToSearch.find(n => n.label === currentLabel);
+
+        if (!foundNode) return null;
+
+        // Si c'est le dernier élément du chemin, on a trouvé le nœud
+        if (restPath.length === 0) {
+          return foundNode;
+        }
+
+        // Sinon, on continue la recherche dans les enfants du nœud trouvé
+        const children = allNodes.filter(n => n.parentId === foundNode.id);
+        return findNodeRecursive(children, restPath);
+      };
+
+      // Démarrer la recherche depuis les options de premier niveau du champ
+      const optionNode = findNodeRecursive(field.options, [...value]);
+
+      if (optionNode) {
+        window.TBL_CASCADER_NODE_IDS = window.TBL_CASCADER_NODE_IDS || {};
+        window.TBL_CASCADER_NODE_IDS[field.id] = optionNode.id;
+      }
+    } catch (e) {
+      console.error("Erreur lors de l'initialisation du mapping Cascader:", e);
+    }
+  }, [value, allNodes, field.id, field.options]);
+  
   // ✅ NOUVEAU: Calculer hasTable AVANT d'appeler le hook pour pouvoir le passer en paramètre
   // 🔧 PRIORITÉ: field.hasTable (base de données) > capabilities.table.enabled (cache) > metadata.hasTable
   const hasTableCapability = useMemo(() => {
@@ -491,7 +531,29 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   
   // 🔗 Hook pour charger les options depuis un tableau lookup (si configuré)
   // ✅ NOUVEAU: On passe hasTableCapability pour que le hook vide les options quand le lookup est désactivé
-  const tableLookup = useTBLTableLookup(field.id, field.id, hasTableCapability);
+  const repeaterTemplateNodeId = (field as Record<string, unknown> | undefined)?.repeaterTemplateNodeId as string | undefined;
+  const originalFieldId = (field as Record<string, unknown> | undefined)?.originalFieldId as string | undefined;
+  const metaOriginalNodeId = (field as Record<string, unknown> | undefined)?.metadata && (field as Record<string, any>).metadata?.originalNodeId as string | undefined;
+  const sourceTemplateNodeId = (field as Record<string, any> | undefined)?.sourceTemplateId as string | undefined;
+  // Détecteur d'UUID v4 simple
+  const looksLikeUUID = (s?: string) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  // Éviter les IDs namespacés type node_123_abcdef
+  const isNamespacedNodeLike = (s?: string) => typeof s === 'string' && /^node_\d+_[a-z0-9]+$/i.test(s);
+  // Choisir le meilleur candidat d'ID pour le lookup table côté backend
+  let lookupNodeId = repeaterTemplateNodeId || originalFieldId || metaOriginalNodeId || sourceTemplateNodeId || field.id;
+  // Si l'ID courant ne ressemble pas à un UUID et qu'on a un candidat meilleur qui en est un, basculer dessus
+  if (!looksLikeUUID(lookupNodeId)) {
+    const candidates = [repeaterTemplateNodeId, originalFieldId, metaOriginalNodeId, sourceTemplateNodeId].filter(Boolean) as string[];
+    const uuidCandidate = candidates.find(looksLikeUUID);
+    if (uuidCandidate) {
+      lookupNodeId = uuidCandidate;
+    } else if (isNamespacedNodeLike(lookupNodeId) && candidates.length > 0) {
+      // Dernier recours: prendre le premier candidat non-vide (même si pas UUID) pour éviter node_*
+      lookupNodeId = candidates[0]!;
+    }
+  }
+
+  const tableLookup = useTBLTableLookup(lookupNodeId, lookupNodeId, hasTableCapability);
   
   // Synchronisation avec la valeur externe
   useEffect(() => {
@@ -900,12 +962,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           return <span style={{ color: '#888' }}>---</span>;
         }
         
+        // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
         return (
-          <CalculatedFieldDisplay
+          <BackendValueDisplay
             nodeId={formulaId}
             treeId={treeId}
             formData={formData}
-            displayFormat="number"
             unit={field.config?.unit}
             precision={field.config?.decimals || 2}
             placeholder="Calcul automatique..."
@@ -930,12 +992,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             return <span style={{ color: '#888' }}>---</span>;
           }
           
+          // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
           return (
-            <CalculatedFieldDisplay
+            <BackendValueDisplay
               nodeId={extractedNodeId}
               treeId={treeId}
               formData={formData}
-              displayFormat="number"
               unit={field.config?.unit}
               precision={field.config?.decimals || 2}
               placeholder="Calcul automatique..."
@@ -947,12 +1009,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           return <span style={{ color: '#888' }}>---</span>;
         }
         
+        // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
         return (
-          <CalculatedFieldDisplay
+          <BackendValueDisplay
             nodeId={variableId}
             treeId={treeId}
             formData={formData}
-            displayFormat="number"
             unit={field.config?.unit}
             precision={field.config?.decimals || 2}
             placeholder="Calcul automatique..."
@@ -1003,12 +1065,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           return <span style={{ color: '#888' }}>---</span>;
         }
         
+        // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
         return (
-          <CalculatedFieldDisplay
+          <BackendValueDisplay
             nodeId={instanceId}
             treeId={treeId}
             formData={formData}
-            displayFormat={dataInstance.displayFormat as 'number' | 'currency' | 'percentage' | undefined}
             unit={dataInstance.unit as string | undefined}
             precision={dataInstance.precision as number | undefined}
             placeholder="Calcul en cours..."
@@ -1035,12 +1097,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         return <span style={{ color: '#888' }}>---</span>;
       }
       
+      // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
       return (
-        <CalculatedFieldDisplay
+        <BackendValueDisplay
           nodeId={capabilities.formula.activeId}
           treeId={treeId}
           formData={formData}
-          displayFormat="number"
           unit={fieldConfig.unit}
           precision={fieldConfig.decimals || 4}
           placeholder="Calcul en cours..."
@@ -1163,10 +1225,52 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // 🔥 OPTIONS DYNAMIQUES - PRIORITÉ: 1) Table Lookup (si activé), 2) Prisma Config, 3) Fallback
         const staticOptions = fieldConfig.selectConfig?.options || fieldConfig.options || [];
         const finalOptions = (fieldConfig.hasTable && tableLookup.options.length > 0) ? tableLookup.options : staticOptions;
+
+        // 🩹 PATCH: Enrichir les options sans id avec le nodeId correspondant depuis allNodes
+        // Contexte: les champs copiés (ex: "Versant (Copie 1)") ont souvent des options sans id,
+        // ce qui empêche la détection de hiérarchie et l'utilisation du Cascader (donc pas d'injection).
+        // Stratégie: pour chaque option sans id, chercher un nœud enfant (leaf_option/leaf_option_field)
+        // du champ courant dont le label correspond. Si trouvé, utiliser son id comme option.id.
+        const enrichedOptions = finalOptions.map((opt: any) => {
+          if (opt && (opt.id || opt.nodeId)) return opt; // déjà enrichi
+          try {
+            const candidates = allNodes.filter(n =>
+              (n.type === 'leaf_option' || n.type === 'leaf_option_field') &&
+              n.parentId === field.id &&
+              (n.label === opt.label || n.option_label === opt.label || n.value === opt.value)
+            );
+            if (candidates.length > 0) {
+              const node = candidates.sort((a, b) => (a.order || 0) - (b.order || 0))[0];
+              return { ...opt, id: node.id, nodeId: node.id };
+            }
+          } catch {
+            /* noop: enrich failure */
+          }
+          return opt;
+        });
+        
+        // 🔍 DEBUG CASCADE COPIÉ - Vérifier les options disponibles
+        if (field.type === 'cascade') {
+          console.log(`🔍 [CASCADE FIELD RENDER] "${field.label}":`, {
+            fieldId: field.id,
+            fieldType: field.type,
+            hasFieldOptions: !!field.options,
+            fieldOptionsCount: field.options?.length || 0,
+            hasFieldConfigOptions: !!fieldConfig.options,
+            fieldConfigOptionsCount: fieldConfig.options?.length || 0,
+            hasFieldConfigSelectOptions: !!fieldConfig.selectConfig?.options,
+            fieldConfigSelectOptionsCount: fieldConfig.selectConfig?.options?.length || 0,
+            hasTableLookup: fieldConfig.hasTable,
+            tableLookupOptionsCount: tableLookup.options.length,
+            finalOptionsCount: finalOptions.length,
+            isRepeaterInstance: (field as any).isRepeaterInstance,
+            repeaterTemplateNodeId: (field as any).repeaterTemplateNodeId
+          });
+        }
         
         // 🔥 NOUVEAU: Détecter si le champ a une hiérarchie (sous-options imbriquées)
         // Récupérer les IDs des options du champ
-        const optionIds = finalOptions.map((opt: any) => opt.id || opt.value);
+  const optionIds = enrichedOptions.map((opt: any) => opt.id || opt.nodeId || opt.value);
         
         // Chercher si des leaf_option ont comme parentId un ID d'option du champ
         const hasHierarchy = allNodes.length > 0 && optionIds.length > 0 && allNodes.some(node => 
@@ -1208,7 +1312,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           };
           
           // Construire l'arbre complet: options du champ + leurs sous-options
-          const cascaderOptions = finalOptions.map((option: any) => {
+          const cascaderOptions = enrichedOptions.map((option: any) => {
             const optionId = option.id || option.value;
             const children = buildRecursive(optionId);
             
@@ -1238,11 +1342,27 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                     if (lastOption?.nodeId) {
                       window.TBL_CASCADER_NODE_IDS = window.TBL_CASCADER_NODE_IDS || {};
                       window.TBL_CASCADER_NODE_IDS[field.id] = lastOption.nodeId;
+                      // ✅ Fallback persistant pour l'injection: stocker aussi dans TBL_FORM_DATA
+                      try {
+                        if (window.TBL_FORM_DATA) {
+                          (window.TBL_FORM_DATA as any)[`${field.id}__selectedNodeId`] = lastOption.nodeId;
+                        }
+                      } catch { /* noop */ }
                     } else if (window.TBL_CASCADER_NODE_IDS) {
                       delete window.TBL_CASCADER_NODE_IDS[field.id];
+                      try {
+                        if (window.TBL_FORM_DATA) {
+                          delete (window.TBL_FORM_DATA as any)[`${field.id}__selectedNodeId`];
+                        }
+                      } catch { /* noop */ }
                     }
                   } else if (window.TBL_CASCADER_NODE_IDS) {
                     delete window.TBL_CASCADER_NODE_IDS[field.id];
+                    try {
+                      if (window.TBL_FORM_DATA) {
+                        delete (window.TBL_FORM_DATA as any)[`${field.id}__selectedNodeId`];
+                      }
+                    } catch { /* noop */ }
                   }
                 }
                 handleChange(lastValue);
@@ -1535,6 +1655,51 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         const maxItems = repeaterMetadata?.maxItems;
         const addButtonLabel = repeaterMetadata?.addButtonLabel || 'Ajouter une entrée';
         const minItems = repeaterMetadata?.minItems || 0;
+
+        // 🎨 Apparence du bouton "+" (respecte les réglages du répétiteur)
+        const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = (repeaterMetadata?.buttonSize as any) || 'middle';
+  const _buttonWidth: 'auto' | 'half' | 'full' = (repeaterMetadata?.buttonWidth as any) || 'auto';
+        const iconOnly: boolean = Boolean(repeaterMetadata?.iconOnly);
+
+        // Helpers de style pour le bouton "+"
+        const getAddButtonHeight = () => {
+          switch (buttonSize) {
+            case 'tiny': return iconOnly ? '28px' : '30px';
+            case 'small': return '32px';
+            case 'large': return '48px';
+            case 'middle':
+            default: return '40px';
+          }
+        };
+        const getAddButtonWidth = () => {
+          if (!iconOnly) return undefined;
+          switch (buttonSize) {
+            case 'tiny': return '28px';
+            case 'small': return '32px';
+            case 'large': return '48px';
+            case 'middle':
+            default: return '40px';
+          }
+        };
+        const getAddButtonFontSize = () => {
+          if (iconOnly) {
+            switch (buttonSize) {
+              case 'tiny': return '14px';
+              case 'small': return '16px';
+              case 'large': return '20px';
+              case 'middle':
+              default: return '18px';
+            }
+          }
+          switch (buttonSize) {
+            case 'tiny': return '12px';
+            case 'small': return '13px';
+            case 'large': return '16px';
+            case 'middle':
+            default: return '14px';
+          }
+        };
+        const getAntSize = (): 'small' | 'middle' | 'large' => (buttonSize === 'tiny' ? 'small' : (buttonSize as 'small' | 'middle' | 'large'));
         
         // Fonction pour récupérer les nœuds template (même logique que TreeBranchLeafPreviewPage)
         const getTemplateNodes = () => {
@@ -1582,12 +1747,23 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               <Form.Item style={{ marginBottom: 16 }}>
                 <Button
                   type="dashed"
-                  block
+                  block={!iconOnly}
+                  size={getAntSize()}
                   icon={<PlusOutlined />}
                   onClick={() => setRepeaterInstanceCount(repeaterInstanceCount + 1)}
                   disabled={disabled}
+                  style={{
+                    height: getAddButtonHeight(),
+                    width: getAddButtonWidth(),
+                    fontSize: getAddButtonFontSize(),
+                    minWidth: iconOnly ? getAddButtonWidth() : undefined,
+                    padding: iconOnly ? '0' : undefined,
+                    display: iconOnly ? 'inline-flex' : undefined,
+                    alignItems: iconOnly ? 'center' : undefined,
+                    justifyContent: iconOnly ? 'center' : undefined
+                  }}
                 >
-                  {addButtonLabel}
+                  {!iconOnly && addButtonLabel}
                 </Button>
               </Form.Item>
             )}

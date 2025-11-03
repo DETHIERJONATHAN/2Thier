@@ -10,7 +10,7 @@
  * + Module du haut : Gestionnaire d'arbres
  */
 
-import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Row, Col, Layout, Card, Spin, Space, Segmented, Grid } from 'antd';
 import { DndContext } from '@dnd-kit/core';
 
@@ -22,7 +22,7 @@ import Parameters from './components/Parameters/Parameters';
 import SimplePreview from './components/Preview/SimplePreview';
 
 // Utils
-import { performanceLogger } from './utils/performanceLogger';
+// import { performanceLogger } from './utils/performanceLogger';
 
 // Hooks et utils
 // import { useTreeData } from './hooks/useTreeData';
@@ -123,7 +123,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
 
   // PropNodes monitoring temporairement supprimé
 
-  const prevTreesSignatureRef = useRef<string | null>(null);
+  const _prevTreesSignatureRef = useRef<string | null>(null);
   // useEffect(() => {
     // const signature = JSON.stringify({
     //   count: trees?.length || 0,
@@ -503,7 +503,10 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           templateNodeIds: [],
           minItems: 0,
           maxItems: null,
-          addButtonLabel: 'Ajouter une entrée'
+          addButtonLabel: null,  // null = utilise "Ajouter [Nom du champ]"
+          buttonSize: 'middle',
+          buttonWidth: 'auto',
+          iconOnly: false  // true = affiche juste "+"
         }
       };
     }
@@ -666,36 +669,26 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   }, [selectedTree, api, onNodesUpdate]);
   
   const duplicateNode = useCallback(async (node: TreeBranchLeafNode): Promise<void> => {
-    // console.log('📋 duplicateNode:', { nodeId: node.id }); // ✨ Log réduit
-    
     if (!selectedTree) {
       console.error('❌ Aucun arbre sélectionné');
       return;
     }
 
     try {
-      // Créer une copie avec un label modifié
-      const copyLabel = `${node.label} (copie)`;
-      
-      const created = await api.post(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`, {
-        type: node.type,
-        label: copyLabel,
-        parentId: node.parentId,
-        subType: node.subType || 'data',
-        order: (node.order || 0) + 1,
-        isVisible: node.isVisible,
-        value: node.value,
-        defaultValue: node.defaultValue,
-        required: node.required,
-        hasValidation: node.hasValidation
+      // Nouvelle stratégie: copie profonde indépendante complète (backend)
+      const response = await api.post(`/api/treebranchleaf/nodes/${node.id}/deep-copy`, {
+        targetParentId: node.parentId,
       });
-      
-      // Recharger les données
+
+      const newRootId = response?.root?.newId || null;
+
+      // Recharger l'arbre complet
       const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
       onNodesUpdate(updatedNodes || []);
-      // Sélectionner automatiquement la copie créée si on l'a reçue avec un id
-      if (created?.id) {
-        const createdNode = (updatedNodes || []).find((n: TreeBranchLeafNode) => n.id === created.id);
+
+      // Sélectionner la nouvelle copie si disponible
+      if (newRootId) {
+        const createdNode = (updatedNodes || []).find((n: TreeBranchLeafNode) => n.id === newRootId);
         setUIState(prev => {
           let expandedNodes = prev.expandedNodes;
           if (createdNode?.parentId) {
@@ -706,9 +699,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           return { ...prev, selectedNode: createdNode || prev.selectedNode, expandedNodes };
         });
       }
-      // console.log('✅ Nœud dupliqué et arbre rechargé'); // ✨ Log réduit
     } catch (error) {
-      console.error('❌ Erreur duplication nœud:', error);
+      console.error('❌ Erreur duplication (deep-copy):', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate]);
@@ -1258,6 +1250,34 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     }));
   }, []);
 
+  // 🔎 Analyse dynamique de la branche complète du nœud sélectionné
+  // Récupère automatiquement la vue "full" (descendants, options, shared refs résolues)
+  // dès que la sélection change, pour la rendre exploitable côté TBL sans action manuelle.
+  const selectedNodeFullRef = useRef<any>(null);
+  useEffect(() => {
+    const id = uiState.selectedNode?.id;
+    if (!id) {
+      selectedNodeFullRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const full = await api.get(`/api/treebranchleaf/nodes/${id}/full`);
+        if (cancelled) return;
+        selectedNodeFullRef.current = full;
+        // Expose pour debug et travail TBL rapide
+        if (typeof window !== 'undefined') {
+          (window as any).__TBL_SELECTED_FULL = full;
+        }
+        console.log('[TreeBranchLeafEditor] 🔎 Analyse complète (auto) chargée pour', id);
+      } catch (e) {
+        if (!cancelled) console.warn('[TreeBranchLeafEditor] ⚠️ Échec chargement analyse complète', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [uiState.selectedNode?.id, api]);
+
   // =============================================================================
   // 🎬 ACTIONS - Gestionnaires d'événements
   // =============================================================================
@@ -1575,6 +1595,34 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           onCapabilityConfig={updateNode}
           readOnly={readOnly}
           registry={TreeBranchLeafRegistry}
+          onDeleteNode={deleteNode}
+          refreshTree={async () => {
+            if (!selectedTree) return;
+            try {
+              const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
+              onNodesUpdate(updatedNodes || []);
+            } catch (e) {
+              console.warn('⚠️ [TreeBranchLeafEditor] refreshTree a échoué:', e);
+            }
+          }}
+          onSelectNodeId={(nodeId: string) => {
+            const findNode = (list: TreeBranchLeafNode[] | undefined, id: string): TreeBranchLeafNode | undefined => {
+              if (!list) return undefined;
+              for (const n of list) {
+                if (n.id === id) return n;
+                const found = findNode(n.children, id);
+                if (found) return found;
+              }
+              return undefined;
+            };
+            const found = findNode(propNodes || [], nodeId);
+            if (found) {
+              setUIState(prev => ({ ...prev, selectedNode: found }));
+            }
+          }}
+          onExpandNodeId={(nodeId: string) => {
+            setUIState(prev => ({ ...prev, expandedNodes: new Set([...prev.expandedNodes, nodeId]) }));
+          }}
         />
       </div>
     </div>

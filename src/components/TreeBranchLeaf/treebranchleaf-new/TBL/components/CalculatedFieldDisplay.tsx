@@ -43,14 +43,21 @@ export const CalculatedFieldDisplay: React.FC<CalculatedFieldDisplayProps> = ({
 
   const { value, loading, error, displayConfig } = useCalculatedFieldValue(nodeId, treeId, formData);
   
-  // 🔍 DEBUG: Log l'état du hook
-  console.log('[CalculatedFieldDisplay] 📊 État du hook:', {
-    nodeId,
-    value,
-    loading,
-    error,
-    displayConfig
-  });
+  console.error('═══════════════════════════════════════════════════════');
+  console.error('🔍 [STEP 6] COMPOSANT CalculatedFieldDisplay');
+  console.error('NodeId:', nodeId);
+  console.error('Value reçue du hook:', value);
+  console.error('Type de value:', typeof value);
+  console.error('Loading:', loading);
+  console.error('Error:', error);
+  console.error('DisplayConfig:', displayConfig);
+  console.error('Est undefined?', value === undefined);
+  console.error('Est null?', value === null);
+  console.error('Est 0?', value === 0);
+  console.error('Est "0"?', value === "0");
+  console.error('Est 56?', value === 56);
+  console.error('Est "56"?', value === "56");
+  console.error('═══════════════════════════════════════════════════════');
 
   if (loading) {
     return (

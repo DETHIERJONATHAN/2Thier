@@ -336,6 +336,9 @@ const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
 };
 app.use(errorHandler);
 
+// Import du hook de synchronisation TreeBranchLeaf
+import { initializeTreeBranchLeafSync } from './components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook';
+
 // Démarrage du serveur
 app.listen(port, () => {
   logSecurityEvent('SERVER_READY', {
@@ -354,6 +357,12 @@ app.listen(port, () => {
 
   console.log(`🎉 [API-SERVER-CLEAN] Serveur CRM démarré avec succès sur http://localhost:${port}`);
   console.log(`🛡️ [ENTERPRISE-SECURITY] Sécurité niveau 100% activée`);
+  
+  // 🔄 Synchronisation automatique des sourceRef TreeBranchLeaf
+  console.log('🔄 [TREEBRANCHLEAF] Synchronisation des sourceRef...');
+  initializeTreeBranchLeafSync().catch(err => {
+    console.error('⚠️  [TREEBRANCHLEAF] Erreur lors de la synchronisation:', err);
+  });
   console.log(`📋 [API-SERVER-CLEAN] Endpoints disponibles:`);
   console.log(`   - Health: http://localhost:${port}/api/health`);
   console.log(`   - Auth Me: http://localhost:${port}/api/auth/me`);

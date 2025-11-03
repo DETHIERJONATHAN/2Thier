@@ -26,7 +26,8 @@ export class TreeBranchLeafAPIService {
   async createTree(data: Partial<TreeBranchLeafTree>): Promise<TreeBranchLeafTree> {
     return TreeBranchLeafAPI.createTree({
       ...data,
-      organizationId: this.organizationId,
+      organizationId: this.organizationId
+    });
   }
 
   async updateTree(id: string, data: Partial<TreeBranchLeafTree>): Promise<TreeBranchLeafTree | null> {

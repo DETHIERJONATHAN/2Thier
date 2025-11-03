@@ -228,18 +228,31 @@ export class TreeBranchLeafAPI {
 
   // PUT /nodes/:id - Modifier un nœud
   static async updateNode(nodeId: string, data: Partial<TreeBranchLeafNode>): Promise<TreeBranchLeafNode | null> {
-    for (const treeId in mockNodes) {
-      const index = mockNodes[treeId].findIndex(node => node.id === nodeId);
-      if (index !== -1) {
-        mockNodes[treeId][index] = {
-          ...mockNodes[treeId][index],
-          ...data,
-          updatedAt: new Date().toISOString()
-        };
-        return mockNodes[treeId][index];
+    try {
+      console.log('🔄 [TreeBranchLeafAPI] updateNode:', nodeId, data);
+      
+      // ✅ APPELER LA VRAIE API AU LIEU DU MOCK
+      const response = await fetch(`/api/treebranchleaf/nodes/${nodeId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+        credentials: 'include', // Pour envoyer les cookies d'authentification
+      });
+
+      if (!response.ok) {
+        console.error('❌ [TreeBranchLeafAPI] Erreur HTTP:', response.status);
+        return null;
       }
+
+      const updatedNode = await response.json();
+      console.log('✅ [TreeBranchLeafAPI] Node mis à jour:', updatedNode);
+      return updatedNode;
+    } catch (error) {
+      console.error('❌ [TreeBranchLeafAPI] Erreur updateNode:', error);
+      return null;
     }
-    return null;
   }
 
   // DELETE /nodes/:id - Supprimer un nœud

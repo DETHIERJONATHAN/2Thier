@@ -58,6 +58,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
   const [loading, setLoading] = useState(false);
   const mountedRef = useRef(true);
   const [instances, setInstances] = useState<DataInstance[]>([]);
+  const [variableId, setVariableId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [name, setName] = useState<string>('');
   
@@ -138,6 +139,11 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           setFixedValue(first.config.fixedValue || '');
           // Laisser l'effet de synchronisation (activeId) remplir le formulaire après montage
           onChange?.(first.config as Record<string, unknown>);
+          // Récupérer l'ID de la variable pour affichage (même si on a déjà des instances en metadata)
+          try {
+            const v = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`) as { id?: string; usedVariableId?: string } | undefined;
+            if (v && typeof v.usedVariableId === 'string') setVariableId(v.usedVariableId);
+          } catch { /* noop */ }
         } else {
           const data = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`);
           if (!mountedRef.current) return;
@@ -159,6 +165,10 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           setInstances([first]);
           setActiveId(first.id);
           setName(first.name);
+          // Capturer l'ID de la variable si déjà existante côté API
+          if (data && typeof (data as { usedVariableId?: string }).usedVariableId === 'string') {
+            setVariableId((data as { usedVariableId?: string }).usedVariableId!);
+          }
           // persister dans metadata
           try {
             const md = (node?.metadata || {}) as Record<string, unknown>;
@@ -191,22 +201,26 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           // Mettre à jour les états locaux
           setSourceType(activeInstance.config.sourceType || 'fixed');
           setFixedValue(activeInstance.config.fixedValue || '');
-          setSelectedSourceRef(activeInstance.config.sourceRef || '');
+          // ❌ NE PAS synchroniser sourceRef depuis les métadonnées - il ne change que via le sélecteur
+          // setSelectedSourceRef(activeInstance.config.sourceRef || '');
           
           // Mettre à jour le formulaire
           form.setFieldsValue(activeInstance.config as Record<string, unknown>);
           
-          console.log('✅ [DataPanel] États synchronisés - sourceType:', activeInstance.config.sourceType, 'fixedValue:', activeInstance.config.fixedValue, 'sourceRef:', activeInstance.config.sourceRef);
+          console.log('✅ [DataPanel] États synchronisés - sourceType:', activeInstance.config.sourceType, 'fixedValue:', activeInstance.config.fixedValue, 'sourceRef:', selectedSourceRef, '(PRÉSERVÉ)');
         } else {
           console.log('🛡️ [DataPanel] Synchronisation ignorée - changement utilisateur récent');
         }
       }
     }
-  }, [activeId, instances, form]);
+  }, [activeId, instances, form, selectedSourceRef]);
 
   const save = useCallback(async (vals: Record<string, unknown>) => {
     try {
-      await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`, vals);
+      const updated = await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`, vals) as { id?: string; usedVariableId?: string } | undefined;
+      if (updated && typeof updated.usedVariableId === 'string') {
+        setVariableId(updated.usedVariableId);
+      }
       
       // 🚀 AUTO-ACTIVATION: Activer la capacité "Données" quand on configure quelque chose
   const hasConfiguration = (vals.sourceType === 'fixed' && vals.fixedValue) || 
@@ -237,6 +251,10 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
             const freshData = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`);
             console.log('🔄 [DataPanel] Données fraîches depuis l\'API:', freshData);
             console.log('🔄 [DataPanel] États avant mise à jour - sourceType:', sourceType, 'fixedValue:', fixedValue, 'selectedSourceRef:', selectedSourceRef);
+            // Mettre à jour l'ID de variable si disponible
+            if (freshData && typeof (freshData as { usedVariableId?: string }).usedVariableId === 'string') {
+              setVariableId((freshData as { usedVariableId?: string }).usedVariableId!);
+            }
             
             if (freshData) {
               // 🎯 PROTECTION: Ne pas écraser l'état si l'utilisateur vient de faire un changement
@@ -268,17 +286,20 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                 return;
               }
               
-              // Seulement mettre à jour si les valeurs sont vraiment différentes
-              if (freshSourceType !== sourceType || freshFixedValue !== fixedValue || freshSourceRef !== selectedSourceRef) {
-                console.log('🔄 [DataPanel] Mise à jour nécessaire - application des données fraîches');
+              // 🎯 CORRECTION CRITIQUE: Ne JAMAIS écraser le sourceRef depuis l'API
+              // Le sourceRef ne doit changer QUE si l'utilisateur clique sur "Sélectionner dans l'arborescence"
+              // Seulement mettre à jour sourceType et fixedValue
+              if (freshSourceType !== sourceType || freshFixedValue !== fixedValue) {
+                console.log('🔄 [DataPanel] Mise à jour nécessaire - application des données fraîches (SAUF sourceRef)');
                 setSourceType(freshSourceType);
                 setFixedValue(freshFixedValue);
-                setSelectedSourceRef(freshSourceRef);
+                // ❌ NE PAS FAIRE: setSelectedSourceRef(freshSourceRef); 
                 
-                // Puis mettre à jour le formulaire avec les données fraîches
-                form.setFieldsValue(freshData as Record<string, unknown>);
+                // Mettre à jour le formulaire SANS toucher au sourceRef
+                const { sourceRef: _ignored, ...freshDataWithoutSourceRef } = freshData as Record<string, unknown>;
+                form.setFieldsValue(freshDataWithoutSourceRef);
                 
-                console.log('✅ [DataPanel] États après mise à jour - sourceType:', freshSourceType, 'fixedValue:', freshFixedValue, 'selectedSourceRef:', freshSourceRef);
+                console.log('✅ [DataPanel] États après mise à jour - sourceType:', freshSourceType, 'fixedValue:', freshFixedValue, 'selectedSourceRef:', selectedSourceRef, '(PRÉSERVÉ)');
               } else {
                 console.log('🚫 [DataPanel] Pas de mise à jour nécessaire - données identiques');
               }
@@ -530,6 +551,13 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
     return ref;
   }, [selectedSourceRef, conditions.items, formulas.items]);
 
+  // Affichage demandé: montrer l'ID de la variable directement dans le champ de sélection
+  const selectedRefDisplay = useMemo(() => {
+    return (variableId && typeof variableId === 'string' && variableId.length > 0)
+      ? variableId
+      : selectedRefLabel;
+  }, [variableId, selectedRefLabel]);
+
   // (supprimé) getSelectedName n'était pas utilisé
 
   const deleteData = useCallback(() => {
@@ -537,13 +565,15 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
     if (!confirmed) return;
     (async () => {
       try {
+        // ✅ Utiliser DELETE au lieu de PUT avec valeurs vides
+        await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`);
+        
         const emptyVals = { exposedKey: undefined, displayFormat: 'number', unit: '', precision: 2, visibleToUser: false } as Record<string, unknown>;
-        await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`, emptyVals);
-        try { await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { hasData: false }); } catch { /* optional */ }
         form.setFieldsValue(emptyVals);
         onChange?.(emptyVals);
         messageApi.success('Donnée supprimée');
-      } catch {
+      } catch (err) {
+        console.error('Erreur lors de la suppression de la variable:', err);
         messageApi.error('Impossible de supprimer la donnée');
       }
     })();
@@ -1117,7 +1147,8 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                 placeholder="Sélectionnez dans l'arborescence..." 
                 readOnly
                 style={{ cursor: 'pointer' }}
-                value={selectedRefLabel}
+                value={selectedRefDisplay}
+                title={selectedRefDisplay}
                 onClick={openTreeSelector}
               />
               <Button 

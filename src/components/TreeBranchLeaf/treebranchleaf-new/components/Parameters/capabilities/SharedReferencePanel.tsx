@@ -445,7 +445,12 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
                           <Card key={ref.id} size="small" style={{ width: '100%' }}>
                             <Space direction="vertical" style={{ width: '100%' }} size="small">
                               <div>
-                                <strong>{ref.label}</strong>
+                                <Space align="center">
+                                  <strong>{ref.label}</strong>
+                                  <Text copyable={{ text: ref.id }} type="secondary" code style={{ fontSize: '10px' }}>
+                                    ID: {ref.id}
+                                  </Text>
+                                </Space>
                                 <div>
                                   <Text type="secondary">{ref.description || 'Aucune description'}</Text>
                                 </div>

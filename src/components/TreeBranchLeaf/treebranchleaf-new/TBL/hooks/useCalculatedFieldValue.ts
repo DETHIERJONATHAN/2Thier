@@ -66,37 +66,73 @@ export const useCalculatedFieldValue = (
         setError(null);
 
         if (process.env.NODE_ENV === 'development') {
-          console.log('[useCalculatedFieldValue] 📡 Appel API:', nodeId);
+          console.warn('🚨🚨🚨 [DEBUG FORMDATA] Appel API pour nodeId:', nodeId);
+          console.warn('🚨🚨🚨 [DEBUG FORMDATA] Keys:', Object.keys(formDataRef.current));
+          console.warn('🚨🚨🚨 [DEBUG FORMDATA] Contenu complet:', formDataRef.current);
         }
 
         // ✅ Utiliser formDataRef.current pour toujours avoir la dernière version
-        const responseData = await api.post<{ 
-          success: boolean; 
-          results: Array<{ 
-            nodeId: string; 
-            operationResult: { value: unknown; humanText: string };
+        const responseData = await api.post<{
+          success: boolean;
+          results: Array<{
+            nodeId: string;
+            value?: unknown;                 // ✅ valeur à la racine (backend récent)
+            calculatedValue?: unknown;       // ✅ alias possible
+            operationResult?: { value?: unknown; humanText?: string };
             displayConfig?: DisplayConfig;
-          }> 
+          }>;
         }>('/api/tbl/submissions/preview-evaluate', {
           treeId,
           formData: formDataRef.current, // ✅ Toujours la dernière version
           leadId // ✅ Version stable du leadId
         });
 
+        console.error('═══════════════════════════════════════════════════════');
+        console.error('🔍 [STEP 2] RÉPONSE BACKEND REÇUE');
+        console.error('Success:', responseData?.success);
+        console.error('Nombre de résultats:', responseData?.results?.length);
+        console.error('═══════════════════════════════════════════════════════');
+
         if (responseData?.success && responseData?.results) {
           const result = responseData.results.find(
             (r: { nodeId: string }) => r.nodeId === nodeId
           );
 
+          console.error('═══════════════════════════════════════════════════════');
+          console.error('🔍 [STEP 3] RECHERCHE DU RÉSULTAT');
+          console.error('NodeId recherché:', nodeId);
+          console.error('Résultat trouvé:', !!result);
           if (result) {
-            const calculatedValue = result.operationResult?.value;
+            console.error('result.value:', (result as any).value);
+            console.error('result.calculatedValue:', (result as any).calculatedValue);
+            console.error('Type de result.value:', typeof (result as any).value);
+          }
+          console.error('═══════════════════════════════════════════════════════');
+
+          if (result) {
+            // ✅ PRENDRE DIRECTEMENT LA VALEUR DU BACKEND
+            let calculatedValue: unknown = (result as any).value ?? (result as any).calculatedValue;
+
+            console.error('═══════════════════════════════════════════════════════');
+            console.error('� [STEP 4] EXTRACTION DE LA VALEUR');
+            console.error('Valeur extraite:', calculatedValue);
+            console.error('Type:', typeof calculatedValue);
+            console.error('Est undefined?', calculatedValue === undefined);
+            console.error('Est null?', calculatedValue === null);
+            console.error('Est 0?', calculatedValue === 0);
+            console.error('Est "0"?', calculatedValue === "0");
+            console.error('Est 56?', calculatedValue === 56);
+            console.error('Est "56"?', calculatedValue === "56");
+            console.error('═══════════════════════════════════════════════════════');
+
+            console.error('═══════════════════════════════════════════════════════');
+            console.error('� [STEP 5] APPEL DE setValue()');
+            console.error('Valeur passée à setValue:', calculatedValue);
+            console.error('═══════════════════════════════════════════════════════');
+
             setValue(calculatedValue);
-            setHumanText(result.operationResult?.humanText || '');
-            setDisplayConfig(result.displayConfig || null);
-            
-            if (process.env.NODE_ENV === 'development') {
-              console.log('[useCalculatedFieldValue] ✅ Valeur:', calculatedValue);
-            }
+            setHumanText((result.operationResult as any)?.humanText || '');
+            setDisplayConfig((result as any).displayConfig || null);
           } else {
             setValue(undefined);
           }

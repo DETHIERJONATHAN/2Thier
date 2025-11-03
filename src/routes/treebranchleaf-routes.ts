@@ -50,6 +50,22 @@ async function mapJSONToColumns(
     if (typeof repeaterMeta.addButtonLabel !== 'undefined') {
       columnData.repeater_addButtonLabel = repeaterMeta.addButtonLabel;
     }
+
+    // ✅ NOUVEAUX PARAMÈTRES D'APPARENCE DU BOUTON
+    if (typeof repeaterMeta.buttonSize !== 'undefined') {
+      columnData.repeater_buttonSize = repeaterMeta.buttonSize;
+      console.log('✅ [mapJSONToColumns] 🎨 repeater_buttonSize sauvegardé:', repeaterMeta.buttonSize);
+    }
+
+    if (typeof repeaterMeta.buttonWidth !== 'undefined') {
+      columnData.repeater_buttonWidth = repeaterMeta.buttonWidth;
+      console.log('✅ [mapJSONToColumns] 🎨 repeater_buttonWidth sauvegardé:', repeaterMeta.buttonWidth);
+    }
+
+    if (typeof repeaterMeta.iconOnly !== 'undefined') {
+      columnData.repeater_iconOnly = repeaterMeta.iconOnly;
+      console.log('✅ [mapJSONToColumns] 🎨 repeater_iconOnly sauvegardé:', repeaterMeta.iconOnly);
+    }
   }
 
   if (metadata && metadata.appearance) {

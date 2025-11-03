@@ -1313,6 +1313,11 @@ model TreeBranchLeafNode {
   hasLink                        Boolean                          @default(false)
   hasMarkers                     Boolean                          @default(false)
   hasTable                       Boolean                          @default(false)
+  // Liens directs: stocker uniquement les IDs (plusieurs possibles)
+  linkedTableIds                 String[]                         @default([])
+  linkedConditionIds             String[]                         @default([])
+  linkedFormulaIds               String[]                         @default([])
+  linkedVariableIds              String[]                         @default([])
   api_activeId                   String?
   api_bodyVars                   Json?
   api_instances                  Json?
@@ -1406,7 +1411,10 @@ model TreeBranchLeafNode {
   repeater_templateNodeLabels    String?
   repeater_minItems              Int?                             @default(0)
   repeater_maxItems              Int?
-  repeater_addButtonLabel        String?                          @default("Ajouter une entrée")
+  repeater_addButtonLabel        String?
+  repeater_buttonSize            String?                          @default("middle")
+  repeater_buttonWidth           String?                          @default("auto")
+  repeater_iconOnly              Boolean?                         @default(false)
   isSharedReference              Boolean?                         @default(false)
   sharedReferenceId              String?
   sharedReferenceName            String?

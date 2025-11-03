@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, InputNumber, Alert } from 'antd';
+import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm } from 'antd';
 import type { InputRef } from 'antd';
 import { 
   SettingOutlined, 
@@ -18,7 +18,8 @@ import {
   TableOutlined,
   ApiOutlined,
   LinkOutlined,
-  TagsOutlined
+  TagsOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../hooks/useDebouncedCallback';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
@@ -43,16 +44,24 @@ interface ParametersProps {
   onCapabilityConfig: (node: Partial<TreeBranchLeafNode> & { id: string }) => Promise<TreeBranchLeafNode | null>;
   readOnly?: boolean;
   registry: TreeBranchLeafRegistryType;
+  refreshTree?: () => Promise<void> | void;
+  onDeleteNode?: (node: TreeBranchLeafNode) => Promise<void> | void;
+  onSelectNodeId?: (nodeId: string) => void;
+  onExpandNodeId?: (nodeId: string) => void;
 }
 
 const Parameters: React.FC<ParametersProps> = (props) => {
-  const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate } = props;
+  const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate, refreshTree, onDeleteNode, onSelectNodeId, onExpandNodeId } = props;
   
   // Refs pour cleanup
   const mountedRef = useRef<boolean>(true);
 
   // 🔐 Hook API authentifié
   const { api } = useAuthenticatedApi();
+  const [applyingSharedRefs, setApplyingSharedRefs] = useState(false);
+  const [unlinkingSharedRefs, setUnlinkingSharedRefs] = useState(false);
+  // 🛡️ Anti-duplication: suivi des duplications en cours par répéteur (repeaterId -> Set<templateId>)
+  const inFlightDupByRepeaterRef = useRef<Map<string, Set<string>>>(new Map());
 
   const capabilities = useMemo(() => registry.getAllCapabilities(), [registry]);
   const [openCaps, setOpenCaps] = useState<Set<string>>(new Set<string>(Array.from(panelState.openCapabilities || [])));
@@ -86,7 +95,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   
   // 🆕 Bloquer l'hydratation temporairement après une modification utilisateur
   const skipNextHydrationRef = useRef(false);
-  const hydrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hydrationTimeoutRef = useRef<number | null>(null);
 
   // Cleanup au démontage
   useEffect(() => {
@@ -95,6 +104,25 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       mountedRef.current = false;
     };
   }, []);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (!selectedNode) return;
+    try {
+      if (typeof onDeleteNode === 'function') {
+        await Promise.resolve(onDeleteNode(selectedNode));
+        return; // onDeleteNode gère déjà le refresh + UI
+      }
+      // Fallback: supprimer via API direct puis rafraîchir
+      if (tree && selectedNode) {
+        await api.delete(`/api/treebranchleaf/trees/${tree.id}/nodes/${selectedNode.id}`);
+        if (typeof refreshTree === 'function') {
+          await Promise.resolve(refreshTree());
+        }
+      }
+    } catch (e) {
+      console.error('❌ [Parameters] Erreur suppression nœud:', e);
+    }
+  }, [api, onDeleteNode, refreshTree, selectedNode, tree]);
 
   // 🔁 FONCTION DE DUPLICATION PHYSIQUE DES TEMPLATES
   const duplicateTemplatesPhysically = useCallback(async (templateNodeIds: string[]) => {
@@ -108,15 +136,69 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       });
       
       console.log('✅ [duplicateTemplatesPhysically] Duplication réussie:', response);
+      const created: Array<{ id: string; sourceTemplateId?: string }> = Array.isArray(response?.duplicated) ? response.duplicated : [];
+
+      // 🔍 Log chaque copie retournée
+      console.log('🔍 [duplicateTemplatesPhysically] Copies retournées du serveur:');
+      created.forEach((copy, idx) => {
+        console.log(`  [${idx}] ID: ${copy.id}, Template: ${copy.sourceTemplateId}`);
+      });
+      console.log(`Total copies créées: ${created.length}, attendues: ${templateNodeIds.length}`);
+
+      // 🧹 NE PAS NETTOYER L'IN-FLIGHT ICI !
+      // Raison: Il faut attendre que `nodes` soit hydraté AVANT de retirer l'in-flight.
+      // Sinon race condition si plusieurs POST en vol = re-création de doublons.
+      // Le nettoyage se fera dans le useEffect qui détecte les mises à jour de `nodes`.
+      // Voir: "Anti-redoublons: nettoyer in-flight une fois que les copies sont détectées dans nodes"
+
+      // 🧭 Appliquer les références partagées des originaux sur les copies ("copie parfaite")
+      try {
+        await Promise.all(
+          created.map((c) => api.post(`/api/treebranchleaf/nodes/${c.id}/apply-shared-references-from-original`))
+        );
+        console.log('🔗 [duplicateTemplatesPhysically] Références partagées appliquées sur copies');
+      } catch (e) {
+        console.warn('⚠️ [duplicateTemplatesPhysically] Échec application références sur certaines copies (non bloquant):', e);
+      }
       
-      // Rafraîchir l'arbre pour afficher les nouveaux enfants
-      if (typeof refreshTree === 'function') {
-        refreshTree();
+      // Rafraîchir l'arbre pour afficher les nouveaux enfants IMMÉDIATEMENT
+      try {
+        if (typeof refreshTree === 'function') {
+          await Promise.resolve(refreshTree());
+        }
+      } catch (e) {
+        console.warn('⚠️ [duplicateTemplatesPhysically] refreshTree a échoué, aucun impact fonctionnel', e);
+      }
+
+      // 🚀 Auto-expand du parent repeater et sélectionner la dernière copie créée
+      try {
+        if (created.length > 0) {
+          const lastId = created[created.length - 1].id;
+          if (typeof onExpandNodeId === 'function') onExpandNodeId(selectedNode.id);
+          if (typeof onSelectNodeId === 'function') onSelectNodeId(lastId);
+        }
+      } catch (e) {
+        console.warn('⚠️ [duplicateTemplatesPhysically] Auto expand/select non disponible:', e);
       }
     } catch (error) {
-      console.error('❌ [duplicateTemplatesPhysically] Erreur:', error);
+      const axiosErr = error as any;
+      console.error('❌ [duplicateTemplatesPhysically] Erreur:', axiosErr?.response?.data || axiosErr);
+      // 🧹 En cas d'échec, retirer les templates tentés de l'in-flight (ils pourront être retentés)
+      try {
+        if (selectedNode?.id) {
+          const map = inFlightDupByRepeaterRef.current;
+          const set = map.get(selectedNode.id);
+          if (set) {
+            templateNodeIds.forEach(id => set.delete(id));
+            if (set.size === 0) map.delete(selectedNode.id); else map.set(selectedNode.id, set);
+            console.log('🧹 [duplicateTemplatesPhysically] Nettoyage in-flight après erreur:', templateNodeIds);
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ [duplicateTemplatesPhysically] Nettoyage in-flight (erreur) échoué:', e);
+      }
     }
-  }, [selectedNode, api]);
+  }, [selectedNode, api, refreshTree, onExpandNodeId, onSelectNodeId]);
 
   // 🆕 Référence stable pour onNodeUpdate (évite de recréer le debounce)
   const onNodeUpdateRef = useRef(onNodeUpdate);
@@ -128,28 +210,36 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const patchNode = useDebouncedCallback(async (payload: Record<string, unknown>) => {
     if (!selectedNodeId) return;
     
-    // ✅ Log réduit : seulement en mode debug
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 [Parameters] Sauvegarde:', selectedNodeId);
-    }
+    // ✅ Log pour debug repeater
+    console.log('🔄 [Parameters] Sauvegarde:', selectedNodeId, payload);
     
     try {
-      // 🔄 NOUVEAU : Flatten appearanceConfig vers metadata.appearance pour compatibilité API
+      // 🔄 NOUVEAU : Mapper appearanceConfig.repeater vers metadata.repeater pour le backend
       const apiData = { ...payload };
+      
       if (payload.appearanceConfig) {
-        apiData.metadata = {
-          ...(apiData.metadata as Record<string, unknown> || {}),
-          appearance: payload.appearanceConfig
-        };
+        const appearanceConfig = payload.appearanceConfig as any;
+        
+        // Extraire la config repeater si présente
+        if (appearanceConfig.repeater) {
+          apiData.metadata = {
+            ...(apiData.metadata as Record<string, unknown> || {}),
+            repeater: appearanceConfig.repeater,
+            appearance: payload.appearanceConfig
+          };
+          console.log('🔁 [Parameters] Metadata repeater mappé:', appearanceConfig.repeater);
+        } else {
+          apiData.metadata = {
+            ...(apiData.metadata as Record<string, unknown> || {}),
+            appearance: payload.appearanceConfig
+          };
+        }
       }
       
       // ✅ Utiliser la ref pour toujours avoir la dernière version
       await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
       
-      // ✅ Log de succès réduit
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Sauvegarde OK');
-      }
+      console.log('✅ [Parameters] Sauvegarde OK');
     } catch (error) {
       console.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
     }
@@ -172,12 +262,17 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     return null;
   }, [nodes, selectedNode]);
 
+  // (helper local retiré: findNodeById) – on utilise une DFS inline lorsque nécessaire
+
   type RepeaterMetadata = {
     templateNodeIds?: string[];
     templateNodeLabels?: Record<string, string>;
     minItems?: number | null;
     maxItems?: number | null;
     addButtonLabel?: string;
+    buttonSize?: 'tiny' | 'small' | 'middle' | 'large';
+    buttonWidth?: 'auto' | 'half' | 'full';
+    iconOnly?: boolean;
   };
 
   const commitRepeaterMetadata = useCallback((partial: Partial<RepeaterMetadata>) => {
@@ -234,58 +329,166 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
     console.log('📝 [commitRepeaterMetadata] METADATA FINALE:', nextMetadata);
 
-    patchNode({ metadata: nextMetadata });
+    // 🔥 IMPORTANT : Enregistrer AUSSI dans les colonnes dédiées de la base
+    const payload: Record<string, unknown> = {
+      metadata: nextMetadata,
+      // ✅ Colonnes dédiées pour performances et requêtes SQL
+      repeater_addButtonLabel: merged.addButtonLabel || null,
+      repeater_buttonSize: merged.buttonSize || 'middle',
+      repeater_buttonWidth: merged.buttonWidth || 'auto',
+      repeater_iconOnly: merged.iconOnly || false,
+      repeater_minItems: merged.minItems ?? 0,
+      repeater_maxItems: merged.maxItems || null
+    };
+
+    console.log('💾 [commitRepeaterMetadata] PAYLOAD COMPLET:', payload);
     
-    // 🔁 DUPLICATION PHYSIQUE : Si des templateNodeIds sont définis, dupliquer les templates
+    patchNode(payload);
+    
+    // � Émettre l'événement pour notifier le hook de recharger les données
+    window.dispatchEvent(
+      new CustomEvent('tbl-repeater-updated', {
+        detail: {
+          nodeId: selectedNode.id,
+          treeId: selectedNode.tree_id
+        }
+      })
+    );
+    console.log('🔔 [commitRepeaterMetadata] Événement tbl-repeater-updated émis');
+    
+    // 🔁 DUPLICATION PHYSIQUE (IDEMPOTENTE)
+    // Ne dupliquer que les gabarits qui n'ont PAS déjà de copie sous ce répéteur
     if (merged.templateNodeIds && merged.templateNodeIds.length > 0) {
-      duplicateTemplatesPhysically(merged.templateNodeIds);
+      try {
+        // 1) Enfants directs du répéteur
+        const deriveChildrenByParentId = (all: TreeBranchLeafNode[], parentId?: string | null) => {
+          if (!parentId) return [] as TreeBranchLeafNode[];
+          const stack: TreeBranchLeafNode[] = [...all];
+          const out: TreeBranchLeafNode[] = [];
+          while (stack.length) {
+            const n = stack.pop()!;
+            if (n.parentId === parentId) out.push(n);
+            if (n.children && n.children.length) stack.push(...n.children);
+          }
+          return out;
+        };
+
+        const repeaterId = selectedNodeFromTree?.id || selectedNode.id;
+        const childrenOfRepeater = deriveChildrenByParentId(nodes, repeaterId);
+
+        // 2) Set des templates déjà matérialisés via les enfants directs
+        const existingSourceTemplateIds = new Set<string>();
+        childrenOfRepeater.forEach(n => {
+          const meta = (n.metadata || {}) as any;
+          if (meta?.sourceTemplateId) existingSourceTemplateIds.add(meta.sourceTemplateId);
+        });
+
+        // 3) Filet de sécurité: inclure aussi les copies trouvées globalement via metadata.duplicatedFromRepeater
+        const flattenAll = (list: TreeBranchLeafNode[] | undefined): TreeBranchLeafNode[] => {
+          if (!list) return [];
+          const out: TreeBranchLeafNode[] = [];
+          const stack: TreeBranchLeafNode[] = [...list];
+          while (stack.length) {
+            const cur = stack.pop()!;
+            out.push(cur);
+            if (cur.children && cur.children.length) stack.push(...cur.children);
+          }
+          return out;
+        };
+        const allNodesFlat = flattenAll(nodes);
+        allNodesFlat.forEach(n => {
+          const meta = (n.metadata || {}) as any;
+          if (meta?.duplicatedFromRepeater === repeaterId && meta?.sourceTemplateId) {
+            existingSourceTemplateIds.add(meta.sourceTemplateId);
+          }
+        });
+
+        // 3bis) Anti-redup: ajouter les duplications EN COURS (in-flight) pour ce répéteur
+        const inflightSet = inFlightDupByRepeaterRef.current.get(repeaterId);
+        if (inflightSet && inflightSet.size > 0) {
+          inflightSet.forEach(id => existingSourceTemplateIds.add(id));
+          console.log('🛡️ [commitRepeaterMetadata] In-flight protégés:', Array.from(inflightSet));
+        }
+
+        // 4) Calculer les gabarits à créer (sélectionnés - déjà existants)
+        const toCreate = merged.templateNodeIds.filter(id => !existingSourceTemplateIds.has(id));
+
+        console.log('🧪 [commitRepeaterMetadata] Idempotence check:', {
+          repeaterId,
+          selectedTemplateIds: merged.templateNodeIds,
+          existingSourceTemplateIds: Array.from(existingSourceTemplateIds),
+          toCreate
+        });
+
+        if (toCreate.length > 0) {
+          // Marquer comme en cours pour éviter re-duplication avant hydratation
+          const map = inFlightDupByRepeaterRef.current;
+          const set = map.get(repeaterId) || new Set<string>();
+          toCreate.forEach(id => set.add(id));
+          map.set(repeaterId, set);
+          duplicateTemplatesPhysically(toCreate);
+        } else {
+          console.log('✅ [commitRepeaterMetadata] Aucune duplication nécessaire (idempotent)');
+        }
+      } catch (e) {
+        console.warn('⚠️ [commitRepeaterMetadata] Échec contrôle idempotence, fallback duplication complète:', e);
+        // Fallback ultra conservateur si une erreur survient
+        duplicateTemplatesPhysically(merged.templateNodeIds);
+      }
     }
-  }, [patchNode, selectedNode, repeaterTemplateIds, repeaterMinItems, repeaterMaxItems, repeaterAddLabel, REPEATER_DEFAULT_LABEL, duplicateTemplatesPhysically]);
+  }, [patchNode, selectedNode, selectedNodeFromTree, nodes, repeaterTemplateIds, repeaterMinItems, repeaterMaxItems, repeaterAddLabel, REPEATER_DEFAULT_LABEL, duplicateTemplatesPhysically]);
 
-  const handleMinItemsChange = useCallback((value: number | null) => {
-    const numeric = typeof value === 'number' ? value : undefined;
-    setRepeaterMinItems(numeric);
-
-    // 🆕 Bloquer l'hydratation pendant la modification
-    skipNextHydrationRef.current = true;
-    if (hydrationTimeoutRef.current) clearTimeout(hydrationTimeoutRef.current);
-    hydrationTimeoutRef.current = setTimeout(() => {
-      skipNextHydrationRef.current = false;
-    }, 1000);
-
-    if (typeof numeric === 'number' && typeof repeaterMaxItems === 'number' && repeaterMaxItems < numeric) {
-      setRepeaterMaxItems(numeric);
-      commitRepeaterMetadata({ minItems: numeric, maxItems: numeric });
-      return;
+  // 🧹 Anti-redoublons: Nettoyer in-flight une fois que les copies sont détectées dans `nodes`
+  // Raison: On ne doit retirer de l'in-flight que APRÈS que `nodes` soit hydraté avec les vraies copies.
+  // Cela évite les race conditions lors de multiples POST simultanés.
+  useEffect(() => {
+    if (!selectedNode?.id || inFlightDupByRepeaterRef.current.size === 0) return;
+    
+    const repeaterId = selectedNode.id;
+    const inflightSet = inFlightDupByRepeaterRef.current.get(repeaterId);
+    if (!inflightSet || inflightSet.size === 0) return;
+    
+    // Chercher les enfants du répéteur dans `nodes`
+    const deriveChildrenByParentId = (all: TreeBranchLeafNode[], parentId?: string | null) => {
+      if (!parentId) return [] as TreeBranchLeafNode[];
+      const stack: TreeBranchLeafNode[] = [...all];
+      const out: TreeBranchLeafNode[] = [];
+      while (stack.length) {
+        const n = stack.pop()!;
+        if (n.parentId === parentId) out.push(n);
+        if (n.children && n.children.length) stack.push(...n.children);
+      }
+      return out;
+    };
+    
+    const childrenOfRepeater = deriveChildrenByParentId(nodes, repeaterId);
+    
+    // Chercher les sourceTemplateIds des enfants ACTUELS
+    const actualSourceTemplateIds = new Set<string>();
+    childrenOfRepeater.forEach(n => {
+      const meta = (n.metadata || {}) as any;
+      if (meta?.sourceTemplateId) actualSourceTemplateIds.add(meta.sourceTemplateId);
+    });
+    
+    // Nettoyer l'in-flight pour les templates qui sont MAINTENANT trouvés dans `nodes`
+    let cleaned = false;
+    inflightSet.forEach(tplId => {
+      if (actualSourceTemplateIds.has(tplId)) {
+        inflightSet.delete(tplId);
+        cleaned = true;
+      }
+    });
+    
+    if (cleaned) {
+      if (inflightSet.size === 0) {
+        inFlightDupByRepeaterRef.current.delete(repeaterId);
+        console.log('🧹 [Parameters] Nettoyage in-flight COMPLET après hydratation de nodes');
+      } else {
+        inFlightDupByRepeaterRef.current.set(repeaterId, inflightSet);
+        console.log('🧹 [Parameters] Nettoyage in-flight PARTIEL:', Array.from(inflightSet));
+      }
     }
-
-    commitRepeaterMetadata({ minItems: numeric });
-  }, [commitRepeaterMetadata, repeaterMaxItems]);
-
-  const handleMaxItemsChange = useCallback((value: number | null) => {
-    const numeric = typeof value === 'number' ? value : undefined;
-    setRepeaterMaxItems(numeric);
-
-    // 🆕 Bloquer l'hydratation pendant la modification
-    skipNextHydrationRef.current = true;
-    if (hydrationTimeoutRef.current) clearTimeout(hydrationTimeoutRef.current);
-    hydrationTimeoutRef.current = setTimeout(() => {
-      skipNextHydrationRef.current = false;
-    }, 1000);
-
-    if (typeof numeric === 'number' && typeof repeaterMinItems === 'number' && repeaterMinItems > numeric) {
-      setRepeaterMinItems(numeric);
-      commitRepeaterMetadata({ minItems: numeric, maxItems: numeric });
-      return;
-    }
-
-    commitRepeaterMetadata({ maxItems: numeric });
-  }, [commitRepeaterMetadata, repeaterMinItems]);
-
-  const handleAddLabelChange = useCallback((value: string) => {
-    setRepeaterAddLabel(value);
-    commitRepeaterMetadata({ addButtonLabel: value });
-  }, [commitRepeaterMetadata]);
+  }, [nodes, selectedNode?.id]);
 
   // Hydratation à la sélection
   useEffect(() => {
@@ -307,7 +510,15 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     const nodeType = registry.getNodeType(selectedNode.type);
     const ft = (selectedNode.subType as string | undefined)
       || (selectedNode.metadata?.fieldType as string | undefined)
-      || nodeType?.defaultFieldType;
+      || nodeType?.defaultFieldType
+      || selectedNode.type; // ✅ FALLBACK: utiliser le type du nœud si pas de fieldType
+    console.log('🔍 [Parameters] FieldType détecté:', { 
+      type: selectedNode.type, 
+      subType: selectedNode.subType, 
+      metadataFieldType: selectedNode.metadata?.fieldType, 
+      defaultFieldType: nodeType?.defaultFieldType,
+      finalFieldType: ft 
+    });
     setFieldType(ft);
 
     // ❌ DÉSACTIVÉ : Ne pas appliquer l'apparence par défaut ici car ça crée une boucle infinie
@@ -462,6 +673,72 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       size="small"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Barre d'actions rapides */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          {/* Actions Références partagées */}
+          <Space size={6}>
+            <Tooltip title="Appliquer les références partagées depuis le gabarit original sur cette copie (crée/associe les copies -1)">
+              <Button
+                size="small"
+                onClick={async () => {
+                  if (!selectedNode?.id) return;
+                  try {
+                    setApplyingSharedRefs(true);
+                    await api.post(`/api/treebranchleaf/nodes/${selectedNode.id}/apply-shared-references-from-original`);
+                    if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
+                  } catch (e) {
+                    console.error('❌ [Parameters] Erreur application références partagées:', e);
+                  } finally {
+                    setApplyingSharedRefs(false);
+                  }
+                }}
+                loading={applyingSharedRefs}
+                disabled={!selectedNode || props.readOnly}
+              >
+                Appliquer réf. partagées
+              </Button>
+            </Tooltip>
+
+            <Popconfirm
+              title="Délier et supprimer les références partagées ?"
+              description="Les liens vers les références partagées seront supprimés dans cette sous-arborescence. Les copies -1 orphelines seront supprimées."
+              okText="Oui, nettoyer"
+              cancelText="Annuler"
+              onConfirm={async () => {
+                if (!selectedNode?.id) return;
+                try {
+                  setUnlinkingSharedRefs(true);
+                  await api.post(`/api/treebranchleaf/nodes/${selectedNode.id}/unlink-shared-references`, { deleteOrphans: true });
+                  if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
+                } catch (e) {
+                  console.error('❌ [Parameters] Erreur délier/suppression références partagées:', e);
+                } finally {
+                  setUnlinkingSharedRefs(false);
+                }
+              }}
+              okButtonProps={{ danger: true }}
+              disabled={!selectedNode || props.readOnly}
+            >
+              <Button danger size="small" loading={unlinkingSharedRefs} disabled={!selectedNode || props.readOnly}>
+                Supprimer réf. partagées
+              </Button>
+            </Popconfirm>
+          </Space>
+
+          <Popconfirm
+            title="Supprimer ce nœud ?"
+            description="Cette action supprimera également ses enfants."
+            okText="Supprimer"
+            cancelText="Annuler"
+            okButtonProps={{ danger: true }}
+            onConfirm={handleDeleteSelected}
+            disabled={!selectedNode || props.readOnly}
+          >
+            <Button danger size="small" icon={<DeleteOutlined />} disabled={!selectedNode || props.readOnly}>
+              Supprimer ce nœud
+            </Button>
+          </Popconfirm>
+        </div>
         {/* Section Apparence */}
         <div>
           <h5 style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, margin: 0 }}>
@@ -678,31 +955,28 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(config);
                           console.log('🎨 [Apparence] Mapping TBL généré:', tblMapping);
                           
-                          // ✅ SAUVEGARDE SANS .then() pour éviter l'erreur
-                          const saveResult = patchNode({ 
-                            appearanceConfig: config,
-                            ...tblMapping 
-                          });
+                          // ✅ EXTRAIRE LES PARAMÈTRES REPEATER POUR LES COLONNES DÉDIÉES
+                          // RepeaterPanel envoie les valeurs DIRECTEMENT à la racine de config
+                          // ⚠️ IMPORTANT : Utiliser l'état local pour les valeurs repeater, car `config` peut être partiel
+                          const repeaterColumns = {
+                            repeater_addButtonLabel: (config.addButtonLabel && String(config.addButtonLabel).trim()) || null,
+                            repeater_buttonSize: config.buttonSize || 'middle',
+                            repeater_buttonWidth: config.buttonWidth || 'auto',
+                            repeater_iconOnly: config.iconOnly === true,
+                            repeater_minItems: config.minItems != null ? Number(config.minItems) : repeaterMinItems ?? 0,
+                            repeater_maxItems: config.maxItems != null ? Number(config.maxItems) : repeaterMaxItems ?? null,
+                          };
+                          console.warn('🔁 [Apparence] Colonnes repeater extraites:', repeaterColumns);
                           
-                          // Si c'est une Promise, on peut attendre
-                          if (saveResult && typeof saveResult.then === 'function') {
-                            saveResult.then(() => {
-                              console.log('🎨 [Apparence] Sauvegarde terminée, déclenchement refresh...');
-                              
-                              // 🔄 DÉCLENCHER UN REFRESH DES DONNÉES TBL
-                              if (typeof window !== 'undefined' && window.TBL_FORCE_REFRESH) {
-                                console.log('🔄 [Apparence] Refresh TBL déclenché');
-                                window.TBL_FORCE_REFRESH();
-                              }
-                            });
-                          } else {
-                            // Si ce n'est pas une Promise, on fait le refresh immédiatement
-                            console.log('🎨 [Apparence] Sauvegarde debounced, déclenchement refresh...');
-                            if (typeof window !== 'undefined' && window.TBL_FORCE_REFRESH) {
-                              console.log('🔄 [Apparence] Refresh TBL déclenché');
-                              window.TBL_FORCE_REFRESH();
-                            }
-                          }
+                          // ✅ SAUVEGARDE AVEC COLONNES REPEATER
+                          const payload = { 
+                            appearanceConfig: config,
+                            ...tblMapping,
+                            ...repeaterColumns
+                          };
+                          console.warn('💾 [Apparence] PAYLOAD COMPLET ENVOYÉ:', payload);
+                          
+                          patchNode(payload);
                         }}
                         readOnly={props.readOnly}
                       />
@@ -740,20 +1014,22 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   style={{ width: '100%', marginTop: 4 }}
                   placeholder="Sélectionnez les champs gabarit"
                   disabled={props.readOnly}
-                  onChange={(values) => {
+                  onChange={async (values) => {
                     console.log('🎯 [Select onChange] Valeurs sélectionnées:', values);
-                    setRepeaterTemplateIds(values as string[]);
+                    const nextIds = values as string[];
+                    const prevIds = repeaterTemplateIds;
+                    setRepeaterTemplateIds(nextIds);
                     
                     skipNextHydrationRef.current = true;
-                    if (hydrationTimeoutRef.current) clearTimeout(hydrationTimeoutRef.current);
-                    hydrationTimeoutRef.current = setTimeout(() => {
+                    if (hydrationTimeoutRef.current) window.clearTimeout(hydrationTimeoutRef.current);
+                    hydrationTimeoutRef.current = window.setTimeout(() => {
                       skipNextHydrationRef.current = false;
                       console.log('✅ [Parameters] Hydratation réactivée');
                     }, 1000);
                     
                     // Construire un map des labels pour chaque template node
                     const templateNodeLabels: Record<string, string> = {};
-                    const selectedIds = values as string[];
+                    const selectedIds = nextIds;
                     
                     console.log('🏷️ [Parameters] onChange appelé - construction des labels pour:', selectedIds);
                     console.log('🏷️ [Parameters] Nodes disponibles:', nodes?.length || 0);
@@ -784,6 +1060,35 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     
                     console.log('🏷️ [Parameters] Template node labels FINAL:', templateNodeLabels);
                     
+                    // 🗑️ Supprimer les copies existantes des templates retirés
+                    try {
+                      const removed = (prevIds || []).filter(id => !nextIds.includes(id));
+                      if (removed.length > 0) {
+                        console.log('🗑️ [Repeater] Templates retirés → suppression des copies:', removed);
+                        const childrenOfRepeater = selectedNodeFromTree?.children || [];
+                        for (const templateId of removed) {
+                          const copies = childrenOfRepeater.filter(n => {
+                            const meta = (n.metadata || {}) as any;
+                            return meta?.sourceTemplateId === templateId;
+                          });
+                          for (const copy of copies) {
+                            // Purge metadata.repeater.* non nécessaire si suppression totale du nœud
+                            if (typeof onDeleteNode === 'function') {
+                              await Promise.resolve(onDeleteNode(copy));
+                            } else if (tree) {
+                              await api.delete(`/api/treebranchleaf/trees/${tree.id}/nodes/${copy.id}`);
+                            }
+                          }
+                        }
+                        // Rafraîchir l'arbre après suppressions
+                        if (typeof refreshTree === 'function') {
+                          await Promise.resolve(refreshTree());
+                        }
+                      }
+                    } catch (e) {
+                      console.warn('⚠️ [Repeater] Échec suppression copies lors du retrait de template:', e);
+                    }
+
                     commitRepeaterMetadata({ 
                       templateNodeIds: selectedIds,
                       templateNodeLabels
@@ -792,7 +1097,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   allowClear
                 >
                   {(() => {
-                    const allowedTypes: NodeTypeKey[] = ['leaf_field', 'leaf_option', 'leaf_option_field', 'section'];
+                    // Autoriser la sélection de branches/sections entières comme gabarits
+                    const allowedTypes: NodeTypeKey[] = ['branch', 'section', 'leaf_field', 'leaf_option', 'leaf_option_field'];
                     const options: { node: TreeBranchLeafNode; path: string[] }[] = [];
 
                     const visit = (list: TreeBranchLeafNode[] | undefined, trail: string[]) => {
@@ -825,6 +1131,169 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   })()}
                 </Select>
               </div>
+
+              {/* 🗂️ Liste des copies par template sélectionné avec action supprimer */}
+              {repeaterTemplateIds.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <strong style={{ fontSize: 12 }}>Copies actuelles</strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                    {(() => {
+                      // 🔁 Récupérer les enfants du repeater DIRECTEMENT depuis la hiérarchie complète,
+                      // en filtrant par parentId. Cela évite un éventuel état obsolète de selectedNodeFromTree.children.
+                      const deriveChildrenByParentId = (all: TreeBranchLeafNode[], parentId?: string | null) => {
+                        if (!parentId) return [] as TreeBranchLeafNode[];
+                        const stack: TreeBranchLeafNode[] = [...all];
+                        const out: TreeBranchLeafNode[] = [];
+                        while (stack.length) {
+                          const n = stack.pop()!;
+                          if (n.parentId === parentId) out.push(n);
+                          if (n.children && n.children.length) stack.push(...n.children);
+                        }
+                        return out;
+                      };
+
+                      const childrenOfRepeater = deriveChildrenByParentId(nodes, selectedNodeFromTree?.id);
+
+                      console.log('🔎 [Parameters] Copies detection START', {
+                        selectedNodeId: selectedNodeFromTree?.id,
+                        childrenCount: childrenOfRepeater.length,
+                        childrenLabels: childrenOfRepeater.map(c => c.label),
+                        repeaterTemplateIds,
+                        childrenWithMetadata: childrenOfRepeater.map(c => ({
+                          id: c.id,
+                          label: c.label,
+                          parentId: c.parentId,
+                          sourceTemplateId: (c.metadata as any)?.sourceTemplateId
+                        }))
+                      });
+                      // Log ALL children en détail (stringifié pour éviter la collapse de l'inspecteur)
+                      try {
+                        const detailed = childrenOfRepeater.map(c => ({
+                          id: c.id,
+                          label: c.label,
+                          type: c.type,
+                          parentId: c.parentId,
+                          sourceTemplateId: (c.metadata as any)?.sourceTemplateId,
+                          metadataKeys: Object.keys(c.metadata || {})
+                        }));
+                        console.log('🔎 [Parameters] ALL CHILDREN DETAILED JSON:', JSON.stringify(detailed, null, 2));
+                      } catch {
+                        // ignore JSON stringify issues
+                      }
+
+                      const items: React.ReactNode[] = [];
+                      for (const tplId of repeaterTemplateIds) {
+                        const tplNode = (function findNode(list?: TreeBranchLeafNode[], targetId?: string): TreeBranchLeafNode | undefined {
+                          if (!list || !targetId) return undefined;
+                          for (const n of list) {
+                            if (n.id === targetId) return n;
+                            const found = findNode(n.children, targetId);
+                            if (found) return found;
+                          }
+                          return undefined;
+                        })(nodes, tplId);
+                        // 1) Filtrage standard: enfants directs du répéteur
+                        let copies = childrenOfRepeater.filter(n => {
+                          const meta = (n.metadata || {}) as any;
+                          const matches = meta?.sourceTemplateId === tplId;
+                          console.log('🔎 [Parameters] Copy filter DEBUG', {
+                            nodeId: n.id,
+                            nodeLabel: n.label,
+                            sourceTemplateId: meta?.sourceTemplateId,
+                            tplId,
+                            matches,
+                            allMetadata: meta
+                          });
+                          return matches;
+                        });
+
+                        // 2) Filet de sécurité: si 0 copie trouvée comme enfant direct, chercher partout
+                        if (copies.length === 0 && nodes && nodes.length > 0 && selectedNodeFromTree?.id) {
+                          const flattenAll = (list: TreeBranchLeafNode[] | undefined): TreeBranchLeafNode[] => {
+                            if (!list) return [];
+                            const out: TreeBranchLeafNode[] = [];
+                            const stack: TreeBranchLeafNode[] = [...list];
+                            while (stack.length) {
+                              const cur = stack.pop()!;
+                              out.push(cur);
+                              if (cur.children && cur.children.length) stack.push(...cur.children);
+                            }
+                            return out;
+                          };
+                          const allNodesFlat = flattenAll(nodes);
+                          const fallback = allNodesFlat.filter(n => {
+                            const meta = (n.metadata || {}) as any;
+                            return meta?.duplicatedFromRepeater === selectedNodeFromTree.id && meta?.sourceTemplateId === tplId;
+                          });
+                          if (fallback.length > 0) {
+                            const existingIds = new Set(copies.map(c => c.id));
+                            const merged = [...copies, ...fallback.filter(f => !existingIds.has(f.id))];
+                            console.warn('🛟 [Parameters] Fallback copies used (global scan by metadata):', merged.map(m => ({ id: m.id, label: m.label })));
+                            copies = merged;
+                          }
+                        }
+                        items.push(
+                          <div key={`tpl-${tplId}`} style={{ border: '1px dashed #e8e8e8', borderRadius: 4, padding: 6 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                              Gabarit: {tplNode?.label || tplId} ({copies.length} copie{copies.length > 1 ? 's' : ''})
+                            </div>
+                            {copies.length === 0 ? (
+                              <div style={{ fontSize: 11, color: '#999' }}>Aucune copie pour ce gabarit.</div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {copies.map(copy => {
+                                  const meta = (copy.metadata || {}) as any;
+                                  // Essayer d'afficher un libellé cohérent: "<Label gabarit>-<N>"
+                                  // 1) Priorité au copySuffix injecté côté serveur
+                                  let suffix: string | number | undefined = meta?.copySuffix;
+                                  // 2) Sinon, extraire un "-N" final du label
+                                  if (suffix === undefined && typeof copy.label === 'string') {
+                                    const m = copy.label.match(/-(\d+)$/);
+                                    if (m) suffix = m[1];
+                                  }
+                                  const displayLabel = `${tplNode?.label || tplId}${suffix !== undefined ? `-${suffix}` : ''}`;
+
+                                  return (
+                                  <div key={copy.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                    <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {displayLabel}
+                                    </div>
+                                    <Popconfirm
+                                      title="Supprimer cette copie ?"
+                                      okText="Supprimer"
+                                      cancelText="Annuler"
+                                      okButtonProps={{ danger: true }}
+                                      onConfirm={async () => {
+                                        try {
+                                          if (typeof onDeleteNode === 'function') {
+                                            await Promise.resolve(onDeleteNode(copy));
+                                          } else if (tree) {
+                                            await api.delete(`/api/treebranchleaf/trees/${tree.id}/nodes/${copy.id}`);
+                                          }
+                                          if (typeof refreshTree === 'function') {
+                                            await Promise.resolve(refreshTree());
+                                          }
+                                        } catch (e) {
+                                          console.error('❌ [Repeater] Erreur suppression copie:', e);
+                                        }
+                                      }}
+                                    >
+                                      <Button danger size="small" icon={<DeleteOutlined />}>
+                                        Supprimer
+                                      </Button>
+                                    </Popconfirm>
+                                  </div>
+                                );})}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return items;
+                    })()}
+                  </div>
+                </div>
+              )}
             </Space>
           </div>
         )}
@@ -840,7 +1309,29 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             {capabilities.map(cap => {
               const isActive = capsState[cap.key] || false;
               const isOpen = openCaps.has(cap.key);
-              const hasData = selectedNode?.config?.[cap.key] && Object.keys(selectedNode.config[cap.key]).length > 0;
+              
+              // 🔧 FIX: Vérifier hasData différemment selon la capacité
+              const hasData = (() => {
+                switch(cap.key) {
+                  case 'table':
+                    return !!selectedNode?.hasTable; // Utiliser hasTable au lieu de config.table
+                  case 'formula':
+                    return !!selectedNode?.hasFormula;
+                  case 'condition':
+                  case 'conditions':
+                    return !!selectedNode?.hasCondition;
+                  case 'data':
+                    return !!selectedNode?.hasData;
+                  case 'api':
+                    return !!selectedNode?.hasAPI;
+                  case 'link':
+                    return !!selectedNode?.hasLink;
+                  case 'markers':
+                    return !!selectedNode?.hasMarkers;
+                  default:
+                    return selectedNode?.config?.[cap.key] && Object.keys(selectedNode.config[cap.key]).length > 0;
+                }
+              })();
               
               const getCapabilityIcon = (key: string) => {
                 switch(key) {

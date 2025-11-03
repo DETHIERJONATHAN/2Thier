@@ -444,6 +444,55 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
         const minItems = repeaterMeta.minItems ?? 1;
         const maxItems = repeaterMeta.maxItems ?? 10;
         const addButtonLabel = repeaterMeta.addButtonLabel || 'Ajouter une entrée';
+        // 🎨 Apparence du bouton d'ajout (respecte les réglages du répétiteur)
+        const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = (repeaterMeta.buttonSize as any) || 'middle';
+        const buttonWidth: 'auto' | 'half' | 'full' = (repeaterMeta.buttonWidth as any) || 'auto';
+        const iconOnly: boolean = !!repeaterMeta.iconOnly;
+
+        // Helpers de style (alignés avec TBLFieldRendererAdvanced)
+        const getAntSize = (): 'small' | 'middle' | 'large' => (buttonSize === 'tiny' ? 'small' : (buttonSize as 'small' | 'middle' | 'large'));
+        const getAddButtonHeight = () => {
+          switch (buttonSize) {
+            case 'tiny': return iconOnly ? '28px' : '30px';
+            case 'small': return '32px';
+            case 'large': return '48px';
+            case 'middle':
+            default: return '40px';
+          }
+        };
+        const getAddButtonWidth = () => {
+          if (iconOnly) {
+            switch (buttonSize) {
+              case 'tiny': return '28px';
+              case 'small': return '32px';
+              case 'large': return '48px';
+              case 'middle':
+              default: return '40px';
+            }
+          }
+          // Gestion simple pour half/full si besoin d'élargir
+          if (buttonWidth === 'full') return '100%';
+          if (buttonWidth === 'half') return '50%';
+          return undefined; // auto -> largeur par défaut
+        };
+        const getAddButtonFontSize = () => {
+          if (iconOnly) {
+            switch (buttonSize) {
+              case 'tiny': return '14px';
+              case 'small': return '16px';
+              case 'large': return '20px';
+              case 'middle':
+              default: return '18px';
+            }
+          }
+          switch (buttonSize) {
+            case 'tiny': return '12px';
+            case 'small': return '13px';
+            case 'large': return '16px';
+            case 'middle':
+            default: return '14px';
+          }
+        };
 
         // État local du repeater (nombre d'instances actuelles)
         const currentInstances = (formData[`${node.id}_instances`] as number) || minItems;
@@ -568,12 +617,23 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
             {currentInstances < maxItems && (
               <Button
                 type="dashed"
-                block
+                block={!iconOnly}
+                size={getAntSize()}
                 icon={<PlusOutlined />}
                 onClick={handleAddInstance}
-                style={{ marginTop: '12px' }}
+                style={{
+                  marginTop: '12px',
+                  height: getAddButtonHeight(),
+                  width: getAddButtonWidth(),
+                  fontSize: getAddButtonFontSize(),
+                  minWidth: iconOnly ? getAddButtonWidth() : undefined,
+                  padding: iconOnly ? '0' : undefined,
+                  display: iconOnly ? 'inline-flex' : undefined,
+                  alignItems: iconOnly ? 'center' : undefined,
+                  justifyContent: iconOnly ? 'center' : undefined
+                }}
               >
-                {addButtonLabel}
+                {!iconOnly && addButtonLabel}
               </Button>
             )}
 

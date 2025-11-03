@@ -7242,7 +7242,7 @@ pg-types@2.2.0:
     postgres-date "~1.0.4"
     postgres-interval "^1.1.0"
 
-pg@^8.13.1, pg@>=8.0:
+pg@^8.16.3, pg@>=8.0:
   version "8.16.3"
   resolved "https://registry.npmjs.org/pg/-/pg-8.16.3.tgz"
   integrity sha512-enxc1h0jA/aq5oSDMvqyW3q89ra6XIIDZgCX9vkMrnz5DFTw/Ny3Li2lFQ+pt3L6MCgm/5o2o8HW9hiJji+xvw==

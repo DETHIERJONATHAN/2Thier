@@ -588,10 +588,53 @@ const TBL: React.FC<TBLProps> = ({
     if (typeof window !== 'undefined') {
       window.TBL_FORCE_REFRESH = () => {
         console.log('🔄 [TBL] Force refresh déclenché depuis Parameters');
+        console.log('🔄 [TBL] useFixed:', useFixed);
+        console.log('🔄 [TBL] newData.refetch:', typeof newData.refetch);
+        console.log('🔄 [TBL] oldData.refetch:', typeof oldData.refetch);
+        
         if (useFixed && newData.refetch) {
+          console.log('🔄 [TBL] Appel de newData.refetch()');
           newData.refetch();
         } else if (!useFixed && oldData.refetch) {
+          console.log('🔄 [TBL] Appel de oldData.refetch()');
           oldData.refetch();
+        } else {
+          console.warn('⚠️ [TBL] Aucune fonction refetch disponible !');
+        }
+      };
+      // 🔎 Vérification rapide des champs conditionnels injectés par instance (original vs copies)
+      (window as any).TBL_VERIFY_CONDITIONALS = () => {
+        try {
+          const nodes = Array.from(document.querySelectorAll('.conditional-field-injected')) as HTMLElement[];
+          const items = nodes.map(n => ({
+            parentFieldId: n.dataset.parentFieldId || 'unknown',
+            parentOption: n.dataset.parentOptionValue || '',
+            fieldId: n.dataset.fieldId || '',
+            label: n.dataset.fieldLabel || ''
+          }));
+          const grouped: Record<string, { option: string; fields: { fieldId: string; label: string }[] }> = {};
+          for (const it of items) {
+            const key = `${it.parentFieldId}::${it.parentOption}`;
+            if (!grouped[key]) grouped[key] = { option: it.parentOption, fields: [] } as any;
+            grouped[key].fields.push({ fieldId: it.fieldId, label: it.label });
+          }
+          console.group('🧪 TBL VERIFY - Champs conditionnels injectés par parent');
+          console.log('Total champs conditionnels visibles:', items.length);
+          const parents = new Set(items.map(i => i.parentFieldId));
+          console.log('Parents distincts (instances):', Array.from(parents));
+          Object.entries(grouped).forEach(([key, group]) => {
+            const [parentFieldId] = key.split('::');
+            console.group(`Parent ${parentFieldId} (option="${group.option}")`);
+            group.fields.forEach(f => console.log(`- ${f.label} [${f.fieldId}]`));
+            console.groupEnd();
+          });
+          console.groupEnd();
+          try { message.success(`Vérification: ${items.length} champs conditionnels, ${parents.size} parents distincts.`); } catch {/* noop */}
+          return { count: items.length, parents: Array.from(parents), details: grouped };
+        } catch (e) {
+          console.error('❌ TBL VERIFY a échoué:', e);
+          try { message.error('Vérification échouée (voir console)'); } catch {/* noop */}
+          return null;
         }
       };
       
@@ -600,9 +643,10 @@ const TBL: React.FC<TBLProps> = ({
         if (window.TBL_FORCE_REFRESH) {
           delete window.TBL_FORCE_REFRESH;
         }
+        try { if ((window as any).TBL_VERIFY_CONDITIONALS) delete (window as any).TBL_VERIFY_CONDITIONALS; } catch {/* noop */}
       };
     }
-  }, [useFixed, newData.refetch, oldData.refetch]);
+  }, [useFixed, newData, oldData]);
 
   const handleFieldChange = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
     console.log(`🔄🔄🔄 [TBL] handleFieldChange appelé: fieldId=${fieldId}, value=${value}`);
@@ -724,6 +768,44 @@ const TBL: React.FC<TBLProps> = ({
       const next: Record<string, unknown> = { ...prev, [fieldId]: value };
       console.log(`✅✅✅ [TBL] setFormData - Mise à jour: fieldId=${fieldId}, value=${value}, formData.keys=${Object.keys(next).length}`);
       console.log(`📦 [TBL] formData COMPLET après mise à jour:`, next);
+      
+      // 🔗 NOUVEAU : Si le champ est une référence partagée (alias), ajouter aussi la clé shared-ref-*
+      try {
+        // Chercher le champ dans la configuration pour voir s'il a un sharedReferenceId
+        let fieldDef: any = null;
+        for (const tab of tabs) {
+          for (const section of tab.sections) {
+            const match = section.fields.find((sf: any) => sf.id === fieldId);
+            if (match) {
+              fieldDef = match;
+              break;
+            }
+          }
+          if (fieldDef) break;
+        }
+
+        // Si le champ a un sharedReferenceId, ajouter la valeur avec cette clé aussi
+        if (fieldDef?.sharedReferenceId) {
+          const sharedRefKey = fieldDef.sharedReferenceId;
+          console.log(`🔗 [TBL] Champ ${fieldId} est un alias de ${sharedRefKey}, ajout au formData`);
+          next[sharedRefKey] = value;
+        }
+
+        // Si le fieldId est déjà un shared-ref-*, chercher les aliases pour les mettre à jour aussi
+        if (fieldId.startsWith('shared-ref-')) {
+          for (const tab of tabs) {
+            for (const section of tab.sections) {
+              const aliases = section.fields.filter((sf: any) => sf.sharedReferenceId === fieldId);
+              aliases.forEach((alias: any) => {
+                console.log(`🔗 [TBL] Mise à jour alias ${alias.id} depuis shared-ref ${fieldId}`);
+                next[alias.id] = value;
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[TBL] Erreur lors de la gestion des shared-ref:', err);
+      }
       
       try {
         // Exposer en debug (lecture) pour analyse miroir
@@ -1587,6 +1669,9 @@ const TBL: React.FC<TBLProps> = ({
                     <>
                       <Button onClick={() => { void fillAllFields(false); }} block={actionButtonBlock}>Remplir tout (admin)</Button>
                       <Button type="primary" onClick={() => { void fillAllFields(true); }} block={actionButtonBlock}>Remplir + Enregistrer</Button>
+                      <Button onClick={() => { try { (window as any).TBL_VERIFY_CONDITIONALS?.(); } catch {/* noop */} }} block={actionButtonBlock}>
+                        Vérifier injections
+                      </Button>
                     </>
                   )}
                   {/* Bouton Actualiser retiré (reload state supprimé) */}
@@ -2252,6 +2337,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
               onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
               treeId={treeId}
               allNodes={rawNodes}
+              allSections={sections}
               disabled={disabled}
             />
           ))}
@@ -2273,6 +2359,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
           onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
           treeId={treeId}
           allNodes={rawNodes}
+          allSections={sections}
           disabled={disabled}
         />
       );

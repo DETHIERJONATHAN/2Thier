@@ -114,7 +114,8 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
   const loadTreeNodes = useCallback(async (treeId: string) => {
     try {
       // console.log('🔍 [TreeBranchLeafWrapper] Chargement nœuds pour arbre:', treeId); // ✨ Log réduit
-      const flatNodesData = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
+      const cacheBuster = `?t=${new Date().getTime()}`;
+      const flatNodesData = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes${cacheBuster}`);
       
       // console.log(...) // ✨ Log réduit
       /* {

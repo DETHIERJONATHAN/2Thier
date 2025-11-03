@@ -30,6 +30,22 @@
 
 import { PrismaClient } from '@prisma/client';
 
+function formatDebugValue(value: unknown): string {
+  if (value === null || value === undefined) return '∅';
+  if (typeof value === 'string') {
+    return value.length > 120 ? `${value.slice(0, 117)}...` : value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized.length > 120 ? `${serialized.slice(0, 117)}...` : serialized;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 📋 TYPES ET INTERFACES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -275,8 +291,11 @@ async function getNodeValue(
   // 🎯 PRIORITÉ 1: Vérifier dans valueMap si fourni
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
+    console.log(`[INTERPRETER][getNodeValue] valueMap hit ${nodeId} → ${formatDebugValue(val)}`);
     return val !== null && val !== undefined ? String(val) : null;
   }
+
+  console.log(`[INTERPRETER][getNodeValue] DB fallback ${nodeId}`);
   
   // 🎯 PRIORITÉ 2: Requête Prisma pour récupérer depuis la base (fallback rare)
   const data = await prisma.treeBranchLeafSubmissionData.findFirst({
@@ -288,6 +307,8 @@ async function getNodeValue(
       value: true
     }
   });
+
+  console.log(`[INTERPRETER][getNodeValue] DB result ${nodeId} → ${formatDebugValue(data?.value ?? null)}`);
   
   // Retourner la valeur ou null
   return data?.value || null;
@@ -672,7 +693,7 @@ async function interpretCondition(
   // ═══════════════════════════════════════════════════════════════════════
   // 🎯 ÉTAPE 6 : Déterminer quelle branche est vraie
   // ═══════════════════════════════════════════════════════════════════════
-  const selectedBranch = conditionMet ? branch : condSet.fallback;
+  const _selectedBranch = conditionMet ? branch : condSet.fallback;
   const branchName = conditionMet ? 'ALORS' : 'SINON';
   
   console.log(`[CONDITION] 🎯 Branche sélectionnée: ${branchName}`);

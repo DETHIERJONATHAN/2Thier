@@ -182,7 +182,24 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
 
     console.log(`[NEW POST /tables] ✅ Transaction terminée avec succès ! Table ${result.id} créée.`);
 
-    // 🔄 MISE À JOUR AUTOMATIQUE DES SELECT CONFIGS
+    // 🎯 Mettre à jour hasTable du nœud
+    await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { hasTable: true }
+    });
+    console.log(`[NEW POST /tables] ✅ hasTable mis à jour pour node ${nodeId}`);
+
+    // 📊 MAJ linkedTableIds du nœud propriétaire
+    try {
+      const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
+      const current = node?.linkedTableIds ?? [];
+      const next = Array.from(new Set([...(current || []), result.id]));
+      await prisma.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
+    } catch (e) {
+      console.warn('[NEW POST /tables] Warning updating linkedTableIds:', (e as Error).message);
+    }
+
+    // �🔄 MISE À JOUR AUTOMATIQUE DES SELECT CONFIGS
     // Si d'autres champs référencent une ancienne table pour ce même nœud,
     // on les met à jour pour pointer vers la nouvelle table
     try {
@@ -530,8 +547,149 @@ router.delete('/tables/:id', async (req, res) => {
       return res.status(403).json({ error: 'Accès non autorisé' });
     }
 
-    // Supprimer la table (les colonnes et lignes seront supprimées en cascade)
+    // 1️⃣ Supprimer la table (les colonnes et lignes seront supprimées en cascade via Prisma)
     await prisma.treeBranchLeafNodeTable.delete({ where: { id } });
+    console.log(`[NEW DELETE /tables/:id] ✅ Table ${id} supprimée (+ colonnes/lignes en cascade)`);
+
+    // 🔍 Nettoyer les champs Select/Cascader qui utilisent cette table comme lookup
+    // 💡 UTILISER LA MÊME LOGIQUE QUE LE BOUTON "DÉSACTIVER LOOKUP" QUI FONCTIONNE PARFAITEMENT
+    try {
+      const selectConfigsUsingTable = await prisma.treeBranchLeafSelectConfig.findMany({
+        where: { tableReference: id },
+        select: { nodeId: true }
+      });
+
+      if (selectConfigsUsingTable.length > 0) {
+        console.log(`[NEW DELETE /tables/:id] 🧹 ${selectConfigsUsingTable.length} champ(s) Select/Cascader référencent cette table - DÉSACTIVATION LOOKUP`);
+        
+        // Pour chaque champ, appliquer la MÊME logique que le bouton "Désactiver lookup"
+        for (const config of selectConfigsUsingTable) {
+          const selectNode = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: config.nodeId },
+            select: { 
+              label: true,
+              metadata: true
+            }
+          });
+
+          if (selectNode) {
+            console.log(`[NEW DELETE /tables/:id] 🔧 Désactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
+            
+            // 1️⃣ Nettoyer metadata.capabilities.table (comme le fait le bouton Désactiver)
+            const oldMetadata = (selectNode.metadata || {}) as Record<string, unknown>;
+            const oldCapabilities = (oldMetadata.capabilities || {}) as Record<string, unknown>;
+            const newCapabilities = {
+              ...oldCapabilities,
+              table: {
+                enabled: false,
+                activeId: null,
+                instances: null,
+                currentTable: null,
+              }
+            };
+            const newMetadata = {
+              ...oldMetadata,
+              capabilities: newCapabilities
+            };
+
+            // 2️⃣ Mettre à jour le nœud (même logique que PUT /capabilities/table avec enabled: false)
+            await prisma.treeBranchLeafNode.update({
+              where: { id: config.nodeId },
+              data: {
+                hasTable: false,
+                table_activeId: null,
+                table_instances: null,
+                table_name: null,
+                table_type: null,
+                table_meta: null,
+                table_columns: null,
+                table_rows: null,
+                table_data: null,
+                metadata: JSON.parse(JSON.stringify(newMetadata)),
+                select_options: [],
+                updatedAt: new Date()
+              }
+            });
+
+            // 3️⃣ Supprimer la configuration SELECT (comme le fait le bouton Désactiver)
+            await prisma.treeBranchLeafSelectConfig.deleteMany({
+              where: { nodeId: config.nodeId }
+            });
+            
+            console.log(`[NEW DELETE /tables/:id] ✅ Lookup désactivé pour "${selectNode.label}" - champ débloqué`);
+          }
+        }
+
+        console.log(`[NEW DELETE /tables/:id] ✅ ${selectConfigsUsingTable.length} champ(s) Select DÉBLOQUÉS (lookup désactivé)`);
+      }
+    } catch (selectConfigError) {
+      console.error(`[NEW DELETE /tables/:id] ⚠️ Erreur désactivation lookups:`, selectConfigError);
+      // On continue quand même
+    }
+
+    // 2️⃣ Nettoyer TOUS les champs liés aux tables dans le nœud
+    if (table.nodeId) {
+      const node = await prisma.treeBranchLeafNode.findUnique({ 
+        where: { id: table.nodeId }, 
+        select: { 
+          linkedTableIds: true,
+          table_activeId: true,
+          table_instances: true
+        } 
+      });
+
+      // 🔄 Nettoyer linkedTableIds
+      const currentLinkedIds = node?.linkedTableIds ?? [];
+      const nextLinkedIds = currentLinkedIds.filter(x => x !== id);
+
+      // 🔄 Si la table supprimée était active, réinitialiser table_activeId
+      const wasActiveTable = node?.table_activeId === id;
+      
+      // 🔄 Nettoyer table_instances (retirer l'instance de cette table)
+      let cleanedInstances = node?.table_instances ?? {};
+      if (typeof cleanedInstances === 'object' && cleanedInstances !== null) {
+        const instances = cleanedInstances as Record<string, unknown>;
+        if (instances[id]) {
+          delete instances[id];
+          cleanedInstances = instances;
+        }
+      }
+
+      // 🔄 Compter les tables restantes pour hasTable
+      const remainingTables = await prisma.treeBranchLeafNodeTable.count({
+        where: { nodeId: table.nodeId }
+      });
+
+      // 📝 Mise à jour du nœud avec TOUS les nettoyages
+      await prisma.treeBranchLeafNode.update({
+        where: { id: table.nodeId },
+        data: {
+          hasTable: remainingTables > 0,
+          linkedTableIds: { set: nextLinkedIds },
+          table_activeId: wasActiveTable ? null : undefined, // Réinitialiser si c'était la table active
+          table_instances: cleanedInstances,
+          // Réinitialiser les autres champs si plus de tables
+          ...(remainingTables === 0 && {
+            table_name: null,
+            table_type: null,
+            table_meta: null,
+            table_columns: null,
+            table_rows: null,
+            table_data: null,
+            table_importSource: null,
+            table_isImported: false
+          })
+        }
+      });
+
+      console.log(`[NEW DELETE /tables/:id] ✅ Nœud ${table.nodeId} nettoyé:`, {
+        hasTable: remainingTables > 0,
+        linkedTableIds: nextLinkedIds.length,
+        table_activeId_reset: wasActiveTable,
+        table_instances_cleaned: true,
+        all_fields_reset: remainingTables === 0
+      });
+    }
 
     console.log(`[NEW DELETE /tables/:id] ✅ Table ${id} supprimée avec succès (+ colonnes et lignes en cascade)`);
     res.json({ success: true, message: 'Table supprimée avec succès' });

@@ -34,6 +34,83 @@ function buildSuppressMatchers(): RegExp[] {
     /TreeBranchLeaf SMART/, // info/warn répétitives
     /TreeBranchLeaf\b/i, // autres logs TreeBranchLeaf
     /^tbl:/i, // scripts de debug "tbl:..."
+
+    // Logs verbeux TBL HOOK
+    /\[TBL HOOK FIXED\]/,
+    /🔔🔔🔔🔔🔔/,
+    /✅✅✅✅✅/,
+    /🎯🎯🎯🎯🎯/,
+    /EVENT LISTENER USEEFFECT/,
+    /LISTENER ATTACHÉ À WINDOW/,
+    /EVENT REÇU.*TBL_FORM_DATA_CHANGED/,
+
+    // Logs TBL.tsx
+    /🔄🔄🔄.*\[TBL\] handleFieldChange/,
+    /✅✅✅.*\[TBL\] setFormData/,
+    /📦.*\[TBL\] formData COMPLET/,
+    /🚀.*\[TBL\] Événement TBL_FORM_DATA_CHANGED/,
+    /\[TBL\].*DEBUG rawNodes/,
+
+    // Logs de style/onglets
+    /⚪ \[ONGLET NORMAL\]/,
+    /🎯 \[STYLE DEBUG\]/,
+    /⚪ \[STYLE\].*→ NORMAL/,
+    /🟢 \[STYLE\].*→ VERT/,
+
+    // Logs CalculatedFieldDisplay
+    /\[CalculatedFieldDisplay\].*Rendu avec/,
+    /🔴.*\[CalculatedFieldDisplay\].*Valeur BRUTE/,
+    /\[CalculatedFieldDisplay\].*État du hook/,
+
+    // Logs useTBLTooltip (très verbeux)
+    /🚨 \[useTBLTooltip\] APPELÉ/,
+    /🔍 \[useTBLTooltip\] OBJET FIELD COMPLET/,
+    /✅ \[useTBLTooltip\] AppearanceConfig/,
+    /🔍 \[useTBLTooltip\] Propriétés field/,
+    /🔥 \[useTBLTooltip\] TOUTES LES PROPRIÉTÉS/,
+    /🔍 \[useTBLTooltip\]\[.*\] Données brutes/,
+    /❌ \[useTBLTooltip\]\[.*\] AUCUN TOOLTIP/,
+    /❌ \[useTBLTooltip\] Pas d'appearanceConfig/,
+
+    // Logs CASCADER
+    /🔍 \[CASCADER DEBUG\] Champ/,
+    /✅ \[CASCADER\] Options construites/,
+
+    // Logs useCalculatedFieldValue
+    /\[useCalculatedFieldValue\].*Appel API/,
+    /\[useCalculatedFieldValue\].*Valeur sélectionnée/,
+
+    // Logs useTBLTableLookup
+    /\[DEBUG\]\[Test - liste\]/,
+    /📊 \[extractOptions\]/,
+
+    // Logs AuthProvider (redondants)
+    /\[AuthProvider\].*Premier fetch/,
+    /\[AuthProvider\].*Pas de user\/org/,
+    /\[AuthProvider\].*Cleanup effect/,
+    /\[AuthProvider\].*response:/,
+    /\[AuthProvider\].*Organisation restaurée/,
+    /\[AuthProvider\].*Tentative de connexion/,
+    /\[AuthProvider\].*Chargement modules/,
+    /\[AuthProvider\].*SuperAdmin.*permission/,
+    /\[AuthProvider\].*Réponse de.*auto-google-auth/,
+    /\[AuthProvider\].*Connexion Google/,
+    /\[AuthProvider\].*Modules actifs chargés/,
+    /\[AuthProvider\].*Modules déjà chargés/,
+
+    // Logs AppLayout
+    /\[AppLayout\].*Layout complet initialisé/,
+    /\[AppLayout\] User:/,
+    /\[AppLayout\] Organization:/,
+    /\[AppLayout\] Modules visibles:/,
+    /\[AppLayout\] Loading:/,
+    /\[AppLayout\] IsSuperAdmin:/,
+    /\[AppLayout\] Modules sample:/,
+
+    // Logs blocksSlice
+    /\[DEBUG\] blocksSlice/,
+    /\[DEBUG\] store\/index/,
+    /\[DEBUG\] createBlocksSlice/,
   ];
   return patterns;
 }

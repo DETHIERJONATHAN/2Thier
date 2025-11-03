@@ -557,29 +557,9 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         setInstances(tables);
 
         if (!tables.length) {
-          // âœ… CrÃ©er automatiquement une premiÃ¨re instance si aucune n'existe
-          console.log('ðŸ—‚ï¸ TablePanel: Aucune instance, crÃ©ation auto...');
-          const firstInstance = {
-            name: 'Tableau 1',
-            description: '',
-            type: 'columns' as const,
-            columns: [],
-            rows: [],
-            data: [],
-            meta: { lookup: { enabled: true, mode: 'columns' as const, exposeColumns: [] } },
-          };
-
-          try {
-            const created = await api.post(`/api/treebranchleaf/nodes/${nodeId}/tables`, firstInstance);
-            const savedInstance = normalizedToInstance(created as NormalizedTableInstanceResponse);
-            console.log('ðŸ—‚ï¸ TablePanel: âœ… PremiÃ¨re instance crÃ©Ã©e:', savedInstance.id);
-            setInstances([savedInstance]);
-            setActiveId(savedInstance.id);
-            setCfg(instanceToConfig(savedInstance));
-          } catch (error) {
-            console.error('ðŸ—‚ï¸ TablePanel: âŒ Erreur crÃ©ation auto:', error);
-            setActiveId(null);
-          }
+          //  PAS de création automatique : l'utilisateur doit créer la table manuellement
+          console.log(' TablePanel: Aucune instance trouvée');
+          setActiveId(null);
           return;
         }
 
@@ -1973,3 +1953,4 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
 };
 
 export default TablePanel;
+
