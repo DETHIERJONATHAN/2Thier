@@ -48672,7 +48672,7 @@ logSecurityEvent("SERVER_STARTUP", {
   securityLevel: "ENTERPRISE"
 }, "info");
 var app = (0, import_express84.default)();
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 4e3);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
 var GIT_SHA = process.env.GIT_SHA || "unknown";

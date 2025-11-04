@@ -59,30 +59,27 @@ export function useAuthenticatedApi() {
   const navigate = useNavigate();
   const { logout: authLogout, currentOrganization } = useAuth();
 
-  const envApiBase = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL;
   const apiBaseUrl = useMemo(() => {
-    let base = envApiBase?.trim();
-
-    if (typeof window !== 'undefined') {
-      const runtimeOverride = (window as typeof window & { __API_BASE_URL?: string }).__API_BASE_URL;
-      if (runtimeOverride) {
-        base = runtimeOverride.trim();
-      }
+    if (typeof window === 'undefined') {
+      // SSR fallback
+      return 'http://localhost:4000';
     }
 
-    // 🌐 Par défaut, on utilise l'URL courante en relatif (sauf en SSR où on fallback sur localhost)
-    if (!base || base.length === 0) {
-      if (typeof window !== 'undefined') {
-        // En mode client, utiliser l'URL relative (même domaine que l'app)
-        base = '';
-      } else {
-        // En mode SSR/build, fallback sur localhost
-        base = 'http://localhost:4000';
-      }
+    // ✅ PRIORITÉ 1: Runtime override (défini dans le <script> inline de index.html)
+    const runtimeOverride = (window as typeof window & { __API_BASE_URL?: string }).__API_BASE_URL;
+    if (runtimeOverride !== undefined) {
+      return runtimeOverride.trim().replace(/\/$/, '');
     }
 
-    return base.replace(/\/$/, '');
-  }, [envApiBase]);
+    // ✅ PRIORITÉ 2: Vite build-time env variables (vides en prod)
+    const envApiBase = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL;
+    if (envApiBase && envApiBase.trim()) {
+      return envApiBase.trim().replace(/\/$/, '');
+    }
+
+    // 🌐 FALLBACK: URLs relatives en production (même domaine)
+    return '';
+  }, []);
 
   const logout = useCallback(() => {
     authLogout();

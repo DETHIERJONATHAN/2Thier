@@ -59,8 +59,8 @@ logSecurityEvent('SERVER_STARTUP', {
 
 const app = express();
 
-// 🌐 Configuration pour Cloud Run / reverse proxies
-app.set('trust proxy', true);
+// 🌐 Configuration pour Cloud Run / reverse proxies (1 = single proxy, not true which is permissive)
+app.set('trust proxy', 1);
 
 const port = Number(process.env.PORT || 4000);
 // 📦 Métadonnées build (injectées par le script de déploiement)

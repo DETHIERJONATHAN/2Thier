@@ -9,8 +9,27 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>2Thier CRM - Gestion de Formulaires</title>
-    <!-- 🔧 Configuration d'environnement runtime (AVANT React) -->
-    <script src="/env-config.js"></script>
+    <!-- 🔧 Configuration d'environnement runtime INLINE (AVANT tout code) -->
+    <script>
+      (function() {
+        // Déterminer si c'est production ou développement
+        const isDev = !window.location.hostname.includes('2thier.be') && 
+                      !window.location.hostname.includes('devis1min.be') &&
+                      window.location.hostname !== '127.0.0.1';
+        
+        // En production: URLs relatives (même domaine app.2thier.be/api)
+        // En développement: localhost:4000
+        const apiBaseUrl = isDev ? 'http://localhost:4000' : '';
+        
+        // Injecter les configurations globales IMMÉDIATEMENT
+        window.__API_BASE_URL = apiBaseUrl;
+        window.__BACKEND_URL = apiBaseUrl;
+        
+        console.log('[ENV-CONFIG] API Base URL:', apiBaseUrl);
+        console.log('[ENV-CONFIG] Host:', window.location.hostname);
+        console.log('[ENV-CONFIG] Mode:', isDev ? 'DEVELOPMENT' : 'PRODUCTION');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
