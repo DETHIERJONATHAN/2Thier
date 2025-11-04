@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import expressWinston from 'express-winston';
 import apiRouter from './routes/index';
+import { prisma } from './lib/prisma';
 
 // 🔥 ROUTES TBL SPÉCIALISÉES
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
@@ -219,6 +220,18 @@ app.get('/health', (_req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
   });
+});
+
+// Vérification de la connectivité base de données (utilitaire de debug/ops)
+app.get('/api/health/db', async (_req, res) => {
+  try {
+    // Vérifie que le moteur répond sans forcer d'autres requêtes applicatives
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ db: 'OK', timestamp: new Date().toISOString() });
+  } catch (e) {
+    const message = (e as Error)?.message || 'Unknown error';
+    res.status(503).json({ db: 'DOWN', error: message, timestamp: new Date().toISOString() });
+  }
 });
 
 // 🌐 MIDDLEWARE DE DÉTECTION AUTOMATIQUE DES SITES VITRINES
