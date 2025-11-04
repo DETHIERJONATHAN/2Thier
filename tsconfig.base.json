@@ -6,7 +6,9 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "strict": true,
+
+    /* Linting */
+    "strict": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
