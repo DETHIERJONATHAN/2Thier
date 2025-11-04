@@ -4,7 +4,7 @@
     "outDir": "./dist",
     "noEmit": false,
     "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "moduleResolution": "node",
     "sourceMap": true,
     "isolatedModules": false
   },
