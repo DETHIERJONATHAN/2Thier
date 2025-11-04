@@ -277,6 +277,28 @@ if (process.env.NODE_ENV === 'production') {
       }
     });
     
+    // 🔧 Service Worker (sw.js)
+    app.get('/sw.js', (req, res) => {
+      const swPath = path.join(distDir, 'sw.js');
+      if (fs.existsSync(swPath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(swPath);
+      } else {
+        res.status(404).end();
+      }
+    });
+    
+    // 🔧 Configuration d'environnement runtime (env-config.js)
+    app.get('/env-config.js', (req, res) => {
+      const envPath = path.join(distDir, 'env-config.js');
+      if (fs.existsSync(envPath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(envPath);
+      } else {
+        res.status(404).end();
+      }
+    });
+    
     // 🌐 RENDU DES SITES VITRINES OU FALLBACK CRM
     // Cette route attrape TOUT ce qui n'est pas /api/ ou /assets/
     app.get(/^(?!\/api\/|\/assets\/).*/, (req: any, res, _next) => {

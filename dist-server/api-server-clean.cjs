@@ -2329,7 +2329,14 @@ void (async () => {
 // src/controllers/authController.ts
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
-var JWT_SECRET = process.env.JWT_SECRET || "development-secret-key";
+var getJWTSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.warn("[AUTH] \u26A0\uFE0F JWT_SECRET non disponible, utilisation de la cl\xE9 de d\xE9veloppement");
+    return "development-secret-key";
+  }
+  return secret;
+};
 var login = async (req2, res) => {
   try {
     const { email, password } = req2.body;
@@ -2386,7 +2393,7 @@ var login = async (req2, res) => {
         isSuperAdmin: isSuperAdmin2,
         role: isSuperAdmin2 ? "super_admin" : userRoles[0]?.name || user.role || "user"
       },
-      JWT_SECRET,
+      getJWTSecret(),
       { expiresIn: "24h" }
     );
     res.cookie("token", token, {
@@ -2409,7 +2416,7 @@ var getMe = async (req2, res) => {
     if (!token) {
       return res.status(401).json({ message: "Non authentifi\xE9" });
     }
-    const decoded = import_jsonwebtoken.default.verify(token, JWT_SECRET);
+    const decoded = import_jsonwebtoken.default.verify(token, getJWTSecret());
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       include: {
@@ -2503,12 +2510,12 @@ __export(config_prod_exports, {
   ENABLE_API_LOGS: () => ENABLE_API_LOGS,
   FORCE_REAL_DATA: () => FORCE_REAL_DATA,
   IS_PRODUCTION: () => IS_PRODUCTION,
-  JWT_SECRET: () => JWT_SECRET2,
+  JWT_SECRET: () => JWT_SECRET,
   SECURITY: () => SECURITY,
   TOKEN_EXPIRY: () => TOKEN_EXPIRY
 });
 var IS_PRODUCTION = true;
-var JWT_SECRET2 = process.env.JWT_SECRET || "prod_secret_key_change_me";
+var JWT_SECRET = process.env.JWT_SECRET || "prod_secret_key_change_me";
 var TOKEN_EXPIRY = "24h";
 var API_URL = process.env.API_URL || "https://api.crmpro.com";
 var ENABLE_API_LOGS = false;
@@ -2526,7 +2533,7 @@ var SECURITY = {
 
 // src/config.ts
 var isProduction = process.env.NODE_ENV === "production";
-var JWT_SECRET3 = process.env.JWT_SECRET || (isProduction ? "prod_secret_key" : "dev_secret_key");
+var JWT_SECRET2 = process.env.JWT_SECRET || (isProduction ? "prod_secret_key" : "dev_secret_key");
 var API_URL2 = process.env.API_URL || (isProduction ? "https://api.crmpro.com" : "");
 if (isProduction) {
   console.log("Application en mode PRODUCTION");
@@ -2536,13 +2543,13 @@ if (isProduction) {
 }
 
 // src/middleware/auth.ts
-var JWT_SECRET4 = JWT_SECRET3;
-console.log("[AUTH] \u{1F510} JWT_SECRET prefix:", typeof JWT_SECRET4 === "string" ? JWT_SECRET4.substring(0, 6) + "..." : "invalid");
+var JWT_SECRET3 = JWT_SECRET2;
+console.log("[AUTH] \u{1F510} JWT_SECRET prefix:", typeof JWT_SECRET3 === "string" ? JWT_SECRET3.substring(0, 6) + "..." : "invalid");
 var authenticateToken = (req2, res, next) => {
   console.log("[AUTH] \u{1F50D} authenticateToken - D\xE9but");
   console.log("[AUTH] \u{1F4CB} URL:", req2.originalUrl);
   console.log("[AUTH] \u{1F4CB} Method:", req2.method);
-  console.log("[AUTH] \u{1F510} Using JWT_SECRET prefix:", typeof JWT_SECRET4 === "string" ? JWT_SECRET4.substring(0, 6) + "..." : "invalid");
+  console.log("[AUTH] \u{1F510} Using JWT_SECRET prefix:", typeof JWT_SECRET3 === "string" ? JWT_SECRET3.substring(0, 6) + "..." : "invalid");
   if (req2.headers["x-test-bypass-auth"] === "1") {
     req2.user = req2.user || {
       id: "test-user",
@@ -2567,7 +2574,7 @@ var authenticateToken = (req2, res, next) => {
   }
   console.log("[AUTH] \u{1F511} Token pr\xE9sent, v\xE9rification...");
   try {
-    const decoded = import_jsonwebtoken2.default.verify(token, JWT_SECRET4);
+    const decoded = import_jsonwebtoken2.default.verify(token, JWT_SECRET3);
     console.log("[AUTH] \u2705 Token valide, utilisateur:", decoded.userId);
     console.log("[AUTH] \u{1F4CB} Email:", decoded.email);
     console.log("[AUTH] \u{1F4CB} OrganizationId:", decoded.organizationId);
@@ -4795,7 +4802,7 @@ var authMiddleware = async (req2, res, next) => {
     return res.status(401).json({ error: "Token de d\xE9veloppement non autoris\xE9" });
   }
   try {
-    const decoded = import_jsonwebtoken3.default.verify(token, JWT_SECRET3);
+    const decoded = import_jsonwebtoken3.default.verify(token, JWT_SECRET2);
     const user = await prisma4.user.findUnique({
       where: { id: decoded.userId }
     });
@@ -4993,7 +5000,7 @@ router2.post("/login", async (req2, res) => {
         // L'organizationId peut être null pour un super_admin sans orga principale
         organizationId: mainOrg ? mainOrg.organizationId : null
       },
-      JWT_SECRET3,
+      JWT_SECRET2,
       { expiresIn: "24h" }
     );
     const { passwordHash: _passwordHash, UserOrganization: userOrganizations = [], ...userInfos } = freshUser;
@@ -5074,7 +5081,7 @@ router2.get(
           // L'organizationId peut être null pour un super_admin sans orga principale
           organizationId: mainOrg ? mainOrg.organizationId : null
         },
-        JWT_SECRET3,
+        JWT_SECRET2,
         { expiresIn: "24h" }
       );
       res.cookie("token", token, {
@@ -48491,6 +48498,8 @@ var authRateLimit = (0, import_express_rate_limit15.default)({
   // 20 tentatives de login / registre / reset par IP / 15min
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: 1,
+  // Spécifique pour Cloud Run
   message: { error: "Trop de tentatives d'authentification, r\xE9essayez plus tard." },
   keyGenerator: (req2) => {
     const ipKey = (0, import_express_rate_limit15.ipKeyGenerator)(req2.ip ?? "");
@@ -48505,6 +48514,8 @@ var authRateLimit = (0, import_express_rate_limit15.default)({
 });
 var advancedRateLimit = (0, import_express_rate_limit15.default)({
   windowMs: 15 * 60 * 1e3,
+  trustProxy: 1,
+  // Spécifique pour Cloud Run
   max: (req2) => {
     if (req2.method === "OPTIONS") return 1e4;
     if (req2.path.startsWith("/assets/") || req2.path === "/manifest.webmanifest" || req2.path === "/registerSW.js" || req2.path === "/sw.js") return 1e4;
@@ -48823,6 +48834,34 @@ if (process.env.NODE_ENV === "production") {
     });
     app.get("/favicon.ico", (req2, res) => res.sendFile(import_path7.default.join(distDir, "favicon.ico")));
     app.get("/manifest.json", (req2, res) => res.sendFile(import_path7.default.join(distDir, "manifest.json")));
+    app.get("/manifest.webmanifest", (req2, res) => res.sendFile(import_path7.default.join(distDir, "manifest.webmanifest")));
+    app.get("/registerSW.js", (req2, res) => {
+      const swPath = import_path7.default.join(distDir, "registerSW.js");
+      if (import_fs5.default.existsSync(swPath)) {
+        res.setHeader("Content-Type", "application/javascript");
+        res.sendFile(swPath);
+      } else {
+        res.status(404).end();
+      }
+    });
+    app.get("/sw.js", (req2, res) => {
+      const swPath = import_path7.default.join(distDir, "sw.js");
+      if (import_fs5.default.existsSync(swPath)) {
+        res.setHeader("Content-Type", "application/javascript");
+        res.sendFile(swPath);
+      } else {
+        res.status(404).end();
+      }
+    });
+    app.get("/env-config.js", (req2, res) => {
+      const envPath = import_path7.default.join(distDir, "env-config.js");
+      if (import_fs5.default.existsSync(envPath)) {
+        res.setHeader("Content-Type", "application/javascript");
+        res.sendFile(envPath);
+      } else {
+        res.status(404).end();
+      }
+    });
     app.get(/^(?!\/api\/|\/assets\/).*/, (req2, res, _next) => {
       if (req2.isWebsiteRoute === true && req2.websiteData) {
         console.log(`\u{1F3A8} [WEBSITE-RENDER] Rendu SSR pour: ${req2.websiteData.name} (${req2.hostname})`);
