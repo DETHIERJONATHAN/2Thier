@@ -43,6 +43,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 ENV PGHOST=/cloudsql/thiernew:europe-west1:crm-db
 ENV PGDATABASE=2thier
 ENV PGUSER=postgres
-# CMD ["npm", "run", "start"]
-# DIAGNOSTIC: List the contents of the dist directory to check build output
-CMD ["ls", "-la", "dist"]
+CMD ["npm", "run", "start"]

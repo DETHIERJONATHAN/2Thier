@@ -50,5 +50,7 @@ jobs:
             --set-cloudsql-instances ${{ env.DB_INSTANCE_NAME }} \
             --set-secrets="DATABASE_URL=DATABASE_URL:16" \
             --set-env-vars="NODE_ENV=production" \
+            --command="npm" \
+            --args="run,start" \
             --platform managed \
             --allow-unauthenticated
