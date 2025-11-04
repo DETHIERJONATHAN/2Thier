@@ -3,8 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "noEmit": false,
-    "module": "NodeNext",
-    "moduleResolution": "node",
+    "module": "CommonJS",
     "sourceMap": true,
     "isolatedModules": false
   },
