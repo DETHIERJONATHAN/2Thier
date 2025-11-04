@@ -31,6 +31,13 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 
 // src/utils/crypto.ts
 function encrypt(text) {
+  if (!key) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ENCRYPTION_KEY absente/invalide: chiffrement indisponible. Configurez une cl\xE9 de 32 caract\xE8res.");
+    }
+    console.warn("[CRYPTO] encrypt() appel\xE9 sans cl\xE9 valide en environnement non-production. Retour en clair.");
+    return text;
+  }
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(text, "utf8", "hex");
@@ -40,7 +47,10 @@ function encrypt(text) {
 function decrypt(text) {
   try {
     if (!text.includes(":")) {
-      console.log("Texte non chiffr\xE9 d\xE9tect\xE9, retour direct:", text);
+      return text;
+    }
+    if (!key) {
+      console.warn("[CRYPTO] decrypt() appel\xE9 sans cl\xE9 valide. Retour du texte original.");
       return text;
     }
     const textParts = text.split(":");
@@ -56,25 +66,33 @@ function decrypt(text) {
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     let decrypted = decipher.update(encryptedText, "hex", "utf8");
     decrypted += decipher.final("utf8");
-    console.log("Texte d\xE9chiffr\xE9 avec succ\xE8s");
     return decrypted;
   } catch (error) {
     console.error("Decryption failed:", error);
-    console.log("\xC9chec du d\xE9cryptage, retour du texte original:", text);
     return text;
   }
 }
-var crypto, ALGORITHM, ENCRYPTION_KEY, IV_LENGTH, key;
+var crypto, ALGORITHM, IV_LENGTH, ENCRYPTION_KEY, key;
 var init_crypto = __esm({
   "src/utils/crypto.ts"() {
     crypto = __toESM(require("crypto"), 1);
     ALGORITHM = "aes-256-cbc";
-    ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
     IV_LENGTH = 16;
-    if (!ENCRYPTION_KEY || Buffer.from(ENCRYPTION_KEY, "utf8").length !== 32) {
-      throw new Error("La variable d'environnement ENCRYPTION_KEY doit \xEAtre d\xE9finie et faire 32 caract\xE8res.");
-    }
-    key = Buffer.from(ENCRYPTION_KEY, "utf8");
+    ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    key = null;
+    (() => {
+      try {
+        if (ENCRYPTION_KEY && Buffer.from(ENCRYPTION_KEY, "utf8").length === 32) {
+          key = Buffer.from(ENCRYPTION_KEY, "utf8");
+        } else {
+          console.warn("[CRYPTO] ENCRYPTION_KEY manquante ou invalide (32 chars requis). Le chiffrement est indisponible jusqu'\xE0 configuration.");
+          key = null;
+        }
+      } catch (e) {
+        console.warn("[CRYPTO] Impossible d'initialiser la cl\xE9 de chiffrement:", e?.message);
+        key = null;
+      }
+    })();
   }
 });
 
