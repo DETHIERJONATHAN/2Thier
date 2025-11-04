@@ -27,25 +27,20 @@ FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# System deps and tsx runner
-RUN apk add --no-cache openssl libc6-compat \
-	&& npm i -g tsx
-
-# Copy built artifacts and production node_modules
+# Copy built artifacts, production node_modules, and package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY ./src ./src
-COPY ./prisma ./prisma
-COPY ./scripts ./scripts
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/prisma ./prisma
 
-# Expose port
-EXPOSE 4000
+# Expose port that Cloud Run expects
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-	CMD wget -qO- http://127.0.0.1:4000/api/health || exit 1
+	CMD wget -qO- http://127.0.0.1:8080/health || exit 1
 
-# Start API server (serves API + static dist)
+# Start API server using the start script from package.json
 ENV PGHOST=/cloudsql/thiernew:europe-west1:crm-db
 ENV PGDATABASE=2thier
 ENV PGUSER=postgres
-CMD ["tsx", "./src/api-server-clean.ts"]
+CMD ["npm", "run", "start"]
