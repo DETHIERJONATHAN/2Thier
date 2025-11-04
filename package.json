@@ -27,7 +27,7 @@
     "db:backup:prisma": "node backup-database-prisma.js",
     "db:restore:json": "tsx scripts/restore-db-json.ts",
     "db:restore:sql": "node restore-database.js",
-    "build": "vite build",
+    "build": "tsc -p tsconfig.server.json && vite build",
     "build:client": "tsc -p tsconfig.build.json && vite build",
     "build:analyze": "ANALYZE=true vite build",
     "preview": "vite preview",

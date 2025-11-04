@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "noEmit": false,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "sourceMap": true,
+    "isolatedModules": false
+  },
+  "include": [
+    "src/api-server-clean.ts",
+    "src/routes/**/*.ts",
+    "src/api/**/*.ts",
+    "src/services/**/*.ts",
+    "src/middleware/**/*.ts",
+    "src/middlewares/**/*.ts",
+    "src/google-auth/**/*.ts",
+    "src/google-workspace/**/*.ts",
+    "src/security/**/*.ts",
+    "src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts",
+    "src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts"
+  ],
+  "exclude": [
+    "src/**/*.tsx",
+    "src/main.tsx",
+    "src/App.tsx",
+    "vite.config.ts",
+    "scripts/**",
+    "**/*.test.ts"
+  ]
+}
