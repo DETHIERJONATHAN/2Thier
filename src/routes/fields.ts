@@ -2,13 +2,13 @@ import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient, Field } from '@prisma/client';
 import { adaptBlockStructure } from '../helpers/adaptBlockStructure';
-import { authMiddleware } from '../middlewares/auth.js';
+import { authMiddleware } from '../middlewares/auth';
 // Import du middleware d'impersonation supprimé car non utilisé pour le moment
-import { requireRole } from '../middlewares/requireRole.js';
-import formulasRouter from './formulas.js';
-import dependenciesRouter from './dependencies.js';
-import validationsRouter from './validations.js';
-import { AuthenticatedRequest } from "../types/express.js";
+import { requireRole } from '../middlewares/requireRole';
+import formulasRouter from './formulas';
+import dependenciesRouter from './dependencies';
+import validationsRouter from './validations';
+import type { AuthenticatedRequest } from "../middlewares/auth";
 
 const router = Router();
 const prisma = new PrismaClient();

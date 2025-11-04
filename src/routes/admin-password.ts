@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authMiddleware } from '../middlewares/auth.js';
-import { impersonationMiddleware } from '../middlewares/impersonation.js';
-import { encrypt } from '../utils/crypto.js';
+import { authMiddleware } from '../middlewares/auth';
+import { impersonationMiddleware } from '../middlewares/impersonation';
+import { encrypt } from '../utils/crypto';
 
 const router = Router();
 const prisma = new PrismaClient();

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Request, Response } from 'express';
-import { authMiddleware } from './middlewares/auth.js';
+import { authMiddleware } from '../middlewares/auth';
 
 interface AuthRequest extends Request {
   user?: {
