@@ -48,9 +48,9 @@ jobs:
             --region ${{ env.GAR_LOCATION }} \
             --image ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/crm/${{ env.API_IMAGE_NAME }}:${{ github.sha }} \
             --set-cloudsql-instances ${{ env.DB_INSTANCE_NAME }} \
-            --set-secrets="DATABASE_URL=DATABASE_URL:16" \
+            --set-secrets="PGPASSWORD=crm-postgres-password:latest" \
             --set-env-vars="NODE_ENV=production" \
-            --command="printenv" \
-            --args="" \
+            --command="npm" \
+            --args="run,start" \
             --platform managed \
             --allow-unauthenticated
