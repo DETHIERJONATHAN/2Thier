@@ -6,29 +6,26 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "sourceMap": true,
-    "isolatedModules": false
+    "isolatedModules": false,
+    "jsx": "react-jsx"
   },
-  "include": [
-    "src/api-server-clean.ts",
-    "src/routes/**/*.ts",
-    "src/api/**/*.ts",
-    "src/services/**/*.ts",
-    "src/middleware/**/*.ts",
-    "src/middlewares/**/*.ts",
-    "src/google-auth/**/*.ts",
-    "src/google-workspace/**/*.ts",
-    "src/security/**/*.ts",
-    "src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts",
-    "src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts"
+  "files": [
+    "src/api-server-clean.ts"
   ],
   "exclude": [
-    "src/**/*.tsx",
+    "src/**/*.test.ts",
+    "src/hooks",
+    "src/components",
+    "src/pages",
+    "src/assets",
+    "src/styles",
+    "src/utils",
+    "src/contexts",
+    "src/types",
     "src/main.tsx",
     "src/App.tsx",
     "vite.config.ts",
-    "scripts/**",
-    "**/*.test.ts",
-    "src/hooks/**/*.ts"
+    "scripts"
   ]
 }
 
