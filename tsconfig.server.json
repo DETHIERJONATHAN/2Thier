@@ -27,7 +27,8 @@
     "src/App.tsx",
     "vite.config.ts",
     "scripts/**",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "src/hooks/**/*.ts"
   ]
 }
 
