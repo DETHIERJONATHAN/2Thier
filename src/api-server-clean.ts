@@ -266,6 +266,16 @@ if (process.env.NODE_ENV === 'production') {
     });
     app.get('/favicon.ico', (req, res) => res.sendFile(path.join(distDir, 'favicon.ico')));
     app.get('/manifest.json', (req, res) => res.sendFile(path.join(distDir, 'manifest.json')));
+    app.get('/manifest.webmanifest', (req, res) => res.sendFile(path.join(distDir, 'manifest.webmanifest')));
+    app.get('/registerSW.js', (req, res) => {
+      const swPath = path.join(distDir, 'registerSW.js');
+      if (fs.existsSync(swPath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(swPath);
+      } else {
+        res.status(404).end();
+      }
+    });
     
     // 🌐 RENDU DES SITES VITRINES OU FALLBACK CRM
     // Cette route attrape TOUT ce qui n'est pas /api/ ou /assets/
