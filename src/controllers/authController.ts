@@ -3,7 +3,17 @@ import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'development-secret-key';
+// Helper pour lire JWT_SECRET dynamiquement (amélioration pour la production)
+// En local: utilise la valeur par défaut ou .env
+// En production: récupère du Secret Manager via process.env
+const getJWTSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.warn('[AUTH] ⚠️ JWT_SECRET non disponible, utilisation de la clé de développement');
+    return 'development-secret-key';
+  }
+  return secret;
+};
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -75,7 +85,7 @@ export const login = async (req: Request, res: Response) => {
         isSuperAdmin: isSuperAdmin,
         role: isSuperAdmin ? 'super_admin' : (userRoles[0]?.name || user.role || 'user')
       },
-      JWT_SECRET,
+      getJWTSecret(),
       { expiresIn: '24h' }
     );
 
@@ -103,7 +113,7 @@ export const getMe = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Non authentifié' });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const decoded = jwt.verify(token, getJWTSecret()) as { userId: string };
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
