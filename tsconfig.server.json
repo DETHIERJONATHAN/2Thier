@@ -1,9 +1,8 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
     "noEmit": false,
-    "allowImportingTsExtensions": false,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "sourceMap": true,
@@ -31,3 +30,4 @@
     "**/*.test.ts"
   ]
 }
+
