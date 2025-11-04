@@ -1,0 +1,1 @@
+var a={};const _={prix_kwh:a.FIELD_ID_PRIX_KWH||"c8a2467b-9cf1-4dba-aeaf-77240adeedd5",prix_mois:a.FIELD_ID_PRIX_MOIS||"52c7f63b-7e57-4ba8-86da-19a176f09220",consommation_kwh:a.FIELD_ID_CONSOMMATION_KWH||"aa448cfa-3d97-4c23-8995-8e013577e27d"};function I(a){return _}export{I as g};

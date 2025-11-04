@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nettoyage du Cache - CRM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        #log {
+            text-align: left;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Nettoyage du Cache CRM</h1>
+        <p>Cette page va nettoyer complètement votre cache et vos cookies pour résoudre les problèmes d'authentification.</p>
+        
+        <div id="status">
+            <div class="loading"></div>
+            <p>Nettoyage en cours...</p>
+        </div>
+        
+        <div id="log"></div>
+        
+        <div id="actions" style="display: none;">
+            <a href="/" class="btn">Retourner au CRM</a>
+            <button onclick="forceClear()" class="btn">Nettoyer à nouveau</button>
+        </div>
+    </div>
+
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        const actions = document.getElementById('actions');
+        
+        function addLog(message) {
+            log.innerHTML += message + '<br>';
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+        }
+        
+        function forceClear() {
+            log.innerHTML = '';
+            status.style.display = 'block';
+            actions.style.display = 'none';
+            setTimeout(clearEverything, 500);
+        }
+        
+        function clearEverything() {
+            addLog('🧹 DÉBUT DU NETTOYAGE COMPLET...');
+            
+            // Supprimer tous les cookies du domaine
+            addLog('🍪 Suppression des cookies...');
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            // Supprimer les cookies spécifiques avec toutes les variantes
+            const cookiesToClear = ['token', 'auth', 'session'];
+            const domains = ['', 'localhost', '.localhost'];
+            const paths = ['/', '/api'];
+            
+            cookiesToClear.forEach(cookieName => {
+                domains.forEach(domain => {
+                    paths.forEach(path => {
+                        // Plusieurs variantes pour être sûr
+                        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}; domain=${domain}`;
+                        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}`;
+                        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=${domain}`;
+                        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC`;
+                    });
+                });
+            });
+            
+            addLog('✅ Cookies supprimés');
+            
+            // Nettoyer le localStorage et sessionStorage
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+                addLog('✅ localStorage et sessionStorage nettoyés');
+            } catch (e) {
+                addLog('⚠️ Erreur storage: ' + e.message);
+            }
+            
+            // Nettoyer les caches
+            if ('caches' in window) {
+                addLog('🗄️ Nettoyage du cache API...');
+                caches.keys().then(names => {
+                    names.forEach(name => {
+                        caches.delete(name);
+                    });
+                    addLog('✅ Cache API nettoyé');
+                }).catch(e => addLog('⚠️ Erreur cache: ' + e.message));
+            }
+            
+            // Faire un appel au serveur pour nettoyer côté serveur aussi
+            addLog('🌐 Nettoyage côté serveur...');
+            fetch('/api/clear-auth', { 
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => {
+                addLog('✅ Nettoyage serveur terminé');
+                return response.text();
+            })
+            .then(() => {
+                addLog('');
+                addLog('🎉 NETTOYAGE COMPLET TERMINÉ!');
+                addLog('');
+                addLog('Vous pouvez maintenant retourner au CRM et vous reconnecter.');
+                
+                status.style.display = 'none';
+                actions.style.display = 'block';
+            })
+            .catch(e => {
+                addLog('⚠️ Erreur serveur: ' + e.message);
+                addLog('');
+                addLog('🎉 NETTOYAGE LOCAL TERMINÉ!');
+                addLog('');
+                addLog('Vous pouvez maintenant retourner au CRM et vous reconnecter.');
+                
+                status.style.display = 'none';
+                actions.style.display = 'block';
+            });
+        }
+        
+        // Démarrer le nettoyage automatiquement
+        window.onload = function() {
+            setTimeout(clearEverything, 1000);
+        };
+    </script>
+</body>
+</html>

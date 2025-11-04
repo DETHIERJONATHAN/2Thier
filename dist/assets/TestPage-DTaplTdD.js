@@ -1,0 +1,1 @@
+import{j as e}from"./index-C0S0DpaX.js";import r from"./OracleNewStandalonePage-CK_r2ZjR.js";import"./react-vendor-Al_k-ZB6.js";import"./antd-vendor-zFcGztvE.js";const o=()=>e.jsxDEV(r,{},void 0,!1,{fileName:"C:/Users/dethi/OneDrive/Desktop/CRM SAVE/crm/src/pages/TestPage.tsx",lineNumber:5,columnNumber:10},void 0);export{o as default};
