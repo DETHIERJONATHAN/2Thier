@@ -2,13 +2,45 @@
 // Configuration globale de l'application
 
 import * as prodConfig from './config.prod';
+import fs from 'fs';
 
 // Déterminer si nous sommes en production
 const isProduction = process.env.NODE_ENV === 'production';
 
+// 🔐 Fonction pour lire JWT_SECRET depuis plusieurs sources
+const getJWTSecretFromConfig = (): string => {
+  // ✅ PRIORITÉ 1: process.env (variables d'environnement Google Secret Manager)
+  let secret = process.env.JWT_SECRET;
+  if (secret && secret.trim()) {
+    console.log('[CONFIG] ✅ JWT_SECRET trouvé dans process.env');
+    return secret;
+  }
+
+  // ✅ PRIORITÉ 2: Fichier Cloud Run secret
+  const cloudRunSecretPath = '/run/secrets/JWT_SECRET';
+  if (fs.existsSync(cloudRunSecretPath)) {
+    try {
+      secret = fs.readFileSync(cloudRunSecretPath, 'utf-8').trim();
+      if (secret) {
+        console.log('[CONFIG] ✅ JWT_SECRET trouvé dans /run/secrets/JWT_SECRET');
+        return secret;
+      }
+    } catch (err) {
+      console.error('[CONFIG] ❌ Erreur à la lecture de /run/secrets/JWT_SECRET:', err);
+    }
+  }
+
+  // ❌ FALLBACK: Clé de développement/production par défaut
+  const fallbackSecret = isProduction ? 'prod_secret_key' : 'dev_secret_key';
+  if (isProduction) {
+    console.warn('[CONFIG] ⚠️ JWT_SECRET non disponible en production, utilisateur une clé par défaut');
+  }
+  return fallbackSecret;
+};
+
 // Configuration de base
 export const IS_PRODUCTION = isProduction;
-export const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? 'prod_secret_key' : 'dev_secret_key');
+export const JWT_SECRET = getJWTSecretFromConfig();
 export const TOKEN_EXPIRY = isProduction ? '24h' : '8h';
 
 // Configuration API

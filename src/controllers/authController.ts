@@ -2,17 +2,36 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
 
 // Helper pour lire JWT_SECRET dynamiquement (amélioration pour la production)
 // En local: utilise la valeur par défaut ou .env
-// En production: récupère du Secret Manager via process.env
+// En production Cloud Run: lit depuis /run/secrets/JWT_SECRET
 const getJWTSecret = (): string => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    console.warn('[AUTH] ⚠️ JWT_SECRET non disponible, utilisation de la clé de développement');
-    return 'development-secret-key';
+  // ✅ PRIORITÉ 1: Lire depuis process.env (variable d'environnement)
+  let secret = process.env.JWT_SECRET;
+  if (secret && secret.trim()) {
+    console.log('[AUTH] ✅ JWT_SECRET trouvé dans process.env');
+    return secret;
   }
-  return secret;
+
+  // ✅ PRIORITÉ 2: Lire depuis le fichier Cloud Run secret
+  const cloudRunSecretPath = '/run/secrets/JWT_SECRET';
+  if (fs.existsSync(cloudRunSecretPath)) {
+    try {
+      secret = fs.readFileSync(cloudRunSecretPath, 'utf-8').trim();
+      if (secret) {
+        console.log('[AUTH] ✅ JWT_SECRET trouvé dans /run/secrets/JWT_SECRET');
+        return secret;
+      }
+    } catch (err) {
+      console.error('[AUTH] ❌ Erreur à la lecture de /run/secrets/JWT_SECRET:', err);
+    }
+  }
+
+  // ❌ FALLBACK: Clé de développement (ne jamais atteindre en production !)
+  console.warn('[AUTH] ⚠️ JWT_SECRET non disponible, utilisation de la clé de développement');
+  return 'development-secret-key';
 };
 
 export const login = async (req: Request, res: Response) => {

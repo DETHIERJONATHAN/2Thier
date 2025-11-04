@@ -2252,7 +2252,7 @@ __export(api_server_clean_exports, {
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_express84 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
-var import_fs5 = __toESM(require("fs"), 1);
+var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_express_session = __toESM(require("express-session"), 1);
 var import_cookie_parser = __toESM(require("cookie-parser"), 1);
@@ -2329,13 +2329,27 @@ void (async () => {
 // src/controllers/authController.ts
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
+var import_fs = __toESM(require("fs"), 1);
 var getJWTSecret = () => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    console.warn("[AUTH] \u26A0\uFE0F JWT_SECRET non disponible, utilisation de la cl\xE9 de d\xE9veloppement");
-    return "development-secret-key";
+  let secret = process.env.JWT_SECRET;
+  if (secret && secret.trim()) {
+    console.log("[AUTH] \u2705 JWT_SECRET trouv\xE9 dans process.env");
+    return secret;
   }
-  return secret;
+  const cloudRunSecretPath = "/run/secrets/JWT_SECRET";
+  if (import_fs.default.existsSync(cloudRunSecretPath)) {
+    try {
+      secret = import_fs.default.readFileSync(cloudRunSecretPath, "utf-8").trim();
+      if (secret) {
+        console.log("[AUTH] \u2705 JWT_SECRET trouv\xE9 dans /run/secrets/JWT_SECRET");
+        return secret;
+      }
+    } catch (err) {
+      console.error("[AUTH] \u274C Erreur \xE0 la lecture de /run/secrets/JWT_SECRET:", err);
+    }
+  }
+  console.warn("[AUTH] \u26A0\uFE0F JWT_SECRET non disponible, utilisation de la cl\xE9 de d\xE9veloppement");
+  return "development-secret-key";
 };
 var login = async (req2, res) => {
   try {
@@ -2532,8 +2546,33 @@ var SECURITY = {
 };
 
 // src/config.ts
+var import_fs2 = __toESM(require("fs"), 1);
 var isProduction = process.env.NODE_ENV === "production";
-var JWT_SECRET2 = process.env.JWT_SECRET || (isProduction ? "prod_secret_key" : "dev_secret_key");
+var getJWTSecretFromConfig = () => {
+  let secret = process.env.JWT_SECRET;
+  if (secret && secret.trim()) {
+    console.log("[CONFIG] \u2705 JWT_SECRET trouv\xE9 dans process.env");
+    return secret;
+  }
+  const cloudRunSecretPath = "/run/secrets/JWT_SECRET";
+  if (import_fs2.default.existsSync(cloudRunSecretPath)) {
+    try {
+      secret = import_fs2.default.readFileSync(cloudRunSecretPath, "utf-8").trim();
+      if (secret) {
+        console.log("[CONFIG] \u2705 JWT_SECRET trouv\xE9 dans /run/secrets/JWT_SECRET");
+        return secret;
+      }
+    } catch (err) {
+      console.error("[CONFIG] \u274C Erreur \xE0 la lecture de /run/secrets/JWT_SECRET:", err);
+    }
+  }
+  const fallbackSecret = isProduction ? "prod_secret_key" : "dev_secret_key";
+  if (isProduction) {
+    console.warn("[CONFIG] \u26A0\uFE0F JWT_SECRET non disponible en production, utilisateur une cl\xE9 par d\xE9faut");
+  }
+  return fallbackSecret;
+};
+var JWT_SECRET2 = getJWTSecretFromConfig();
 var API_URL2 = process.env.API_URL || (isProduction ? "https://api.crmpro.com" : "");
 if (isProduction) {
   console.log("Application en mode PRODUCTION");
@@ -5251,7 +5290,7 @@ var import_express4 = require("express");
 var import_client7 = require("@prisma/client");
 var import_multer = __toESM(require("multer"), 1);
 var import_path = __toESM(require("path"), 1);
-var import_fs = __toESM(require("fs"), 1);
+var import_fs3 = __toESM(require("fs"), 1);
 var prisma7 = new import_client7.PrismaClient();
 var router3 = (0, import_express4.Router)();
 var buildAvatarUrl = (req2, avatarPath) => {
@@ -5278,8 +5317,8 @@ var sanitizeText = (value) => {
 var storage = import_multer.default.diskStorage({
   destination: function(_req, _file, cb) {
     const dir = "public/uploads/avatars";
-    if (!import_fs.default.existsSync(dir)) {
-      import_fs.default.mkdirSync(dir, { recursive: true });
+    if (!import_fs3.default.existsSync(dir)) {
+      import_fs3.default.mkdirSync(dir, { recursive: true });
     }
     cb(null, dir);
   },
@@ -8086,7 +8125,7 @@ async function refreshGoogleTokenIfNeeded(organizationId) {
 // src/google-auth/routes/gmail.ts
 var import_express12 = require("express");
 var import_formidable = __toESM(require("formidable"), 1);
-var import_fs2 = __toESM(require("fs"), 1);
+var import_fs4 = __toESM(require("fs"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var formidableMiddleware = (req2, res, next) => {
   console.log("[DEBUG FORMIDABLE] ==================== D\xC9BUT ANALYSE REQU\xCATE ====================");
@@ -8117,8 +8156,8 @@ var formidableMiddleware = (req2, res, next) => {
     // Pas de hash pour la performance
   });
   const uploadDir = import_path2.default.join(process.cwd(), "uploads");
-  if (!import_fs2.default.existsSync(uploadDir)) {
-    import_fs2.default.mkdirSync(uploadDir, { recursive: true });
+  if (!import_fs4.default.existsSync(uploadDir)) {
+    import_fs4.default.mkdirSync(uploadDir, { recursive: true });
   }
   console.log("[DEBUG FORMIDABLE] \u{1F527} Configuration Formidable appliqu\xE9e");
   console.log("[DEBUG FORMIDABLE] \u{1F4C1} Upload Directory:", uploadDir);
@@ -8142,7 +8181,7 @@ var formidableMiddleware = (req2, res, next) => {
       const fileList = Array.isArray(fileArray) ? fileArray : [fileArray];
       req2.files[key2] = fileList.map((file) => ({
         name: file.originalFilename || file.newFilename,
-        data: import_fs2.default.readFileSync(file.filepath),
+        data: import_fs4.default.readFileSync(file.filepath),
         // Lire le fichier en Buffer
         size: file.size,
         mimetype: file.mimetype,
@@ -8156,8 +8195,8 @@ var formidableMiddleware = (req2, res, next) => {
       for (const [, fileArray] of Object.entries(files)) {
         const fileList = Array.isArray(fileArray) ? fileArray : [fileArray];
         fileList.forEach((file) => {
-          if (import_fs2.default.existsSync(file.filepath)) {
-            import_fs2.default.unlinkSync(file.filepath);
+          if (import_fs4.default.existsSync(file.filepath)) {
+            import_fs4.default.unlinkSync(file.filepath);
             console.log("[DEBUG FORMIDABLE] \u{1F5D1}\uFE0F Fichier temporaire supprim\xE9:", file.filepath);
           }
         });
@@ -17852,7 +17891,7 @@ var analytics_default = router38;
 
 // src/routes/ai.ts
 var import_express40 = __toESM(require("express"), 1);
-var import_fs3 = __toESM(require("fs"), 1);
+var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
 var import_client32 = require("@prisma/client");
 var import_crypto7 = require("crypto");
@@ -18581,7 +18620,7 @@ function __aiBuildCodeIndex() {
     if (depth > 6) return;
     let entries = [];
     try {
-      entries = import_fs3.default.readdirSync(dir);
+      entries = import_fs5.default.readdirSync(dir);
     } catch {
       return;
     }
@@ -18590,7 +18629,7 @@ function __aiBuildCodeIndex() {
       if (/node_modules|\.git|dist|build/.test(full)) continue;
       let st;
       try {
-        st = import_fs3.default.statSync(full);
+        st = import_fs5.default.statSync(full);
       } catch {
         continue;
       }
@@ -18609,7 +18648,7 @@ function __aiBuildSymbolIndex() {
   for (const rel of idx.slice(0, 1200)) {
     try {
       const abs2 = import_path4.default.join(process.cwd(), "src", rel);
-      const content = import_fs3.default.readFileSync(abs2, "utf8");
+      const content = import_fs5.default.readFileSync(abs2, "utf8");
       const regexes = [
         /export\s+class\s+([A-Za-z0-9_]+)/g,
         /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g,
@@ -18666,8 +18705,8 @@ function __aiSummarizeFile(rel) {
     const cached = __AI_FILE_SUMMARY_CACHE[rel];
     if (cached && now - cached.ts < __AI_FILE_SUMMARY_TTL) return cached.summary;
     const abs2 = import_path4.default.join(process.cwd(), "src", rel);
-    if (!import_fs3.default.existsSync(abs2)) return null;
-    const content = import_fs3.default.readFileSync(abs2, "utf8");
+    if (!import_fs5.default.existsSync(abs2)) return null;
+    const content = import_fs5.default.readFileSync(abs2, "utf8");
     const lines = content.split(/\r?\n/);
     const first = lines.slice(0, 80).join("\n");
     const importMatches = Array.from(content.matchAll(/import\s+[^;]+from\s+['"]([^'".][^'"/]*)['"]/g)).map((m) => m[1]).slice(0, 8);
@@ -18780,11 +18819,11 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       let resolvePageFile = function(name) {
         if (!name) return null;
         const base = import_path4.default.join(process.cwd(), "src", "pages");
-        if (name.endsWith(".tsx") && import_fs3.default.existsSync(import_path4.default.join(process.cwd(), "src", name))) return name;
+        if (name.endsWith(".tsx") && import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", name))) return name;
         const candidate = import_path4.default.join(base, name.endsWith(".tsx") ? name : name + ".tsx");
-        if (import_fs3.default.existsSync(candidate)) return "pages/" + import_path4.default.basename(candidate);
+        if (import_fs5.default.existsSync(candidate)) return "pages/" + import_path4.default.basename(candidate);
         try {
-          const entries = import_fs3.default.readdirSync(base);
+          const entries = import_fs5.default.readdirSync(base);
           const hit = entries.find((e) => e.toLowerCase() === (name.toLowerCase().endsWith(".tsx") ? name.toLowerCase() : name.toLowerCase() + ".tsx"));
           if (hit) return "pages/" + hit;
         } catch {
@@ -18799,9 +18838,9 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       let featureKey = null;
       const featureMapPath = import_path4.default.join(process.cwd(), "src", "feature-map.json");
       let featureMap = null;
-      if (import_fs3.default.existsSync(featureMapPath)) {
+      if (import_fs5.default.existsSync(featureMapPath)) {
         try {
-          featureMap = JSON.parse(import_fs3.default.readFileSync(featureMapPath, "utf8"));
+          featureMap = JSON.parse(import_fs5.default.readFileSync(featureMapPath, "utf8"));
         } catch {
         }
       }
@@ -18822,14 +18861,14 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       if (maybePage) pagePath = resolvePageFile(maybePage);
       if (!pagePath && /(page|mailpage|googlemailpage|inbox)/i.test(message)) {
         const guess = ["pages/GoogleMailPageFixed_New.tsx", "pages/GoogleMailPageFixed.tsx", "pages/GoogleMailPage.tsx", "pages/MailPage.tsx"];
-        pagePath = guess.find((g) => import_fs3.default.existsSync(import_path4.default.join(process.cwd(), "src", g))) || null;
+        pagePath = guess.find((g) => import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", g))) || null;
       }
       if ((wantAnalysis || featureKey || pagePath) && (featureKey || pagePath)) {
         autoAnalysis = {};
-        if (pagePath && import_fs3.default.existsSync(import_path4.default.join(process.cwd(), "src", pagePath))) {
+        if (pagePath && import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", pagePath))) {
           try {
             const absPage = import_path4.default.join(process.cwd(), "src", pagePath);
-            const content = import_fs3.default.readFileSync(absPage, "utf8");
+            const content = import_fs5.default.readFileSync(absPage, "utf8");
             const linesArr = content.split(/\r?\n/);
             const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
             const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -18869,9 +18908,9 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
             let totalLines = 0, totalHooks = 0, i18nYes = 0, antdYes = 0, tailwindYes = 0, count = 0;
             for (const f of files) {
               const absF = import_path4.default.join(process.cwd(), f);
-              if (!import_fs3.default.existsSync(absF)) continue;
+              if (!import_fs5.default.existsSync(absF)) continue;
               count++;
-              const content = import_fs3.default.readFileSync(absF, "utf8");
+              const content = import_fs5.default.readFileSync(absF, "utf8");
               const linesArr = content.split(/\r?\n/);
               totalLines += linesArr.length;
               const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -19608,7 +19647,7 @@ var ai_default = router39;
 
 // src/routes/ai-code.ts
 var import_express41 = __toESM(require("express"), 1);
-var import_fs4 = __toESM(require("fs"), 1);
+var import_fs6 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
 var import_crypto8 = __toESM(require("crypto"), 1);
 var router40 = import_express41.default.Router();
@@ -19658,16 +19697,16 @@ router40.get("/code/tree", (req2, res) => {
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const depth = Math.min(4, Math.max(0, parseInt(String(req2.query.depth || "2"), 10) || 0));
   const target = abs(rel);
-  if (!import_fs4.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
+  if (!import_fs6.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
   function build(p, d) {
-    const stat = import_fs4.default.statSync(p);
+    const stat = import_fs6.default.statSync(p);
     const name = import_path5.default.basename(p);
     const relPath = p.substring(REPO_ROOT.length + 1).replace(/\\/g, "/");
     if (stat.isDirectory()) {
       if (d >= depth) return { type: "dir", name, path: relPath };
       let children = [];
       try {
-        children = import_fs4.default.readdirSync(p).slice(0, 200).map((f) => build(import_path5.default.join(p, f), d + 1));
+        children = import_fs6.default.readdirSync(p).slice(0, 200).map((f) => build(import_path5.default.join(p, f), d + 1));
       } catch {
         children = [];
       }
@@ -19687,11 +19726,11 @@ router40.get("/code/file", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs4.default.existsSync(target) || !import_fs4.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   const offset = Math.max(0, parseInt(String(req2.query.offset || "0"), 10) || 0);
   const limit = Math.min(800, Math.max(50, parseInt(String(req2.query.limit || "400"), 10) || 400));
   try {
-    const content = import_fs4.default.readFileSync(target, "utf8");
+    const content = import_fs6.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
     const etag = 'W/"' + import_crypto8.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
@@ -19715,10 +19754,10 @@ function buildFileIndex() {
   const acc = [];
   function walk(rel) {
     const full = abs(rel);
-    if (!import_fs4.default.existsSync(full)) return;
-    const stat = import_fs4.default.statSync(full);
+    if (!import_fs6.default.existsSync(full)) return;
+    const stat = import_fs6.default.statSync(full);
     if (stat.isDirectory()) {
-      const entries = import_fs4.default.readdirSync(full).slice(0, 500);
+      const entries = import_fs6.default.readdirSync(full).slice(0, 500);
       for (const e of entries) {
         const childRel = rel + "/" + e;
         if (/node_modules|\.git|dist|build/.test(childRel)) continue;
@@ -19744,7 +19783,7 @@ router40.get("/code/search", (req2, res) => {
   for (const f of files) {
     if (results.length >= max) break;
     try {
-      const content = import_fs4.default.readFileSync(abs(f), "utf8");
+      const content = import_fs6.default.readFileSync(abs(f), "utf8");
       const lines = content.split(/\r?\n/);
       for (let idx = 0; idx < lines.length && results.length < max; idx++) {
         const line = lines[idx];
@@ -19760,9 +19799,9 @@ router40.get("/code/summary", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs4.default.existsSync(target) || !import_fs4.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
-    const content = import_fs4.default.readFileSync(target, "utf8");
+    const content = import_fs6.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const totalBytes = Buffer.byteLength(content, "utf8");
     const importRegex = /import\s+[^;]*?from\s+['"]([^'";]+)['"]/g;
@@ -19795,7 +19834,7 @@ router40.get("/code/summary", (req2, res) => {
       exports: named.slice(0, 50),
       dependencies: deps.slice(0, 100),
       sizeCategory: totalBytes > MAX_FILE_SIZE_BYTES ? "large" : "normal",
-      lastModified: import_fs4.default.statSync(target).mtime
+      lastModified: import_fs6.default.statSync(target).mtime
     };
     recordRecent({ path: rel, at: Date.now(), lines: lines.length });
     res.json({ success: true, data: summary });
@@ -19810,11 +19849,11 @@ router40.get("/code/diff", (req2, res) => {
   if (!oldRel || !newRel) return res.status(400).json({ success: false, error: "Param\xE8tres old et new requis" });
   const oldPath = abs(oldRel);
   const newPath = abs(newRel);
-  if (!import_fs4.default.existsSync(oldPath) || !import_fs4.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
-  if (!import_fs4.default.existsSync(newPath) || !import_fs4.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
+  if (!import_fs6.default.existsSync(oldPath) || !import_fs6.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
+  if (!import_fs6.default.existsSync(newPath) || !import_fs6.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
   try {
-    const oldLines = import_fs4.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
-    const newLines = import_fs4.default.readFileSync(newPath, "utf8").split(/\r?\n/);
+    const oldLines = import_fs6.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
+    const newLines = import_fs6.default.readFileSync(newPath, "utf8").split(/\r?\n/);
     const diffs = [];
     const max = Math.max(oldLines.length, newLines.length);
     const maxOutput = 800;
@@ -19846,14 +19885,14 @@ router40.get("/code/analyze", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs4.default.existsSync(target) || !import_fs4.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
     const cached = ANALYZE_CACHE[rel];
     const now = Date.now();
     if (cached && now - cached.ts < ANALYZE_TTL_MS) {
       return res.json({ success: true, data: cached.data, meta: { cached: true, ageMs: now - cached.ts } });
     }
-    const content = import_fs4.default.readFileSync(target, "utf8");
+    const content = import_fs6.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const size = lines.length;
     const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
@@ -19960,15 +19999,15 @@ router40.get("/code/feature/analyze", (req2, res) => {
   const feature = String(req2.query.feature || "").trim();
   if (!feature) return res.status(400).json({ success: false, error: "Param\xE8tre feature requis" });
   const fmapPath = abs("src/feature-map.json");
-  if (!import_fs4.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
+  if (!import_fs6.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
   try {
     let analyzeFile = function(rel) {
       const target = abs(rel);
-      if (!import_fs4.default.existsSync(target) || !import_fs4.default.statSync(target).isFile()) {
+      if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) {
         errors.push({ path: rel, error: "introuvable" });
         return;
       }
-      const content = import_fs4.default.readFileSync(target, "utf8");
+      const content = import_fs6.default.readFileSync(target, "utf8");
       const lines = content.split(/\r?\n/);
       const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -19992,7 +20031,7 @@ router40.get("/code/feature/analyze", (req2, res) => {
         importAntd
       });
     };
-    const fmap = JSON.parse(import_fs4.default.readFileSync(fmapPath, "utf8"));
+    const fmap = JSON.parse(import_fs6.default.readFileSync(fmapPath, "utf8"));
     const def = fmap[feature];
     if (!def) return res.status(404).json({ success: false, error: "Feature inconnue" });
     const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean);
@@ -20036,7 +20075,7 @@ router40.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     const full = abs(safe);
-    if (!import_fs4.default.existsSync(full) || !import_fs4.default.statSync(full).isFile()) {
+    if (!import_fs6.default.existsSync(full) || !import_fs6.default.statSync(full).isFile()) {
       errors.push({ path: rel, error: "introuvable" });
       return;
     }
@@ -20046,7 +20085,7 @@ router40.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     try {
-      const content = import_fs4.default.readFileSync(full, "utf8");
+      const content = import_fs6.default.readFileSync(full, "utf8");
       const lines = content.split(/\r?\n/);
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
       const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -48816,7 +48855,7 @@ app.use(websiteInterceptor);
 if (process.env.NODE_ENV === "production") {
   const distDir = import_path7.default.resolve(process.cwd(), "dist");
   const indexHtml = import_path7.default.join(distDir, "index.html");
-  if (import_fs5.default.existsSync(indexHtml)) {
+  if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
     app.use("/assets", import_express84.default.static(assetsDir, {
@@ -48826,7 +48865,7 @@ if (process.env.NODE_ENV === "production") {
     }));
     app.get(/^\/pwa-.*/, (req2, res) => {
       const filePath = import_path7.default.join(distDir, req2.path);
-      if (import_fs5.default.existsSync(filePath)) {
+      if (import_fs7.default.existsSync(filePath)) {
         res.sendFile(filePath);
       } else {
         res.status(404).end();
@@ -48837,7 +48876,7 @@ if (process.env.NODE_ENV === "production") {
     app.get("/manifest.webmanifest", (req2, res) => res.sendFile(import_path7.default.join(distDir, "manifest.webmanifest")));
     app.get("/registerSW.js", (req2, res) => {
       const swPath = import_path7.default.join(distDir, "registerSW.js");
-      if (import_fs5.default.existsSync(swPath)) {
+      if (import_fs7.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -48846,7 +48885,7 @@ if (process.env.NODE_ENV === "production") {
     });
     app.get("/sw.js", (req2, res) => {
       const swPath = import_path7.default.join(distDir, "sw.js");
-      if (import_fs5.default.existsSync(swPath)) {
+      if (import_fs7.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -48855,7 +48894,7 @@ if (process.env.NODE_ENV === "production") {
     });
     app.get("/env-config.js", (req2, res) => {
       const envPath = import_path7.default.join(distDir, "env-config.js");
-      if (import_fs5.default.existsSync(envPath)) {
+      if (import_fs7.default.existsSync(envPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(envPath);
       } else {
@@ -48900,9 +48939,9 @@ app.get("/api/debug/static-status", (_req, res) => {
   const indexHtml = import_path7.default.join(distDir, "index.html");
   res.json({
     env: process.env.NODE_ENV,
-    distExists: import_fs5.default.existsSync(distDir),
-    indexExists: import_fs5.default.existsSync(indexHtml),
-    served: process.env.NODE_ENV === "production" && import_fs5.default.existsSync(indexHtml)
+    distExists: import_fs7.default.existsSync(distDir),
+    indexExists: import_fs7.default.existsSync(indexHtml),
+    served: process.env.NODE_ENV === "production" && import_fs7.default.existsSync(indexHtml)
   });
 });
 var errorHandler = (err, req2, res, next) => {
