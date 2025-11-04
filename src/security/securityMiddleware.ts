@@ -76,6 +76,7 @@ export const authRateLimit = rateLimit({
   max: 20, // 20 tentatives de login / registre / reset par IP / 15min
   standardHeaders: true,
   legacyHeaders: false,
+  trustProxy: 1, // Spécifique pour Cloud Run
   message: { error: 'Trop de tentatives d\'authentification, réessayez plus tard.' },
   keyGenerator: (req: Request) => {
     const ipKey = ipKeyGenerator(req.ip ?? '');
@@ -92,6 +93,7 @@ export const authRateLimit = rateLimit({
 // Limiteur général API (exclut explicitement static et OPTIONS, plus plafond élevé)
 export const advancedRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
+  trustProxy: 1, // Spécifique pour Cloud Run
   max: (req: Request) => {
     // OPTIONS jamais compté (CORS preflight)
     if (req.method === 'OPTIONS') return 10_000;
