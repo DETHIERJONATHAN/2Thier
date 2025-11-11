@@ -350,7 +350,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       new CustomEvent('tbl-repeater-updated', {
         detail: {
           nodeId: selectedNode.id,
-          treeId: selectedNode.tree_id
+          treeId: selectedNode.tree_id,
+          suppressReload: false,
+          source: 'commitRepeaterMetadata',
+          timestamp: Date.now()
         }
       })
     );

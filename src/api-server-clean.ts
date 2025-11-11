@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -13,6 +16,7 @@ import { prisma } from './lib/prisma';
 
 // 🔥 ROUTES TBL SPÉCIALISÉES
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
+import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES STOCKÉES
 
 // 🌐 ROUTES GESTION SITES WEB
 // 🔄 FORCE RELOAD - Timestamp: 2025-10-09 20:05
@@ -213,6 +217,7 @@ app.use('/api/ai', aiRouter); // 🤖 GEMINI AI (suggestions, optimisations)
 app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
 app.use('/api', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
+app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
 console.log('✅ [API-SERVER-CLEAN] Routes configurées');
 
 app.get('/health', (_req, res) => {

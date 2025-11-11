@@ -36,6 +36,30 @@ export const useBackendValue = (
       try {
         setLoading(true);
 
+        // 🚀 ÉTAPE 1 : CHERCHER D'ABORD LA VALEUR STOCKÉE DANS PRISMA
+        console.log(`🔍 [useBackendValue] Tentative de récupération de la valeur STOCKÉE pour nodeId: ${nodeId}`);
+        try {
+          const cachedResponse = await api.get<{
+            success: boolean;
+            value: unknown;
+            calculatedAt?: string;
+            calculatedBy?: string;
+          }>(`/api/tree-nodes/${nodeId}/calculated-value`);
+
+          if (cachedResponse?.success && cachedResponse?.value !== undefined && cachedResponse?.value !== null) {
+            console.log(`✅ [useBackendValue] VALEUR TROUVÉE DANS PRISMA pour nodeId: ${nodeId}`, cachedResponse.value);
+            setValue(cachedResponse.value);
+            setLoading(false);
+            return; // 🎯 Sortir ici si valeur trouvée !
+          }
+        } catch (cacheErr) {
+          console.log(`⚠️ [useBackendValue] Valeur non trouvée dans Prisma (normal pour première requête):`, cacheErr);
+          // Continuer vers la réponse du backend
+        }
+
+        // 🚀 ÉTAPE 2 : SI PAS DE VALEUR STOCKÉE, CALCULER VIA BACKEND
+        console.log(`🔍 [useBackendValue] Pas de valeur stockée, calcul via backend pour nodeId: ${nodeId}`);
+
         // Reconstituer formData depuis le hash
         const parsedFormData = JSON.parse(formDataHash);
 
@@ -46,6 +70,7 @@ export const useBackendValue = (
           success: boolean;
           results: Array<{
             nodeId: string;
+            label?: string;
             value: unknown;
             calculatedValue: unknown;
           }>;
@@ -57,12 +82,49 @@ export const useBackendValue = (
 
         // Trouver le résultat pour ce nodeId
         if (response?.success && response?.results) {
-          console.log(`🔍 [useBackendValue] RÉPONSE COMPLÈTE pour nodeId ${nodeId}:`, JSON.stringify(response.results, null, 2));
+          console.log(`🔍🔍🔍 [useBackendValue] RÉPONSE COMPLÈTE pour nodeId recherché: "${nodeId}"`);
+          console.log(`📊 [useBackendValue] Tous les résultats disponibles (${response.results.length}):`, 
+            response.results.map(r => ({ nodeId: r.nodeId, label: r.label, value: r.value, calculatedValue: r.calculatedValue }))
+          );
           
-          const result = response.results.find(r => r.nodeId === nodeId);
+          // 🎯 STRATÉGIE ULTRA-ROBUSTE : Essayer plusieurs méthodes de recherche
+          console.log(`🔍 [useBackendValue] Recherche pour nodeId: "${nodeId}"`);
+          
+          let result = response.results.find(r => r.nodeId === nodeId);
+          if (result) {
+            console.log(`✅ [useBackendValue] Méthode 1 - Match exact du nodeId`);
+          }
+          
+          // Si pas trouvé directement, essayer avec le nodeId sans suffix "-1"
+          if (!result && nodeId.endsWith('-1')) {
+            const nodeIdWithoutSuffix = nodeId.slice(0, -2);
+            result = response.results.find(r => r.nodeId === nodeIdWithoutSuffix);
+            if (result) {
+              console.log(`✅ [useBackendValue] Méthode 2 - RÉSULTAT TROUVÉ avec nodeId sans suffix: ${nodeIdWithoutSuffix}`);
+            }
+          }
+          
+          // Si toujours pas trouvé, essayer avec le nodeId AVEC suffix "-1"
+          if (!result && !nodeId.endsWith('-1')) {
+            const nodeIdWithSuffix = `${nodeId}-1`;
+            result = response.results.find(r => r.nodeId === nodeIdWithSuffix);
+            if (result) {
+              console.log(`✅ [useBackendValue] Méthode 3 - RÉSULTAT TROUVÉ avec nodeId avec suffix: ${nodeIdWithSuffix}`);
+            }
+          }
+          
+          // 🆕 MÉTHODE 4 : Recherche par label (fallback ultime si nodeId ne match pas)
+          if (!result) {
+            console.log(`⚠️ [useBackendValue] NodeId "${nodeId}" non trouvé, tentative de recherche par label...`);
+            // On ne peut pas utiliser le label directement car on ne l'a pas ici
+            // Mais on peut logger tous les nodeIds disponibles pour debug
+            console.log(`📋 [useBackendValue] NodeIds disponibles dans la réponse:`, 
+              response.results.map(r => r.nodeId).join(', ')
+            );
+          }
           
           if (result) {
-            console.log(`🔍 [useBackendValue] RÉSULTAT TROUVÉ:`, JSON.stringify(result, null, 2));
+            console.log(`✅✅✅ [useBackendValue] RÉSULTAT TROUVÉ:`, JSON.stringify(result, null, 2));
             console.log(`🔍 [useBackendValue] STRUCTURE DU RÉSULTAT:`, {
               hasValue: 'value' in result,
               hasCalculatedValue: 'calculatedValue' in result,

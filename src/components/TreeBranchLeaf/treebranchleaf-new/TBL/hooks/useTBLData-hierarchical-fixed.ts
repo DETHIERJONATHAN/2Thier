@@ -1,87 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useTBLCapabilitiesPreload, PreloadedTBLCapability } from './useTBLCapabilitiesPreload';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { dlog } from '../../../../../utils/debug';
-
-// -------------------------------------------------------------
-// Types de base
-// -------------------------------------------------------------
-export interface TreeBranchLeafNode {
-  id: string;
-  treeId: string;
-  parentId: string | null;
-  type: string; // 'branch' | 'leaf_field' | 'leaf_option' | ...
-  subType: string | null;
-  label: string;
-  description: string | null;
-  value: string | null;
-  order: number;
-  isRequired: boolean;
-  isVisible: boolean;
-  isActive: boolean;
-  fieldConfig: Record<string, unknown> | null;
-  metadata: Record<string, unknown> | null;
-  defaultValue?: string;
-  calculatedValue?: string;
-  fieldType?: string;
-  fieldSubType?: string;
-}
-
-export interface TBLField {
-  id: string;
-  name: string;
-  label: string;
-  type: 'text' | 'email' | 'date' | 'number' | 'textarea' | 'select' | 'boolean';
-  required: boolean;
-  value?: string | number | boolean;
-  options?: string[];
-  visible: boolean;
-  placeholder?: string;
-  description?: string;
-  validation?: string;
-  order: number;
-  parentId?: string;
-  shouldDisplay?: boolean;
-  // 🔧 Ajouts pour alignement avec renderer avancé
-  config?: Record<string, unknown>;
-  treeMetadata?: Record<string, unknown>;
-  capabilities?: Record<string, unknown>; // structure légère (data/formula...)
-  // 💡 Propriétés tooltip
-  text_helpTooltipType?: string;
-  text_helpTooltipText?: string;
-  text_helpTooltipImage?: string;
-  appearanceConfig?: Record<string, unknown>;
-}
-
-export interface TBLSection {
-  id: string;
-  name: string;
-  title?: string;
-  description?: string | null;
-  icon?: string;
-  fields: TBLField[];
-  order?: number;
-  parentId?: string;
-  subsections?: TBLSection[];
-}
-
-export interface TBLTab {
-  id: string;
-  name: string;
-  label: string;
-  sections: TBLSection[];
-  order: number;
-}
-
-export interface TBLTree {
-  id: string;
-  name: string;
-  tabs: TBLTab[];
-}
+import {
+  transformNodesToTBLComplete,
+  type TreeBranchLeafNode,
+  type TBLField,
+  type TBLSection,
+  type TBLTab,
+  type TBLTree
+} from './useTBLDataPrismaComplete';
 
 export interface UseTBLDataHierarchicalParams {
   tree_id: string | number;
-  disabled?: boolean; // si true, on n'effectue pas le fetch
+  disabled?: boolean;
 }
 
 export interface UseTBLDataHierarchicalReturn {
@@ -91,422 +22,517 @@ export interface UseTBLDataHierarchicalReturn {
   sectionsByTab: Record<string, TBLSection[]>;
   loading: boolean;
   error: string | null;
+  refetch: () => Promise<void>;
   updateNodeValue: (nodeId: string, value: string | number | boolean) => Promise<void>;
   toggleNodeVisibility: (nodeId: string) => Promise<void>;
   addOption: (nodeId: string, option: string) => Promise<void>;
   deleteOption: (nodeId: string, option: string) => Promise<void>;
+  rawNodes: TreeBranchLeafNode[];
 }
 
-// -------------------------------------------------------------
-// Icônes : mapping centralisé
-// -------------------------------------------------------------
-const TYPE_ICON_MAP: Record<string, string> = {
-  branch: '📂',
-  leaf_field: '📝',
-  leaf_option: '🔧',
-  leaf_option_field: '🧩'
-};
-
-// -------------------------------------------------------------
-// Debug util (activer avec localStorage.TBL_DIAG='1')
-// -------------------------------------------------------------
 const diagEnabled = () => {
-  try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; }
+  try {
+    return localStorage.getItem('TBL_DIAG') === '1';
+  } catch {
+    return false;
+  }
 };
-const ddiag = (...args: unknown[]) => { if (diagEnabled()) console.log('[TBL_DIAG]', ...args); };
 
-function deriveIcon(node: TreeBranchLeafNode): string {
-  // 1 - metadata.icon
-  if (node.metadata && typeof node.metadata === 'object') {
-    const icon = (node.metadata as Record<string, unknown>)?.icon;
-    if (typeof icon === 'string' && icon.trim()) return icon.trim();
+const ddiag = (...args: unknown[]) => {
+  if (diagEnabled()) {
+    console.log('[TBL_DIAG]', ...args);
   }
-  // 2 - fieldConfig.icon
-  if (node.fieldConfig && typeof node.fieldConfig === 'object') {
-    const icon = (node.fieldConfig as Record<string, unknown>)?.icon;
-    if (typeof icon === 'string' && icon.trim()) return icon.trim();
-  }
-  // 3 - mapping par type
-  if (TYPE_ICON_MAP[node.type]) return TYPE_ICON_MAP[node.type];
-  // 4 - fallback
-  return '📋';
-}
+};
 
-// -------------------------------------------------------------
-// Création d'un champ à partir d'un nœud leaf
-// -------------------------------------------------------------
-type CapabilityLite = Pick<PreloadedTBLCapability, 'capacity' | 'sourceRef' | 'sourceType' | 'fixedValue'>;
-function createField(node: TreeBranchLeafNode, nodeMap: Map<string, TreeBranchLeafNode>, capability?: CapabilityLite): TBLField {
-  let type: TBLField['type'] = 'text';
-  if (node.fieldConfig && typeof node.fieldConfig === 'object') {
-    const t = (node.fieldConfig as Record<string, unknown>).type;
-    if (typeof t === 'string') type = t as TBLField['type'];
-  } else if (node.fieldType) {
-    type = node.fieldType as TBLField['type'];
-  }
-
-  let value: string | number | boolean | undefined = node.value ?? undefined;
-  let options: string[] | undefined;
-  if (type === 'number' && typeof node.value === 'string') {
-    const n = parseFloat(node.value);
-    value = isNaN(n) ? undefined : n;
-  } else if (type === 'boolean' && typeof node.value === 'string') {
-    value = ['true', '1', 'yes'].includes(node.value.toLowerCase());
-  } else if (type === 'select') {
-    if (node.fieldConfig && Array.isArray((node.fieldConfig as Record<string, unknown>).options)) {
-      options = (node.fieldConfig as Record<string, unknown>).options as string[];
-    }
-  }
-
-  const field: TBLField = {
-    id: node.id,
-    name: node.label,
-    label: node.label,
-    type,
-    required: !!node.isRequired,
-    value,
-    options,
-    visible: node.isVisible !== false,
-    placeholder: `Saisir ${node.label}`,
-    description: node.description ?? undefined,
-    validation: undefined,
-    order: node.order || 0,
-    parentId: node.parentId || undefined,
-    shouldDisplay: node.isActive !== false,
-    config: (node.fieldConfig || undefined) as Record<string, unknown> | undefined,
-    treeMetadata: (node.metadata || undefined) as Record<string, unknown> | undefined,
-    // 💡 Propriétés tooltip depuis les colonnes TBL
-    text_helpTooltipType: node.text_helpTooltipType,
-    text_helpTooltipText: node.text_helpTooltipText,
-    text_helpTooltipImage: node.text_helpTooltipImage,
-    // 🎯 APPARENCE CONFIG avec tooltips intégrés
-    appearanceConfig: {
-      ...(node.appearanceConfig || {}),
-      // ✅ Ajouter les tooltips dans appearanceConfig
-      helpTooltipType: node.text_helpTooltipType,
-      helpTooltipText: node.text_helpTooltipText,
-      helpTooltipImage: node.text_helpTooltipImage
-    }
-  };
-
-  // 🧠 Capabilities via preload si disponibles, sinon fallback inférence locale
-  try {
-    if (capability) {
-      const cap = capability;
-      const capabilities: Record<string, unknown> = {};
-      if (cap.capacity === 'formula') {
-        capabilities.formula = { activeId: cap.sourceRef?.replace('formula:', ''), currentFormula: { expression: cap.sourceRef } };
-      }
-      if (cap.capacity === 'condition') {
-        capabilities.condition = { activeId: cap.sourceRef?.replace('condition:', '') };
-      }
-      if (cap.capacity === 'table') {
-        capabilities.table = { activeId: cap.sourceRef?.replace('table:', '') };
-      }
-      if (cap.capacity === 'fixed') {
-        capabilities.data = { enabled: true, fixedValue: cap.fixedValue };
-      }
-      if (cap.capacity === 'data' || cap.capacity === 'unknown') {
-        // Minimal data layer
-        if (cap.sourceRef || cap.fixedValue) {
-          capabilities.data = {
-            enabled: true,
-            activeId: cap.sourceRef,
-            instances: cap.sourceRef ? { [cap.sourceRef]: { metadata: { sourceType: cap.sourceType, sourceRef: cap.sourceRef, fixedValue: cap.fixedValue } } } : undefined
-          };
-        }
-      }
-      if (Object.keys(capabilities).length) field.capabilities = capabilities;
-      ddiag('createField(preloaded)', { id: field.id, capacity: cap.capacity, sourceRef: cap.sourceRef });
-    } else {
-      const meta = (node.metadata || {}) as Record<string, unknown>;
-      const fc = (node.fieldConfig || {}) as Record<string, unknown>;
-      const sourceType = (meta.sourceType || fc.sourceType) as string | undefined;
-      const sourceRef = (meta.sourceRef || fc.sourceRef) as string | undefined;
-      const fixedValue = (meta.fixedValue || fc.fixedValue) as unknown;
-      const hasFormula = typeof sourceRef === 'string' && sourceRef.startsWith('formula:');
-      const hasCondition = typeof sourceRef === 'string' && sourceRef.startsWith('condition:');
-      const hasVariable = typeof sourceRef === 'string' && (sourceRef.startsWith('variable:') || sourceType === 'tree');
-      const capabilities: Record<string, unknown> = {};
-      if (sourceRef || fixedValue !== undefined) {
-        if (!capabilities.data) capabilities.data = {};
-        (capabilities.data as Record<string, unknown>).enabled = true;
-        (capabilities.data as Record<string, unknown>).activeId = sourceRef || undefined;
-        (capabilities.data as Record<string, unknown>).instances = sourceRef ? { [sourceRef]: { metadata: { sourceType: sourceType || (hasVariable ? 'tree' : 'fixed'), sourceRef, fixedValue } } } : {};
-      }
-      if (hasFormula) capabilities.formula = { activeId: sourceRef?.replace('formula:', ''), currentFormula: { expression: sourceRef } };
-      if (hasCondition) capabilities.condition = { activeId: sourceRef?.replace('condition:', '') };
-      if (Object.keys(capabilities).length > 0) field.capabilities = capabilities;
-      ddiag('createField(fallback)', { id: field.id, sourceRef, sourceType, hasFormula, hasCondition });
-    }
-  } catch {/* silent */}
-
-  // Conditionnel: leaf_option_field visible seulement si parent leaf_option sélectionné
-  if (node.type === 'leaf_option_field' && node.parentId) {
-    const parent = nodeMap.get(node.parentId);
-    if (parent && parent.type === 'leaf_option') {
-      field.shouldDisplay = parent.value === node.label;
-    }
-  }
-
-  // Condition simple dérivée de metadata (dependsOn / operator / value)
-  try {
-    const meta = (node.metadata || {}) as Record<string, unknown>;
-    const dependsOn = meta.dependsOn as string | undefined;
-    const operator = (meta.operator as string | undefined) || 'equals';
-    const expected = meta.value ?? meta.showWhen;
-    if (dependsOn) {
-      // Recherche valeur du champ référencé parmi nodeMap (par label ou id) - heuristique simple
-  const referenced: TreeBranchLeafNode | undefined = nodeMap.get(dependsOn) || Array.from(nodeMap.values()).find(n => n.label === dependsOn);
-      const refVal = referenced?.value;
-      let match = true;
-      switch (operator) {
-        case 'equals': match = refVal === expected; break;
-        case 'not_equals': match = refVal !== expected; break;
-        case 'contains': match = typeof refVal === 'string' && String(refVal).includes(String(expected)); break;
-        case 'exists': match = refVal !== undefined && refVal !== null && refVal !== ''; break;
-        default: match = true;
-      }
-      if (!match) field.shouldDisplay = false;
-    }
-  } catch { /* non bloquant */ }
-  return field;
-}
-
-// -------------------------------------------------------------
-// Transformation hiérarchique → Tabs / Sections / Fields
-// Règle adoptée :
-// - branch parentId=null => TAB
-// - branch parentId = branch(tab) => SECTION (1er niveau)
-// - branch parentId = section => SUBSECTION (récursif)
-// - leaf_* rattaché à branch => field dans la section ou tab si directement sous tab
-// -------------------------------------------------------------
-// buildHierarchy legacy supprimé (logique réécrite inline avec capabilities preload)
-
-// -------------------------------------------------------------
-// Hook principal
-// -------------------------------------------------------------
 export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams): UseTBLDataHierarchicalReturn {
-  // 🚨 LOG TRÈS VISIBLE AU DÉBUT DU HOOK
-  console.log('🟢🟢🟢 [TBL HOOK] useTBLDataHierarchicalFixed APPELÉ !', params);
-  const { api } = useAuthenticatedApi();
   const { tree_id, disabled } = params;
+  const treeId = tree_id ? String(tree_id) : undefined;
+  const { api } = useAuthenticatedApi();
+  const apiRef = useRef(api);
+  useEffect(() => { if (api && api !== apiRef.current) apiRef.current = api; }, [api]);
+
   const [rawNodes, setRawNodes] = useState<TreeBranchLeafNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const rawNodesRef = useRef<TreeBranchLeafNode[]>([]); // 🔄 Ref stable pour éviter recréation callback
-  
-  // Synchroniser le ref avec le state
+  const rawNodesRef = useRef<TreeBranchLeafNode[]>([]);
+  const transformedRef = useRef<ReturnType<typeof transformNodesToTBLComplete> | null>(null);
+  const capabilityDebounceRef = useRef<number | null>(null);
+
+  // Feature: When form data changes, re-transform the existing rawNodes with the new formData
+  // This state/ref pair is used to trigger a recompute of the memoized transform without fetching.
+  const [formDataVersion, setFormDataVersion] = useState(0);
+  const formDataVersionRef = useRef<number>(0);
+  useEffect(() => { formDataVersionRef.current = formDataVersion; }, [formDataVersion]);
+
   useEffect(() => {
     rawNodesRef.current = rawNodes;
+    try { (window as any).__DEBUG_RAW_NODES = rawNodes; } catch { /* ignore */ }
   }, [rawNodes]);
 
-  // Préload capabilities (tree_id converti string)
-  const preload = useTBLCapabilitiesPreload({
-    treeId: tree_id ? String(tree_id) : undefined,
-    enabled: !disabled && !!tree_id,
-    extractDependencies: true,
-    includeRaw: false
-  });
+  useEffect(() => {
+    // keep a ref to the current transformed tree for background checks
+    // transformed is declared later; we fill this ref after it's computed below
+  }, []);
 
   const fetchData = useCallback(async () => {
-    if (!tree_id || disabled) return;
+    if (!treeId || disabled) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
+
     try {
-      dlog('[TBL] Fetch nodes for tree', tree_id);
-      const data = await api.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
-      
-      // 🔧 L'API peut retourner directement un tableau OU un objet wrapper
+      dlog('[useTBLDataHierarchicalFixed] fetching nodes', treeId);
+      const payload = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
+
       let nodes: TreeBranchLeafNode[] = [];
-      if (Array.isArray(data)) {
-        // Cas 1: Tableau direct
-        nodes = data as TreeBranchLeafNode[];
-      } else if (data && typeof data === 'object') {
-        // Cas 2: Objet wrapper { data: [...] } ou { nodes: [...] }
-        const wrapped = data as { success?: boolean; data?: TreeBranchLeafNode[]; nodes?: TreeBranchLeafNode[] };
-        nodes = (wrapped.data || wrapped.nodes || []) as TreeBranchLeafNode[];
+      if (Array.isArray(payload)) {
+        nodes = payload as TreeBranchLeafNode[];
+      } else if (payload && typeof payload === 'object') {
+        const wrapper = payload as { data?: TreeBranchLeafNode[]; nodes?: TreeBranchLeafNode[] };
+        nodes = (wrapper.data || wrapper.nodes || []) as TreeBranchLeafNode[];
       }
-      
-      console.log('🚨 [TBL NEW] Nœuds reçus:', nodes.length);
-      
-      // 🔍 DEBUG: Vérifier les données tooltip dans les nodes
-      console.log('🚨 [TBL] TOUS LES NODES reçus de l\'API:', nodes.map(n => ({
-        id: n.id,
-        label: n.label,
-        text_helpTooltipType: n.text_helpTooltipType,
-        text_helpTooltipText: n.text_helpTooltipText,
-        text_helpTooltipImage: n.text_helpTooltipImage
-      })));
-      
-      const firstNode = nodes[0];
-      if (firstNode) {
-        console.log('🔍 [TBL] Premier node reçu de l\'API (COMPLET):', JSON.stringify(firstNode, null, 2));
-        console.log('🔍 [TBL] Premier node - Propriétés tooltip:', {
-          id: firstNode.id,
-          label: firstNode.label,
-          text_helpTooltipType: firstNode.text_helpTooltipType,
-          text_helpTooltipText: firstNode.text_helpTooltipText,
-          text_helpTooltipImage: firstNode.text_helpTooltipImage,
-          appearanceConfig: firstNode.appearanceConfig,
-          allKeys: Object.keys(firstNode)
-        });
-      }
-      
+
+      ddiag('Nodes fetched', nodes.length);
       setRawNodes(nodes);
-    } catch (e) {
-      console.error('❌ [TBL] Erreur chargement nœuds:', e);
-      setError((e as Error).message);
+    } catch (err) {
+      console.error('❌ [useTBLDataHierarchicalFixed] fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       setLoading(false);
     }
-  }, [api, tree_id, disabled]);
+  }, [api, treeId, disabled]);
 
   useEffect(() => {
-    if (!disabled) fetchData();
+    if (!disabled) {
+      fetchData();
+    }
   }, [fetchData, disabled]);
 
-  // 🔄 Écouter les changements de capacité pour recharger les données
-  useEffect(() => {
-    const handleCapabilityUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined }>;
-      const { treeId: eventTreeId } = customEvent.detail;
-      
-      // Recharger uniquement si c'est notre arbre
-      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
-        console.log('🔄 [TBL Hook] Capacité mise à jour détectée, rechargement des données...', customEvent.detail);
+  const reconcileDuplicatedNodes = useCallback(async (duplicated: Array<{ id: string; parentId?: string; sourceTemplateId?: string }>) => {
+    if (!duplicated || duplicated.length === 0) return;
+    const getMissing = () => {
+      const t = transformedRef.current;
+      if (!t) return duplicated.map(d => d.id);
+      const allFields = Object.values(t.fieldsByTab || {}).flat();
+      return duplicated.map(d => d.id).filter(id => !allFields.some(f => f.id === id));
+    };
+
+    let missing = getMissing();
+    if (missing.length === 0) return;
+    let attempts = 0;
+    while (missing.length > 0 && attempts < 4) {
+      attempts += 1;
+      await Promise.all(missing.map(async id => {
+        try {
+          const res = await apiRef.current.get(`/api/treebranchleaf/nodes/${id}/full`);
+          const nodes: TreeBranchLeafNode[] = Array.isArray(res) ? res as TreeBranchLeafNode[] : (res && typeof res === 'object' ? (res.data || res.nodes || (res.node ? [res.node] : [])) : []);
+          if (nodes.length > 0) {
+            setRawNodes(prev => {
+              const known = new Set(prev.map(n => n.id));
+              const newOnes = nodes.filter(n => !known.has(n.id));
+              if (newOnes.length === 0) return prev;
+              return [...prev, ...newOnes];
+            });
+          }
+        } catch {
+          // ignore
+        }
+      }));
+
+      // wait a bit for transform to recalculated
+      await new Promise(r => setTimeout(r, 200));
+      setFormDataVersion(v => v + 1);
+      await new Promise(r => setTimeout(r, 100));
+      missing = getMissing();
+    }
+
+    if (missing.length > 0) {
+      console.warn('[useTBLDataHierarchicalFixed] Reconciliation incomplete after retry; attempting targeted merge using full tree');
+      try {
+        if (!treeId) {
+          console.warn('[useTBLDataHierarchicalFixed] No treeId available for full tree query; falling back to fetchData()');
+          fetchData();
+          return;
+        }
+        const response = await apiRef.current.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
+        let allNodes: TreeBranchLeafNode[] = [];
+        if (Array.isArray(response)) allNodes = response as TreeBranchLeafNode[];
+        else if (response && typeof response === 'object') allNodes = (response.data || response.nodes || []) as TreeBranchLeafNode[];
+        if (allNodes.length === 0) {
+          console.warn('[useTBLDataHierarchicalFixed] Full tree query returned no nodes, falling back to fetchData()');
+          fetchData();
+          return;
+        }
+        const duplicateIds = new Set(duplicated.map(d => d.id));
+        const duplicateSourceTemplateIds = new Set(duplicated.map(d => d.sourceTemplateId).filter(Boolean));
+        const sourceParentIds: string[] = [];
+        if (duplicateSourceTemplateIds.size > 0) {
+          await Promise.all(Array.from(duplicateSourceTemplateIds).map(async stid => {
+            try {
+              const sr = await apiRef.current.get(`/api/treebranchleaf/nodes/${stid}/full`);
+              const sarr: TreeBranchLeafNode[] = Array.isArray(sr) ? sr as TreeBranchLeafNode[] : (sr && typeof sr === 'object' ? (sr.data || sr.nodes || (sr.node ? [sr.node] : [])) : []);
+              if (sarr.length > 0) {
+                const p = sarr[0].parentId;
+                if (p) sourceParentIds.push(p as string);
+              }
+            } catch (err) {
+              ddiag('[useTBLDataHierarchicalFixed] failed to resolve sourceTemplate parent during reconciliation', stid, err);
+            }
+          }));
+        }
+        const sourceParentSet = new Set(sourceParentIds);
+        const candidates = allNodes.filter(n => {
+          const meta: any = n.metadata || {};
+          const parentMatchesSource = !!(n.parentId && sourceParentSet.has(n.parentId));
+          return (meta.copiedFromNodeId && duplicateIds.has(meta.copiedFromNodeId)) ||
+                 (meta.copiedFromNodeId && duplicateSourceTemplateIds.has(meta.copiedFromNodeId)) ||
+                 (meta.sourceTemplateId && duplicateSourceTemplateIds.has(meta.sourceTemplateId)) ||
+                 (meta.fromVariableId && parentMatchesSource) ||
+                 (meta.autoCreated && parentMatchesSource);
+        });
+        if (candidates.length > 0) {
+          setRawNodes(prev => {
+            const known = new Set(prev.map(n => n.id));
+            const newOnes = candidates.filter(n => !known.has(n.id));
+            if (newOnes.length === 0) return prev;
+            return [...prev, ...newOnes];
+          });
+          ddiag('[useTBLDataHierarchicalFixed] merged nodes from full tree query:', candidates.length);
+          setFormDataVersion(v => v + 1);
+          await new Promise(r => setTimeout(r, 120));
+          missing = getMissing();
+        } else {
+          console.warn('[useTBLDataHierarchicalFixed] No candidate nodes found in full tree query; falling back to fetchData()');
+          fetchData();
+        }
+      } catch (err) {
+        console.error('[useTBLDataHierarchicalFixed] Failed full tree reconcile query:', err);
         fetchData();
       }
+    }
+  }, [apiRef, fetchData, treeId]);
+
+  useEffect(() => {
+    if (!treeId || disabled) {
+      return;
+    }
+
+  const handleCapabilityUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ treeId?: string | number }>).detail;
+      if (!detail?.treeId) {
+        return;
+      }
+      if (String(detail.treeId) !== treeId) {
+        return;
+      }
+      ddiag('Capability update detected → refetch (debounced)', detail);
+      if (capabilityDebounceRef.current) window.clearTimeout(capabilityDebounceRef.current);
+      capabilityDebounceRef.current = window.setTimeout(() => {
+        fetchData();
+      }, 300);
     };
 
     window.addEventListener('tbl-capability-updated', handleCapabilityUpdate);
-    return () => window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
-  }, [fetchData, disabled, tree_id]);
+    return () => {
+      if (capabilityDebounceRef.current) window.clearTimeout(capabilityDebounceRef.current);
+      window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
+    };
+  }, [fetchData, treeId, disabled, setFormDataVersion, reconcileDuplicatedNodes]);
 
-  // 🔄 Écouter les changements de paramètres repeater pour recharger les données
   useEffect(() => {
+    if (!treeId || disabled) {
+      return;
+    }
+
     const handleRepeaterUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined }>;
-      const { treeId: eventTreeId } = customEvent.detail;
-      
-      // Recharger uniquement si c'est notre arbre
-      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
-        console.log('🔄 [TBL Hook FIXED] Paramètres repeater mis à jour, rechargement des données...', customEvent.detail);
-        fetchData();
+      const detail = (event as CustomEvent<{ treeId?: string | number }>).detail;
+      if (!detail?.treeId) {
+        return;
       }
+      if (String(detail.treeId) !== treeId) {
+        return;
+      }
+        ddiag('Repeater update received', detail);
+
+        if (detail?.suppressReload) {
+          ddiag('Repeater update (suppressReload=true) → Doing local retransform only', detail);
+          const duplicated: Array<{ id: string }> = (detail as any)?.duplicated || [];
+          const deletedIds: string[] = (detail as any)?.deletedIds || [];
+
+          // Merge duplicated nodes by fetching full subtree and appending
+          (async () => {
+            try {
+              if (Array.isArray(duplicated) && duplicated.length > 0) {
+                const toFetch = Array.from(new Set(duplicated.map(d => d.id))).filter(Boolean);
+                const fetched: TreeBranchLeafNode[] = [];
+                await Promise.all(toFetch.map(async id => {
+                  try {
+                    // Retry few times if the backend hasn't materialized the subtree yet
+                    let attempts = 0;
+                    let res: any = null;
+                    while (attempts < 3) {
+                      try {
+                        res = await apiRef.current.get(`/api/treebranchleaf/nodes/${id}/full`);
+                        break; // success
+                      } catch {
+                        // wait briefly before retry
+                        attempts += 1;
+                        await new Promise(r => setTimeout(r, 120));
+                      }
+                    }
+                    if (!res) {
+                      throw new Error('no response from /nodes/:id/full');
+                    }
+                    // Normaliser la réponse: le endpoint peut renvoyer soit un tableau, soit { data: [...] }, soit { nodes: [...] }
+                    if (Array.isArray(res)) {
+                      fetched.push(...res as TreeBranchLeafNode[]);
+                    } else if (res && typeof res === 'object') {
+                      const asAny = res as any;
+                      if (Array.isArray(asAny.data)) fetched.push(...asAny.data);
+                      else if (Array.isArray(asAny.nodes)) fetched.push(...asAny.nodes);
+                      else if (asAny.node && typeof asAny.node === 'object') fetched.push(asAny.node);
+                    }
+                  } catch (e) {
+                    ddiag('Failed to fetch duplicated node subtree', id, e);
+                  }
+                }));
+
+                if (fetched.length > 0) {
+                  setRawNodes(prev => {
+                    const known = new Set(prev.map(n => n.id));
+                    const newOnes = fetched.filter(n => !known.has(n.id));
+                    if (newOnes.length === 0) return prev;
+                    return [...prev, ...newOnes];
+                  });
+                  console.log('[useTBLDataHierarchicalFixed] merged duplicated subtree nodes:', fetched.length);
+                  // Also fetch parent subtrees for display nodes created under the parent
+                  try {
+                    let parentIds = Array.from(new Set((duplicated as Array<any>).map(d => d.parentId).filter(Boolean)));
+                    // Also attempt to derive parentIds from the original template's parent (sourceTemplateId)
+                    const sourceParentIds: string[] = [];
+                    const sourceTemplateIds = Array.from(new Set((duplicated as Array<any>).map(d => d.sourceTemplateId).filter(Boolean))) as string[];
+                    if (sourceTemplateIds.length > 0) {
+                      await Promise.all(sourceTemplateIds.map(async stid => {
+                        try {
+                          const sr = await apiRef.current.get(`/api/treebranchleaf/nodes/${stid}/full`);
+                          const sarr: TreeBranchLeafNode[] = Array.isArray(sr) ? sr as TreeBranchLeafNode[] : (sr && typeof sr === 'object' ? (sr.data || sr.nodes || (sr.node ? [sr.node] : [])) : []);
+                          if (sarr.length > 0) {
+                            const p = sarr[0].parentId;
+                            if (p) sourceParentIds.push(p);
+                          }
+                        } catch (e) {
+                          ddiag('[useTBLDataHierarchicalFixed] failed to fetch full source template', stid, e);
+                        }
+                      }));
+                      if (sourceParentIds.length > 0) parentIds = [...new Set(parentIds.concat(sourceParentIds))];
+                    }
+                    if (parentIds.length > 0) {
+                      const fetchedParentNodes: TreeBranchLeafNode[] = [];
+                      await Promise.all(parentIds.map(async pid => {
+                        try {
+                          const pr = await apiRef.current.get(`/api/treebranchleaf/nodes/${pid}/full`);
+                          if (Array.isArray(pr)) fetchedParentNodes.push(...pr as TreeBranchLeafNode[]);
+                          else if (pr && typeof pr === 'object') {
+                            const asAny = pr as any;
+                            if (Array.isArray(asAny.data)) fetchedParentNodes.push(...asAny.data);
+                            else if (Array.isArray(asAny.nodes)) fetchedParentNodes.push(...asAny.nodes);
+                            else if (asAny.node && typeof asAny.node === 'object') fetchedParentNodes.push(asAny.node);
+                          }
+                        } catch {
+                          // ignore
+                        }
+                      }));
+                      if (fetchedParentNodes.length > 0) {
+                        setRawNodes(prev => {
+                          const known = new Set(prev.map(n => n.id));
+                          const newOnes = fetchedParentNodes.filter(n => !known.has(n.id));
+                          if (newOnes.length === 0) return prev;
+                          return [...prev, ...newOnes];
+                        });
+                        ddiag('useTBLDataHierarchicalFixed merged parent subtree nodes:', fetchedParentNodes.length);
+                      }
+                    }
+                  } catch {
+                    // swallow errors to avoid affecting the optimistic local merge
+                  }
+                }
+                else if (Array.isArray(duplicated) && duplicated.length > 0) {
+                  // Fallback: if we expected duplicates but nothing was fetched, do a full refresh only
+                  // if the caller explicitly asked to force a refresh (forceRefresh=true).
+                  console.warn('[useTBLDataHierarchicalFixed] Expected duplicates but fetched 0 nodes → falling back to full fetch (respecting suppressReload)', { duplicated });
+                  if ((detail as any)?.forceRefresh) {
+                    fetchData();
+                  } else {
+                    ddiag('[useTBLDataHierarchicalFixed] suppressReload=true — skipping fallback fetch for expected duplicates (no reload)');
+                  }
+                  return;
+                }
+              }
+
+              if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+                // 1) Local cascade from the deletedIds
+                setRawNodes(prev => {
+                  const removed = new Set(deletedIds);
+                  let added = true;
+                  while (added) {
+                    added = false;
+                    for (const n of prev) {
+                      if (n.parentId && removed.has(n.parentId) && !removed.has(n.id)) {
+                        removed.add(n.id);
+                        added = true;
+                      }
+                    }
+                  }
+                  return prev.filter(n => !removed.has(n.id));
+                });
+
+                // NOTE: we intentionally avoid a heavy full-tree query here to keep it lightweight.
+                // The Prisma-aware hook performs aggressive enrichment; however, we fallback to
+                // a delayed refresh if deletions didn't remove display nodes locally.
+                console.log('[useTBLDataHierarchicalFixed] deleted nodes merged locally:', deletedIds.length);
+                // Attempt to enrich deletions by scanning the full tree for display nodes
+                // referencing the deleted nodes (via metadata). If we find any, remove them
+                // locally and retransform; otherwise, schedule a gentle fetchData() as fallback.
+                (async () => {
+                  try {
+                    if (!treeId) return;
+                    // Prefer local cache first
+                    let allNodes: TreeBranchLeafNode[] = Array.isArray(rawNodesRef.current) ? rawNodesRef.current as TreeBranchLeafNode[] : [];
+                    // If local cache is empty and the caller asked for a full refresh, fetch it
+                    if (!allNodes.length && (detail as any)?.forceRefresh) {
+                      const resp = await apiRef.current.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
+                      if (Array.isArray(resp)) allNodes = resp as TreeBranchLeafNode[];
+                      else if (resp && typeof resp === 'object') allNodes = (resp.data || resp.nodes || []) as TreeBranchLeafNode[];
+                    }
+                    if (!allNodes.length) {
+                      // No nodes available from full tree query. Respect suppressReload and
+                      // only refresh if the caller explicitly requested it via forceRefresh.
+                      if ((detail as any)?.forceRefresh) setTimeout(() => fetchData(), 800);
+                      return;
+                    }
+                    const baseRemoved = new Set(deletedIds);
+                    const nodeById = new Map(allNodes.map(n => [n.id, n] as const));
+                    const relatedTemplateIds = new Set<string>();
+                    for (const rid of deletedIds) {
+                      const deletedNode = nodeById.get(rid as string);
+                      if (!deletedNode) continue;
+                      const dm: any = deletedNode.metadata || {};
+                      if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
+                      if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+                    }
+                    const extraToRemove = new Set<string>();
+                    for (const node of allNodes) {
+                      const meta: any = node.metadata || {};
+                      if (meta.copiedFromNodeId && baseRemoved.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
+                      if (meta.copiedFromNodeId && relatedTemplateIds.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
+                      if (meta.sourceTemplateId && (baseRemoved.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) extraToRemove.add(node.id);
+                      if (meta.fromVariableId) {
+                        for (const rid of baseRemoved) {
+                          if (String(meta.fromVariableId).includes(String(rid))) extraToRemove.add(node.id);
+                        }
+                        for (const tid of relatedTemplateIds) {
+                          if (String(meta.fromVariableId).includes(String(tid))) extraToRemove.add(node.id);
+                        }
+                      }
+                      for (const rid of baseRemoved) {
+                        const m = String(rid).match(/-(\d+)$/);
+                        if (m) {
+                          const suffix = `-${m[1]}`;
+                          if (String(meta.fromVariableId).endsWith(suffix)) extraToRemove.add(node.id);
+                        }
+                      }
+                    }
+                    if (extraToRemove.size > 0) {
+                      setRawNodes(prev => prev.filter(n => !extraToRemove.has(n.id)));
+                      ddiag('[useTBLDataHierarchicalFixed] merged additional deletion candidates from full tree:', extraToRemove.size);
+                      setFormDataVersion(v => v + 1);
+                    } else {
+                      if ((detail as any)?.forceRefresh) setTimeout(() => fetchData(), 800);
+                    }
+                    } catch (e) {
+                      ddiag('[useTBLDataHierarchicalFixed] failed to enrich deletions via full tree query', e);
+                      if ((detail as any)?.forceRefresh) setTimeout(() => fetchData(), 800);
+                    }
+                })();
+              }
+            } catch (e) {
+              ddiag('Error merging duplicated/deleted nodes silently', e);
+            } finally {
+              setFormDataVersion(v => v + 1);
+            }
+          })();
+          // Recompute local transform based on current window.TBL_FORM_DATA and rawNodes
+          if (rawNodesRef.current.length > 0) {
+            formDataVersionRef.current += 1;
+            // The useMemo that builds nodes from rawNodes will recompute when formDataVersion changes
+            setFormDataVersion((v) => v + 1);
+            // Kick off background reconciliation for cases where some display nodes are not yet visible
+            (async () => {
+              try {
+                if (duplicated && duplicated.length > 0) await reconcileDuplicatedNodes(duplicated);
+              } catch { /* ignore */ }
+            })();
+          }
+          return;
+        }
+
+        ddiag('Repeater update detected → refetch', detail);
+        fetchData();
     };
 
     window.addEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     return () => window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
-  }, [fetchData, disabled, tree_id]);
+  }, [fetchData, treeId, disabled, setFormDataVersion, reconcileDuplicatedNodes]);
 
-  // 🔄 NOUVEAU: Écouter les changements de formData pour retransformer avec références partagées
+  // Feature: When form data changes, re-transform the existing rawNodes with the new formData
+  // NOTE: Do NOT call fetchData() here; fetching nodes on each field change is expensive.
   useEffect(() => {
-    console.log('🎯 [TBL Hook FIXED] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
-    
+    if (!treeId || disabled) {
+      return;
+    }
+
     const handleFormDataChange = () => {
-      console.error('🔔🔔🔔🔔🔔 [TBL HOOK FIXED] ===== EVENT REÇU ===== TBL_FORM_DATA_CHANGED');
-      console.log('🔔 [TBL Hook FIXED] Event TBL_FORM_DATA_CHANGED reçu !');
-      
-      if (disabled) {
-        console.log('⚠️ [TBL Hook FIXED] Hook désactivé, ignoré');
+      if (!rawNodesRef.current.length) {
+        ddiag('Form data change ignored (no cached nodes)');
         return;
       }
-      
-      if (!tree_id) {
-        console.log('⚠️ [TBL Hook FIXED] Pas de tree_id, ignoré');
-        return;
-      }
-      
-      if (rawNodesRef.current.length === 0) {
-        console.log('⚠️ [TBL Hook FIXED] rawNodes vide, ignoré');
-        return;
-      }
-      
-      console.log('🔄 [TBL Hook FIXED] FormData modifié, rechargement pour références partagées...');
-      // Forcer la retransformation en rechargeant les données depuis l'API
-      fetchData();
+      ddiag('Form data changed → re-transforming local nodes (no network)');
+      // Trigger a re-compute of transformed memo by bumping the version counter
+      setFormDataVersion(v => v + 1);
     };
 
-    console.error('✅✅✅✅✅ [TBL HOOK FIXED] ===== LISTENER ATTACHÉ À WINDOW =====');
-    console.log('✅ [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED attaché');
     window.addEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
-    
-    return () => {
-      console.log('🧹 [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED détaché');
-      window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
-    };
-  }, [disabled, tree_id, fetchData]);
+    return () => window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+  }, [fetchData, treeId, disabled, setFormDataVersion]);
 
-  // Actions mutation (optimistes simples + refetch)
-  const transformRawNodes = useCallback((nodes: TreeBranchLeafNode[]) => {
-    if (!nodes.length) return { tree: null, tabs: [], fieldsByTab: {}, sectionsByTab: {} };
-    
-    const nodeMap = new Map<string, TreeBranchLeafNode>();
-    nodes.forEach(n => nodeMap.set(n.id, n));
-    const childrenMap = new Map<string | null, TreeBranchLeafNode[]>();
-    nodes.forEach(n => {
-      const key = n.parentId;
-      if (!childrenMap.has(key)) childrenMap.set(key, []);
-      childrenMap.get(key)!.push(n);
-    });
-    childrenMap.forEach(arr => arr.sort((a, b) => (a.order || 0) - (b.order || 0)));
-    const topBranches = (childrenMap.get(null) || []).filter(n => n.type === 'branch');
-    const tabsLocal: TBLTab[] = [];
-    const fieldsByTabLocal: Record<string, TBLField[]> = {};
-    const sectionsByTabLocal: Record<string, TBLSection[]> = {};
-    const preloadedByNodeId = preload.byNodeId;
-    
-    const makeSection = (branchNode: TreeBranchLeafNode): TBLSection => {
-      const rawChildren = childrenMap.get(branchNode.id) || [];
-      const subsections: TBLSection[] = [];
-      const fields: TBLField[] = [];
-      rawChildren.forEach(child => {
-        if (child.type === 'branch') subsections.push(makeSection(child));
-        else if (child.type.startsWith('leaf_')) fields.push(createField(child, nodeMap, preloadedByNodeId.get(child.id) as CapabilityLite | undefined));
-      });
+  const transformed = useMemo(() => {
+    // linter: reference formDataVersion to ensure memoization reacts to formData changes
+    void formDataVersion;
+    if (!rawNodes.length) {
       return {
-        id: branchNode.id,
-        name: branchNode.label,
-        title: branchNode.label,
-        description: branchNode.description,
-        icon: deriveIcon(branchNode),
-        fields: fields.sort((a, b) => a.order - b.order),
-        order: branchNode.order || 0,
-        parentId: branchNode.parentId || undefined,
-        subsections: subsections.sort((a, b) => (a.order || 0) - (b.order || 0))
+        tree: null,
+        tabs: [] as TBLTab[],
+        fieldsByTab: {} as Record<string, TBLField[]>,
+        sectionsByTab: {} as Record<string, TBLSection[]>
       };
-    };
-    
-    topBranches.forEach(tabBranch => {
-      const level2 = childrenMap.get(tabBranch.id) || [];
-      const sections: TBLSection[] = [];
-      const directFields: TBLField[] = [];
-      level2.forEach(n => {
-        if (n.type === 'branch') sections.push(makeSection(n));
-        else if (n.type.startsWith('leaf_')) directFields.push(createField(n, nodeMap, preloadedByNodeId.get(n.id) as CapabilityLite | undefined));
-      });
-      const tab: TBLTab = { id: tabBranch.id, name: tabBranch.label, label: tabBranch.label, order: tabBranch.order || 0, sections: sections.sort((a, b) => (a.order || 0) - (b.order || 0)) };
-      tabsLocal.push(tab);
-      fieldsByTabLocal[tab.id] = [...directFields].sort((a, b) => a.order - b.order);
-      sectionsByTabLocal[tab.id] = tab.sections;
-    });
-    
-    const treeObj: TBLTree = { id: nodes[0].treeId, name: 'Arbre TreeBranchLeaf', tabs: tabsLocal.sort((a, b) => a.order - b.order) };
-    return { tree: treeObj, tabs: treeObj.tabs, fieldsByTab: fieldsByTabLocal, sectionsByTab: sectionsByTabLocal };
-  }, [preload.byNodeId]);
+    }
+    const formData = (typeof window !== 'undefined' && (window as any).TBL_FORM_DATA) || {};
+    return transformNodesToTBLComplete(rawNodes, formData);
+  }, [rawNodes, formDataVersion]);
+  useEffect(() => { transformedRef.current = transformed; }, [transformed]);
 
-  const { tree, tabs, fieldsByTab, sectionsByTab } = useMemo(() => {
-    return transformRawNodes(rawNodes);
-  }, [rawNodes, transformRawNodes]);
+  
 
-  // Actions mutation (optimistes simples + refetch)
+  const refetch = useCallback(() => fetchData(), [fetchData]);
+
   const updateNodeValue = useCallback(async (nodeId: string, value: string | number | boolean) => {
     try {
       await api.post(`/api/treebranchleaf/nodes/${nodeId}/value`, { value });
       await fetchData();
-    } catch (e) {
-      console.error('❌ [TBL] updateNodeValue error:', e);
+    } catch (err) {
+      console.error('❌ [useTBLDataHierarchicalFixed] updateNodeValue error:', err);
     }
   }, [api, fetchData]);
 
@@ -514,8 +540,8 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     try {
       await api.put(`/api/treebranchleaf/${nodeId}/visibility`, {});
       await fetchData();
-    } catch (e) {
-      console.error('❌ [TBL] toggleNodeVisibility error:', e);
+    } catch (err) {
+      console.error('❌ [useTBLDataHierarchicalFixed] toggleNodeVisibility error:', err);
     }
   }, [api, fetchData]);
 
@@ -523,8 +549,8 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     try {
       await api.post(`/api/treebranchleaf/${nodeId}/options`, { option });
       await fetchData();
-    } catch (e) {
-      console.error('❌ [TBL] addOption error:', e);
+    } catch (err) {
+      console.error('❌ [useTBLDataHierarchicalFixed] addOption error:', err);
     }
   }, [api, fetchData]);
 
@@ -532,60 +558,16 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     try {
       await api.delete(`/api/treebranchleaf/${nodeId}/options/${encodeURIComponent(option)}`);
       await fetchData();
-    } catch (e) {
-      console.error('❌ [TBL] deleteOption error:', e);
+    } catch (err) {
+      console.error('❌ [useTBLDataHierarchicalFixed] deleteOption error:', err);
     }
   }, [api, fetchData]);
 
-  // Event listener pour TBL_FORM_DATA_CHANGED
-  useEffect(() => {
-    console.error('🎯🎯🎯🎯🎯 [TBL HOOK FIXED] ===== EVENT LISTENER USEEFFECT DÉCLENCHÉ =====');
-    console.log('🎯 [TBL Hook FIXED] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
-    
-    const handleFormDataChange = () => {
-      console.error('🔔🔔🔔🔔🔔 [TBL HOOK FIXED] ===== EVENT REÇU ===== TBL_FORM_DATA_CHANGED');
-      console.log('🔔 [TBL Hook FIXED] Event TBL_FORM_DATA_CHANGED reçu !');
-      
-      if (disabled) {
-        console.log('⚠️ [TBL Hook FIXED] Hook désactivé, ignoré');
-        return;
-      }
-      
-      if (!tree_id) {
-        console.log('⚠️ [TBL Hook FIXED] Pas de tree_id, ignoré');
-        return;
-      }
-      
-      if (rawNodesRef.current.length === 0) {
-        console.log('⚠️ [TBL Hook FIXED] rawNodes vide, ignoré');
-        return;
-      }
-      
-      console.log('🔄 [TBL Hook FIXED] FormData modifié, rechargement pour références partagées...');
-      fetchData();
-    };
-
-    console.error('✅✅✅✅✅ [TBL HOOK FIXED] ===== LISTENER ATTACHÉ À WINDOW =====');
-    console.log('✅ [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED attaché');
-    window.addEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
-    
-    return () => {
-      console.log('🧹 [TBL Hook FIXED] Event listener TBL_FORM_DATA_CHANGED détaché');
-      window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
-    };
-  }, [disabled, tree_id, fetchData]);
-
-  // 🔄 Wrapper pour logger les appels à refetch
-  const refetch = useCallback(() => {
-    console.log('🔄 [useTBLDataHierarchicalFixed] refetch() appelé !');
-    return fetchData();
-  }, [fetchData]);
-
   return {
-    tree,
-    tabs,
-    fieldsByTab,
-    sectionsByTab,
+    tree: transformed.tree,
+    tabs: transformed.tabs,
+    fieldsByTab: transformed.fieldsByTab,
+    sectionsByTab: transformed.sectionsByTab,
     loading,
     error,
     refetch,
@@ -593,7 +575,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     toggleNodeVisibility,
     addOption,
     deleteOption,
-    rawNodes // 🔥 NOUVEAU: Exposer rawNodes pour Cascader (contient leaf_option)
+    rawNodes
   };
 }
 

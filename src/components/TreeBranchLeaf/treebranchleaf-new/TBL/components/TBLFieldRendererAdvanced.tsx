@@ -894,6 +894,37 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     setLocalValue(newValue);
     onChange(newValue);
+
+    // 🔥 CRITICAL FIX: Si ce champ utilise tableLookup, stocker AUSSI la valeur avec le nodeId du SELECT
+    // Le backend `interpretTable` cherche les valeurs dans formData[selectNodeId], pas formData[field.id]
+    if (fieldConfig.hasTable && field.table_activeId && formData) {
+      console.log(`🔗 [${field.label}] Table Lookup détecté - Stockage duppliqué avec table_activeId: ${field.table_activeId}`);
+      
+      // Trouver le(s) SELECT node(s) configuré(s) pour cette table
+      // Le table_activeId pointe vers la table, mais les SELECTs ont leurs propres IDs
+      // On doit chercher dans allNodes les nodes qui ont une TreeBranchLeafSelectConfig pointant vers cette table
+      const tableId = field.table_activeId;
+      
+      // Parcourir tous les nœuds pour trouver les SELECT liés à cette table
+      if (allNodes && allNodes.length > 0) {
+        allNodes.forEach(node => {
+          // Vérifier si ce node est un SELECT lié à notre table
+          if (node.type?.includes('SELECT') || node.nodeType === 'leaf_field') {
+            // Si le node a une reference vers notre table dans ses capacités
+            const nodeTableId = node.table_activeId;
+            if (nodeTableId === tableId) {
+              console.log(`✅ [${field.label}] Trouvé SELECT node ${node.id} (${node.label}) lié à la table ${tableId}`);
+              // Stocker la valeur AVEC LE NODE ID du SELECT
+              onChange(newValue); // Stockage original avec field.id (déjà fait au-dessus)
+              // Maintenant on doit aussi écrire dans formData[node.id] mais on n'a pas d'accès direct
+              // SOLUTION: Appeler un callback parent si disponible, ou utiliser un setter global
+              console.log(`⚠️ [${field.label}] ATTENTION: Impossible de stocker directement dans formData[${node.id}]`);
+              console.log(`💡 SOLUTION: Le parent (TBLSectionRenderer) doit gérer ce cas`);
+            }
+          }
+        });
+      }
+    }
   };
 
   // Rendu conditionnel basé sur les conditions TreeBranchLeaf
@@ -910,44 +941,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
   // Rendu du champ selon le type et la configuration TreeBranchLeaf
   const renderFieldInput = () => {
-    // 🎯 PRIORITÉ 0: Table Lookup - Si le champ a un lookup configuré ET activé ET des options chargées
-    if (fieldConfig.hasTable && tableLookup.options.length > 0) {
-      return (
-        <Select
-          value={localValue}
-          onChange={handleChange}
-          placeholder={`Sélectionnez ${fieldConfig.label.toLowerCase()}`}
-          loading={tableLookup.loading}
-          showSearch
-          allowClear
-          disabled={disabled}
-          style={{ width: '150px' }}
-          filterOption={(input, option) =>
-            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }
-        >
-          {tableLookup.options.map((option) => (
-            <Option key={option.value} value={option.value} label={option.label}>
-              {option.label}
-            </Option>
-          ))}
-        </Select>
-      );
-    }
-
-    // Si le lookup est activé ET en cours de chargement, afficher un état de chargement
-    if (fieldConfig.hasTable && tableLookup.loading) {
-      return (
-        <Select
-          value={localValue}
-          onChange={handleChange}
-          placeholder="Chargement..."
-          loading={true}
-          disabled
-          style={{ width: '150px' }}
-        />
-      );
-    }
+    // (La gestion Table Lookup est traitée plus bas via le type SELECT et ne doit pas préempter
+    // les champs avec capacités Data/Formula qui doivent afficher une valeur calculée.)
 
     // 🚀 PRIORITÉ 1: Champs TreeBranchLeaf intelligents (générés dynamiquement)
     if (field.isTreeBranchLeafSmart && (field.hasData || field.hasFormula)) {
@@ -1106,6 +1101,30 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           unit={fieldConfig.unit}
           precision={fieldConfig.decimals || 4}
           placeholder="Calcul en cours..."
+        />
+      );
+    }
+    
+    // 🔥 PRIORITÉ 2B: FALLBACK SOURCEREF - Si le champ a une sourceRef directe (condition/formula/node-formula/table)
+    // C'est pour les champs comme "Prix Kwh" et "M façade" qui ont sourceRef mais pas de capabilities.data
+    const fieldSourceRef = (field as any).sourceRef || (field as any).metadata?.sourceRef;
+    const fieldNodeId = (field as any).nodeId || field.id;
+    if (fieldSourceRef && typeof fieldSourceRef === 'string' && /^(condition:|formula:|node-formula:|@table\.|@value\.)/.test(fieldSourceRef)) {
+      if (!treeId) {
+        return <span style={{ color: '#888' }}>---</span>;
+      }
+      
+      console.log(`🔥 [FALLBACK DIRECT SOURCEREF] Champ "${fieldConfig.label}" utilise sourceRef directe: ${fieldSourceRef}, nodeId: ${fieldNodeId}`);
+      
+      // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
+      return (
+        <BackendValueDisplay
+          nodeId={fieldNodeId}
+          treeId={treeId}
+          formData={formData}
+          unit={fieldConfig.unit}
+          precision={fieldConfig.decimals || 4}
+          placeholder="Calcul..."
         />
       );
     }
@@ -1750,7 +1769,16 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                   block={!iconOnly}
                   size={getAntSize()}
                   icon={<PlusOutlined />}
-                  onClick={() => setRepeaterInstanceCount(repeaterInstanceCount + 1)}
+                  onClick={() => {
+                    const newCount = repeaterInstanceCount + 1;
+                    setRepeaterInstanceCount(newCount);
+                    try {
+                      const instanceCountKey = `${field.id}_instanceCount`;
+                      onChange(instanceCountKey, newCount);
+                    } catch {
+                      // If onChange undefined (data section or similar), ignore
+                    }
+                  }}
                   disabled={disabled}
                   style={{
                     height: getAddButtonHeight(),
@@ -1776,7 +1804,16 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                   block
                   danger
                   icon={<MinusCircleOutlined />}
-                  onClick={() => setRepeaterInstanceCount(repeaterInstanceCount - 1)}
+                  onClick={() => {
+                    const newCount = repeaterInstanceCount - 1;
+                    setRepeaterInstanceCount(newCount);
+                    try {
+                      const instanceCountKey = `${field.id}_instanceCount`;
+                      onChange(instanceCountKey, newCount);
+                    } catch {
+                      // ignore
+                    }
+                  }}
                   disabled={disabled}
                 >
                   Supprimer la dernière entrée

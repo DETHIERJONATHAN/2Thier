@@ -412,11 +412,12 @@ router.get('/tables/:id', async (req, res) => {
 // =============================================================================
 router.put('/tables/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, description, columns, rows, type } = req.body;
+  const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req.body;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
   console.log(`[NEW PUT /tables/:id] 🔄 Mise à jour table ${id}`);
   console.log(`[NEW PUT /tables/:id] Nouvelles données: ${Array.isArray(columns) ? columns.length : 'N/A'} colonnes, ${Array.isArray(rows) ? rows.length : 'N/A'} lignes`);
+  console.log(`[NEW PUT /tables/:id] Lookup config: selectColumn=${lookupSelectColumn}, displayColumns=${JSON.stringify(lookupDisplayColumns)}`);
 
   try {
     const updatedTable = await prisma.$transaction(async (tx) => {
@@ -448,6 +449,10 @@ router.put('/tables/:id', async (req, res) => {
       if (type) updateData.type = type;
       if (Array.isArray(columns)) updateData.columnCount = columns.length;
       if (Array.isArray(rows)) updateData.rowCount = rows.length;
+      
+      // 🔥 AJOUT: Sauvegarder la configuration du lookup
+      if (lookupSelectColumn !== undefined) updateData.lookupSelectColumn = lookupSelectColumn;
+      if (Array.isArray(lookupDisplayColumns)) updateData.lookupDisplayColumns = lookupDisplayColumns;
 
       // Mettre à jour la table principale
       const tableUpdated = await tx.treeBranchLeafNodeTable.update({

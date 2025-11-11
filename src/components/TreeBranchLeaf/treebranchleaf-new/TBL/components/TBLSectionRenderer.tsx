@@ -10,8 +10,8 @@
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { dlog as globalDlog } from '../../../../../utils/debug';
-// ✅ NOUVEAU SYSTÈME : BackendValueDisplay récupère directement la valeur du backend
-import { BackendValueDisplay } from './BackendValueDisplay';
+// ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche les valeurs STOCKÉES dans Prisma
+import { CalculatedValueCard } from './CalculatedValueCard';
 import { useBatchEvaluation } from '../hooks/useBatchEvaluation';
 import { 
   Card, 
@@ -38,6 +38,7 @@ import type { TBLFormData } from '../hooks/useTBLSave';
 import { buildMirrorKeys } from '../utils/mirrorNormalization';
 import type { RawTreeNode } from '../types';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { isCopyFromRepeater } from '../utils/isCopyFromRepeater';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -286,9 +287,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   parentConditions = {},
   isValidation = false
 }) => {
-  const { api } = useAuthenticatedApi();
+  // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
+  const apiHook = useAuthenticatedApi();
+  const api = useMemo(() => apiHook.api, [apiHook.api]);
+  // dlog alias to global debug logger (globalDlog checks DEBUG_VERBOSE)
+  const dlog = globalDlog;
   
   // � DEBUG GLOBAL: Voir tous les champs reçus par cette section
+  // ⚠️ DÉSACTIVÉ pour performance - réactiver si besoin de debug
+  /*
   useEffect(() => {
     const copiesInSection = (section.fields || []).filter(field => {
       const meta = (field.metadata || {}) as any;
@@ -300,8 +307,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         copiesInSection.map(f => `${f.label} (source: ${(f.metadata as any)?.sourceTemplateId})`));
     }
   }, [section.fields, section.title]);
+  */
 
   // �🔍 EXPOSITION GLOBALE POUR DÉBOGAGE
+  // ⚠️ DÉSACTIVÉ pour performance - réactiver si besoin de debug
+  /*
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.TBL_FORM_DATA = formData;
@@ -316,6 +326,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       };
     }
   }, [formData, allNodes]);
+  */
   
   // 🔥 FONCTION RECURSIVE STABLE : Recherche récursive des sharedReferenceIds dans toute la hiérarchie PAR PARENTID
   const findAllSharedReferencesRecursive = useCallback((nodeId: string, allNodes: any[], visited = new Set<string>()): string[] => {
@@ -359,15 +370,216 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     isMobile ? 12 : 16,
     16
   ], [isMobile]);
-  // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1'))
-  const debugEnabled = useMemo(() => {
-    try { return localStorage.getItem('TBL_SMART_DEBUG') === '1'; } catch { return false; }
-  }, []);
-  const dlog = useCallback((...args: unknown[]) => {
-    if (debugEnabled) {
-      globalDlog('[TBLSectionRenderer]', ...args);
+  
+  // ✅ CRITIQUE: Mémoiser le handleFieldChange pour éviter les re-rendus
+  const handleFieldChange = useCallback((fieldId: string, value: any, fieldLabel?: string) => {
+    onChange(fieldId, value);
+    
+    // Synchronisation miroir
+    if (fieldLabel) {
+      try {
+        const mirrorKey = `__mirror_data_${fieldLabel}`;
+        onChange(mirrorKey, value);
+      } catch {
+        // Ignorer les erreurs de miroir en production
+      }
     }
-  }, [debugEnabled]);
+  }, [onChange]);
+  
+  // ✅ CRITIQUE: Fonction pour extraire la valeur de formData
+  const extractFieldValue = useCallback((fieldId: string) => {
+    const rawValue = formData[fieldId];
+    // Si c'est un objet avec value/calculatedValue (réponse backend), extraire
+    if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+      return rawValue.value ?? rawValue.calculatedValue ?? rawValue.operationResult?.value ?? rawValue;
+    }
+    return rawValue;
+  }, [formData]);
+
+  // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1'))
+  // NOTE: Moved earlier to avoid runtime TDZ errors (dlog used across this file)
+
+  // Handler to delete a full copy group (used by delete button)
+  const handleDeleteCopyGroup = useCallback(async (f: TBLField) => {
+    try {
+      const repeaterId = (f as any).parentRepeaterId as string;
+      const label = String(f.label || '');
+      const oldPattern = label.match(/\(Copie\s+(\d+)\)/);
+      const newPattern = label.match(/-(\d+)\s*$/);
+      const copyNumber = oldPattern?.[1] || newPattern?.[1] || null;
+      const signatureOld = copyNumber ? ` (Copie ${copyNumber})` : null;
+      const signatureNew = copyNumber ? `-${copyNumber}` : null;
+
+      if (!copyNumber) {
+        console.warn('⚠️ [DELETE COPY GROUP] Signature de copie introuvable, action ignorée.');
+        return;
+      }
+
+  dlog('🗑️ [DELETE COPY GROUP] Suppression de la copie:', { copyNumber, repeaterId });
+
+      const fieldsInSameCopy = section.fields.filter(sf => {
+        const sameRepeater = (sf as any).parentRepeaterId === repeaterId;
+        const lbl = String(sf.label || '');
+        const isCopyField = (sf as any).isDeletableCopy === true;
+        const matchesOld = signatureOld ? lbl.endsWith(signatureOld) : false;
+        const matchesNew = signatureNew ? /-(\d+)\s*$/.test(lbl) && lbl.endsWith(signatureNew!) : false;
+        return sameRepeater && isCopyField && (matchesOld || matchesNew);
+      });
+
+      const fieldsInNewSection = (allNodes || []).filter(n => {
+        const lbl = String(n.label || '');
+        const matchesOld = signatureOld ? lbl.endsWith(signatureOld) : false;
+        const matchesNew = signatureNew ? /-(\d+)\s*$/.test(lbl) && lbl.endsWith(signatureNew!) : false;
+        const notInCurrentSection = !section.fields.some((sf: any) => sf.id === n.id);
+        const shouldDelete = notInCurrentSection && (matchesOld || matchesNew) && n.id !== f.id;
+        if (shouldDelete) {
+          dlog('✅ [DELETE MATCH] Champ trouvé via allNodes:', { label: lbl, id: n.id, notInCurrentSection });
+        }
+        return shouldDelete;
+      });
+
+      const allFieldsToDelete = Array.from(new Map([...fieldsInSameCopy, ...fieldsInNewSection].map(x => [x.id, x])).values());
+      if (allFieldsToDelete.length === 0) {
+        dlog('⚠️ [DELETE COPY GROUP] Aucun champ à supprimer pour cette copie.');
+        return;
+      }
+
+      dlog('🗑️ [DELETE COPY GROUP] Suppression de', allFieldsToDelete.length, 'champs (après déduplication)');
+
+      // Dispatch optimistic UI update to remove the ids immediately (suppress reload)
+      try {
+        const optimisticIds = allFieldsToDelete.map(x => x.id);
+        window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { detail: { treeId: treeId, nodeId: repeaterId, source: 'delete-copy-group-optimistic', suppressReload: true, deletingIds: optimisticIds, timestamp: Date.now() } }));
+        dlog('[DELETE COPY GROUP] Dispatched optimistic tbl-repeater-updated (deletingIds)', optimisticIds);
+      } catch {
+        dlog('[DELETE COPY GROUP] Failed to dispatch optimistic tbl-repeater-updated (silent)');
+      }
+
+      const BATCH_SIZE = 5;
+      const MAX_RETRIES = 3;
+      const DELAY_MS = 500;
+      let globalSuccess = 0;
+      let globalFailed = 0;
+      const globalFailedFields: Array<{ label: string; id: string; lastError: string }> = [];
+      const globalSuccessIds: string[] = [];
+
+      const deleteWithRetry = async (node: any, retry = 0) => {
+        try {
+          await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}`, { suppressErrorLogForStatuses: [404] });
+          return { status: 'success' as const, id: node.id, label: node.label };
+        } catch (err: any) {
+          const status = err?.status || 500;
+          const errMsg = err?.data?.error || err?.message || 'Erreur inconnue';
+          if (status === 500 && retry < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, DELAY_MS * (retry + 1)));
+            return deleteWithRetry(node, retry + 1);
+          }
+          if (status === 404) return { status: 'success' as const, id: node.id, label: node.label };
+          return { status: 'failed' as const, id: node.id, label: node.label, error: errMsg };
+        }
+      };
+
+  for (let i = 0; i < allFieldsToDelete.length; i += BATCH_SIZE) {
+        const batch = allFieldsToDelete.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(batch.map(b => deleteWithRetry(b)));
+        for (const r of results) {
+          if (r.status === 'success') {
+            globalSuccess++;
+            globalSuccessIds.push(r.id);
+          } else {
+            globalFailed++;
+            globalFailedFields.push({ label: r.label || '', id: r.id, lastError: String((r as any).error || '') });
+          }
+        }
+        if (i + BATCH_SIZE < allFieldsToDelete.length) await new Promise(res => setTimeout(res, DELAY_MS));
+      }
+
+      dlog('🗑️ [DELETE COPY GROUP] Suppression terminée - Succès:', globalSuccess, '❌ Échecs:', globalFailed);
+      if (globalFailed > 0) console.warn('🗑️ [DELETE COPY GROUP] Champs non supprimés:', globalFailedFields.map(f => `${f.label} (${f.lastError})`));
+
+      // Extra cleanup: scan for display nodes referencing deleted copies
+      try {
+  const removedSet = new Set(globalSuccessIds);
+        let nodesForScan = Array.isArray(allNodes) && allNodes.length > 0 ? allNodes : [];
+        if (!nodesForScan || nodesForScan.length === 0) {
+          try {
+            const resp = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
+            nodesForScan = Array.isArray(resp) ? resp as any[] : (resp?.data || resp?.nodes || []);
+          } catch (err) {
+            console.warn('[DELETE COPY GROUP] Unable to fetch full tree for extra deletion:', err);
+            nodesForScan = allNodes || [];
+          }
+        }
+        const nodeById = new Map(nodesForScan.map(n => [n.id, n] as const));
+        const relatedTemplateIds = new Set<string>();
+        for (const rid of globalSuccessIds) {
+          const removedNode = nodeById.get(rid);
+          if (!removedNode) continue;
+          const dm: any = removedNode.metadata || {};
+          if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
+          if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+        }
+
+        const extraCandidates = (nodesForScan || []).filter(n => {
+          const meta: any = n.metadata || {};
+          const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
+          if (!looksLikeDisplay) return false;
+          if (removedSet.has(n.id)) return false;
+          if (meta.copiedFromNodeId && (removedSet.has(String(meta.copiedFromNodeId)) || relatedTemplateIds.has(String(meta.copiedFromNodeId)))) return true;
+          if (meta.sourceTemplateId && (removedSet.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) return true;
+          if (meta.fromVariableId) {
+            for (const rid of Array.from(removedSet)) if (String(meta.fromVariableId).includes(String(rid))) return true;
+            for (const tid of Array.from(relatedTemplateIds)) if (String(meta.fromVariableId).includes(String(tid))) return true;
+          }
+          for (const rid of Array.from(removedSet)) {
+            const m = String(rid).match(/-(\d+)$/);
+            if (m) {
+              const suffix = `-${m[1]}`;
+              if (String(meta.fromVariableId || '').endsWith(suffix)) return true;
+              if (String(n.label || '').endsWith(suffix)) return true;
+            }
+          }
+          return false;
+        });
+
+  if (extraCandidates.length > 0) {
+          const extraIdsToRemove: string[] = [];
+          for (let i = 0; i < extraCandidates.length; i += BATCH_SIZE) {
+            const batch = extraCandidates.slice(i, i + BATCH_SIZE);
+            const res = await Promise.all(batch.map(b => deleteWithRetry(b)));
+            for (const r of res) {
+              if (r.status === 'success') extraIdsToRemove.push(r.id);
+              else console.warn('[DELETE COPY GROUP] Failed to delete extra display node', r.id, (r as any).error);
+            }
+          }
+          if (extraIdsToRemove.length > 0) {
+            for (const id of extraIdsToRemove) if (!globalSuccessIds.includes(id)) globalSuccessIds.push(id);
+            dlog('🗑️ [DELETE COPY GROUP] Additional display nodes deleted successfully:', extraIdsToRemove.length);
+          }
+        }
+      } catch (e) {
+        console.warn('[DELETE COPY GROUP] Extra cleanup encountered an error:', e);
+      }
+
+      try {
+        // Final reconciliation event
+        window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { detail: { treeId: treeId, nodeId: repeaterId, source: 'delete-copy-group-finished', suppressReload: true, deletedIds: globalSuccessIds, timestamp: Date.now() } }));
+        dlog('[DELETE COPY GROUP] Dispatched final tbl-repeater-updated (deletedIds)', globalSuccessIds);
+        // Backwards-compatible light event for other listeners if needed
+        window.dispatchEvent(new CustomEvent('delete-copy-group-finished', { detail: { treeId: treeId, nodeId: repeaterId, deletedIds: globalSuccessIds, timestamp: Date.now() } }));
+        // Ensure local retransform/computation runs in dependent components if they rely on memoized values
+        try {
+          window.dispatchEvent(new CustomEvent('TBL_FORM_DATA_CHANGED', { detail: { reason: 'delete-copy-group-finished', deletedIds: globalSuccessIds } }));
+        } catch {/* noop */}
+      } catch {
+        dlog('⚠️ [DELETE COPY GROUP] Impossible de dispatch final tbl-repeater-updated (silent)');
+      }
+    } catch (error) {
+      console.error('❌ [DELETE COPY GROUP] Erreur lors de la suppression de la copie:', error);
+    }
+  }, [api, allNodes, section, treeId, dlog]);
+  
+  // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1')) is declared earlier
 
   const buildConditionalFieldFromNode = useCallback((node: RawTreeNode): TBLField => {
     const finalFieldType = (node.subType || node.fieldType || node.type || 'TEXT') as string;
@@ -1902,11 +2114,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // Ces copies ne doivent s'afficher que dans le répéteur lui-même, pas comme des champs normaux
     const result = orderedFields.filter(field => {
       const meta = (field.metadata || {}) as any;
-      const isACopy = !!meta?.sourceTemplateId;
-      if (isACopy) {
+      const sourceTemplateId = meta?.sourceTemplateId;
+      const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
+      if (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
         console.log(`🚫 [COPY-FILTER] Exclusion de copie: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+        return false;
       }
-      return !isACopy;
+      return true;
     });
     
     // LOG DÉTAILLÉ pour champs conditionnels injectés
@@ -1939,7 +2153,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     });
     
     return result;
-  }, [orderedFields, section.title]);
+  }, [orderedFields, section.title, allNodes]);
 
   // 🎨 Déterminer le style selon le niveau
   const getSectionStyle = () => {
@@ -1973,7 +2187,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     const [batchLoaded, setBatchLoaded] = useState(false);
     const isDataSection = section.isDataSection || section.title === 'Données' || section.title.includes('Données');
 
-    // Pré-chargement batch pour les cartes de la section Données
+    // 🔥 CORRECTION CRITIQUE: Pré-chargement batch UNIQUEMENT au montage du composant
+    // ❌ NE PAS mettre formData dans les dépendances car ça relance l'API à chaque frappe !
     useEffect(() => {
       if (!isDataSection) return;
       type DataInstance = { metadata?: { sourceType?: string; sourceRef?: string }; displayFormat?: string; unit?: string; precision?: number };
@@ -1994,14 +2209,25 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         batchCacheRef.current = map;
         setBatchLoaded(true);
       })();
-    }, [isDataSection, formData, section.fields, evaluateBatch]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isDataSection, section.fields, evaluateBatch]); // ✅ formData intentionnellement omis pour éviter les appels API à chaque frappe
 
     const renderDataSectionField = (field: TBLField) => {
+    // 🔥 CORRECTION CRITIQUE: Synthétiser capabilities.data pour les champs condition/formula
+    // Si le champ n'a pas de data_instances mais a une sourceRef dans ses metadata,
+    // créer un objet data synthétique pour que getDisplayValue() fonctionne correctement
+    let effectiveCapabilities = field.capabilities;
+    
+    // ⚠️ DEBUG DÉSACTIVÉ pour performance - réactiver si besoin
+    // console.log(`🎯 [RENDER DATA FIELD] Début renderDataSectionField pour: "${field.label}" (id: ${field.id})`);
+    
+    // 🔥 CORRECTION: Les champs avec data.instances vides seront gérés par PRIORITÉ 0 dans getDisplayValue()
+    
     // 🔥 CORRECTION CRITIQUE : Si le champ a une capacité Table (lookup ou matrix), utiliser le renderer éditable
-    const hasTableCapability = field.capabilities?.table?.enabled;
-    const hasRowOrColumnMode = field.capabilities?.table?.currentTable?.rowBased === true || 
-                               field.capabilities?.table?.currentTable?.columnBased === true;
-    const isMatrixMode = field.capabilities?.table?.currentTable?.mode === 'matrix';
+    const hasTableCapability = effectiveCapabilities?.table?.enabled;
+    const hasRowOrColumnMode = effectiveCapabilities?.table?.currentTable?.rowBased === true || 
+                               effectiveCapabilities?.table?.currentTable?.columnBased === true;
+  // Note: le mode 'matrix' est géré en affichage (BackendValueDisplay), pas en édition
     
     //  Détection des champs répétables
     const isRepeater = field.type === 'leaf_repeater' || 
@@ -2009,8 +2235,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                        (field as any).fieldType === 'leaf_repeater' ||
                        (field as any).fieldType === 'LEAF_REPEATER';
     
-    // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un résultat de matrice OU un répétable
-    if ((hasTableCapability && (hasRowOrColumnMode || isMatrixMode)) || isRepeater) {
+  // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un répétable
+  // ⚠️ Ne PAS traiter les résultats de matrice comme éditables: ils doivent s'afficher via BackendValueDisplay
+  if ((hasTableCapability && hasRowOrColumnMode) || isRepeater) {
       return (
         <Col
           key={field.id}
@@ -2021,29 +2248,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         >
           <TBLFieldRendererAdvanced
             field={field}
-            value={(() => {
-              const rawValue = formData[field.id];
-              // Si c'est un objet avec value/calculatedValue (réponse backend), extraire
-              if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-                return rawValue.value ?? rawValue.calculatedValue ?? rawValue.operationResult?.value ?? rawValue;
-              }
-              return rawValue;
-            })()}
+            value={extractFieldValue(field.id)}
             allNodes={allNodes}
-            onChange={(value) => {
-              onChange(field.id, value);
-
-              // Synchronisation miroir
-              try {
-                const label = (field.label || '').toString();
-                if (label) {
-                  const mirrorKey = `__mirror_data_${label}`;
-                  onChange(mirrorKey, value);
-                }
-              } catch (e) {
-                console.warn('⚠️ [MIRROR] Impossible de créer la valeur miroir:', e);
-              }
-            }}
+            onChange={(value) => handleFieldChange(field.id, value, field.label)}
             isValidation={isValidation}
             formData={formData}
             treeId={treeId}
@@ -2054,15 +2261,26 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     
     // 🎯 Système TreeBranchLeaf : connexion aux capacités réelles (DISPLAY ONLY)
     const getDisplayValue = () => {
-      const capabilities = field.capabilities;
+      const capabilities = effectiveCapabilities;
       
   dlog(`🔬 [TEST CAPABILITIES] Champ "${field.label}" - Capabilities présentes:`, !!capabilities);
+  console.log(`🔥 [DEBUG CAPABILITIES] "${field.label}":`, {
+    hasData: !!capabilities?.data,
+    dataActiveId: capabilities?.data?.activeId,
+    dataInstancesCount: Object.keys(capabilities?.data?.instances || {}).length,
+    dataSourceType: (capabilities?.data?.instances?.[capabilities?.data?.activeId as string] as any)?.metadata?.sourceType,
+    dataSourceRef: (capabilities?.data?.instances?.[capabilities?.data?.activeId as string] as any)?.metadata?.sourceRef,
+    hasTable: !!capabilities?.table,
+    hasFormula: !!capabilities?.formula,
+    fieldId: field.id,
+    fieldLabel: field.label
+  });
 
       // ✨ Check 0: valeur "miroir" issue d'un champ conditionnel associé (ex: "Prix Kw/h - Champ")
       // Permet d'afficher instantanément la valeur saisie quand aucune capacité Data/Formula n'est disponible
       const mirrorKey = `__mirror_data_${field.label}`;
       const mirrorValue: unknown = (formData as Record<string, unknown>)[mirrorKey];
-      const hasDynamicCapabilities = Boolean(field.capabilities?.data?.instances || field.capabilities?.formula);
+      const hasDynamicCapabilities = Boolean(capabilities?.data?.instances || capabilities?.formula);
       // 🔍 Recherche variantes si pas trouvé
       let effectiveMirrorValue = mirrorValue;
       // 🔥 MODIFICATION: Rechercher les variantes MÊME SI hasDynamicCapabilities = true
@@ -2116,6 +2334,26 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   dlog(`🪞 [MIRROR] Valeur miroir DÉTECTÉE pour "${field.label}" mais capacités dynamiques présentes - on laisse les capacités s'exécuter`);
       }
 
+      // 🔥 PRIORITÉ 0 (AVANT TOUT): Si data.instances existe MAIS EST VIDE, c'est une condition/formule
+      // → Afficher directement via BackendValueDisplay avec field.id
+      // ✅ CORRECTION: Vérifier aussi si le champ a une sourceRef dans ses métadonnées
+      // 🎯 MEGA FIX: Même SANS sourceRef, si data.instances est vide mais data.enabled = true,
+      //    c'est probablement un champ calculé → tenter avec field.id
+      const hasEmptyInstances = capabilities?.data?.instances && Object.keys(capabilities.data.instances).length === 0;
+      const hasDataCapability = capabilities?.data?.enabled || (capabilities?.data?.instances !== undefined);
+      
+      if (hasEmptyInstances && hasDataCapability && treeId && field.id) {
+        console.log(`🚀🚀🚀 [MEGA FIX BACKEND] Champ "${field.label}" (${field.id}) - Affichage valeur stockée`);
+        return (
+          <CalculatedValueCard
+            nodeId={field.id}
+            unit={(field.config as any)?.unit}
+            precision={(field.config as any)?.decimals ?? 2}
+            placeholder="---"
+          />
+        );
+      }
+
       // ✨ Pré-évaluation: si la capacité Donnée pointe vers une condition et qu'une formule est dispo,
       // on donne la priorité à la formule pour éviter un résultat null quand la condition n'est pas remplie.
       try {
@@ -2125,8 +2363,21 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const candidateDataInstance = dataActiveId && dataInstances
           ? dataInstances[dataActiveId]
           : (dataInstances ? dataInstances[Object.keys(dataInstances)[0]] : undefined);
-        const dataSourceType = candidateDataInstance?.metadata?.sourceType;
-        const dataSourceRef = candidateDataInstance?.metadata?.sourceRef as string | undefined;
+        let dataSourceType = candidateDataInstance?.metadata?.sourceType;
+        let dataSourceRef = candidateDataInstance?.metadata?.sourceRef as string | undefined;
+        
+        // 🔥 FIX ULTRA SIMPLE: Si data.instances est vide mais le champ a une sourceRef dans ses métadonnées,
+        // on l'utilise directement. C'est pour les champs condition/formula qui n'ont pas de data_instances.
+        if (!dataSourceRef) {
+          const fieldMeta = (field as any).metadata || {};
+          const fallbackSourceRef = fieldMeta.sourceRef || (field as any).sourceRef;
+          if (fallbackSourceRef && typeof fallbackSourceRef === 'string') {
+            dataSourceRef = fallbackSourceRef;
+            dataSourceType = 'tree';
+            console.log(`🔧 [FALLBACK SOURCEREF] Utilisation sourceRef du champ pour "${field.label}": ${dataSourceRef}`);
+          }
+        }
+        
         // 🚫 Suppression de la préférence forcée formule : on suit exactement la sourceRef.
         // Si la sourceRef cible une condition -> on affiche la condition (bool / valeur) via BackendCalculatedField.
         // Si l'utilisateur veut une formule, la sourceRef doit explicitement être "formula:<id>".
@@ -2135,20 +2386,52 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           if (r.startsWith('condition:') || r.startsWith('formula:') || r.startsWith('node-formula:') || r.startsWith('@value.') || r.startsWith('@table.')) {
             dlog(`Routing data direct sourceRef='${r}'`);
             const dMeta = (candidateDataInstance as { displayFormat?: string; unit?: string; precision?: number } | undefined) || {};
-            // Récupérer le nodeId depuis dataActiveId
-            if (!dataActiveId || !treeId) {
+            // Récupérer le nodeId selon le type de sourceRef
+            if (!treeId) {
               return <span style={{ color: '#888' }}>---</span>;
             }
+            // Choix du nodeId à évaluer
+            const looksLikeUuid = (s?: string) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+            let nodeIdToUse: string | undefined;
             
-            // ✅ NOUVEAU SYSTÈME : BackendValueDisplay récupère directement la valeur du backend
+            // 🔥 FIX CRITIQUE: Pour condition/formula, utiliser field.id (pas l'ID de la sourceRef)
+            // Car le backend retourne les résultats indexés par field.id, pas par l'ID de la condition/formule
+            if (r.startsWith('condition:') || r.startsWith('formula:') || r.startsWith('node-formula:')) {
+              nodeIdToUse = field.id; // Utiliser l'ID du champ, pas celui de la condition/formule
+              console.log(`✅ [FIX FORMULA/CONDITION] Utilisation field.id pour la recherche backend: ${nodeIdToUse} (sourceRef était: ${r})`);
+            } else if (r.startsWith('@value.')) {
+              nodeIdToUse = r.split('@value.')[1]; // "@value.xyz" -> "xyz"
+              dlog(`✅ [FIX @VALUE] Extraction nodeId direct de sourceRef: ${nodeIdToUse}`);
+            } else if (r.startsWith('@table.')) {
+              // Cas @table.*: correctif existant car activeId peut être la table conteneur
+              const tableActiveId = (capabilities?.table as any)?.activeId as string | undefined;
+              const fieldNodeId = (field as any).nodeId || (field as any).metadata?.originalNodeId || field.id;
+              nodeIdToUse = dataActiveId;
+              // Si activeId est égal à l'ID de table ou est absent, basculer sur l'ID du champ
+              if (!nodeIdToUse || (tableActiveId && nodeIdToUse === tableActiveId)) {
+                nodeIdToUse = fieldNodeId;
+              }
+              // Sécurité: si nodeIdToUse ne ressemble pas à un UUID, mais field.id oui, prendre field.id
+              if (!looksLikeUuid(nodeIdToUse) && looksLikeUuid(field.id)) {
+                nodeIdToUse = field.id;
+              }
+              dlog(`✅ [TABLE RESOLUTION] nodeIdToUse final: ${nodeIdToUse}`);
+            } else {
+              // Fallback: utiliser dataActiveId
+              nodeIdToUse = dataActiveId as string | undefined;
+            }
+
+            if (!nodeIdToUse) {
+              return <span style={{ color: '#888' }}>---</span>;
+            }
+
+            // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur STOCKÉE
             return (
-              <BackendValueDisplay
-                nodeId={dataActiveId}
-                treeId={treeId}
-                formData={formData}
+              <CalculatedValueCard
+                nodeId={nodeIdToUse}
                 unit={dMeta.unit}
                 precision={typeof dMeta.precision === 'number' ? dMeta.precision : (field.config?.decimals || 2)}
-                placeholder="Calcul..."
+                placeholder="---"
               />
             );
           }
@@ -2157,9 +2440,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         console.warn('⚠️ [PREFERENCE] Erreur lors de la vérification priorité formule vs donnée:', e);
       }
       
-  // ✨ PRIORITÉ 1: Capacité Data (données dynamiques depuis TreeBranchLeafNodeVariable)
-  // Ne pas exiger strictement 'enabled' si des instances existent côté Prisma
-  if (capabilities?.data?.enabled || capabilities?.data?.instances) {
+  // ✨ PRIORITÉ 1: Capacité Data avec instances PEUPLÉES (données dynamiques depuis TreeBranchLeafNodeVariable)
+  if ((capabilities?.data?.enabled || capabilities?.data?.instances) && 
+      capabilities?.data?.instances && 
+      Object.keys(capabilities.data.instances).length > 0) {
   dlog(`� [TEST DATA] Champ "${field.label}" a une capacité Data active:`, capabilities.data.activeId);
   dlog(`🔬 [TEST DATA] Instances disponibles:`, capabilities.data.instances);
         
@@ -2198,21 +2482,27 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               }
               
               // Récupérer le nodeId pour le composant
-              const variableNodeId = (capabilities?.data?.activeId) || (capabilities?.data?.instances ? Object.keys(capabilities.data.instances)[0] : undefined);
+              let variableNodeId = (capabilities?.data?.activeId) || (capabilities?.data?.instances ? Object.keys(capabilities.data.instances)[0] : undefined);
+              
+              // 🔥 FIX CRITIQUE FORMULE: Pour les formules/conditions, le backend retourne les résultats
+              // avec le nodeId du CHAMP D'AFFICHAGE (field.id), PAS le nodeId de la formule elle-même.
+              // On doit donc TOUJOURS utiliser field.id pour les formules/conditions.
+              if (isCondition || isFormula) {
+                variableNodeId = field.id;
+                console.log(`🔥🔥🔥 [FIX ${isFormula ? 'FORMULA' : 'CONDITION'}] Utilisation de field.id: ${variableNodeId} pour "${field.label}"`);
+              }
               
               if (!variableNodeId || !treeId) {
                 return <span style={{ color: '#888' }}>---</span>;
               }
               
-              // ✅ NOUVEAU SYSTÈME : BackendValueDisplay récupère directement la valeur du backend
+              // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur STOCKÉE
               return (
-                <BackendValueDisplay
+                <CalculatedValueCard
                   nodeId={variableNodeId}
-                  treeId={treeId}
-                  formData={formData}
                   unit={dataInstance?.unit as string | undefined}
                   precision={dataInstance?.precision as number | undefined}
-                  placeholder={batchLoaded ? '---' : 'Calcul...'}
+                  placeholder="---"
                 />
               );
             }
@@ -2231,15 +2521,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 return <span style={{ color: '#888' }}>---</span>;
               }
               
-              // ✅ NOUVEAU SYSTÈME : BackendValueDisplay récupère directement la valeur du backend
+              // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur du champ d'affichage
+              // 🔥 FIX CRITIQUE: Utiliser field.id et non instanceId
+              // Le backend stocke la valeur calculée dans le nœud du CHAMP D'AFFICHAGE
               return (
-                <BackendValueDisplay
-                  nodeId={instanceId}
-                  treeId={treeId}
-                  formData={formData}
+                <CalculatedValueCard
+                  nodeId={field.id}
                   unit={dataInstance?.unit as string | undefined}
                   precision={dataInstance?.precision as number | undefined}
-                  placeholder={batchLoaded ? '---' : 'Calcul...'}
+                  placeholder="---"
                 />
               );
             }
@@ -2277,15 +2567,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           return <span style={{ color: '#888' }}>---</span>;
         }
         
-        // ✅ NOUVEAU SYSTÈME : BackendValueDisplay récupère directement la valeur du backend
+        // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur STOCKÉE
+        // 🔥 FIX CRITIQUE: Utiliser field.id (nodeId du champ d'affichage) et non formulaId
+        // Le backend stocke les résultats avec le nodeId du CHAMP D'AFFICHAGE
         return (
-          <BackendValueDisplay
-            nodeId={formulaId}
-            treeId={treeId}
-            formData={formData}
+          <CalculatedValueCard
+            nodeId={field.id}
             unit={field.config?.unit}
             precision={field.config?.decimals || 4}
-            placeholder="Calcul en cours..."
+            placeholder="---"
           />
         );
       }
@@ -2353,15 +2643,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           }
           
           const cfg = field.config as { displayFormat?: 'number'|'currency'|'percentage'; unit?: string; decimals?: number } | undefined;
-          // ✅ NOUVEAU SYSTÈME : BackendValueDisplay récupère directement la valeur du backend
+          // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur du champ d'affichage
+          // 🔥 FIX CRITIQUE: Utiliser field.id et non extractedNodeId
+          // Le backend stocke la valeur calculée dans le nœud du CHAMP D'AFFICHAGE
           return (
-            <BackendValueDisplay
-              nodeId={extractedNodeId}
-              treeId={treeId}
-              formData={formData}
+            <CalculatedValueCard
+              nodeId={field.id}
               unit={cfg?.unit}
               precision={cfg?.decimals || 2}
-              placeholder="Calcul..."
+              placeholder="---"
             />
           );
         }
@@ -2469,6 +2759,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             </Text>
             {(() => {
               const displayValue = getDisplayValue();
+              console.log(`✅ [RENDER DATA FIELD] Fin renderDataSectionField pour: "${field.label}" - displayValue:`, displayValue);
               
               // 🎯 NOUVEAU SYSTÈME ULTRA-SIMPLE:
               // BackendValueDisplay retourne juste la valeur (string ou Fragment avec string)
@@ -2556,17 +2847,30 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             {(section.isDataSection || section.title === 'Données' || section.title.includes('Données')) ? (
               <div style={{ marginBottom: '16px' }}>
                 <Row gutter={dataRowGutter} justify="center">
-                  {(visibilityFilteredFields.length > 0 
-                    ? visibilityFilteredFields 
-                    : (section.fields || []).filter(field => {
-                        const meta = (field.metadata || {}) as any;
-                        const isACopy = !!meta?.sourceTemplateId;
-                        if (isACopy) {
-                          console.log(`🚫 [COPY-FILTER] Exclusion de copie DATA SECTION: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
-                        }
-                        return !isACopy;
-                      })
-                  ).map(renderDataSectionField)}
+                  {(() => {
+                    const filteredFields = orderedFields.filter(field => {
+                      const meta = (field.metadata || {}) as any;
+                      const sourceTemplateId = meta?.sourceTemplateId;
+                      const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
+                      const isRepeaterVariant = Boolean((field as any).parentRepeaterId) || (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId));
+                      if (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
+                        console.log(`🚫 [COPY-FILTER] Exclusion de copie DATA SECTION: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+                        return false;
+                      }
+                      if (isRepeaterVariant) {
+                        console.log(`🚫 [REPEATER-FILTER] Exclusion de variante repeater DATA SECTION: "${field.label}" (id: ${field.id})`);
+                      }
+                      return !isRepeaterVariant;
+                    });
+                    
+                    console.log(`🎯🎯🎯 [DATA SECTION ROW] Rendering ${filteredFields.length} filtered fields in Row:`, filteredFields.map(f => ({ id: f.id, label: f.label })));
+                    
+                    return filteredFields.map(field => {
+                      const rendered = renderDataSectionField(field);
+                      console.log(`✅✅✅ [DATA SECTION FIELD RENDERED] "${field.label}" -> JSX element:`, rendered);
+                      return rendered;
+                    });
+                  })()}
                 </Row>
               </div>
             ) : visibilityFilteredFields.length > 0 ? (
@@ -2681,7 +2985,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               console.log(`🚀 Utilisation de l'API de copie au lieu du namespace`);
                               console.log(`${'🚀'.repeat(30)}\n`);
                               
-                              try {
+                                let optimisticOk = true;
+                                try {
                                 // Récupérer les templates depuis les métadonnées du repeater
                                 const parentField = section.fields.find(f => f.id === repeaterParentId);
                                 
@@ -2716,25 +3021,57 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   templateNodeIds 
                                 });
                                 
-                                // Appel à l'API de copie
+                                // 🎯 Premièrement: ajouter l'instance UI localement (optimistic UI)
+                                try {
+                                  const newCount = instanceCount + 1;
+                                  onChange(instanceCountKey, newCount);
+                                } catch (e) {
+                                  console.warn('⚠️ [REPEATER] Échec optimistic add instance', e);
+                                }
+
+                                // Appel à l'API de copie (opération asynchrone en arrière-plan)
                                 const response = await api.post(`/api/treebranchleaf/nodes/${repeaterParentId}/duplicate-templates`, {
                                   templateNodeIds
                                 });
                                 
                                 console.log(`✅ [COPY-API] Copie créée:`, response);
                                 
-                                // 🔄 Recharger les données pour voir la nouvelle copie
-                                console.log(`🔄 [COPY-API] Rechargement des données...`);
-                                if (typeof window !== 'undefined' && window.TBL_FORCE_REFRESH) {
-                                  window.TBL_FORCE_REFRESH();
-                                  console.log(`✅ [COPY-API] Données rechargées !`);
-                                } else {
-                                  console.warn(`⚠️ [COPY-API] window.TBL_FORCE_REFRESH non disponible`);
+                                // ✅ Réponse reçue. On n'appelle PAS TBL_FORCE_REFRESH pour éviter le rechargement
+                                // du formulaire complet et l'affichage d'un loader. On émet un événement local
+                                // pour indiquer qu'une duplication a été effectuée, mais en demandant aux
+                                // listeners de ne pas forcer un rechargement (suppressReload).
+                                try {
+                                  const duplicatedArray = (response && (response.duplicated || (response as any).data?.duplicated)) || [];
+                                  const normalizedDuplicated = duplicatedArray.map((d: any) => ({ id: d?.id || d, parentId: d?.parentId || (d?.node || {})?.parentId || undefined, sourceTemplateId: d?.sourceTemplateId || (d?.metadata || {})?.sourceTemplateId || undefined }));
+                                  console.log('[COPY-API] Dispatching tbl-repeater-updated (silent) duplicated:', normalizedDuplicated.map(d => d.id));
+                                  window.dispatchEvent(new CustomEvent('tbl-repeater-updated', {
+                                    detail: {
+                                      treeId: treeId,
+                                      nodeId: repeaterParentId,
+                                      source: 'duplicate-templates',
+                                      duplicated: normalizedDuplicated,
+                                      suppressReload: true,
+                                      timestamp: Date.now()
+                                    }
+                                  }));
+                                } catch (e) {
+                                  console.warn('⚠️ [COPY-API] Impossible de dispatch tbl-repeater-updated (silent)', e);
                                 }
                                 
-                              } catch (error) {
-                                console.error('❌ [COPY-API] Erreur lors de la copie:', error);
-                              }
+                                } catch (error) {
+                                  console.error('❌ [COPY-API] Erreur lors de la copie:', error);
+                                  optimisticOk = false;
+                                }
+
+                                // Si la duplication a échoué côté serveur, annuler l'optimistic UI
+                                if (!optimisticOk) {
+                                  try {
+                                    const newCount = Math.max(0, (formData[instanceCountKey] as number || 1) - 1);
+                                    onChange(instanceCountKey, newCount);
+                                  } catch (e) {
+                                    console.warn('⚠️ [COPY-API] Impossible d’annuler l’instance localement', e);
+                                  }
+                                }
                             } else if (isRemoveInstanceButton) {
                               // Supprimer une instance spécifique
                               dlog(`🔁 [REPEATER] Suppression instance #${instanceIndex + 1}:`, {
@@ -2743,7 +3080,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 oldCount: instanceCount
                               });
                               
-                              // 🎯 Diminuer immédiatement le compteur
+                              // 🎯 Diminuer immédiatement le compteur localement (optimistic)
                               const newCount = instanceCount - 1;
                               onChange(instanceCountKey, newCount);
                               
@@ -2809,33 +3146,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       >
                         <TBLFieldRendererAdvanced
                           field={field}
-                          value={(() => {
-                            const rawValue = formData[field.id];
-                            if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-                              return rawValue.value ?? rawValue.calculatedValue ?? rawValue.operationResult?.value ?? rawValue;
-                            }
-                            return rawValue;
-                          })()}
+                          value={extractFieldValue(field.id)}
                           allNodes={allNodes}
-                          onChange={(value) => {
-                            console.log('🔄 [CONDITIONAL FIELD] onChange pour champ conditionnel injecté:', field.id, value);
-                            onChange(field.id, value);
-
-                            // Synchronisation miroir pour les champs conditionnels
-                            try {
-                              const label = (field.label || '').toString();
-                              const mirrorTargetLabel = (field as any).mirrorTargetLabel;
-                              const baseLabel = mirrorTargetLabel || label;
-                              
-                              if (baseLabel) {
-                                const mirrorKey = `__mirror_data_${baseLabel}`;
-                                console.log('🪞 [CONDITIONAL MIRROR] Synchronisation:', baseLabel, '->', mirrorKey, '=', value);
-                                onChange(mirrorKey, value);
-                              }
-                            } catch (e) {
-                              console.warn('⚠️ [CONDITIONAL MIRROR] Erreur:', e);
-                            }
-                          }}
+                          onChange={(value) => handleFieldChange(field.id, value, field.label)}
                           disabled={disabled}
                           formData={formData}
                           treeMetadata={field.treeMetadata}
@@ -2896,38 +3209,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             >
                               <TBLFieldRendererAdvanced
                                 field={condField}
-                                value={(() => {
-                                  const rawValue = formData[condField.id];
-                                  if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-                                    return rawValue.value ?? rawValue.calculatedValue ?? rawValue.operationResult?.value ?? rawValue;
-                                  }
-                                  return rawValue;
-                                })()}
+                                value={extractFieldValue(condField.id)}
                                 allNodes={allNodes}
-                                onChange={(value) => {
-                                  onChange(condField.id, value);
-
-                                  // Synchronisation miroir pour les conditionalFields
-                                  try {
-                                    const label = (condField.label || '').toString();
-                                    const repeaterNamespace = (condField as unknown as Record<string, unknown>).repeaterNamespace as RepeaterNamespaceMeta | undefined;
-                                    
-                                    let cleanLabel = label;
-                                    if (repeaterNamespace?.labelPrefix) {
-                                      const prefix = repeaterNamespace.labelPrefix;
-                                      if (label.startsWith(prefix)) {
-                                        cleanLabel = label.substring(prefix.length).replace(/^\s*-\s*/, '').trim();
-                                      }
-                                    }
-                                    
-                                    if (cleanLabel) {
-                                      const mirrorKey = `__mirror_data_${cleanLabel}`;
-                                      onChange(mirrorKey, value);
-                                    }
-                                  } catch (e) {
-                                    console.warn('⚠️ [REPEATER INJECTION MIRROR] Erreur:', e);
-                                  }
-                                }}
+                                onChange={(value) => handleFieldChange(condField.id, value, condField.label)}
                                 disabled={disabled}
                                 formData={formData}
                                 treeMetadata={condField.treeMetadata}
@@ -2951,42 +3235,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             >
                               <TBLFieldRendererAdvanced
                                 field={field}
-                                value={(() => {
-                                  const rawValue = formData[field.id];
-                                  if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-                                    return rawValue.value ?? rawValue.calculatedValue ?? rawValue.operationResult?.value ?? rawValue;
-                                  }
-                                  return rawValue;
-                                })()}
+                                value={extractFieldValue(field.id)}
                                 allNodes={allNodes}
-                                onChange={(value) => {
-                                  dlog(`🔄 [SECTION RENDERER] onChange appelé pour ${field.id}:`, value);
-                                  onChange(field.id, value);
-
-                                  // Synchronisation miroir normale
-                                  try {
-                                    const label = (field.label || '').toString();
-                                    const repeaterNamespace = (field as unknown as Record<string, unknown>).repeaterNamespace as RepeaterNamespaceMeta | undefined;
-                                    const isRepeaterInstance = Boolean(repeaterNamespace);
-                                    
-                                    let cleanLabel = label;
-                                    if (isRepeaterInstance && repeaterNamespace?.labelPrefix) {
-                                      const prefix = repeaterNamespace.labelPrefix;
-                                      if (label.startsWith(prefix)) {
-                                        cleanLabel = label.substring(prefix.length).replace(/^\s*-\s*/, '').trim();
-                                        dlog(`🔧 [MIRROR][NAMESPACE] Label nettoyé: "${label}" -> "${cleanLabel}"`);
-                                      }
-                                    }
-                                    
-                                    if (cleanLabel) {
-                                      const mirrorKey = `__mirror_data_${cleanLabel}`;
-                                      dlog(`🪞 [MIRROR][UNIVERSAL] Synchronisation: "${cleanLabel}" -> ${mirrorKey} = ${value}`);
-                                      onChange(mirrorKey, value);
-                                    }
-                                  } catch (e) {
-                                    console.warn('⚠️ [MIRROR] Impossible de créer la valeur miroir:', e);
-                                  }
-                                }}
+                                onChange={(value) => handleFieldChange(field.id, value, field.label)}
                                 disabled={disabled}
                                 formData={formData}
                                 treeMetadata={field.treeMetadata}
@@ -3023,42 +3274,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           <div style={{ flex: 1 }}>
                             <TBLFieldRendererAdvanced
                               field={field}
-                              value={(() => {
-                                const rawValue = formData[field.id];
-                                if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-                                  return rawValue.value ?? rawValue.calculatedValue ?? rawValue.operationResult?.value ?? rawValue;
-                                }
-                                return rawValue;
-                              })()}
+                              value={extractFieldValue(field.id)}
                               allNodes={allNodes}
-                              onChange={(value) => {
-                                dlog(`🔄 [SECTION RENDERER] onChange appelé pour ${field.id}:`, value);
-                                onChange(field.id, value);
-
-                                // Synchronisation miroir normale
-                                try {
-                                  const label = (field.label || '').toString();
-                                  const repeaterNamespace = (field as unknown as Record<string, unknown>).repeaterNamespace as RepeaterNamespaceMeta | undefined;
-                                  const isRepeaterInstance = Boolean(repeaterNamespace);
-                                  
-                                  let cleanLabel = label;
-                                  if (isRepeaterInstance && repeaterNamespace?.labelPrefix) {
-                                    const prefix = repeaterNamespace.labelPrefix;
-                                    if (label.startsWith(prefix)) {
-                                      cleanLabel = label.substring(prefix.length).replace(/^\s*-\s*/, '').trim();
-                                      dlog(`🔧 [MIRROR][NAMESPACE] Label nettoyé: "${label}" -> "${cleanLabel}"`);
-                                    }
-                                  }
-                                  
-                                  if (cleanLabel) {
-                                    const mirrorKey = `__mirror_data_${cleanLabel}`;
-                                    dlog(`🪞 [MIRROR][UNIVERSAL] Synchronisation: "${cleanLabel}" -> ${mirrorKey} = ${value}`);
-                                    onChange(mirrorKey, value);
-                                  }
-                                } catch (e) {
-                                  console.warn('⚠️ [MIRROR] Impossible de créer la valeur miroir:', e);
-                                }
-                              }}
+                              onChange={(value) => handleFieldChange(field.id, value, field.label)}
                               disabled={disabled}
                               formData={formData}
                               treeMetadata={field.treeMetadata}
@@ -3088,150 +3306,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   alignItems: 'center',
                                   justifyContent: 'center'
                                 }}
-                                onClick={async () => {
-                                  try {
-                                    const repeaterId = (field as any).parentRepeaterId as string;
-                                    const label = String(field.label || '');
-                                    // Supporter les deux schémas de suffixe: ancien "(Copie N)" et nouveau "-N"
-                                    const oldPattern = label.match(/\(Copie\s+(\d+)\)/);
-                                    const newPattern = label.match(/-(\d+)\s*$/);
-                                    const copyNumber = oldPattern?.[1] || newPattern?.[1] || null;
-                                    const signatureOld = copyNumber ? ` (Copie ${copyNumber})` : null;
-                                    const signatureNew = copyNumber ? `-${copyNumber}` : null;
-
-                                    if (!copyNumber) {
-                                      console.warn('⚠️ [DELETE COPY GROUP] Signature de copie introuvable, action ignorée.');
-                                      return;
-                                    }
-
-                                    console.log('🗑️ [DELETE COPY GROUP] Suppression de la copie:', { copyNumber, repeaterId });
-
-                                    // 1️⃣ Trouver tous les champs appartenant à la même copie dans la section actuelle
-                                    const fieldsInSameCopy = section.fields.filter(f => {
-                                      const sameRepeater = (f as any).parentRepeaterId === repeaterId;
-                                      const lbl = String(f.label || '');
-                                      const isCopyField = (f as any).isDeletableCopy === true; // indicateur côté hook
-                                      // Correspond si le label se termine par l'un ou l'autre des schémas
-                                      const matchesOld = signatureOld ? lbl.endsWith(signatureOld) : false;
-                                      const matchesNew = signatureNew ? /-(\d+)\s*$/.test(lbl) && lbl.endsWith(signatureNew!) : false;
-                                      return sameRepeater && isCopyField && (matchesOld || matchesNew);
-                                    });
-
-                                    console.log('🗑️ [DELETE COPY GROUP] Champs trouvés dans section actuelle:', fieldsInSameCopy.length, fieldsInSameCopy.map((f: any) => f.label));
-
-                                    // 2️⃣ Trouver aussi les champs créés dans "Nouveau Section" avec le même suffixe
-                                    // Utiliser allNodes directement car "Nouveau Section" peut ne pas être dans allSections du contexte actuel
-                                    // NOTE: allNodes vient de l'API brute SANS le flag isDeletableCopy, donc on identifie les copies par le suffixe uniquement
-                                    const fieldsInNewSection = (allNodes || [])
-                                      .filter(f => {
-                                        const lbl = String(f.label || '');
-                                        // Les champs de copie ont TOUJOURS le suffixe -1, -2, -3, etc.
-                                        // On n'utilise PAS isDeletableCopy car il n'existe que dans le hook transformé
-                                        const matchesOld = signatureOld ? lbl.endsWith(signatureOld) : false;
-                                        const matchesNew = signatureNew ? /-(\d+)\s*$/.test(lbl) && lbl.endsWith(signatureNew!) : false;
-                                        
-                                        // Chercher tous les champs qui ne sont pas dans la section actuelle et qui matche les suffixes
-                                        const notInCurrentSection = !section.fields.some((sf: any) => sf.id === f.id);
-                                        const shouldDelete = notInCurrentSection && (matchesOld || matchesNew) && f.id !== field.id;
-                                        
-                                        if (shouldDelete) {
-                                          console.log('✅ [DELETE MATCH] Champ trouvé via allNodes:', { label: lbl, id: f.id, notInCurrentSection });
-                                        }
-                                        return shouldDelete;
-                                      });
-
-                                    console.log('🗑️ [DELETE COPY GROUP] Champs trouvés via allNodes:', fieldsInNewSection.length, fieldsInNewSection.map((f: any) => f.label));
-
-                                    // 3️⃣ Combiner tous les champs à supprimer et dédupliciter par ID
-                                    const allFieldsToDelete = Array.from(
-                                      new Map(
-                                        [...fieldsInSameCopy, ...fieldsInNewSection].map(f => [f.id, f])
-                                      ).values()
-                                    );
-
-                                    if (allFieldsToDelete.length === 0) {
-                                      console.warn('⚠️ [DELETE COPY GROUP] Aucun champ à supprimer pour cette copie.');
-                                      return;
-                                    }
-
-                                    console.log('🗑️ [DELETE COPY GROUP] Suppression de', allFieldsToDelete.length, 'champs (après déduplication)');
-
-                                    // 4️⃣ Supprimer par BATCH avec RETRY pour gérer les contraintes de cascade
-                                    const BATCH_SIZE = 5;
-                                    const MAX_RETRIES = 3;
-                                    const DELAY_MS = 500; // Délai entre les batches
-                                    
-                                    let globalSuccess = 0;
-                                    let globalFailed = 0;
-                                    const globalFailedFields: Array<{ label: string; id: string; lastError: string }> = [];
-                                    
-                                    // Helper: supprimer avec retry
-                                    const deleteWithRetry = async (field: any, retryCount = 0): Promise<{ status: 'success' | 'failed'; label: string; id: string; error?: any }> => {
-                                      try {
-                                        await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${field.id}`);
-                                        console.log('✅ [DELETE SUCCESS]', field.label, field.id);
-                                        return { status: 'success', label: field.label, id: field.id };
-                                      } catch (err: any) {
-                                        const errorMsg = err?.data?.error || err?.message || 'Erreur inconnue';
-                                        const status = err?.status || 500;
-                                        
-                                        // Retry si c'est une erreur 500 (cascade) et pas de retry maxed
-                                        if (status === 500 && retryCount < MAX_RETRIES) {
-                                          console.log(`⏳ [DELETE RETRY] ${field.label} - Tentative ${retryCount + 1}/${MAX_RETRIES}`);
-                                          await new Promise(resolve => setTimeout(resolve, DELAY_MS * (retryCount + 1)));
-                                          return deleteWithRetry(field, retryCount + 1);
-                                        }
-                                        
-                                        // 404 = déjà supprimé (success)
-                                        if (status === 404) {
-                                          console.log('✅ [DELETE SUCCESS - ALREADY DELETED]', field.label, field.id);
-                                          return { status: 'success', label: field.label, id: field.id };
-                                        }
-                                        
-                                        console.error('❌ [DELETE FAILED]', field.label, field.id, errorMsg);
-                                        return { status: 'failed', label: field.label, id: field.id, error: errorMsg };
-                                      }
-                                    };
-                                    
-                                    // Supprimer par batch
-                                    for (let i = 0; i < allFieldsToDelete.length; i += BATCH_SIZE) {
-                                      const batch = allFieldsToDelete.slice(i, i + BATCH_SIZE);
-                                      console.log(`🗑️ [BATCH ${Math.floor(i / BATCH_SIZE) + 1}] Suppression de ${batch.length} champs...`);
-                                      
-                                      const batchResults = await Promise.all(batch.map(f => deleteWithRetry(f)));
-                                      
-                                      for (const result of batchResults) {
-                                        if (result.status === 'success') {
-                                          globalSuccess++;
-                                        } else {
-                                          globalFailed++;
-                                          globalFailedFields.push({
-                                            label: result.label,
-                                            id: result.id,
-                                            lastError: result.error?.toString() || 'Erreur inconnue'
-                                          });
-                                        }
-                                      }
-                                      
-                                      // Délai avant le prochain batch (sauf le dernier)
-                                      if (i + BATCH_SIZE < allFieldsToDelete.length) {
-                                        await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-                                      }
-                                    }
-                                    
-                                    console.log('🗑️ [DELETE COPY GROUP] Suppression terminée - Succès:', globalSuccess, '❌ Échecs:', globalFailed);
-                                    if (globalFailed > 0) {
-                                      console.error('🗑️ [DELETE COPY GROUP] Champs non supprimés:', globalFailedFields.map(f => `${f.label} (${f.lastError})`));
-                                    }
-
-                                    // 🔄 Rechargement
-                                    if (typeof window !== 'undefined' && window.TBL_FORCE_REFRESH) {
-                                      window.TBL_FORCE_REFRESH();
-                                    }
-                                  } catch (error) {
-                                    console.error('❌ [DELETE COPY GROUP] Erreur lors de la suppression de la copie:', error);
-                                  }
-                                }}
+                                onClick={() => handleDeleteCopyGroup(field)}
                               />
                             )}
                           </div>
@@ -3242,80 +3317,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       {!field.canAddNewCopy && !(field as any).isLastInCopyGroup && (
                         <TBLFieldRendererAdvanced
                           field={field}
-                          value={(() => {
-                            const rawValue = formData[field.id];
-                            // Si c'est un objet avec value/calculatedValue (réponse backend), extraire
-                            if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-                              return rawValue.value ?? rawValue.calculatedValue ?? rawValue.operationResult?.value ?? rawValue;
-                            }
-                            return rawValue;
-                          })()}
+                          value={extractFieldValue(field.id)}
                           allNodes={allNodes}
-                          onChange={(value) => {
-                          dlog(`🔄 [SECTION RENDERER] onChange appelé pour ${field.id}:`, value);
-                          dlog(`🔄 [SECTION RENDERER] Ancienne valeur:`, formData[field.id]);
-                          onChange(field.id, value);
-
-                          // ✨ Mécanisme de miroir UNIVERSEL - synchronise TOUS les champs vers leurs miroirs
-                          try {
-                            const label = (field.label || '').toString();
-                            
-                            // 🔧 NETTOYAGE DES LABELS POUR LES INSTANCES RÉPÉTÉES
-                            // Si le champ provient d'un repeater, on retire le préfixe de namespace
-                            // pour que les clones écrivent dans les MÊMES clés miroir que l'original
-                            const repeaterNamespace = (field as unknown as Record<string, unknown>).repeaterNamespace as RepeaterNamespaceMeta | undefined;
-                            const isRepeaterInstance = Boolean(repeaterNamespace);
-                            
-                            let cleanLabel = label;
-                            if (isRepeaterInstance && repeaterNamespace?.labelPrefix) {
-                              const prefix = repeaterNamespace.labelPrefix;
-                              // Si le label commence par le préfixe (ex: "Versant 1 - Orientation")
-                              if (label.startsWith(prefix)) {
-                                // Retirer le préfixe et le " - " qui suit pour obtenir "Orientation"
-                                cleanLabel = label.substring(prefix.length).replace(/^\s*-\s*/, '').trim();
-                                dlog(`🔧 [MIRROR][NAMESPACE] Label nettoyé: "${label}" -> "${cleanLabel}"`);
-                              }
-                            }
-                            
-                            // 🎯 TOUJOURS créer le miroir par label (plus seulement les conditionnels)
-                            // Utiliser le label NETTOYÉ pour que les instances répétées et l'original partagent la même clé
-                            if (cleanLabel) {
-                              const mirrorKey = `__mirror_data_${cleanLabel}`;
-                              dlog(`🪞 [MIRROR][UNIVERSAL] Synchronisation: "${cleanLabel}" -> ${mirrorKey} = ${value}`);
-                              onChange(mirrorKey, value);
-                              
-                              // Synchroniser aussi vers window.TBL_FORM_DATA
-                              if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
-                                window.TBL_FORM_DATA[mirrorKey] = value;
-                                
-                                // Synchroniser toutes les variantes du miroir
-                                Object.keys(window.TBL_FORM_DATA).forEach(key => {
-                                  if (key.startsWith('__mirror_data_') && 
-                                      (key.includes(cleanLabel) || 
-                                       key.includes(cleanLabel.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()) ||
-                                       key === mirrorKey)) {
-                                    window.TBL_FORM_DATA[key] = value;
-                                    dlog(`🔄 [MIRROR][VARIANT] ${key} = ${value}`);
-                                  }
-                                });
-                              }
-                            }
-                            
-                            // 🔧 Logique spéciale pour les champs conditionnels (conservée)
-                            const isConditional = Boolean(field.isConditional) || /\s-\s/.test(label);
-                            if (isConditional) {
-                              const explicitTarget = (field as unknown as { mirrorTargetLabel?: string }).mirrorTargetLabel;
-                              const baseLabel = explicitTarget || cleanLabel.replace(/\s*-\s*Champ.*$/i, '').trim();
-                              if (baseLabel && baseLabel !== cleanLabel) {
-                                const conditionalMirrorKey = `__mirror_data_${baseLabel}`;
-                                dlog(`🪞 [MIRROR][CONDITIONAL] Mise à jour de la valeur miroir pour "${baseLabel}" -> key=${conditionalMirrorKey}:`, value);
-                                onChange(conditionalMirrorKey, value);
-                              }
-                            }
-                          } catch (e) {
-                            console.warn('⚠️ [MIRROR] Impossible de créer la valeur miroir:', e);
-                          }
-                        }}
+                          onChange={(value) => handleFieldChange(field.id, value, field.label)}
                           disabled={disabled}
                           formData={formData}
                           treeMetadata={field.treeMetadata}
@@ -3393,4 +3397,33 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   );
 };
 
-export default TBLSectionRenderer;
+// ✅ MÉMOÏSATION AVEC COMPARAISON CUSTOM pour éviter les re-rendus à chaque frappe
+const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, nextProps) => {
+  // Ne re-render que si les props pertinentes changent
+  if (prevProps.section.id !== nextProps.section.id) return false;
+  if (prevProps.disabled !== nextProps.disabled) return false;
+  if (prevProps.treeId !== nextProps.treeId) return false;
+  if (prevProps.level !== nextProps.level) return false;
+  
+  // ⚠️ CRITIQUE: Comparer SEULEMENT les valeurs des champs de CETTE section
+  const prevFieldIds = prevProps.section.fields.map(f => f.id);
+  const nextFieldIds = nextProps.section.fields.map(f => f.id);
+  
+  // Si les champs ont changé (ajout/suppression), re-render
+  if (prevFieldIds.length !== nextFieldIds.length) return false;
+  if (!prevFieldIds.every((id, i) => id === nextFieldIds[i])) return false;
+  
+  // Comparer les VALEURS des champs de cette section uniquement
+  for (const fieldId of prevFieldIds) {
+    if (prevProps.formData[fieldId] !== nextProps.formData[fieldId]) {
+      return false; // Une valeur a changé, re-render
+    }
+  }
+  
+  // Aucun changement pertinent, ne pas re-render
+  return true;
+});
+
+MemoizedTBLSectionRenderer.displayName = 'TBLSectionRenderer';
+
+export default MemoizedTBLSectionRenderer;

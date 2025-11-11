@@ -24,6 +24,7 @@ interface SubmissionDataEntry {
   lastResolved?: Date | null;
 }
 import { evaluateVariableOperation } from '../../treebranchleaf-new/api/operation-interpreter';
+import { storeCalculatedValues } from '../../../../services/calculatedValuesService';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -1075,6 +1076,31 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     results.forEach((r, i) => {
       console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value="${r.value}" (calculatedValue="${r.calculatedValue}")`);
     });
+
+    // 💾 STOCKER LES VALEURS CALCULÉES DANS PRISMA
+    try {
+      const calculatedValues = results
+        .filter(r => {
+          // Exclure null, undefined, chaînes vides, et symboles de vide (∅)
+          if (r.value === null || r.value === undefined) return false;
+          const strValue = String(r.value).trim();
+          if (strValue === '' || strValue === '∅') return false;
+          return true;
+        })
+        .map(r => ({
+          nodeId: r.nodeId,
+          calculatedValue: String(r.value),
+          calculatedBy: `preview-${userId}`
+        }));
+
+      if (calculatedValues.length > 0) {
+        await storeCalculatedValues(calculatedValues, submissionId);
+        console.log(`[PREVIEW-EVALUATE] ✅ ${calculatedValues.length} valeurs stockées dans Prisma`);
+      }
+    } catch (storeError) {
+      console.error(`[PREVIEW-EVALUATE] ⚠️ Erreur stockage valeurs calculées:`, storeError);
+      // Ne pas bloquer la réponse si le stockage échoue
+    }
 
     return res.json({
       success: true,

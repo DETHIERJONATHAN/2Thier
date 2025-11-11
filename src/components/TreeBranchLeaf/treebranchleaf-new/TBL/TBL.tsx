@@ -515,18 +515,19 @@ const TBL: React.FC<TBLProps> = ({
   }, []);
 
   // Prévisualisation sans écriture (aucune création/MAJ en base)
-  const previewNoSave = useCallback(async (data: TBLFormData) => {
+  // ❌ DÉSACTIVÉ : Cet appel se déclenchait à CHAQUE frappe et causait des re-rendus massifs !
+  const previewNoSave = useCallback(async (_data: TBLFormData) => {
     try {
       if (!api || !tree) return;
-      const formData = normalizePayload(data);
-      await api.post('/api/tbl/submissions/preview-evaluate', {
-        treeId: tree.id,
-        formData
-      });
+      // const formData = normalizePayload(data);
+      // await api.post('/api/tbl/submissions/preview-evaluate', {
+      //   treeId: tree.id,
+      //   formData
+      // });
     } catch (e) {
       if (isVerbose()) console.warn('⚠️ [TBL][PREVIEW] Échec preview-evaluate', e);
     }
-  }, [api, tree, normalizePayload]);
+  }, [api, tree]);
 
   // Helper: exécution de l'autosave (PUT)
   const doAutosave = useCallback(async (data: TBLFormData) => {
@@ -810,12 +811,24 @@ const TBL: React.FC<TBLProps> = ({
       try {
         // Exposer en debug (lecture) pour analyse miroir
         if (typeof window !== 'undefined') {
+          const prevGlobal = window.TBL_FORM_DATA || {};
           window.TBL_FORM_DATA = next;
-          
-          // ✅ NOUVEAU: Émettre événement pour que useTBLDataPrismaComplete recharge les références partagées
-          const event = new CustomEvent('TBL_FORM_DATA_CHANGED', { detail: { fieldId, value } });
-          window.dispatchEvent(event);
-          console.log('🚀 [TBL] Événement TBL_FORM_DATA_CHANGED dispatché:', { fieldId, value });
+
+          // ⚠️ DISPATCH CONDITIONAL: Only emit event when the changed field affects shared refs or mirrors
+          const isMirrorKey = fieldId && String(fieldId).startsWith('__mirror_data_');
+          const isSharedRef = (fieldDef && !!fieldDef.sharedReferenceId) || (typeof fieldId === 'string' && fieldId.startsWith('shared-ref-'));
+          const dynamicLabel = fieldConfig?.label || fieldId;
+          const mirrorUpdated = (typeof dynamicLabel === 'string' && / - Champ$/i.test(dynamicLabel)) ? (`__mirror_data_${dynamicLabel.replace(/ - Champ$/i, '')}`) : null;
+
+          const valueChanged = (prevGlobal[fieldId] !== value) || (isSharedRef && prevGlobal[fieldDef?.sharedReferenceId || ''] !== value) || (mirrorUpdated && prevGlobal[mirrorUpdated] !== value);
+
+          if ((isMirrorKey || isSharedRef || mirrorUpdated) && valueChanged) {
+            const event = new CustomEvent('TBL_FORM_DATA_CHANGED', { detail: { fieldId, value } });
+            window.dispatchEvent(event);
+            console.log('🚀 [TBL] Événement TBL_FORM_DATA_CHANGED dispatché:', { fieldId, value, isMirrorKey, isSharedRef, mirrorUpdated });
+          } else {
+            if (localStorage.getItem('TBL_DIAG') === '1') console.log('🔕 [TBL] Dispatch TBL_FORM_DATA_CHANGED SKIPPED:', { fieldId, value, isMirrorKey, isSharedRef, mirrorUpdated, valueChanged });
+          }
         }
       } catch { /* noop */ }
       try {
@@ -2282,7 +2295,7 @@ interface TBLTabContentWithSectionsProps {
   validationActions?: any;
 }
 
-const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
+const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
   sections,
   fields,
   formData,
@@ -2325,6 +2338,9 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
     return { total, required, completed };
   }, [sections, fields, formData]);
 
+  // ✅ STABILISER onChange pour éviter les re-rendus en cascade !
+  const stableOnChange = useCallback(onChange, [onChange]);
+
   const renderContent = () => {
     if (sections.length) {
       return (
@@ -2334,7 +2350,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
               key={section.id}
               section={section}
               formData={formData}
-              onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
+              onChange={stableOnChange}
               treeId={treeId}
               allNodes={rawNodes}
               allSections={sections}
@@ -2356,7 +2372,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
         <TBLSectionRenderer
           section={synthetic}
           formData={formData}
-          onChange={(fid, val: string | number | boolean | string[] | null | undefined) => onChange(fid, val)}
+          onChange={stableOnChange}
           treeId={treeId}
           allNodes={rawNodes}
           allSections={sections}
@@ -2376,4 +2392,4 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = ({
     </div>
   );
 
-};
+});

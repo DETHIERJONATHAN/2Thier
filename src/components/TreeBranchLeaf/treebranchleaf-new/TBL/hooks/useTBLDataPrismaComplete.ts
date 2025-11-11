@@ -6,6 +6,7 @@ import { buildMirrorKeys } from '../utils/mirrorNormalization';
 declare global { interface Window { __TBL_VERBOSE__?: boolean } }
 const verbose = () => (typeof window !== 'undefined' && window.__TBL_VERBOSE__ === true);
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { isCopyFromRepeater } from '../utils/isCopyFromRepeater';
 
 // 🎯 FONCTION: Création automatique des mirrors pour tous les champs TreeBranchLeaf
 const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode[]): void => {
@@ -365,7 +366,7 @@ type MarkersCapability = Array<{
 }> | null;
 
 // �🌟 INTERFACE PRISMA COMPLÈTE (TOUTES les colonnes)
-interface TreeBranchLeafNode {
+export interface TreeBranchLeafNode {
   id: string;
   treeId: string;
   parentId: string | null;
@@ -724,8 +725,8 @@ const transformPrismaNodeToField = (
     formula: {
       enabled: !!node.formula_instances && Object.keys(node.formula_instances || {}).length > 0,
       activeId: node.formula_activeId,
-      instances: node.formula_instances,
       currentFormula: extractActiveCapability(node.formula_instances, node.formula_activeId) as FormulaCapability,
+      instances: node.formula_instances,
     },
     
     condition: {
@@ -1380,7 +1381,7 @@ const transformPrismaNodeToField = (
 };
 
 // 🌳 FONCTION PRINCIPALE: Transformation hiérarchique DYNAMIQUE PRISMA
-const transformNodesToTBLComplete = (
+export const transformNodesToTBLComplete = (
   nodes: TreeBranchLeafNode[],
   formData?: Record<string, any> // 🔗 NOUVEAU: Pour vérifier les sélections d'options
 ): {
@@ -1621,13 +1622,16 @@ const transformNodesToTBLComplete = (
         sectionsForTab.forEach(([sectionId, sectionData], index) => {
           // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (metadata.sourceTemplateId) de chaque section détectée
           const sectionFieldsFiltered = sectionData.fields.filter(field => {
-            const meta = (field.metadata || {}) as any;
-            const isACopy = !!meta?.sourceTemplateId;
-            if (isACopy) {
-              console.log(`🚫 [TBL-HOOK] Exclusion de copie de répéteur "${field.label}" de la section détectée "${sectionData.node.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
-            }
-            return !isACopy;
-          });
+              const meta = (field.metadata || {}) as any;
+              const sourceTemplateId = meta?.sourceTemplateId;
+              const parentId = nodeMap.get(field.id)?.parentId;
+              if (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, nodeMap, parentId)) {
+                console.log(`🚫 [TBL-HOOK] Exclusion de copie de répéteur "${field.label}" de la section détectée "${sectionData.node.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+                return false; // exclude real repeater copies from sections
+              }
+              // Otherwise include the copy (e.g., copies created in display section)
+              return true;
+            });
           
           ongletSections.push({
             id: `${sectionId}-section`,
@@ -1650,11 +1654,13 @@ const transformNodesToTBLComplete = (
         // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (metadata.sourceTemplateId) avant de les ajouter aux sections
         const fieldsNotInSectionsFiltered = fieldsNotInSections.filter(field => {
           const meta = (field.metadata || {}) as any;
-          const isACopy = !!meta?.sourceTemplateId;
-          if (isACopy) {
+          const sourceTemplateId = meta?.sourceTemplateId;
+          const parentId = nodeMap.get(field.id)?.parentId;
+          if (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, nodeMap, parentId)) {
             console.log(`🚫 [TBL-HOOK] Exclusion de copie de répéteur "${field.label}" de la section "${ongletNode.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+            return false;
           }
-          return !isACopy;
+          return true;
         });
         
         if (fieldsNotInSectionsFiltered.length > 0) {
@@ -1671,11 +1677,13 @@ const transformNodesToTBLComplete = (
         // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (metadata.sourceTemplateId) avant de créer la section par défaut
         const sortedFieldsFiltered = sortedFields.filter(field => {
           const meta = (field.metadata || {}) as any;
-          const isACopy = !!meta?.sourceTemplateId;
-          if (isACopy) {
+          const sourceTemplateId = meta?.sourceTemplateId;
+          const parentId = nodeMap.get(field.id)?.parentId;
+          if (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, nodeMap, parentId)) {
             console.log(`🚫 [TBL-HOOK] Exclusion de copie de répéteur "${field.label}" de la section par défaut "${ongletNode.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+            return false;
           }
-          return !isACopy;
+          return true;
         });
         
         // Pas de sections détectées, créer une section par défaut
@@ -1729,7 +1737,20 @@ const transformNodesToTBLComplete = (
 // 🎯 HOOK PRINCIPAL
 export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_id: string; disabled?: boolean }) => {
   console.log('🎯 [TBL DEBUG] useTBLDataPrismaComplete appelé avec tree_id:', tree_id, 'disabled:', disabled);
-  const { api } = useAuthenticatedApi();
+  
+  // ✅ STABILISATION ULTRA CRITIQUE: Utiliser un REF pour que l'API ne change JAMAIS
+  const apiHook = useAuthenticatedApi();
+  const apiRef = useRef(apiHook.api);
+  
+  // Mettre à jour le ref seulement si api change vraiment
+  useEffect(() => {
+    if (apiHook.api && apiHook.api !== apiRef.current) {
+      apiRef.current = apiHook.api;
+    }
+  }, [apiHook.api]);
+  
+  const api = apiRef.current;
+  
   const [tree, setTree] = useState<TBLTree | null>(null);
   const [tabs, setTabs] = useState<TBLTab[]>([]);
   const [fieldsByTab, setFieldsByTab] = useState<Record<string, TBLField[]>>({});
@@ -1738,11 +1759,22 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
   const [error, setError] = useState<string | null>(null);
   const [rawNodes, setRawNodes] = useState<TreeBranchLeafNode[]>([]); // 🔄 NOUVEAU: Garder les données brutes pour retransformation
   const rawNodesRef = useRef<TreeBranchLeafNode[]>([]); // 🔄 NOUVEAU: Ref stable pour éviter recréation callback
+  const capabilityDebounceRef = useRef<number | null>(null);
   
   // Synchroniser le ref avec le state
   useEffect(() => {
     rawNodesRef.current = rawNodes;
+    try { (window as any).__DEBUG_RAW_NODES = rawNodes; } catch { /* ignore */ }
   }, [rawNodes]);
+
+  // Feature: When form data changes, re-transform the existing rawNodes with the new formData
+  // This state/ref pair is used to trigger a recompute of the memoized transform without fetching.
+  const [formDataVersion, setFormDataVersion] = useState(0);
+  const formDataVersionRef = useRef<number>(0);
+  useEffect(() => { formDataVersionRef.current = formDataVersion; }, [formDataVersion]);
+
+  const transformedRef = useRef<ReturnType<typeof transformNodesToTBLComplete> | null>(null);
+  useEffect(() => { transformedRef.current = { tree, tabs, fieldsByTab, sectionsByTab }; }, [tree, tabs, fieldsByTab, sectionsByTab]);
 
   const fetchData = useCallback(async () => {
     if (!tree_id || disabled) return;
@@ -1750,39 +1782,28 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
     try {
       setLoading(true);
       setError(null);
-
-  if (verbose()) dlog('📡 [TBL-PRISMA] Récupération données:', { tree_id });
+      if (verbose()) dlog('📡 [TBL-PRISMA] Récupération données:', { tree_id });
 
       const response = await api.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
-      
       if (response && Array.isArray(response)) {
-        // 🔄 NOUVEAU: Sauvegarder les données brutes pour retransformation dynamique
+        // store raw
         setRawNodes(response);
-        
-        // ✅ Récupérer formData depuis le global store TBL
         const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
         const transformedData = transformNodesToTBLComplete(response, formData);
-        
-        // 🎯 PHASE 2: Résolution asynchrone des valeurs pour les champs qui en ont besoin
-  if (verbose()) dlog('🔄 [TBL-PRISMA] Phase 2: Résolution des valeurs dynamiques...');
-        
+        if (verbose()) dlog('🔄 [TBL-PRISMA] Phase 2: Résolution des valeurs dynamiques...');
+
         const resolvedFieldsByTab: Record<string, TBLField[]> = {};
-        
         for (const [tabId, fields] of Object.entries(transformedData.fieldsByTab)) {
           const resolvedFields = await Promise.all(
             fields.map(async (field) => {
               if (field.needsValueResolution) {
                 try {
                   if (verbose()) dlog(`🔍 [TBL-PRISMA] Résolution valeur pour "${field.label}"`);
-                  
-                  // Trouver le nœud original dans les données
                   const originalNode = response.find(node => node.id === field.id);
                   if (originalNode) {
                     const { value: resolvedValue, variableConfig } = await resolveFieldValue(originalNode, api, tree_id);
-
-                    // Injecter la config de variable dans capabilities.data.instances si disponible
                     let nextCapabilities = field.capabilities;
-                    const variableId = originalNode.id; // par convention, l'instance correspond au nodeId
+                    const variableId = originalNode.id;
                     if (variableConfig) {
                       nextCapabilities = {
                         ...(field.capabilities || {}),
@@ -1796,15 +1817,12 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
                         }
                       } as TBLField['capabilities'];
                     }
-
                     if (resolvedValue !== null) {
                       if (verbose()) dlog(`✅ [TBL-PRISMA] Valeur résolue pour "${field.label}": ${resolvedValue}`);
                       return { ...field, value: resolvedValue, capabilities: nextCapabilities };
                     }
-
-                    // Si pas de valeur (null) mais config dynamique présente, retourner le champ enrichi pour évaluation au rendu
                     if (variableConfig) {
-                      if (verbose()) dlog(`ℹ️ [TBL-PRISMA] Valeur non calculée pour "${field.label}", évaluation déléguée au rendu via sourceRef`);
+                      if (verbose()) dlog(`ℹ️ [TBL-PRISMA] Valeur non calculée pour "${field.label}", évaluation déléguée`);
                       return { ...field, capabilities: nextCapabilities };
                     }
                   }
@@ -1815,36 +1833,21 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
               return field;
             })
           );
-          
           resolvedFieldsByTab[tabId] = resolvedFields;
         }
-        
-        // 🎯 MISE À JOUR des sections avec les champs résolus
+
         const resolvedSectionsByTab: Record<string, TBLSection[]> = {};
-        
         for (const [tabId, sections] of Object.entries(transformedData.sectionsByTab)) {
           const resolvedSections = sections.map(section => ({
             ...section,
-            fields: resolvedFieldsByTab[tabId]?.filter(field => 
-              section.fields.some(sectionField => sectionField.id === field.id)
-            ) || section.fields
+            fields: resolvedFieldsByTab[tabId]?.filter(field => section.fields.some(sectionField => sectionField.id === field.id)) || section.fields
           }));
-          
           resolvedSectionsByTab[tabId] = resolvedSections;
         }
-        
-        // 🎯 MISE À JOUR de l'arbre avec les onglets résolus
-        const resolvedTabs = transformedData.tabs.map(tab => ({
-          ...tab,
-          allFields: resolvedFieldsByTab[tab.id] || tab.allFields,
-          sections: resolvedSectionsByTab[tab.id] || tab.sections
-        }));
-        
-  if (verbose()) dlog('✅ [TBL-PRISMA] Résolution des valeurs terminée');
-        
-        // 🎯 CRÉATION AUTOMATIQUE DES MIRRORS POUR TOUS LES CHAMPS TreeBranchLeaf
+
+        const resolvedTabs = transformedData.tabs.map(tab => ({ ...tab, allFields: resolvedFieldsByTab[tab.id] || tab.allFields, sections: resolvedSectionsByTab[tab.id] || tab.sections }));
+        if (verbose()) dlog('✅ [TBL-PRISMA] Résolution des valeurs terminée');
         createAutomaticMirrors(resolvedTabs, response);
-        
         setTree({ ...transformedData.tree, tabs: resolvedTabs });
         setTabs(resolvedTabs);
         setFieldsByTab(resolvedFieldsByTab);
@@ -1860,6 +1863,105 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
       setLoading(false);
     }
   }, [api, tree_id, disabled]);
+
+  const reconcileDuplicatedNodes = useCallback(async (duplicated: Array<{ id: string; parentId?: string; sourceTemplateId?: string }>) => {
+    if (!duplicated || duplicated.length === 0) return;
+    const getMissing = () => {
+      const t = transformedRef.current;
+      if (!t) return duplicated.map(d => d.id);
+      const allFields = Object.values(t.fieldsByTab || {}).flat();
+      return duplicated.map(d => d.id).filter(id => !allFields.some(f => f.id === id));
+    };
+
+    let missing = getMissing();
+    if (missing.length === 0) return;
+    let attempts = 0;
+    while (missing.length > 0 && attempts < 4) {
+      attempts += 1;
+  await Promise.all(missing.map(async id => {
+        try {
+          const res = await apiRef.current.get(`/api/treebranchleaf/nodes/${id}/full`);
+          const nodes: TreeBranchLeafNode[] = Array.isArray(res) ? res as TreeBranchLeafNode[] : (res && typeof res === 'object' ? (res.data || res.nodes || (res.node ? [res.node] : [])) : []);
+          if (nodes.length > 0) {
+            setRawNodes(prev => {
+              const known = new Set(prev.map(n => n.id));
+              const newOnes = nodes.filter(n => !known.has(n.id));
+              if (newOnes.length === 0) return prev;
+              return [...prev, ...newOnes];
+            });
+          }
+        } catch { /* ignore */ }
+      }));
+
+      await new Promise(r => setTimeout(r, 200));
+      setFormDataVersion(v => v + 1);
+      await new Promise(r => setTimeout(r, 100));
+      missing = getMissing();
+    }
+
+    if (missing.length > 0) {
+      console.warn('[TBL Hook] Reconciliation incomplete after retry; attempting targeted merge using full tree');
+      try {
+        const response = await apiRef.current.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
+        let allNodes: TreeBranchLeafNode[] = [];
+        if (Array.isArray(response)) allNodes = response as TreeBranchLeafNode[];
+        else if (response && typeof response === 'object') allNodes = (response.data || response.nodes || []) as TreeBranchLeafNode[];
+        if (allNodes.length > 0) {
+          // Merge nodes whose metadata.copiedFromNodeId OR metadata.sourceTemplateId match duplicated sources or ids
+          const duplicateIds = new Set(duplicated.map(d => d.id));
+          const duplicateSourceTemplateIds = new Set(duplicated.map(d => d.sourceTemplateId).filter(Boolean));
+          const sourceParentIds: string[] = [];
+          if (duplicateSourceTemplateIds.size > 0) {
+            await Promise.all(Array.from(duplicateSourceTemplateIds).map(async (stid) => {
+              try {
+                const sr = await apiRef.current.get(`/api/treebranchleaf/nodes/${stid}/full`);
+                const sarr: TreeBranchLeafNode[] = Array.isArray(sr) ? sr as TreeBranchLeafNode[] : (sr && typeof sr === 'object' ? (sr.data || sr.nodes || (sr.node ? [sr.node] : [])) : []);
+                if (sarr.length > 0) {
+                  const p = sarr[0].parentId;
+                  if (p) sourceParentIds.push(p as string);
+                }
+              } catch (err) {
+                ddiag('[TBL Hook] failed to resolve sourceTemplateId parent during reconciliation', stid, err);
+              }
+            }));
+          }
+          const sourceParentSet = new Set(sourceParentIds);
+          const candidates = allNodes.filter(n => {
+            const meta: any = n.metadata || {};
+            const parentMatchesSource = !!(n.parentId && sourceParentSet.has(n.parentId));
+            return (meta.copiedFromNodeId && duplicateIds.has(meta.copiedFromNodeId)) ||
+                   (meta.copiedFromNodeId && duplicateSourceTemplateIds.has(meta.copiedFromNodeId)) ||
+                   (meta.sourceTemplateId && duplicateSourceTemplateIds.has(meta.sourceTemplateId)) ||
+                   (meta.fromVariableId && parentMatchesSource) ||
+                   (meta.autoCreated && parentMatchesSource);
+          });
+          if (candidates.length > 0) {
+            setRawNodes(prev => {
+              const known = new Set(prev.map(n => n.id));
+              const newOnes = candidates.filter(n => !known.has(n.id));
+              if (newOnes.length === 0) return prev;
+              return [...prev, ...newOnes];
+            });
+            console.log('[TBL Hook] merged nodes from full tree query:', candidates.length);
+            // trigger retransform and re-evaluate missing
+            setFormDataVersion(v => v + 1);
+            await new Promise(r => setTimeout(r, 120));
+            missing = getMissing();
+          } else {
+            console.warn('[TBL Hook] No candidate nodes found in full tree query. Falling back to full fetch (fetchData)');
+            fetchData();
+          }
+        } else {
+          console.warn('[TBL Hook] Full tree query returned no nodes, falling back to fetchData()');
+          fetchData();
+        }
+      } catch (err) {
+        console.error('[TBL Hook] Failed full tree reconcile query:', err);
+        fetchData();
+      }
+    }
+  }, [apiRef, fetchData, tree_id]);
+
 
   useEffect(() => {
     if (disabled) {
@@ -1968,10 +2070,14 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
   // 🔄 NOUVEAU: Écouter les changements de formData pour réinjecter les références partagées
   // ⚠️ ATTENTION: NE PAS recharger fetchData() qui réinitialise tout le formulaire !
   // → On retransforme les données déjà chargées avec le nouveau formData
+  // Debounce + guard refs
+  const retransformDebounceRef = useRef<number | null>(null);
+  const isRetransformingRef = useRef(false);
+
   useEffect(() => {
     console.log('🎯 [TBL Hook] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
     
-    const handleFormDataChange = () => {
+  const handleFormDataChange = () => {
       console.log('🔔 [TBL Hook] Event TBL_FORM_DATA_CHANGED reçu !');
       
       if (disabled) {
@@ -1989,8 +2095,19 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
         return;
       }
       
-      console.log('🔄 [TBL Hook] FormData modifié, rechargement pour références partagées...');
-      retransformWithCurrentFormData();
+      // Débouncer les appels pour ne pas lancer une retransformation sur chaque caractère
+      if (retransformDebounceRef.current) {
+        window.clearTimeout(retransformDebounceRef.current);
+      }
+      retransformDebounceRef.current = window.setTimeout(() => {
+        if (isRetransformingRef.current) return; // éviter la concurrence
+        try {
+          isRetransformingRef.current = true;
+          retransformWithCurrentFormData();
+        } finally {
+          isRetransformingRef.current = false;
+        }
+      }, 250);
     };
 
     console.log('✅ [TBL Hook] Event listener TBL_FORM_DATA_CHANGED attaché');
@@ -1999,6 +2116,10 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
     return () => {
       console.log('🧹 [TBL Hook] Event listener TBL_FORM_DATA_CHANGED détaché');
       window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
+      if (retransformDebounceRef.current) {
+        window.clearTimeout(retransformDebounceRef.current);
+        retransformDebounceRef.current = null;
+      }
     };
   }, [disabled, tree_id, retransformWithCurrentFormData]);
 
@@ -2009,21 +2130,27 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
       const { treeId: eventTreeId } = customEvent.detail;
       
       // Recharger uniquement si c'est notre arbre
-      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
-        console.log('🔄 [TBL Hook OLD] Capacité mise à jour détectée, rechargement des données...', customEvent.detail);
-        fetchData();
+  if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
+        console.log('🔄 [TBL Hook OLD] Capacité mise à jour détectée, rechargement des données... (debounced)', customEvent.detail);
+        if (capabilityDebounceRef.current) window.clearTimeout(capabilityDebounceRef.current);
+        capabilityDebounceRef.current = window.setTimeout(() => {
+          fetchData();
+        }, 300);
       }
     };
 
     window.addEventListener('tbl-capability-updated', handleCapabilityUpdate);
-    return () => window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
-  }, [fetchData, disabled, tree_id]);
+    return () => {
+      if (capabilityDebounceRef.current) window.clearTimeout(capabilityDebounceRef.current);
+      window.removeEventListener('tbl-capability-updated', handleCapabilityUpdate);
+    };
+  }, [fetchData, disabled, tree_id, retransformWithCurrentFormData, reconcileDuplicatedNodes]);
 
   // 🔄 Écouter les changements de paramètres repeater pour recharger les données
   useEffect(() => {
     console.warn('🎧 [TBL Hook] Listener tbl-repeater-updated INSTALLÉ', { tree_id, disabled });
     
-    const handleRepeaterUpdate = (event: Event) => {
+  const handleRepeaterUpdate = (event: Event) => {
       console.warn('🎉🎉🎉 [TBL Hook] EVENT REÇU - tbl-repeater-updated', {
         event,
         detail: (event as CustomEvent).detail,
@@ -2031,7 +2158,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
         disabled
       });
       
-      const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined; source?: string; timestamp?: number }>;
+  const customEvent = event as CustomEvent<{ nodeId: string; treeId: string | number | undefined; source?: string; timestamp?: number; suppressReload?: boolean; duplicated?: any[] }>;
       const { treeId: eventTreeId, nodeId, source, timestamp } = customEvent.detail;
       
       console.warn('🔍 [TBL Hook] Vérification treeId', {
@@ -2046,8 +2173,228 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
       
       // Recharger uniquement si c'est notre arbre
       if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
-        console.warn('✅✅✅ [TBL Hook] RECHARGEMENT DES DONNÉES !', customEvent.detail);
-        fetchData();
+        // Si le dispatcheur a demandé de ne PAS recharger (suppressReload), on ne déclenche
+        // pas fetchData() afin d'éviter le rechargement complet du formulaire (UX).
+        if (customEvent.detail?.suppressReload) {
+          console.log('🔇 [TBL Hook] Repeater update (suppressReload=true) — pas de fetchData, retransform possible', customEvent.detail);
+          // Optionnel: retransform localement si nécessaire
+          if (rawNodesRef.current.length && !disabled) {
+            // Si des nouveaux duplicates sont fournis, fusionner les nœuds côté client
+            const detail = customEvent.detail as any;
+            const duplicated: Array<{ id: string; label?: string; type?: string; parentId?: string }> = detail?.duplicated || [];
+            const deletedIds: string[] = detail?.deletedIds || [];
+
+          (async () => {
+              try {
+                // 1) Merge duplicated nodes (fetch full subtrees and append)
+                if (Array.isArray(duplicated) && duplicated.length > 0) {
+                  const toFetch = Array.from(new Set(duplicated.map(d => d.id))).filter(Boolean) as string[];
+                  const fetchedNodesList: TreeBranchLeafNode[] = [];
+                  await Promise.all(toFetch.map(async (id) => {
+                      try {
+                        // Retry few times if the backend hasn't materialized the subtree yet
+                        let attempts = 0;
+                        let res: any = null;
+                        while (attempts < 3) {
+                          try {
+                            res = await apiRef.current.get(`/api/treebranchleaf/nodes/${id}/full`);
+                            break; // success
+                          } catch {
+                            attempts += 1;
+                            await new Promise(r => setTimeout(r, 120));
+                          }
+                        }
+                        if (!res) {
+                          throw new Error('no response from /nodes/:id/full');
+                        }
+                        if (Array.isArray(res)) fetchedNodesList.push(...res as TreeBranchLeafNode[]);
+                        else if (res && typeof res === 'object') {
+                          const asAny = res as any;
+                          if (Array.isArray(asAny.data)) fetchedNodesList.push(...asAny.data);
+                          else if (Array.isArray(asAny.nodes)) fetchedNodesList.push(...asAny.nodes);
+                          else if (asAny.node && typeof asAny.node === 'object') fetchedNodesList.push(asAny.node);
+                        }
+                      } catch (e) {
+                        console.warn('[TBL Hook] fetch duplicated node failed', id, e);
+                      }
+                    }));
+
+                  if (fetchedNodesList.length > 0) {
+                    setRawNodes(prev => {
+                      const byId = new Set(prev.map(n => n.id));
+                      const newOnes = fetchedNodesList.filter(n => !byId.has(n.id));
+                      if (newOnes.length === 0) return prev;
+                      return [...prev, ...newOnes];
+                    });
+                    console.log('[TBL Hook] merged duplicated subtree nodes:', fetchedNodesList.length);
+                    // ALSO: fetch parent subtrees to capture ANY display nodes created under the parent
+                    let parentIds = Array.from(new Set((duplicated as Array<any>).map(d => d.parentId).filter(Boolean)));
+                    // Also collect parent ids of the source templates (duplicated.sourceTemplateId)
+                    // because display nodes may be created under the original template's parent
+                    const sourceParentIds: string[] = [];
+                    const sourceTemplateIds = Array.from(new Set((duplicated as Array<any>).map(d => d.sourceTemplateId).filter(Boolean))) as string[];
+                    if (sourceTemplateIds.length > 0) {
+                      await Promise.all(sourceTemplateIds.map(async stid => {
+                        try {
+                          const sres = await apiRef.current.get(`/api/treebranchleaf/nodes/${stid}/full`);
+                          const sarr: TreeBranchLeafNode[] = Array.isArray(sres) ? sres as TreeBranchLeafNode[] : (sres && typeof sres === 'object' ? (sres.data || sres.nodes || (sres.node ? [sres.node] : [])) : []);
+                          if (sarr && sarr.length > 0) {
+                            if (sarr[0].parentId) sourceParentIds.push(sarr[0].parentId as string);
+                          }
+                        } catch (e) {
+                          ddiag('[TBL Hook] failed to fetch sourceTemplateId full node', stid, e);
+                        }
+                      }));
+                      if (sourceParentIds.length > 0) parentIds = [...new Set(parentIds.concat(sourceParentIds))];
+                    }
+                    if (parentIds.length > 0) {
+                      const fetchedParentNodes: TreeBranchLeafNode[] = [];
+                      await Promise.all(parentIds.map(async pid => {
+                        try {
+                          const pr = await apiRef.current.get(`/api/treebranchleaf/nodes/${pid}/full`);
+                          if (Array.isArray(pr)) fetchedParentNodes.push(...pr as TreeBranchLeafNode[]);
+                          else if (pr && typeof pr === 'object') {
+                            const asAny = pr as any;
+                            if (Array.isArray(asAny.data)) fetchedParentNodes.push(...asAny.data);
+                            else if (Array.isArray(asAny.nodes)) fetchedParentNodes.push(...asAny.nodes);
+                            else if (asAny.node && typeof asAny.node === 'object') fetchedParentNodes.push(asAny.node);
+                          }
+                        } catch {
+                          console.warn('[TBL Hook] fetch parent subtree failed', pid);
+                        }
+                      }));
+                      if (fetchedParentNodes.length > 0) {
+                        setRawNodes(prev => {
+                          const byId = new Set(prev.map(n => n.id));
+                          const newOnes = fetchedParentNodes.filter(n => !byId.has(n.id));
+                          if (newOnes.length === 0) return prev;
+                          return [...prev, ...newOnes];
+                        });
+                        console.log('[TBL Hook] merged parent subtree nodes:', fetchedParentNodes.length);
+                      }
+                    }
+                  }
+                  else if (Array.isArray(duplicated) && duplicated.length > 0) {
+                    console.warn('[TBL Hook] Expected duplicates but fetched 0 nodes -> falling back to full fetch (respecting suppressReload)');
+                    if (customEvent.detail?.forceRefresh) {
+                      fetchData();
+                    } else {
+                      ddiag('[TBL Hook] suppressReload=true — skipping fallback fetch for expected duplicates (no reload)');
+                    }
+                    return;
+                  }
+                }
+
+                // 2) Remove deletedIds from local rawNodes (and descendants)
+                if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+                  // 1. Build base removed set (including descendants in rawNodes)
+                  setRawNodes(prev => {
+                    const removed = new Set(deletedIds);
+                    // Build closure of descendants within local rawNodes
+                    let added = true;
+                    while (added) {
+                      added = false;
+                      for (const n of prev) {
+                        if (n.parentId && removed.has(n.parentId) && !removed.has(n.id)) {
+                          removed.add(n.id);
+                          added = true;
+                        }
+                      }
+                    }
+                    if (removed.size === 0) return prev;
+                    return prev.filter(n => !removed.has(n.id));
+                  });
+
+                  // 2. Attempt to find additional nodes to delete (display nodes created elsewhere)
+                  (async () => {
+                    try {
+                      if (!tree_id) return;
+                      // Attempt a local scan first (rawNodesRef.current) to find display nodes referencing
+                      // removed nodes and remove them localy without a network roundtrip.
+                      let allNodes: TreeBranchLeafNode[] = Array.isArray(rawNodesRef.current) ? rawNodesRef.current as TreeBranchLeafNode[] : [];
+                      // If local cache is empty, optionally fetch full tree only if forceRefresh is allowed.
+                      if (!allNodes.length && (customEvent.detail?.forceRefresh)) {
+                        const resp = await apiRef.current.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
+                        if (Array.isArray(resp)) allNodes = resp as TreeBranchLeafNode[];
+                        else if (resp && typeof resp === 'object') allNodes = (resp.data || resp.nodes || []) as TreeBranchLeafNode[];
+                      }
+                      if (!allNodes.length) return;
+                      const baseRemoved = new Set(deletedIds);
+                      // Derive related template ids from deleted nodes to find nodes that refer to templates
+                      const nodeById = new Map(allNodes.map(n => [n.id, n] as const));
+                      const relatedTemplateIds = new Set<string>();
+                      for (const rid of deletedIds) {
+                        const deletedNode = nodeById.get(rid as string);
+                        if (!deletedNode) continue;
+                        const dm: any = deletedNode.metadata || {};
+                        if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
+                        if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+                      }
+                      const extraToRemove = new Set<string>();
+                      for (const node of allNodes) {
+                        const meta: any = node.metadata || {};
+                        if (meta.copiedFromNodeId && baseRemoved.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
+                        if (meta.copiedFromNodeId && relatedTemplateIds.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
+                        if (meta.sourceTemplateId && (baseRemoved.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) extraToRemove.add(node.id);
+                        if (meta.fromVariableId) {
+                          // Heuristic: if fromVariableId contains any removed id or related template id string, mark for removal
+                          for (const rid of baseRemoved) {
+                            if (String(meta.fromVariableId).includes(String(rid))) extraToRemove.add(node.id);
+                          }
+                          for (const tid of relatedTemplateIds) {
+                            if (String(meta.fromVariableId).includes(String(tid))) extraToRemove.add(node.id);
+                          }
+                        }
+                        // Heuristic: if deleted ids include a suffix -N, remove nodes whose fromVariableId endsWith that suffix
+                        for (const rid of baseRemoved) {
+                          const m = String(rid).match(/-(\d+)$/);
+                          if (m) {
+                            const suffix = `-${m[1]}`;
+                            if (String(meta.fromVariableId).endsWith(suffix)) extraToRemove.add(node.id);
+                          }
+                        }
+                      }
+                      if (extraToRemove.size > 0) {
+                        setRawNodes(prev => prev.filter(n => !extraToRemove.has(n.id)));
+                        console.log('[TBL Hook] merged additional deletion candidates from full tree:', extraToRemove.size);
+                        setFormDataVersion(v => v + 1);
+                      }
+                      else {
+                        // If we didn't find matching display nodes to delete, we do NOT trigger a full
+                        // fetch because the caller asked for suppressReload=true. A full fetch would
+                        // force a complete remount and create a UX flicker. If the caller explicitly
+                        // requests a refresh, it may pass forceRefresh=true in the event detail.
+                        if (customEvent.detail?.forceRefresh) {
+                          setTimeout(() => fetchData(), 800);
+                        } else {
+                          ddiag('[TBL Hook] suppressReload=true — skipping fallback full fetch (no reload)');
+                        }
+                      }
+                    } catch (e) {
+                      ddiag('[TBL Hook] failed to enrich deletions via full tree query', e);
+                    }
+                  })();
+              }
+
+                // 3) Finally, retransform once after changes
+                if (retransformDebounceRef.current) window.clearTimeout(retransformDebounceRef.current);
+                retransformDebounceRef.current = window.setTimeout(() => {
+                  retransformWithCurrentFormData();
+                }, 100);
+                (async () => {
+                  try {
+                    if (duplicated && duplicated.length > 0) await reconcileDuplicatedNodes(duplicated);
+                  } catch { /* ignore */ }
+                })();
+              } catch (e) {
+                console.error('[TBL Hook] Erreur lors du merge/suppression de duplicates localement', e);
+              }
+            })();
+          }
+        } else {
+          console.warn('✅✅✅ [TBL Hook] RECHARGEMENT DES DONNÉES !', customEvent.detail);
+          fetchData();
+        }
       } else {
         console.warn('❌ [TBL Hook] Rechargement ignoré', { 
           reason: disabled ? 'disabled=true' : !eventTreeId ? 'no treeId' : 'treeId mismatch',
@@ -2062,7 +2409,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
       console.warn('🔴 [TBL Hook] Listener tbl-repeater-updated DÉSINSTALLÉ', { tree_id });
       window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     };
-  }, [fetchData, disabled, tree_id]);
+  }, [fetchData, disabled, tree_id, retransformWithCurrentFormData, reconcileDuplicatedNodes]);
 
   // 🔄 Wrapper pour logger les appels à refetch
   const refetch = useCallback(() => {

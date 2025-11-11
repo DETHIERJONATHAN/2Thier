@@ -2911,6 +2911,141 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     // ðŸ”— SHARED REFERENCES : Inclure les rÃ©fÃ©rences partagÃ©es pour les cascades
     sharedReferenceIds: node.sharedReferenceIds || undefined
   };
+
+  // =====================================================================
+  // 🧱 ADAPTATEUR LEGACY CAPABILITIES (Reconstruit l'ancien objet attendu)
+  // =====================================================================
+  // Objectif: Fournir à nouveau result.capabilities sans modifier le modèle Prisma.
+  // On s'appuie UNIQUEMENT sur les colonnes dÃ©diÃ©es (hasFormula, formula_activeId, etc.).
+  // Si metadata.capabilities existe déjà (anciennes données), on la préserve et on fusionne.
+
+  try {
+    const legacyMetaCaps = (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : undefined;
+
+    const buildInstances = (raw: unknown): Record<string, unknown> | undefined => {
+      if (!raw) return undefined;
+      if (typeof raw === 'object' && raw !== null) return raw as Record<string, unknown>;
+      return undefined;
+    };
+
+    const capabilities: Record<string, unknown> = {
+      // Données dynamiques / variables
+      data: (node.hasData || node.data_activeId || node.data_instances) ? {
+        enabled: !!node.hasData,
+        activeId: node.data_activeId || null,
+        instances: buildInstances(node.data_instances) || {},
+        unit: node.data_unit || null,
+        precision: typeof node.data_precision === 'number' ? node.data_precision : 2,
+        exposedKey: node.data_exposedKey || null,
+        displayFormat: node.data_displayFormat || null,
+        visibleToUser: node.data_visibleToUser === true
+      } : undefined,
+      // Formules
+      formula: (node.hasFormula || node.formula_activeId || node.formula_instances) ? {
+        enabled: !!node.hasFormula,
+        activeId: node.formula_activeId || null,
+        instances: buildInstances(node.formula_instances) || {},
+        tokens: buildInstances(node.formula_tokens) || undefined,
+        name: node.formula_name || null
+      } : undefined,
+      // Table lookup
+      table: (node.hasTable || node.table_activeId || node.table_instances) ? {
+        enabled: !!node.hasTable,
+        activeId: node.table_activeId || null,
+        instances: buildInstances(node.table_instances) || {},
+        name: node.table_name || null,
+        meta: buildInstances(node.table_meta) || {},
+        type: node.table_type || 'columns',
+        isImported: node.table_isImported === true,
+        importSource: node.table_importSource || null,
+        columns: Array.isArray(node.table_columns) ? node.table_columns : null,
+        rows: Array.isArray(node.table_rows) ? node.table_rows : null
+      } : undefined,
+      // Select (options statiques ou dynamiques déjà résolues)
+      select: (node.select_options || node.select_defaultValue) ? {
+        options: Array.isArray(node.select_options) ? node.select_options : [],
+        allowClear: node.select_allowClear !== false,
+        multiple: node.select_multiple === true,
+        searchable: node.select_searchable !== false,
+        defaultValue: node.select_defaultValue || null
+      } : undefined,
+      // Nombre
+      number: (node.number_min !== undefined || node.number_max !== undefined || node.number_defaultValue !== undefined) ? {
+        min: node.number_min ?? null,
+        max: node.number_max ?? null,
+        step: node.number_step ?? 1,
+        decimals: node.number_decimals ?? 0,
+        unit: node.number_unit || null,
+        prefix: node.number_prefix || null,
+        suffix: node.number_suffix || null,
+        defaultValue: node.number_defaultValue || null
+      } : undefined,
+      // Booléen
+      bool: (node.bool_trueLabel || node.bool_falseLabel || node.bool_defaultValue !== undefined) ? {
+        trueLabel: node.bool_trueLabel || null,
+        falseLabel: node.bool_falseLabel || null,
+        defaultValue: node.bool_defaultValue ?? null
+      } : undefined,
+      // Date
+      date: (node.date_format || node.date_showTime || node.date_minDate || node.date_maxDate) ? {
+        format: node.date_format || 'DD/MM/YYYY',
+        showTime: node.date_showTime === true,
+        minDate: node.date_minDate || null,
+        maxDate: node.date_maxDate || null
+      } : undefined,
+      // Image
+      image: (node.image_maxSize || node.image_ratio || node.image_crop || node.image_thumbnails) ? {
+        maxSize: node.image_maxSize || null,
+        ratio: node.image_ratio || null,
+        crop: node.image_crop === true,
+        thumbnails: node.image_thumbnails || null
+      } : undefined,
+      // Linking / navigation (simplifié)
+      link: (node.link_activeId || node.link_instances) ? {
+        enabled: !!node.hasLink,
+        activeId: node.link_activeId || null,
+        instances: buildInstances(node.link_instances) || {},
+        mode: node.link_mode || 'JUMP',
+        name: node.link_name || null,
+        carryContext: node.link_carryContext === true,
+        params: buildInstances(node.link_params) || {},
+        targetNodeId: node.link_targetNodeId || null,
+        targetTreeId: node.link_targetTreeId || null
+      } : undefined,
+      // Markers
+      markers: (node.markers_activeId || node.markers_instances || node.markers_selectedIds) ? {
+        enabled: !!node.hasMarkers,
+        activeId: node.markers_activeId || null,
+        instances: buildInstances(node.markers_instances) || {},
+        available: buildInstances(node.markers_available) || {},
+        selectedIds: buildInstances(node.markers_selectedIds) || {}
+      } : undefined,
+      // API (legacy mapping minimal)
+      api: (node.api_activeId || node.api_instances) ? {
+        enabled: !!node.hasAPI,
+        activeId: node.api_activeId || null,
+        instances: buildInstances(node.api_instances) || {},
+        bodyVars: buildInstances(node.api_bodyVars) || {},
+        name: node.api_name || null
+      } : undefined
+    };
+
+    // Nettoyer les clés undefined
+    Object.keys(capabilities).forEach(key => {
+      if (capabilities[key] === undefined) delete capabilities[key];
+    });
+
+    // Fusion avec legacy metadata.capabilities si présent
+    let mergedCaps: Record<string, unknown> = capabilities;
+    if (legacyMetaCaps && typeof legacyMetaCaps === 'object') {
+      mergedCaps = { ...legacyMetaCaps, ...capabilities };
+    }
+
+    // Injection dans result
+    (result as any).capabilities = mergedCaps;
+  } catch (e) {
+    console.error('❌ [buildResponseFromColumns] Erreur adaptation legacy capabilities:', e);
+  }
   
   // ðŸ” DEBUG SHARED REFERENCES : Log pour les options avec rÃ©fÃ©rences
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
@@ -3425,6 +3560,94 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           }
         });
       }
+    }
+
+    // ------------------------------------------------------------------
+    // EXTRA CLEANUP: Supprimer les nœuds d'affichage qui rÃ©fÃ©rencent les nœuds supprimés
+    // ------------------------------------------------------------------
+    try {
+      // Recharger l'arbre pour trouver d'eventuels nodes qui rÃ©fÃ©rencent les deleted IDs
+      const remainingNodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId } });
+      const nodesToScan = remainingNodes;
+      const removedSet = new Set(toDelete);
+
+      // Construire un set de template/roots potentiels liÃ©s (sourceTemplateId / copiedFromNodeId)
+      const relatedTemplateIds = new Set<string>();
+      for (const rid of toDelete) {
+        const n = allNodes.find(x => x.id === rid);
+        if (!n) continue;
+        const dm: any = n.metadata || {};
+        if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
+        if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+      }
+
+      // Trouver candidats additionnels qui ressemblent Ã  des nÃ¸uds d'affichage
+      const extraCandidates = nodesToScan.filter(n => {
+        const meta: any = n.metadata || {};
+        const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
+        if (!looksLikeDisplay) return false;
+        if (removedSet.has(n.id)) return false;
+        if (meta.copiedFromNodeId && (removedSet.has(String(meta.copiedFromNodeId)) || relatedTemplateIds.has(String(meta.copiedFromNodeId)))) return true;
+        if (meta.sourceTemplateId && (removedSet.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) return true;
+        if (meta.fromVariableId) {
+          for (const rid of Array.from(removedSet)) {
+            if (String(meta.fromVariableId).includes(String(rid))) return true;
+          }
+          for (const tid of Array.from(relatedTemplateIds)) {
+            if (String(meta.fromVariableId).includes(String(tid))) return true;
+          }
+        }
+        // Suffix heuristic: -N
+        for (const rid of Array.from(removedSet)) {
+          const m = String(rid).match(/-(\d+)$/);
+          if (m) {
+            const suffix = `-${m[1]}`;
+            if (String(meta.fromVariableId || '').endsWith(suffix)) return true;
+            if (String(n.label || '').endsWith(suffix)) return true;
+          }
+        }
+        return false;
+      });
+
+      if (extraCandidates.length > 0) {
+        // Supprimer ces candidats (ordre enfants -> parents)
+        const byParent = new Map<string, string[]>();
+        for (const n of remainingNodes) {
+          if (!n.parentId) continue;
+          const arr = byParent.get(n.parentId) || [];
+          arr.push(n.id);
+          byParent.set(n.parentId, arr);
+        }
+        const delSet = new Set<string>();
+        const ddepth = new Map<string, number>();
+        for (const cand of extraCandidates) {
+          const q: string[] = [cand.id];
+          ddepth.set(cand.id, 0);
+          while (q.length) {
+            const cur = q.shift()!;
+            if (delSet.has(cur)) continue;
+            delSet.add(cur);
+            const d = ddepth.get(cur)!;
+            for (const c of (byParent.get(cur) || [])) { ddepth.set(c, d + 1); q.push(c); }
+          }
+        }
+        const ordered = Array.from(delSet).sort((a, b) => (ddepth.get(b)! - ddepth.get(a)!));
+        let deletedExtra = 0;
+        await prisma.$transaction(async (tx) => {
+          for (const id of ordered) {
+            try {
+              await tx.treeBranchLeafNode.delete({ where: { id } });
+              deletedExtra++;
+            } catch (e) {
+              // Ignorer les erreurs individuelles (ex: id dÃ©jÃ  supprimÃ©), mais logger
+              console.warn('[DELETE EXTRA] Failed to delete node', id, (e as Error).message);
+            }
+          }
+        });
+        console.log('[DELETE] Extra display nodes deleted:', deletedExtra);
+      }
+    } catch (e) {
+      console.warn('[DELETE] Extra cleanup failed', (e as Error).message);
     }
 
     res.json({ success: true, message: `Sous-arbre supprimÃ© (${toDelete.length} nÅ“ud(s)), orphelines supprimÃ©es: ${deletedOrphans}` , deletedCount: toDelete.length, deletedOrphans });
@@ -4376,10 +4599,43 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         },
       });
 
-      // Marquer le nÅ“ud comme ayant des donnÃ©es configurÃ©es (capacitÃ© "DonnÃ©e" active)
+      // Marquer le nÅ"ud comme ayant des donnÃ©es configurÃ©es (capacitÃ© "DonnÃ©e" active)
+      // 🎯 NOUVEAU: Si sourceRef pointe vers une table, mettre à jour table_activeId et table_instances
+      const nodeUpdateData: any = { hasData: true, updatedAt: new Date() };
+      
+      if (variable.sourceRef && variable.sourceRef.startsWith('@table.')) {
+        const tableId = variable.sourceRef.replace('@table.', '');
+        console.log(`[TBL] 🔧 Configuration lookup pour table ${tableId}`);
+
+        const instanceConfig = {
+          sourceType: variable.sourceType || 'tree',
+          sourceRef: variable.sourceRef,
+          displayFormat: variable.displayFormat || null,
+          unit: variable.unit ?? null,
+          precision: variable.precision ?? null,
+          visibleToUser: variable.visibleToUser ?? true,
+          exposedKey: variable.exposedKey || null,
+          metadata: {
+            sourceType: variable.sourceType || 'tree',
+            sourceRef: variable.sourceRef,
+            fixedValue: variable.fixedValue ?? null,
+            selectedNodeId: variable.selectedNodeId ?? null,
+            updatedAt: new Date().toISOString()
+          }
+        };
+
+        nodeUpdateData.data_activeId = tableId;
+        nodeUpdateData.data_instances = { [tableId]: instanceConfig };
+        nodeUpdateData.table_activeId = tableId;
+        nodeUpdateData.table_instances = { [tableId]: instanceConfig };
+        nodeUpdateData.hasTable = true;
+
+        console.log(`[TBL] ✅ data_activeId/table_activeId="${tableId}" configurés`);
+      }
+      
       await tx.treeBranchLeafNode.update({
         where: { id: nodeId },
-        data: { hasData: true, updatedAt: new Date() }
+        data: nodeUpdateData
       });
 
       // ðŸ”— MAJ linkedVariableIds du nÅ“ud propriÃ©taire
@@ -9589,7 +9845,65 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     }
 
     // Fallback: Si pas de keyRow/keyColumn, retourner le tableau complet
-    console.log(`[TreeBranchLeaf API] âš ï¸ Aucun keyRow/keyColumn configurÃ©, retour tableau brut`);
+    // ðŸ”¥ AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : Générer options dynamiques si structure A1 détectée
+    if (table.type === 'matrix') {
+      const hasNoConfig = !selectConfig?.keyRow && !selectConfig?.keyColumn;
+      const a1 = rows[0];
+      const firstColHeader = columns[0];
+      // Heuristique : si A1 est identique au header de la première colonne, on suppose colonne A = labels (Orientation, Nord, ...)
+      if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
+        const autoOptions = rows.slice(1)
+          .filter(r => r && r !== 'undefined' && r !== 'null')
+          .map(r => ({ value: r, label: r }));
+        console.log(`[TreeBranchLeaf API] ⚙️ AUTO-DEFAULT lookup (matrix, colonne A) généré`, {
+          nodeId,
+          autoCount: autoOptions.length,
+          sample: autoOptions.slice(0, 5)
+        });
+        // Upsert automatique d'une configuration SELECT minimale basée sur la colonne A (A1)
+        try {
+          await prisma.treeBranchLeafSelectConfig.upsert({
+            where: { nodeId },
+            create: {
+              id: randomUUID(),
+              nodeId,
+              options: [] as Prisma.InputJsonValue,
+              multiple: false,
+              searchable: true,
+              allowCustom: false,
+              optionsSource: 'table',
+              tableReference: table.id,
+              keyColumn: firstColHeader,
+              keyRow: null,
+              valueColumn: null,
+              valueRow: null,
+              displayColumn: null,
+              displayRow: null,
+              dependsOnNodeId: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            update: {
+              optionsSource: 'table',
+              tableReference: table.id,
+              keyColumn: firstColHeader,
+              keyRow: null,
+              valueColumn: null,
+              valueRow: null,
+              displayColumn: null,
+              displayRow: null,
+              updatedAt: new Date(),
+            }
+          });
+          console.log(`[TreeBranchLeaf API] ✅ AUTO-UPSERT select-config: nodeId=${nodeId}, table=${table.id}, keyColumn=${firstColHeader}`);
+        } catch (e) {
+          console.warn(`[TreeBranchLeaf API] ⚠️ Auto-upsert select-config a échoué (non bloquant):`, e);
+        }
+        return res.json({ options: autoOptions, autoDefault: { source: 'columnA', keyColumnCandidate: firstColHeader } });
+      }
+    }
+
+    console.log(`[TreeBranchLeaf API] âš ï¸ Aucun keyRow/keyColumn configurÃ©, retour tableau brut (pas d'auto-default applicable)`);
     return res.json(table);
 
   } catch (error) {

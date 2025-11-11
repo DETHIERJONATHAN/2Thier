@@ -1303,6 +1303,8 @@ model TreeBranchLeafNode {
   linkConfig                     Json?
   defaultValue                   String?
   calculatedValue                String?
+  calculatedAt                   DateTime?                        // Quand la valeur a été calculée
+  calculatedBy                   String?                          // Source: "formula-abc", "table-def", "condition-ghi", etc.
   metadata                       Json                             @default("{}")
   createdAt                      DateTime                         @default(now())
   updatedAt                      DateTime

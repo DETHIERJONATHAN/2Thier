@@ -22,6 +22,7 @@ import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉ
 import treebranchleafRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes';
 import centralizedOperationsRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/centralized-operations-routes';
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
+import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES
 import websitesRouter from './api/websites'; // 🌐 GESTION DES SITES WEB
 import imageUploadRouter from './api/image-upload'; // 📸 UPLOAD D'IMAGES
 console.log('✅ [DEBUG] Router minimal importé');

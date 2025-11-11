@@ -66,7 +66,7 @@ export function useTBLCapabilitiesPreload(options: UseTBLCapabilitiesPreloadOpti
       params.set('treeId', treeId);
       if (includeRaw) params.set('raw', '1');
       if (extractDependencies) params.set('deps', '1');
-      const resp = await api.get(`/tbl/capabilities?${params.toString()}`);
+  const resp = await api.get(`/api/tbl/capabilities?${params.toString()}`);
       const json = resp?.data || resp; // selon impl api
       ddiag('Fetched capabilities', json?.count);
       setData(json?.capabilities || []);

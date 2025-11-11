@@ -102,16 +102,16 @@ async function resolveCapabilities(treeId: string, opts: CapabilityResolverOptio
       }
     }),
     prisma.treeBranchLeafNodeFormula.findMany({
-      where: { node: { treeId } },
+      where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, tokens: true, name: true }
     }),
     prisma.treeBranchLeafNodeCondition.findMany({
-      where: { node: { treeId } },
+      where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, conditionSet: true, name: true }
     }),
     prisma.treeBranchLeafNodeTable.findMany({
-      where: { node: { treeId } },
-      select: { id: true, nodeId: true, type: true, columns: true, rows: true, name: true }
+      where: { TreeBranchLeafNode: { treeId } },
+      select: { id: true, nodeId: true, type: true, name: true, meta: true }
     })
   ]);
 

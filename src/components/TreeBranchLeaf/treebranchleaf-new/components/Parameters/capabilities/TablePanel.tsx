@@ -415,6 +415,30 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isLoadingTable, setIsLoadingTable] = useState<boolean>(false);
 
+  const isPhysicalNodeId = useCallback((fieldId?: string | null): fieldId is string => {
+    if (!fieldId) return false;
+    const normalized = fieldId.trim();
+    if (!normalized) return false;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)) {
+      return true;
+    }
+    return normalized.startsWith('node_') || normalized.startsWith('display-');
+  }, []);
+
+  const updateTableCapability = useCallback(
+    async (fieldId: string | null | undefined, payload: Record<string, unknown>) => {
+      if (!isPhysicalNodeId(fieldId)) {
+        console.log('[TablePanel] Skipping capability update for virtual field:', fieldId);
+        return;
+      }
+      await api.put(`/api/treebranchleaf/nodes/${fieldId}/capabilities/table`, payload);
+      window.dispatchEvent(
+        new CustomEvent('tbl-capability-updated', { detail: { nodeId: fieldId, treeId: initialTreeId } })
+      );
+    },
+    [api, initialTreeId, isPhysicalNodeId]
+  );
+
   // Fonction de sauvegarde debounced
   const debouncedSave = useDebouncedCallback(async (config: TableConfig) => {
     if (!activeId || activeId.startsWith('temp_')) {
@@ -1410,8 +1434,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           // Désactiver tous les champs
                           for (const fieldId of fieldsToDisable) {
                             try {
-                              await api.put(`/api/treebranchleaf/nodes/${fieldId}/capabilities/table`, { enabled: false });
-                              window.dispatchEvent(new CustomEvent('tbl-capability-updated', { detail: { nodeId: fieldId, treeId: initialTreeId } }));
+                              await updateTableCapability(fieldId, { enabled: false });
                             } catch (error) {
                               console.error(`Erreur desactivation ${fieldId}:`, error);
                             }
@@ -1496,8 +1519,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           // Désactiver tous les champs
                           for (const fieldId of fieldsToDisable) {
                             try {
-                              await api.put(`/api/treebranchleaf/nodes/${fieldId}/capabilities/table`, { enabled: false });
-                              window.dispatchEvent(new CustomEvent('tbl-capability-updated', { detail: { nodeId: fieldId, treeId: initialTreeId } }));
+                              await updateTableCapability(fieldId, { enabled: false });
                             } catch (error) {
                               console.error(`Erreur desactivation ${fieldId}:`, error);
                             }
@@ -1600,13 +1622,8 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                               },
                             };
                             console.log('[TablePanel][COLUMN] Payload PUT initial:', payload);
-                            await api.put(`/api/treebranchleaf/nodes/${value}/capabilities/table`, payload);
+                            await updateTableCapability(value, payload);
                             console.log('[TablePanel][COLUMN] Capacite Table activee pour:', value);
-                            
-                            window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                              detail: { nodeId: value, treeId: initialTreeId } 
-                            }));
-                            console.log('[TablePanel] Evenement tbl-capability-updated emis');
                             
                             message.success('Champ transforme en liste !');
                           } catch (error) {
@@ -1664,7 +1681,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             if (lookupConfig.selectors?.columnFieldId && activeId) {
                               (async () => {
                                 try {
-                                  await api.put(`/api/treebranchleaf/nodes/${lookupConfig.selectors.columnFieldId}/capabilities/table`, {
+                                  await updateTableCapability(lookupConfig.selectors?.columnFieldId, {
                                     enabled: true,
                                     activeId,
                                     currentTable: {
@@ -1675,9 +1692,6 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                       displayColumn: lookupConfig.displayColumn || null,
                                     },
                                   });
-                                  window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                                    detail: { nodeId: lookupConfig.selectors.columnFieldId, treeId: initialTreeId } 
-                                  }));
                                 } catch (error) {
                                   console.error('Erreur keyColumn:', error);
                                 }
@@ -1766,7 +1780,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             // Sauvegarder dans la base (table instance)
                             await debouncedSave(updatedCfg);
                             
-                            await api.put(`/api/treebranchleaf/nodes/${value}/capabilities/table`, {
+                            await updateTableCapability(value, {
                               enabled: true,
                               activeId,
                               currentTable: {
@@ -1780,9 +1794,6 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                 displayRow: lookupConfig.displayRow || null,
                               },
                             });
-                            window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                              detail: { nodeId: value, treeId: initialTreeId } 
-                            }));
                             message.success('Champ ligne active !');
                           } catch (error) {
                             console.error('Erreur rowFieldId:', error);
@@ -1823,7 +1834,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           if (lookupConfig.selectors?.rowFieldId && activeId) {
                             (async () => {
                               try {
-                                await api.put(`/api/treebranchleaf/nodes/${lookupConfig.selectors.rowFieldId}/capabilities/table`, {
+                                await updateTableCapability(lookupConfig.selectors?.rowFieldId, {
                                   enabled: true,
                                   activeId,
                                   currentTable: {
@@ -1834,9 +1845,6 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                     displayRow: lookupConfig.displayRow || null,
                                   },
                                 });
-                                window.dispatchEvent(new CustomEvent('tbl-capability-updated', { 
-                                  detail: { nodeId: lookupConfig.selectors.rowFieldId, treeId: initialTreeId } 
-                                }));
                               } catch (error) {
                                 console.error('Erreur keyRow:', error);
                               }

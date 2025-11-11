@@ -2250,7 +2250,8 @@ __export(api_server_clean_exports, {
   app: () => app
 });
 module.exports = __toCommonJS(api_server_clean_exports);
-var import_express84 = __toESM(require("express"), 1);
+var import_dotenv = __toESM(require("dotenv"), 1);
+var import_express85 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -27485,10 +27486,11 @@ router55.get("/tables/:id", async (req2, res) => {
 });
 router55.put("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
-  const { name, description, columns, rows, type } = req2.body;
+  const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
   console.log(`[NEW PUT /tables/:id] \u{1F504} Mise \xE0 jour table ${id}`);
   console.log(`[NEW PUT /tables/:id] Nouvelles donn\xE9es: ${Array.isArray(columns) ? columns.length : "N/A"} colonnes, ${Array.isArray(rows) ? rows.length : "N/A"} lignes`);
+  console.log(`[NEW PUT /tables/:id] Lookup config: selectColumn=${lookupSelectColumn}, displayColumns=${JSON.stringify(lookupDisplayColumns)}`);
   try {
     const updatedTable = await prisma45.$transaction(async (tx) => {
       const table = await tx.treeBranchLeafNodeTable.findUnique({
@@ -27514,6 +27516,8 @@ router55.put("/tables/:id", async (req2, res) => {
       if (type) updateData.type = type;
       if (Array.isArray(columns)) updateData.columnCount = columns.length;
       if (Array.isArray(rows)) updateData.rowCount = rows.length;
+      if (lookupSelectColumn !== void 0) updateData.lookupSelectColumn = lookupSelectColumn;
+      if (Array.isArray(lookupDisplayColumns)) updateData.lookupDisplayColumns = lookupDisplayColumns;
       const tableUpdated = await tx.treeBranchLeafNodeTable.update({
         where: { id },
         data: updateData
@@ -29679,6 +29683,125 @@ function buildResponseFromColumns(node) {
     // ðŸ”— SHARED REFERENCES : Inclure les rÃ©fÃ©rences partagÃ©es pour les cascades
     sharedReferenceIds: node.sharedReferenceIds || void 0
   };
+  try {
+    const legacyMetaCaps = node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : void 0;
+    const buildInstances = (raw) => {
+      if (!raw) return void 0;
+      if (typeof raw === "object" && raw !== null) return raw;
+      return void 0;
+    };
+    const capabilities = {
+      // Données dynamiques / variables
+      data: node.hasData || node.data_activeId || node.data_instances ? {
+        enabled: !!node.hasData,
+        activeId: node.data_activeId || null,
+        instances: buildInstances(node.data_instances) || {},
+        unit: node.data_unit || null,
+        precision: typeof node.data_precision === "number" ? node.data_precision : 2,
+        exposedKey: node.data_exposedKey || null,
+        displayFormat: node.data_displayFormat || null,
+        visibleToUser: node.data_visibleToUser === true
+      } : void 0,
+      // Formules
+      formula: node.hasFormula || node.formula_activeId || node.formula_instances ? {
+        enabled: !!node.hasFormula,
+        activeId: node.formula_activeId || null,
+        instances: buildInstances(node.formula_instances) || {},
+        tokens: buildInstances(node.formula_tokens) || void 0,
+        name: node.formula_name || null
+      } : void 0,
+      // Table lookup
+      table: node.hasTable || node.table_activeId || node.table_instances ? {
+        enabled: !!node.hasTable,
+        activeId: node.table_activeId || null,
+        instances: buildInstances(node.table_instances) || {},
+        name: node.table_name || null,
+        meta: buildInstances(node.table_meta) || {},
+        type: node.table_type || "columns",
+        isImported: node.table_isImported === true,
+        importSource: node.table_importSource || null,
+        columns: Array.isArray(node.table_columns) ? node.table_columns : null,
+        rows: Array.isArray(node.table_rows) ? node.table_rows : null
+      } : void 0,
+      // Select (options statiques ou dynamiques déjà résolues)
+      select: node.select_options || node.select_defaultValue ? {
+        options: Array.isArray(node.select_options) ? node.select_options : [],
+        allowClear: node.select_allowClear !== false,
+        multiple: node.select_multiple === true,
+        searchable: node.select_searchable !== false,
+        defaultValue: node.select_defaultValue || null
+      } : void 0,
+      // Nombre
+      number: node.number_min !== void 0 || node.number_max !== void 0 || node.number_defaultValue !== void 0 ? {
+        min: node.number_min ?? null,
+        max: node.number_max ?? null,
+        step: node.number_step ?? 1,
+        decimals: node.number_decimals ?? 0,
+        unit: node.number_unit || null,
+        prefix: node.number_prefix || null,
+        suffix: node.number_suffix || null,
+        defaultValue: node.number_defaultValue || null
+      } : void 0,
+      // Booléen
+      bool: node.bool_trueLabel || node.bool_falseLabel || node.bool_defaultValue !== void 0 ? {
+        trueLabel: node.bool_trueLabel || null,
+        falseLabel: node.bool_falseLabel || null,
+        defaultValue: node.bool_defaultValue ?? null
+      } : void 0,
+      // Date
+      date: node.date_format || node.date_showTime || node.date_minDate || node.date_maxDate ? {
+        format: node.date_format || "DD/MM/YYYY",
+        showTime: node.date_showTime === true,
+        minDate: node.date_minDate || null,
+        maxDate: node.date_maxDate || null
+      } : void 0,
+      // Image
+      image: node.image_maxSize || node.image_ratio || node.image_crop || node.image_thumbnails ? {
+        maxSize: node.image_maxSize || null,
+        ratio: node.image_ratio || null,
+        crop: node.image_crop === true,
+        thumbnails: node.image_thumbnails || null
+      } : void 0,
+      // Linking / navigation (simplifié)
+      link: node.link_activeId || node.link_instances ? {
+        enabled: !!node.hasLink,
+        activeId: node.link_activeId || null,
+        instances: buildInstances(node.link_instances) || {},
+        mode: node.link_mode || "JUMP",
+        name: node.link_name || null,
+        carryContext: node.link_carryContext === true,
+        params: buildInstances(node.link_params) || {},
+        targetNodeId: node.link_targetNodeId || null,
+        targetTreeId: node.link_targetTreeId || null
+      } : void 0,
+      // Markers
+      markers: node.markers_activeId || node.markers_instances || node.markers_selectedIds ? {
+        enabled: !!node.hasMarkers,
+        activeId: node.markers_activeId || null,
+        instances: buildInstances(node.markers_instances) || {},
+        available: buildInstances(node.markers_available) || {},
+        selectedIds: buildInstances(node.markers_selectedIds) || {}
+      } : void 0,
+      // API (legacy mapping minimal)
+      api: node.api_activeId || node.api_instances ? {
+        enabled: !!node.hasAPI,
+        activeId: node.api_activeId || null,
+        instances: buildInstances(node.api_instances) || {},
+        bodyVars: buildInstances(node.api_bodyVars) || {},
+        name: node.api_name || null
+      } : void 0
+    };
+    Object.keys(capabilities).forEach((key2) => {
+      if (capabilities[key2] === void 0) delete capabilities[key2];
+    });
+    let mergedCaps = capabilities;
+    if (legacyMetaCaps && typeof legacyMetaCaps === "object") {
+      mergedCaps = { ...legacyMetaCaps, ...capabilities };
+    }
+    result.capabilities = mergedCaps;
+  } catch (e) {
+    console.error("\u274C [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
+  }
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
     console.log("\xF0\u0178\u201D\u2014 [buildResponseFromColumns] OPTION AVEC SHARED REFS:", {
       nodeId: node.id,
@@ -30657,9 +30780,36 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           selectedNodeId: true
         }
       });
+      const nodeUpdateData = { hasData: true, updatedAt: /* @__PURE__ */ new Date() };
+      if (variable.sourceRef && variable.sourceRef.startsWith("@table.")) {
+        const tableId = variable.sourceRef.replace("@table.", "");
+        console.log(`[TBL] \u{1F527} Configuration lookup pour table ${tableId}`);
+        const instanceConfig = {
+          sourceType: variable.sourceType || "tree",
+          sourceRef: variable.sourceRef,
+          displayFormat: variable.displayFormat || null,
+          unit: variable.unit ?? null,
+          precision: variable.precision ?? null,
+          visibleToUser: variable.visibleToUser ?? true,
+          exposedKey: variable.exposedKey || null,
+          metadata: {
+            sourceType: variable.sourceType || "tree",
+            sourceRef: variable.sourceRef,
+            fixedValue: variable.fixedValue ?? null,
+            selectedNodeId: variable.selectedNodeId ?? null,
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        };
+        nodeUpdateData.data_activeId = tableId;
+        nodeUpdateData.data_instances = { [tableId]: instanceConfig };
+        nodeUpdateData.table_activeId = tableId;
+        nodeUpdateData.table_instances = { [tableId]: instanceConfig };
+        nodeUpdateData.hasTable = true;
+        console.log(`[TBL] \u2705 data_activeId/table_activeId="${tableId}" configur\xE9s`);
+      }
       await tx.treeBranchLeafNode.update({
         where: { id: nodeId },
-        data: { hasData: true, updatedAt: /* @__PURE__ */ new Date() }
+        data: nodeUpdateData
       });
       try {
         await addToNodeLinkedField5(tx, nodeId, "linkedVariableIds", [variable.id]);
@@ -34361,7 +34511,59 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         return res.json({ options });
       }
     }
-    console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Aucun keyRow/keyColumn configur\xC3\xA9, retour tableau brut`);
+    if (table.type === "matrix") {
+      const hasNoConfig = !selectConfig?.keyRow && !selectConfig?.keyColumn;
+      const a1 = rows[0];
+      const firstColHeader = columns[0];
+      if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
+        const autoOptions = rows.slice(1).filter((r) => r && r !== "undefined" && r !== "null").map((r) => ({ value: r, label: r }));
+        console.log(`[TreeBranchLeaf API] \u2699\uFE0F AUTO-DEFAULT lookup (matrix, colonne A) g\xE9n\xE9r\xE9`, {
+          nodeId,
+          autoCount: autoOptions.length,
+          sample: autoOptions.slice(0, 5)
+        });
+        try {
+          await prisma46.treeBranchLeafSelectConfig.upsert({
+            where: { nodeId },
+            create: {
+              id: (0, import_crypto10.randomUUID)(),
+              nodeId,
+              options: [],
+              multiple: false,
+              searchable: true,
+              allowCustom: false,
+              optionsSource: "table",
+              tableReference: table.id,
+              keyColumn: firstColHeader,
+              keyRow: null,
+              valueColumn: null,
+              valueRow: null,
+              displayColumn: null,
+              displayRow: null,
+              dependsOnNodeId: null,
+              createdAt: /* @__PURE__ */ new Date(),
+              updatedAt: /* @__PURE__ */ new Date()
+            },
+            update: {
+              optionsSource: "table",
+              tableReference: table.id,
+              keyColumn: firstColHeader,
+              keyRow: null,
+              valueColumn: null,
+              valueRow: null,
+              displayColumn: null,
+              displayRow: null,
+              updatedAt: /* @__PURE__ */ new Date()
+            }
+          });
+          console.log(`[TreeBranchLeaf API] \u2705 AUTO-UPSERT select-config: nodeId=${nodeId}, table=${table.id}, keyColumn=${firstColHeader}`);
+        } catch (e) {
+          console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Auto-upsert select-config a \xE9chou\xE9 (non bloquant):`, e);
+        }
+        return res.json({ options: autoOptions, autoDefault: { source: "columnA", keyColumnCandidate: firstColHeader } });
+      }
+    }
+    console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Aucun keyRow/keyColumn configur\xC3\xA9, retour tableau brut (pas d'auto-default applicable)`);
     return res.json(table);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching table for lookup:", error);
@@ -38799,16 +39001,16 @@ async function resolveCapabilities(treeId, opts = {}) {
       }
     }),
     prisma48.treeBranchLeafNodeFormula.findMany({
-      where: { node: { treeId } },
+      where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, tokens: true, name: true }
     }),
     prisma48.treeBranchLeafNodeCondition.findMany({
-      where: { node: { treeId } },
+      where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, conditionSet: true, name: true }
     }),
     prisma48.treeBranchLeafNodeTable.findMany({
-      where: { node: { treeId } },
-      select: { id: true, nodeId: true, type: true, columns: true, rows: true, name: true }
+      where: { TreeBranchLeafNode: { treeId } },
+      select: { id: true, nodeId: true, type: true, name: true, meta: true }
     })
   ]);
   const formulaByNode = /* @__PURE__ */ new Map();
@@ -44413,6 +44615,80 @@ var routes_default = apiRouter;
 var import_express72 = require("express");
 var import_client60 = require("@prisma/client");
 init_operation_interpreter();
+
+// src/services/calculatedValuesService.ts
+async function storeCalculatedValues(values, submissionId) {
+  const result = {
+    success: true,
+    stored: 0,
+    failed: 0,
+    errors: []
+  };
+  console.log(`\u{1F4CA} [StoreCalculatedValues] D\xE9but stockage de ${values.length} valeurs`, {
+    submissionId,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  for (const value of values) {
+    try {
+      const { nodeId, calculatedValue, calculatedBy = "unknown" } = value;
+      if (!nodeId) {
+        result.errors.push({ nodeId: "unknown", error: "nodeId manquant" });
+        result.failed++;
+        continue;
+      }
+      const node = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        select: { id: true, label: true }
+      });
+      if (!node) {
+        result.errors.push({
+          nodeId,
+          error: "N\u0153ud non trouv\xE9"
+        });
+        result.failed++;
+        continue;
+      }
+      await prisma.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: {
+          calculatedValue: String(calculatedValue),
+          calculatedAt: /* @__PURE__ */ new Date(),
+          calculatedBy
+        }
+      });
+      result.stored++;
+      console.log(`\u2705 [StoreCalculatedValues] Valeur stock\xE9e:`, {
+        nodeId,
+        label: node.label,
+        calculatedValue,
+        calculatedBy,
+        submissionId
+      });
+    } catch (error) {
+      result.failed++;
+      result.errors.push({
+        nodeId: value.nodeId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      console.error(`\u274C [StoreCalculatedValues] Erreur stockage:`, {
+        nodeId: value.nodeId,
+        error,
+        submissionId
+      });
+    }
+  }
+  console.log(`\u{1F4CA} [StoreCalculatedValues] Fin stockage:`, {
+    stored: result.stored,
+    failed: result.failed,
+    total: values.length,
+    submissionId,
+    errors: result.errors.length > 0 ? result.errors : void 0
+  });
+  result.success = result.failed === 0;
+  return result;
+}
+
+// src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var router70 = (0, import_express72.Router)();
 var prisma58 = new import_client60.PrismaClient();
 var stagingStore = /* @__PURE__ */ new Map();
@@ -45215,6 +45491,24 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
     results.forEach((r, i) => {
       console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value="${r.value}" (calculatedValue="${r.calculatedValue}")`);
     });
+    try {
+      const calculatedValues = results.filter((r) => {
+        if (r.value === null || r.value === void 0) return false;
+        const strValue = String(r.value).trim();
+        if (strValue === "" || strValue === "\u2205") return false;
+        return true;
+      }).map((r) => ({
+        nodeId: r.nodeId,
+        calculatedValue: String(r.value),
+        calculatedBy: `preview-${userId}`
+      }));
+      if (calculatedValues.length > 0) {
+        await storeCalculatedValues(calculatedValues, submissionId);
+        console.log(`[PREVIEW-EVALUATE] \u2705 ${calculatedValues.length} valeurs stock\xE9es dans Prisma`);
+      }
+    } catch (storeError) {
+      console.error(`[PREVIEW-EVALUATE] \u26A0\uFE0F Erreur stockage valeurs calcul\xE9es:`, storeError);
+    }
     return res.json({
       success: true,
       mode: "preview",
@@ -45437,12 +45731,145 @@ router70.get("/tables/:tableId", async (req2, res) => {
 });
 var tbl_submission_evaluator_default = router70;
 
-// src/api/websites.ts
+// src/controllers/calculatedValueController.ts
 var import_express73 = require("express");
-var import_client61 = require("@prisma/client");
 var router71 = (0, import_express73.Router)();
+router71.get("/:nodeId/calculated-value", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    const { _submissionId } = req2.query;
+    if (!nodeId) {
+      return res.status(400).json({ error: "nodeId requis" });
+    }
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: {
+        id: nodeId
+      },
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true,
+        type: true,
+        fieldType: true
+      }
+    });
+    if (!node) {
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+    }
+    return res.json({
+      nodeId: node.id,
+      label: node.label,
+      value: node.calculatedValue,
+      calculatedAt: node.calculatedAt,
+      calculatedBy: node.calculatedBy,
+      type: node.type,
+      fieldType: node.fieldType
+    });
+  } catch (error) {
+    console.error("[CalculatedValueController] GET erreur:", error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+router71.post("/:nodeId/store-calculated-value", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    const { calculatedValue, calculatedBy, submissionId } = req2.body;
+    if (!nodeId) {
+      return res.status(400).json({ error: "nodeId requis" });
+    }
+    if (calculatedValue === void 0) {
+      return res.status(400).json({ error: "calculatedValue requis" });
+    }
+    const updated = await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        calculatedValue: String(calculatedValue),
+        calculatedAt: /* @__PURE__ */ new Date(),
+        calculatedBy: calculatedBy || "unknown"
+      },
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true
+      }
+    });
+    console.log("\u2705 [CalculatedValueController] Valeur stock\xE9e:", {
+      nodeId,
+      calculatedValue,
+      calculatedBy,
+      submissionId
+    });
+    return res.json({
+      success: true,
+      nodeId: updated.id,
+      calculatedValue: updated.calculatedValue,
+      calculatedAt: updated.calculatedAt,
+      calculatedBy: updated.calculatedBy
+    });
+  } catch (error) {
+    console.error("[CalculatedValueController] POST erreur:", error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+router71.post("/store-batch-calculated-values", async (req2, res) => {
+  try {
+    const { values, submissionId } = req2.body;
+    if (!Array.isArray(values) || values.length === 0) {
+      return res.status(400).json({ error: "values doit \xEAtre un tableau non-vide" });
+    }
+    const results = [];
+    for (const { nodeId, calculatedValue, calculatedBy } of values) {
+      if (!nodeId) continue;
+      try {
+        const updated = await prisma.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: {
+            calculatedValue: String(calculatedValue),
+            calculatedAt: /* @__PURE__ */ new Date(),
+            calculatedBy: calculatedBy || "unknown"
+          }
+        });
+        results.push({
+          nodeId,
+          success: true,
+          calculatedValue: updated.calculatedValue
+        });
+      } catch (err) {
+        results.push({
+          nodeId,
+          success: false,
+          error: String(err)
+        });
+      }
+    }
+    console.log("\u2705 [CalculatedValueController] BATCH stockage:", {
+      submissionId,
+      total: values.length,
+      success: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length
+    });
+    return res.json({
+      success: true,
+      results,
+      submissionId
+    });
+  } catch (error) {
+    console.error("[CalculatedValueController] BATCH POST erreur:", error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+var calculatedValueController_default = router71;
+
+// src/api/websites.ts
+var import_express74 = require("express");
+var import_client61 = require("@prisma/client");
+var router72 = (0, import_express74.Router)();
 var prisma59 = new import_client61.PrismaClient();
-router71.get("/websites", authenticateToken, async (req2, res) => {
+router72.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -45470,7 +45897,7 @@ router71.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.get("/websites/:slug", async (req2, res) => {
+router72.get("/websites/:slug", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -45541,7 +45968,7 @@ router71.get("/websites/:slug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.get("/websites/:slug/services", async (req2, res) => {
+router72.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await prisma59.webSite.findFirst({
@@ -45564,7 +45991,7 @@ router71.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.get("/websites/:slug/projects", async (req2, res) => {
+router72.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -45592,7 +46019,7 @@ router71.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.get("/websites/:slug/testimonials", async (req2, res) => {
+router72.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -45620,7 +46047,7 @@ router71.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.get("/websites/:slug/blog", async (req2, res) => {
+router72.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -45659,7 +46086,7 @@ router71.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router72.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await prisma59.webSite.findFirst({
@@ -45696,7 +46123,7 @@ router71.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.put("/websites/:id", authenticateToken, async (req2, res) => {
+router72.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -45740,7 +46167,7 @@ router71.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.post("/websites", authenticateToken, async (req2, res) => {
+router72.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -45769,7 +46196,7 @@ router71.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router71.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router72.delete("/websites/:id", authenticateToken, async (req2, res) => {
   console.log("\u{1F5D1}\uFE0F [WEBSITES] DELETE /websites/:id atteint!");
   console.log("\u{1F5D1}\uFE0F [WEBSITES] ID du site:", req2.params.id);
   try {
@@ -45805,14 +46232,14 @@ router71.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router71;
+var websites_default = router72;
 
 // src/api/website-services.ts
-var import_express74 = require("express");
+var import_express75 = require("express");
 var import_client62 = require("@prisma/client");
-var router72 = (0, import_express74.Router)();
+var router73 = (0, import_express75.Router)();
 var prisma60 = new import_client62.PrismaClient();
-router72.get("/website-services/:websiteId", async (req2, res) => {
+router73.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma60.webSiteService.findMany({
@@ -45829,7 +46256,7 @@ router72.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router72.post("/website-services", async (req2, res) => {
+router73.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -45859,7 +46286,7 @@ router72.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router72.put("/website-services/:id", async (req2, res) => {
+router73.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -45882,7 +46309,7 @@ router72.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router72.delete("/website-services/:id", async (req2, res) => {
+router73.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma60.webSiteService.delete({
@@ -45894,7 +46321,7 @@ router72.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router72.post("/website-services/reorder", async (req2, res) => {
+router73.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -45914,14 +46341,14 @@ router72.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router72;
+var website_services_default = router73;
 
 // src/api/website-projects.ts
-var import_express75 = require("express");
+var import_express76 = require("express");
 var import_client63 = require("@prisma/client");
-var router73 = (0, import_express75.Router)();
+var router74 = (0, import_express76.Router)();
 var prisma61 = new import_client63.PrismaClient();
-router73.get("/website-projects/:websiteId", async (req2, res) => {
+router74.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma61.webSiteProject.findMany({
@@ -45938,7 +46365,7 @@ router73.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router73.post("/website-projects", async (req2, res) => {
+router74.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -45967,7 +46394,7 @@ router73.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router73.put("/website-projects/:id", async (req2, res) => {
+router74.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -45989,7 +46416,7 @@ router73.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router73.delete("/website-projects/:id", async (req2, res) => {
+router74.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma61.webSiteProject.delete({
@@ -46001,7 +46428,7 @@ router73.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router73.post("/website-projects/reorder", async (req2, res) => {
+router74.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -46021,14 +46448,14 @@ router73.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router73;
+var website_projects_default = router74;
 
 // src/api/website-testimonials.ts
-var import_express76 = require("express");
+var import_express77 = require("express");
 var import_client64 = require("@prisma/client");
-var router74 = (0, import_express76.Router)();
+var router75 = (0, import_express77.Router)();
 var prisma62 = new import_client64.PrismaClient();
-router74.get("/website-testimonials/:websiteId", async (req2, res) => {
+router75.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma62.webSiteTestimonial.findMany({
@@ -46045,7 +46472,7 @@ router74.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.post("/website-testimonials", async (req2, res) => {
+router75.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -46075,7 +46502,7 @@ router74.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.put("/website-testimonials/:id", async (req2, res) => {
+router75.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -46098,7 +46525,7 @@ router74.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.delete("/website-testimonials/:id", async (req2, res) => {
+router75.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma62.webSiteTestimonial.delete({
@@ -46110,7 +46537,7 @@ router74.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router74.post("/website-testimonials/reorder", async (req2, res) => {
+router75.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -46130,14 +46557,14 @@ router74.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router74;
+var website_testimonials_default = router75;
 
 // src/api/website-sections.ts
-var import_express77 = __toESM(require("express"), 1);
+var import_express78 = __toESM(require("express"), 1);
 var import_client65 = require("@prisma/client");
-var router75 = import_express77.default.Router();
+var router76 = import_express78.default.Router();
 var prisma63 = new import_client65.PrismaClient();
-router75.get("/website-sections/:websiteId", async (req2, res) => {
+router76.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await prisma63.webSiteSection.findMany({
@@ -46154,7 +46581,7 @@ router75.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.post("/website-sections", async (req2, res) => {
+router76.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await prisma63.webSiteSection.aggregate({
@@ -46182,7 +46609,7 @@ router75.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.put("/website-sections/:id", async (req2, res) => {
+router76.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -46233,7 +46660,7 @@ router75.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.patch("/website-sections/:id", async (req2, res) => {
+router76.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -46281,7 +46708,7 @@ router75.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.delete("/website-sections/:id", async (req2, res) => {
+router76.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await prisma63.webSiteSection.findUnique({
@@ -46299,7 +46726,7 @@ router75.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.post("/website-sections/reorder", async (req2, res) => {
+router76.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await prisma63.$transaction(
@@ -46316,7 +46743,7 @@ router75.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router75.post("/website-sections/duplicate/:id", async (req2, res) => {
+router76.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await prisma63.webSiteSection.findUnique({
@@ -46347,12 +46774,12 @@ router75.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router75;
+var website_sections_default = router76;
 
 // src/api/website-themes.ts
-var import_express78 = require("express");
-var router76 = (0, import_express78.Router)();
-router76.get("/:websiteId", async (req2, res) => {
+var import_express79 = require("express");
+var router77 = (0, import_express79.Router)();
+router77.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
@@ -46368,7 +46795,7 @@ router76.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router76.post("/", async (req2, res) => {
+router77.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
@@ -46381,7 +46808,7 @@ router76.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router76.put("/:id", async (req2, res) => {
+router77.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -46396,7 +46823,7 @@ router76.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router76.delete("/:id", async (req2, res) => {
+router77.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
@@ -46409,12 +46836,12 @@ router76.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router76;
+var website_themes_default = router77;
 
 // src/api/contact-form.ts
-var import_express79 = require("express");
+var import_express80 = require("express");
 var import_client66 = require("@prisma/client");
-var router77 = (0, import_express79.Router)();
+var router78 = (0, import_express80.Router)();
 var prisma64 = new import_client66.PrismaClient();
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -46432,7 +46859,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router77.post("/contact-form", async (req2, res) => {
+router78.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -46508,7 +46935,7 @@ router77.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router77.get("/contact-submissions/:websiteId", async (req2, res) => {
+router78.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma64.contactSubmission.findMany({
@@ -46523,7 +46950,7 @@ router77.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router77.patch("/contact-submission/:id/read", async (req2, res) => {
+router78.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma64.contactSubmission.update({
@@ -46536,7 +46963,7 @@ router77.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router77.patch("/contact-submission/:id/status", async (req2, res) => {
+router78.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -46558,7 +46985,7 @@ router77.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router77.delete("/contact-submission/:id", async (req2, res) => {
+router78.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma64.contactSubmission.delete({
@@ -46570,15 +46997,15 @@ router77.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router77;
+var contact_form_default = router78;
 
 // src/api/image-upload.ts
-var import_express80 = require("express");
+var import_express81 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
 var import_path6 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
 var import_client67 = require("@prisma/client");
-var router78 = (0, import_express80.Router)();
+var router79 = (0, import_express81.Router)();
 var prisma65 = new import_client67.PrismaClient();
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
@@ -46607,7 +47034,7 @@ var upload2 = (0, import_multer2.default)({
     // 5MB max
   }
 });
-router78.post("/upload-image", upload2.single("image"), async (req2, res) => {
+router79.post("/upload-image", upload2.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -46664,7 +47091,7 @@ router78.post("/upload-image", upload2.single("image"), async (req2, res) => {
     });
   }
 });
-router78.get("/images/:websiteId", async (req2, res) => {
+router79.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -46688,7 +47115,7 @@ router78.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router78.delete("/image/:id", async (req2, res) => {
+router79.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma65.webSiteMediaFile.findUnique({
@@ -46720,10 +47147,10 @@ router78.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router78;
+var image_upload_default = router79;
 
 // src/api/ai-content.ts
-var import_express81 = require("express");
+var import_express82 = require("express");
 
 // src/services/aiContentService.ts
 var AIContentService = class {
@@ -46936,8 +47363,8 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
-var router79 = (0, import_express81.Router)();
-router79.post("/generate-service", async (req2, res) => {
+var router80 = (0, import_express82.Router)();
+router80.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -46963,7 +47390,7 @@ router79.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router79.post("/generate-project", async (req2, res) => {
+router80.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -46989,7 +47416,7 @@ router79.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router79.post("/generate-testimonial", async (req2, res) => {
+router80.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -47015,7 +47442,7 @@ router79.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router79.post("/generate-page", async (req2, res) => {
+router80.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -47042,7 +47469,7 @@ router79.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router79.post("/optimize-seo", async (req2, res) => {
+router80.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -47070,7 +47497,7 @@ router79.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router79.post("/generate-multiple-services", async (req2, res) => {
+router80.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -47096,15 +47523,15 @@ router79.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router79;
+var ai_content_default = router80;
 
 // src/api/ai.ts
-var import_express82 = __toESM(require("express"), 1);
+var import_express83 = __toESM(require("express"), 1);
 var import_generative_ai2 = require("@google/generative-ai");
-var router80 = import_express82.default.Router();
+var router81 = import_express83.default.Router();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router80.post("/generate", async (req2, res) => {
+router81.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -47267,7 +47694,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router80.post("/analyze-section", async (req2, res) => {
+router81.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -47402,7 +47829,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router80.post("/optimize-seo", async (req2, res) => {
+router81.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -47442,7 +47869,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router80.post("/improve-content", async (req2, res) => {
+router81.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -47479,7 +47906,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router80.post("/optimize-layout", async (req2, res) => {
+router81.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -47534,7 +47961,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router80.post("/generate-palette", async (req2, res) => {
+router81.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -47673,13 +48100,13 @@ function generateFallbackPalettes(baseColor) {
     }
   ];
 }
-var ai_default2 = router80;
+var ai_default2 = router81;
 
 // src/routes/ai-field-generator.ts
-var import_express83 = __toESM(require("express"), 1);
-var router81 = import_express83.default.Router();
+var import_express84 = __toESM(require("express"), 1);
+var router82 = import_express84.default.Router();
 var geminiService3 = new GoogleGeminiService();
-router81.use(authMiddleware);
+router82.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -48062,7 +48489,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router81.post("/generate-field", async (req2, res) => {
+router82.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -48149,7 +48576,7 @@ router81.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router81.get("/status", async (_req, res) => {
+router82.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -48166,7 +48593,7 @@ router81.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router81;
+var ai_field_generator_default = router82;
 
 // src/middleware/websiteDetection.ts
 var import_client68 = require("@prisma/client");
@@ -48703,6 +49130,7 @@ async function initializeTreeBranchLeafSync() {
 }
 
 // src/api-server-clean.ts
+import_dotenv.default.config();
 console.log("\u{1F680} [API-SERVER-CLEAN] D\xE9marrage du serveur CRM...");
 logSecurityEvent("SERVER_STARTUP", {
   timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -48710,7 +49138,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express84.default)();
+var app = (0, import_express85.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 4e3);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
@@ -48780,7 +49208,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express84.default.json({
+app.use(import_express85.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -48794,7 +49222,7 @@ app.use(import_express84.default.json({
     }
   }
 }));
-app.use(import_express84.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express85.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -48813,7 +49241,7 @@ app.use((0, import_express_session.default)({
 }));
 console.log("\u2705 [ENTERPRISE-SECURITY] Configuration s\xE9curit\xE9 niveau Enterprise activ\xE9e");
 var uploadsDir = import_path7.default.resolve(process.cwd(), "public", "uploads");
-app.use("/uploads", import_express84.default.static(uploadsDir));
+app.use("/uploads", import_express85.default.static(uploadsDir));
 console.log("\u{1F4F8} [UPLOADS] Dossier uploads configur\xE9:", uploadsDir);
 console.log("\u{1F527} [API-SERVER-CLEAN] Configuration Passport...");
 app.use(import_passport.default.initialize());
@@ -48834,6 +49262,7 @@ app.use("/api/ai", ai_default2);
 app.use("/api", contact_form_default);
 app.use("/api", image_upload_default);
 app.use("/api/tbl", tbl_submission_evaluator_default);
+app.use("/api/tree-nodes", calculatedValueController_default);
 console.log("\u2705 [API-SERVER-CLEAN] Routes configur\xE9es");
 app.get("/health", (_req, res) => {
   res.json({
@@ -48858,7 +49287,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express84.default.static(assetsDir, {
+    app.use("/assets", import_express85.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

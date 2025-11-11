@@ -7,7 +7,7 @@
   },
   "type": "module",
   "scripts": {
-    "dev:server": "tsx watch src/api-server-clean.ts",
+    "dev:server": "tsx watch --clear-screen=false --env-file=.env src/api-server-clean.ts",
     "dev:client": "vite",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
     "auto:commit": "tsx -- scripts/git-auto-push.ts --no-push",

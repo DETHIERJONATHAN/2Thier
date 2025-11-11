@@ -50,19 +50,21 @@ describe('deepCopyNodeInternal Integration Tests', () => {
         treeId,
         label: 'Source Node',
         type: 'group',
+        updatedAt: new Date(),
       },
     });
 
-    const variable = await prisma.treeBranchLeafNodeVariable.create({
-        data: {
-            id: randomUUID(),
-            nodeId: sourceNode.id,
-            organizationId,
-            displayName: 'Test Variable',
-            sourceType: 'fixed',
-            fixedValue: '123',
-        }
-    });
+  const variable = await prisma.treeBranchLeafNodeVariable.create({
+    data: {
+      id: randomUUID(),
+      nodeId: sourceNode.id,
+      exposedKey: `var_${randomUUID()}`,
+      displayName: 'Test Variable',
+      sourceType: 'fixed',
+      fixedValue: '123',
+      updatedAt: new Date(),
+    }
+  });
 
     const formula = await prisma.treeBranchLeafNodeFormula.create({
         data: {
