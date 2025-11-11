@@ -360,6 +360,41 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     return sharedRefs;
   }, []);
 
+  // Helper to resolve matching node by cascaderNodeId, node UUID in selectedValue, or label/value in allNodes
+  const resolveMatchingNodeFromSelectedValue = useCallback((selectedValue: unknown, cascaderNodeId?: string) : RawTreeNode | undefined => {
+    try {
+      if (cascaderNodeId) {
+        const byId = allNodes.find(n => n.id === cascaderNodeId);
+        if (byId) return byId;
+      }
+      if (typeof selectedValue === 'string' && selectedValue.length > 0) {
+        const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+        const candidates = new Set<string>();
+        candidates.add(selectedValue);
+        const afterLastUnderscore = selectedValue.split('_').pop();
+        if (afterLastUnderscore) candidates.add(afterLastUnderscore);
+        const uuidMatch = selectedValue.match(uuidRegex);
+        if (uuidMatch && uuidMatch[0]) candidates.add(uuidMatch[0]);
+        for (const cid of Array.from(candidates)) {
+          const foundById = allNodes.find(node => node.id === cid);
+          if (foundById) return foundById;
+        }
+      }
+      // Fallback: find by label/value
+      if (typeof selectedValue === 'string' && allNodes && allNodes.length > 0) {
+        const norm = (v: unknown) => (v === null || v === undefined ? v : String(v));
+        const foundByLabel = allNodes.find(node =>
+          (node.type === 'leaf_option' || node.type === 'leaf_option_field') &&
+          (node.label === selectedValue || norm(node.label) === norm(selectedValue))
+        );
+        if (foundByLabel) return foundByLabel;
+      }
+    } catch {
+      // noop — keep undefined
+    }
+    return undefined;
+  }, [allNodes]);
+
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   const formRowGutter: [number, number] = useMemo(() => [
@@ -971,6 +1006,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 return opt.value === selectedValue || norm(opt.value) === norm(selectedValue);
               }) : undefined) as (typeof f.options extends undefined ? never : NonNullable<typeof f.options>[number]) | undefined;
 
+              // 🔍 DEBUG COPY: log key info so we can trace why conditionalFields are not injected
+              console.log('🔧 [REPEATER COPY INJECTION START]', { fieldId: f.id, fieldLabel: f.label, selectedValue, selectedOption, optionsCount: f.options?.length || 0 });
+
               // Si pas de conditionalFields préconstruits, reconstruire depuis allNodes via nodeId persistant
               let conditionalFieldsToRender: TBLField[] = [];
               const conditionalFromOption = selectedOption && Array.isArray(selectedOption.conditionalFields) ? selectedOption.conditionalFields : [];
@@ -984,25 +1022,62 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     const key = `${f.id}__selectedNodeId`;
                     const maybe = (window as any).TBL_FORM_DATA[key];
                     if (typeof maybe === 'string' && maybe.length > 0) cascaderNodeId = maybe;
+                    // FALLBACK: if no cascaderNodeId for this copy id, try the template/original id key
+                    // FALLBACK: try window.TBL_CASCADER_NODE_IDS map for copyId and originalId
+                    try {
+                      const maybeNodeIdMap = (window as any).TBL_CASCADER_NODE_IDS as Record<string, string> | undefined;
+                      if (!cascaderNodeId && maybeNodeIdMap) {
+                        const n1 = maybeNodeIdMap[f.id];
+                        const originalId = (f as any).originalFieldId || (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId;
+                        const n2 = originalId ? maybeNodeIdMap[originalId] : undefined;
+                        if (typeof n1 === 'string' && n1.length > 0) cascaderNodeId = n1;
+                        if (!cascaderNodeId && typeof n2 === 'string' && n2.length > 0) cascaderNodeId = n2;
+                        if (cascaderNodeId) console.log('🔁 [REPEATER COPY INJECTION] fallback cascaderNodeId via TBL_CASCADER_NODE_IDS', { fId: f.id, cascaderNodeId });
+                      }
+                    } catch { /* noop */ }
+                    if (!cascaderNodeId) {
+                      const originalId = (f as any).originalFieldId || (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId;
+                      if (originalId) {
+                        const templateKey = `${originalId}__selectedNodeId`;
+                        const maybe2 = (window as any).TBL_FORM_DATA[templateKey];
+                        if (typeof maybe2 === 'string' && maybe2.length > 0) {
+                          cascaderNodeId = maybe2;
+                          console.log('🔁 [REPEATER COPY INJECTION] fallback cascaderNodeId via template key found:', { fieldId: f.id, templateKey, cascaderNodeId });
+                        }
+                      }
+                    }
                   }
                 } catch {/* noop */}
 
-                // Trouver le node correspondant et reconstruire les conditionnels
-                if (cascaderNodeId) {
-                  const matchingNode = allNodes.find(n => n.id === cascaderNodeId);
-                  if (matchingNode) {
-                    const childFields = allNodes.filter(childNode => childNode.parentId === matchingNode.id && childNode.type === 'leaf_option_field');
-                    for (const child of childFields) {
-                      conditionalFieldsToRender.push(buildConditionalFieldFromNode(child));
-                    }
-                    const sharedReferenceIds = findAllSharedReferencesRecursive(matchingNode.id, allNodes);
-                    for (const refId of sharedReferenceIds) {
-                      const refNode = allNodes.find(n => n.id === refId);
-                      if (refNode) conditionalFieldsToRender.push(buildConditionalFieldFromNode(refNode));
-                    }
-                    // Fallback: si selectedValue est vide, utiliser le label du node
-                    if (selectedValue === undefined || selectedValue === null) selectedValue = matchingNode.label;
+                // Trouver le node correspondant via helper (cascaderNodeId, uuid in selectedValue, or fallback by label/value)
+                let matchingNodeCopy = resolveMatchingNodeFromSelectedValue(selectedValue, cascaderNodeId);
+                if (!matchingNodeCopy && selectedOption && (selectedOption as any).id) {
+                  matchingNodeCopy = resolveMatchingNodeFromSelectedValue((selectedOption as any).id, cascaderNodeId);
+                }
+
+                if (matchingNodeCopy) {
+                  const childFields = allNodes.filter(childNode => childNode.parentId === matchingNodeCopy.id && childNode.type === 'leaf_option_field');
+                  for (const child of childFields) {
+                    conditionalFieldsToRender.push(buildConditionalFieldFromNode(child));
                   }
+                  const sharedReferenceIds = findAllSharedReferencesRecursive(matchingNodeCopy.id, allNodes);
+                  for (const refId of sharedReferenceIds) {
+                    const refNode = allNodes.find(n => n.id === refId);
+                    if (refNode) conditionalFieldsToRender.push(buildConditionalFieldFromNode(refNode));
+                  }
+                  // Fallback: si selectedValue est vide, utiliser le label du node
+                  if (selectedValue === undefined || selectedValue === null) selectedValue = matchingNodeCopy.label;
+                }
+                // Debug: if we could not reconstruct conditionalFields for a copy
+                if ((!selectedOption || (selectedOption && (!Array.isArray(selectedOption.conditionalFields) || selectedOption.conditionalFields.length === 0))) && conditionalFieldsToRender.length === 0 && (selectedValue || cascaderNodeId)) {
+                  console.log('�🔎 [REPEATER COPY INJECTION] No conditional fields reconstructed for copy:', {
+                    fieldId: f.id,
+                    fieldLabel: f.label,
+                    selectedValue,
+                    cascaderNodeId,
+                    optionsCount: f.options?.length || 0,
+                    sampleOptions: Array.isArray(f.options) ? f.options.map(o => ({ label: o.label, value: o.value, conditionalFieldsCount: (o.conditionalFields||[]).length })) : []
+                  });
                 }
               }
 
@@ -1241,6 +1316,41 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             formDataKeys: Object.keys(formData).filter(k => k.includes(field.id.split('_')[0]))
           });
 
+          // 🩹 PATCH (Versant / Cascader) : Si aucune valeur n'est encore détectée mais qu'un nodeId Cascader est mémorisé
+          // ou qu'on dispose déjà d'un label sélectionné dans window.TBL_FORM_DATA, essayer de reconstruire selectedValue
+          if ((selectedValue === undefined || selectedValue === null) && typeof window !== 'undefined') {
+            try {
+              const cascNodeId = window.TBL_CASCADER_NODE_IDS?.[field.id];
+              const globalFormData = (window as any).TBL_FORM_DATA as Record<string, unknown> | undefined;
+              // 1) Si un nodeId est présent, tenter de retrouver le nœud puis utiliser son label
+              if (cascNodeId && allNodes?.length) {
+                const cascNode = allNodes.find(n => n.id === cascNodeId);
+                if (cascNode) {
+                  selectedValue = cascNode.label || (cascNode as any).value || selectedValue;
+                  console.log('🩹 [CASCADER PATCH] selectedValue reconstruit via cascaderNodeId:', { fieldId: field.id, cascNodeId, selectedValue });
+                }
+              }
+              // 2) Fallback: si une clé miroir simple a été stockée avec le label (cas où handleFieldChange a déjà écrit la valeur)
+              if ((selectedValue === undefined || selectedValue === null) && globalFormData) {
+                const direct = globalFormData[field.id];
+                if (typeof direct === 'string' && direct.length > 0) {
+                  selectedValue = direct as unknown;
+                  console.log('🩹 [CASCADER PATCH] selectedValue reconstruit via TBL_FORM_DATA direct:', { fieldId: field.id, selectedValue });
+                }
+              }
+              // 3) Dernier recours: tester les options en comparant label vs rawSelectedValue stringifié
+              if ((selectedValue === undefined || selectedValue === null) && rawSelectedValue !== undefined && Array.isArray(field.options)) {
+                const matchByLabel = field.options.find(o => o.label === rawSelectedValue);
+                if (matchByLabel) {
+                  selectedValue = matchByLabel.value ?? matchByLabel.label;
+                  console.log('🩹 [CASCADER PATCH] selectedValue reconstruit via option.label match rawSelectedValue:', { fieldId: field.id, selectedValue });
+                }
+              }
+            } catch (e) {
+              console.warn('⚠️ [CASCADER PATCH] Échec reconstruction selectedValue:', e);
+            }
+          }
+
           // 🔥 DEBUG spécifique pour la copie du champ Versant
           if (field.id === 'e207d8bf-6a6f-414c-94ed-ffde47096915') {
             console.log('🔥🔥🔥 [COPIE VERSANT DEBUG] Champ copié spécifique détecté:', {
@@ -1332,6 +1442,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               dlog('🟡 [SECTION RENDERER] Correspondance option niveau 1 trouvée via comparaison loose (string).');
             }
           }
+          // 🩹 PATCH complémentaire : tenter correspondance par label si value mismatch (ex: "Mesure simple" vs "mesure_simple")
+          if (!selectedOption && (selectedValue !== undefined && selectedValue !== null)) {
+            selectedOption = field.options.find(opt => norm(opt.label) === selectedNorm);
+            if (selectedOption) {
+              dlog('🟡 [SECTION RENDERER] Correspondance option trouvée via label (patch cascader).');
+            }
+          }
           
 
           
@@ -1405,15 +1522,18 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               } catch { /* noop */ }
             }
 
-            if (cascaderNodeId) {
-              matchingNode = allNodes.find(node => node.id === cascaderNodeId);
-              console.log('🔍🔍🔍 [SECTION RENDERER] Recherche prioritaire via nodeId', {
+            // Resolve matching node via cascaderNodeId OR selectedValue via helper
+            matchingNode = resolveMatchingNodeFromSelectedValue(selectedValue, cascaderNodeId);
+            if (!matchingNode && selectedOption && (selectedOption as any).id) {
+              matchingNode = resolveMatchingNodeFromSelectedValue((selectedOption as any).id, cascaderNodeId);
+            }
+            if (matchingNode) {
+              console.log('🔍🔍🔍 [SECTION RENDERER] Recherche prioritaire via nodeId/selectedValue', {
                 fieldLabel: field.label,
-                cascaderNodeId,
-                found: !!matchingNode
+                found: !!matchingNode,
+                matchingNodeId: matchingNode.id
               });
             }
-
             if (!matchingNode) {
               console.log('🔍🔍🔍 [SECTION RENDERER] Option non trouvée niveau 1, recherche dans allNodes...', {
                 fieldLabel: field.label,
@@ -1423,10 +1543,32 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               });
               
               // Chercher dans les nodes de type leaf_option qui ont le bon label/value
-              matchingNode = allNodes.find(node => 
-                (node.type === 'leaf_option' || node.type === 'leaf_option_field') &&
-                (node.label === selectedValue || norm(node.label) === selectedNorm)
-              );
+              // 🔧 FALLBACK: si selectedValue contient un nodeId (UUID ou node_*), prioriser la recherche par id
+              if (typeof selectedValue === 'string' && selectedValue.length > 0) {
+                const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+                const candidates = new Set<string>();
+                candidates.add(selectedValue);
+                // Extraire la partie après le dernier '_' (utile si namespace ajouté)
+                const afterLastUnderscore = selectedValue.split('_').pop();
+                if (afterLastUnderscore) candidates.add(afterLastUnderscore);
+                const uuidMatch = selectedValue.match(uuidRegex);
+                if (uuidMatch && uuidMatch[0]) candidates.add(uuidMatch[0]);
+
+                for (const cid of Array.from(candidates)) {
+                  const foundById = allNodes.find(node => node.id === cid);
+                  if (foundById) {
+                    matchingNode = foundById;
+                    break;
+                  }
+                }
+              }
+
+              if (!matchingNode) {
+                matchingNode = allNodes.find(node => 
+                  (node.type === 'leaf_option' || node.type === 'leaf_option_field') &&
+                  (node.label === selectedValue || norm(node.label) === selectedNorm)
+                );
+              }
               
               console.log('🔍🔍🔍 [SECTION RENDERER] Résultat recherche matchingNode:', {
                 found: !!matchingNode,
@@ -2067,7 +2209,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // 🎯 CORRECTION: Ne pas trier pour préserver l'ordre des repeaters
     // Les champs sont déjà dans le bon ordre car ajoutés séquentiellement avec nextOrder
     return uniqueFields;
-  }, [dlog, formData, section, allNodes, buildConditionalFieldFromNode, findAllSharedReferencesRecursive]);
+  }, [dlog, formData, section, allNodes, buildConditionalFieldFromNode, findAllSharedReferencesRecursive, resolveMatchingNodeFromSelectedValue]);
 
   // 🔗 ÉTAPE 2: Filtrer les champs basés sur la visibilité conditionnelle du cascader
   // Si un cascader est sélectionné, afficher UNIQUEMENT les champs dont sharedReferenceId correspond
@@ -3404,6 +3546,10 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
   if (prevProps.disabled !== nextProps.disabled) return false;
   if (prevProps.treeId !== nextProps.treeId) return false;
   if (prevProps.level !== nextProps.level) return false;
+  // ⚠️ IMPORTANT: Si formData a changé (référence), forcer le re-render
+  // Les champs conditionnels d'une section peuvent dépendre d'un select situé dans une AUTRE section (ex: Versant)
+  // En comparant la référence, on garantit l'actualisation immédiate après toute sélection.
+  if (prevProps.formData !== nextProps.formData) return false;
   
   // ⚠️ CRITIQUE: Comparer SEULEMENT les valeurs des champs de CETTE section
   const prevFieldIds = prevProps.section.fields.map(f => f.id);
