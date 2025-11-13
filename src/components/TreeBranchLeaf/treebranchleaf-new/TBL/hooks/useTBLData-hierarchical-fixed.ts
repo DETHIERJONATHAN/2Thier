@@ -260,6 +260,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
           ddiag('Repeater update (suppressReload=true) → Doing local retransform only', detail);
           const duplicated: Array<{ id: string }> = (detail as any)?.duplicated || [];
           const deletedIds: string[] = (detail as any)?.deletedIds || [];
+          const deletingIds: string[] = (detail as any)?.deletingIds || [];
 
           // Merge duplicated nodes by fetching full subtree and appending
           (async () => {
@@ -371,20 +372,97 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                 }
               }
 
+              if (Array.isArray(deletingIds) && deletingIds.length > 0) {
+                // 0) Handle optimistic deletions (deletingIds) — local, suffix-aware cascade only
+                setRawNodes(prev => {
+                  const removed = new Set(deletingIds);
+                  const deletedSuffixes = new Set<string>();
+                  for (const id of deletingIds) {
+                    const m = String(id).match(/-(\d+)$/);
+                    if (m) deletedSuffixes.add(m[1]);
+                  }
+                    const debugEnabled = typeof window !== 'undefined' && (window as any).localStorage && localStorage.getItem('TBL_DEBUG_DELETE') === '1';
+                    let added = true;
+                  while (added) {
+                    added = false;
+                    for (const n of prev) {
+                      if (removed.has(n.id)) continue;
+                      if (n.parentId && removed.has(n.parentId)) {
+                        const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                        if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
+                            if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] caused by parent suffix match (deletingIds)', { nodeId: n.id, parentId: n.parentId, suffix: nodeSuffix });
+                            removed.add(n.id);
+                          added = true;
+                        } else if (!nodeSuffix) {
+                            if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] caused by parent base node (no suffix)', { nodeId: n.id, parentId: n.parentId });
+                            removed.add(n.id);
+                          added = true;
+                        }
+                      }
+                    }
+                  }
+                  if (removed.size === 0) return prev;
+                  if (typeof window !== 'undefined' && (window as any).localStorage && localStorage.getItem('TBL_DEBUG_DELETE') === '1') {
+                    const removedList = Array.from(removed);
+                    console.log('[OPTIMISTIC-REMOVE] Final removed (optimistic):', { count: removedList.length, list: removedList });
+                  }
+                  return prev.filter(n => !removed.has(n.id));
+                });
+              }
+
               if (Array.isArray(deletedIds) && deletedIds.length > 0) {
                 // 1) Local cascade from the deletedIds
+                // ⚠️ CRITIQUE: Vérifier le suffixe pour éviter de supprimer les mauvais nœuds
                 setRawNodes(prev => {
                   const removed = new Set(deletedIds);
+                  
+                  // Extraire les suffixes des nœuds supprimés
+                  const deletedSuffixes = new Set<string>();
+                  const deletedParentIds = new Set<string>();
+                  for (const id of deletedIds) {
+                    const match = String(id).match(/-(\d+)$/);
+                    if (match) {
+                      deletedSuffixes.add(match[1]); // "2" pour "xyz-2"
+                    }
+                    // Trouver le parentId du nœud supprimé
+                    const node = prev.find(n => n.id === id);
+                    if (node?.parentId) {
+                      deletedParentIds.add(node.parentId);
+                    }
+                  }
+                  
+                  console.log('🔢 [DELETE CASCADE LOCAL] Suffixes détectés:', Array.from(deletedSuffixes));
+                  console.log('👨‍👩‍👧 [DELETE CASCADE LOCAL] ParentIds des nœuds supprimés:', Array.from(deletedParentIds));
+                  
+                  // Cascade avec vérification du suffixe
                   let added = true;
                   while (added) {
                     added = false;
                     for (const n of prev) {
-                      if (n.parentId && removed.has(n.parentId) && !removed.has(n.id)) {
-                        removed.add(n.id);
-                        added = true;
+                      // Déjà supprimé → skip
+                      if (removed.has(n.id)) continue;
+                      
+                      // Si le parent est supprimé, vérifier le suffixe
+                      if (n.parentId && removed.has(n.parentId)) {
+                        const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                        
+                        // ✅ RÈGLE STRICTE: Le nœud doit avoir le MÊME suffixe que son parent supprimé
+                        if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
+                          console.log(`✅ [DELETE CASCADE LOCAL MATCH] Nœud ${n.id} (${n.label}) → parent supprimé + suffixe -${nodeSuffix}`);
+                          removed.add(n.id);
+                          added = true;
+                        } else if (nodeSuffix) {
+                          console.log(`⏭️ [DELETE CASCADE LOCAL SKIP] Nœud ${n.id} (${n.label}) → parent supprimé MAIS suffixe -${nodeSuffix} différent`);
+                        } else {
+                          // Pas de suffixe → supprimer (nœud de base)
+                          console.log(`✅ [DELETE CASCADE LOCAL] Nœud ${n.id} (${n.label}) → parent supprimé, pas de suffixe`);
+                          removed.add(n.id);
+                          added = true;
+                        }
                       }
                     }
                   }
+                  
                   return prev.filter(n => !removed.has(n.id));
                 });
 
@@ -415,32 +493,93 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     const baseRemoved = new Set(deletedIds);
                     const nodeById = new Map(allNodes.map(n => [n.id, n] as const));
                     const relatedTemplateIds = new Set<string>();
+                    const relatedTemplateSuffixes = new Map<string, Set<string | null>>();
                     for (const rid of deletedIds) {
                       const deletedNode = nodeById.get(rid as string);
                       if (!deletedNode) continue;
                       const dm: any = deletedNode.metadata || {};
-                      if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
-                      if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+                      const suffix = String(rid).match(/-(\d+)$/)?.[1] ?? null;
+                      if (dm?.sourceTemplateId) {
+                        relatedTemplateIds.add(String(dm.sourceTemplateId));
+                        const set = relatedTemplateSuffixes.get(String(dm.sourceTemplateId)) || new Set();
+                        set.add(suffix);
+                        relatedTemplateSuffixes.set(String(dm.sourceTemplateId), set);
+                      }
+                      if (dm?.copiedFromNodeId) {
+                        relatedTemplateIds.add(String(dm.copiedFromNodeId));
+                        const set = relatedTemplateSuffixes.get(String(dm.copiedFromNodeId)) || new Set();
+                        set.add(suffix);
+                        relatedTemplateSuffixes.set(String(dm.copiedFromNodeId), set);
+                      }
                     }
                     const extraToRemove = new Set<string>();
                     for (const node of allNodes) {
                       const meta: any = node.metadata || {};
-                      if (meta.copiedFromNodeId && baseRemoved.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
-                      if (meta.copiedFromNodeId && relatedTemplateIds.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
-                      if (meta.sourceTemplateId && (baseRemoved.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) extraToRemove.add(node.id);
-                      if (meta.fromVariableId) {
-                        for (const rid of baseRemoved) {
-                          if (String(meta.fromVariableId).includes(String(rid))) extraToRemove.add(node.id);
-                        }
-                        for (const tid of relatedTemplateIds) {
-                          if (String(meta.fromVariableId).includes(String(tid))) extraToRemove.add(node.id);
+                      if (meta.copiedFromNodeId && baseRemoved.has(String(meta.copiedFromNodeId))) {
+                        extraToRemove.add(node.id);
+                        ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (copiedFrom matches removed id):', node.id, meta.copiedFromNodeId);
+                      }
+                      if (meta.copiedFromNodeId && relatedTemplateIds.has(String(meta.copiedFromNodeId))) {
+                        const suffixSet = relatedTemplateSuffixes.get(String(meta.copiedFromNodeId));
+                        const nodeSuffix = String(node.id).match(/-(\d+)$/)?.[1] ?? null;
+                        const allowed = suffixSet && (suffixSet.has(null) || (nodeSuffix && suffixSet.has(nodeSuffix)));
+                        if (allowed) {
+                          extraToRemove.add(node.id);
+                          ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (copiedFrom matches related template + suffix):', node.id, meta.copiedFromNodeId, nodeSuffix, Array.from(suffixSet || []));
+                        } else {
+                          ddiag('[useTBLDataHierarchicalFixed] SKIP (copiedFrom matches related template but suffix mismatch):', node.id, meta.copiedFromNodeId, nodeSuffix, Array.from(suffixSet || []));
                         }
                       }
-                      for (const rid of baseRemoved) {
+                      if (meta.sourceTemplateId && (baseRemoved.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) {
+                        const suffixSet = relatedTemplateSuffixes.get(String(meta.sourceTemplateId));
+                        const nodeSuffix = String(node.id).match(/-(\d+)$/)?.[1] ?? null;
+                        const allowed = baseRemoved.has(String(meta.sourceTemplateId)) || (suffixSet && (suffixSet.has(null) || (nodeSuffix && suffixSet.has(nodeSuffix))));
+                        if (allowed) {
+                          extraToRemove.add(node.id);
+                          ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (sourceTemplate matches removed/related + suffix):', node.id, meta.sourceTemplateId, nodeSuffix, Array.from(suffixSet || []));
+                        } else {
+                          ddiag('[useTBLDataHierarchicalFixed] SKIP (sourceTemplate matches related but suffix mismatch):', node.id, meta.sourceTemplateId, nodeSuffix, Array.from(suffixSet || []));
+                        }
+                      }
+                      if (meta.fromVariableId) {
+                        const fromVarStr = String(meta.fromVariableId || '');
+                        for (const rid of baseRemoved) {
+                          const ridStr = String(rid);
+                          if (fromVarStr === ridStr) {
+                            extraToRemove.add(node.id);
+                            ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (fromVariableId exact removed match):', node.id, fromVarStr, ridStr);
+                            continue;
+                          }
+                          const m = ridStr.match(/-(\d+)$/);
+                          if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+                            extraToRemove.add(node.id);
+                            ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (fromVariableId endsWith removed suffix match):', node.id, fromVarStr, `-${m[1]}`);
+                            continue;
+                          }
+                        }
+                        for (const tid of relatedTemplateIds) {
+                          const tidStr = String(tid);
+                          if (fromVarStr === tidStr) {
+                            extraToRemove.add(node.id);
+                            ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (fromVariableId exact related template match):', node.id, fromVarStr, tidStr);
+                            continue;
+                          }
+                          const m = tidStr.match(/-(\d+)$/);
+                          if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+                            extraToRemove.add(node.id);
+                            ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (fromVariableId endsWith related template suffix):', node.id, fromVarStr, `-${m[1]}`);
+                            continue;
+                          }
+                        }
+                      }
+                        for (const rid of baseRemoved) {
                         const m = String(rid).match(/-(\d+)$/);
                         if (m) {
                           const suffix = `-${m[1]}`;
-                          if (String(meta.fromVariableId).endsWith(suffix)) extraToRemove.add(node.id);
+                            if (String(meta.fromVariableId).endsWith(suffix)) {
+                              extraToRemove.add(node.id);
+                              ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (fromVariableId endsWith suffix from deleted id):', node.id, String(meta.fromVariableId), suffix);
+                            }
                         }
                       }
                     }

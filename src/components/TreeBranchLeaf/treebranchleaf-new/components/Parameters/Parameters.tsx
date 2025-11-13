@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm } from 'antd';
+import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm, Tag } from 'antd';
 import type { InputRef } from 'antd';
 import { 
   SettingOutlined, 
@@ -32,6 +32,37 @@ import type {
   TreeBranchLeafRegistry as TreeBranchLeafRegistryType,
   NodeTypeKey
 } from '../../types';
+
+// Simple editor pour un tableau de sous-onglets (labels)
+const SubTabsEditor: React.FC<{ value: string[]; onChange: (next: string[]) => void }> = ({ value = [], onChange }) => {
+  const [input, setInput] = useState('');
+  const add = () => {
+    const trimmed = (input || '').trim();
+    if (!trimmed) return;
+    if (value.includes(trimmed)) {
+      setInput('');
+      return;
+    }
+    onChange([...value, trimmed]);
+    setInput('');
+  };
+  const remove = (label: string) => {
+    onChange(value.filter(v => v !== label));
+  };
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+        {value.map((label) => (
+          <Tag key={label} closable onClose={() => remove(label)}>{label}</Tag>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Input size="small" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ajouter un sous-onglet" />
+        <Button size="small" onClick={add}>Ajouter</Button>
+      </div>
+    </div>
+  );
+};
 
 // const { Title, Text } = Typography; // TEMPORAIREMENT DÉSACTIVÉ POUR DEBUG ELLIPSISMEASURE
 
@@ -237,9 +268,22 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       }
       
       // ✅ Utiliser la ref pour toujours avoir la dernière version
-      await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
+  await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
       
       console.log('✅ [Parameters] Sauvegarde OK');
+
+      // Si on a modifié les subTabs (branch-level) ou le subTab d'un champ, forcer un refresh du tree
+      try {
+        const md = (apiData.metadata as Record<string, unknown> | undefined);
+        if (md && (Array.isArray(md.subTabs) || typeof md.subTab === 'string')) {
+          if (typeof refreshTree === 'function') {
+            console.log('🔁 [Parameters] Déclencher refreshTree suite à modification des subTabs');
+            await Promise.resolve(refreshTree());
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ [Parameters] refreshTree échoué après Sauvegarde subTabs', e);
+      }
     } catch (error) {
       console.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
     }
@@ -261,6 +305,18 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     }
     return null;
   }, [nodes, selectedNode]);
+
+  // Build a flat map (id -> node) for efficient deep lookups (used across multiple UI widgets)
+  const nodesMap = useMemo(() => {
+    const m = new Map<string, TreeBranchLeafNode>();
+    const stack: TreeBranchLeafNode[] = [...(nodes || [])];
+    while (stack.length) {
+      const n = stack.pop()!;
+      m.set(n.id, n);
+      if (n.children && n.children.length > 0) stack.push(...n.children);
+    }
+    return m;
+  }, [nodes]);
 
   // (helper local retiré: findNodeById) – on utilise une DFS inline lorsque nécessaire
 
@@ -905,6 +961,156 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               }}
               readOnly={props.readOnly}
             />
+          </div>
+        )}
+
+        {/* Sous-onglet d'affectation pour les champs (si le parent de la branche contient des subTabs) */}
+        {!isContainerNode && selectedNode && (
+          (() => {
+            // Trouver le parent branch de ce champ en naviguant via parentId sur le map
+            const findParentBranch = (id?: string | null): TreeBranchLeafNode | null => {
+              if (!id) return null;
+              let currentId: string | undefined | null = id;
+              while (currentId) {
+                const node = nodesMap.get(currentId);
+                if (!node) break;
+                if (node.type === 'branch') return node;
+                currentId = node.parentId as string | undefined || undefined;
+              }
+              return null;
+            };
+
+            const parentBranch = findParentBranch(selectedNode.id);
+            const parentSubTabs = parentBranch ? (Array.isArray(parentBranch.metadata?.subTabs) ? parentBranch.metadata?.subTabs as string[] : []) : [];
+
+            // Show even if there's only one subTab (developer convenience)
+            if (!parentSubTabs || parentSubTabs.length === 0) return null;
+
+            // Small debug log to help diagnose cases where parentSubTabs should exist
+            console.debug('[Parameters] parentBranch:', parentBranch?.id, 'parentSubTabs:', parentSubTabs);
+
+            return (
+              <div style={{ marginTop: 12 }}>
+                <strong style={{ fontSize: 12 }}>Affectation Sous-onglet</strong>
+                <div style={{ marginTop: 6 }}>
+                  <Select
+                    size="small"
+                    value={(selectedNode?.metadata?.subTab as string) ?? undefined}
+                    onChange={(val) => {
+                      const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
+                      if (!val) delete nextMeta.subTab; else nextMeta.subTab = val;
+                      patchNode({ metadata: nextMeta });
+                    }}
+                    style={{ width: '100%' }}
+                    placeholder="Aucun sous-onglet"
+                  >
+                    <Select.Option value="">Aucun</Select.Option>
+                    {parentSubTabs.map(st => <Select.Option key={st} value={st}>{st}</Select.Option>)}
+                  </Select>
+                </div>
+              </div>
+            );
+          })()
+        )}
+
+        {/* Section Sous-onglets (visuel) */}
+        {selectedNode?.type === 'branch' && (
+          <div style={{ marginTop: 12 }}>
+            <h5 style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>Sous-onglets (visuel)</h5>
+            <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+              <div style={{ fontSize: 12, color: '#666' }}>Créer des sous-onglets pour organiser visuellement les champs (Affectation via le champ : sélectionnez le champ puis éditez 'Affectation Sous-onglet' dans ses paramètres).</div>
+              <SubTabsEditor
+                value={Array.isArray(selectedNode?.metadata?.subTabs) ? (selectedNode?.metadata?.subTabs as string[]) : []}
+                onChange={(next) => {
+                  patchNode({ metadata: { ...(selectedNode?.metadata || {}), subTabs: next } });
+                  // Émettre un événement pour que TBL refetch si besoin
+                  try {
+                    window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode?.id, treeId: selectedNode?.tree_id } }));
+                    console.log('🔔 [Parameters] Événement tbl-subtabs-updated émis');
+                  } catch { /* noop */ }
+                }}
+              />
+            </div>
+            {/* Overview: show descendant fields and their subTab assignments */}
+            <div style={{ marginTop: 12 }}>
+              <h5 style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>Aperçu : Champs et Sous-onglets</h5>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Sélectionnez un champ pour l'éditer — son affectation au sous-onglet s'affiche ici.</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {/* Bulk assign control */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    <Select size="small" style={{ minWidth: 160 }} placeholder="Affecter tous les champs (via champ)" value={undefined} onChange={async (val) => {
+                    if (!val) return;
+                    try {
+                      const toAssign = [] as { id: string; meta: Record<string, unknown> }[];
+                      const stack2: TreeBranchLeafNode[] = [selectedNode];
+                      while (stack2.length) {
+                        const n = stack2.pop()!;
+                        if (n.children && n.children.length) stack2.push(...n.children);
+                        if (n.type && n.type.startsWith('leaf')) {
+                          const nextMeta = { ...(n.metadata || {}) } as Record<string, unknown>;
+                          nextMeta.subTab = val;
+                          toAssign.push({ id: n.id, meta: nextMeta });
+                        }
+                      }
+                      if (toAssign.length === 0) return;
+                      // Update sequentially to avoid too many POSTs at once
+                      for (const t of toAssign) {
+                        if (typeof onNodeUpdate === 'function') {
+                          await onNodeUpdate({ id: t.id, metadata: t.meta });
+                        }
+                      }
+                      if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
+                      try { window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode.id, treeId: tree?.id } })); } catch { /* noop */ }
+                      console.log('✅ [Parameters] Affectation bulk appliquée:', val, 'sur', toAssign.length, 'champs');
+                    } catch (e) {
+                      console.error('❌ [Parameters] Erreur lors de l\'affectation bulk:', e);
+                    }
+                  }}>
+                    {((Array.isArray(selectedNode?.metadata?.subTabs) ? selectedNode?.metadata?.subTabs as string[] : [])).map(st => (
+                      <Select.Option key={st} value={st}>{st}</Select.Option>
+                    ))}
+                  </Select>
+                  <div style={{ fontSize: 12, color: '#666' }}>Affecter ce sous-onglet à tous les champs de la branche</div>
+                </div>
+                {(() => {
+                  const descendants: TreeBranchLeafNode[] = [];
+                  const stack: TreeBranchLeafNode[] = [selectedNode];
+                  while (stack.length) {
+                    const n = stack.pop()!;
+                    if (n.children && n.children.length) stack.push(...n.children);
+                    if (n.type && n.type.startsWith('leaf')) descendants.push(n);
+                  }
+                  if (descendants.length === 0) return <div style={{ fontSize: 12, color: '#999' }}>Aucun champ dans cette branche.</div>;
+                  return descendants.map((d) => {
+                    const meta = (d.metadata || {}) as any;
+                    const assigned = meta?.subTab || 'Général';
+                    return (
+                      <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: 6, border: '1px solid #eee', borderRadius: 6 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <div style={{ fontSize: 12, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label || d.id}</div>
+                          <div style={{ fontSize: 11, color: '#666', background: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>{assigned}</div>
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            {/* Remplacer le Select inline par un simple Tag afin d'encourager l'édition depuis le champ */}
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <div>
+                                {(meta?.subTab && typeof meta?.subTab === 'string') ? (
+                                  <Tag color="blue">{meta.subTab}</Tag>
+                                ) : (
+                                  <Tag color="default">Aucun</Tag>
+                                )}
+                              </div>
+                            </div>
+                            <Button size="small" onClick={() => { if (onSelectNodeId) onSelectNodeId(d.id); }}>Éditer</Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
           </div>
         )}
 

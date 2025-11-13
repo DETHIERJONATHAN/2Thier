@@ -64,6 +64,8 @@ export interface TblNode {
     // Relations
     markers: TblMarker[];
     children: TblNode[];
+    // Metadata libre (copié depuis TreeBranchLeaf API) — utilisé pour étendre localement
+    metadata?: JsonObject | null;
 }
 
 /**

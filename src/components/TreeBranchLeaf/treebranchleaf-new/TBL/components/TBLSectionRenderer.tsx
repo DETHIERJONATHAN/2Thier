@@ -293,6 +293,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   // dlog alias to global debug logger (globalDlog checks DEBUG_VERBOSE)
   const dlog = globalDlog;
   
+  // ✨ ÉTAT LOCAL POUR FILTRAGE DES CHAMPS SUPPRIMÉS (SANS RECHARGEMENT VISIBLE)
+  // ❌ SUPPRESSION DU SYSTÈME DE FILTRAGE LOCAL
+  // Le forceRefresh + refetch silencieux gère déjà correctement la mise à jour
+  // Pas besoin de filtrage temporaire avec deletedFieldIds
+  
   // � DEBUG GLOBAL: Voir tous les champs reçus par cette section
   // ⚠️ DÉSACTIVÉ pour performance - réactiver si besoin de debug
   /*
@@ -438,48 +443,64 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   const handleDeleteCopyGroup = useCallback(async (f: TBLField) => {
     try {
       const repeaterId = (f as any).parentRepeaterId as string;
+      // ✅ Priorité: utiliser l'index d'instance du repeater (plus fiable que le suffixe du label)
+      const instanceIndex: number | null = (f as any).repeaterInstanceIndex ?? null;
       const label = String(f.label || '');
-      const oldPattern = label.match(/\(Copie\s+(\d+)\)/);
-      const newPattern = label.match(/-(\d+)\s*$/);
-      const copyNumber = oldPattern?.[1] || newPattern?.[1] || null;
-      const signatureOld = copyNumber ? ` (Copie ${copyNumber})` : null;
-      const signatureNew = copyNumber ? `-${copyNumber}` : null;
-
-      if (!copyNumber) {
-        console.warn('⚠️ [DELETE COPY GROUP] Signature de copie introuvable, action ignorée.');
+      // Legacy: extraction via label si l'index est absent (compatibilité anciennes copies)
+      const legacyMatch = label.match(/-(\d+)\s*$/) || label.match(/\(Copie\s+(\d+)\)/);
+      const legacyIndex = legacyMatch ? parseInt(legacyMatch[1], 10) : null;
+      const effectiveIndex = instanceIndex ?? legacyIndex;
+      if (effectiveIndex == null) {
+        console.warn('⚠️ [DELETE COPY GROUP] Impossible de déterminer l\'index de copie, suppression annulée.', { repeaterId, label });
         return;
       }
 
-  dlog('🗑️ [DELETE COPY GROUP] Suppression de la copie:', { copyNumber, repeaterId });
+      dlog('🗑️ [DELETE COPY GROUP] Suppression de la copie ciblée:', { repeaterId, instanceIndex: effectiveIndex });
 
+      // ✅ Sélection stricte des champs de la copie courante dans la section (évite la suppression d'autres copies)
+      const getSuffixFromId = (id?: string) => String(id || '').match(/-(\d+)$/)?.[1] || null;
       const fieldsInSameCopy = section.fields.filter(sf => {
-        const sameRepeater = (sf as any).parentRepeaterId === repeaterId;
-        const lbl = String(sf.label || '');
-        const isCopyField = (sf as any).isDeletableCopy === true;
-        const matchesOld = signatureOld ? lbl.endsWith(signatureOld) : false;
-        const matchesNew = signatureNew ? /-(\d+)\s*$/.test(lbl) && lbl.endsWith(signatureNew!) : false;
-        return sameRepeater && isCopyField && (matchesOld || matchesNew);
+  const metaIndex = (sf as any).repeaterInstanceIndex;
+  const suffix = getSuffixFromId(sf.id);
+  const sameRepeater = (sf as any).parentRepeaterId === repeaterId;
+  const sameIndex = String(metaIndex) === String(effectiveIndex) || (suffix && Number(suffix) === Number(effectiveIndex));
+        return sameRepeater && sameIndex && (sf as any).isDeletableCopy === true;
       });
 
+      // ✅ Recherche dans allNodes: uniquement les nœuds avec métadonnées correspondantes
       const fieldsInNewSection = (allNodes || []).filter(n => {
-        const lbl = String(n.label || '');
-        const matchesOld = signatureOld ? lbl.endsWith(signatureOld) : false;
-        const matchesNew = signatureNew ? /-(\d+)\s*$/.test(lbl) && lbl.endsWith(signatureNew!) : false;
+  const meta: any = n.metadata || {};
+  const sameRepeater = meta.repeaterParentId === repeaterId;
+  const metaIndex = meta.repeaterInstanceIndex;
+  const suffix = getSuffixFromId(n.id);
+  const sameIndex = String(metaIndex) === String(effectiveIndex) || (suffix && Number(suffix) === Number(effectiveIndex));
+        if (!sameRepeater || !sameIndex) return false;
         const notInCurrentSection = !section.fields.some((sf: any) => sf.id === n.id);
-        const shouldDelete = notInCurrentSection && (matchesOld || matchesNew) && n.id !== f.id;
-        if (shouldDelete) {
-          dlog('✅ [DELETE MATCH] Champ trouvé via allNodes:', { label: lbl, id: n.id, notInCurrentSection });
-        }
-        return shouldDelete;
+        return notInCurrentSection;
       });
+
+      // ✅ Fallback supplémentaire: pattern d'ID namespacé "${repeaterId}_${effectiveIndex}_<originalFieldId>"
+      if (fieldsInNewSection.length === 0) {
+        const prefix = `${repeaterId}_${effectiveIndex}_`;
+        const patternMatches = (allNodes || []).filter(n => n.id?.startsWith(prefix) && !section.fields.some((sf: any) => sf.id === n.id));
+        if (patternMatches.length > 0) {
+          dlog('[DELETE COPY GROUP] Ajout des nœuds via prefix fallback:', patternMatches.map(p => p.id));
+          fieldsInNewSection.push(...patternMatches as any);
+        }
+      }
 
       const allFieldsToDelete = Array.from(new Map([...fieldsInSameCopy, ...fieldsInNewSection].map(x => [x.id, x])).values());
+      // DEBUG: Inspect optimistic ids and suffixes
+      try {
+        const debugList = allFieldsToDelete.map(x => ({ id: x.id, suffix: getSuffixFromId(x.id), label: x.label }));
+        dlog('[DELETE COPY GROUP] All fields to delete (optimistic):', { count: allFieldsToDelete.length, list: debugList });
+  } catch { /* noop */ }
       if (allFieldsToDelete.length === 0) {
-        dlog('⚠️ [DELETE COPY GROUP] Aucun champ à supprimer pour cette copie.');
+        dlog('⚠️ [DELETE COPY GROUP] Aucun champ détecté pour cette instance, rien à supprimer.');
         return;
       }
 
-      dlog('🗑️ [DELETE COPY GROUP] Suppression de', allFieldsToDelete.length, 'champs (après déduplication)');
+      dlog('🗑️ [DELETE COPY GROUP] Total éléments à supprimer (dédup):', allFieldsToDelete.length);
 
       // Dispatch optimistic UI update to remove the ids immediately (suppress reload)
       try {
@@ -500,8 +521,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       const deleteWithRetry = async (node: any, retry = 0) => {
         try {
-          await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}`, { suppressErrorLogForStatuses: [404] });
-          return { status: 'success' as const, id: node.id, label: node.label };
+          const response = await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}`, { suppressErrorLogForStatuses: [404] });
+          // ✨ CRITIQUE: Le serveur peut retourner les IDs supprimés (CASCADE + display nodes)
+          console.log('🔍 [DELETE RESPONSE]', { nodeId: node.id, response, deletedIds: response?.data?.deletedIds, responseData: response?.data });
+          const serverDeletedIds = response?.data?.deletedIds || response?.deletedIds || [node.id];
+          console.log('✅ [EXTRACTED IDS]', { nodeId: node.id, count: serverDeletedIds.length, serverDeletedIds });
+          console.table(serverDeletedIds.map((id: string) => ({ id, suffix: id.match(/-(\d+)$/)?.[1] || 'BASE' })));
+          return { status: 'success' as const, id: node.id, label: node.label, serverDeletedIds };
         } catch (err: any) {
           const status = err?.status || 500;
           const errMsg = err?.data?.error || err?.message || 'Erreur inconnue';
@@ -509,18 +535,26 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             await new Promise(r => setTimeout(r, DELAY_MS * (retry + 1)));
             return deleteWithRetry(node, retry + 1);
           }
-          if (status === 404) return { status: 'success' as const, id: node.id, label: node.label };
-          return { status: 'failed' as const, id: node.id, label: node.label, error: errMsg };
+          if (status === 404) return { status: 'success' as const, id: node.id, label: node.label, serverDeletedIds: [node.id] };
+          return { status: 'failed' as const, id: node.id, label: node.label, error: errMsg, serverDeletedIds: [] };
         }
       };
 
-  for (let i = 0; i < allFieldsToDelete.length; i += BATCH_SIZE) {
+      for (let i = 0; i < allFieldsToDelete.length; i += BATCH_SIZE) {
         const batch = allFieldsToDelete.slice(i, i + BATCH_SIZE);
         const results = await Promise.all(batch.map(b => deleteWithRetry(b)));
         for (const r of results) {
           if (r.status === 'success') {
             globalSuccess++;
             globalSuccessIds.push(r.id);
+            // ✨ CRITIQUE: Collecter TOUS les IDs retournés par le serveur (incluant CASCADE + display nodes)
+            if (r.serverDeletedIds && Array.isArray(r.serverDeletedIds)) {
+              for (const serverId of r.serverDeletedIds) {
+                if (!globalSuccessIds.includes(serverId)) {
+                  globalSuccessIds.push(serverId);
+                }
+              }
+            }
           } else {
             globalFailed++;
             globalFailedFields.push({ label: r.label || '', id: r.id, lastError: String((r as any).error || '') });
@@ -532,9 +566,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       dlog('🗑️ [DELETE COPY GROUP] Suppression terminée - Succès:', globalSuccess, '❌ Échecs:', globalFailed);
       if (globalFailed > 0) console.warn('🗑️ [DELETE COPY GROUP] Champs non supprimés:', globalFailedFields.map(f => `${f.label} (${f.lastError})`));
 
-      // Extra cleanup: scan for display nodes referencing deleted copies
+      // Extra cleanup ciblée: supprimer uniquement les display nodes de CETTE instance (évite suppression autres copies)
       try {
-  const removedSet = new Set(globalSuccessIds);
+        const removedSet = new Set(globalSuccessIds);
         let nodesForScan = Array.isArray(allNodes) && allNodes.length > 0 ? allNodes : [];
         if (!nodesForScan || nodesForScan.length === 0) {
           try {
@@ -545,66 +579,78 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             nodesForScan = allNodes || [];
           }
         }
-        const nodeById = new Map(nodesForScan.map(n => [n.id, n] as const));
-        const relatedTemplateIds = new Set<string>();
-        for (const rid of globalSuccessIds) {
-          const removedNode = nodeById.get(rid);
-          if (!removedNode) continue;
-          const dm: any = removedNode.metadata || {};
-          if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
-          if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
-        }
-
         const extraCandidates = (nodesForScan || []).filter(n => {
           const meta: any = n.metadata || {};
-          const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
+          if (!meta) return false;
+          // Doit appartenir au même repeater ET même instance
+          if (meta.repeaterParentId !== repeaterId) return false;
+          if (meta.repeaterInstanceIndex !== effectiveIndex) return false;
+          // Doit ressembler à un display node généré (variables, autoCreate, sourceTemplateId)
+          const looksLikeDisplay = !!(meta.autoCreateDisplayNode || meta.copiedFromNodeId || meta.fromVariableId || meta.sourceTemplateId);
           if (!looksLikeDisplay) return false;
+          // Ne pas re-supprimer ceux déjà dans la liste
           if (removedSet.has(n.id)) return false;
-          if (meta.copiedFromNodeId && (removedSet.has(String(meta.copiedFromNodeId)) || relatedTemplateIds.has(String(meta.copiedFromNodeId)))) return true;
-          if (meta.sourceTemplateId && (removedSet.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) return true;
-          if (meta.fromVariableId) {
-            for (const rid of Array.from(removedSet)) if (String(meta.fromVariableId).includes(String(rid))) return true;
-            for (const tid of Array.from(relatedTemplateIds)) if (String(meta.fromVariableId).includes(String(tid))) return true;
-          }
-          for (const rid of Array.from(removedSet)) {
-            const m = String(rid).match(/-(\d+)$/);
-            if (m) {
-              const suffix = `-${m[1]}`;
-              if (String(meta.fromVariableId || '').endsWith(suffix)) return true;
-              if (String(n.label || '').endsWith(suffix)) return true;
-            }
-          }
-          return false;
+          return true;
         });
-
-  if (extraCandidates.length > 0) {
+        if (extraCandidates.length) {
+          dlog('[DELETE COPY GROUP] Display nodes supplémentaires détectés pour instance:', extraCandidates.map(e => e.id));
           const extraIdsToRemove: string[] = [];
           for (let i = 0; i < extraCandidates.length; i += BATCH_SIZE) {
             const batch = extraCandidates.slice(i, i + BATCH_SIZE);
             const res = await Promise.all(batch.map(b => deleteWithRetry(b)));
             for (const r of res) {
               if (r.status === 'success') extraIdsToRemove.push(r.id);
-              else console.warn('[DELETE COPY GROUP] Failed to delete extra display node', r.id, (r as any).error);
+              else console.warn('[DELETE COPY GROUP] Failed to delete display node', r.id, (r as any).error);
             }
           }
-          if (extraIdsToRemove.length > 0) {
+          if (extraIdsToRemove.length) {
             for (const id of extraIdsToRemove) if (!globalSuccessIds.includes(id)) globalSuccessIds.push(id);
-            dlog('🗑️ [DELETE COPY GROUP] Additional display nodes deleted successfully:', extraIdsToRemove.length);
+            dlog('[DELETE COPY GROUP] Display nodes supprimés (instance ciblée):', extraIdsToRemove.length);
           }
         }
       } catch (e) {
-        console.warn('[DELETE COPY GROUP] Extra cleanup encountered an error:', e);
+        console.warn('[DELETE COPY GROUP] Extra cleanup ciblée erreur:', e);
       }
 
       try {
-        // Final reconciliation event
-        window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { detail: { treeId: treeId, nodeId: repeaterId, source: 'delete-copy-group-finished', suppressReload: true, deletedIds: globalSuccessIds, timestamp: Date.now() } }));
-        dlog('[DELETE COPY GROUP] Dispatched final tbl-repeater-updated (deletedIds)', globalSuccessIds);
+        // ✨ MISE À JOUR LOCALE SANS RECHARGEMENT VISIBLE + REFETCH SILENCIEUX
+        // On émet un événement avec les IDs supprimés pour que le composant parent filtre localement
+        window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { 
+          detail: { 
+            treeId: treeId, 
+            nodeId: repeaterId, 
+            source: 'delete-copy-group-finished', 
+            suppressReload: true, // Pas de rechargement visible immédiat
+            forceRefresh: true,   // ✅ Déclenche un refetch silencieux après 800ms
+            deletedIds: globalSuccessIds, 
+            timestamp: Date.now() 
+          } 
+        }));
+        dlog('[DELETE COPY GROUP] Dispatched final tbl-repeater-updated (deletedIds) - SILENT UPDATE + FORCE REFRESH', globalSuccessIds);
+        
         // Backwards-compatible light event for other listeners if needed
-        window.dispatchEvent(new CustomEvent('delete-copy-group-finished', { detail: { treeId: treeId, nodeId: repeaterId, deletedIds: globalSuccessIds, timestamp: Date.now() } }));
+        window.dispatchEvent(new CustomEvent('delete-copy-group-finished', { 
+          detail: { 
+            treeId: treeId, 
+            nodeId: repeaterId, 
+            deletedIds: globalSuccessIds, 
+            timestamp: Date.now() 
+          } 
+        }));
+        
+        // ❌ SUPPRESSION DE L'ÉVÉNEMENT TBL_LOCAL_FILTER_DELETED
+        // Le forceRefresh + refetch silencieux gère déjà correctement la mise à jour
+        // Pas besoin de filtrage temporaire
+        console.log('✨ [DELETE COPY GROUP] Mise à jour locale sans rechargement:', globalSuccessIds.length, 'éléments');
+        
         // Ensure local retransform/computation runs in dependent components if they rely on memoized values
         try {
-          window.dispatchEvent(new CustomEvent('TBL_FORM_DATA_CHANGED', { detail: { reason: 'delete-copy-group-finished', deletedIds: globalSuccessIds } }));
+          window.dispatchEvent(new CustomEvent('TBL_FORM_DATA_CHANGED', { 
+            detail: { 
+              reason: 'delete-copy-group-finished', 
+              deletedIds: globalSuccessIds 
+            } 
+          }));
         } catch {/* noop */}
       } catch {
         dlog('⚠️ [DELETE COPY GROUP] Impossible de dispatch final tbl-repeater-updated (silent)');
@@ -2249,12 +2295,17 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     console.log('🚨🚨🚨 [ULTRA DEBUG] VISIBILITYFILTERED - Entrée:', {
       section: section.title,
       nbOrderedFields: orderedFields.length,
-      orderedFieldsConditionnels: orderedFields.filter(f => (f as any).isConditional).length
+      orderedFieldsConditionnels: orderedFields.filter(f => (f as any).isConditional).length,
+      deletedFieldIds: [] // Plus utilisé
     });
+    
+    // ❌ SUPPRESSION DU FILTRAGE LOCAL DES SUPPRESSIONS
+    // Le refetch silencieux (forceRefresh) gère déjà correctement la mise à jour
+    let fieldsAfterDeletion = orderedFields;
     
     // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (identifiées par metadata.sourceTemplateId)
     // Ces copies ne doivent s'afficher que dans le répéteur lui-même, pas comme des champs normaux
-    const result = orderedFields.filter(field => {
+    const result = fieldsAfterDeletion.filter(field => {
       const meta = (field.metadata || {}) as any;
       const sourceTemplateId = meta?.sourceTemplateId;
       const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);

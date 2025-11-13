@@ -1,74 +1,7 @@
-/**
- * 🌐 TreeBranchLeaf API Service - Backend centralisé
- * 
- * Service backend complet pour TreeBranchLeaf
- * Tout est centralisé dans treebranchleaf-new/
- */
-
-import { Router } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
-import { authenticateToken } from '../../../../middleware/auth';
-import { 
-  validateParentChildRelation, 
-  getValidationErrorMessage,
-  NodeType,
-  NodeSubType
-} from '../shared/hierarchyRules';
-import { randomUUID } from 'crypto';
-
-const router = Router();
-const prisma = new PrismaClient();
-
-// Helper pour unifier le contexte d'auth (org/superadmin) même si req.user est partiel
-type MinimalReqUser = { organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };
-type MinimalReq = { user?: MinimalReqUser; headers?: Record<string, unknown> };
-function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAdmin: boolean } {
-  const user: MinimalReqUser = (req && req.user) || {};
-  const headerOrg: string | undefined = (req?.headers?.['x-organization-id'] as string)
-    || (req?.headers?.['x-organization'] as string)
-    || (req?.headers?.['organization-id'] as string);
-  const role: string | undefined = user.role || user.userRole;
-  const isSuperAdmin = Boolean(user.isSuperAdmin || role === 'super_admin' || role === 'superadmin');
-  const organizationId: string | null = (user.organizationId as string) || headerOrg || null;
-  return { organizationId, isSuperAdmin };
-}
-
-// =============================================================================
-// 🛡️ MIDDLEWARE - Sécurité et authentification
-// =============================================================================
-
-// Authentification requise pour toutes les routes
-router.use(authenticateToken);
-
-// =============================================================================
-// 🌳 TREES - Gestion des arbres
-// =============================================================================
-
-// GET /api/treebranchleaf/trees - Liste des arbres
-router.get('/trees', async (req, res) => {
-  try {
-    // console.log('🔍 [TBL-ROUTES] GET /trees - DÉBUT de la route'); // ✨ Log réduit
-    
-    // Déterminer l'organisation depuis l'utilisateur/headers
-    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    // console.log('🔍 [TBL-ROUTES] Organization ID:', organizationId); // ✨ Log réduit
-    // console.log('🔍 [TBL-ROUTES] Is Super Admin:', isSuperAdmin); // ✨ Log réduit
-    
-    const whereFilter = isSuperAdmin || !organizationId ? {} : { organizationId };
-    // console.log(...) // ✨ Log réduit - objet de debug
-
-    // console.log('🔍 [TBL-ROUTES] Arbres trouvés:', trees.length); // ✨ Log réduit
-    // console.log('🔍 [TBL-ROUTES] Premier arbre:', trees[0] ? `${trees[0].id} - ${trees[0].name}` : 'Aucun'); // ✨ Log réduit
-    if (trees.length > 0) {
-      // console.log(...) // ✨ Log réduit - objet de debug
-    }
-
-    res.json(trees);
-  } catch (error) {
-    console.error('[TreeBranchLeaf API] Error fetching trees:', error);
-    res.status(500).json({ error: 'Impossible de récupérer les arbres' });
-  }
-});
+// Fichier archivé -- version minifiée et neutre pour éviter la compilation
+// Ce fichier (treebranchleaf-routes-broken.ts) était un backup contenant des erreurs de syntaxe.
+// Il a été transformé en module vide-export afin de ne pas casser la compilation TypeScript.
+export {};
 
 // GET /api/treebranchleaf/trees/:id - Détails d'un arbre
 router.get('/trees/:id', async (req, res) => {

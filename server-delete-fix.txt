@@ -1,0 +1,43 @@
+// REMPLACER LES LIGNES 3730-3751 dans treebranchleaf-routes.ts
+
+        }
+        const ordered = Array.from(delSet).sort((a, b) => (ddepth.get(b)! - ddepth.get(a)!));
+        let deletedExtra = 0;
+        const deletedExtraIds: string[] = []; // ✨ COLLECTER LES IDS SUPPRIMÉS
+        await prisma.$transaction(async (tx) => {
+          for (const id of ordered) {
+            try {
+              await tx.treeBranchLeafNode.delete({ where: { id } });
+              deletedExtra++;
+              deletedExtraIds.push(id); // ✨ AJOUTER L'ID
+            } catch (e) {
+              console.warn('[DELETE EXTRA] Failed to delete node', id, (e as Error).message);
+            }
+          }
+        });
+        console.log('[DELETE] Extra display nodes deleted:', deletedExtra);
+        console.log('🎯 [DELETE FINAL] Total supprimé:', toDelete.length, '+ extra:', deletedExtra, '= ', toDelete.length + deletedExtra);
+        
+        // ✨ RETOURNER TOUS LES IDS SUPPRIMÉS
+        const allDeletedIds = [...toDelete, ...deletedExtraIds];
+        res.json({ 
+          success: true, 
+          message: `Sous-arbre supprimé (${toDelete.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`, 
+          deletedCount: allDeletedIds.length, 
+          deletedOrphans,
+          deletedIds: allDeletedIds // ✨ LISTE COMPLÈTE
+        });
+        return; // ✨ IMPORTANT: SORTIR ICI
+      }
+    } catch (e) {
+      console.warn('[DELETE] Extra cleanup failed', (e as Error).message);
+    }
+
+    // ✨ FALLBACK: Si pas d'extra cleanup, retourner quand même les IDs CASCADE
+    res.json({ 
+      success: true, 
+      message: `Sous-arbre supprimé (${toDelete.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`, 
+      deletedCount: toDelete.length, 
+      deletedOrphans,
+      deletedIds: toDelete // ✨ IDS CASCADE
+    });

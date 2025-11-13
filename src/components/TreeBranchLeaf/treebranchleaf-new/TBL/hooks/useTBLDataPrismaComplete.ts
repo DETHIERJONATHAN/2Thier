@@ -5,6 +5,10 @@ import { buildMirrorKeys } from '../utils/mirrorNormalization';
 // 🔇 Contrôle de verbosité (activer via console: window.__TBL_VERBOSE__ = true)
 declare global { interface Window { __TBL_VERBOSE__?: boolean } }
 const verbose = () => (typeof window !== 'undefined' && window.__TBL_VERBOSE__ === true);
+const diagEnabled = () => {
+  try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; }
+};
+const ddiag = (...args: unknown[]) => { if (diagEnabled()) console.log('[TBL_DIAG]', ...args as any); };
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { isCopyFromRepeater } from '../utils/isCopyFromRepeater';
 
@@ -628,6 +632,9 @@ export interface TBLField {
       }>;
     };
   };
+
+  // 🔖 Optionnel: clé de sous-onglet (purement visuelle) - valeur issue de metadata.subTab
+  subTabKey?: string | null;
   
   // Propriétés pour la gestion des copies supprimables
   isDeletableCopy?: boolean;
@@ -657,6 +664,8 @@ export interface TBLTab {
   order: number;
   sections: TBLSection[];
   allFields: TBLField[];  // 🎯 NOUVEAU: Tous les champs de cet onglet (pour statistiques)
+  // Subtabs metadata (optionnelement défini dans metadata du noeud parent)
+  subTabs?: { key: string; label: string }[];
 }
 
 export interface TBLTree {
@@ -704,6 +713,9 @@ const transformPrismaNodeToField = (
     }
   }
   
+  // 🔖 Sub-tab (purement visuelle) - tirée depuis metadata.subTab
+  const subTabKey = (node.metadata && (node.metadata as any).subTab) || (node.metadata && (node.metadata as any).subTabKey) || undefined;
+
   // 1️⃣ Déterminer si c'est une sous-branche (liste déroulante) ou un champ simple
   const children = childrenMap.get(resolvedNode.id) || [];
   const hasOptions = children.some(child => child.type === 'leaf_option' || child.type === 'leaf_option_field');
@@ -1159,6 +1171,8 @@ const transformPrismaNodeToField = (
         selectDefaultValue: node.select_defaultValue,
       },
       capabilities
+      ,
+      subTabKey: subTabKey ?? undefined
     };
   } else if (node.type === 'leaf_repeater') {
     // 🔁 C'EST UN RÉPÉTABLE
@@ -1287,6 +1301,8 @@ const transformPrismaNodeToField = (
         repeater: repeaterMetadata
       },
       capabilities
+      ,
+      subTabKey: subTabKey ?? undefined
     };
     
   } else if (node.type.includes('leaf_field')) {
@@ -1359,6 +1375,8 @@ const transformPrismaNodeToField = (
         thumbnails: node.image_thumbnails,
       },
       capabilities
+      ,
+      subTabKey: subTabKey ?? undefined
     };
   }
   
@@ -1377,6 +1395,8 @@ const transformPrismaNodeToField = (
     visible: node.isVisible,
     order: node.order,
     capabilities
+    ,
+    subTabKey: subTabKey ?? undefined
   };
 };
 
@@ -1545,6 +1565,13 @@ export const transformNodesToTBLComplete = (
             copyField.isDeletableCopy = true;
             copyField.parentRepeaterId = child.id;
             copyField.sourceTemplateId = (copyNode.metadata as any)?.sourceTemplateId;
+            // ✅ INDEX INSTANCE (utilisé pour suppression ciblée)
+            (copyField as any).repeaterInstanceIndex = index;
+            copyField.metadata = {
+              ...(copyField.metadata || {}),
+              repeaterParentId: child.id,
+              repeaterInstanceIndex: index
+            } as any;
             
             // ➕ AJOUTER LE BOUTON + SUR LA DERNIÈRE COPIE
             copyField.isLastInCopyGroup = (index === realCopies.length - 1);
@@ -1698,6 +1725,29 @@ export const transformNodesToTBLComplete = (
       }
       
       // Construire l'onglet
+      const tabSubTabsMap = new Map<string, string>();
+      // Déduire les subTabs depuis les champs (subTabKey) ou depuis metadata du noeud onglet
+      (ongletFields || []).forEach(f => {
+        const key = (f as any).subTabKey;
+        if (key && !tabSubTabsMap.has(key)) {
+          // Déduire un label simple depuis la clé
+          tabSubTabsMap.set(key, key);
+        }
+      });
+
+      // Si le noeud onglet porte une metadata.subTabs[] on l'utilise comme priorité
+      try {
+        const nodeTabs = (ongletNode.metadata && (ongletNode.metadata as any).subTabs) as string[] | undefined;
+        if (Array.isArray(nodeTabs)) {
+          nodeTabs.forEach((label) => {
+            const key = String(label);
+            if (!tabSubTabsMap.has(key)) tabSubTabsMap.set(key, key);
+          });
+        }
+      } catch { /* ignore */ }
+
+      const inferredSubTabs = Array.from(tabSubTabsMap.entries()).map(([k, v]) => ({ key: k, label: v }));
+
       const tab: TBLTab = {
         id: ongletNode.id,
         name: ongletNode.label,
@@ -1707,6 +1757,8 @@ export const transformNodesToTBLComplete = (
         allFields: sectionsForTab.length > 0 ? 
           ongletSections.flatMap(section => section.fields) : // Utiliser tous les champs des sections
           sortedFields // Ou tous les champs si pas de sections
+        ,
+        subTabs: inferredSubTabs.length > 0 ? inferredSubTabs : undefined
       };
       
       tabs.push(tab);
@@ -2183,6 +2235,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
             const detail = customEvent.detail as any;
             const duplicated: Array<{ id: string; label?: string; type?: string; parentId?: string }> = detail?.duplicated || [];
             const deletedIds: string[] = detail?.deletedIds || [];
+            const deletingIds: string[] = detail?.deletingIds || [];
 
           (async () => {
               try {
@@ -2285,19 +2338,83 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
                   }
                 }
 
-                // 2) Remove deletedIds from local rawNodes (and descendants)
-                if (Array.isArray(deletedIds) && deletedIds.length > 0) {
-                  // 1. Build base removed set (including descendants in rawNodes)
+                // 1) Optimistic: handle deletingIds (optimistic UI) with suffix-aware cascade
+                if (Array.isArray(deletingIds) && deletingIds.length > 0) {
                   setRawNodes(prev => {
-                    const removed = new Set(deletedIds);
-                    // Build closure of descendants within local rawNodes
+                    const removed = new Set(deletingIds);
+                    const deletedSuffixes = new Set<string>();
+                    for (const id of deletingIds) {
+                      const m = String(id).match(/-(\d+)$/);
+                      if (m) deletedSuffixes.add(m[1]);
+                    }
+                    const debugEnabled = typeof window !== 'undefined' && (window as any).localStorage && localStorage.getItem('TBL_DEBUG_DELETE') === '1';
                     let added = true;
                     while (added) {
                       added = false;
                       for (const n of prev) {
-                        if (n.parentId && removed.has(n.parentId) && !removed.has(n.id)) {
-                          removed.add(n.id);
-                          added = true;
+                        if (removed.has(n.id)) continue;
+                        if (n.parentId && removed.has(n.parentId)) {
+                          const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                          if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
+                            if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] prisma - parent suffix match', { nodeId: n.id, parentId: n.parentId, suffix: nodeSuffix });
+                            removed.add(n.id);
+                            added = true;
+                          } else if (!nodeSuffix) {
+                            if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] prisma - parent base node (no suffix)', { nodeId: n.id, parentId: n.parentId });
+                            removed.add(n.id);
+                            added = true;
+                          }
+                        }
+                      }
+                    }
+                    if (removed.size === 0) return prev;
+                    if (debugEnabled) console.log('[OPTIMISTIC-REMOVE] prisma - final removed set:', Array.from(removed));
+                    return prev.filter(n => !removed.has(n.id));
+                  });
+                }
+
+                // 2) Remove deletedIds from local rawNodes (and descendants)
+                if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+                  // 1. Build base removed set (including descendants in rawNodes)
+                  // ⚠️ IMPORTANT: do not naively remove all descendants by parentId.
+                  // We must verify that suffixes (e.g., -1/-2) match the deleted nodes to
+                  // avoid removing sibling copies with different suffixes.
+                  setRawNodes(prev => {
+                    const removed = new Set(deletedIds);
+
+                    // Extract suffixes and parentIds from deletedIds
+                    const deletedSuffixes = new Set<string>();
+                    const deletedParentIds = new Set<string>();
+                    for (const id of deletedIds) {
+                      const m = String(id).match(/-(\d+)$/);
+                      if (m) deletedSuffixes.add(m[1]);
+                      const node = prev.find(n => n.id === id);
+                      if (node?.parentId) deletedParentIds.add(node.parentId);
+                    }
+                    console.log('🔢 [DELETE CASCADE LOCAL] Suffixes détectés (prisma hook):', Array.from(deletedSuffixes));
+                    console.log('👨‍👩‍👧 [DELETE CASCADE LOCAL] ParentIds détectés (prisma hook):', Array.from(deletedParentIds));
+
+                    // Build closure of descendants within local rawNodes BUT validate suffix
+                    let added = true;
+                    while (added) {
+                      added = false;
+                      for (const n of prev) {
+                        if (removed.has(n.id)) continue;
+                        // If parent is removed, check suffix of this node before deleting
+                        if (n.parentId && removed.has(n.parentId)) {
+                          const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
+                          if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
+                            console.log(`✅ [DELETE CASCADE PRISMA MATCH] Nœud ${n.id} (${n.label}) → parent supprimé + suffixe -${nodeSuffix}`);
+                            removed.add(n.id);
+                            added = true;
+                          } else if (nodeSuffix) {
+                            console.log(`⏭️ [DELETE CASCADE PRISMA SKIP] Nœud ${n.id} (${n.label}) → parent supprimé MAIS suffixe -${nodeSuffix} différent`);
+                          } else {
+                            // Base nodes (no suffix) should be removed when child display nodes are removed
+                            console.log(`✅ [DELETE CASCADE PRISMA] Nœud ${n.id} (${n.label}) → parent supprimé, pas de suffixe`);
+                            removed.add(n.id);
+                            added = true;
+                          }
                         }
                       }
                     }
@@ -2323,26 +2440,90 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
                       // Derive related template ids from deleted nodes to find nodes that refer to templates
                       const nodeById = new Map(allNodes.map(n => [n.id, n] as const));
                       const relatedTemplateIds = new Set<string>();
+                      // Map related template / copiedFrom id -> set of suffixes seen on deleted ids
+                      const relatedTemplateSuffixes = new Map<string, Set<string | null>>();
                       for (const rid of deletedIds) {
                         const deletedNode = nodeById.get(rid as string);
                         if (!deletedNode) continue;
                         const dm: any = deletedNode.metadata || {};
-                        if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
-                        if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+                        const suffix = String(rid).match(/-(\d+)$/)?.[1] ?? null;
+                        if (dm?.sourceTemplateId) {
+                          relatedTemplateIds.add(String(dm.sourceTemplateId));
+                          const set = relatedTemplateSuffixes.get(String(dm.sourceTemplateId)) || new Set();
+                          set.add(suffix);
+                          relatedTemplateSuffixes.set(String(dm.sourceTemplateId), set);
+                        }
+                        if (dm?.copiedFromNodeId) {
+                          relatedTemplateIds.add(String(dm.copiedFromNodeId));
+                          const set = relatedTemplateSuffixes.get(String(dm.copiedFromNodeId)) || new Set();
+                          set.add(suffix);
+                          relatedTemplateSuffixes.set(String(dm.copiedFromNodeId), set);
+                        }
                       }
                       const extraToRemove = new Set<string>();
                       for (const node of allNodes) {
                         const meta: any = node.metadata || {};
-                        if (meta.copiedFromNodeId && baseRemoved.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
-                        if (meta.copiedFromNodeId && relatedTemplateIds.has(String(meta.copiedFromNodeId))) extraToRemove.add(node.id);
-                        if (meta.sourceTemplateId && (baseRemoved.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) extraToRemove.add(node.id);
+                        // 1) exact copiedFrom match
+                        if (meta.copiedFromNodeId && baseRemoved.has(String(meta.copiedFromNodeId))) {
+                          extraToRemove.add(node.id);
+                          ddiag('[TBL Hook] extraToRemove candidate (copiedFrom matches removed id):', node.id, meta.copiedFromNodeId);
+                        }
+                        // 2) copiedFrom matches a related template -> ensure suffix compatibility
+                        if (meta.copiedFromNodeId && relatedTemplateIds.has(String(meta.copiedFromNodeId))) {
+                          const suffixSet = relatedTemplateSuffixes.get(String(meta.copiedFromNodeId));
+                          const nodeSuffix = String(node.id).match(/-(\d+)$/)?.[1] ?? null;
+                          // If any suffix in the set is null, it means a base node was deleted; accept
+                          const allowed = suffixSet && (suffixSet.has(null) || (nodeSuffix && suffixSet.has(nodeSuffix)));
+                          if (allowed) {
+                            extraToRemove.add(node.id);
+                            ddiag('[TBL Hook] extraToRemove candidate (copiedFrom matches related template + suffix):', node.id, meta.copiedFromNodeId, nodeSuffix, Array.from(suffixSet || []));
+                          } else {
+                            ddiag('[TBL Hook] SKIP (copiedFrom matches related template but suffix mismatch):', node.id, meta.copiedFromNodeId, nodeSuffix, Array.from(suffixSet || []));
+                          }
+                        }
+                        // 3) sourceTemplateId matches removed or related templates -> ensure suffix compatibility
+                        if (meta.sourceTemplateId && (baseRemoved.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) {
+                          const suffixSet = relatedTemplateSuffixes.get(String(meta.sourceTemplateId));
+                          const nodeSuffix = String(node.id).match(/-(\d+)$/)?.[1] ?? null;
+                          const allowed = baseRemoved.has(String(meta.sourceTemplateId)) || (suffixSet && (suffixSet.has(null) || (nodeSuffix && suffixSet.has(nodeSuffix))));
+                          if (allowed) {
+                            extraToRemove.add(node.id);
+                            ddiag('[TBL Hook] extraToRemove candidate (sourceTemplate matches removed/related + suffix):', node.id, meta.sourceTemplateId, nodeSuffix, Array.from(suffixSet || []));
+                          } else {
+                            ddiag('[TBL Hook] SKIP (sourceTemplate matches related but suffix mismatch):', node.id, meta.sourceTemplateId, nodeSuffix, Array.from(suffixSet || []));
+                          }
+                        }
                         if (meta.fromVariableId) {
-                          // Heuristic: if fromVariableId contains any removed id or related template id string, mark for removal
+                          // Heuristic: match fromVariableId STRICTLY against removed ids or check suffix equality
+                          const fromVarStr = String(meta.fromVariableId || '');
                           for (const rid of baseRemoved) {
-                            if (String(meta.fromVariableId).includes(String(rid))) extraToRemove.add(node.id);
+                            const ridStr = String(rid);
+                            // Exact equality OR endsWith suffix match ("-N") only
+                            if (fromVarStr === ridStr) {
+                              extraToRemove.add(node.id);
+                              ddiag('[TBL Hook] extraToRemove candidate (fromVariableId exact removed match):', node.id, fromVarStr, ridStr);
+                              continue;
+                            }
+                            const m = ridStr.match(/-(\d+)$/);
+                            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+                              extraToRemove.add(node.id);
+                              ddiag('[TBL Hook] extraToRemove candidate (fromVariableId endsWith removed suffix match):', node.id, fromVarStr, `-${m[1]}`);
+                              continue;
+                            }
                           }
                           for (const tid of relatedTemplateIds) {
-                            if (String(meta.fromVariableId).includes(String(tid))) extraToRemove.add(node.id);
+                            const tidStr = String(tid);
+                            const m = tidStr.match(/-(\d+)$/);
+                            if (fromVarStr === tidStr) {
+                              extraToRemove.add(node.id);
+                              ddiag('[TBL Hook] extraToRemove candidate (fromVariableId exact related template match):', node.id, fromVarStr, tidStr);
+                              continue;
+                            }
+                            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+                              extraToRemove.add(node.id);
+                              ddiag('[TBL Hook] extraToRemove candidate (fromVariableId endsWith related template suffix):', node.id, fromVarStr, `-${m[1]}`);
+                              continue;
+                            }
                           }
                         }
                         // Heuristic: if deleted ids include a suffix -N, remove nodes whose fromVariableId endsWith that suffix
@@ -2350,7 +2531,10 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
                           const m = String(rid).match(/-(\d+)$/);
                           if (m) {
                             const suffix = `-${m[1]}`;
-                            if (String(meta.fromVariableId).endsWith(suffix)) extraToRemove.add(node.id);
+                            if (String(meta.fromVariableId).endsWith(suffix)) {
+                              extraToRemove.add(node.id);
+                              ddiag('[TBL Hook] extraToRemove candidate (fromVariableId endsWith suffix from deleted id):', node.id, String(meta.fromVariableId), suffix);
+                            }
                           }
                         }
                       }
@@ -2410,6 +2594,22 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false }: { tree_i
       window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     };
   }, [fetchData, disabled, tree_id, retransformWithCurrentFormData, reconcileDuplicatedNodes]);
+
+  // 🔄 Écouter un événement d'update de subTabs pour forcer un refetch
+  useEffect(() => {
+    const handleSubTabsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ nodeId?: string; treeId?: string | number }>; 
+      const { treeId: eventTreeId } = customEvent.detail || {};
+      if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
+        console.log('🔄 [TBL Hook] tbl-subtabs-updated reçu - refetch');
+        fetchData();
+      }
+    };
+    window.addEventListener('tbl-subtabs-updated', handleSubTabsUpdate);
+    return () => {
+      window.removeEventListener('tbl-subtabs-updated', handleSubTabsUpdate);
+    };
+  }, [fetchData, disabled, tree_id]);
 
   // 🔄 Wrapper pour logger les appels à refetch
   const refetch = useCallback(() => {

@@ -1,0 +1,7 @@
+Fichier archivé treebranchleaf-routes-broken.ts
+
+Contenu original déplacé hors du dossier src car il casse la compilation TypeScript.
+Cette version est intentionnellement placée hors du scope TypeScript en tant que .txt dans /archive.
+
+---
+Si nécessaire, restaurer depuis l'historique Git plutôt que garder ce fichier dans le projet en cours.

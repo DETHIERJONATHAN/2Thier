@@ -8,6 +8,6 @@
     "jsx": "react-jsx"
   },
   "include": ["src", "vite.config.ts", "prisma/seed.ts", "./*.js", "./*.ts"],
-  "exclude": []
+  "exclude": ["treebranchleaf-routes-broken.ts", "src/**/*.backup.tsx", "src/**/*.old.tsx"]
 }
 

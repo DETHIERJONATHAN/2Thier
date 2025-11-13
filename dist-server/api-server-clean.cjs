@@ -30172,7 +30172,187 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         });
       }
     }
-    res.json({ success: true, message: `Sous-arbre supprim\xC3\xA9 (${toDelete.length} n\xC5\u201Cud(s)), orphelines supprim\xC3\xA9es: ${deletedOrphans}`, deletedCount: toDelete.length, deletedOrphans });
+    try {
+      const remainingNodes = await prisma46.treeBranchLeafNode.findMany({ where: { treeId } });
+      const nodesToScan = remainingNodes;
+      const removedSet = new Set(toDelete);
+      const relatedTemplateIds = /* @__PURE__ */ new Set();
+      const deletedSuffixes = /* @__PURE__ */ new Set();
+      const deletedParentIds = /* @__PURE__ */ new Set();
+      console.log("\u{1F5D1}\uFE0F [DELETE DEBUG] N\u0153uds \xE0 supprimer:", toDelete);
+      for (const rid of toDelete) {
+        const n = allNodes.find((x) => x.id === rid);
+        if (!n) continue;
+        const dm = n.metadata || {};
+        if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
+        if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+        const match = String(rid).match(/-(\d+)$/);
+        if (match) {
+          deletedSuffixes.add(match[1]);
+          console.log(`\u{1F522} [DELETE DEBUG] N\u0153ud ${rid} a le suffixe: -${match[1]}, parentId: ${n.parentId || "N/A"}`);
+        }
+        if (n.parentId) {
+          deletedParentIds.add(n.parentId);
+        }
+      }
+      console.log("\u{1F522} [DELETE DEBUG] Suffixes d\xE9tect\xE9s:", Array.from(deletedSuffixes));
+      console.log("\u{1F468}\u200D\u{1F469}\u200D\u{1F467} [DELETE DEBUG] ParentIds des n\u0153uds supprim\xE9s:", Array.from(deletedParentIds));
+      const extraCandidates = nodesToScan.filter((n) => {
+        const meta = n.metadata || {};
+        const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
+        if (!looksLikeDisplay) return false;
+        if (removedSet.has(n.id)) return false;
+        if (meta.copiedFromNodeId && (removedSet.has(String(meta.copiedFromNodeId)) || relatedTemplateIds.has(String(meta.copiedFromNodeId)))) {
+          const copiedFromMatch = String(meta.copiedFromNodeId).match(/-(\d+)$/);
+          const nodeMatch = String(n.id).match(/-(\d+)$/);
+          const copiedFromSuffix = copiedFromMatch ? copiedFromMatch[1] : null;
+          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
+          if (nodeSuffix) {
+            if (!deletedSuffixes.has(nodeSuffix)) {
+              console.log(`\u23ED\uFE0F [DELETE SKIP] N\u0153ud ${n.id} (${n.label}) \u2192 copiedFromNodeId match MAIS suffixe -${nodeSuffix} non supprim\xE9 (on supprime: ${Array.from(deletedSuffixes).join(", ")})`);
+              return false;
+            }
+          }
+          if (copiedFromSuffix && nodeSuffix && copiedFromSuffix !== nodeSuffix) {
+            console.log(`\u23ED\uFE0F [DELETE SKIP] N\u0153ud ${n.id} (${n.label}) \u2192 copiedFromNodeId match MAIS suffixe diff\xE9rent (${nodeSuffix} != ${copiedFromSuffix})`);
+            return false;
+          }
+          console.log(`\u2705 [DELETE MATCH] N\u0153ud ${n.id} (${n.label}) \u2192 copiedFromNodeId match (suffixe: ${nodeSuffix})`);
+          return true;
+        }
+        if (meta.sourceTemplateId && (removedSet.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) {
+          const sourceMatch = String(meta.sourceTemplateId).match(/-(\d+)$/);
+          const nodeMatch = String(n.id).match(/-(\d+)$/);
+          const sourceSuffix = sourceMatch ? sourceMatch[1] : null;
+          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
+          if (nodeSuffix) {
+            if (!deletedSuffixes.has(nodeSuffix)) {
+              console.log(`\u23ED\uFE0F [DELETE SKIP] N\u0153ud ${n.id} (${n.label}) \u2192 sourceTemplateId match MAIS suffixe -${nodeSuffix} non supprim\xE9 (on supprime: ${Array.from(deletedSuffixes).join(", ")})`);
+              return false;
+            }
+          }
+          if (sourceSuffix && nodeSuffix && sourceSuffix !== nodeSuffix) {
+            console.log(`\u23ED\uFE0F [DELETE SKIP] N\u0153ud ${n.id} (${n.label}) \u2192 sourceTemplateId match MAIS suffixe diff\xE9rent (${nodeSuffix} != ${sourceSuffix})`);
+            return false;
+          }
+          console.log(`\u2705 [DELETE MATCH] N\u0153ud ${n.id} (${n.label}) \u2192 sourceTemplateId match (suffixe: ${nodeSuffix})`);
+          return true;
+        }
+        if (meta.fromVariableId) {
+          const fromVarStr = String(meta.fromVariableId || "");
+          for (const rid of Array.from(removedSet)) {
+            const ridStr = String(rid);
+            if (fromVarStr === ridStr) {
+              console.log(`\u2705 [DELETE MATCH] N\u0153ud ${n.id} (${n.label}) \u2192 fromVariableId equals ${rid}`);
+              return true;
+            }
+            const m = ridStr.match(/-(\d+)$/);
+            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+              console.log(`\u2705 [DELETE MATCH] N\u0153ud ${n.id} (${n.label}) \u2192 fromVariableId endsWith suffix -${m[1]} referencing ${rid}`);
+              return true;
+            }
+          }
+          for (const tid of Array.from(relatedTemplateIds)) {
+            const tidStr = String(tid);
+            if (fromVarStr === tidStr) {
+              console.log(`\u2705 [DELETE MATCH] N\u0153ud ${n.id} (${n.label}) \u2192 fromVariableId equals template ${tid}`);
+              return true;
+            }
+            const m = tidStr.match(/-(\d+)$/);
+            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+              console.log(`\u2705 [DELETE MATCH] N\u0153ud ${n.id} (${n.label}) \u2192 fromVariableId endsWith suffix -${m[1]} referencing template ${tid}`);
+              return true;
+            }
+          }
+        }
+        if (deletedSuffixes.size > 0 && n.parentId && deletedParentIds.has(n.parentId)) {
+          const nodeMatch = String(n.id).match(/-(\d+)$/);
+          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
+          if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
+            console.log(`\u2705 [DELETE MATCH SUFFIXE] N\u0153ud ${n.id} (${n.label}) \u2192 m\xEAme parent + suffixe -${nodeSuffix} (on supprime: -${Array.from(deletedSuffixes).join(", -")})`);
+            return true;
+          }
+          const labelMatch = String(n.label || "").match(/-(\d+)$/);
+          const labelSuffix = labelMatch ? labelMatch[1] : null;
+          if (labelSuffix && deletedSuffixes.has(labelSuffix)) {
+            console.log(`\u2705 [DELETE MATCH SUFFIXE LABEL] N\u0153ud ${n.id} (${n.label}) \u2192 label avec suffixe -${labelSuffix} (on supprime: -${Array.from(deletedSuffixes).join(", -")})`);
+            return true;
+          }
+          if (meta.fromVariableId) {
+            const varMatch = String(meta.fromVariableId).match(/-(\d+)$/);
+            const varSuffix = varMatch ? varMatch[1] : null;
+            if (varSuffix && deletedSuffixes.has(varSuffix)) {
+              console.log(`\u2705 [DELETE MATCH SUFFIXE VAR] N\u0153ud ${n.id} (${n.label}) \u2192 fromVariableId avec suffixe -${varSuffix} (on supprime: -${Array.from(deletedSuffixes).join(", -")})`);
+              return true;
+            }
+          }
+          if (nodeSuffix && !deletedSuffixes.has(nodeSuffix)) {
+            console.log(`\u23ED\uFE0F [DELETE SKIP SUFFIXE] N\u0153ud ${n.id} (${n.label}) \u2192 m\xEAme parent MAIS suffixe -${nodeSuffix} diff\xE9rent (on supprime seulement: -${Array.from(deletedSuffixes).join(", -")})`);
+          }
+        }
+        return false;
+      });
+      console.log(`\u{1F4CA} [DELETE DEBUG] ${extraCandidates.length} candidats suppl\xE9mentaires trouv\xE9s:`, extraCandidates.map((c) => ({ id: c.id, label: c.label, parentId: c.parentId })));
+      if (extraCandidates.length > 0) {
+        const byParent = /* @__PURE__ */ new Map();
+        for (const n of remainingNodes) {
+          if (!n.parentId) continue;
+          const arr = byParent.get(n.parentId) || [];
+          arr.push(n.id);
+          byParent.set(n.parentId, arr);
+        }
+        const delSet = /* @__PURE__ */ new Set();
+        const ddepth = /* @__PURE__ */ new Map();
+        for (const cand of extraCandidates) {
+          const q = [cand.id];
+          ddepth.set(cand.id, 0);
+          while (q.length) {
+            const cur = q.shift();
+            if (delSet.has(cur)) continue;
+            delSet.add(cur);
+            const d = ddepth.get(cur);
+            for (const c of byParent.get(cur) || []) {
+              ddepth.set(c, d + 1);
+              q.push(c);
+            }
+          }
+        }
+        const ordered = Array.from(delSet).sort((a, b) => ddepth.get(b) - ddepth.get(a));
+        let deletedExtra = 0;
+        const deletedExtraIds = [];
+        await prisma46.$transaction(async (tx) => {
+          for (const id of ordered) {
+            try {
+              await tx.treeBranchLeafNode.delete({ where: { id } });
+              deletedExtra++;
+              deletedExtraIds.push(id);
+            } catch (e) {
+              console.warn("[DELETE EXTRA] Failed to delete node", id, e.message);
+            }
+          }
+        });
+        console.log("[DELETE] Extra display nodes deleted:", deletedExtra);
+        console.log(" [DELETE FINAL] Total supprim\xE9:", toDelete.length, "+ extra:", deletedExtra, "= ", toDelete.length + deletedExtra);
+        const allDeletedIds = [...toDelete, ...deletedExtraIds];
+        res.json({
+          success: true,
+          message: `Sous-arbre supprim\xE9 (${toDelete.length} n\u0153ud(s)), orphelines supprim\xE9es: ${deletedOrphans}`,
+          deletedCount: allDeletedIds.length,
+          deletedOrphans,
+          deletedIds: allDeletedIds
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn("[DELETE] Extra cleanup failed", e.message);
+    }
+    res.json({
+      success: true,
+      message: `Sous-arbre supprim\xE9 (${toDelete.length} n\u0153ud(s)), orphelines supprim\xE9es: ${deletedOrphans}`,
+      deletedCount: toDelete.length,
+      deletedOrphans,
+      deletedIds: toDelete
+    });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node subtree:", error);
     res.status(500).json({ error: "Impossible de supprimer le n\xC5\u201Cud et ses descendants" });

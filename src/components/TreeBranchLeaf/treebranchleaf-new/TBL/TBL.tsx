@@ -228,7 +228,7 @@ const TBL: React.FC<TBLProps> = ({
         // 1. Analyse des données formData
         const allKeys = Object.keys(formData);
         const mirrorKeys = allKeys.filter(k => k.startsWith('__mirror_'));
-        const dataKeys = allKeys.filter(k => !k.startsWith('__mirror_'));
+  const _dataKeys = allKeys.filter(k => !k.startsWith('__mirror_'));
         
         // console.log(`📊 FormData - Total: ${allKeys.length}, Données: ${dataKeys.length}, Mirrors: ${mirrorKeys.length}`);
         
@@ -241,9 +241,9 @@ const TBL: React.FC<TBLProps> = ({
           const conditionMirrors = mirrorKeys.filter(k => k.startsWith('__mirror_condition_'));
           
           // Afficher TOUS les miroirs avec valeurs non-null/non-undefined/non-0
-          const dataWithValues = dataMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== 0).map(k => `${k}=${formData[k]}`);
-          const formulaWithValues = formulaMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== 0).map(k => `${k}=${formData[k]}`);
-          const conditionWithValues = conditionMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== false).map(k => `${k}=${formData[k]}`);
+          const _dataWithValues = dataMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== 0).map(k => `${k}=${formData[k]}`);
+          const _formulaWithValues = formulaMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== 0).map(k => `${k}=${formData[k]}`);
+          const _conditionWithValues = conditionMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== false).map(k => `${k}=${formData[k]}`);
           
           // console.log(`  📊 DONNÉES (${dataMirrors.length} total, ${dataWithValues.length} avec valeurs):`, dataWithValues.length > 0 ? dataWithValues : dataMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
           // console.log(`  🧮 FORMULES (${formulaMirrors.length} total, ${formulaWithValues.length} avec valeurs):`, formulaWithValues.length > 0 ? formulaWithValues : formulaMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
@@ -279,7 +279,7 @@ const TBL: React.FC<TBLProps> = ({
           
           const total = smartFields.length;
           const working = stats.withMirror + stats.resolved;
-          const successRate = Math.round((working / total) * 100);
+          const _successRate = Math.round((working / total) * 100);
           
           // console.log(`🎯 TAUX DE SUCCÈS: ${successRate}% (${working}/${total})`);
           
@@ -890,7 +890,7 @@ const TBL: React.FC<TBLProps> = ({
       console.group('[TBL][SAVE_AS_DEVIS] Début');
       console.time('[TBL] SAVE_AS_DEVIS');
       // console.log('[TBL][SAVE_AS_DEVIS] Params', values);
-      const dataSize = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
+  const _dataSize = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
       // console.log('[TBL][SAVE_AS_DEVIS] formData', { keys: Object.keys(formData).length, approxBytes: dataSize });
       const result = await saveAsDevis(formData, tree!.id, {
         clientId: 'temp-client-id', // TODO: utiliser le vrai client ID
@@ -1130,7 +1130,7 @@ const TBL: React.FC<TBLProps> = ({
       console.time('[TBL] CREATE_DEVIS');
 
       const effectiveTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
-      const approxBytes = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
+  const _approxBytes = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
       // console.log('🔍 [TBL] État actuel:', { leadId, treeId, effectiveTreeId, devisName, formDataKeys: Object.keys(formData), approxBytes });
 
       const values = await form.validateFields();
@@ -1292,7 +1292,7 @@ const TBL: React.FC<TBLProps> = ({
     } catch (error) {
       console.error('❌ [TBL] Erreur lors de la création du devis:', error);
       try {
-        const err = error as { response?: { status?: number; data?: unknown; statusText?: string }; status?: number; message?: string; url?: string };
+        const _err = error as { response?: { status?: number; data?: unknown; statusText?: string }; status?: number; message?: string; url?: string };
         console.group('[TBL][CREATE_DEVIS][ERROR]');
         // console.log('status:', err?.response?.status ?? err?.status);
         // console.log('statusText:', err?.response?.statusText);
@@ -1465,7 +1465,7 @@ const TBL: React.FC<TBLProps> = ({
         
         // Reformater les données pour le formulaire
         const formattedData: TBLFormData = {};
-        submission.TreeBranchLeafSubmissionData.forEach((item: {nodeId: string, value?: string}, index: number) => {
+  submission.TreeBranchLeafSubmissionData.forEach((item: {nodeId: string, value?: string}) => {
           // console.log(`🔍 [TBL] Item ${index}:`, item);
           if (item.value !== undefined && item.value !== null && item.value !== '') {
             formattedData[item.nodeId] = item.value;
@@ -1883,6 +1883,8 @@ const TBL: React.FC<TBLProps> = ({
                         disabled={saving}
                         validationState={validationState}
                         validationActions={validationActions}
+                        // Passer explicitement la liste de subTabs définie au niveau de l'onglet
+                        tabSubTabs={tab.subTabs}
                       />
                     </div>
                   )
@@ -2293,6 +2295,7 @@ interface TBLTabContentWithSectionsProps {
   disabled?: boolean;
   validationState?: any;
   validationActions?: any;
+  tabSubTabs?: { key: string; label: string }[] | undefined;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -2301,11 +2304,13 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   formData,
   onChange,
   treeId,
-  tree,
+  _tree,
   rawNodes = [],
-  validationState,
-  validationActions,
+  _validationState,
+  _validationActions,
   disabled = false
+  ,
+  tabSubTabs
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -2341,11 +2346,64 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   // ✅ STABILISER onChange pour éviter les re-rendus en cascade !
   const stableOnChange = useCallback(onChange, [onChange]);
 
+  // Subtabs: déduire depuis les champs (subTabKey). Les champs sans subTabKey vont dans la catégorie 'default'.
+  const allSubTabs = useMemo(() => {
+    const set = new Map<string, string>();
+    const addKey = (k?: string | null) => {
+      const key = (k && String(k)) || '__default__';
+      if (!set.has(key)) set.set(key, key === '__default__' ? 'Général' : key);
+    };
+    sections.forEach(s => s.fields.forEach(f => addKey((f as any).subTabKey)));
+    fields.forEach(f => addKey((f as any).subTabKey));
+    // Si le tab a une metadata.subTabs explicite, l'ajouter aussi pour l'affichage même si aucun champ n'est assigné
+    try {
+      if (Array.isArray(tabSubTabs)) {
+        tabSubTabs.forEach((st) => {
+          if (!st) return;
+          const key = typeof st === 'string' ? st : (st.key || String(st));
+          const label = typeof st === 'string' ? st : (st.label || key);
+          if (!set.has(key)) set.set(key, label);
+        });
+      }
+    } catch { /* ignore */ }
+    return Array.from(set.entries()).map(([key, label]) => ({ key, label }));
+  }, [sections, fields, tabSubTabs]);
+
+  const [activeSubTab, setActiveSubTab] = useState<string | undefined>(allSubTabs.length > 0 ? allSubTabs[0].key : undefined);
+  useEffect(() => { if (allSubTabs.length > 0 && !allSubTabs.find(st => st.key === activeSubTab)) setActiveSubTab(allSubTabs[0].key); }, [allSubTabs, activeSubTab]);
+
   const renderContent = () => {
     if (sections.length) {
+      // Si on a plusieurs sous-onglets, ou si l'onglet a explicitement des subTabs définis
+      const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
+      const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
+
+      const filteredSections = sections.map(section => ({
+        ...section,
+        fields: section.fields.filter(f => {
+          const key = ((f as any).subTabKey as string) || '__default__';
+          if (!activeSubTab) return true;
+          return key === activeSubTab;
+        })
+      }));
+
       return (
         <div className="space-y-6">
-          {sections.map(section => (
+          {showSubTabs && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              {(allSubTabs || []).map(st => (
+                <Button
+                  key={st.key}
+                  size="small"
+                  type={st.key === activeSubTab ? 'primary' : 'default'}
+                  onClick={() => setActiveSubTab(st.key)}
+                >
+                  {st.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          {filteredSections.map(section => (
             <TBLSectionRenderer
               key={section.id}
               section={section}
@@ -2361,6 +2419,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       );
     }
     if (fields.length) {
+      // When no explicit sections, build a synthetic one and respect subTabs
       const synthetic: TBLSection = {
         id: '__synthetic__',
         title: 'Champs',
@@ -2368,16 +2427,40 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         fields: fields,
         subsections: []
       } as unknown as TBLSection;
+      const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
+      const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
+      const filteredSyntheticFields = synthetic.fields.filter(f => {
+        const key = ((f as any).subTabKey as string) || '__default__';
+        if (!activeSubTab) return true;
+        return key === activeSubTab;
+      });
+      const filteredSynthetic: TBLSection = { ...synthetic, fields: filteredSyntheticFields };
       return (
-        <TBLSectionRenderer
-          section={synthetic}
-          formData={formData}
-          onChange={stableOnChange}
-          treeId={treeId}
-          allNodes={rawNodes}
-          allSections={sections}
-          disabled={disabled}
-        />
+        <div>
+          {showSubTabs && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              {(allSubTabs || []).map(st => (
+                <Button
+                  key={st.key}
+                  size="small"
+                  type={st.key === activeSubTab ? 'primary' : 'default'}
+                  onClick={() => setActiveSubTab(st.key)}
+                >
+                  {st.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          <TBLSectionRenderer
+            section={filteredSynthetic}
+            formData={formData}
+            onChange={stableOnChange}
+            treeId={treeId}
+            allNodes={rawNodes}
+            allSections={sections}
+            disabled={disabled}
+          />
+        </div>
       );
     }
     return <div className="text-sm text-gray-400">Aucun champ.</div>;

@@ -294,13 +294,6 @@ function resolveActionsLabels(actions: unknown, labels: LabelMap) {
   });
 }
 
-// =============================================================================
-// ðŸ”— Helpers de maintenance automatique des colonnes linked*Ids
-// =============================================================================
-type LinkedField = 'linkedFormulaIds' | 'linkedConditionIds' | 'linkedTableIds' | 'linkedVariableIds';
-
-const uniq = <T,>(arr: T[]): T[] => Array.from(new Set(arr));
-
 async function getNodeLinkedField(
   client: PrismaClient | Prisma.TransactionClient,
   nodeId: string,
@@ -1341,35 +1334,39 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
       return res.status(404).json({ error: 'Arbre non trouvÃ©' });
     }
 
-    const nodes = await prisma.treeBranchLeafNode.findMany({
-      where: { treeId },
-      include: {
-        _count: {
-          select: {
-            other_TreeBranchLeafNode: true
-          }
-        },
-        TreeBranchLeafNodeTable: {
-          include: {
-            tableColumns: {
-              orderBy: { columnIndex: 'asc' }
-            },
-            tableRows: {
-              orderBy: { rowIndex: 'asc' }
-            }
-          }
-        }
-      },
-      orderBy: [
-        { order: 'asc' },
-        { createdAt: 'asc' }
-      ]
-    });
-    console.log('ðŸ” [TBL-ROUTES] NÅ“uds trouvÃ©s:', nodes.length);
+    // Récupérer tous les nœuds de l'arbre
+    let nodesRaw: any[] = [];
+    try {
+      nodesRaw = await prisma.treeBranchLeafNode.findMany({ where: { treeId } });
+    } catch (prismaErr: any) {
+      // Prisma P2022: missing column(s) in DB - provide helpful guidance
+      if (prismaErr?.code === 'P2022') {
+        console.error('[TreeBranchLeaf API] Prisma missing column error (P2022):', prismaErr.meta || prismaErr.message);
+        // Include details for the user (devs) - don't log secrets
+        return res.status(500).json({
+          error: 'Erreur base de données: colonne manquante détectée par Prisma (P2022).',
+          details: prismaErr?.meta || prismaErr?.message,
+          hint: 'Vérifiez que vous avez appliqué toutes les migrations `npx prisma migrate dev` et régénéré le client `npx prisma generate`.'
+        });
+      }
+      // Re-propagate other Prisma errors as server errors and log stack
+      console.error('[TreeBranchLeaf API] Unexpected Prisma error fetching nodes:', prismaErr);
+      return res.status(500).json({ error: 'Erreur serveur lors de la récupération des nœuds', details: prismaErr?.message });
+    }
+    console.log('🔍 [GET /trees/:treeId/nodes] Nœuds bruts récupérés en base:', nodesRaw.length);
 
-    // ðŸ”„ MIGRATION : Reconstruire les donnÃ©es JSON depuis les colonnes dÃ©diÃ©es
-    console.log('ðŸ”„ [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour', nodes.length, 'nÅ“uds');
-    const reconstructedNodes = nodes.map(node => buildResponseFromColumns(node));
+    // 🔄 MIGRATION : Reconstruire les données JSON depuis les colonnes dédiées
+    console.log('🔧 [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour', nodesRaw.length, 'nœuds');
+    const reconstructedNodes: Array<Record<string, unknown>> = [];
+    for (const nodeItem of nodesRaw) {
+      try {
+        reconstructedNodes.push(buildResponseFromColumns(nodeItem));
+      } catch (e) {
+        console.error('[TreeBranchLeaf API] Erreur reconstruction noeud:', { nodeId: (nodeItem as any)?.id, error: e });
+        // Fallback: push a minimal node object so UI receives something instead of crashing
+        reconstructedNodes.push({ id: (nodeItem as any)?.id, label: (nodeItem as any)?.label || 'Nœud', metadata: nodeItem?.metadata || {} });
+      }
+    }
     
     // ðŸš¨ DEBUG TOOLTIP FINAL : VÃ©rifier ce qui va Ãªtre envoyÃ© au client
     const nodesWithTooltips = reconstructedNodes.filter(node => 
@@ -1389,8 +1386,8 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
 
     res.json(reconstructedNodes);
   } catch (error) {
-    console.error('[TreeBranchLeaf API] Error fetching nodes:', error);
-    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer les nÅ“uds' });
+    console.error('[TreeBranchLeaf API] Error fetching nodes:', error, (error as any)?.stack);
+    res.status(500).json({ error: 'Impossible de récupérer les nœuds', details: String(error) });
   }
 });
 
@@ -2636,6 +2633,17 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (repeaterMeta.buttonWidth) columnData.repeater_buttonWidth = repeaterMeta.buttonWidth;
     if (repeaterMeta.iconOnly !== undefined) columnData.repeater_iconOnly = repeaterMeta.iconOnly;
   }
+
+  // âœ… Ã‰TAPE X : Migration pour subTabs / subTab
+  if (Array.isArray(metadata.subTabs)) {
+    // Sauvegarder la liste en JSON dans la colonne dédiée 'subtabs'
+    columnData.subtabs = JSON.stringify(metadata.subTabs);
+    console.log('ðŸ’¤ [mapJSONToColumns] subtabs column sauvegardée:', metadata.subTabs);
+  }
+  if (metadata.subTab !== undefined) {
+    columnData.subtab = metadata.subTab || null;
+    console.log('ðŸ’¤ [mapJSONToColumns] subtab column sauvegardée:', metadata.subTab);
+  }
   
   // âœ… Ã‰TAPE 2 : Migration configuration champs texte
   const textConfig = metadata.textConfig || fieldConfig.text || fieldConfig.textConfig || {};
@@ -2863,6 +2871,25 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     ...(node.metadata || {}),
     appearance
   };
+
+  // Reconstruire les subTabs depuis la colonne `subtabs` si elle existe
+  if (node.subtabs) {
+    try {
+      const parsed = JSON.parse(node.subtabs as string);
+      if (Array.isArray(parsed)) {
+        (cleanedMetadata as any).subTabs = parsed;
+        console.log('ðŸ” [buildResponseFromColumns] Reconstruit subTabs depuis colonne subtabs:', parsed);
+      }
+    } catch { /* noop */ }
+  }
+
+  // Reconstruire le subTab depuis la colonne `subtab` si elle existe
+  if (node.subtab !== undefined && node.subtab !== null) {
+    try {
+      (cleanedMetadata as any).subTab = node.subtab as string;
+      console.log('ðŸ” [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:', (cleanedMetadata as any).subTab);
+    } catch { /* noop */ }
+  }
   
   // ðŸ” DEBUG: Log metadata pour "Test - liste"
   if (node.id === '131a7b51-97d5-4f40-8a5a-9359f38939e8') {
@@ -2870,6 +2897,12 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     console.log('ðŸ” [buildResponseFromColumns][Test - liste] cleanedMetadata:', cleanedMetadata);
     console.log('ðŸ” [buildResponseFromColumns][Test - liste] metadata.capabilities:', 
       (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : 'N/A');
+  }
+
+  if (cleanedMetadata && cleanedMetadata.subTabs) {
+    try {
+      console.log('ðŸ” [buildResponseFromColumns] metadata.subTabs present for node', node.id, JSON.stringify((cleanedMetadata as any).subTabs));
+    } catch(e) { /* noop */ }
   }
   
   // ðŸ”¥ INJECTER repeater dans cleanedMetadata
@@ -3083,15 +3116,22 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
  */
 function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<string, unknown> {
   const { metadata, fieldConfig: _fieldConfig, appearanceConfig: _appearanceConfig, ...cleanData } = updateData;
-  
-  // ðŸ”¥ CORRECTION : PrÃ©server metadata.capabilities pour les formules multiples
-  if (metadata && typeof metadata === 'object' && (metadata as Record<string, unknown>).capabilities) {
-    return {
-      ...cleanData,
-      metadata: {
-        capabilities: (metadata as Record<string, unknown>).capabilities
-      }
-    };
+
+  // 🔧 PRESERVER metadata CAPABILITIES + SUBTABS/SUBTAB
+  // Nous autorisons explicitement certaines clés metadata à traverser la suppression JSON
+  if (metadata && typeof metadata === 'object') {
+    const metaObj = metadata as Record<string, unknown>;
+    const preserved: Record<string, unknown> = {};
+    if (metaObj.capabilities) preserved.capabilities = metaObj.capabilities;
+    if (metaObj.subTabs) preserved.subTabs = metaObj.subTabs;
+    if (metaObj.subTab) preserved.subTab = metaObj.subTab;
+    // Si au moins une clé doit être préservée, renvoyer le cleanData avec metadata réduit
+    if (Object.keys(preserved).length > 0) {
+      return {
+        ...cleanData,
+        metadata: preserved
+      };
+    }
   }
   
   return cleanData;
@@ -3177,6 +3217,13 @@ const updateOrMoveNode = async (req, res) => {
       columnData: columnData
     });
 
+    // DEBUG: show the actual metadata object intended to be written
+    try {
+      console.log('ðŸ”„ [updateOrMoveNode] updateObj.metadata CONTENT:', JSON.stringify(updateObj.metadata || null));
+    } catch(e) {
+      console.warn('ðŸ”„ [updateOrMoveNode] Failed to stringify updateObj.metadata', e);
+    }
+
   // ðŸ§© IMPORTANT: Normaliser les rÃ©fÃ©rences partagÃ©es si le nÅ“ud est une COPIE (ID avec suffixe "-N")
   // Concerne les Ã©critures directes envoyÃ©es par le frontend (single/array)
   normalizeSharedRefsForCopy(nodeId, updateObj);
@@ -3207,6 +3254,25 @@ const updateOrMoveNode = async (req, res) => {
     const existingNode = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId }
     });
+
+    // Si les colonnes dédiées pour subTabs/subTab existent en base et ne sont pas dans updateObj,
+    // les préremplir pour éviter la perte involontaire lors de l'update.
+    try {
+      const selectedColumns = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        select: { subtabs: true, subtab: true }
+      });
+      if (selectedColumns) {
+        if (!('subtabs' in updateObj) && selectedColumns.subtabs !== undefined) {
+          updateObj.subtabs = selectedColumns.subtabs;
+          console.log('ðŸ’¤ [updateOrMoveNode] Prérempli updateObj.subtabs depuis la base');
+        }
+        if (!('subtab' in updateObj) && selectedColumns.subtab !== undefined) {
+          updateObj.subtab = selectedColumns.subtab;
+          console.log('ðŸ’¤ [updateOrMoveNode] Prérempli updateObj.subtab depuis la base');
+        }
+      }
+    } catch { }
 
     if (!existingNode) {
       // ðŸš¨ DEBUG: Chercher le nÅ“ud sans contrainte de treeId pour voir s'il existe ailleurs
@@ -3573,13 +3639,33 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
 
       // Construire un set de template/roots potentiels liÃ©s (sourceTemplateId / copiedFromNodeId)
       const relatedTemplateIds = new Set<string>();
+      const deletedSuffixes = new Set<string>(); // Suffixes des nœuds supprimés
+      const deletedParentIds = new Set<string>(); // ParentIds des nœuds supprimés (pour identifier la branche)
+      
+      console.log('🗑️ [DELETE DEBUG] Nœuds à supprimer:', toDelete);
+      
       for (const rid of toDelete) {
         const n = allNodes.find(x => x.id === rid);
         if (!n) continue;
         const dm: any = n.metadata || {};
         if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
         if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
+        
+        // Extraire le suffixe du nœud supprimé (ex: "node-xyz-2" → "-2")
+        const match = String(rid).match(/-(\d+)$/);
+        if (match) {
+          deletedSuffixes.add(match[1]); // Stocker juste le numéro (ex: "2")
+          console.log(`🔢 [DELETE DEBUG] Nœud ${rid} a le suffixe: -${match[1]}, parentId: ${n.parentId || 'N/A'}`);
+        }
+        
+        // Stocker le parentId pour identifier la branche
+        if (n.parentId) {
+          deletedParentIds.add(n.parentId);
+        }
       }
+      
+      console.log('🔢 [DELETE DEBUG] Suffixes détectés:', Array.from(deletedSuffixes));
+      console.log('👨‍👩‍👧 [DELETE DEBUG] ParentIds des nœuds supprimés:', Array.from(deletedParentIds));
 
       // Trouver candidats additionnels qui ressemblent Ã  des nÃ¸uds d'affichage
       const extraCandidates = nodesToScan.filter(n => {
@@ -3587,27 +3673,128 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
         if (!looksLikeDisplay) return false;
         if (removedSet.has(n.id)) return false;
-        if (meta.copiedFromNodeId && (removedSet.has(String(meta.copiedFromNodeId)) || relatedTemplateIds.has(String(meta.copiedFromNodeId)))) return true;
-        if (meta.sourceTemplateId && (removedSet.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) return true;
+        
+        // 1. Champs d'affichage liés par copiedFromNodeId/sourceTemplateId
+        // CORRECTIF CRITIQUE: Vérifier aussi que les suffixes correspondent
+        if (meta.copiedFromNodeId && (removedSet.has(String(meta.copiedFromNodeId)) || relatedTemplateIds.has(String(meta.copiedFromNodeId)))) {
+          // Extraire les suffixes pour comparaison
+          const copiedFromMatch = String(meta.copiedFromNodeId).match(/-(\d+)$/);
+          const nodeMatch = String(n.id).match(/-(\d+)$/);
+          const copiedFromSuffix = copiedFromMatch ? copiedFromMatch[1] : null;
+          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
+          
+          // RÈGLE: Le nœud ne doit être supprimé QUE si son suffixe correspond aux suffixes en cours de suppression
+          if (nodeSuffix) {
+            // Le nœud a un suffixe → vérifier qu'il est dans deletedSuffixes
+            if (!deletedSuffixes.has(nodeSuffix)) {
+              console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → copiedFromNodeId match MAIS suffixe -${nodeSuffix} non supprimé (on supprime: ${Array.from(deletedSuffixes).join(', ')})`);
+              return false;
+            }
+          }
+          
+          // Si les deux ont des suffixes, ils doivent être identiques
+          if (copiedFromSuffix && nodeSuffix && copiedFromSuffix !== nodeSuffix) {
+            console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → copiedFromNodeId match MAIS suffixe différent (${nodeSuffix} != ${copiedFromSuffix})`);
+            return false; // Ne pas supprimer si les suffixes ne correspondent pas
+          }
+          
+          console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → copiedFromNodeId match (suffixe: ${nodeSuffix})`);
+          return true;
+        }
+        if (meta.sourceTemplateId && (removedSet.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) {
+          // Même vérification pour sourceTemplateId
+          const sourceMatch = String(meta.sourceTemplateId).match(/-(\d+)$/);
+          const nodeMatch = String(n.id).match(/-(\d+)$/);
+          const sourceSuffix = sourceMatch ? sourceMatch[1] : null;
+          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
+          
+          // RÈGLE: Le nœud ne doit être supprimé QUE si son suffixe correspond aux suffixes en cours de suppression
+          if (nodeSuffix) {
+            if (!deletedSuffixes.has(nodeSuffix)) {
+              console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → sourceTemplateId match MAIS suffixe -${nodeSuffix} non supprimé (on supprime: ${Array.from(deletedSuffixes).join(', ')})`);
+              return false;
+            }
+          }
+          
+          if (sourceSuffix && nodeSuffix && sourceSuffix !== nodeSuffix) {
+            console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → sourceTemplateId match MAIS suffixe différent (${nodeSuffix} != ${sourceSuffix})`);
+            return false;
+          }
+          
+          console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → sourceTemplateId match (suffixe: ${nodeSuffix})`);
+          return true;
+        }
+        
+        // 2. Champs d'affichage liés par fromVariableId
         if (meta.fromVariableId) {
+          const fromVarStr = String(meta.fromVariableId || '');
           for (const rid of Array.from(removedSet)) {
-            if (String(meta.fromVariableId).includes(String(rid))) return true;
+            const ridStr = String(rid);
+            if (fromVarStr === ridStr) {
+              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId equals ${rid}`);
+              return true;
+            }
+            const m = ridStr.match(/-(\d+)$/);
+            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId endsWith suffix -${m[1]} referencing ${rid}`);
+              return true;
+            }
           }
           for (const tid of Array.from(relatedTemplateIds)) {
-            if (String(meta.fromVariableId).includes(String(tid))) return true;
+            const tidStr = String(tid);
+            if (fromVarStr === tidStr) {
+              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId equals template ${tid}`);
+              return true;
+            }
+            const m = tidStr.match(/-(\d+)$/);
+            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
+              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId endsWith suffix -${m[1]} referencing template ${tid}`);
+              return true;
+            }
           }
         }
-        // Suffix heuristic: -N
-        for (const rid of Array.from(removedSet)) {
-          const m = String(rid).match(/-(\d+)$/);
-          if (m) {
-            const suffix = `-${m[1]}`;
-            if (String(meta.fromVariableId || '').endsWith(suffix)) return true;
-            if (String(n.label || '').endsWith(suffix)) return true;
+        
+        // 3. CORRECTIF: Supprimer les frères/sœurs (même parentId) avec le même suffixe
+        // Ex: Si on supprime "Versant-2" (parent X), supprimer tous les champs du même parent avec "-2"
+        // ⚠️ CRITIQUE: Vérifier AUSSI le suffixe pour éviter de supprimer -1 lors de suppression de -2
+        if (deletedSuffixes.size > 0 && n.parentId && deletedParentIds.has(n.parentId)) {
+          const nodeMatch = String(n.id).match(/-(\d+)$/);
+          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
+          
+          // ✅ RÈGLE STRICTE: Le noeud doit avoir un suffixe ET ce suffixe doit être dans deletedSuffixes
+          if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
+            console.log(`✅ [DELETE MATCH SUFFIXE] Nœud ${n.id} (${n.label}) → même parent + suffixe -${nodeSuffix} (on supprime: -${Array.from(deletedSuffixes).join(', -')})`);
+            return true; // Même branche + même suffixe → à supprimer
+          }
+          
+          // Aussi vérifier le label pour les display nodes
+          const labelMatch = String(n.label || '').match(/-(\d+)$/);
+          const labelSuffix = labelMatch ? labelMatch[1] : null;
+          if (labelSuffix && deletedSuffixes.has(labelSuffix)) {
+            console.log(`✅ [DELETE MATCH SUFFIXE LABEL] Nœud ${n.id} (${n.label}) → label avec suffixe -${labelSuffix} (on supprime: -${Array.from(deletedSuffixes).join(', -')})`);
+            return true;
+          }
+          
+          // Vérifier fromVariableId pour le suffixe
+          if (meta.fromVariableId) {
+            const varMatch = String(meta.fromVariableId).match(/-(\d+)$/);
+            const varSuffix = varMatch ? varMatch[1] : null;
+            if (varSuffix && deletedSuffixes.has(varSuffix)) {
+              console.log(`✅ [DELETE MATCH SUFFIXE VAR] Nœud ${n.id} (${n.label}) → fromVariableId avec suffixe -${varSuffix} (on supprime: -${Array.from(deletedSuffixes).join(', -')})`);
+              return true;
+            }
+          }
+          
+          // ⏭️ Si le noeud a le même parent MAIS un suffixe différent, NE PAS supprimer
+          if (nodeSuffix && !deletedSuffixes.has(nodeSuffix)) {
+            console.log(`⏭️ [DELETE SKIP SUFFIXE] Nœud ${n.id} (${n.label}) → même parent MAIS suffixe -${nodeSuffix} différent (on supprime seulement: -${Array.from(deletedSuffixes).join(', -')})`);
           }
         }
+        
         return false;
       });
+      
+      console.log(`📊 [DELETE DEBUG] ${extraCandidates.length} candidats supplémentaires trouvés:`, extraCandidates.map(c => ({ id: c.id, label: c.label, parentId: c.parentId })));
 
       if (extraCandidates.length > 0) {
         // Supprimer ces candidats (ordre enfants -> parents)
@@ -3633,24 +3820,42 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         }
         const ordered = Array.from(delSet).sort((a, b) => (ddepth.get(b)! - ddepth.get(a)!));
         let deletedExtra = 0;
+        const deletedExtraIds: string[] = [];
         await prisma.$transaction(async (tx) => {
           for (const id of ordered) {
             try {
               await tx.treeBranchLeafNode.delete({ where: { id } });
               deletedExtra++;
+              deletedExtraIds.push(id);
             } catch (e) {
-              // Ignorer les erreurs individuelles (ex: id dÃ©jÃ  supprimÃ©), mais logger
               console.warn('[DELETE EXTRA] Failed to delete node', id, (e as Error).message);
             }
           }
         });
         console.log('[DELETE] Extra display nodes deleted:', deletedExtra);
+        console.log(' [DELETE FINAL] Total supprimé:', toDelete.length, '+ extra:', deletedExtra, '= ', toDelete.length + deletedExtra);
+        
+        const allDeletedIds = [...toDelete, ...deletedExtraIds];
+        res.json({ 
+          success: true, 
+          message: `Sous-arbre supprimé (${toDelete.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`, 
+          deletedCount: allDeletedIds.length, 
+          deletedOrphans,
+          deletedIds: allDeletedIds
+        });
+        return;
       }
     } catch (e) {
       console.warn('[DELETE] Extra cleanup failed', (e as Error).message);
     }
 
-    res.json({ success: true, message: `Sous-arbre supprimÃ© (${toDelete.length} nÅ“ud(s)), orphelines supprimÃ©es: ${deletedOrphans}` , deletedCount: toDelete.length, deletedOrphans });
+    res.json({ 
+      success: true, 
+      message: `Sous-arbre supprimé (${toDelete.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`, 
+      deletedCount: toDelete.length, 
+      deletedOrphans,
+      deletedIds: toDelete
+    });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting node subtree:', error);
     res.status(500).json({ error: 'Impossible de supprimer le nÅ“ud et ses descendants' });
@@ -12454,6 +12659,13 @@ router.get('/variables/search', async (req, res) => {
   }
 });
 
+
+// Exporter les helpers utiles pour les tests et la logique externe
+export {
+  mapJSONToColumns,
+  removeJSONFromUpdate,
+  buildResponseFromColumns
+};
 
 export default router;
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
-import type { TblNode, TblTab, TblTree } from '../types/types';
+import type { TblNode, TblTab, TblTree, JsonObject } from '../types/types';
 
 type ApiTree = { id: string; name: string } | undefined;
 type ApiNode = {
@@ -11,6 +11,7 @@ type ApiNode = {
 	type: string;
 	subType?: string | null;
 	order?: number | null;
+    metadata?: Record<string, unknown> | null;
 };
 
 const mockTree: TblTree = {
@@ -199,7 +200,8 @@ function coerceNodes(response: unknown): ApiNode[] | undefined {
 			description: typeof node.description === 'string' ? node.description : null,
 			type: typeof node.type === 'string' ? node.type : 'leaf_field',
 			subType: typeof node.subType === 'string' ? node.subType : null,
-			order: typeof node.order === 'number' ? node.order : null
+			order: typeof node.order === 'number' ? node.order : null,
+			metadata: typeof node.metadata === 'object' && node.metadata !== null ? (node.metadata as JsonObject) : null
 		};
 	});
 }
@@ -210,7 +212,7 @@ function coerceTreeList(response: unknown): ApiTree[] {
 	return root.map((item) => coerceTree(item)).filter((tree): tree is ApiTree => Boolean(tree));
 }
 
-function mapApiTree(tree: ApiTree, nodes: ApiNode[] | undefined): TblTree | null {
+export function mapApiTree(tree: ApiTree, nodes: ApiNode[] | undefined): TblTree | null {
 	if (!tree || !nodes || nodes.length === 0) return null;
 
 	const nodeMap = new Map<string, TblNode>();
@@ -255,7 +257,8 @@ function mapApiTree(tree: ApiTree, nodes: ApiNode[] | undefined): TblTree | null
 			children: [],
 			fieldConfig: type === 'LEAF' ? mapFieldConfig(apiNode.type, apiNode.subType) : null,
 			conditionConfig: null,
-			formulaConfig: null
+			formulaConfig: null,
+			metadata: apiNode.metadata as JsonObject ?? undefined
 		});
 	});
 

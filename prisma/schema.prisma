@@ -1306,6 +1306,8 @@ model TreeBranchLeafNode {
   calculatedAt                   DateTime?                        // Quand la valeur a été calculée
   calculatedBy                   String?                          // Source: "formula-abc", "table-def", "condition-ghi", etc.
   metadata                       Json                             @default("{}")
+  subtabs                        Json?                            @db.Json
+  subtab                         String?
   createdAt                      DateTime                         @default(now())
   updatedAt                      DateTime
   hasAPI                         Boolean                          @default(false)
@@ -1412,6 +1414,7 @@ model TreeBranchLeafNode {
   repeater_templateNodeIds       String?
   repeater_templateNodeLabels    String?
   repeater_minItems              Int?                             @default(0)
+  // Sub-tabs: JSON array to describe a branch's sub-tabs (visual only)
   repeater_maxItems              Int?
   repeater_addButtonLabel        String?
   repeater_buttonSize            String?                          @default("middle")
