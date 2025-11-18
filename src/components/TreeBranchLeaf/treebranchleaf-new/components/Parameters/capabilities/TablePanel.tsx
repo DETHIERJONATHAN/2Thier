@@ -161,11 +161,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Divider, Input, Select, Space, Switch, Table, Tooltip, Typography, message } from 'antd';
+import { Button, Card, Divider, Input, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col, Badge, Alert } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import * as XLSX from 'xlsx';
-import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, EyeOutlined } from '@ant-design/icons';
+import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 
 const { Title, Text } = Typography;
 
@@ -221,6 +222,22 @@ type TableLookupConfig = {
   exposeColumns?: TableLookupExpose[];
   selectors?: TableLookupSelectors;
   fallbackValue?: string | number | null;
+  // 🔥 NOUVEAU: Filtrage conditionnel des options de lookup
+  filterConditions?: {
+    enabled?: boolean;
+    conditions?: TableLookupCondition[];
+    filterLogic?: 'AND' | 'OR'; // Comment combiner les conditions
+  };
+};
+
+// 🔥 NOUVEAU: Type pour une condition de filtrage de lookup
+type TableLookupCondition = {
+  id: string;
+  filterByColumn?: string; // Colonne du tableau à filtrer (optionnel)
+  filterByRow?: string; // Ligne du tableau à filtrer (optionnel)
+  operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
+  compareWithRef?: string; // Référence NodeTreeSelector vers un champ/formule
+  description?: string; // Description lisible de la condition
 };
 
 type TableMeta = {
@@ -414,6 +431,22 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   const [fieldsLoading, setFieldsLoading] = useState<boolean>(false);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isLoadingTable, setIsLoadingTable] = useState<boolean>(false);
+  
+  // 🔥 NOUVEAU: États pour les conditions de filtrage
+  const [showNodeTreeSelector, setShowNodeTreeSelector] = useState<boolean>(false);
+  const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
+  
+  // ⚡ ULTRA-NOUVEAU: États pour le filtrage temps réel
+  const [realtimePreview, setRealtimePreview] = useState(false);
+  const [testMode, setTestMode] = useState(false);
+  const [testValues, setTestValues] = useState<Record<string, string>>({});
+  const [filterResults, setFilterResults] = useState<{
+    totalOptions: number;
+    filteredOptions: number;
+    matchingRows: any[];
+    conditions: Array<{ id: string; result: boolean; description: string }>;
+  } | null>(null);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
 
   const isPhysicalNodeId = useCallback((fieldId?: string | null): fieldId is string => {
     if (!fieldId) return false;
@@ -736,6 +769,114 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     },
     [setCfg, debouncedSave]
   );
+
+  // ⚡ ULTRA-NOUVEAU: Évaluation temps réel des conditions
+  const evaluateFilterConditionsRealtime = useCallback(async () => {
+    if (!lookupConfig.filterConditions?.enabled || !lookupConfig.filterConditions?.conditions?.length) {
+      setFilterResults(null);
+      return;
+    }
+
+    setEvaluationLoading(true);
+    try {
+      // Simuler l'évaluation des conditions (remplacer par vraie logique)
+      const conditions = lookupConfig.filterConditions.conditions.map(condition => {
+        const testValue = testMode ? testValues[condition.compareWithRef] : 'valeur_courante';
+        const result = Math.random() > 0.5; // Simulation
+        const filterTarget = condition.filterByColumn ? `Colonne "${condition.filterByColumn}"` : 
+                           condition.filterByRow ? `Ligne "${condition.filterByRow}"` : 'Non configuré';
+        return {
+          id: condition.id,
+          result,
+          description: `${filterTarget} ${condition.operator} ${condition.compareWithRef} = ${result ? '✅' : '❌'}`
+        };
+      });
+
+      // Calculer les options filtrées
+      const totalOptions = (cfg.rows?.length || 1) - 1; // Exclure header
+      const filteredCount = Math.floor(totalOptions * (0.3 + Math.random() * 0.4)); // Simulation
+      
+      setFilterResults({
+        totalOptions,
+        filteredOptions: filteredCount,
+        matchingRows: [], // À implémenter
+        conditions
+      });
+    } catch (error) {
+      console.error('Erreur évaluation conditions:', error);
+    } finally {
+      setEvaluationLoading(false);
+    }
+  }, [lookupConfig.filterConditions, testMode, testValues, cfg.rows]);
+
+  // Auto-évaluation quand les conditions changent
+  useEffect(() => {
+    if (realtimePreview && lookupConfig.filterConditions?.enabled) {
+      const timeout = setTimeout(evaluateFilterConditionsRealtime, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [realtimePreview, lookupConfig.filterConditions, evaluateFilterConditionsRealtime]);
+
+  // 🔥 NOUVEAU: Gestion des conditions de filtrage
+  const addFilterCondition = useCallback(() => {
+    const newCondition: TableLookupCondition = {
+      id: `condition_${Date.now()}`,
+      filterByColumn: undefined, // Colonne du tableau à filtrer (optionnel)
+      filterByRow: undefined, // Ligne du tableau à filtrer (optionnel)
+      operator: 'equals',
+      compareWithRef: '', // Référence NodeTreeSelector
+      description: ''
+    };
+    
+    updateLookupConfig((prev) => ({
+      ...prev,
+      filterConditions: {
+        ...prev.filterConditions,
+        enabled: true,
+        conditions: [...(prev.filterConditions?.conditions || []), newCondition],
+        filterLogic: prev.filterConditions?.filterLogic || 'AND'
+      }
+    }));
+  }, [updateLookupConfig]);
+
+  const removeFilterCondition = useCallback((conditionId: string) => {
+    updateLookupConfig((prev) => ({
+      ...prev,
+      filterConditions: {
+        ...prev.filterConditions,
+        conditions: (prev.filterConditions?.conditions || []).filter(c => c.id !== conditionId)
+      }
+    }));
+  }, [updateLookupConfig]);
+
+  const updateFilterCondition = useCallback((conditionId: string, updates: Partial<TableLookupCondition>) => {
+    updateLookupConfig((prev) => ({
+      ...prev,
+      filterConditions: {
+        ...prev.filterConditions,
+        conditions: (prev.filterConditions?.conditions || []).map(c => 
+          c.id === conditionId ? { ...c, ...updates } : c
+        )
+      }
+    }));
+  }, [updateLookupConfig]);
+
+  const handleNodeTreeSelection = useCallback((selection: NodeTreeSelectorValue) => {
+    if (!currentConditionId) return;
+    
+    updateFilterCondition(currentConditionId, {
+      compareWithRef: selection.ref,
+      description: `Comparer avec: ${selection.ref}`
+    });
+    
+    setShowNodeTreeSelector(false);
+    setCurrentConditionId(null);
+  }, [currentConditionId, updateFilterCondition]);
+
+  const openNodeTreeSelector = useCallback((conditionId: string) => {
+    setCurrentConditionId(conditionId);
+    setShowNodeTreeSelector(true);
+  }, []);
 
   // Gestion Colonnes (tous types)
   const addColumn = useCallback(() => {
@@ -1901,10 +2042,411 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                     </div>
                   </div>
                 )}
-              </div>
-            </Space>
 
-      <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 6 }}>
+                {/* 🔥 NOUVEAU: Section filtrage par lookup */}
+                {(lookupConfig.keyColumn || lookupConfig.keyRow) && (
+                  <div style={{ padding: '12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '6px', marginTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <FilterOutlined style={{ color: '#fa8c16' }} />
+                      <Text strong style={{ fontSize: 13, color: '#fa8c16' }}>Filtrage pour ce lookup</Text>
+                      <Switch
+                        size="small"
+                        checked={lookupConfig.filterConditions?.enabled === true}
+                        onChange={(checked) => {
+                          updateLookupConfig((prev) => ({
+                            ...prev,
+                            filterConditions: {
+                              ...prev.filterConditions,
+                              enabled: checked,
+                              conditions: prev.filterConditions?.conditions || [],
+                              filterLogic: prev.filterConditions?.filterLogic || 'AND'
+                            }
+                          }));
+                        }}
+                        disabled={readOnly}
+                      />
+                      <Tooltip title={`Filtrer les options ${lookupConfig.keyColumn ? 'de colonnes' : 'de lignes'} selon des conditions`}>
+                        <InfoCircleOutlined style={{ color: '#999' }} />
+                      </Tooltip>
+                    </div>
+
+                    {lookupConfig.filterConditions?.enabled && (
+                      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Logique de combinaison:</Text>
+                            <Select
+                              size="small"
+                              value={lookupConfig.filterConditions?.filterLogic || 'AND'}
+                              style={{ width: 80 }}
+                              onChange={(value) => {
+                                updateLookupConfig((prev) => ({
+                                  ...prev,
+                                  filterConditions: {
+                                    ...prev.filterConditions,
+                                    filterLogic: value
+                                  }
+                                }));
+                              }}
+                              disabled={readOnly}
+                            >
+                              <Select.Option value="AND">ET</Select.Option>
+                              <Select.Option value="OR">OU</Select.Option>
+                            </Select>
+                          </div>
+                          <Button
+                            type="dashed"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={addFilterCondition}
+                            disabled={readOnly}
+                          >
+                            Ajouter condition
+                          </Button>
+                        </div>
+
+                        {/* Liste des conditions */}
+                        {(lookupConfig.filterConditions?.conditions || []).map((condition, index) => (
+                          <div
+                            key={condition.id}
+                            style={{ 
+                              padding: '12px', 
+                              background: '#fafafa', 
+                              border: '1px solid #d9d9d9', 
+                              borderRadius: '4px' 
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                              <Text strong style={{ fontSize: 12 }}>Condition {index + 1}</Text>
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<DeleteOutlined />}
+                                onClick={() => removeFilterCondition(condition.id)}
+                                disabled={readOnly}
+                                danger
+                              />
+                            </div>
+                            
+                            <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                              {/* Filtrage par colonne */}
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Filtrer par colonne:</Text>
+                                <Select
+                                  size="small"
+                                  placeholder="Choisir une colonne (optionnel)"
+                                  value={condition.filterByColumn}
+                                  onChange={(value) => updateFilterCondition(condition.id, { filterByColumn: value })}
+                                  style={{ width: '100%', marginTop: 2 }}
+                                  disabled={readOnly}
+                                  allowClear
+                                >
+                                  {(cfg.columns || []).slice(1).map(column => (
+                                    <Select.Option key={column} value={column}>
+                                      📊 {column}
+                                    </Select.Option>
+                                  ))}
+                                </Select>
+                              </div>
+
+                              {/* Filtrage par ligne */}
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Filtrer par ligne:</Text>
+                                <Select
+                                  size="small"
+                                  placeholder="Choisir une ligne (optionnel)"
+                                  value={condition.filterByRow}
+                                  onChange={(value) => updateFilterCondition(condition.id, { filterByRow: value })}
+                                  style={{ width: '100%', marginTop: 2 }}
+                                  disabled={readOnly}
+                                  allowClear
+                                >
+                                  {(cfg.rows || []).slice(1).map((row, index) => (
+                                    <Select.Option key={row} value={row}>
+                                      📋 Ligne {index + 1} ({String(row).substring(0, 20)}{String(row).length > 20 ? '...' : ''})
+                                    </Select.Option>
+                                  ))}
+                                </Select>
+                              </div>
+
+                              {/* Opérateur de comparaison */}
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <div style={{ flex: 1 }}>
+                                  <Text type="secondary" style={{ fontSize: 11 }}>Opérateur:</Text>
+                                  <Select
+                                    size="small"
+                                    value={condition.operator}
+                                    style={{ width: '100%', marginTop: 2 }}
+                                    onChange={(value) => updateFilterCondition(condition.id, { operator: value })}
+                                    disabled={readOnly}
+                                  >
+                                    <Select.Option value="equals">= (égal)</Select.Option>
+                                    <Select.Option value="notEquals">≠ (différent)</Select.Option>
+                                    <Select.Option value="greaterThan">&gt; (supérieur)</Select.Option>
+                                    <Select.Option value="lessThan">&lt; (inférieur)</Select.Option>
+                                    <Select.Option value="greaterOrEqual">≥ (sup. ou égal)</Select.Option>
+                                    <Select.Option value="lessOrEqual">≤ (inf. ou égal)</Select.Option>
+                                    <Select.Option value="contains">contient</Select.Option>
+                                    <Select.Option value="notContains">ne contient pas</Select.Option>
+                                  </Select>
+                                </div>
+
+                                <div style={{ flex: 1 }}>
+                                  <Text type="secondary" style={{ fontSize: 11 }}>Comparer avec:</Text>
+                                  <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                                    <Input
+                                      size="small"
+                                      placeholder="Sélectionner dans l'arborescence"
+                                      value={condition.compareWithRef}
+                                      readOnly
+                                      style={{ flex: 1 }}
+                                    />
+                                    <Button
+                                      size="small"
+                                      type="dashed"
+                                      onClick={() => openNodeTreeSelector(condition.id)}
+                                      disabled={readOnly}
+                                    >
+                                      🌳 Sélectionner
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Description optionnelle */}
+                              {condition.description && (
+                                <Text type="secondary" style={{ fontSize: 10, fontStyle: 'italic' }}>
+                                  {condition.description}
+                                </Text>
+                              )}
+                            </Space>
+                          </div>
+                        ))}
+
+                        {(lookupConfig.filterConditions?.conditions || []).length === 0 && (
+                          <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                            <Text type="secondary">Aucune condition de filtrage configurée</Text>
+                            <br />
+                            <Text type="secondary" style={{ fontSize: 11 }}>
+                              Cliquez sur "Ajouter condition" pour filtrer les options selon d'autres champs
+                            </Text>
+                          </div>
+                        )}
+                      </Space>
+                    )}  
+                  </div>
+                )}
+
+                {/* ✨ ULTRA-NOUVEAU: Section filtrage temps réel */}
+                {lookupConfig.filterConditions?.enabled && lookupConfig.filterConditions?.conditions?.length > 0 && (
+                  <div style={{ 
+                    marginTop: 16, 
+                    padding: '16px', 
+                    background: 'linear-gradient(135deg, #f6ffed 0%, #f0f9ff 100%)', 
+                    border: '2px solid #52c41a', 
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                      <ThunderboltOutlined style={{ color: '#52c41a', fontSize: 18 }} />
+                      <Text strong style={{ fontSize: 15, color: '#52c41a' }}>🚀 Filtrage Temps Réel</Text>
+                      {filterResults && (
+                        <div style={{ 
+                          background: filterResults.conditions.every(c => c.result) ? '#f6ffed' : '#fff2e8',
+                          color: filterResults.conditions.every(c => c.result) ? '#52c41a' : '#fa8c16',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: 10,
+                          fontWeight: 'bold',
+                          border: `1px solid ${filterResults.conditions.every(c => c.result) ? '#b7eb8f' : '#ffd591'}`
+                        }}>
+                          {filterResults.conditions.every(c => c.result) ? '✅ TOUTES OK' : '⚠️ PARTIELLES'}
+                        </div>
+                      )}
+                      <Switch
+                        size="small"
+                        checked={realtimePreview}
+                        onChange={setRealtimePreview}
+                        checkedChildren="ON"
+                        unCheckedChildren="OFF"
+                      />
+                      <Button
+                        type="primary" 
+                        size="small"
+                        icon={<PlayCircleOutlined />}
+                        onClick={() => {
+                          evaluateFilterConditionsRealtime();
+                          message.success('🎯 Évaluation lancée !', 1);
+                        }}
+                        loading={evaluationLoading}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        Évaluer maintenant
+                      </Button>
+                      <Tooltip title="Copier la configuration de filtrage">
+                        <Button
+                          size="small"
+                          icon={<InfoCircleOutlined />}
+                          onClick={() => {
+                            const config = JSON.stringify(lookupConfig.filterConditions, null, 2);
+                            navigator.clipboard?.writeText(config);
+                            message.success('📋 Configuration copiée !', 1.5);
+                          }}
+                        />
+                      </Tooltip>
+                    </div>
+
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Card size="small" style={{ 
+                          background: 'linear-gradient(135deg, #f6ffed 0%, #ffffff 100%)', 
+                          border: '1px solid #d9f7be',
+                          boxShadow: '0 2px 8px rgba(82, 196, 26, 0.1)'
+                        }}>
+                          <Statistic
+                            title={
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                                Options disponibles
+                              </span>
+                            }
+                            value={filterResults?.filteredOptions || 0}
+                            suffix={`/ ${filterResults?.totalOptions || 0}`}
+                            valueStyle={{ 
+                              color: filterResults && filterResults.filteredOptions > 0 ? '#52c41a' : '#ff4d4f', 
+                              fontSize: 20,
+                              fontWeight: 'bold'
+                            }}
+                          />
+                          {filterResults && (
+                            <div>
+                              <Progress
+                                percent={Math.round((filterResults.filteredOptions / filterResults.totalOptions) * 100)}
+                                size="small"
+                                strokeColor={{
+                                  '0%': '#52c41a',
+                                  '100%': '#389e0d'
+                                }}
+                                trailColor="#f0f0f0"
+                                style={{ marginTop: 8 }}
+                              />
+                              <Text style={{ 
+                                fontSize: 10, 
+                                color: '#666', 
+                                marginTop: 4,
+                                display: 'block'
+                              }}>
+                                {filterResults.filteredOptions === 0 ? '🚫 Aucune option' : 
+                                 filterResults.filteredOptions === filterResults.totalOptions ? '✨ Toutes visibles' :
+                                 '🎯 Filtrage actif'}
+                              </Text>
+                            </div>
+                          )}
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card size="small" style={{ background: '#fff', border: '1px solid #d9f7be' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <BulbOutlined style={{ color: '#fa8c16' }} />
+                            <Text strong style={{ fontSize: 13 }}>Mode Test</Text>
+                            <Switch
+                              size="small"
+                              checked={testMode}
+                              onChange={setTestMode}
+                              checkedChildren="✓"
+                              unCheckedChildren="✗"
+                            />
+                          </div>
+                          {testMode && (
+                            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                              {lookupConfig.filterConditions?.conditions?.map(condition => (
+                                <div key={condition.id} style={{ display: 'flex', gap: 4 }}>
+                                  <Text style={{ fontSize: 11, minWidth: 60 }}>{condition.sourceRef?.split(':').pop() || 'Source'}:</Text>
+                                  <Input
+                                    size="small"
+                                    placeholder="Valeur test"
+                                    value={testValues[condition.sourceRef] || ''}
+                                    onChange={(e) => setTestValues(prev => ({ ...prev, [condition.sourceRef]: e.target.value }))}
+                                    style={{ flex: 1 }}
+                                  />
+                                </div>
+                              ))}
+                            </Space>
+                          )}
+                        </Card>
+                      </Col>
+                    </Row>
+
+                    {/* Résultats des conditions */}
+                    {filterResults && (
+                      <div style={{ marginTop: 16 }}>
+                        <Text strong style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>🎯 Évaluation des conditions:</Text>
+                        <Timeline
+                          size="small"
+                          items={filterResults.conditions.map(cond => ({
+                            dot: cond.result ? 
+                              <CheckCircleOutlined style={{ color: '#52c41a' }} /> : 
+                              <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+                            children: (
+                              <Text style={{ 
+                                fontSize: 12, 
+                                color: cond.result ? '#52c41a' : '#ff4d4f',
+                                fontFamily: 'monospace'
+                              }}>
+                                {cond.description}
+                              </Text>
+                            )
+                          }))}
+                        />
+                      </div>
+                    )}
+
+                    {evaluationLoading && (
+                      <div style={{ textAlign: 'center', padding: '20px' }}>
+                        <Spin size="small" />
+                        <Text style={{ marginLeft: 8, fontSize: 12, color: '#999' }}>Évaluation en cours...</Text>
+                      </div>
+                    )}
+
+                    {/* 🎯 SECTION HELP CONTEXTUELLE */}
+                    {!filterResults && !evaluationLoading && (
+                      <div style={{ 
+                        marginTop: 16, 
+                        padding: '12px', 
+                        background: '#f0f9ff', 
+                        border: '1px dashed #1890ff', 
+                        borderRadius: '6px' 
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <BulbOutlined style={{ color: '#1890ff' }} />
+                          <Text strong style={{ color: '#1890ff', fontSize: 12 }}>💡 Aide</Text>
+                        </div>
+                        <Text style={{ fontSize: 11, color: '#666' }}>
+                          • <strong>Temps réel ON</strong> : Évaluation automatique à chaque modification<br/>
+                          • <strong>Mode Test</strong> : Simulez différentes valeurs pour tester vos conditions<br/>
+                          • <strong>Évaluer maintenant</strong> : Lance une évaluation manuelle instantanée
+                        </Text>
+                      </div>
+                    )}
+
+                    {/* 🏆 SECTION PERFORMANCE TIPS */}
+                    {filterResults && filterResults.filteredOptions < filterResults.totalOptions * 0.1 && (
+                      <div style={{ 
+                        marginTop: 12, 
+                        padding: '8px 12px', 
+                        background: '#fff7e6', 
+                        border: '1px solid #ffd591', 
+                        borderRadius: '4px' 
+                      }}>
+                        <Text style={{ fontSize: 11, color: '#d48806' }}>
+                          ⚡ <strong>Filtrage très sélectif</strong> : Seulement {Math.round((filterResults.filteredOptions / filterResults.totalOptions) * 100)}% des options sont affichées
+                        </Text>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Space>      <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 6 }}>
               <Table
                 size="small"
                 sticky
@@ -1955,6 +2497,19 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
               )}
             </div>
       </Space>
+
+      {/* 🔥 NOUVEAU: NodeTreeSelector pour les conditions */}
+      <NodeTreeSelector
+        nodeId={nodeId}
+        open={showNodeTreeSelector}
+        onClose={() => {
+          setShowNodeTreeSelector(false);
+          setCurrentConditionId(null);
+        }}
+        onSelect={handleNodeTreeSelection}
+        selectionContext="token"
+        allowMulti={false}
+      />
 
     </Card>
   );

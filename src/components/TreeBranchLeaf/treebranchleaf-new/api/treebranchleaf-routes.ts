@@ -1626,6 +1626,7 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
 
     // Dupliquer chaque template en COPIE PROFONDE (utilise deepCopyNodeInternal)
     const duplicatedSummaries: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }> = [];
+    const duplicatedNodeIds = new Set<string>();
     for (const template of templateNodes) {
       // Compter les copies existantes + celles crÃ©Ã©es dans cette passe
       const existingCopiesCount = existingChildren.filter(child => {
@@ -1671,6 +1672,7 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       console.log(`🎯 [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : 'NULL');
       
       if (created) {
+        duplicatedNodeIds.add(created.id);
         duplicatedSummaries.push({
           id: created.id,
           label: created.label,
@@ -1711,12 +1713,38 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
         // ℹ️ NOTE: Les variables liées (linkedVariableIds) sont DÉJÀ copiées par deepCopyNodeInternal
         // avec autoCreateDisplayNode: true, donc pas besoin d'appeler copyLinkedVariablesFromNode ici
         console.log(`ℹ️ [DUPLICATE-TEMPLATES] Variables liées déjà copiées par deepCopyNodeInternal pour ${newRootId}`);
+
+        if (result?.idMap && typeof result.idMap === 'object') {
+          Object.values(result.idMap).forEach((newId) => {
+            if (typeof newId === 'string' && newId) {
+              duplicatedNodeIds.add(newId);
+            }
+          });
+        }
       }
 
     }
     console.log(`ðŸŽ‰ [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} nÅ“uds dupliquÃ©s (deep) avec succÃ¨s`);
+
+    let duplicatedNodesPayload: Record<string, unknown>[] = [];
+    if (duplicatedNodeIds.size > 0) {
+      try {
+        const nodes = await prisma.treeBranchLeafNode.findMany({
+          where: {
+            treeId: parentNode.treeId,
+            id: { in: Array.from(duplicatedNodeIds) }
+          }
+        });
+        duplicatedNodesPayload = nodes.map(node => buildResponseFromColumns(node));
+        console.log(`📦 [DUPLICATE-TEMPLATES] Payload complet gÃ©nÃ©rÃ© pour ${duplicatedNodesPayload.length} nÅ“uds`);
+      } catch (payloadError) {
+        console.warn('⚠️ [DUPLICATE-TEMPLATES] Impossible de rÃ©cupÃ©rer le payload complet des nouveaux nÅ“uds', payloadError);
+      }
+    }
+
     res.status(201).json({
       duplicated: duplicatedSummaries.map(n => ({ id: n.id, label: n.label, type: n.type, parentId: n.parentId, sourceTemplateId: n.sourceTemplateId })),
+      nodes: duplicatedNodesPayload,
       count: duplicatedSummaries.length
     });
   } catch (error) {
@@ -2589,13 +2617,38 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
   // âœ… Ã‰TAPE 1 : Migration depuis appearanceConfig (NOUVEAU systÃ¨me prioritaire)
   if (Object.keys(appearanceConfig).length > 0) {
     console.log('ðŸ”„ [mapJSONToColumns] Traitement appearanceConfig:', appearanceConfig);
+    // 🎨 Apparence générale (pour TOUS les champs)
     if (appearanceConfig.size) columnData.appearance_size = appearanceConfig.size;
     if (appearanceConfig.width) columnData.appearance_width = appearanceConfig.width;
     if (appearanceConfig.variant) columnData.appearance_variant = appearanceConfig.variant;
-    // Copier tous les autres champs d'apparence possibles
+    
+    // Compatibilité avec anciens noms
     if (appearanceConfig.textSize) columnData.appearance_size = appearanceConfig.textSize;
     if (appearanceConfig.fieldWidth) columnData.appearance_width = appearanceConfig.fieldWidth;
     if (appearanceConfig.fieldVariant) columnData.appearance_variant = appearanceConfig.fieldVariant;
+    
+    // 💡 Configuration tooltip d'aide (pour TOUS les champs)
+    if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
+    if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
+    if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
+    
+    // 📂 Configuration sections/branches
+    if (appearanceConfig.collapsible !== undefined) columnData.section_collapsible = appearanceConfig.collapsible;
+    if (appearanceConfig.defaultCollapsed !== undefined) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
+    if (appearanceConfig.showChildrenCount !== undefined) columnData.section_showChildrenCount = appearanceConfig.showChildrenCount;
+    if (appearanceConfig.columnsDesktop !== undefined) columnData.section_columnsDesktop = appearanceConfig.columnsDesktop;
+    if (appearanceConfig.columnsMobile !== undefined) columnData.section_columnsMobile = appearanceConfig.columnsMobile;
+    if (appearanceConfig.gutter !== undefined) columnData.section_gutter = appearanceConfig.gutter;
+    
+    // 📎 Configuration fichiers
+    if (appearanceConfig.maxFileSize !== undefined) columnData.file_maxSize = appearanceConfig.maxFileSize;
+    if (appearanceConfig.allowedTypes) columnData.file_allowedTypes = appearanceConfig.allowedTypes;
+    if (appearanceConfig.multiple !== undefined) columnData.file_multiple = appearanceConfig.multiple;
+    if (appearanceConfig.showPreview !== undefined) columnData.file_showPreview = appearanceConfig.showPreview;
+    
+    // 🔧 Propriétés avancées universelles
+    if (appearanceConfig.visibleToUser !== undefined) columnData.data_visibleToUser = appearanceConfig.visibleToUser;
+    if (appearanceConfig.isRequired !== undefined) columnData.isRequired = appearanceConfig.isRequired;
   }
   
   // âœ… Ã‰TAPE 1bis : Migration depuis metadata.appearance (fallback)
@@ -2641,7 +2694,11 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     console.log('ðŸ’¤ [mapJSONToColumns] subtabs column sauvegardée:', metadata.subTabs);
   }
   if (metadata.subTab !== undefined) {
-    columnData.subtab = metadata.subTab || null;
+    if (Array.isArray(metadata.subTab)) {
+      columnData.subtab = metadata.subTab.length ? JSON.stringify(metadata.subTab) : null;
+    } else {
+      columnData.subtab = metadata.subTab || null;
+    }
     console.log('ðŸ’¤ [mapJSONToColumns] subtab column sauvegardée:', metadata.subTab);
   }
   
@@ -2885,8 +2942,27 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
 
   // Reconstruire le subTab depuis la colonne `subtab` si elle existe
   if (node.subtab !== undefined && node.subtab !== null) {
+    const rawSubTab = node.subtab as string;
+    let parsedSubTab: string | string[] = rawSubTab;
+    if (typeof rawSubTab === 'string') {
+      const trimmed = rawSubTab.trim();
+      if (trimmed.startsWith('[')) {
+        try {
+          const candidate = JSON.parse(trimmed);
+          if (Array.isArray(candidate)) {
+            parsedSubTab = candidate;
+          }
+        } catch {
+          parsedSubTab = rawSubTab;
+        }
+      } else if (trimmed.includes(',')) {
+        parsedSubTab = trimmed.split(',').map(part => part.trim()).filter(Boolean);
+      } else {
+        parsedSubTab = trimmed;
+      }
+    }
     try {
-      (cleanedMetadata as any).subTab = node.subtab as string;
+      (cleanedMetadata as any).subTab = parsedSubTab;
       console.log('ðŸ” [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:', (cleanedMetadata as any).subTab);
     } catch { /* noop */ }
   }
@@ -3187,6 +3263,9 @@ const updateOrMoveNode = async (req, res) => {
     const { treeId, nodeId } = req.params;
     const { organizationId } = req.user!;
     const updateData = req.body || {};
+    // Flag: cascade subTab to descendants (server-side optimized variant)
+    const cascadeSubTab = !!updateData.cascadeSubTab;
+    if ('cascadeSubTab' in updateData) delete updateData.cascadeSubTab;
     
     console.log('ðŸ”„ [updateOrMoveNode] AVANT migration - donnÃ©es reÃ§ues:', {
       hasMetadata: !!updateData.metadata,
@@ -3272,7 +3351,7 @@ const updateOrMoveNode = async (req, res) => {
           console.log('ðŸ’¤ [updateOrMoveNode] Prérempli updateObj.subtab depuis la base');
         }
       }
-    } catch { }
+    } catch (e) { console.warn('ðŸ’¤ [updateOrMoveNode] Error while pre-filling subtabs/subtab from base', e); }
 
     if (!existingNode) {
       // ðŸš¨ DEBUG: Chercher le nÅ“ud sans contrainte de treeId pour voir s'il existe ailleurs
@@ -3478,6 +3557,30 @@ const updateOrMoveNode = async (req, res) => {
     }
 
     const updatedNode = await prisma.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+
+    // If requested, perform a server-side cascade update for subTab on descendants
+    try {
+      if (cascadeSubTab && updateObj.subtab !== undefined && updateObj.subtab !== null) {
+        const subTabStr = String(updateObj.subtab);
+        console.log('ðŸ“— [updateOrMoveNode] CascadeSubTab activé: mise à jour SQL pour', nodeId, 'valeur:', subTabStr);
+        await prisma.$executeRaw`
+          WITH RECURSIVE descendants AS (
+            SELECT id FROM "public"."TreeBranchLeafNode" WHERE id = ${nodeId}
+            UNION ALL
+            SELECT n.id FROM "public"."TreeBranchLeafNode" n JOIN descendants d ON n."parentId" = d.id
+          )
+          UPDATE "public"."TreeBranchLeafNode" t
+          SET "subtab" = ${subTabStr}, "updatedAt" = NOW()
+          WHERE t.id IN (SELECT id FROM descendants)
+            AND (
+              t.type LIKE 'leaf_%'
+              OR COALESCE(jsonb_array_length(t.subtabs), 0) = 0
+            );
+        `;
+      }
+    } catch (e) {
+      console.error('âŒ [updateOrMoveNode] Erreur lors du cascadeSubTab SQL:', e);
+    }
     
     console.log('ðŸ”„ [updateOrMoveNode] APRÃˆS mise Ã  jour - nÅ“ud brut Prisma:', {
       'updatedNode.metadata': updatedNode?.metadata,
@@ -12668,5 +12771,6 @@ export {
 };
 
 export default router;
+
 
 

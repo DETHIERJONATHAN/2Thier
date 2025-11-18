@@ -49,6 +49,206 @@ declare global {
 }
 // Types locaux pour éviter les 'any' lors de l'extraction des formules dynamiques
 interface VariableDefLocal { sourceField: string; type?: string }
+
+// 🔥 NOUVEAU: Types pour le filtrage conditionnel des lookups
+interface TableLookupCondition {
+  id: string;
+  filterByColumn?: string; // Colonne du tableau à filtrer (optionnel)
+  filterByRow?: string; // Ligne du tableau à filtrer (optionnel)
+  operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
+  compareWithRef?: string; // Référence NodeTreeSelector vers un champ/formule
+  description?: string; // Description lisible de la condition
+}
+
+interface TableLookupFilterConfig {
+  enabled?: boolean;
+  conditions?: TableLookupCondition[];
+  filterLogic?: 'AND' | 'OR'; // Comment combiner les conditions
+}
+
+// 🔥 NOUVEAU: Fonction pour évaluer si une option de lookup passe les conditions de filtrage
+const evaluateFilterConditions = (
+  option: any, // Option courante {value, label}
+  conditions: TableLookupCondition[], 
+  formData: Record<string, any>,
+  tableData: {columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'},
+  config: any, // Configuration du lookup (keyColumn, keyRow, etc.)
+  filterLogic: 'AND' | 'OR' = 'AND'
+): boolean => {
+  if (!conditions || conditions.length === 0) return true;
+  if (!tableData || !config) return true;
+
+  const results = conditions.map(condition => {
+    // 1. Extraire la valeur de référence depuis formData
+    let referenceValue: any = null;
+    
+    if (condition.compareWithRef?.startsWith('@value.')) {
+      const fieldId = condition.compareWithRef.replace('@value.', '');
+      referenceValue = formData[fieldId];
+    } else if (condition.compareWithRef?.startsWith('@select.')) {
+      const fieldId = condition.compareWithRef.replace('@select.', '');
+      referenceValue = formData[fieldId];
+    }
+    // TODO: Ajouter le support pour formula:{id} et condition:{id}
+
+    // 2. Trouver la/les valeur(s) correspondante(s) dans le tableau pour cette option
+    const tableValues: any[] = [];
+    
+    try {
+      // Collecter les valeurs selon filterByColumn et/ou filterByRow
+      if (condition.filterByColumn) {
+        const columnValue = extractValueFromColumn(option, condition.filterByColumn, tableData, config);
+        if (columnValue !== null) tableValues.push(columnValue);
+      }
+      
+      if (condition.filterByRow) {
+        const rowValue = extractValueFromRow(option, condition.filterByRow, tableData, config);
+        if (rowValue !== null) tableValues.push(rowValue);
+      }
+      
+      // Si aucune valeur trouvée, rejeter cette condition
+      if (tableValues.length === 0) {
+        return false;
+      }
+    } catch (error) {
+      console.warn('Erreur lors de l\'extraction de la valeur du tableau:', error);
+      return false;
+    }
+
+    // 3. Comparer referenceValue avec chaque tableValue selon l'opérateur
+    // Si plusieurs valeurs (colonne ET ligne), toutes doivent passer la condition
+    const conditionResults = tableValues.map(tableValue => {
+      switch (condition.operator) {
+        case 'equals':
+          return String(referenceValue) === String(tableValue);
+        case 'notEquals':
+          return String(referenceValue) !== String(tableValue);
+        case 'greaterThan':
+          return Number(referenceValue) > Number(tableValue);
+        case 'lessThan':
+          return Number(referenceValue) < Number(tableValue);
+        case 'greaterOrEqual':
+          return Number(referenceValue) >= Number(tableValue);
+        case 'lessOrEqual':
+          return Number(referenceValue) <= Number(tableValue);
+        case 'contains':
+          return String(tableValue).toLowerCase().includes(String(referenceValue).toLowerCase());
+        case 'notContains':
+          return !String(tableValue).toLowerCase().includes(String(referenceValue).toLowerCase());
+        default:
+          return false;
+      }
+    });
+    
+    // Si colonne ET ligne: toutes les conditions doivent passer (AND)
+    // Si seulement colonne OU ligne: au moins une doit passer
+    return conditionResults.every(result => result);
+  });
+
+  // Combiner les résultats selon la logique
+  return filterLogic === 'AND' 
+    ? results.every(result => result) 
+    : results.some(result => result);
+};
+
+// 🔧 Fonction utilitaire pour extraire une valeur depuis une colonne du tableau
+const extractValueFromColumn = (
+  option: any,
+  targetColumn: string,
+  tableData: {columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'},
+  config: any
+): any => {
+  if (tableData.type === 'columns') {
+    // Mode colonnes: trouver la ligne correspondante à cette option
+    const keyColIndex = config.keyColumn ? tableData.columns.indexOf(config.keyColumn) : 0;
+    const targetColIndex = tableData.columns.indexOf(targetColumn);
+    
+    if (keyColIndex >= 0 && targetColIndex >= 0) {
+      const matchingRowIndex = tableData.data.findIndex(row => String(row[keyColIndex]) === String(option.value));
+      if (matchingRowIndex >= 0) {
+        return tableData.data[matchingRowIndex][targetColIndex];
+      }
+    }
+  } else if (tableData.type === 'matrix') {
+    // Mode matrix selon keyColumn/keyRow
+    const targetColIndex = tableData.columns.indexOf(targetColumn);
+    
+    if (config.keyColumn) {
+      // Lookup par colonne: l'option correspond à une colonne
+      const optionColIndex = tableData.columns.indexOf(String(option.value));
+      if (optionColIndex >= 0 && targetColIndex >= 0) {
+        // Pour chaque ligne de données, comparer les colonnes
+        for (let rowIndex = 0; rowIndex < tableData.data.length; rowIndex++) {
+          const dataColIndex = optionColIndex - 1; // Décalage car data n'a pas colonne A
+          const targetDataColIndex = targetColIndex - 1;
+          if (dataColIndex >= 0 && targetDataColIndex >= 0) {
+            return tableData.data[rowIndex][targetDataColIndex];
+          }
+        }
+      }
+    } else if (config.keyRow) {
+      // Lookup par ligne: trouver la colonne cible
+      const keyRowIndex = tableData.rows.indexOf(config.keyRow);
+      if (keyRowIndex >= 0 && targetColIndex >= 0) {
+        const dataRowIndex = keyRowIndex - 1;
+        const dataColIndex = targetColIndex - 1;
+        if (dataRowIndex >= 0 && dataRowIndex < tableData.data.length &&
+            dataColIndex >= 0 && dataColIndex < tableData.data[dataRowIndex].length) {
+          return tableData.data[dataRowIndex][dataColIndex];
+        }
+      }
+    }
+  }
+  
+  return null;
+};
+
+// 🔧 Fonction utilitaire pour extraire une valeur depuis une ligne du tableau
+const extractValueFromRow = (
+  option: any,
+  targetRow: string,
+  tableData: {columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'},
+  config: any
+): any => {
+  if (tableData.type === 'columns') {
+    // Mode colonnes: targetRow n'est pas applicable directement
+    // On pourrait chercher dans les données mais c'est moins logique
+    return null;
+  } else if (tableData.type === 'matrix') {
+    const targetRowIndex = tableData.rows.indexOf(targetRow);
+    
+    if (config.keyColumn) {
+      // Lookup par colonne: trouver la ligne cible
+      const keyColIndex = tableData.columns.indexOf(config.keyColumn);
+      const optionColIndex = tableData.columns.indexOf(String(option.value));
+      
+      if (targetRowIndex >= 0 && optionColIndex >= 0) {
+        const dataRowIndex = targetRowIndex - 1;
+        const dataColIndex = optionColIndex - 1;
+        if (dataRowIndex >= 0 && dataRowIndex < tableData.data.length &&
+            dataColIndex >= 0 && dataColIndex < tableData.data[dataRowIndex].length) {
+          return tableData.data[dataRowIndex][dataColIndex];
+        }
+      }
+    } else if (config.keyRow) {
+      // Lookup par ligne: l'option correspond à une ligne
+      const optionRowIndex = tableData.rows.indexOf(String(option.value));
+      if (optionRowIndex >= 0 && targetRowIndex >= 0) {
+        const optionDataRowIndex = optionRowIndex - 1;
+        const targetDataRowIndex = targetRowIndex - 1;
+        
+        // Comparer les valeurs de la première colonne (ou d'une colonne spécifique)
+        if (optionDataRowIndex >= 0 && targetDataRowIndex >= 0 && 
+            optionDataRowIndex < tableData.data.length && targetDataRowIndex < tableData.data.length) {
+          // Retourner une valeur representative de cette ligne (ex: première colonne de données)
+          return tableData.data[targetDataRowIndex][0];
+        }
+      }
+    }
+  }
+  
+  return null;
+};
 interface FormulaConfigLocal { expression?: string; variables?: Record<string, VariableDefLocal> }
 
 const { TextArea } = Input;
@@ -944,6 +1144,81 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // (La gestion Table Lookup est traitée plus bas via le type SELECT et ne doit pas préempter
     // les champs avec capacités Data/Formula qui doivent afficher une valeur calculée.)
 
+    const fieldNodeId = (field as any).nodeId || field.id;
+    const resolveBackendNodeId = (f: any): string | undefined => {
+      try {
+        const meta = (f && f.metadata) || {};
+        let cid = meta?.copiedFromNodeId;
+        if (typeof cid === 'string' && cid.trim().startsWith('[')) {
+          try {
+            const arr = JSON.parse(cid);
+            if (Array.isArray(arr) && arr.length > 0) cid = arr[0];
+          } catch { /* ignore */ }
+        }
+        if (Array.isArray(cid) && cid.length > 0) cid = cid[0];
+        if (cid) return String(cid);
+        if (meta?.originalNodeId) return String(meta.originalNodeId);
+        if (f?.nodeId) return String(f.nodeId);
+        if (f?.id) return String(f.id);
+      } catch (e) { console.warn('[resolveBackendNodeId] erreur:', e); }
+      return undefined;
+    };
+
+    const resolveNodeIdFromSourceRef = (
+      sourceRef?: string,
+      options?: {
+        fallbackNodeId?: string;
+        dataActiveId?: string;
+        tableActiveId?: string;
+      }
+    ): string => {
+      const fallbackNodeId = options?.fallbackNodeId || fieldNodeId;
+      const ref = typeof sourceRef === 'string' ? sourceRef.trim() : '';
+      if (!ref) {
+        return options?.dataActiveId || fallbackNodeId;
+      }
+
+      if (/^(condition:|formula:|node-formula:)/.test(ref)) {
+        return fallbackNodeId;
+      }
+
+      if (ref.startsWith('@value.')) {
+        const extracted = ref.slice('@value.'.length);
+        return extracted || fallbackNodeId;
+      }
+
+      if (ref.startsWith('@table.')) {
+        let candidate = options?.dataActiveId;
+        if (!candidate || (options?.tableActiveId && candidate === options.tableActiveId)) {
+          candidate = fallbackNodeId;
+        }
+        if (candidate && !looksLikeUUID(candidate) && looksLikeUUID(fallbackNodeId)) {
+          return fallbackNodeId;
+        }
+        return candidate || fallbackNodeId;
+      }
+
+      if (/^variable:/.test(ref) || /^value:/.test(ref)) {
+        const extracted = ref.split(':')[1];
+        if (extracted) {
+          return extracted;
+        }
+      }
+
+      if (!ref.includes(':') && looksLikeUUID(ref)) {
+        return ref;
+      }
+
+      if (ref.includes(':')) {
+        const candidate = ref.split(':')[1];
+        if (candidate && looksLikeUUID(candidate)) {
+          return candidate;
+        }
+      }
+
+      return options?.dataActiveId || fallbackNodeId;
+    };
+
     // 🚀 PRIORITÉ 1: Champs TreeBranchLeaf intelligents (générés dynamiquement)
     if (field.isTreeBranchLeafSmart && (field.hasData || field.hasFormula)) {
       const caps = field.capabilities || {};
@@ -960,7 +1235,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
         return (
           <BackendValueDisplay
-            nodeId={formulaId}
+            nodeId={resolveBackendNodeId(field) || field.id}
             treeId={treeId}
             formData={formData}
             unit={field.config?.unit}
@@ -978,19 +1253,20 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         const dataInstance = caps?.data?.instances?.[variableId] as { metadata?: { sourceType?: string; sourceRef?: string; fixedValue?: unknown } } | undefined;
         const meta = dataInstance?.metadata;
         if (meta?.sourceType === 'tree' && typeof meta.sourceRef === 'string' && meta.sourceRef) {
-          // Extraire le nodeId depuis sourceRef (format: "formula:id" ou "condition:id")
-          const extractedNodeId = meta.sourceRef.includes(':') 
-            ? meta.sourceRef.split(':')[1] 
-            : variableId;
+          const resolvedNodeId = resolveNodeIdFromSourceRef(meta.sourceRef, {
+            dataActiveId: variableId,
+            tableActiveId: caps?.table?.activeId as string | undefined,
+            fallbackNodeId: fieldNodeId
+          });
           
-          if (!treeId || !extractedNodeId) {
+          if (!treeId || !resolvedNodeId) {
             return <span style={{ color: '#888' }}>---</span>;
           }
           
           // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
           return (
             <BackendValueDisplay
-              nodeId={extractedNodeId}
+              nodeId={resolvedNodeId}
               treeId={treeId}
               formData={formData}
               unit={field.config?.unit}
@@ -1007,7 +1283,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
         return (
           <BackendValueDisplay
-            nodeId={variableId}
+            nodeId={resolveBackendNodeId(field) || field.id}
             treeId={treeId}
             formData={formData}
             unit={field.config?.unit}
@@ -1025,12 +1301,21 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // 🎯 NOUVEAU SYSTÈME TreeBranchLeaf : Vérifier les capacités Data et Formula d'abord
     const capabilities = field.capabilities || {};
+    const dataInstances = capabilities.data?.instances;
+    const hasDataCapability = Boolean(
+      capabilities.data && (
+        capabilities.data.enabled !== false ||
+        capabilities.data.activeId ||
+        (dataInstances && Object.keys(dataInstances).length > 0)
+      )
+    );
     
     // ✨ PRIORITÉ 1: Capacité Data (données dynamiques depuis TreeBranchLeafNodeVariable)
-  if (capabilities.data?.enabled && (capabilities.data.activeId || capabilities.data.instances)) {
+    if (hasDataCapability) {
       
       // Récupérer la configuration de la variable active
-      const dataInstance = capabilities.data.instances?.[capabilities.data.activeId] as {
+      const activeDataId = capabilities.data?.activeId || (dataInstances ? Object.keys(dataInstances)[0] : undefined);
+      const dataInstance = activeDataId && dataInstances ? dataInstances[activeDataId] as {
         metadata?: {
           sourceType?: string;
           sourceRef?: string;
@@ -1039,15 +1324,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         displayFormat?: string;
         unit?: string;
         precision?: number;
-      };
+      } : undefined;
       if (dataInstance && dataInstance.metadata) {
         const { sourceType: configSourceType, sourceRef: configSourceRef, fixedValue } = dataInstance.metadata;
         
         // Mode arborescence (déléguer à la variable du nœud pour couvrir formules ET conditions)
         if (configSourceType === 'tree' && configSourceRef) {
-          const instanceId = capabilities.data.activeId 
-            || (capabilities.data.instances ? Object.keys(capabilities.data.instances)[0] : undefined)
-            || field.id;
         const metaFormula = capabilities?.formula?.currentFormula as FormulaConfigLocal | undefined;
         let variablesDef = metaFormula?.variables ? Object.fromEntries(Object.entries(metaFormula.variables).map(([k,v]) => [k, { sourceField: (v as VariableDefLocal).sourceField, type: (v as VariableDefLocal).type }])) : undefined;
         // Fallback: certaines variables data peuvent exposer un metadata.variables (structure similaire)
@@ -1059,11 +1341,16 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         if (!treeId) {
           return <span style={{ color: '#888' }}>---</span>;
         }
+        const resolvedNodeId = resolveNodeIdFromSourceRef(configSourceRef, {
+          dataActiveId: capabilities.data?.activeId,
+          tableActiveId,
+          fallbackNodeId: fieldNodeId
+        });
         
         // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
         return (
           <BackendValueDisplay
-            nodeId={instanceId}
+            nodeId={resolvedNodeId}
             treeId={treeId}
             formData={formData}
             unit={dataInstance.unit as string | undefined}
@@ -1084,10 +1371,37 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           );
         }
       }
+
+      if (!treeId) {
+        return <span style={{ color: '#888' }}>---</span>;
+      }
+
+      return (
+        <BackendValueDisplay
+          nodeId={resolveBackendNodeId(field) || field.id}
+          treeId={treeId}
+          formData={formData}
+          unit={(dataInstance?.unit as string | undefined) ?? field.config?.unit}
+          precision={((dataInstance?.precision as number | undefined) ?? field.config?.decimals) ?? 2}
+          placeholder="Calcul en cours..."
+        />
+      );
     }
     
+    const hasFormulaCapability = Boolean(
+      (capabilities.formula && (
+        capabilities.formula.enabled !== false ||
+        capabilities.formula.activeId ||
+        (capabilities.formula.instances && Object.keys(capabilities.formula.instances).length > 0) ||
+        capabilities.formula.currentFormula
+      )) ||
+      fieldConfig.hasFormula ||
+      field.hasFormula
+    );
+    const manualOverrideAllowed = fieldConfig.formulaConfig?.allowManualOverride === true;
+
     // ✨ PRIORITÉ 2: Capacité Formula (formules directes)
-    if (capabilities.formula?.enabled && capabilities.formula.currentFormula && capabilities.formula.activeId) {
+    if (hasFormulaCapability && !manualOverrideAllowed) {
       if (!treeId) {
         return <span style={{ color: '#888' }}>---</span>;
       }
@@ -1095,7 +1409,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
       return (
         <BackendValueDisplay
-          nodeId={capabilities.formula.activeId}
+          nodeId={resolveBackendNodeId(field) || field.id}
           treeId={treeId}
           formData={formData}
           unit={fieldConfig.unit}
@@ -1108,7 +1422,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // 🔥 PRIORITÉ 2B: FALLBACK SOURCEREF - Si le champ a une sourceRef directe (condition/formula/node-formula/table)
     // C'est pour les champs comme "Prix Kwh" et "M façade" qui ont sourceRef mais pas de capabilities.data
     const fieldSourceRef = (field as any).sourceRef || (field as any).metadata?.sourceRef;
-    const fieldNodeId = (field as any).nodeId || field.id;
     if (fieldSourceRef && typeof fieldSourceRef === 'string' && /^(condition:|formula:|node-formula:|@table\.|@value\.)/.test(fieldSourceRef)) {
       if (!treeId) {
         return <span style={{ color: '#888' }}>---</span>;
@@ -1116,10 +1429,16 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       
       console.log(`🔥 [FALLBACK DIRECT SOURCEREF] Champ "${fieldConfig.label}" utilise sourceRef directe: ${fieldSourceRef}, nodeId: ${fieldNodeId}`);
       
+      const resolvedNodeId = resolveNodeIdFromSourceRef(fieldSourceRef, {
+        dataActiveId: capabilities.data?.activeId,
+        tableActiveId,
+        fallbackNodeId: fieldNodeId
+      });
+
       // ✅ NOUVEAU SYSTÈME : BackendValueDisplay
       return (
         <BackendValueDisplay
-          nodeId={fieldNodeId}
+          nodeId={resolvedNodeId}
           treeId={treeId}
           formData={formData}
           unit={fieldConfig.unit}
@@ -1243,7 +1562,31 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       case 'SELECT': {
         // 🔥 OPTIONS DYNAMIQUES - PRIORITÉ: 1) Table Lookup (si activé), 2) Prisma Config, 3) Fallback
         const staticOptions = fieldConfig.selectConfig?.options || fieldConfig.options || [];
-        const finalOptions = (fieldConfig.hasTable && tableLookup.options.length > 0) ? tableLookup.options : staticOptions;
+        let baseOptions = (fieldConfig.hasTable && tableLookup.options.length > 0) ? tableLookup.options : staticOptions;
+
+        // 🔥 NOUVEAU: Filtrage conditionnel des options de lookup
+        if (fieldConfig.hasTable && field.capabilities?.table?.currentTable?.meta?.lookup) {
+          const lookupConfig = field.capabilities.table.currentTable.meta.lookup;
+          const filterConfig = lookupConfig.filterConditions;
+          
+          if (filterConfig?.enabled && filterConfig.conditions && filterConfig.conditions.length > 0 && 
+              tableLookup.tableData && tableLookup.config) {
+            
+            // Filtrer chaque option individuellement
+            baseOptions = baseOptions.filter(option => 
+              evaluateFilterConditions(
+                option,
+                filterConfig.conditions,
+                formData,
+                tableLookup.tableData!,
+                tableLookup.config!,
+                filterConfig.filterLogic || 'AND'
+              )
+            );
+          }
+        }
+        
+        const finalOptions = baseOptions;
 
         // 🩹 PATCH: Enrichir les options sans id avec le nodeId correspondant depuis allNodes
         // Contexte: les champs copiés (ex: "Versant (Copie 1)") ont souvent des options sans id,

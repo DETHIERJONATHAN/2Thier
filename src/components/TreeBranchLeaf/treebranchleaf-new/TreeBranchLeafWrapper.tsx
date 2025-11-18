@@ -33,6 +33,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
   const [nodes, setNodes] = useState<TreeBranchLeafNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [handleNodeMetadataUpdate, setHandleNodeMetadataUpdate] = useState<((node: TreeBranchLeafNode) => void) | null>(null);
 
   // Hooks
   const { user } = useAuth();
@@ -348,6 +349,8 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
       onTreesUpdate={handleTreesUpdate}
       onNodesUpdate={handleNodesUpdate}
       onNodeCreate={handleNodeCreate} // Passer la fonction de création
+      onSetHandleNodeMetadataUpdate={setHandleNodeMetadataUpdate}
+      handleNodeMetadataUpdate={handleNodeMetadataUpdate}
     />
   );
 };

@@ -496,9 +496,37 @@ export async function copyVariableWithCapacities(
     } else if (autoCreateDisplayNode) {
       // Créer un nœud d'affichage DÉDIÉ avec un ID unique dérivé de l'ancien nodeId + suffixe
       try {
+        const parseJsonIfNeeded = (value: unknown): unknown => {
+          if (typeof value !== 'string') return value ?? undefined;
+          const trimmed = value.trim();
+          if (!trimmed) return undefined;
+          const first = trimmed[0];
+          const last = trimmed[trimmed.length - 1];
+          const looksJson = (first === '[' && last === ']') || (first === '{' && last === '}');
+          if (!looksJson) return value;
+          try {
+            return JSON.parse(trimmed);
+          } catch {
+            return value;
+          }
+        };
+
         const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId! },
-          select: { id: true, parentId: true, treeId: true, order: true, linkedTableIds: true, hasTable: true, table_name: true, table_activeId: true, table_instances: true }
+          select: {
+            id: true,
+            parentId: true,
+            treeId: true,
+            order: true,
+            linkedTableIds: true,
+            hasTable: true,
+            table_name: true,
+            table_activeId: true,
+            table_instances: true,
+            metadata: true,
+            subtab: true,
+            subtabs: true,
+          }
         });
         if (originalOwnerNode) {
           // Chercher ou créer la section d'affichage sous le même parent
@@ -578,6 +606,41 @@ export async function copyVariableWithCapacities(
           finalNodeId = displayNodeId;
 
           const now = new Date();
+          const ownerMetadata = originalOwnerNode.metadata && typeof originalOwnerNode.metadata === 'object'
+            ? JSON.parse(JSON.stringify(originalOwnerNode.metadata)) as Record<string, unknown>
+            : {};
+
+          const ownerSubTabRaw = ownerMetadata?.subTab
+            ?? ownerMetadata?.subTabKey
+            ?? parseJsonIfNeeded(originalOwnerNode.subtab ?? undefined);
+          const ownerSubTabsRaw = ownerMetadata?.subTabs
+            ?? parseJsonIfNeeded(originalOwnerNode.subtabs ?? undefined);
+
+          const ownerSubTabsArray = Array.isArray(ownerSubTabsRaw)
+            ? (ownerSubTabsRaw as unknown[]).map(entry => String(entry))
+            : undefined;
+
+          const metadataForDisplay: Record<string, unknown> = {
+            ...ownerMetadata,
+            fromVariableId: `${originalVar.id}-${suffix}`,
+            autoCreatedDisplayNode: true,
+          };
+
+          if (ownerSubTabRaw !== undefined) {
+            metadataForDisplay.subTab = ownerSubTabRaw;
+          }
+          if (ownerSubTabsArray?.length) {
+            metadataForDisplay.subTabs = ownerSubTabsArray;
+          }
+
+          const formatSubTabColumn = (value: unknown): string | null => {
+            if (value === null || value === undefined) return null;
+            if (Array.isArray(value)) {
+              return value.length ? JSON.stringify(value) : null;
+            }
+            return typeof value === 'string' ? value : String(value);
+          };
+
           const displayNodeData = {
             id: displayNodeId,
             treeId: originalOwnerNode.treeId,
@@ -600,7 +663,9 @@ export async function copyVariableWithCapacities(
             linkConfig: null as any,
             defaultValue: null as any,
             calculatedValue: null as any,
-            metadata: { fromVariableId: `${originalVar.id}-${suffix}` } as any,
+            metadata: metadataForDisplay as any,
+            subtab: formatSubTabColumn(ownerSubTabRaw),
+            subtabs: ownerSubTabsArray?.length ? JSON.stringify(ownerSubTabsArray) : null,
             createdAt: now,
             updatedAt: now,
             hasAPI: false,

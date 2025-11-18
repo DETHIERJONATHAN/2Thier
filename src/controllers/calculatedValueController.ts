@@ -34,6 +34,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         id: true,
         label: true,
         calculatedValue: true,
+        metadata: true,
         calculatedAt: true,
         calculatedBy: true,
         type: true,
@@ -44,9 +45,39 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     if (!node) {
       return res.status(404).json({ error: 'Nœud non trouvé' });
     }
+    // 🎯 Si le nœud courant n'a pas de valeur calculée mais qu'il est une copie
+    // (metadata.copiedFromNodeId) -> retourner la valeur du noeud original
+    try {
+      const meta = (node as any).metadata as any;
+      if ((node.calculatedValue === null || node.calculatedValue === undefined || node.calculatedValue === '') && meta?.copiedFromNodeId) {
+        let origId = meta.copiedFromNodeId;
+        if (typeof origId === 'string' && origId.trim().startsWith('[')) {
+          try { origId = JSON.parse(origId)[0]; } catch { /* ignore */ }
+        }
+        if (Array.isArray(origId) && origId.length > 0) origId = origId[0];
+        if (origId) {
+          const originalNode = await prisma.treeBranchLeafNode.findUnique({ where: { id: String(origId) }, select: { id: true, label: true, calculatedValue: true, calculatedAt: true, calculatedBy: true, type: true, fieldType: true } });
+          if (originalNode) {
+            return res.json({
+              success: true,
+              nodeId: originalNode.id,
+              label: originalNode.label,
+              value: originalNode.calculatedValue,
+              calculatedAt: originalNode.calculatedAt,
+              calculatedBy: originalNode.calculatedBy,
+              type: originalNode.type,
+              fieldType: originalNode.fieldType
+            });
+          }
+        }
+      }
+    } catch (metaErr) {
+      console.warn('[CalculatedValueController] error checking copiedFromNodeId fallback', metaErr);
+    }
 
-    // ✅ Retourner la valeur calculée
+    // ✅ Retourner la valeur calculée du Nœud (par défaut)
     return res.json({
+      success: true,
       nodeId: node.id,
       label: node.label,
       value: node.calculatedValue,

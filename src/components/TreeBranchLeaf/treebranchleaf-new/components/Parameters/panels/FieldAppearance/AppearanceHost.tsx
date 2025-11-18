@@ -93,13 +93,18 @@ export const AppearanceHost: React.FC<AppearanceHostProps> = ({ treeId, nodeId, 
   }, [debouncedSave]);
 
   type LazyComp = { default: React.ComponentType<Record<string, unknown>> };
-  const importer = useMemo(() => (FieldAppearancePanels as Record<string, () => Promise<LazyComp>>)[fieldType], [fieldType]);
+  // 🌟 NOUVEAU : Utiliser le panneau universel par défaut si aucun panneau spécialisé n'existe
+  const importer = useMemo(() => {
+    const specificImporter = (FieldAppearancePanels as Record<string, () => Promise<LazyComp>>)[fieldType];
+    const defaultImporter = (FieldAppearancePanels as Record<string, () => Promise<LazyComp>>)['DEFAULT'];
+    return specificImporter || defaultImporter;
+  }, [fieldType]);
 
   if (!importer) {
     return (
       <Card size="small" bordered>
         <Title level={5}>🎨 Apparence</Title>
-        <Alert type="info" showIcon message={<Text>Type de champ non pris en charge pour l'apparence ({fieldType}).</Text>} />
+        <Alert type="error" showIcon message={<Text>❌ Erreur critique: Aucun panneau d'apparence disponible</Text>} />
       </Card>
     );
   }

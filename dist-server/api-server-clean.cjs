@@ -26473,9 +26473,36 @@ ${"\u2550".repeat(80)}`);
       console.log(`\u{1F4CD} nodeId mapp\xE9: ${originalVar.nodeId} \u2192 ${finalNodeId}`);
     } else if (autoCreateDisplayNode) {
       try {
+        const parseJsonIfNeeded = (value) => {
+          if (typeof value !== "string") return value ?? void 0;
+          const trimmed = value.trim();
+          if (!trimmed) return void 0;
+          const first = trimmed[0];
+          const last = trimmed[trimmed.length - 1];
+          const looksJson = first === "[" && last === "]" || first === "{" && last === "}";
+          if (!looksJson) return value;
+          try {
+            return JSON.parse(trimmed);
+          } catch {
+            return value;
+          }
+        };
         const originalOwnerNode = await prisma68.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
-          select: { id: true, parentId: true, treeId: true, order: true, linkedTableIds: true, hasTable: true, table_name: true, table_activeId: true, table_instances: true }
+          select: {
+            id: true,
+            parentId: true,
+            treeId: true,
+            order: true,
+            linkedTableIds: true,
+            hasTable: true,
+            table_name: true,
+            table_activeId: true,
+            table_instances: true,
+            metadata: true,
+            subtab: true,
+            subtabs: true
+          }
         });
         if (originalOwnerNode) {
           let displayParentId = originalOwnerNode.parentId || null;
@@ -26548,6 +26575,28 @@ ${"\u2550".repeat(80)}`);
           const displayNodeId2 = `${originalVar.nodeId}-${suffix}`;
           finalNodeId = displayNodeId2;
           const now = /* @__PURE__ */ new Date();
+          const ownerMetadata = originalOwnerNode.metadata && typeof originalOwnerNode.metadata === "object" ? JSON.parse(JSON.stringify(originalOwnerNode.metadata)) : {};
+          const ownerSubTabRaw = ownerMetadata?.subTab ?? ownerMetadata?.subTabKey ?? parseJsonIfNeeded(originalOwnerNode.subtab ?? void 0);
+          const ownerSubTabsRaw = ownerMetadata?.subTabs ?? parseJsonIfNeeded(originalOwnerNode.subtabs ?? void 0);
+          const ownerSubTabsArray = Array.isArray(ownerSubTabsRaw) ? ownerSubTabsRaw.map((entry) => String(entry)) : void 0;
+          const metadataForDisplay = {
+            ...ownerMetadata,
+            fromVariableId: `${originalVar.id}-${suffix}`,
+            autoCreatedDisplayNode: true
+          };
+          if (ownerSubTabRaw !== void 0) {
+            metadataForDisplay.subTab = ownerSubTabRaw;
+          }
+          if (ownerSubTabsArray?.length) {
+            metadataForDisplay.subTabs = ownerSubTabsArray;
+          }
+          const formatSubTabColumn = (value) => {
+            if (value === null || value === void 0) return null;
+            if (Array.isArray(value)) {
+              return value.length ? JSON.stringify(value) : null;
+            }
+            return typeof value === "string" ? value : String(value);
+          };
           const displayNodeData = {
             id: displayNodeId2,
             treeId: originalOwnerNode.treeId,
@@ -26570,7 +26619,9 @@ ${"\u2550".repeat(80)}`);
             linkConfig: null,
             defaultValue: null,
             calculatedValue: null,
-            metadata: { fromVariableId: `${originalVar.id}-${suffix}` },
+            metadata: metadataForDisplay,
+            subtab: formatSubTabColumn(ownerSubTabRaw),
+            subtabs: ownerSubTabsArray?.length ? JSON.stringify(ownerSubTabsArray) : null,
             createdAt: now,
             updatedAt: now,
             hasAPI: false,
@@ -28112,7 +28163,6 @@ function resolveActionsLabels(actions, labels) {
     };
   });
 }
-var uniq = (arr) => Array.from(new Set(arr));
 async function getNodeLinkedField(client, nodeId, field) {
   const node = await client.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
@@ -28441,33 +28491,32 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
     }
-    const nodes = await prisma46.treeBranchLeafNode.findMany({
-      where: { treeId },
-      include: {
-        _count: {
-          select: {
-            other_TreeBranchLeafNode: true
-          }
-        },
-        TreeBranchLeafNodeTable: {
-          include: {
-            tableColumns: {
-              orderBy: { columnIndex: "asc" }
-            },
-            tableRows: {
-              orderBy: { rowIndex: "asc" }
-            }
-          }
-        }
-      },
-      orderBy: [
-        { order: "asc" },
-        { createdAt: "asc" }
-      ]
-    });
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] N\xC5\u201Cuds trouv\xC3\xA9s:", nodes.length);
-    console.log("\xF0\u0178\u201D\u201E [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour", nodes.length, "n\xC5\u201Cuds");
-    const reconstructedNodes = nodes.map((node) => buildResponseFromColumns(node));
+    let nodesRaw = [];
+    try {
+      nodesRaw = await prisma46.treeBranchLeafNode.findMany({ where: { treeId } });
+    } catch (prismaErr) {
+      if (prismaErr?.code === "P2022") {
+        console.error("[TreeBranchLeaf API] Prisma missing column error (P2022):", prismaErr.meta || prismaErr.message);
+        return res.status(500).json({
+          error: "Erreur base de donn\xE9es: colonne manquante d\xE9tect\xE9e par Prisma (P2022).",
+          details: prismaErr?.meta || prismaErr?.message,
+          hint: "V\xE9rifiez que vous avez appliqu\xE9 toutes les migrations `npx prisma migrate dev` et r\xE9g\xE9n\xE9r\xE9 le client `npx prisma generate`."
+        });
+      }
+      console.error("[TreeBranchLeaf API] Unexpected Prisma error fetching nodes:", prismaErr);
+      return res.status(500).json({ error: "Erreur serveur lors de la r\xE9cup\xE9ration des n\u0153uds", details: prismaErr?.message });
+    }
+    console.log("\u{1F50D} [GET /trees/:treeId/nodes] N\u0153uds bruts r\xE9cup\xE9r\xE9s en base:", nodesRaw.length);
+    console.log("\u{1F527} [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour", nodesRaw.length, "n\u0153uds");
+    const reconstructedNodes = [];
+    for (const nodeItem of nodesRaw) {
+      try {
+        reconstructedNodes.push(buildResponseFromColumns(nodeItem));
+      } catch (e) {
+        console.error("[TreeBranchLeaf API] Erreur reconstruction noeud:", { nodeId: nodeItem?.id, error: e });
+        reconstructedNodes.push({ id: nodeItem?.id, label: nodeItem?.label || "N\u0153ud", metadata: nodeItem?.metadata || {} });
+      }
+    }
     const nodesWithTooltips = reconstructedNodes.filter(
       (node) => node.text_helpTooltipType && node.text_helpTooltipType !== "none"
     );
@@ -28485,8 +28534,8 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
     }
     res.json(reconstructedNodes);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching nodes:", error);
-    res.status(500).json({ error: "Impossible de r\xC3\xA9cup\xC3\xA9rer les n\xC5\u201Cuds" });
+    console.error("[TreeBranchLeaf API] Error fetching nodes:", error, error?.stack);
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les n\u0153uds", details: String(error) });
   }
 });
 router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
@@ -28625,6 +28674,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     }
     console.log(`\xF0\u0178\u201D\x81 [DUPLICATE-TEMPLATES] ${templateNodes.length} templates \xC3\xA0 dupliquer`);
     const duplicatedSummaries = [];
+    const duplicatedNodeIds = /* @__PURE__ */ new Set();
     for (const template of templateNodes) {
       const existingCopiesCount = existingChildren.filter((child) => {
         const meta = child.metadata;
@@ -28663,6 +28713,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       });
       console.log(`\u{1F3AF} [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : "NULL");
       if (created) {
+        duplicatedNodeIds.add(created.id);
         duplicatedSummaries.push({
           id: created.id,
           label: created.label,
@@ -28696,11 +28747,34 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
           console.warn("\u26A0\uFE0F  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s\xE9lecteurs pour", newRootId, selectorErr);
         }
         console.log(`\u2139\uFE0F [DUPLICATE-TEMPLATES] Variables li\xE9es d\xE9j\xE0 copi\xE9es par deepCopyNodeInternal pour ${newRootId}`);
+        if (result?.idMap && typeof result.idMap === "object") {
+          Object.values(result.idMap).forEach((newId) => {
+            if (typeof newId === "string" && newId) {
+              duplicatedNodeIds.add(newId);
+            }
+          });
+        }
       }
     }
     console.log(`\xF0\u0178\u017D\u2030 [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} n\xC5\u201Cuds dupliqu\xC3\xA9s (deep) avec succ\xC3\xA8s`);
+    let duplicatedNodesPayload = [];
+    if (duplicatedNodeIds.size > 0) {
+      try {
+        const nodes = await prisma46.treeBranchLeafNode.findMany({
+          where: {
+            treeId: parentNode.treeId,
+            id: { in: Array.from(duplicatedNodeIds) }
+          }
+        });
+        duplicatedNodesPayload = nodes.map((node) => buildResponseFromColumns(node));
+        console.log(`\u{1F4E6} [DUPLICATE-TEMPLATES] Payload complet g\xC3\xA9n\xC3\xA9r\xC3\xA9 pour ${duplicatedNodesPayload.length} n\xC5\u201Cuds`);
+      } catch (payloadError) {
+        console.warn("\u26A0\uFE0F [DUPLICATE-TEMPLATES] Impossible de r\xC3\xA9cup\xC3\xA9rer le payload complet des nouveaux n\xC5\u201Cuds", payloadError);
+      }
+    }
     res.status(201).json({
       duplicated: duplicatedSummaries.map((n) => ({ id: n.id, label: n.label, type: n.type, parentId: n.parentId, sourceTemplateId: n.sourceTemplateId })),
+      nodes: duplicatedNodesPayload,
       count: duplicatedSummaries.length
     });
   } catch (error) {
@@ -29453,6 +29527,18 @@ function mapJSONToColumns(updateData) {
     if (repeaterMeta.buttonWidth) columnData.repeater_buttonWidth = repeaterMeta.buttonWidth;
     if (repeaterMeta.iconOnly !== void 0) columnData.repeater_iconOnly = repeaterMeta.iconOnly;
   }
+  if (Array.isArray(metadata.subTabs)) {
+    columnData.subtabs = JSON.stringify(metadata.subTabs);
+    console.log("\xF0\u0178\u2019\xA4 [mapJSONToColumns] subtabs column sauvegard\xE9e:", metadata.subTabs);
+  }
+  if (metadata.subTab !== void 0) {
+    if (Array.isArray(metadata.subTab)) {
+      columnData.subtab = metadata.subTab.length ? JSON.stringify(metadata.subTab) : null;
+    } else {
+      columnData.subtab = metadata.subTab || null;
+    }
+    console.log("\xF0\u0178\u2019\xA4 [mapJSONToColumns] subtab column sauvegard\xE9e:", metadata.subTab);
+  }
   const textConfig = metadata.textConfig || fieldConfig.text || fieldConfig.textConfig || {};
   if (Object.keys(textConfig).length > 0) {
     if (textConfig.placeholder) columnData.text_placeholder = textConfig.placeholder;
@@ -29640,6 +29726,42 @@ function buildResponseFromColumns(node) {
     ...node.metadata || {},
     appearance
   };
+  if (node.subtabs) {
+    try {
+      const parsed = JSON.parse(node.subtabs);
+      if (Array.isArray(parsed)) {
+        cleanedMetadata.subTabs = parsed;
+        console.log("\xF0\u0178\u201D\x8D [buildResponseFromColumns] Reconstruit subTabs depuis colonne subtabs:", parsed);
+      }
+    } catch {
+    }
+  }
+  if (node.subtab !== void 0 && node.subtab !== null) {
+    const rawSubTab = node.subtab;
+    let parsedSubTab = rawSubTab;
+    if (typeof rawSubTab === "string") {
+      const trimmed = rawSubTab.trim();
+      if (trimmed.startsWith("[")) {
+        try {
+          const candidate = JSON.parse(trimmed);
+          if (Array.isArray(candidate)) {
+            parsedSubTab = candidate;
+          }
+        } catch {
+          parsedSubTab = rawSubTab;
+        }
+      } else if (trimmed.includes(",")) {
+        parsedSubTab = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+      } else {
+        parsedSubTab = trimmed;
+      }
+    }
+    try {
+      cleanedMetadata.subTab = parsedSubTab;
+      console.log("\xF0\u0178\u201D\x8D [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:", cleanedMetadata.subTab);
+    } catch {
+    }
+  }
   if (node.id === "131a7b51-97d5-4f40-8a5a-9359f38939e8") {
     console.log("\xF0\u0178\u201D\x8D [buildResponseFromColumns][Test - liste] node.metadata BRUT:", node.metadata);
     console.log("\xF0\u0178\u201D\x8D [buildResponseFromColumns][Test - liste] cleanedMetadata:", cleanedMetadata);
@@ -29647,6 +29769,12 @@ function buildResponseFromColumns(node) {
       "\xF0\u0178\u201D\x8D [buildResponseFromColumns][Test - liste] metadata.capabilities:",
       node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : "N/A"
     );
+  }
+  if (cleanedMetadata && cleanedMetadata.subTabs) {
+    try {
+      console.log("\xF0\u0178\u201D\x8D [buildResponseFromColumns] metadata.subTabs present for node", node.id, JSON.stringify(cleanedMetadata.subTabs));
+    } catch (e) {
+    }
   }
   const metadataWithRepeater = {
     ...cleanedMetadata,
@@ -29825,13 +29953,18 @@ function buildResponseFromColumns(node) {
 }
 function removeJSONFromUpdate(updateData) {
   const { metadata, fieldConfig: _fieldConfig, appearanceConfig: _appearanceConfig, ...cleanData } = updateData;
-  if (metadata && typeof metadata === "object" && metadata.capabilities) {
-    return {
-      ...cleanData,
-      metadata: {
-        capabilities: metadata.capabilities
-      }
-    };
+  if (metadata && typeof metadata === "object") {
+    const metaObj = metadata;
+    const preserved = {};
+    if (metaObj.capabilities) preserved.capabilities = metaObj.capabilities;
+    if (metaObj.subTabs) preserved.subTabs = metaObj.subTabs;
+    if (metaObj.subTab) preserved.subTab = metaObj.subTab;
+    if (Object.keys(preserved).length > 0) {
+      return {
+        ...cleanData,
+        metadata: preserved
+      };
+    }
   }
   return cleanData;
 }
@@ -29865,6 +29998,8 @@ var updateOrMoveNode = async (req2, res) => {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
     const updateData = req2.body || {};
+    const cascadeSubTab = !!updateData.cascadeSubTab;
+    if ("cascadeSubTab" in updateData) delete updateData.cascadeSubTab;
     console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] AVANT migration - donn\xC3\xA9es re\xC3\xA7ues:", {
       hasMetadata: !!updateData.metadata,
       hasFieldConfig: !!updateData.fieldConfig,
@@ -29886,6 +30021,11 @@ var updateOrMoveNode = async (req2, res) => {
       hasFieldConfigInFinal: !!updateObj.fieldConfig,
       columnData
     });
+    try {
+      console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] updateObj.metadata CONTENT:", JSON.stringify(updateObj.metadata || null));
+    } catch (e) {
+      console.warn("\xF0\u0178\u201D\u201E [updateOrMoveNode] Failed to stringify updateObj.metadata", e);
+    }
     normalizeSharedRefsForCopy(nodeId, updateObj);
     for (const k of ["markers", "hasMarkers"]) {
       if (k in updateObj) delete updateObj[k];
@@ -29903,6 +30043,24 @@ var updateOrMoveNode = async (req2, res) => {
     const existingNode = await prisma46.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId }
     });
+    try {
+      const selectedColumns = await prisma46.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        select: { subtabs: true, subtab: true }
+      });
+      if (selectedColumns) {
+        if (!("subtabs" in updateObj) && selectedColumns.subtabs !== void 0) {
+          updateObj.subtabs = selectedColumns.subtabs;
+          console.log("\xF0\u0178\u2019\xA4 [updateOrMoveNode] Pr\xE9rempli updateObj.subtabs depuis la base");
+        }
+        if (!("subtab" in updateObj) && selectedColumns.subtab !== void 0) {
+          updateObj.subtab = selectedColumns.subtab;
+          console.log("\xF0\u0178\u2019\xA4 [updateOrMoveNode] Pr\xE9rempli updateObj.subtab depuis la base");
+        }
+      }
+    } catch (e) {
+      console.warn("\xF0\u0178\u2019\xA4 [updateOrMoveNode] Error while pre-filling subtabs/subtab from base", e);
+    }
     if (!existingNode) {
       const nodeAnyTree = await prisma46.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
@@ -30050,6 +30208,28 @@ var updateOrMoveNode = async (req2, res) => {
       return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
     }
     const updatedNode = await prisma46.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+    try {
+      if (cascadeSubTab && updateObj.subtab !== void 0 && updateObj.subtab !== null) {
+        const subTabStr = String(updateObj.subtab);
+        console.log("\xF0\u0178\u201C\u2014 [updateOrMoveNode] CascadeSubTab activ\xE9: mise \xE0 jour SQL pour", nodeId, "valeur:", subTabStr);
+        await prisma46.$executeRaw`
+          WITH RECURSIVE descendants AS (
+            SELECT id FROM "public"."TreeBranchLeafNode" WHERE id = ${nodeId}
+            UNION ALL
+            SELECT n.id FROM "public"."TreeBranchLeafNode" n JOIN descendants d ON n."parentId" = d.id
+          )
+          UPDATE "public"."TreeBranchLeafNode" t
+          SET "subtab" = ${subTabStr}, "updatedAt" = NOW()
+          WHERE t.id IN (SELECT id FROM descendants)
+            AND (
+              t.type LIKE 'leaf_%'
+              OR COALESCE(jsonb_array_length(t.subtabs), 0) = 0
+            );
+        `;
+      }
+    } catch (e) {
+      console.error("\xE2\x9D\u0152 [updateOrMoveNode] Erreur lors du cascadeSubTab SQL:", e);
+    }
     console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S mise \xC3\xA0 jour - n\xC5\u201Cud brut Prisma:", {
       "updatedNode.metadata": updatedNode?.metadata,
       "updatedNode.metadata typeof": typeof updatedNode?.metadata
@@ -45027,7 +45207,8 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
     userId: userId || "unknown-user",
     treeId
   };
-  const results = { updated: 0, created: 0 };
+  const results = { updated: 0, created: 0, stored: 0 };
+  const calculatedValuesToStore = [];
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef;
     try {
@@ -45088,8 +45269,34 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         });
         results.created++;
       }
+      const rawValue = capacityResult.value;
+      const stringified = rawValue === null || rawValue === void 0 ? null : String(rawValue).trim();
+      if (rawValue !== null && rawValue !== void 0 && stringified !== "" && stringified !== "\u2205") {
+        let normalizedValue;
+        if (typeof rawValue === "number" || typeof rawValue === "boolean") {
+          normalizedValue = rawValue;
+        } else {
+          normalizedValue = String(rawValue);
+        }
+        calculatedValuesToStore.push({
+          nodeId: capacity.nodeId,
+          calculatedValue: normalizedValue,
+          calculatedBy: `submission-${submissionId}`
+        });
+      }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+    }
+  }
+  if (calculatedValuesToStore.length > 0) {
+    try {
+      const storeResult = await storeCalculatedValues(calculatedValuesToStore, submissionId);
+      results.stored = storeResult.stored;
+      if (!storeResult.success && storeResult.errors.length > 0) {
+        console.warn("[TBL CAPACITY STORE] Certaines valeurs n'ont pas pu \xEAtre enregistr\xE9es:", storeResult.errors);
+      }
+    } catch (storeError) {
+      console.error("[TBL CAPACITY STORE] Erreur lors du stockage des valeurs calcul\xE9es:", storeError);
     }
   }
   return results;
@@ -45408,7 +45615,7 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
       });
       console.log(`\u{1F3AF} [TBL CREATE-AND-EVALUATE] ${capacities.length} capacit\xE9s trouv\xE9es`);
       const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId);
-      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es`);
+      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.stored} valeurs stock\xE9es`);
     }
     const finalSubmission = await prisma58.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
@@ -45475,7 +45682,7 @@ router70.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
     });
     return res.json({
       success: true,
-      message: `Soumission mise \xE0 jour (${saved} entr\xE9es) et \xE9valu\xE9e (${stats.updated} mises \xE0 jour, ${stats.created} cr\xE9\xE9es)`,
+      message: `Soumission mise \xE0 jour (${saved} entr\xE9es) et \xE9valu\xE9e (${stats.updated} mises \xE0 jour, ${stats.created} cr\xE9\xE9es, ${stats.stored} valeurs stock\xE9es)`,
       submission: finalSubmission
     });
   } catch (error) {
@@ -45939,6 +46146,7 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
       return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     return res.json({
+      success: true,
       nodeId: node.id,
       label: node.label,
       value: node.calculatedValue,

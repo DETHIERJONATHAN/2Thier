@@ -1307,7 +1307,7 @@ model TreeBranchLeafNode {
   calculatedBy                   String?                          // Source: "formula-abc", "table-def", "condition-ghi", etc.
   metadata                       Json                             @default("{}")
   subtabs                        Json?                            @db.Json
-  subtab                         String?
+  subtab                         Json?                            @db.Json
   createdAt                      DateTime                         @default(now())
   updatedAt                      DateTime
   hasAPI                         Boolean                          @default(false)
@@ -1420,6 +1420,18 @@ model TreeBranchLeafNode {
   repeater_buttonSize            String?                          @default("middle")
   repeater_buttonWidth           String?                          @default("auto")
   repeater_iconOnly              Boolean?                         @default(false)
+  // 🖥️ Configuration layout responsive pour sections/branches
+  section_collapsible            Boolean?                         @default(false)
+  section_defaultCollapsed       Boolean?                         @default(false)
+  section_showChildrenCount      Boolean?                         @default(false)
+  section_columnsDesktop         Int?                             @default(2)
+  section_columnsMobile          Int?                             @default(1)
+  section_gutter                 Int?                             @default(16)
+  // 📎 Configuration fichiers
+  file_maxSize                   Int?
+  file_allowedTypes              String?
+  file_multiple                  Boolean?                         @default(false)
+  file_showPreview               Boolean?                         @default(true)
   isSharedReference              Boolean?                         @default(false)
   sharedReferenceId              String?
   sharedReferenceName            String?

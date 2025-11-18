@@ -267,7 +267,8 @@ async function evaluateCapacitiesForSubmission(
     treeId
   };
 
-  const results: { updated: number; created: number } = { updated: 0, created: 0 };
+  const results: { updated: number; created: number; stored: number } = { updated: 0, created: 0, stored: 0 };
+  const calculatedValuesToStore: { nodeId: string; calculatedValue: string | number | boolean; calculatedBy?: string }[] = [];
 
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
@@ -338,8 +339,37 @@ async function evaluateCapacitiesForSubmission(
         });
         results.created++;
       }
+
+      const rawValue = (capacityResult as { value?: unknown }).value;
+      const stringified = rawValue === null || rawValue === undefined ? null : String(rawValue).trim();
+      if (rawValue !== null && rawValue !== undefined && stringified !== '' && stringified !== '∅') {
+        let normalizedValue: string | number | boolean;
+        if (typeof rawValue === 'number' || typeof rawValue === 'boolean') {
+          normalizedValue = rawValue;
+        } else {
+          normalizedValue = String(rawValue);
+        }
+
+        calculatedValuesToStore.push({
+          nodeId: capacity.nodeId,
+          calculatedValue: normalizedValue,
+          calculatedBy: `submission-${submissionId}`
+        });
+      }
     } catch (error) {
       console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+    }
+  }
+
+  if (calculatedValuesToStore.length > 0) {
+    try {
+      const storeResult = await storeCalculatedValues(calculatedValuesToStore, submissionId);
+      results.stored = storeResult.stored;
+      if (!storeResult.success && storeResult.errors.length > 0) {
+        console.warn('[TBL CAPACITY STORE] Certaines valeurs n\'ont pas pu être enregistrées:', storeResult.errors);
+      }
+    } catch (storeError) {
+      console.error('[TBL CAPACITY STORE] Erreur lors du stockage des valeurs calculées:', storeError);
     }
   }
 
@@ -753,7 +783,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       
       // C. Évaluer et persister les capacités avec NO-OP
       const evalStats = await evaluateCapacitiesForSubmission(submissionId!, organizationId!, userId || null, effectiveTreeId);
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées`);
+      console.log(`✅ [TBL CREATE-AND-EVALUATE] Capacités: ${evalStats.updated} mises à jour, ${evalStats.created} créées, ${evalStats.stored} valeurs stockées`);
     }
     
     // 3. Évaluation immédiate déjà effectuée via operation-interpreter ci-dessus.
@@ -843,7 +873,7 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
 
     return res.json({
       success: true,
-      message: `Soumission mise à jour (${saved} entrées) et évaluée (${stats.updated} mises à jour, ${stats.created} créées)`,
+      message: `Soumission mise à jour (${saved} entrées) et évaluée (${stats.updated} mises à jour, ${stats.created} créées, ${stats.stored} valeurs stockées)`,
       submission: finalSubmission
     });
 

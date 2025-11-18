@@ -10,8 +10,8 @@
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { dlog as globalDlog } from '../../../../../utils/debug';
-// ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche les valeurs STOCKÉES dans Prisma
-import { CalculatedValueCard } from './CalculatedValueCard';
+// ✅ NOUVEAU SYSTÈME : CalculatedValueDisplay affiche les valeurs STOCKÉES dans Prisma
+import { CalculatedValueDisplay } from './CalculatedValueDisplay';
 import { useBatchEvaluation } from '../hooks/useBatchEvaluation';
 import { 
   Card, 
@@ -292,6 +292,36 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   // dlog alias to global debug logger (globalDlog checks DEBUG_VERBOSE)
   const dlog = globalDlog;
+
+  const resolveEventTreeId = useCallback(() => {
+    if (treeId && String(treeId).length > 0) {
+      return String(treeId);
+    }
+    if (typeof window !== 'undefined') {
+      const fallback = (window as any)?.__TBL_LAST_TREE_ID
+        || (window as any)?.__TBL_TREE_ID
+        || (window as any)?.TBL_LAST_TREE_ID;
+      if (fallback) {
+        return String(fallback);
+      }
+    }
+    return undefined;
+  }, [treeId]);
+  
+  // 🔥 FORCE RETRANSFORM LISTENER: Listen for displayAlways updates
+  const [, forceUpdate] = useState({});
+  useEffect(() => {
+    const handleForceRetransform = (event: Event) => {
+      const customEvent = event as CustomEvent<{ nodeId: string; fieldName: string }>;
+      console.log('🔄 [TBLSectionRenderer] Received tbl-force-retransform for:', customEvent.detail?.nodeId, 'field:', customEvent.detail?.fieldName);
+      
+      // Force re-render by updating a dummy state
+      forceUpdate({});
+    };
+    
+    window.addEventListener('tbl-force-retransform', handleForceRetransform);
+    return () => window.removeEventListener('tbl-force-retransform', handleForceRetransform);
+  }, []);
   
   // ✨ ÉTAT LOCAL POUR FILTRAGE DES CHAMPS SUPPRIMÉS (SANS RECHARGEMENT VISIBLE)
   // ❌ SUPPRESSION DU SYSTÈME DE FILTRAGE LOCAL
@@ -402,6 +432,20 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
   const screens = useBreakpoint();
   const isMobile = !screens.md;
+
+  
+  // 📱 Gutters configurables par section (avec fallback)
+  const getFormRowGutter = useCallback((section?: TBLSection): [number, number] => {
+    const customGutter = section?.config?.gutter ?? (isMobile ? 12 : 24);
+    return [customGutter, customGutter];
+  }, [isMobile]);
+  
+  const getDataRowGutter = useCallback((section?: TBLSection): [number, number] => {
+    const customGutter = section?.config?.gutter ?? (isMobile ? 12 : 16);
+    return [customGutter, 16];
+  }, [isMobile]);
+  
+  // Fallback pour compatibilité
   const formRowGutter: [number, number] = useMemo(() => [
     isMobile ? 12 : 24,
     isMobile ? 12 : 24
@@ -410,6 +454,25 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     isMobile ? 12 : 16,
     16
   ], [isMobile]);
+  
+  // 📱 Fonction pour calculer les spans de colonnes responsive
+  const getResponsiveColSpan = useCallback((section: TBLSection) => {
+    const columnsDesktop = section.config?.columnsDesktop ?? 2;
+    const columnsMobile = section.config?.columnsMobile ?? 1;
+    
+    // Calculer les spans pour chaque breakpoint
+    const spanDesktop = Math.floor(24 / columnsDesktop);
+    const spanMobile = Math.floor(24 / columnsMobile);
+    
+    return {
+      xs: spanMobile,     // Mobile
+      sm: spanMobile,     // Tablette portrait
+      md: spanDesktop,    // Tablette paysage
+      lg: spanDesktop,    // Desktop
+      xl: spanDesktop,    // Large desktop
+      xxl: spanDesktop    // Extra large desktop
+    };
+  }, []);
   
   // ✅ CRITIQUE: Mémoiser le handleFieldChange pour éviter les re-rendus
   const handleFieldChange = useCallback((fieldId: string, value: any, fieldLabel?: string) => {
@@ -505,7 +568,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // Dispatch optimistic UI update to remove the ids immediately (suppress reload)
       try {
         const optimisticIds = allFieldsToDelete.map(x => x.id);
-        window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { detail: { treeId: treeId, nodeId: repeaterId, source: 'delete-copy-group-optimistic', suppressReload: true, deletingIds: optimisticIds, timestamp: Date.now() } }));
+        const eventTreeId = resolveEventTreeId();
+        window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { detail: { treeId: eventTreeId, nodeId: repeaterId, source: 'delete-copy-group-optimistic', suppressReload: true, deletingIds: optimisticIds, timestamp: Date.now() } }));
         dlog('[DELETE COPY GROUP] Dispatched optimistic tbl-repeater-updated (deletingIds)', optimisticIds);
       } catch {
         dlog('[DELETE COPY GROUP] Failed to dispatch optimistic tbl-repeater-updated (silent)');
@@ -615,9 +679,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       try {
         // ✨ MISE À JOUR LOCALE SANS RECHARGEMENT VISIBLE + REFETCH SILENCIEUX
         // On émet un événement avec les IDs supprimés pour que le composant parent filtre localement
+        const eventTreeId = resolveEventTreeId();
         window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { 
           detail: { 
-            treeId: treeId, 
+            treeId: eventTreeId, 
             nodeId: repeaterId, 
             source: 'delete-copy-group-finished', 
             suppressReload: true, // Pas de rechargement visible immédiat
@@ -631,7 +696,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         // Backwards-compatible light event for other listeners if needed
         window.dispatchEvent(new CustomEvent('delete-copy-group-finished', { 
           detail: { 
-            treeId: treeId, 
+            treeId: eventTreeId, 
             nodeId: repeaterId, 
             deletedIds: globalSuccessIds, 
             timestamp: Date.now() 
@@ -658,7 +723,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     } catch (error) {
       console.error('❌ [DELETE COPY GROUP] Erreur lors de la suppression de la copie:', error);
     }
-  }, [api, allNodes, section, treeId, dlog]);
+  }, [api, allNodes, section, treeId, dlog, resolveEventTreeId]);
   
   // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1')) is declared earlier
 
@@ -759,6 +824,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         trueLabel: node.bool_trueLabel ?? undefined,
         falseLabel: node.bool_falseLabel ?? undefined,
         boolDefaultValue: node.bool_defaultValue ?? undefined,
+        // 📱 Configuration layout responsive
+        columnsDesktop: node.section_columnsDesktop ?? 2,
+        columnsMobile: node.section_columnsMobile ?? 1,
+        gutter: node.section_gutter ?? 16,
+        collapsible: node.section_collapsible ?? false,
+        defaultCollapsed: node.section_defaultCollapsed ?? false,
+        showChildrenCount: node.section_showChildrenCount ?? false,
       },
       capabilities: {
         data: buildBaseCapability(node.data_instances as Record<string, unknown> | null, node.data_activeId as string | null),
@@ -2309,8 +2381,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const meta = (field.metadata || {}) as any;
       const sourceTemplateId = meta?.sourceTemplateId;
       const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
-      if (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
-        console.log(`🚫 [COPY-FILTER] Exclusion de copie: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+      const isPhysicalRepeaterCopy = Boolean(meta?.duplicatedFromRepeater);
+      if (sourceTemplateId && !isPhysicalRepeaterCopy && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
+        console.log(`🚫 [COPY-FILTER] Exclusion de template repeater: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
         return false;
       }
       return true;
@@ -2406,10 +2479,56 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     }, [isDataSection, section.fields, evaluateBatch]); // ✅ formData intentionnellement omis pour éviter les appels API à chaque frappe
 
     const renderDataSectionField = (field: TBLField) => {
+    const deriveNodeIdFromSourceRef = (sourceRef?: string) => {
+      if (!sourceRef || typeof sourceRef !== 'string') return undefined;
+      if (sourceRef.startsWith('@table.') || sourceRef.startsWith('@value.')) {
+        return sourceRef.split('.').slice(1).join('.') || undefined;
+      }
+      if (sourceRef.includes(':')) {
+        const [, rest] = sourceRef.split(':');
+        return rest;
+      }
+      return sourceRef;
+    };
+
     // 🔥 CORRECTION CRITIQUE: Synthétiser capabilities.data pour les champs condition/formula
     // Si le champ n'a pas de data_instances mais a une sourceRef dans ses metadata,
     // créer un objet data synthétique pour que getDisplayValue() fonctionne correctement
     let effectiveCapabilities = field.capabilities;
+    const metadataCapabilities = (field as any).metadata?.capabilities;
+    const metadataDataEntries = Array.isArray(metadataCapabilities?.datas)
+      ? metadataCapabilities?.datas
+      : [];
+
+    if ((!effectiveCapabilities || !effectiveCapabilities.data) && metadataDataEntries.length > 0) {
+      const instances: Record<string, { metadata: Record<string, unknown> }> = {};
+      let syntheticActiveId: string | undefined;
+
+      metadataDataEntries.forEach((entry: any, index: number) => {
+        const sourceRef = entry?.config?.sourceRef as string | undefined;
+        const derivedId = deriveNodeIdFromSourceRef(sourceRef);
+        const instanceId = derivedId || entry?.id || `${field.id}-data-${index}`;
+        if (!syntheticActiveId) {
+          syntheticActiveId = instanceId;
+        }
+        instances[instanceId] = {
+          metadata: {
+            ...(entry?.config || {})
+          }
+        };
+      });
+
+      if (Object.keys(instances).length > 0) {
+        effectiveCapabilities = {
+          ...(effectiveCapabilities || {}),
+          data: {
+            enabled: true,
+            activeId: syntheticActiveId,
+            instances
+          }
+        } as TBLField['capabilities'];
+      }
+    }
     
     // ⚠️ DEBUG DÉSACTIVÉ pour performance - réactiver si besoin
     // console.log(`🎯 [RENDER DATA FIELD] Début renderDataSectionField pour: "${field.label}" (id: ${field.id})`);
@@ -2455,6 +2574,73 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // 🎯 Système TreeBranchLeaf : connexion aux capacités réelles (DISPLAY ONLY)
     const getDisplayValue = () => {
       const capabilities = effectiveCapabilities;
+      let rawValue = formData[field.id];
+      const fieldMetadata = (((field as unknown) as { metadata?: Record<string, unknown> }).metadata || {}) as Record<string, unknown>;
+      const looksLikeDisplayNode = Boolean(
+        fieldMetadata.autoCreateDisplayNode ||
+        fieldMetadata.copiedFromNodeId ||
+        fieldMetadata.fromVariableId ||
+        fieldMetadata.sourceTemplateId ||
+        fieldMetadata.tbl_auto_generated
+      );
+
+      // ✅ Définition de resolveBackendNodeId AVANT utilisation
+      const resolveBackendNodeId = (f: any): string | undefined => {
+        try {
+          const meta = (f && f.metadata) || {};
+          // copiedFromNodeId can be array/string/JSON array -> prefer first item
+          let cid = meta?.copiedFromNodeId;
+          if (typeof cid === 'string' && cid.trim().startsWith('[')) {
+            try {
+              const arr = JSON.parse(cid);
+              if (Array.isArray(arr) && arr.length > 0) cid = arr[0];
+            } catch { /* ignore JSON parse */ }
+          }
+          if (Array.isArray(cid) && cid.length > 0) cid = cid[0];
+          if (cid) return String(cid);
+
+          // Some metadata use originalNodeId
+          if (meta?.originalNodeId) return String(meta.originalNodeId);
+
+          // Fallback: use nodeId property or field.id
+          if (f?.nodeId) return String(f.nodeId);
+          if (f?.id) return String(f.id);
+        } catch (e) {
+          console.warn('[resolveBackendNodeId] Erreur résolution nodeId:', e);
+        }
+        return undefined;
+      };
+
+      const renderStoredCalculatedValue = (
+        nodeIdToUse?: string,
+        options?: { unit?: string; precision?: number; fallbackValue?: unknown }
+      ) => {
+        if (!nodeIdToUse || !treeId) {
+          return <span style={{ color: '#888' }}>---</span>;
+        }
+
+        return (
+          <CalculatedValueDisplay
+            nodeId={nodeIdToUse}
+            treeId={treeId}
+            placeholder="---"
+            precision={options?.precision ?? 2}
+            unit={options?.unit}
+            fallbackValue={options?.fallbackValue}
+          />
+        );
+      };
+
+      // 🔥 FIX PRIORITAIRE: Forcer l'affichage via CalculatedValueDisplay pour TOUTES les copies
+      const isCopyWithSuffix = typeof field.id === 'string' && /^.+-\d+$/.test(field.id);
+      if (treeId && isCopyWithSuffix) {
+        console.log(`🚀 [COPY FIX CHAMPS DONNÉES] Forçage CalculatedValueDisplay pour copie de données: ${field.id} (${field.label})`);
+        return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+          unit: (field.config as { unit?: string } | undefined)?.unit,
+          precision: (field.config as { decimals?: number } | undefined)?.decimals ?? 2,
+          fallbackValue: rawValue
+        });
+      }
       
   dlog(`🔬 [TEST CAPABILITIES] Champ "${field.label}" - Capabilities présentes:`, !!capabilities);
   console.log(`🔥 [DEBUG CAPABILITIES] "${field.label}":`, {
@@ -2537,14 +2723,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       
       if (hasEmptyInstances && hasDataCapability && treeId && field.id) {
         console.log(`🚀🚀🚀 [MEGA FIX BACKEND] Champ "${field.label}" (${field.id}) - Affichage valeur stockée`);
-        return (
-          <CalculatedValueCard
-            nodeId={field.id}
-            unit={(field.config as any)?.unit}
-            precision={(field.config as any)?.decimals ?? 2}
-            placeholder="---"
-          />
-        );
+        return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+          unit: (field.config as any)?.unit,
+          precision: (field.config as any)?.decimals ?? 2,
+          fallbackValue: effectiveMirrorValue
+        });
       }
 
       // ✨ Pré-évaluation: si la capacité Donnée pointe vers une condition et qu'une formule est dispo,
@@ -2618,15 +2801,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               return <span style={{ color: '#888' }}>---</span>;
             }
 
-            // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur STOCKÉE
-            return (
-              <CalculatedValueCard
-                nodeId={nodeIdToUse}
-                unit={dMeta.unit}
-                precision={typeof dMeta.precision === 'number' ? dMeta.precision : (field.config?.decimals || 2)}
-                placeholder="---"
-              />
-            );
+            return renderStoredCalculatedValue(nodeIdToUse, {
+              unit: dMeta.unit,
+              precision: typeof dMeta.precision === 'number' ? dMeta.precision : (field.config?.decimals || 2),
+              fallbackValue: effectiveMirrorValue
+            });
           }
         }
       } catch (e) {
@@ -2689,15 +2868,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 return <span style={{ color: '#888' }}>---</span>;
               }
               
-              // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur STOCKÉE
-              return (
-                <CalculatedValueCard
-                  nodeId={variableNodeId}
-                  unit={dataInstance?.unit as string | undefined}
-                  precision={dataInstance?.precision as number | undefined}
-                  placeholder="---"
-                />
-              );
+              return renderStoredCalculatedValue(variableNodeId, {
+                unit: dataInstance?.unit as string | undefined,
+                precision: (dataInstance?.precision as number | undefined) ?? field.config?.decimals,
+                fallbackValue: effectiveMirrorValue
+              });
             }
 
             // Sinon, déléguer à l'évaluation de variable du nœud
@@ -2714,17 +2889,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 return <span style={{ color: '#888' }}>---</span>;
               }
               
-              // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur du champ d'affichage
-              // 🔥 FIX CRITIQUE: Utiliser field.id et non instanceId
-              // Le backend stocke la valeur calculée dans le nœud du CHAMP D'AFFICHAGE
-              return (
-                <CalculatedValueCard
-                  nodeId={field.id}
-                  unit={dataInstance?.unit as string | undefined}
-                  precision={dataInstance?.precision as number | undefined}
-                  placeholder="---"
-                />
-              );
+              if (localStorage.getItem('TBL_DIAG') === '1') {
+                console.log('🔍 [TBL_DIAG] renderStoredCalculatedValue DATA-VARIABLE', {
+                  fieldId: field.id,
+                  label: field.label,
+                  resolved: resolveBackendNodeId(field),
+                  metadata: (field as any).metadata
+                });
+              }
+              return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+                unit: dataInstance?.unit as string | undefined,
+                precision: (dataInstance?.precision as number | undefined) ?? field.config?.decimals,
+                fallbackValue: effectiveMirrorValue ?? rawValue
+              });
             }
             console.warn('ℹ️ [DATA VARIABLE] Aucune instanceId trouvée pour variable – affichage placeholder');
             return '---';
@@ -2760,23 +2937,39 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           return <span style={{ color: '#888' }}>---</span>;
         }
         
-        // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur STOCKÉE
-        // 🔥 FIX CRITIQUE: Utiliser field.id (nodeId du champ d'affichage) et non formulaId
-        // Le backend stocke les résultats avec le nodeId du CHAMP D'AFFICHAGE
-        return (
-          <CalculatedValueCard
-            nodeId={field.id}
-            unit={field.config?.unit}
-            precision={field.config?.decimals || 4}
-            placeholder="---"
-          />
-        );
+        // ✅ NOUVEAU SYSTÈME : CalculatedValueDisplay affiche la valeur STOCKÉE
+        // 🔥 FIX CRITIQUE: Utiliser field.id (nodeId du champ d'affichage) et non formulaId (sauf si c'est une copie)
+        // Le backend stocke les résultats avec le nodeId du CHAMP D'AFFICHAGE, mais pour les copies
+        // il peut être nécessaire d'utiliser l'ID d'origine (copiedFromNodeId)
+        return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+          unit: field.config?.unit,
+          precision: field.config?.decimals || 4,
+          fallbackValue: effectiveMirrorValue
+        });
       }
       
   // Pas de fallback conditionnel codé en dur: la valeur doit venir des capacités TBL (data/formula)
       
-  // 🔍 Si aucune capacité configurée, afficher la valeur brute du formulaire
-      let rawValue = formData[field.id];
+      // 🚑 Fallback Prisma: certaines copies de champs d'affichage perdent leurs capacités
+      // mais restent marquées comme display nodes -> forcer l'appel CalculatedValueDisplay
+      if (treeId && looksLikeDisplayNode && !hasDynamicCapabilities) {
+        if (localStorage.getItem('TBL_DIAG') === '1') {
+          console.log('🔍 [TBL_DIAG] Fallback display node (no dynamic capabilities):', {
+            fieldId: field.id,
+            label: field.label,
+            resolvedBackendId: resolveBackendNodeId(field),
+            metadata: (field as any).metadata
+          });
+        }
+        return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+          unit: (field.config as { unit?: string } | undefined)?.unit,
+          precision: (field.config as { decimals?: number } | undefined)?.decimals ?? 2,
+          fallbackValue: effectiveMirrorValue ?? rawValue
+        });
+      }
+
+      // 🔍 Si aucune capacité configurée, afficher la valeur brute du formulaire
+      // rawValue déjà initialisé en amont pour permettre un fallback rapide
       
       // 🛡️ EXTRACTION PRÉCOCE : Si rawValue est un objet (réponse backend), extraire la valeur IMMÉDIATEMENT
       // Cela évite d'afficher "[object Object]" dans les cartes bleues et autres affichages
@@ -2836,17 +3029,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           }
           
           const cfg = field.config as { displayFormat?: 'number'|'currency'|'percentage'; unit?: string; decimals?: number } | undefined;
-          // ✅ NOUVEAU SYSTÈME : CalculatedValueCard affiche la valeur du champ d'affichage
-          // 🔥 FIX CRITIQUE: Utiliser field.id et non extractedNodeId
-          // Le backend stocke la valeur calculée dans le nœud du CHAMP D'AFFICHAGE
-          return (
-            <CalculatedValueCard
-              nodeId={field.id}
-              unit={cfg?.unit}
-              precision={cfg?.decimals || 2}
-              placeholder="---"
-            />
-          );
+          return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
+            unit: cfg?.unit,
+            precision: cfg?.decimals || 2,
+            fallbackValue: effectiveMirrorValue ?? rawValue
+          });
         }
       } catch { /* ignore */ }
 
@@ -2935,7 +3122,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     };
 
     return (
-      <Col key={field.id} xs={24} sm={12} lg={6}>
+      <Col key={field.id} {...getResponsiveColSpan(section)}>
         <Card
           size="small"
           style={getCardStyle()}
@@ -2953,18 +3140,26 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             {(() => {
               const displayValue = getDisplayValue();
               console.log(`✅ [RENDER DATA FIELD] Fin renderDataSectionField pour: "${field.label}" - displayValue:`, displayValue);
-              
+
+              if (React.isValidElement(displayValue)) {
+                return (
+                  <div style={{ width: '100%' }}>
+                    {displayValue}
+                  </div>
+                );
+              }
+
               // 🎯 NOUVEAU SYSTÈME ULTRA-SIMPLE:
               // BackendValueDisplay retourne juste la valeur (string ou Fragment avec string)
               // La carte bleue ENVELOPPE TOUJOURS dans un <Text> avec le bon style
-              
+
               return (
                 <Text style={{ 
                   color: '#64748b', 
                   fontSize: '12px',
                   fontWeight: 'bold'
                 }}>
-                  {displayValue}
+                  {displayValue ?? '---'}
                 </Text>
               );
             })()}
@@ -3045,15 +3240,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       const meta = (field.metadata || {}) as any;
                       const sourceTemplateId = meta?.sourceTemplateId;
                       const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
+                      const isPhysicalRepeaterCopy = Boolean(meta?.duplicatedFromRepeater);
                       const isRepeaterVariant = Boolean((field as any).parentRepeaterId) || (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId));
-                      if (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
-                        console.log(`🚫 [COPY-FILTER] Exclusion de copie DATA SECTION: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+                      if (sourceTemplateId && !isPhysicalRepeaterCopy && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
+                        console.log(`🚫 [COPY-FILTER] Exclusion de template DATA SECTION: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
                         return false;
                       }
-                      if (isRepeaterVariant) {
+                      if (isRepeaterVariant && !isPhysicalRepeaterCopy) {
                         console.log(`🚫 [REPEATER-FILTER] Exclusion de variante repeater DATA SECTION: "${field.label}" (id: ${field.id})`);
                       }
-                      return !isRepeaterVariant;
+                      return !isRepeaterVariant || isPhysicalRepeaterCopy;
                     });
                     
                     console.log(`🎯🎯🎯 [DATA SECTION ROW] Rendering ${filteredFields.length} filtered fields in Row:`, filteredFields.map(f => ({ id: f.id, label: f.label })));
@@ -3209,6 +3405,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   return;
                                 }
                                 
+                                      treeId={treeId}
+                                      formData={formData}
                                 console.log(`🔁 [COPY-API] Duplication des templates:`, { 
                                   repeaterParentId, 
                                   templateNodeIds 
@@ -3234,21 +3432,106 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 // pour indiquer qu'une duplication a été effectuée, mais en demandant aux
                                 // listeners de ne pas forcer un rechargement (suppressReload).
                                 try {
+                                  console.log('[COPY-API] Processing response for event dispatch...', { hasResponse: !!response });
                                   const duplicatedArray = (response && (response.duplicated || (response as any).data?.duplicated)) || [];
+                                  console.log('[COPY-API] duplicatedArray extracted:', { count: duplicatedArray.length, items: duplicatedArray });
                                   const normalizedDuplicated = duplicatedArray.map((d: any) => ({ id: d?.id || d, parentId: d?.parentId || (d?.node || {})?.parentId || undefined, sourceTemplateId: d?.sourceTemplateId || (d?.metadata || {})?.sourceTemplateId || undefined }));
-                                  console.log('[COPY-API] Dispatching tbl-repeater-updated (silent) duplicated:', normalizedDuplicated.map(d => d.id));
+                                  const newNodesPayload = (response && (response.nodes || (response as any).data?.nodes)) || [];
+                                  const eventDebugId = Math.random().toString(36).slice(2,9);
+                                  // Ensure we have detailed nodes for each duplicated item before dispatching.
+                                  let finalNodesPayload: any[] = Array.isArray(newNodesPayload) ? [...newNodesPayload] : [];
+                                  const duplicatedIds = normalizedDuplicated.map((d:any)=>d.id).filter(Boolean);
+                                  if (duplicatedIds.length && finalNodesPayload.length === 0) {
+                                    // If response doesn't include the full nodes, attempt per-id fetch with retries
+                                    const MAX_ATTEMPTS = 5;
+                                    const RETRY_DELAY_MS = 120;
+                                    const fetchedNodes: any[] = [];
+                                    await Promise.all(duplicatedIds.map(async (id) => {
+                                      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                                        try {
+                                          const res = await api.get(`/api/treebranchleaf/nodes/${id}/full`);
+                                          if (res) {
+                                            // Normalize response to nodes array
+                                            const arr = Array.isArray(res) ? res : (res.data || res.nodes || (res.node ? [res.node] : []));
+                                            if (Array.isArray(arr) && arr.length > 0) {
+                                              fetchedNodes.push(...arr);
+                                              break;
+                                            }
+                                          }
+                                        } catch {
+                                          // ignore and retry
+                                        }
+                                        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+                                      }
+                                    }));
+                                    if (fetchedNodes.length > 0) {
+                                      // Deduplicate by id
+                                      const existing = new Set(finalNodesPayload.map((n:any)=>n.id));
+                                      const unique = fetchedNodes.filter((n:any)=>n && n.id && !existing.has(n.id));
+                                      finalNodesPayload.push(...unique);
+                                    }
+                                    // If still empty, we'll still dispatch but the hierarchical hook will try reconcile
+                                    if (finalNodesPayload.length === 0) {
+                                      console.warn('[COPY-API] No full nodes found from response or fetch attempts for duplicated ids; dispatching with empty newNodes (hook will reconcile).', { eventDebugId, duplicatedIds });
+                                    }
+                                  }
+                                  const eventTreeId = resolveEventTreeId();
+                                  console.log('[COPY-API] 📡 About to dispatch tbl-repeater-updated', { eventDebugId, duplicatedCount: normalizedDuplicated.length, duplicatedIds: normalizedDuplicated.map(d => d.id), treeId: eventTreeId, nodeId: repeaterParentId });
+                                  const hasInlineNodes = Array.isArray(finalNodesPayload) && finalNodesPayload.length > 0;
+                                  let forceRemoteOverride = false;
+                                  try {
+                                    forceRemoteOverride = typeof window !== 'undefined' && localStorage.getItem('TBL_FORCE_REMOTE_DUPLICATE') === '1';
+                                  } catch {
+                                    forceRemoteOverride = false;
+                                  }
+                                  const resolveUsingFixedHierarchy = () => {
+                                    if (typeof window === 'undefined') return false;
+                                    const globalFlag = (window as any).__TBL_USING_FIXED_HIERARCHY;
+                                    if (typeof globalFlag === 'boolean') {
+                                      return globalFlag;
+                                    }
+                                    try {
+                                      return localStorage.getItem('USE_FIXED_HIERARCHY') === '1';
+                                    } catch {
+                                      return false;
+                                    }
+                                  };
+                                  const usingFixedHierarchy = resolveUsingFixedHierarchy();
+                                  const shouldForceRemoteRetransform = forceRemoteOverride || !usingFixedHierarchy || (!hasInlineNodes && normalizedDuplicated.length > 0);
                                   window.dispatchEvent(new CustomEvent('tbl-repeater-updated', {
                                     detail: {
-                                      treeId: treeId,
+                                      treeId: eventTreeId,
                                       nodeId: repeaterParentId,
                                       source: 'duplicate-templates',
                                       duplicated: normalizedDuplicated,
+                                      newNodes: Array.isArray(finalNodesPayload) ? finalNodesPayload : [],
                                       suppressReload: true,
-                                      timestamp: Date.now()
+                                      timestamp: Date.now(),
+                                      eventDebugId
                                     }
                                   }));
+                                  if (process.env.NODE_ENV === 'development') {
+                                    try {
+                                      console.log('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId, duplicated: JSON.stringify(normalizedDuplicated, null, 2), newNodesCount: (finalNodesPayload || []).length });
+                                      console.log('[COPY-API] 📡 newNodes preview:', JSON.stringify((finalNodesPayload || []).slice(0, 6), null, 2));
+                                    } catch (err) { console.log('[COPY-API] dispatched (debug log failure)', err); }
+                                  } else {
+                                    console.log('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId });
+                                  }
+                                  // After the event, request a local retransform to ensure UI picks up merged nodes
+                                  try {
+                                    window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
+                                      detail: {
+                                        source: 'duplicate-templates',
+                                        treeId: eventTreeId,
+                                        forceRemote: shouldForceRemoteRetransform,
+                                        eventDebugId,
+                                      }
+                                    }));
+                                  } catch { /* ignore */ }
                                 } catch (e) {
                                   console.warn('⚠️ [COPY-API] Impossible de dispatch tbl-repeater-updated (silent)', e);
+                                  console.warn('⚠️ [COPY-API] Error details:', { error: e, response });
                                 }
                                 
                                 } catch (error) {
@@ -3590,6 +3873,25 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   );
 };
 
+const buildSectionStructureSignature = (section: TBLSection): string[] => {
+  const signature: string[] = [];
+  const visit = (sec: TBLSection, depth: number) => {
+    signature.push(`section:${depth}:${sec.id}`);
+    (sec.fields || []).forEach((field, index) => {
+      signature.push(`field:${depth}:${index}:${field.id}`);
+    });
+    const subsections = (sec as unknown as { subsections?: TBLSection[] }).subsections;
+    if (Array.isArray(subsections)) {
+      subsections.forEach((subsection, index) => {
+        signature.push(`subsection:${depth}:${index}:${subsection.id}`);
+        visit(subsection, depth + 1);
+      });
+    }
+  };
+  visit(section, 0);
+  return signature;
+};
+
 // ✅ MÉMOÏSATION AVEC COMPARAISON CUSTOM pour éviter les re-rendus à chaque frappe
 const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, nextProps) => {
   // Ne re-render que si les props pertinentes changent
@@ -3603,14 +3905,18 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
   if (prevProps.formData !== nextProps.formData) return false;
   
   // ⚠️ CRITIQUE: Comparer SEULEMENT les valeurs des champs de CETTE section
-  const prevFieldIds = prevProps.section.fields.map(f => f.id);
-  const nextFieldIds = nextProps.section.fields.map(f => f.id);
-  
-  // Si les champs ont changé (ajout/suppression), re-render
-  if (prevFieldIds.length !== nextFieldIds.length) return false;
-  if (!prevFieldIds.every((id, i) => id === nextFieldIds[i])) return false;
+  const prevStructure = buildSectionStructureSignature(prevProps.section);
+  const nextStructure = buildSectionStructureSignature(nextProps.section);
+
+  if (prevStructure.length !== nextStructure.length) return false;
+  for (let i = 0; i < prevStructure.length; i += 1) {
+    if (prevStructure[i] !== nextStructure[i]) {
+      return false;
+    }
+  }
   
   // Comparer les VALEURS des champs de cette section uniquement
+  const prevFieldIds = prevProps.section.fields.map(f => f.id);
   for (const fieldId of prevFieldIds) {
     if (prevProps.formData[fieldId] !== nextProps.formData[fieldId]) {
       return false; // Une valeur a changé, re-render

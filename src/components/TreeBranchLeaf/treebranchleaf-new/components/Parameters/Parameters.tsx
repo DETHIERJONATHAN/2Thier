@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm, Tag } from 'antd';
+import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm, Tag, Checkbox } from 'antd';
 import type { InputRef } from 'antd';
 import { 
   SettingOutlined, 
@@ -79,16 +79,28 @@ interface ParametersProps {
   onDeleteNode?: (node: TreeBranchLeafNode) => Promise<void> | void;
   onSelectNodeId?: (nodeId: string) => void;
   onExpandNodeId?: (nodeId: string) => void;
+  onNodeMetadataUpdated?: (node: TreeBranchLeafNode) => void; // 🔥 NEW: Direct callback for metadata changes
 }
 
 const Parameters: React.FC<ParametersProps> = (props) => {
-  const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate, refreshTree, onDeleteNode, onSelectNodeId, onExpandNodeId } = props;
+  const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate, refreshTree, onDeleteNode, onSelectNodeId, onExpandNodeId, onNodeMetadataUpdated } = props;
+  
+  // Log to verify callback is provided
+  useEffect(() => {
+    console.error(`🎯 [Parameters] Mounted with node: ${selectedNode?.id}, callback provided: ${!!onNodeMetadataUpdated}`);
+    return () => {
+      console.error(`🎯 [Parameters] Unmounting`);
+    };
+  }, [selectedNode?.id, onNodeMetadataUpdated]);
   
   // Refs pour cleanup
   const mountedRef = useRef<boolean>(true);
 
   // 🔐 Hook API authentifié
   const { api } = useAuthenticatedApi();
+  const applyToChildrenRef = useRef(false);
+  const [applyToChildren, setApplyToChildren] = useState(false);
+  const [useServerCascade, setUseServerCascade] = useState(false);
   const [applyingSharedRefs, setApplyingSharedRefs] = useState(false);
   const [unlinkingSharedRefs, setUnlinkingSharedRefs] = useState(false);
   // 🛡️ Anti-duplication: suivi des duplications en cours par répéteur (repeaterId -> Set<templateId>)
@@ -127,6 +139,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   // 🆕 Bloquer l'hydratation temporairement après une modification utilisateur
   const skipNextHydrationRef = useRef(false);
   const hydrationTimeoutRef = useRef<number | null>(null);
+
+  const emitMetadataUpdate = useCallback((nextMetadata: Record<string, unknown>) => {
+    if (!selectedNode || typeof onNodeMetadataUpdated !== 'function') return;
+    onNodeMetadataUpdated({ ...selectedNode, metadata: nextMetadata } as TreeBranchLeafNode);
+  }, [selectedNode, onNodeMetadataUpdated]);
 
   // Cleanup au démontage
   useEffect(() => {
@@ -268,21 +285,29 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       }
       
       // ✅ Utiliser la ref pour toujours avoir la dernière version
-  await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
-      
+      const _updated = await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
+
+      // Emit generic event for other listeners; include returned updated node for local merges
+      try {
+        const nodeToEmit = _updated || { id: selectedNodeId };
+        if (process.env.NODE_ENV === 'development') console.log('🔔 [Parameters] Emission tbl-node-updated pour:', nodeToEmit.id);
+        window.dispatchEvent(new CustomEvent('tbl-node-updated', { detail: { node: nodeToEmit, treeId: tree?.id } }));
+      } catch { /* noop */ }
       console.log('✅ [Parameters] Sauvegarde OK');
 
-      // Si on a modifié les subTabs (branch-level) ou le subTab d'un champ, forcer un refresh du tree
+      // Rafraîchir l'arbre uniquement lorsque la structure des sous-onglets change (et non chaque affectation)
       try {
         const md = (apiData.metadata as Record<string, unknown> | undefined);
-        if (md && (Array.isArray(md.subTabs) || typeof md.subTab === 'string')) {
+        const hasSubTabStructureChange = !!(md && Array.isArray(md.subTabs));
+        const hasCascadeUpdate = Boolean((payload as any)?.cascadeSubTab);
+        if (hasSubTabStructureChange || hasCascadeUpdate) {
           if (typeof refreshTree === 'function') {
-            console.log('🔁 [Parameters] Déclencher refreshTree suite à modification des subTabs');
+            console.log('🔁 [Parameters] Déclencher refreshTree suite à modification de la structure des subTabs');
             await Promise.resolve(refreshTree());
           }
         }
       } catch (e) {
-        console.warn('⚠️ [Parameters] refreshTree échoué après Sauvegarde subTabs', e);
+        console.warn('⚠️ [Parameters] refreshTree échoué après mise à jour subTabs', e);
       }
     } catch (error) {
       console.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
@@ -317,6 +342,21 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     }
     return m;
   }, [nodes]);
+
+  const branchSubTabs = useMemo(() => {
+    if (!selectedNode) return [] as string[];
+    // If the selected branch defines its own subTabs, use them
+    if (Array.isArray((selectedNode.metadata as any)?.subTabs)) return (selectedNode.metadata as any).subTabs as string[];
+    // Otherwise, find nearest ancestor branch that defines subTabs
+    let currentId = selectedNode.parentId as string | undefined | null;
+    while (currentId) {
+      const parent = nodesMap.get(currentId);
+      if (!parent) break;
+      if (Array.isArray((parent.metadata as any)?.subTabs)) return (parent.metadata as any).subTabs as string[];
+      currentId = parent.parentId as string | undefined | null;
+    }
+    return [] as string[];
+  }, [selectedNode, nodesMap]);
 
   // (helper local retiré: findNodeById) – on utilise une DFS inline lorsque nécessaire
 
@@ -400,6 +440,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     console.log('💾 [commitRepeaterMetadata] PAYLOAD COMPLET:', payload);
     
     patchNode(payload);
+    emitMetadataUpdate(nextMetadata);
     
     // � Émettre l'événement pour notifier le hook de recharger les données
     window.dispatchEvent(
@@ -495,7 +536,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         duplicateTemplatesPhysically(merged.templateNodeIds);
       }
     }
-  }, [patchNode, selectedNode, selectedNodeFromTree, nodes, repeaterTemplateIds, repeaterMinItems, repeaterMaxItems, repeaterAddLabel, REPEATER_DEFAULT_LABEL, duplicateTemplatesPhysically]);
+  }, [patchNode, selectedNode, selectedNodeFromTree, nodes, repeaterTemplateIds, repeaterMinItems, repeaterMaxItems, repeaterAddLabel, REPEATER_DEFAULT_LABEL, duplicateTemplatesPhysically, emitMetadataUpdate]);
 
   // 🧹 Anti-redoublons: Nettoyer in-flight une fois que les copies sont détectées dans `nodes`
   // Raison: On ne doit retirer de l'in-flight que APRÈS que `nodes` soit hydraté avec les vraies copies.
@@ -989,22 +1030,42 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             // Small debug log to help diagnose cases where parentSubTabs should exist
             console.debug('[Parameters] parentBranch:', parentBranch?.id, 'parentSubTabs:', parentSubTabs);
 
+            // Support both single and multiple values
+            const rawSubTab = selectedNode?.metadata?.subTab;
+            const currentValue = Array.isArray(rawSubTab) 
+              ? rawSubTab 
+              : typeof rawSubTab === 'string' && rawSubTab 
+                ? [rawSubTab] 
+                : [];
+
             return (
               <div style={{ marginTop: 12 }}>
                 <strong style={{ fontSize: 12 }}>Affectation Sous-onglet</strong>
                 <div style={{ marginTop: 6 }}>
                   <Select
+                    mode="multiple"
                     size="small"
-                    value={(selectedNode?.metadata?.subTab as string) ?? undefined}
-                    onChange={(val) => {
+                    value={currentValue}
+                    key={`subtab-select-${selectedNode?.id}`}
+                    onChange={(values) => {
                       const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
-                      if (!val) delete nextMeta.subTab; else nextMeta.subTab = val;
+                      if (!values || values.length === 0) {
+                        delete nextMeta.subTab;
+                      } else if (values.length === 1) {
+                        // Single selection: store as string for backward compatibility
+                        nextMeta.subTab = values[0];
+                      } else {
+                        // Multiple selections: store as array
+                        nextMeta.subTab = values;
+                      }
                       patchNode({ metadata: nextMeta });
+                      emitMetadataUpdate(nextMeta);
                     }}
                     style={{ width: '100%' }}
-                    placeholder="Aucun sous-onglet"
+                    placeholder="Sélectionnez un ou plusieurs sous-onglets"
+                    allowClear
+                    maxTagCount="responsive"
                   >
-                    <Select.Option value="">Aucun</Select.Option>
                     {parentSubTabs.map(st => <Select.Option key={st} value={st}>{st}</Select.Option>)}
                   </Select>
                 </div>
@@ -1018,11 +1079,103 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           <div style={{ marginTop: 12 }}>
             <h5 style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>Sous-onglets (visuel)</h5>
             <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+              {/* Contrôle: sélectionner le sous-onglet du noeud (branche) et optionnellement l'appliquer aux enfants */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <strong style={{ fontSize: 12 }}>Affectation Sous-onglet (branche)</strong>
+                  <div style={{ marginTop: 6 }}>
+                    <Select
+                      mode="multiple"
+                      size="small"
+                      value={Array.isArray((selectedNode?.metadata?.subTab))
+                        ? (selectedNode?.metadata?.subTab as string[])
+                        : typeof (selectedNode?.metadata?.subTab) === 'string' && selectedNode?.metadata?.subTab
+                          ? [(selectedNode?.metadata?.subTab as string)]
+                          : []
+                      }
+                      onChange={(values) => {
+                        const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
+                        if (!values || values.length === 0) {
+                          delete nextMeta.subTab;
+                        } else if (values.length === 1) {
+                          nextMeta.subTab = values[0];
+                        } else {
+                          nextMeta.subTab = values;
+                        }
+                        // Toujours patcher le noeud courant
+                        if (applyToChildrenRef.current && useServerCascade) {
+                          patchNode({ metadata: nextMeta, cascadeSubTab: true });
+                        } else {
+                          patchNode({ metadata: nextMeta });
+                        }
+                        emitMetadataUpdate(nextMeta);
+                        // Si checkbox applyToChildren est cochée, on effectue la propagation
+                        const subTabValue = values && values.length > 0 ? values : null;
+                        if (applyToChildrenRef.current && subTabValue && !useServerCascade) {
+                          // Déclencher propagation asynchrone
+                          void (async () => {
+                            try {
+                              const toAssign: { id: string; meta: Record<string, unknown> }[] = [];
+                              const stack2: TreeBranchLeafNode[] = [selectedNode];
+                              while (stack2.length) {
+                                const n = stack2.pop()!;
+                                if (n.children && n.children.length) stack2.push(...n.children);
+                                // Apply to all descendant leaf nodes
+                                if (n.type && n.type.startsWith('leaf')) {
+                                  const nextMeta2 = { ...(n.metadata || {}) } as Record<string, unknown>;
+                                  nextMeta2.subTab = subTabValue.length === 1 ? subTabValue[0] : subTabValue;
+                                  toAssign.push({ id: n.id, meta: nextMeta2 });
+                                }
+                                // Also apply to branch nodes that don't define their own subTabs (inheritance)
+                                if (n.type === 'branch' || n.type === 'section') {
+                                  const hasOwnSubTabs = Array.isArray((n.metadata as any)?.subTabs) && (n.metadata as any).subTabs.length > 0;
+                                  if (!hasOwnSubTabs) {
+                                    const nextMeta2 = { ...(n.metadata || {}) } as Record<string, unknown>;
+                                    nextMeta2.subTab = subTabValue.length === 1 ? subTabValue[0] : subTabValue;
+                                    toAssign.push({ id: n.id, meta: nextMeta2 });
+                                  }
+                                }
+                              }
+                              if (toAssign.length) {
+                                for (const t of toAssign) {
+                                  if (typeof onNodeUpdate === 'function') {
+                                    await onNodeUpdate({ id: t.id, metadata: t.meta });
+                                  }
+                                }
+                                if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
+                                try { window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode.id, treeId: tree?.id } })); } catch { /* noop */ }
+                              }
+                            } catch (e) {
+                              console.error('❌ [Parameters] Erreur propagation subTab vers enfants:', e);
+                            }
+                          })();
+                        }
+                      }}
+                      placeholder="Sélectionnez un ou plusieurs sous-onglets"
+                      allowClear
+                      maxTagCount="responsive"
+                      style={{ width: '100%' }}
+                    >
+                      {branchSubTabs.map(st => <Select.Option key={st} value={st}>{st}</Select.Option>)}
+                    </Select>
+                  </div>
+                </div>
+                <div style={{ width: 270, display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <label style={{ fontSize: 12, color: '#666' }}>Appliquer aux enfants</label>
+                  <Checkbox checked={applyToChildren} onChange={(e) => { setApplyToChildren(e.target.checked); applyToChildrenRef.current = e.target.checked; }} />
+                  <div style={{ width: 120, display: 'flex', gap: 6, alignItems: 'center', marginLeft: 8 }}>
+                    <label style={{ fontSize: 12, color: '#666' }}>Côté serveur</label>
+                    <Checkbox checked={useServerCascade} onChange={(e) => setUseServerCascade(e.target.checked)} />
+                  </div>
+                </div>
+              </div>
               <div style={{ fontSize: 12, color: '#666' }}>Créer des sous-onglets pour organiser visuellement les champs (Affectation via le champ : sélectionnez le champ puis éditez 'Affectation Sous-onglet' dans ses paramètres).</div>
               <SubTabsEditor
                 value={Array.isArray(selectedNode?.metadata?.subTabs) ? (selectedNode?.metadata?.subTabs as string[]) : []}
                 onChange={(next) => {
-                  patchNode({ metadata: { ...(selectedNode?.metadata || {}), subTabs: next } });
+                  const nextMetadata = { ...(selectedNode?.metadata || {}), subTabs: next } as Record<string, unknown>;
+                  patchNode({ metadata: nextMetadata });
+                  emitMetadataUpdate(nextMetadata);
                   // Émettre un événement pour que TBL refetch si besoin
                   try {
                     window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode?.id, treeId: selectedNode?.tree_id } }));
@@ -1030,6 +1183,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   } catch { /* noop */ }
                 }}
               />
+              <div style={{ fontSize: 12, color: '#666', marginTop: 8 }}>
+                Astuce: si tous les champs de cette branche sont affectés à un sous-onglet, le sous-onglet "Général" disparaîtra automatiquement.
+              </div>
             </div>
             {/* Overview: show descendant fields and their subTab assignments */}
             <div style={{ marginTop: 12 }}>
@@ -1053,10 +1209,18 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                         }
                       }
                       if (toAssign.length === 0) return;
-                      // Update sequentially to avoid too many POSTs at once
-                      for (const t of toAssign) {
+                      if (useServerCascade) {
+                        // Fast path: update the branch with cascade flag (server will update descendants)
+                        const nextMetaBranch = { ...(selectedNode?.metadata || {}), subTab: val };
                         if (typeof onNodeUpdate === 'function') {
-                          await onNodeUpdate({ id: t.id, metadata: t.meta });
+                          await onNodeUpdate({ id: selectedNode.id, metadata: nextMetaBranch, cascadeSubTab: true } as any);
+                        }
+                      } else {
+                        // Update sequentially to avoid too many POSTs at once
+                        for (const t of toAssign) {
+                          if (typeof onNodeUpdate === 'function') {
+                            await onNodeUpdate({ id: t.id, metadata: t.meta });
+                          }
                         }
                       }
                       if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
@@ -1110,6 +1274,87 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   });
                 })()}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Option pour rendre une section affichage toujours visible dans tous les sous-onglets */}
+        {selectedNode?.type === 'section' && (
+          <div style={{ marginTop: 12 }}>
+            <strong style={{ fontSize: 12 }}>Affichage</strong>
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 12, color: '#666' }}>Toujours visible dans les sous-onglets</div>
+                <Checkbox
+                checked={!!(selectedNode?.metadata as any)?.displayAlways}
+                onChange={(e) => {
+                  const next: Record<string, unknown> = { ...(selectedNode?.metadata || {}) };
+                  if (e.target.checked) next.displayAlways = true; else delete next.displayAlways;
+                  console.log('🔔 [Parameters] displayAlways toggled:', e.target.checked, 'for node', selectedNode?.id);
+                  // Save change immediately (bypass debounce for displayAlways since it affects layout)
+                  (async () => {
+                    if (!selectedNodeId) return;
+                    
+                    try {
+                      // Build the updated node with new metadata
+                      const updatedNode = {
+                        ...(selectedNode || {}),
+                        metadata: { ...(selectedNode?.metadata || {}), ...next }
+                      };
+                      
+                      console.log('🔔 [Parameters] Emission tbl-node-updated IMMEDIATELY (optimistic) for displayAlways:', { 
+                        id: updatedNode.id, 
+                        displayAlways: updatedNode.metadata?.displayAlways,
+                        treeId: tree?.id
+                      });
+                      
+                      // Store for debugging
+                      window.__tblNodeUpdated = { node: updatedNode, treeId: tree?.id, timestamp: Date.now() };
+                      
+                      // 🔥 DIRECT CALLBACK first (most reliable)
+                      if (onNodeMetadataUpdated) {
+                        console.error('📞 [Parameters] Calling onNodeMetadataUpdated callback directly for:', updatedNode.id);
+                        onNodeMetadataUpdated(updatedNode as any);
+                        console.error('✅ [Parameters] onNodeMetadataUpdated callback completed');
+                      } else {
+                        console.error('❌ [Parameters] onNodeMetadataUpdated callback NOT PROVIDED!');
+                      }
+                      
+                      // Then emit event as fallback
+                      window.dispatchEvent(new CustomEvent('tbl-node-updated', { 
+                        detail: { node: updatedNode, treeId: tree?.id } 
+                      }));
+                      
+                      // 🔥 FORCE RETRANSFORMATION: Signal any listening component to retransform
+                      // This works even if the hook isn't mounted yet
+                      console.error('🔥 [Parameters] DISPATCHING tbl-force-retransform event for:', updatedNode.id);
+                      
+                      // Store update in global state that TBL can access
+                      if (typeof window !== 'undefined') {
+                        (window as any).__tblForceRetransformSignal = {
+                          nodeId: updatedNode.id,
+                          fieldName: 'displayAlways',
+                          timestamp: Date.now()
+                        };
+                        console.error('✅ [Parameters] Stored force-retransform signal in window.__tblForceRetransformSignal');
+                      }
+                      
+                      // Also try window event as backup
+                      window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
+                        detail: { nodeId: updatedNode.id, fieldName: 'displayAlways', forceRemote: true }
+                      }));
+                      console.error('✅ [Parameters] tbl-force-retransform event dispatched');
+                      
+                      // THEN save to server asynchronously (don't wait for response)
+                      console.log('🔄 [Parameters] Calling onNodeUpdateRef for server persistence');
+                      onNodeUpdateRef.current?.({ metadata: next, id: selectedNodeId });
+                      
+                      console.log('✅ [Parameters] displayAlways update emitted and queued');
+                    } catch (e) {
+                      console.warn('[Parameters] Failed to update displayAlways:', e);
+                    }
+                  })();
+                }}
+              />
             </div>
           </div>
         )}

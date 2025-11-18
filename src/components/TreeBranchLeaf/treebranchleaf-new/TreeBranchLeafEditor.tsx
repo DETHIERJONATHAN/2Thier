@@ -75,6 +75,8 @@ interface TreeBranchLeafEditorProps {
   readOnly?: boolean;
   onTreeChange: (tree: TreeBranchLeafTree) => void;
   onNodesUpdate: (nodes: TreeBranchLeafNode[]) => void;
+  onSetHandleNodeMetadataUpdate?: (handler: (node: TreeBranchLeafNode) => void) => void;
+  handleNodeMetadataUpdate?: ((node: TreeBranchLeafNode) => void) | null;
 }
 
 const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
@@ -83,7 +85,9 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   nodes: propNodes,
   readOnly = false,
   onTreeChange,
-  onNodesUpdate
+  onNodesUpdate,
+  onSetHandleNodeMetadataUpdate,
+  handleNodeMetadataUpdate
 }) => {
   // Fallback automatique : si aucun arbre sélectionné fourni par le parent, on prend le premier disponible
   const selectedTree = selectedTreeProp || (trees && trees.length > 0 ? trees[0] : null);
@@ -1477,18 +1481,19 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
 
   // Garder l'objet du nœud sélectionné synchronisé lorsque la liste des nœuds change
   const _previousSelectedNodeIdRef = useRef<string | null>(null);
-  // useEffect(() => {
-    // if (!uiState.selectedNode || !propNodes) return;
-    // 
-    // const currentId = uiState.selectedNode.id;
-    // if (previousSelectedNodeIdRef.current === currentId) return; // Éviter les re-déclenchements
-    // 
-    // const updated = propNodes.find(n => n.id === currentId);
-    // if (updated && updated !== uiState.selectedNode) {
-    //   setUIState(prev => ({ ...prev, selectedNode: updated }));
-    //   previousSelectedNodeIdRef.current = currentId;
-    // }
-  // }, [propNodes, uiState.selectedNode?.id]);
+  useEffect(() => {
+    if (!uiState.selectedNode || !propNodes) return;
+
+    const currentId = uiState.selectedNode.id;
+    if (_previousSelectedNodeIdRef.current === currentId) return; // avoid re-triggers
+
+    const updated = propNodes.find(n => n.id === currentId);
+    if (updated && updated !== uiState.selectedNode) {
+      // If metadata changed or other properties changed, update the selectedNode object
+      setUIState(prev => ({ ...prev, selectedNode: updated }));
+      _previousSelectedNodeIdRef.current = currentId;
+    }
+  }, [propNodes, uiState.selectedNode?.id, uiState.selectedNode]);
 
   // useEffect(() => {
     // if (!isDesktop && activeMobileTab === 'parameters' && uiState.panelState.previewMode && activeMobileTab !== 'structure') {
@@ -1596,6 +1601,14 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           readOnly={readOnly}
           registry={TreeBranchLeafRegistry}
           onDeleteNode={deleteNode}
+          onNodeMetadataUpdated={(node) => {
+            setUIState(prev => {
+              if (!prev.selectedNode || prev.selectedNode.id !== node.id) {
+                return prev;
+              }
+              return { ...prev, selectedNode: { ...prev.selectedNode, ...node } };
+            });
+          }}
           refreshTree={async () => {
             if (!selectedTree) return;
             try {

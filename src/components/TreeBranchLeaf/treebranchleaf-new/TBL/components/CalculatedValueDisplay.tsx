@@ -7,7 +7,8 @@
 
 import React, { useMemo } from 'react';
 import { Spin, Tooltip, Tag } from 'antd';
-import { useNodeCalculatedValue } from '../hooks/useNodeCalculatedValue';
+import { useNodeCalculatedValue } from '../../../../../hooks/useNodeCalculatedValue';
+import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 
 interface CalculatedValueDisplayProps {
   /** ID du nœud TreeBranchLeaf */
@@ -30,6 +31,10 @@ interface CalculatedValueDisplayProps {
   className?: string;
   /** Style personnalisé */
   style?: React.CSSProperties;
+  /** Valeur locale à afficher tant que Prisma n'a rien retourné */
+  fallbackValue?: string | number | boolean | null;
+  /** Liste d'IDs de secours à interroger si le premier nodeId n'a pas de valeur stockée */
+  fallbackNodeIds?: string[];
 }
 
 /**
@@ -48,35 +53,90 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
   displayMode = 'simple',
   showMetadata = false,
   className = '',
-  style = {}
+  style = {},
+  fallbackValue
+  , fallbackNodeIds = []
 }) => {
-  const { value, loading, error, calculatedAt, calculatedBy } = useNodeCalculatedValue(
+  const { value, loading, error, calculatedAt, calculatedBy, refresh } = useNodeCalculatedValue(
     nodeId,
     treeId,
     submissionId
   );
 
+  // Support client-side fallback: try fallbackNodeIds if primary node returns nothing
+  const [fallbackValueFound, setFallbackValueFound] = React.useState<null | string | number | boolean>(null);
+  const [fallbackLoading, setFallbackLoading] = React.useState(false);
+  const { api } = useAuthenticatedApi();
+
+  const fallbackNodeIdsKey = (fallbackNodeIds || []).join(',');
+
+  // Debugging helpful log for fallback flow
+  if (typeof window !== 'undefined' && localStorage.getItem('TBL_DIAG') === '1') {
+    console.log('[CalculatedValueDisplay] props', { nodeId, treeId, fallbackNodeIds });
+  }
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const runFallbacks = async () => {
+      if (!fallbackNodeIds || fallbackNodeIds.length === 0) return;
+      console.log('[CalculatedValueDisplay] fallbackNodeIds to try:', fallbackNodeIds);
+      try {
+        setFallbackLoading(true);
+        for (const fbId of fallbackNodeIds) {
+          if (cancelled) return;
+          if (!fbId) continue;
+          // Skip if same as primary
+          if (fbId === nodeId) continue;
+          try {
+            const resp = await api.get(`/api/tree-nodes/${fbId}/calculated-value`);
+            if (resp?.success && resp?.value !== undefined && resp?.value !== null) {
+              if (cancelled) return;
+              setFallbackValueFound(resp.value);
+              if (typeof window !== 'undefined' && localStorage.getItem('TBL_DIAG') === '1') {
+                console.log('[CalculatedValueDisplay] found fallback value for', fbId, resp.value);
+              }
+              setFallbackLoading(false);
+              return;
+            }
+          } catch (err) { console.debug('[CalculatedValueDisplay] fallback fetch error', err); }
+        }
+      } finally {
+        if (!cancelled) setFallbackLoading(false);
+      }
+    };
+
+    // Only trigger fallbacks when main value is missing
+    if ((value === undefined || value === null) && fallbackNodeIds && fallbackNodeIds.length > 0) {
+      runFallbacks();
+    } else {
+      setFallbackValueFound(null);
+    }
+
+    return () => { cancelled = true; };
+  }, [api, nodeId, treeId, submissionId, value, fallbackNodeIdsKey, fallbackNodeIds]);
+
   // Formater la valeur affichée
   const formattedValue = useMemo(() => {
-    if (value === undefined || value === null || value === '∅') {
+    const raw = (value === undefined || value === null || value === '∅') ? (fallbackValueFound ?? fallbackValue) : value;
+    if (raw === undefined || raw === null || raw === '∅') {
       return placeholder;
     }
 
     let displayValue: string;
 
-    if (typeof value === 'number') {
-      displayValue = value.toFixed(precision);
-    } else if (typeof value === 'string') {
-      const num = parseFloat(value);
+    if (typeof raw === 'number') {
+      displayValue = raw.toFixed(precision);
+    } else if (typeof raw === 'string') {
+      const num = parseFloat(raw);
       if (!isNaN(num)) {
         displayValue = num.toFixed(precision);
       } else {
-        displayValue = value;
+        displayValue = raw;
       }
-    } else if (typeof value === 'boolean') {
-      displayValue = value ? 'Oui' : 'Non';
+    } else if (typeof raw === 'boolean') {
+      displayValue = raw ? 'Oui' : 'Non';
     } else {
-      displayValue = String(value);
+      displayValue = String(raw);
     }
 
     // Ajouter l'unité
@@ -85,13 +145,24 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
     }
 
     return displayValue;
-  }, [value, precision, unit, placeholder]);
+  }, [value, precision, unit, placeholder, fallbackValue, fallbackValueFound]);
 
   // 🔴 Cas erreur
   if (error) {
     return (
       <Tooltip title={`Erreur: ${error}`}>
-        <span className={`text-red-500 ${className}`} style={style}>
+        <span
+          className={`text-red-500 ${className}`}
+          style={style}
+          role="button"
+          tabIndex={0}
+          onClick={refresh}
+          onKeyDown={(evt) => {
+            if (evt.key === 'Enter' || evt.key === ' ') {
+              refresh();
+            }
+          }}
+        >
           Erreur
         </span>
       </Tooltip>
@@ -99,7 +170,7 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
   }
 
   // ⏳ Cas chargement
-  if (loading) {
+  if (loading || fallbackLoading) {
     return <Spin size="small" />;
   }
 

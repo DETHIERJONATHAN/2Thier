@@ -7,6 +7,7 @@ import '../../../../styles/tbl-green-asterisk.css';
 declare global {
   interface Window {
     TBL_FORCE_REFRESH?: () => void;
+    __TBL_LAST_TREE_ID?: string;
   }
 }
 import { 
@@ -68,6 +69,12 @@ interface TBLProps {
 const TBL: React.FC<TBLProps> = ({ 
   treeId
 }) => {
+  // Use a global flag to track mounting (alert is too intrusive)
+  if (typeof window !== 'undefined' && !(window as any).__tblMountedAt) {
+    (window as any).__tblMountedAt = Date.now();
+    console.error('🚀 [TBL] Component FIRST mounted at', new Date().toISOString());
+  }
+  
   // Récupérer leadId depuis l'URL
   const { leadId: urlLeadId } = useParams<{ leadId?: string }>();
   const { api } = useAuthenticatedApi();
@@ -122,6 +129,8 @@ const TBL: React.FC<TBLProps> = ({
   // Garde-fous autosave: éviter les envois identiques
   const lastSavedSignatureRef = useRef<string | null>(null);
   const lastQueuedSignatureRef = useRef<string | null>(null);
+  const previewDebounceRef = useRef<number | null>(null);
+  const lastPreviewSignatureRef = useRef<string | null>(null);
 
   // Charger les données Lead si leadId fourni
   useEffect(() => {
@@ -307,27 +316,115 @@ const TBL: React.FC<TBLProps> = ({
   } = useTreeBranchLeafConfig();
   // const [reload, setReload] = useState(0); // supprimé : non utilisé
 
+  // 🔥 DEBUG: Global listener to trace tbl-node-updated events
+  useEffect(() => {
+    const globalDebugListener = (event: Event) => {
+      try {
+        const customEvent = event as CustomEvent<any>;
+        const { node, treeId } = customEvent.detail || {};
+        (window as any).__tblGlobalEvents = (window as any).__tblGlobalEvents || [];
+        (window as any).__tblGlobalEvents.push({
+          time: new Date().toISOString(),
+          event: 'tbl-node-updated',
+          nodeId: node?.id,
+          treeId,
+          metadata: node?.metadata
+        });
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('tbl-node-updated', globalDebugListener, true);
+    return () => window.removeEventListener('tbl-node-updated', globalDebugListener, true);
+  }, []);
+
   // Hooks personnalisés
   // Flag de bascule (localStorage.USE_FIXED_HIERARCHY = '1')
   const useFixed = useMemo(() => {
     try { return localStorage.getItem('USE_FIXED_HIERARCHY') === '1'; } catch { return false; }
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      (window as any).__TBL_USING_FIXED_HIERARCHY = useFixed;
+    } catch {
+      // ignore write errors (private browsing, etc.)
+    }
+  }, [useFixed]);
+
+  const requestedTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
+
   // Ancien hook (référence actuelle) - désactivé si on bascule vers nouveau
+  const [retransformCounter, setRetransformCounter] = useState(0);
   const oldData = useTBLDataPrismaComplete({ 
-    tree_id: treeId || 'cmf1mwoz10005gooked1j6orn',
-    disabled: useFixed // éviter double fetch
+    tree_id: requestedTreeId,
+    disabled: useFixed, // éviter double fetch
+    triggerRetransform: retransformCounter
   });
 
   // Nouveau hook hiérarchique propre - activé seulement si flag
   const newData = useTBLDataHierarchicalFixed({
-    tree_id: treeId || 'cmf1mwoz10005gooked1j6orn',
+    tree_id: requestedTreeId,
     disabled: !useFixed
   });
 
+  // 🔥 SIGNAL RETRANSFORM: When displayAlways changes, increment counter to trigger hook retransform
+  const refetchRef = useRef<(() => void) | undefined>();
+  
+  // Keep refetch reference stable
+  useEffect(() => {
+    refetchRef.current = useFixed ? newData.refetch : oldData.refetch;
+  }, [useFixed, newData.refetch, oldData.refetch]);
+  
+  // Also try event listener as fallback
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleForceRetransform = (event: Event) => {
+          const detail = (event as CustomEvent<{ source?: string; skipFormReload?: boolean; forceRemote?: boolean }>).detail;
+          // Preserve old behavior: ignore when skipFormReload provided or autosave
+          if (detail?.skipFormReload || detail?.source === 'autosave') {
+            console.error('⏭️ [TBL] Ignoring tbl-force-retransform (auto-save/no-reload hint)');
+            return;
+          }
+          const forceRemote = !!detail?.forceRemote;
+          const debugId = (detail as any)?.eventDebugId || null;
+          console.error(`🔄 [TBL] Received tbl-force-retransform event (forceRemote=${forceRemote})`, { debugId });
+
+        // ✅ Increment retransform counter to trigger hook retransform
+        setRetransformCounter(prev => {
+          const newVal = prev + 1;
+          console.error(`🚀 [TBL] Incrementing retransformCounter to ${newVal} from event`);
+          return newVal;
+        });
+
+        // Only call the server-side refetch if explicitly requested (prevent global flicker)
+        if (forceRemote) {
+          console.error(`🔄 [TBL] Calling refetch() to update data from server (forceRemote)`);
+          refetchRef.current?.();
+        } else {
+          console.error(`🔄 [TBL] Skipping server refetch (local retransform only)`);
+        }
+      };
+    
+    window.addEventListener('tbl-force-retransform', handleForceRetransform);
+    console.error('✅ [TBL] Event listener registered');
+    
+    return () => {
+      console.error('🔌 [TBL] Cleanup: Removing event listener');
+      window.removeEventListener('tbl-force-retransform', handleForceRetransform);
+    };
+  }, [setRetransformCounter]);
+
+  // 🔥 Store the handler for direct metadata updates (bypass event system)
+  useEffect(() => {
+    (window as any).__tblHandleNodeMetadataUpdate = oldData.handleNodeMetadataUpdate;
+  }, [oldData.handleNodeMetadataUpdate]);
+
   // Préload direct (pour le dev panel) - même treeId. On pourrait réutiliser celui interne du hook mais ici on force pour debug global
   const devPreload = useTBLCapabilitiesPreload({
-    treeId: treeId || 'cmf1mwoz10005gooked1j6orn',
+    treeId: requestedTreeId,
     enabled: useFixed && (() => { try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } })(),
     extractDependencies: true,
     includeRaw: false
@@ -341,7 +438,17 @@ const TBL: React.FC<TBLProps> = ({
   const tabs = useFixed ? newData.tabs as unknown as TBLSection[] : oldData.tabs; // cast transitoire
   const dataLoading = useFixed ? newData.loading : oldData.loading;
   const dataError = useFixed ? newData.error : oldData.error;
-  const rawNodes = useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || []); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
+  const rawNodes = useMemo(() => (useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || [])), [useFixed, newData.rawNodes, oldData.rawNodes]); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
+  const effectiveTreeId = tree?.id || requestedTreeId;
+
+  useEffect(() => {
+    if (!effectiveTreeId) return;
+    try {
+      window.__TBL_LAST_TREE_ID = effectiveTreeId;
+    } catch {
+      // ignore
+    }
+  }, [effectiveTreeId]);
   
   // 🔥 DEBUG TEMPORAIRE: Vérifier si rawNodes est peuplé
   console.log('[TBL] 🔥 DEBUG rawNodes:', {
@@ -503,6 +610,15 @@ const TBL: React.FC<TBLProps> = ({
     return out;
   }, []);
 
+  const buildPreviewPayload = useCallback((data: TBLFormData) => {
+    const clean: Record<string, unknown> = {};
+    Object.entries(data || {}).forEach(([key, value]) => {
+      if (key.startsWith('__mirror_')) return;
+      clean[key] = value;
+    });
+    return clean;
+  }, []);
+
   const computeSignature = useCallback((obj: Record<string, unknown>) => {
     // Stringify stable: tri des clés pour éviter les différences d'ordre
     const keys = Object.keys(obj).sort();
@@ -513,6 +629,26 @@ const TBL: React.FC<TBLProps> = ({
     }
     return parts.join('|');
   }, []);
+
+  const broadcastCalculatedRefresh = useCallback((detail?: Record<string, unknown>) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
+        detail: {
+          source: 'autosave',
+          submissionId,
+          treeId: tree?.id,
+          timestamp: Date.now(),
+          skipFormReload: true,
+          ...(detail || {})
+        }
+      }));
+    } catch (err) {
+      console.warn('⚠️ [TBL][AUTOSAVE] Dispatch tbl-force-retransform échoué', err);
+    }
+  }, [submissionId, tree?.id]);
 
   // Prévisualisation sans écriture (aucune création/MAJ en base)
   // ❌ DÉSACTIVÉ : Cet appel se déclenchait à CHAQUE frappe et causait des re-rendus massifs !
@@ -547,15 +683,21 @@ const TBL: React.FC<TBLProps> = ({
       if (!submissionId) {
         // Aucun devis existant: uniquement prévisualiser (zéro écriture)
         await previewNoSave(data);
+        broadcastCalculatedRefresh({ reason: 'preview-no-save' });
       } else {
         // Devis existant: mise à jour idempotente
-        await api.post('/api/tbl/submissions/create-and-evaluate', {
+        const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
           submissionId,
           formData,
           status: 'draft'
         });
         lastSavedSignatureRef.current = sig;
         setAutosaveLast(new Date());
+        broadcastCalculatedRefresh({
+          reason: 'create-and-evaluate',
+          evaluatedSubmissionId: submissionId,
+          recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length
+        });
       }
     } catch (e) {
       // Discret: pas de toast pour éviter le spam, logs console seulement
@@ -564,7 +706,7 @@ const TBL: React.FC<TBLProps> = ({
       lastQueuedSignatureRef.current = null;
       setIsAutosaving(false);
     }
-  }, [api, tree, normalizePayload, computeSignature, submissionId, previewNoSave]);
+  }, [api, tree, normalizePayload, computeSignature, submissionId, previewNoSave, broadcastCalculatedRefresh]);
 
   // Déclencheur débouncé
   const scheduleAutosave = useCallback((data: TBLFormData) => {
@@ -583,6 +725,45 @@ const TBL: React.FC<TBLProps> = ({
 
     return () => clearInterval(interval);
   }, [formData, autoSaveEnabled, tree, scheduleAutosave]);
+
+  const previewEvaluateAndStore = useCallback(async (data: TBLFormData) => {
+    if (!api || !tree?.id) return;
+    try {
+      const normalized = normalizePayload(data);
+      const sig = computeSignature(normalized);
+      if (lastPreviewSignatureRef.current === sig) {
+        return;
+      }
+      lastPreviewSignatureRef.current = sig;
+      const payload = buildPreviewPayload(data);
+      await api.post('/api/tbl/submissions/preview-evaluate', {
+        treeId: tree.id,
+        formData: payload,
+        baseSubmissionId: submissionId || undefined,
+        leadId: leadId || undefined
+      });
+      broadcastCalculatedRefresh({ reason: 'preview-evaluate-live', signature: sig });
+    } catch (err) {
+      lastPreviewSignatureRef.current = null;
+      if (isVerbose()) console.warn('⚠️ [TBL][PREVIEW] Échec preview-evaluate live', err);
+    }
+  }, [api, tree?.id, normalizePayload, computeSignature, buildPreviewPayload, submissionId, leadId, broadcastCalculatedRefresh]);
+
+  const scheduleCapabilityPreview = useCallback((data: TBLFormData) => {
+    if (!tree?.id) return;
+    if (previewDebounceRef.current) {
+      window.clearTimeout(previewDebounceRef.current);
+    }
+    previewDebounceRef.current = window.setTimeout(() => { void previewEvaluateAndStore(data); }, 600);
+  }, [tree?.id, previewEvaluateAndStore]);
+
+  useEffect(() => {
+    return () => {
+      if (previewDebounceRef.current) {
+        window.clearTimeout(previewDebounceRef.current);
+      }
+    };
+  }, []);
 
   // 🔄 EXPOSITION DE LA FONCTION DE REFRESH POUR LES CHANGEMENTS D'APPARENCE
   useEffect(() => {
@@ -639,15 +820,40 @@ const TBL: React.FC<TBLProps> = ({
         }
       };
       
+      // Debug helpers
+      if (process.env.NODE_ENV === 'development') {
+        (window as any).TBL_PRINT_NODE_METADATA = (nodeId?: string) => {
+          try {
+            const match = (rawNodes || []).find(n => n.id === nodeId);
+            console.log('🔎 [TBL] node metadata for', nodeId, match?.metadata || match);
+            return match?.metadata || match;
+          } catch (e) { console.error('[TBL] TBL_PRINT_NODE_METADATA failed', e); }
+          return null;
+        };
+
+        (window as any).TBL_PRINT_SECTION_METADATA = (tabId?: string, sectionId?: string) => {
+          try {
+            const sSet = (useFixed ? (newData.sectionsByTab || {}) : (oldData.sectionsByTab || {}));
+            const sectionsList = Object.values(sSet).flat();
+            const found = sectionsList.find((s: any) => s.id === sectionId);
+            console.log('🔎 [TBL] section metadata for', sectionId, found?.metadata || found);
+            return found?.metadata || found;
+          } catch (e) { console.error('[TBL] TBL_PRINT_SECTION_METADATA failed', e); }
+          return null;
+        };
+      }
+
       // Cleanup
       return () => {
         if (window.TBL_FORCE_REFRESH) {
           delete window.TBL_FORCE_REFRESH;
         }
         try { if ((window as any).TBL_VERIFY_CONDITIONALS) delete (window as any).TBL_VERIFY_CONDITIONALS; } catch {/* noop */}
+        try { if ((window as any).TBL_PRINT_NODE_METADATA) delete (window as any).TBL_PRINT_NODE_METADATA; } catch {/* noop */}
+        try { if ((window as any).TBL_PRINT_SECTION_METADATA) delete (window as any).TBL_PRINT_SECTION_METADATA; } catch {/* noop */}
       };
     }
-  }, [useFixed, newData, oldData]);
+  }, [useFixed, newData, oldData, rawNodes]);
 
   const handleFieldChange = useCallback((fieldId: string, value: string | number | boolean | string[] | null | undefined) => {
     console.log(`🔄🔄🔄 [TBL] handleFieldChange appelé: fieldId=${fieldId}, value=${value}`);
@@ -879,9 +1085,12 @@ const TBL: React.FC<TBLProps> = ({
       try {
         scheduleAutosave(next as TBLFormData);
       } catch {/* noop */}
+      try {
+        scheduleCapabilityPreview(next as TBLFormData);
+      } catch {/* noop */}
       return next as typeof prev;
     });
-  }, [tblConfig, tabs, scheduleAutosave]);
+  }, [tblConfig, tabs, scheduleAutosave, scheduleCapabilityPreview]);
 
 
   // Sauvegarder comme devis
@@ -1877,7 +2086,7 @@ const TBL: React.FC<TBLProps> = ({
                         fields={tab.fields || []}
                         formData={formData}
                         onChange={handleFieldChange}
-                        treeId={tree?.id}
+                        treeId={effectiveTreeId}
                         tree={tree}
                         rawNodes={rawNodes}
                         disabled={saving}
@@ -1885,6 +2094,7 @@ const TBL: React.FC<TBLProps> = ({
                         validationActions={validationActions}
                         // Passer explicitement la liste de subTabs définie au niveau de l'onglet
                         tabSubTabs={tab.subTabs}
+                        tabId={tab.id}
                       />
                     </div>
                   )
@@ -2296,6 +2506,7 @@ interface TBLTabContentWithSectionsProps {
   validationState?: any;
   validationActions?: any;
   tabSubTabs?: { key: string; label: string }[] | undefined;
+  tabId?: string;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -2310,7 +2521,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   _validationActions,
   disabled = false
   ,
-  tabSubTabs
+  tabSubTabs,
+  tabId
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -2346,15 +2558,45 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   // ✅ STABILISER onChange pour éviter les re-rendus en cascade !
   const stableOnChange = useCallback(onChange, [onChange]);
 
+  const getFieldSubTabs = (item: any): string[] => {
+    if (!item) return [];
+    const rawKeys = Array.isArray(item.subTabKeys) && item.subTabKeys.length
+      ? item.subTabKeys
+      : Array.isArray(item.subTabKey)
+        ? item.subTabKey
+        : item.subTabKey
+          ? [item.subTabKey]
+          : [];
+    return rawKeys
+      .map((entry: unknown) => typeof entry === 'string' ? entry.trim() : String(entry ?? ''))
+      .filter(Boolean);
+  };
+
   // Subtabs: déduire depuis les champs (subTabKey). Les champs sans subTabKey vont dans la catégorie 'default'.
   const allSubTabs = useMemo(() => {
     const set = new Map<string, string>();
-    const addKey = (k?: string | null) => {
-      const key = (k && String(k)) || '__default__';
-      if (!set.has(key)) set.set(key, key === '__default__' ? 'Général' : key);
+    let hasDefault = false;
+    // collect explicit keys
+    const addExplicitKey = (k?: string | null) => {
+      if (!k) return;
+      const key = String(k);
+      if (!set.has(key)) set.set(key, key);
     };
-    sections.forEach(s => s.fields.forEach(f => addKey((f as any).subTabKey)));
-    fields.forEach(f => addKey((f as any).subTabKey));
+    sections.forEach(s => s.fields.forEach(f => getFieldSubTabs(f).forEach(addExplicitKey)));
+    fields.forEach(f => getFieldSubTabs(f).forEach(addExplicitKey));
+    // detect if any field has no subTabKey (unassigned)
+    const detectDefault = (field: any) => {
+      if (getFieldSubTabs(field).length === 0) hasDefault = true;
+    };
+    // When checking for a default (unassigned fields), ignore sections/fields marked as displayOnly (displayAlways)
+    sections.forEach(s => {
+      const meta = (s as any).metadata || {};
+      const sectionAlwaysVisible = !!meta.displayAlways || /affich|aperç|display/i.test(s.label || '');
+      if (sectionAlwaysVisible) return; // don't count these fields as requiring default
+      s.fields.forEach(f => detectDefault(f));
+    });
+    // For top-level fields (not in sections), always include in detection
+    fields.forEach(f => detectDefault(f));
     // Si le tab a une metadata.subTabs explicite, l'ajouter aussi pour l'affichage même si aucun champ n'est assigné
     try {
       if (Array.isArray(tabSubTabs)) {
@@ -2366,11 +2608,21 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         });
       }
     } catch { /* ignore */ }
+    // Add 'Général' only if there are unassigned fields
+    if (hasDefault && !set.has('__default__')) set.set('__default__', 'Général');
     return Array.from(set.entries()).map(([key, label]) => ({ key, label }));
   }, [sections, fields, tabSubTabs]);
 
   const [activeSubTab, setActiveSubTab] = useState<string | undefined>(allSubTabs.length > 0 ? allSubTabs[0].key : undefined);
   useEffect(() => { if (allSubTabs.length > 0 && !allSubTabs.find(st => st.key === activeSubTab)) setActiveSubTab(allSubTabs[0].key); }, [allSubTabs, activeSubTab]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    try {
+      const meta = sections.map(s => ({ id: s.id, title: s.title, metadata: (s as any).metadata }));
+      console.log('🔎 [TBL] ActiveSubTab change:', activeSubTab, 'sections metadata:', meta);
+    } catch (e) { console.error('[TBL] activeSubTab logging error', e); }
+  }, [activeSubTab, sections]);
 
   const renderContent = () => {
     if (sections.length) {
@@ -2378,14 +2630,35 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
       const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
 
-      const filteredSections = sections.map(section => ({
-        ...section,
-        fields: section.fields.filter(f => {
-          const key = ((f as any).subTabKey as string) || '__default__';
-          if (!activeSubTab) return true;
-          return key === activeSubTab;
-        })
-      }));
+      const filteredSections = sections.map(section => {
+        const sectionMeta = (section as any).metadata || {};
+        const sectionAlwaysVisible = (sectionMeta.displayAlways === true || String(sectionMeta.displayAlways) === 'true') || /affich|aperç|display/i.test(section.label || '');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[TBL] [renderContent] Section filter:', { tabId, sectionId: section.id, sectionLabel: section.label, sectionAlwaysVisible, activeSubTab, sectionMeta, displayAlwaysValue: sectionMeta.displayAlways, displayAlwaysType: typeof sectionMeta.displayAlways });
+        }
+        if (process.env.NODE_ENV === 'development') console.log('[TBL] sectionAlwaysVisible for section', section.id, section.label, '=>', sectionAlwaysVisible, 'metadata:', sectionMeta);
+        
+        // CRITICAL: If sectionAlwaysVisible, keep ALL fields regardless of subTab
+        const filteredFields = sectionAlwaysVisible 
+          ? section.fields  // Keep ALL fields if section is marked displayAlways
+          : section.fields.filter(f => {
+              if (!activeSubTab) return true;
+              const assignedTabs = getFieldSubTabs(f);
+              const fMeta = (f as any).metadata || {};
+              const fieldAlwaysVisible = (fMeta.displayAlways === true || String(fMeta.displayAlways) === 'true');
+              if (fieldAlwaysVisible) return true;
+              if (assignedTabs.length === 0) {
+                return activeSubTab === '__default__';
+              }
+              return assignedTabs.includes(activeSubTab);
+            });
+        
+        return {
+          ...section,
+          fields: filteredFields
+        };
+      });
+      if (process.env.NODE_ENV === 'development') console.log('[TBL] filteredSections summary', { tabId, totalSections: sections.length, filteredSectionsCounts: filteredSections.map(s => ({ id: s.id, label: s.label, fieldsCount: (s.fields || []).length, displayAlways: ((s as any).metadata || {}).displayAlways })) });
 
       return (
         <div className="space-y-6">
@@ -2430,9 +2703,15 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
       const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
       const filteredSyntheticFields = synthetic.fields.filter(f => {
-        const key = ((f as any).subTabKey as string) || '__default__';
+        const meta = (f as any).metadata || {};
+        const fieldAlwaysVisible = (meta.displayAlways === true || String(meta.displayAlways) === 'true');
         if (!activeSubTab) return true;
-        return key === activeSubTab;
+        if (fieldAlwaysVisible) return true;
+        const assignedTabs = getFieldSubTabs(f);
+        if (assignedTabs.length === 0) {
+          return activeSubTab === '__default__';
+        }
+        return assignedTabs.includes(activeSubTab);
       });
       const filteredSynthetic: TBLSection = { ...synthetic, fields: filteredSyntheticFields };
       return (

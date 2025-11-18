@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Card, Form, Input, InputNumber, DatePicker, Checkbox, Typography, Button, Space } from 'antd';
 import type { TreeBranchLeafNode } from '../../types';
 
@@ -49,7 +49,21 @@ function fieldForLeaf(node: TreeBranchLeafNode, readOnly?: boolean) {
 }
 
 function renderNode(node: TreeBranchLeafNode, depth: number, readOnly?: boolean): React.ReactNode {
+  // 🔥 Check displayAlways metadata - if false, hide this section unless it has a value
+  const metadata = (node.metadata as any) || {};
+  const displayAlways = metadata.displayAlways === true;
+  
+  console.log(`[SimplePreview] renderNode called: label="${node.label}", type="${node.type}", displayAlways=${displayAlways}, metadata:`, metadata);
+  
+  // For sections, respect displayAlways: if false, don't show the section
   if (node.type === 'branch') {
+    // 🔍 DEBUG: Log displayAlways for branches
+    if (!displayAlways && node.subType === 'data') {
+      console.log(`🚫 [SimplePreview] HIDING section: ${node.label} (displayAlways=false, subType=${node.subType})`);
+      return null; // Hide this section
+    }
+    
+    console.log(`✅ [SimplePreview] SHOWING section: ${node.label} (displayAlways=${displayAlways})`);
     return (
       <div key={node.id} style={{ marginLeft: depth * 12 }}>
         <Title level={5} style={{ marginTop: depth === 0 ? 0 : 12 }}>{node.label}</Title>
@@ -91,6 +105,16 @@ function renderNode(node: TreeBranchLeafNode, depth: number, readOnly?: boolean)
 }
 
 const SimplePreview: React.FC<Props> = ({ nodes, readOnly }) => {
+  // Log when nodes prop changes
+  useEffect(() => {
+    console.log(`📥 [SimplePreview] nodes prop updated. Count: ${nodes?.length || 0}, nodes:`, nodes?.map(n => ({
+      id: n.id,
+      label: n.label,
+      type: n.type,
+      displayAlways: (n.metadata as any)?.displayAlways
+    })));
+  }, [nodes]);
+
   const ordered = useMemo(() => {
     const sortRec = (items: TreeBranchLeafNode[]): TreeBranchLeafNode[] =>
       [...items]

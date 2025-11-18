@@ -24,6 +24,14 @@ interface TableLookupResult {
   options: TableLookupOption[];
   loading: boolean;
   error: string | null;
+  // 🔥 NOUVEAU: Données complètes du tableau pour filtrage conditionnel
+  tableData?: {
+    columns: string[];
+    rows: string[];
+    data: unknown[][];
+    type: 'columns' | 'matrix';
+  };
+  config?: TreeBranchLeafSelectConfig;
 }
 
 export interface TreeBranchLeafSelectConfig {
@@ -81,6 +89,8 @@ export function useTBLTableLookup(
   const [options, setOptions] = useState<TableLookupOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tableData, setTableData] = useState<{columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'} | undefined>(undefined);
+  const [config, setConfig] = useState<TreeBranchLeafSelectConfig | undefined>(undefined);
 
   useEffect(() => {
     const isTargetField = fieldId === '131a7b51-97d5-4f40-8a5a-9359f38939e8';
@@ -93,6 +103,8 @@ export function useTBLTableLookup(
     if (!enabled) {
       if (isTargetField) console.log(`[DEBUG][Test - liste] 🔴 Lookup désactivé (enabled=false). Vidage des options.`);
       setOptions([]);
+      setTableData(undefined);
+      setConfig(undefined);
       setLoading(false);
       setError(null);
       return;
@@ -102,6 +114,8 @@ export function useTBLTableLookup(
     // Cela évite des centaines de requêtes 404 inutiles pour des champs TEXT/NUMBER/etc.
     if (!fieldId || !nodeId) {
       setOptions([]);
+      setTableData(undefined);
+      setConfig(undefined);
       setLoading(false);
       setError(null);
       return;
@@ -131,6 +145,8 @@ export function useTBLTableLookup(
         if (!selectConfig) {
           if (isTargetField) console.log(`[DEBUG][Test - liste] ❌ Pas de selectConfig. Arrêt.`);
           setOptions([]);
+          setTableData(undefined);
+          setConfig(undefined);
           setLoading(false);
           return;
         }
@@ -138,6 +154,8 @@ export function useTBLTableLookup(
         if (selectConfig.optionsSource !== 'table') {
           if (isTargetField) console.log(`[DEBUG][Test - liste] ❌ optionsSource n'est pas 'table'. Arrêt.`);
           setOptions([]);
+          setTableData(undefined);
+          setConfig(undefined);
           setLoading(false);
           return;
         }
@@ -145,6 +163,8 @@ export function useTBLTableLookup(
         if (!selectConfig.tableReference) {
           if (isTargetField) console.log(`[DEBUG][Test - liste] ❌ Pas de tableReference. Arrêt.`);
           setOptions([]);
+          setTableData(undefined);
+          setConfig(undefined);
           setLoading(false);
           return;
         }
@@ -171,6 +191,8 @@ export function useTBLTableLookup(
         // Si la requête a été supprimée (404), on arrête
         if (!table) {
           setOptions([]);
+          setTableData(undefined);
+          setConfig(undefined);
           setLoading(false);
           return;
         }
@@ -189,6 +211,13 @@ export function useTBLTableLookup(
         }
 
         setOptions(extractedOptions);
+        setConfig(selectConfig);
+        setTableData({
+          columns: table.columns,
+          rows: table.rows,
+          data: table.data,
+          type: table.type
+        });
         setLoading(false);
       } catch (err) {
         if (isTargetField) console.error(`[DEBUG][Test - liste] 💥 Erreur dans le hook:`, err);
@@ -196,6 +225,8 @@ export function useTBLTableLookup(
           // Ne logger que les erreurs réelles (pas les 404 qui sont gérés)
           setError(err instanceof Error ? err.message : 'Erreur inconnue');
           setOptions([]);
+          setTableData(undefined);
+          setConfig(undefined);
           setLoading(false);
         }
       }
@@ -206,7 +237,7 @@ export function useTBLTableLookup(
     };
   }, [fieldId, nodeId, api, enabled]); // ✅ Ajout de 'enabled' aux dépendances
 
-  return { options, loading, error };
+  return { options, loading, error, tableData, config };
 }
 
 /**
