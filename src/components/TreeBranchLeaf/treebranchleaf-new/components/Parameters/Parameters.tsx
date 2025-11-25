@@ -343,6 +343,15 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     return m;
   }, [nodes]);
 
+    const hydratedAppearanceConfig = useMemo(() => {
+      if (!selectedNode) return {};
+      const tblSnapshot = TreeBranchLeafRegistry.mapTBLToAppearanceConfig(selectedNode as unknown as Record<string, unknown>);
+      return {
+        ...tblSnapshot,
+        ...(selectedNode.appearanceConfig || {})
+      };
+    }, [selectedNode]);
+
   const branchSubTabs = useMemo(() => {
     if (!selectedNode) return [] as string[];
     // If the selected branch defines its own subTabs, use them
@@ -935,6 +944,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       : selectedNode.type === 'section'
                         ? '📋 Section (pas de champ)'
                         : '➕ Bloc répétable (conteneur)'}
+                    <div style={{ marginTop: 4, fontSize: 10, color: '#8c8c8c' }}>
+                      Utilisez le bouton « Apparence » pour gérer les colonnes et le style du conteneur.
+                    </div>
                   </div>
                 ) : (
                   <Select
@@ -961,7 +973,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               <div style={{ marginTop: 20 }}>
                 <Tooltip title={
                   isContainerNode
-                    ? 'Ce type de nœud n\'a pas de panneau d\'apparence'
+                    ? 'Configurer l\'apparence (colonnes, variantes, largeur...) de ce conteneur'
                     : 'Apparence du champ'
                 }>
                   <Button
@@ -969,7 +981,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     size="small"
                     icon={<BgColorsOutlined />}
                     style={{ width: 32, height: 24 }}
-                    disabled={props.readOnly || !fieldType || isContainerNode}
+                    disabled={props.readOnly || !(fieldType || selectedNode?.type)}
                     onClick={() => {
                       setAppearanceOpen(!appearanceOpen);
                     }}
@@ -1360,12 +1372,12 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         )}
 
         {/* Panneau d'apparence spécifique au type de champ */}
-        {appearanceOpen && fieldType && (
+        {appearanceOpen && (fieldType || selectedNode?.type) && (
           <div style={{ marginTop: 12, border: '1px solid #e8e8e8', borderRadius: 6, backgroundColor: '#fbfbfb' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #e8e8e8', backgroundColor: '#f7f7f7' }}>
               <strong style={{ fontSize: 12 }}>
                 <BgColorsOutlined style={{ marginRight: 6, fontSize: 11 }} />
-                Configuration Apparence ({fieldType?.toUpperCase()})
+                Configuration Apparence ({(fieldType || selectedNode?.type || 'DEFAULT')?.toUpperCase()})
               </strong>
               <Button 
                 type="text" 
@@ -1379,8 +1391,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             
             <div style={{ padding: 8 }}>
               {(() => {
-                const fieldTypeUpper = fieldType?.toUpperCase();
-                const panelImporter = (FieldAppearancePanels as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)[fieldTypeUpper || ''];
+                const fieldTypeUpper = (fieldType || selectedNode?.type || 'DEFAULT')?.toUpperCase();
+                const panelImporter = (FieldAppearancePanels as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)[fieldTypeUpper || '']
+                  || (FieldAppearancePanels as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)['DEFAULT'];
+
                 if (!panelImporter) {
                   return (
                     <div style={{ padding: 8, fontSize: 11, color: '#999', textAlign: 'center' }}>
@@ -1401,7 +1415,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       } as React.CSSProperties & Record<string, string>}
                     >
                       <LazyAppearancePanel 
-                        value={selectedNode?.appearanceConfig || {}}
+                        value={hydratedAppearanceConfig}
                         onChange={(config: Record<string, unknown>) => {
                           console.log('🎨 [Apparence] Changement détecté:', config);
                           

@@ -26,7 +26,8 @@ import {
   Tag,
   Tooltip,
   Typography,
-  Grid
+  Grid,
+  message
 } from 'antd';
 import { 
   InfoCircleOutlined, 
@@ -58,12 +59,6 @@ interface TableLookupCondition {
   operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
   compareWithRef?: string; // Référence NodeTreeSelector vers un champ/formule
   description?: string; // Description lisible de la condition
-}
-
-interface TableLookupFilterConfig {
-  enabled?: boolean;
-  conditions?: TableLookupCondition[];
-  filterLogic?: 'AND' | 'OR'; // Comment combiner les conditions
 }
 
 // 🔥 NOUVEAU: Fonction pour évaluer si une option de lookup passe les conditions de filtrage
@@ -219,7 +214,6 @@ const extractValueFromRow = (
     
     if (config.keyColumn) {
       // Lookup par colonne: trouver la ligne cible
-      const keyColIndex = tableData.columns.indexOf(config.keyColumn);
       const optionColIndex = tableData.columns.indexOf(String(option.value));
       
       if (targetRowIndex >= 0 && optionColIndex >= 0) {
@@ -256,6 +250,46 @@ const { Option } = Select;
 const { Text } = Typography;
 const { useBreakpoint } = Grid;
 
+// 🔧 Réserve deux lignes pour les labels afin d'aligner toutes les entrées
+const LABEL_LINE_HEIGHT_PX = 18;
+const LABEL_MIN_LINES = 2;
+const LABEL_CONTAINER_HEIGHT = (LABEL_LINE_HEIGHT_PX * LABEL_MIN_LINES) + 12;
+const DEFAULT_LABEL_TEXT_STYLE: React.CSSProperties = {
+  lineHeight: `${LABEL_LINE_HEIGHT_PX}px`,
+  height: `${LABEL_LINE_HEIGHT_PX * LABEL_MIN_LINES}px`,
+  display: '-webkit-box',
+  WebkitLineClamp: LABEL_MIN_LINES,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+  width: '100%',
+  paddingRight: 32
+};
+
+const LABEL_CONTAINER_STYLE: React.CSSProperties = {
+  position: 'relative',
+  height: LABEL_CONTAINER_HEIGHT,
+  width: '100%',
+  display: 'flex',
+  alignItems: 'flex-start'
+};
+
+const LABEL_REQUIRED_BADGE_STYLE: React.CSSProperties = {
+  display: 'inline-block',
+  fontWeight: 600,
+  marginLeft: 4
+};
+
+const LABEL_ACTIONS_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  height: LABEL_CONTAINER_HEIGHT,
+  display: 'inline-flex',
+  alignItems: 'flex-start',
+  gap: 8,
+  minWidth: 24
+};
+
 interface TreeBranchLeafFieldConfig {
   // Configuration de base
   fieldType: string;
@@ -263,6 +297,7 @@ interface TreeBranchLeafFieldConfig {
   description?: string;
   required: boolean;
   visible: boolean;
+  placeholder?: string;
   
   // Configurations spécifiques par type
   numberConfig?: {
@@ -292,6 +327,9 @@ interface TreeBranchLeafFieldConfig {
     multiple?: boolean;
     searchable?: boolean;
     allowClear?: boolean;
+    mode?: 'single' | 'multiple' | 'checkboxes' | 'tags';
+    allowCustom?: boolean;
+    maxSelections?: number;
   };
   
   checkboxConfig?: {
@@ -306,6 +344,32 @@ interface TreeBranchLeafFieldConfig {
     disabledDate?: (date: dayjs.Dayjs) => boolean;
     showTime?: boolean;
     defaultValue?: string;
+    minDate?: string;
+    maxDate?: string;
+  };
+  
+  fileConfig?: {
+    accept?: string;
+    maxSize?: number;
+    multiple?: boolean;
+    showPreview?: boolean;
+  };
+  
+  imageConfig?: {
+    formats?: string[];
+    maxSize?: number;
+    ratio?: string;
+    crop?: boolean;
+    thumbnails?: unknown;
+  };
+  
+  repeaterConfig?: {
+    minItems?: number;
+    maxItems?: number;
+    addButtonLabel?: string;
+    buttonSize?: 'tiny' | 'small' | 'middle' | 'large';
+    buttonWidth?: 'auto' | 'half' | 'full';
+    iconOnly?: boolean;
   };
   
   // Apparence TreeBranchLeaf
@@ -370,6 +434,8 @@ interface TBLFieldAdvancedProps {
       size?: string;
       width?: string;
       variant?: string;
+      placeholder?: string;
+      mask?: string;
       
       // Texte
       minLength?: number;
@@ -392,8 +458,11 @@ interface TBLFieldAdvancedProps {
       format?: string;
       showTime?: boolean;
       dateDefaultValue?: string;
+      minDate?: string;
+      maxDate?: string;
       
       // Sélection
+      options?: Array<{ label: string; value: string; disabled?: boolean }>;
       multiple?: boolean;
       searchable?: boolean;
       allowClear?: boolean;
@@ -404,6 +473,7 @@ interface TBLFieldAdvancedProps {
       falseLabel?: string;
       boolDefaultValue?: boolean;
     };
+    appearanceConfig?: Record<string, unknown>;
     options?: Array<{ label: string; value: string }>;
     conditions?: Array<{
       dependsOn: string;
@@ -753,7 +823,59 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
   }
 
-  const tableLookup = useTBLTableLookup(lookupNodeId, lookupNodeId, hasTableCapability);
+  const tableLookup = useTBLTableLookup(lookupNodeId, lookupNodeId, hasTableCapability, formData);
+
+  const templateAppearanceOverrides = useMemo(() => {
+    if (!allNodes || allNodes.length === 0) return null;
+
+    const safePush = (acc: Set<string>, candidate?: unknown) => {
+      if (!candidate) return;
+      if (Array.isArray(candidate)) {
+        candidate.forEach((value) => safePush(acc, value));
+        return;
+      }
+      if (typeof candidate === 'string' && candidate.trim()) {
+        acc.add(candidate.trim());
+      }
+    };
+
+    const meta = ((field as Record<string, any>)?.metadata) || {};
+    const candidateIds = new Set<string>();
+
+    safePush(candidateIds, (field as Record<string, any>)?.repeaterTemplateNodeId);
+    safePush(candidateIds, (field as Record<string, any>)?.sourceTemplateId);
+    safePush(candidateIds, (field as Record<string, any>)?.originalFieldId);
+    safePush(candidateIds, meta?.sourceTemplateId);
+    safePush(candidateIds, meta?.originalNodeId);
+
+    let copiedFrom = meta?.copiedFromNodeId;
+    if (typeof copiedFrom === 'string' && copiedFrom.trim().startsWith('[')) {
+      try {
+        copiedFrom = JSON.parse(copiedFrom);
+      } catch {
+        // ignore malformed JSON values
+      }
+    }
+    safePush(candidateIds, copiedFrom);
+
+    const templateNode = Array.from(candidateIds)
+      .map((id) => allNodes.find((node) => node.id === id))
+      .find((node): node is RawTreeNode => Boolean(node));
+
+    if (!templateNode) return null;
+
+    const metadataAppearance = (templateNode.metadata?.appearance || {}) as Record<string, unknown>;
+    const legacyAppearance: Record<string, unknown> = {};
+
+    if (templateNode.appearance_size) legacyAppearance.size = templateNode.appearance_size;
+    if (templateNode.appearance_width) legacyAppearance.width = templateNode.appearance_width;
+    if (templateNode.appearance_variant) legacyAppearance.variant = templateNode.appearance_variant;
+
+    return {
+      ...legacyAppearance,
+      ...metadataAppearance
+    };
+  }, [allNodes, field]);
   
   // Synchronisation avec la valeur externe
   useEffect(() => {
@@ -762,9 +884,30 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
   // Configuration complète du champ depuis TreeBranchLeaf
   const fieldConfig: TreeBranchLeafFieldConfig = useMemo(() => {
-    const config = field.config || {};
+    const baseAppearanceConfig = (field.appearanceConfig || {}) as Record<string, unknown>;
+    const resolvedAppearanceConfig = {
+      ...(templateAppearanceOverrides || {}),
+      ...baseAppearanceConfig
+    };
+    const config = { ...(field.config || {}) } as Record<string, unknown> & typeof field.config;
+    if (resolvedAppearanceConfig && Object.keys(resolvedAppearanceConfig).length > 0) {
+      Object.entries(resolvedAppearanceConfig).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          (config as Record<string, unknown>)[key] = value;
+        }
+      });
+    }
     const metadata = treeMetadata || {};
     const capabilities = field.capabilities || {};
+
+    const pickDefined = <T,>(...values: Array<T | null | undefined>): T | undefined => {
+      for (const value of values) {
+        if (value !== undefined && value !== null) {
+          return value;
+        }
+      }
+      return undefined;
+    };
     
     // Récupérer la configuration depuis les métadonnées TreeBranchLeaf
     const nodeType = field.type?.toUpperCase() || 'TEXT';
@@ -775,11 +918,48 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const subType = hasTableLookup ? 'SELECT' : baseSubType; // 🔥 TRANSFORMATION DYNAMIQUE
     
     //  CORRECTION: Lire l'apparence depuis field.config ET metadata.appearance
+    const columnAppearance = {
+      size: (field as Record<string, any>)?.appearance_size,
+      width: (field as Record<string, any>)?.appearance_width,
+      variant: (field as Record<string, any>)?.appearance_variant
+    };
+
+    const metadataAppearance = {
+      ...(templateAppearanceOverrides || {}),
+      ...((metadata.appearance || {}) as Record<string, unknown>)
+    };
+    const normalizedAppearanceConfig = resolvedAppearanceConfig || {};
     const appearance = {
-      size: config.size || metadata.appearance?.size,
-      width: config.width || metadata.appearance?.width,
-      variant: config.variant || metadata.appearance?.variant,
-      ...(metadata.appearance || {})
+      ...metadataAppearance,
+      ...normalizedAppearanceConfig,
+      size: pickDefined(
+        normalizedAppearanceConfig.size as string | undefined,
+        normalizedAppearanceConfig.textSize as string | undefined,
+        config.size as string | undefined,
+        columnAppearance.size as string | undefined,
+        metadataAppearance.size as string | undefined
+      ),
+      width: pickDefined(
+        normalizedAppearanceConfig.width as string | undefined,
+        normalizedAppearanceConfig.fieldWidth as string | undefined,
+        config.width as string | undefined,
+        columnAppearance.width as string | undefined,
+        metadataAppearance.width as string | undefined
+      ),
+      variant: pickDefined(
+        normalizedAppearanceConfig.variant as string | undefined,
+        config.variant as string | undefined,
+        columnAppearance.variant as string | undefined,
+        metadataAppearance.variant as string | undefined
+      ),
+      className: pickDefined(
+        normalizedAppearanceConfig.className as string | undefined,
+        metadataAppearance.className as string | undefined
+      ),
+      style: pickDefined(
+        normalizedAppearanceConfig.style as React.CSSProperties | undefined,
+        metadataAppearance.style as React.CSSProperties | undefined
+      )
     };
     
     // 🔍 [DEBUG] Log spécifique pour l'apparence et le type
@@ -813,64 +993,274 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     //   finalFieldType: subType
     // });
     
+    const metadataTextConfig = (metadata.textConfig || {}) as Record<string, unknown>;
+    const metadataNumberConfig = (metadata.numberConfig || {}) as Record<string, unknown>;
+    const metadataSelectConfig = (metadata.selectConfig || {}) as Record<string, unknown>;
+    const metadataCheckboxConfig = (metadata.checkboxConfig || {}) as Record<string, unknown>;
+    const metadataDateConfig = (metadata.dateConfig || {}) as Record<string, unknown>;
+
+    const resolvedRequired = pickDefined(
+      normalizedAppearanceConfig.isRequired as boolean | undefined,
+      field.required,
+      metadata.isRequired,
+      (metadata as Record<string, any>).required
+    ) ?? false;
+
+    const resolvedVisible = (field.visible !== false) && (metadata.isVisible !== false) && (normalizedAppearanceConfig.visibleToUser !== false);
+
     return {
       fieldType: subType,
       label: field.label || 'Champ',
-      description: field.description || metadata.description,
-      required: field.required || metadata.isRequired || false,
-      visible: field.visible !== false && metadata.isVisible !== false,
+      description: pickDefined(field.description, metadata.description),
+      required: resolvedRequired,
+      visible: resolvedVisible,
+      placeholder: pickDefined(
+        normalizedAppearanceConfig.placeholder as string | undefined,
+        field.placeholder,
+        config.placeholder as string | undefined,
+        metadataTextConfig.placeholder,
+        metadata.placeholder
+      ),
       
       // Configurations spécifiques
       numberConfig: {
-        min: config.min || metadata.min,
-        max: config.max || metadata.max,
-        step: config.step || metadata.step || 1,
-        defaultValue: config.numberDefaultValue || metadata.numberDefaultValue || config.defaultValue || metadata.defaultValue,
-        ui: appearance.variant || config.ui || 'input',
-        unit: config.unit || metadata.unit,
+        min: pickDefined(config.min, metadataNumberConfig.min, (metadata as Record<string, unknown>).min) as number | undefined,
+        max: pickDefined(config.max, metadataNumberConfig.max, (metadata as Record<string, unknown>).max) as number | undefined,
+        step: pickDefined(config.step, metadataNumberConfig.step, (metadata as Record<string, unknown>).step) ?? 1,
+        defaultValue: pickDefined(
+          config.numberDefaultValue,
+          metadataNumberConfig.defaultValue,
+          config.defaultValue,
+          metadata.defaultValue
+        ),
+        ui: pickDefined(appearance.variant, config.ui, metadataNumberConfig.ui, 'input') as string,
+        unit: pickDefined(config.unit, metadataNumberConfig.unit, (metadata as Record<string, unknown>).unit),
         ...metadata.numberConfig
       },
       
       textConfig: {
-        placeholder: field.placeholder || config.placeholder || metadata.placeholder,
-        minLength: config.minLength || metadata.minLength,
-        maxLength: config.maxLength || metadata.maxLength,
-        mask: config.mask || metadata.mask, // 🔥 AJOUT: masque
-        rows: config.rows || metadata.rows || 3,
-        defaultValue: config.textDefaultValue || metadata.textDefaultValue || config.defaultValue || metadata.defaultValue,
-        pattern: config.regex || metadata.regex,
+        placeholder: pickDefined(
+          normalizedAppearanceConfig.placeholder as string | undefined,
+          field.placeholder,
+          config.placeholder as string | undefined,
+          metadataTextConfig.placeholder,
+          metadata.placeholder
+        ),
+        minLength: pickDefined(
+          normalizedAppearanceConfig.minLength as number | undefined,
+          config.minLength as number | undefined,
+          metadataTextConfig.minLength,
+          metadata.minLength
+        ) as number | undefined,
+        maxLength: pickDefined(
+          normalizedAppearanceConfig.maxLength as number | undefined,
+          config.maxLength as number | undefined,
+          metadataTextConfig.maxLength,
+          metadata.maxLength
+        ) as number | undefined,
+        mask: pickDefined(
+          normalizedAppearanceConfig.mask as string | undefined,
+          config.mask as string | undefined,
+          metadataTextConfig.mask,
+          metadata.mask
+        ),
+        rows: pickDefined(
+          normalizedAppearanceConfig.rows as number | undefined,
+          config.rows as number | undefined,
+          metadataTextConfig.rows,
+          metadata.rows
+        ) ?? 3,
+        defaultValue: pickDefined(
+          config.textDefaultValue,
+          metadataTextConfig.defaultValue,
+          config.defaultValue,
+          metadata.defaultValue
+        ),
+        pattern: pickDefined(
+          normalizedAppearanceConfig.regex as string | undefined,
+          config.regex as string | undefined,
+          metadataTextConfig.regex,
+          metadata.regex
+        ),
         ...metadata.textConfig
       },
       
       selectConfig: {
-        options: field.options || config.options || metadata.options || [],
-        defaultValue: config.selectDefaultValue || metadata.selectDefaultValue || config.defaultValue || metadata.defaultValue,
-        multiple: config.multiple || metadata.multiple || false,
-        searchable: config.searchable || metadata.searchable !== false,
-        allowClear: !field.required,
+        options: field.options || (config.options as any) || metadataSelectConfig.options || metadata.options || [],
+        defaultValue: pickDefined(
+          config.selectDefaultValue,
+          metadataSelectConfig.defaultValue,
+          config.defaultValue,
+          metadata.defaultValue
+        ),
+        multiple: pickDefined(
+          normalizedAppearanceConfig.selectMode === 'multiple' ? true : undefined,
+          config.multiple as boolean | undefined,
+          metadataSelectConfig.multiple,
+          metadata.multiple
+        ) ?? false,
+        searchable: pickDefined(
+          normalizedAppearanceConfig.selectSearchable as boolean | undefined,
+          normalizedAppearanceConfig.selectShowSearch as boolean | undefined,
+          config.searchable as boolean | undefined,
+          metadataSelectConfig.searchable,
+          metadata.searchable
+        ) ?? true,
+        allowClear: pickDefined(
+          normalizedAppearanceConfig.selectAllowClear as boolean | undefined,
+          config.allowClear as boolean | undefined,
+          metadataSelectConfig.allowClear,
+          metadata.allowClear
+        ) ?? !resolvedRequired,
+        mode: pickDefined(
+          normalizedAppearanceConfig.selectMode as 'single' | 'multiple' | 'checkboxes' | 'tags' | undefined,
+          metadataSelectConfig.mode as 'single' | 'multiple' | 'checkboxes' | 'tags' | undefined
+        ),
+        allowCustom: pickDefined(
+          normalizedAppearanceConfig.selectAllowCustom as boolean | undefined,
+          config.selectAllowCustom as boolean | undefined,
+          metadataSelectConfig.allowCustom as boolean | undefined
+        ),
+        maxSelections: pickDefined(
+          normalizedAppearanceConfig.selectMaxSelections as number | undefined,
+          config.selectMaxSelections as number | undefined,
+          metadataSelectConfig.maxSelections as number | undefined
+        ),
         ...metadata.selectConfig
       },
       
       checkboxConfig: {
         label: field.label,
-        trueLabel: config.trueLabel || metadata.trueLabel,
-        falseLabel: config.falseLabel || metadata.falseLabel,
-        defaultValue: config.boolDefaultValue || metadata.boolDefaultValue || config.defaultValue || metadata.defaultValue,
+        trueLabel: pickDefined(config.trueLabel, metadataCheckboxConfig.trueLabel, metadata.trueLabel),
+        falseLabel: pickDefined(config.falseLabel, metadataCheckboxConfig.falseLabel, metadata.falseLabel),
+        defaultValue: pickDefined(
+          config.boolDefaultValue,
+          metadataCheckboxConfig.defaultValue,
+          config.defaultValue,
+          metadata.defaultValue
+        ),
         ...metadata.checkboxConfig
       },
       
       dateConfig: {
-        format: config.format || metadata.format || 'DD/MM/YYYY',
-        showTime: config.showTime || metadata.showTime || false,
-        defaultValue: config.dateDefaultValue || metadata.dateDefaultValue || config.defaultValue || metadata.defaultValue,
+        format: pickDefined(
+          normalizedAppearanceConfig.format as string | undefined,
+          config.format as string | undefined,
+          metadataDateConfig.format,
+          metadata.format
+        ) || 'DD/MM/YYYY',
+        showTime: pickDefined(
+          normalizedAppearanceConfig.showTime as boolean | undefined,
+          config.showTime as boolean | undefined,
+          metadataDateConfig.showTime,
+          metadata.showTime
+        ) ?? false,
+        defaultValue: pickDefined(
+          config.dateDefaultValue,
+          metadataDateConfig.defaultValue,
+          config.defaultValue,
+          metadata.defaultValue
+        ),
+        minDate: pickDefined(
+          normalizedAppearanceConfig.minDate as string | undefined,
+          config.minDate as string | undefined,
+          metadataDateConfig.minDate,
+          metadata.minDate
+        ),
+        maxDate: pickDefined(
+          normalizedAppearanceConfig.maxDate as string | undefined,
+          config.maxDate as string | undefined,
+          metadataDateConfig.maxDate,
+          metadata.maxDate
+        ),
         ...metadata.dateConfig
+      },
+
+      fileConfig: {
+        accept: pickDefined(
+          normalizedAppearanceConfig.fileAccept as string | undefined,
+          config.fileAccept as string | undefined,
+          (metadata as Record<string, unknown>).fileAccept as string | undefined
+        ),
+        maxSize: pickDefined(
+          normalizedAppearanceConfig.fileMaxSize as number | undefined,
+          config.fileMaxSize as number | undefined,
+          (metadata as Record<string, unknown>).fileMaxSize as number | undefined
+        ),
+        multiple: pickDefined(
+          normalizedAppearanceConfig.fileMultiple as boolean | undefined,
+          config.fileMultiple as boolean | undefined,
+          (metadata as Record<string, unknown>).fileMultiple as boolean | undefined
+        ),
+        showPreview: pickDefined(
+          normalizedAppearanceConfig.fileShowPreview as boolean | undefined,
+          config.fileShowPreview as boolean | undefined,
+          (metadata as Record<string, unknown>).fileShowPreview as boolean | undefined
+        )
+      },
+
+      imageConfig: {
+        formats: Array.isArray(normalizedAppearanceConfig.imageFormats)
+          ? normalizedAppearanceConfig.imageFormats as string[]
+          : typeof normalizedAppearanceConfig.imageFormats === 'string'
+            ? (normalizedAppearanceConfig.imageFormats as string).split(',').map(str => str.trim()).filter(Boolean)
+            : (Array.isArray((metadata as Record<string, unknown>).imageFormats)
+              ? (metadata as Record<string, unknown>).imageFormats as string[]
+              : undefined),
+        maxSize: pickDefined(
+          normalizedAppearanceConfig.imageMaxSize as number | undefined,
+          config.imageMaxSize as number | undefined,
+          (metadata as Record<string, unknown>).imageMaxSize as number | undefined
+        ),
+        ratio: pickDefined(
+          normalizedAppearanceConfig.imageRatio as string | undefined,
+          config.imageRatio as string | undefined,
+          (metadata as Record<string, unknown>).imageRatio as string | undefined
+        ),
+        crop: pickDefined(
+          normalizedAppearanceConfig.imageCrop as boolean | undefined,
+          config.imageCrop as boolean | undefined,
+          (metadata as Record<string, unknown>).imageCrop as boolean | undefined
+        ),
+        thumbnails: pickDefined(
+          normalizedAppearanceConfig.imageThumbnails,
+          config.imageThumbnails,
+          (metadata as Record<string, unknown>).imageThumbnails
+        )
+      },
+
+      repeaterConfig: {
+        minItems: pickDefined(
+          normalizedAppearanceConfig.minItems as number | undefined,
+          config.minItems as number | undefined
+        ),
+        maxItems: pickDefined(
+          normalizedAppearanceConfig.maxItems as number | undefined,
+          config.maxItems as number | undefined
+        ),
+        addButtonLabel: pickDefined(
+          normalizedAppearanceConfig.addButtonLabel as string | undefined,
+          config.addButtonLabel as string | undefined
+        ),
+        buttonSize: pickDefined(
+          normalizedAppearanceConfig.buttonSize as 'tiny' | 'small' | 'middle' | 'large' | undefined,
+          config.buttonSize as 'tiny' | 'small' | 'middle' | 'large' | undefined
+        ),
+        buttonWidth: pickDefined(
+          normalizedAppearanceConfig.buttonWidth as 'auto' | 'half' | 'full' | undefined,
+          config.buttonWidth as 'auto' | 'half' | 'full' | undefined
+        ),
+        iconOnly: pickDefined(
+          normalizedAppearanceConfig.iconOnly as boolean | undefined,
+          config.iconOnly as boolean | undefined
+        )
       },
       
       // Apparence
       appearance: {
         variant: appearance.variant,
-        size: appearance.size || 'middle',
-        width: appearance.width, // 🔥 AJOUT: largeur depuis config
+        size: appearance.size ?? 'middle',
+        width: appearance.width,
         style: appearance.style || {},
         className: appearance.className || ''
       },
@@ -921,7 +1311,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         markers: capabilities.markers.currentMarkers
       } : metadata.markersConfig || {}
     };
-  }, [field, treeMetadata]);
+  }, [field, treeMetadata, templateAppearanceOverrides]);
 
   // Gestion des conditions du champ (système useTBLData)
   useEffect(() => {
@@ -1082,6 +1472,41 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     setValidationError(error);
   }, [fieldConfig, calculatedValue, localValue, isValidation, field.text_maxLength]);
+
+  // 🎯 Auto-sélection intelligente pour les champs SELECT avec table lookup
+  // Quand les filtres changent (via formData), gérer automatiquement la sélection :
+  // - Si aucune option disponible : vider la sélection
+  // - Si la valeur actuelle est invalide : auto-sélectionner la première option
+  useEffect(() => {
+    // Ne s'applique qu'aux champs SELECT avec table lookup activé
+    if (fieldConfig.fieldType !== 'SELECT' || !fieldConfig.hasTable) return;
+    
+    // Ne rien faire pendant le chargement initial
+    if (tableLookup.loading) return;
+    
+    const currentValue = localValue;
+    
+    // CAS 1 : Aucune option disponible → VIDER la sélection
+    if (!tableLookup.options || tableLookup.options.length === 0) {
+      if (currentValue !== null && currentValue !== undefined && currentValue !== '') {
+        console.log(`🧹 [Auto-Clear] Champ "${field.label}": Aucune option disponible, vidage de la sélection`);
+        handleChange(null);
+      }
+      return;
+    }
+    
+    // CAS 2 : Vérifier si la valeur actuelle est toujours valide
+    const isCurrentValueValid = currentValue && tableLookup.options.some(
+      opt => String(opt.value) === String(currentValue)
+    );
+    
+    // CAS 3 : Si la valeur actuelle n'est plus valide, auto-sélectionner la première option
+    if (!isCurrentValueValid && tableLookup.options.length > 0) {
+      const firstOption = tableLookup.options[0];
+      console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
+      handleChange(firstOption.value);
+    }
+  }, [tableLookup.options, tableLookup.loading, fieldConfig.fieldType, fieldConfig.hasTable, field.label]);
 
   // Gestionnaire de changement unifié
   const handleChange = (newValue: unknown) => {
@@ -1455,24 +1880,62 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     // 🎨 Construction du style avec largeur configurée
     const appearanceStyle = fieldConfig.appearance?.style || {};
-    
-    // 🎯 FORCE: TOUS LES CHAMPS À 150PX - PAS DE DIFFÉRENCE DE TAILLE
-    const widthStyle: React.CSSProperties = {
-      width: '150px'
+
+    const normalizeWidth = (raw?: string | number | null): string | undefined => {
+      if (raw === undefined || raw === null) return undefined;
+      if (typeof raw === 'number' && Number.isFinite(raw)) {
+        return `${raw}px`;
+      }
+      if (typeof raw !== 'string') return undefined;
+      const trimmed = raw.trim();
+      if (!trimmed) return undefined;
+      if (/^\d+$/.test(trimmed)) return `${trimmed}px`;
+      if (/^\d+(\.\d+)?(px|rem|em|%|vh|vw)$/.test(trimmed)) return trimmed;
+      if (trimmed.startsWith('calc(')) return trimmed;
+      return undefined;
     };
+
+    const widthStyle: React.CSSProperties = {};
+    const customWidth = normalizeWidth(fieldConfig.appearance?.width || fieldConfig.width);
+    if (customWidth) {
+      widthStyle.width = customWidth;
+    }
+
+    const mapSizeToAntd = (size?: string) => {
+      switch ((size || '').toLowerCase()) {
+        case 'sm':
+        case 'small':
+          return 'small';
+        case 'lg':
+        case 'large':
+          return 'large';
+        case 'md':
+        case 'medium':
+        default:
+          return 'middle';
+      }
+    };
+
+    const resolvedSize = mapSizeToAntd(fieldConfig.appearance?.size || fieldConfig.size);
 
     const commonProps = {
       disabled: isDisabled,
       // 🔥 PLACEHOLDER DYNAMIQUE PRISMA - PRIORITÉ AUX DONNÉES DIRECTES
-      placeholder: field.text_placeholder || field.placeholder || fieldConfig.textConfig?.placeholder || fieldConfig.placeholder || `Saisissez ${fieldConfig.label.toLowerCase()}`,
-      status: validationError && isValidation ? 'error' as const : validationError && !isValidation ? 'success' as const : undefined,
-      // 🔥 TAILLE FIXE pour tous les champs
-      size: 'middle' as const,
+      placeholder: field.text_placeholder || fieldConfig.placeholder || field.placeholder || fieldConfig.textConfig?.placeholder || `Saisissez ${fieldConfig.label.toLowerCase()}`,
+      status: validationError && isValidation ? 'error' as const : undefined,
+      size: resolvedSize,
       style: { 
         ...appearanceStyle, 
         ...widthStyle 
       },
-      className: fieldConfig.appearance?.className || fieldConfig.className || ''
+      className: fieldConfig.appearance?.className || fieldConfig.className || '',
+      'aria-required': fieldConfig.required || undefined
+    };
+
+    // For selects and cascaders: default to 100% width when no explicit width configured
+    const selectLikeStyle: React.CSSProperties = {
+      ...(commonProps.style || {}),
+      width: (commonProps.style && (commonProps.style as React.CSSProperties).width) ? (commonProps.style as React.CSSProperties).width : '100%'
     };
 
     // 🔍 Debug du style appliqué
@@ -1730,7 +2193,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                 handleChange(lastValue);
               }}
               options={cascaderOptions}
-              style={commonProps.style}
+              style={selectLikeStyle}
               placeholder={commonProps.placeholder}
               disabled={isDisabled}
               showSearch={{
@@ -1746,14 +2209,38 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           );
         }
         
-        // 🔥 VARIANT DYNAMIQUE PRISMA SELECT avec fallback
-        if ((fieldConfig.appearance?.variant || fieldConfig.variant) === 'radio') {
+        const selectionMode = fieldConfig.selectConfig?.mode || ((fieldConfig.selectConfig?.multiple || fieldConfig.multiple) ? 'multiple' : 'single');
+        const allowCustomValues = fieldConfig.selectConfig?.allowCustom;
+        const maxSelections = fieldConfig.selectConfig?.maxSelections;
+        const isCheckboxMode = selectionMode === 'checkboxes';
+        const wantsTagMode = selectionMode === 'tags' || (allowCustomValues && selectionMode !== 'single');
+        const antSelectMode = isCheckboxMode
+          ? undefined
+          : selectionMode === 'multiple'
+            ? 'multiple'
+            : wantsTagMode
+              ? 'tags'
+              : undefined;
+        const isMultiValue = isCheckboxMode || Boolean(antSelectMode);
+        const normalizedSelectValue = isMultiValue
+          ? (Array.isArray(finalValue) ? finalValue : (finalValue !== undefined && finalValue !== null ? [finalValue] : []))
+          : finalValue;
+
+        const enforceMaxSelections = (nextValue: unknown) => {
+          if (Array.isArray(nextValue) && maxSelections && nextValue.length > maxSelections) {
+            message.warning(`Maximum ${maxSelections} sélection(s).`);
+            return;
+          }
+          handleChange(nextValue);
+        };
+
+        if ((fieldConfig.appearance?.variant || fieldConfig.variant) === 'radio' && !isMultiValue) {
           return (
             <Radio.Group
               disabled={isDisabled}
               value={finalValue}
               onChange={(e) => handleChange(e.target.value)}
-              size={fieldConfig.appearance?.size}
+              size={resolvedSize}
             >
               {finalOptions.map((option) => (
                 <Radio 
@@ -1767,22 +2254,34 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             </Radio.Group>
           );
         }
+
+        if (isCheckboxMode) {
+          const checkboxValue = Array.isArray(normalizedSelectValue) ? normalizedSelectValue : [];
+          return (
+            <Checkbox.Group
+              options={finalOptions.map(option => ({ label: option.label, value: option.value, disabled: option.disabled }))}
+              value={checkboxValue}
+              disabled={isDisabled}
+              onChange={(vals) => enforceMaxSelections(vals)}
+            />
+          );
+        }
         
         // SELECT classique (sans hiérarchie)
         return (
           <Select
             {...commonProps}
-            value={finalValue}
-            onChange={handleChange}
-            style={commonProps.style}
+            value={antSelectMode ? normalizedSelectValue : finalValue}
+            onChange={(value) => enforceMaxSelections(value)}
+            style={selectLikeStyle}
             loading={fieldConfig.hasTable && tableLookup.loading}
-            // 🔥 PARAMÈTRES DYNAMIQUES PRISMA SELECT avec fallback
-            mode={(fieldConfig.selectConfig?.multiple || fieldConfig.config?.multiple || fieldConfig.multiple) ? 'multiple' : undefined}
-            showSearch={fieldConfig.selectConfig?.searchable ?? fieldConfig.config?.searchable ?? fieldConfig.searchable ?? true}
-            allowClear={fieldConfig.selectConfig?.allowClear ?? fieldConfig.config?.allowClear ?? fieldConfig.allowClear ?? true}
+            mode={antSelectMode}
+            showSearch={fieldConfig.selectConfig?.searchable ?? fieldConfig.searchable ?? true}
+            allowClear={fieldConfig.selectConfig?.allowClear ?? true}
             filterOption={(input, option) =>
               (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
             }
+            tokenSeparators={allowCustomValues ? [','] : undefined}
           >
             {finalOptions.map((option) => (
               <Option 
@@ -1801,12 +2300,13 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       case 'CHECKBOX':
         // 🔥 VARIANT DYNAMIQUE PRISMA CHECKBOX avec fallback
         if ((fieldConfig.appearance?.variant || fieldConfig.variant) === 'switch') {
+          const mapSizeToSwitch = (size?: 'small' | 'middle' | 'large') => (size === 'small' ? 'small' : 'default');
           return (
             <Switch
               disabled={isDisabled}
               checked={Boolean(finalValue)}
               onChange={handleChange}
-              size={fieldConfig.appearance?.size}
+              size={mapSizeToSwitch(resolvedSize as 'small' | 'middle' | 'large')}
               // 🔥 LABELS DYNAMIQUES PRISMA SWITCH avec fallback
               checkedChildren={fieldConfig.checkboxConfig?.trueLabel || fieldConfig.trueLabel}
               unCheckedChildren={fieldConfig.checkboxConfig?.falseLabel || fieldConfig.falseLabel}
@@ -1836,7 +2336,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             // 🔥 VARIANT DYNAMIQUE PRISMA DATE avec fallback
             picker={(fieldConfig.appearance?.variant || fieldConfig.variant) as 'date' | 'week' | 'month' | 'quarter' | 'year' | undefined}
             showTime={fieldConfig.dateConfig?.showTime || fieldConfig.showTime}
-            size={fieldConfig.appearance?.size || fieldConfig.size}
+            size={resolvedSize}
             // 🔥 MIN/MAX DATE DYNAMIQUES PRISMA
             disabledDate={(current) => {
               const minDate = fieldConfig.dateConfig?.minDate || fieldConfig.minDate;
@@ -1879,38 +2379,35 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         );
 
       case 'IMAGE':
+        const imageConfig = fieldConfig.imageConfig || {};
+        const acceptedFormats = Array.isArray(imageConfig.formats) && imageConfig.formats.length > 0
+          ? imageConfig.formats.map(fmt => (fmt.startsWith('.') ? fmt : `.${fmt.toLowerCase()}`))
+          : undefined;
+        const imageAccept = acceptedFormats && acceptedFormats.length > 0 ? acceptedFormats.join(',') : 'image/*';
+        const maxImageSizeBytes = imageConfig.maxSize ? imageConfig.maxSize * 1024 * 1024 : undefined;
+        const enforcedRatio = imageConfig.ratio;
+        const imageThumbnails = imageConfig.thumbnails;
         return (
           <div>
             <Upload
-              accept="image/*"
+              accept={imageAccept}
               maxCount={1}
               // 🔥 TAILLE MAX DYNAMIQUE PRISMA IMAGE
               beforeUpload={(file) => {
-                const maxSize = fieldConfig.config?.maxSize || fieldConfig.maxSize;
-                // 🔥 RATIO DYNAMIQUE PRISMA IMAGE
-                const ratio = fieldConfig.imageConfig?.ratio || fieldConfig.ratio;
-                // 🔥 CROP DYNAMIQUE PRISMA IMAGE  
-                const crop = fieldConfig.imageConfig?.crop || fieldConfig.crop;
-                
-                if (maxSize && file.size > maxSize) {
-                  // console.warn(`Fichier trop volumineux: ${file.size} > ${maxSize}`); // ✨ Log réduit
-                  return false;
-                }
-                
-                // Log de la configuration crop pour debug
-                if (crop) {
-                  // console.log(`🖼️ Configuration crop activée:`, crop); // ✨ Log réduit
+                if (maxImageSizeBytes && file.size > maxImageSizeBytes) {
+                  message.error(`Image trop lourde (max ${imageConfig.maxSize} Mo).`);
+                  return Upload.LIST_IGNORE;
                 }
                 
                 // Validation ratio si défini
-                if (ratio && window.URL) {
+                if (enforcedRatio && window.URL) {
                   const img = new Image();
                   img.onload = () => {
-                    const [width, height] = ratio.split(':').map(Number);
+                    const [width, height] = enforcedRatio.split(':').map(Number);
                     const expectedRatio = width / height;
                     const actualRatio = img.width / img.height;
                     if (Math.abs(expectedRatio - actualRatio) > 0.1) {
-                      // console.warn(`Ratio d'image incorrect. Attendu: ${ratio}, Actuel: ${img.width}:${img.height}`); // ✨ Log réduit
+                      message.warning(`Ratio attendu ${enforcedRatio}`);
                     }
                     URL.revokeObjectURL(img.src);
                   };
@@ -1926,16 +2423,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                     const reader = new FileReader();
                     reader.onload = (e) => {
                       // 🔥 THUMBNAILS DYNAMIQUE PRISMA IMAGE
-                      const thumbnails = fieldConfig.imageConfig?.thumbnails || fieldConfig.thumbnails;
                       let imageData = e.target?.result;
                       
                       // Traiter les thumbnails si configurés
-                      if (thumbnails && typeof thumbnails === 'object') {
+                      if (imageThumbnails && typeof imageThumbnails === 'object') {
                         // console.log(`🖼️ Configuration thumbnails:`, thumbnails); // ✨ Log réduit
                         // Stocker à la fois l'image originale et la config thumbnails
                         imageData = {
                           original: e.target?.result,
-                          thumbnails: thumbnails
+                          thumbnails: imageThumbnails
 ,
                         };
                       }
@@ -1954,59 +2450,65 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               <Button 
                 icon={<UploadOutlined />} 
                 disabled={isDisabled}
-                size={fieldConfig.appearance?.size || 'middle'}
+                size={resolvedSize}
                 style={commonProps.style}
               >
                 {finalValue ? 'Modifier l\'image' : 'Charger une image'}
               </Button>
             </Upload>
             {finalValue && (
-              <div className="mt-2">
-                <img 
-                  src={finalValue as string} 
-                  alt="preview" 
-                  style={{ 
-                    width: '100px', 
-                    height: '100px', 
-                    objectFit: 'cover', 
-                    border: '1px solid #d9d9d9',
-                    borderRadius: '6px'
+              <img 
+                src={finalValue as string} 
+                alt="preview" 
+                style={{ 
+                  width: '100px', 
+                  height: '100px', 
+                  objectFit: 'cover', 
+                  border: '1px solid #d9d9d9',
+                  borderRadius: '6px'
 ,
-                  }} 
-                />
-              </div>
+                }} 
+              />
             )}
           </div>
         );
 
-      case 'FILE':
+      case 'FILE': {
+        const fileConfig = fieldConfig.fileConfig || {};
+        const fileAccept = fileConfig.accept;
+        const maxFileSizeBytes = fileConfig.maxSize ? fileConfig.maxSize * 1024 * 1024 : undefined;
+        const allowMultipleFiles = Boolean(fileConfig.multiple);
+        const showPreviewList = Boolean(fileConfig.showPreview);
         return (
           <Upload
-            // 🔥 TAILLE MAX DYNAMIQUE PRISMA FILE
+            accept={fileAccept}
+            multiple={allowMultipleFiles}
+            maxCount={allowMultipleFiles ? undefined : 1}
+            showUploadList={showPreviewList ? { showRemoveIcon: !isDisabled } : false}
             beforeUpload={(file) => {
-              const maxSize = fieldConfig.config?.maxSize || fieldConfig.maxSize;
-              if (maxSize && file.size > maxSize) {
-                // console.warn(`Fichier trop volumineux: ${file.size} > ${maxSize}`); // ✨ Log réduit
-                return false;
+              if (maxFileSizeBytes && file.size > maxFileSizeBytes) {
+                message.error(`Fichier trop volumineux (max ${fileConfig.maxSize} Mo).`);
+                return Upload.LIST_IGNORE;
               }
               return false; // Empêche l'upload automatique
             }}
             onChange={(info) => {
-              if (info.fileList.length > 0) {
-                const file = info.fileList[0];
-                handleChange(file.originFileObj);
+              if (allowMultipleFiles) {
+                const files = info.fileList.map(item => item.originFileObj || item);
+                handleChange(files);
               } else {
-                handleChange(null);
+                const file = info.fileList[0];
+                handleChange(file ? (file.originFileObj || file) : null);
               }
             }}
             disabled={isDisabled}
-            maxCount={1}
           >
             <Button icon={<UploadOutlined />} disabled={isDisabled}>
               Sélectionner un fichier
             </Button>
           </Upload>
         );
+      }
 
       case 'leaf_repeater':
       case 'LEAF_REPEATER': {
@@ -2014,14 +2516,14 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // Extraire les métadonnées du répétable depuis field.metadata.repeater
         const repeaterMetadata = field.metadata?.repeater;
         const templateNodeIds = repeaterMetadata?.templateNodeIds || [];
-        const maxItems = repeaterMetadata?.maxItems;
-        const addButtonLabel = repeaterMetadata?.addButtonLabel || 'Ajouter une entrée';
-        const minItems = repeaterMetadata?.minItems || 0;
+        const repeaterOverrides = fieldConfig.repeaterConfig || {};
+        const maxItems = repeaterOverrides.maxItems ?? repeaterMetadata?.maxItems ?? undefined;
+        const addButtonLabel = repeaterOverrides.addButtonLabel || repeaterMetadata?.addButtonLabel || 'Ajouter une entrée';
+        const minItems = repeaterOverrides.minItems ?? repeaterMetadata?.minItems ?? 0;
 
         // 🎨 Apparence du bouton "+" (respecte les réglages du répétiteur)
-        const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = (repeaterMetadata?.buttonSize as any) || 'middle';
-  const _buttonWidth: 'auto' | 'half' | 'full' = (repeaterMetadata?.buttonWidth as any) || 'auto';
-        const iconOnly: boolean = Boolean(repeaterMetadata?.iconOnly);
+          const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = repeaterOverrides.buttonSize || (repeaterMetadata?.buttonSize as any) || 'middle';
+          const iconOnly: boolean = repeaterOverrides.iconOnly ?? Boolean(repeaterMetadata?.iconOnly);
 
         // Helpers de style pour le bouton "+"
         const getAddButtonHeight = () => {
@@ -2183,52 +2685,73 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
   };
 
+  const normalizedValidationMessage = typeof validationError === 'string'
+    ? validationError.trim()
+    : '';
+  const sanitizedValidationMessage = normalizedValidationMessage
+    ? normalizedValidationMessage
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[.!?]/g, '')
+        .trim()
+    : '';
+  const shouldDisplayValidationHelp = Boolean(
+    normalizedValidationMessage &&
+    sanitizedValidationMessage !== 'ce champ est obligatoire'
+  );
+
+  const hasValidationError = Boolean(validationError);
+  const shouldShowErrorState = hasValidationError && isValidation;
+
   return (
     <Form.Item
       className={`mb-4 ${isMobile ? 'tbl-form-item-mobile' : ''}`}
       labelCol={{ span: 24 }}
       wrapperCol={{ span: 24 }}
       colon={false}
-      style={{ width: '150px' }}
+      style={{ width: '100%' }}
       label={
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-          <span className="font-medium text-gray-700 whitespace-normal break-words">
+        <div style={LABEL_CONTAINER_STYLE}>
+          <span
+            className="font-medium text-gray-700 whitespace-normal break-words"
+            style={DEFAULT_LABEL_TEXT_STYLE}
+          >
             {fieldConfig.label}
-            {(() => {
-              if (fieldConfig.required) {
-                return (
-                  <span 
-                    className={isValidation ? 'text-red-500 ml-1' : 'text-green-600 ml-1'} 
-                    style={{ color: isValidation ? '#ef4444 !important' : '#16a34a !important' }}
-                  >
-                    *
-                  </span>
-                );
-              }
-              return null;
-            })()}
-            {/* 🎯 Tooltip à droite du label avec espacement */}
-            {tooltipData.hasTooltip && (
-              <span className="ml-2 inline-flex">
-                <HelpTooltip
-                  type={tooltipData.type}
-                  text={tooltipData.text}
-                  image={tooltipData.image}
-                />
-              </span>
-            )}
+            <span
+              style={{
+                ...LABEL_REQUIRED_BADGE_STYLE,
+                color: fieldConfig.required
+                  ? (isValidation ? '#ef4444' : '#16a34a')
+                  : 'transparent'
+              }}
+            >
+              *
+            </span>
           </span>
-          <div className="flex items-center gap-1">
+          <div style={LABEL_ACTIONS_STYLE}>
+            {tooltipData.hasTooltip && (
+              <HelpTooltip
+                type={tooltipData.type}
+                text={tooltipData.text}
+                image={tooltipData.image}
+              />
+            )}
             {fieldConfig.description && (
               <Tooltip title={fieldConfig.description}>
                 <InfoCircleOutlined className="text-gray-400" />
               </Tooltip>
             )}
+            {!tooltipData.hasTooltip && !fieldConfig.description && (
+              <span style={{ visibility: 'hidden' }}>
+                <InfoCircleOutlined />
+              </span>
+            )}
           </div>
         </div>
       }
-      validateStatus={validationError && isValidation ? 'error' : validationError && !isValidation ? 'success' : ''}
-      help={validationError ? (
+      validateStatus={shouldShowErrorState ? 'error' : ''}
+      help={shouldDisplayValidationHelp ? (
         <div 
           style={{ 
             color: isValidation ? '#dc2626' : '#059669',
@@ -2237,10 +2760,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             marginTop: '4px'
           }}
         >
-          {validationError}
+          {normalizedValidationMessage}
         </div>
       ) : undefined}
-      required={fieldConfig.required}
+      required={false}
     >
       {renderCapabilityBadges()}
       {renderFieldInput()}

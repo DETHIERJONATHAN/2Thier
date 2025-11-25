@@ -261,11 +261,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   const toTree = (parent: string | null): TreeNode[] => {
       const kids = byParent[parent || 'root'] || [];
       return kids.map(k => {
+        // 🔥 NOUVEAU: Permettre la sélection des branches (pour récupérer la réponse directement)
+        const isBranch = k.type === 'branch';
+        const isTree = k.type === 'tree';
+        
         const base: TreeNode = {
           title: `${k.label} (${k.type}${k.subType ? ':' + k.subType : ''})`,
           value: k.id,
           key: k.id,
-          disabled: k.type === 'tree' || k.type === 'branch'
+          disabled: isTree // Seuls les "tree" restent désactivés
         };
         const realChildren = toTree(k.id);
         // Ajouter des sous-entrées virtuelles pour séparer Option vs Champ (uniquement en mode token)
@@ -275,6 +279,14 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
             { title: 'Option (O)', value: `${k.id}::option`, key: `${k.id}::option` },
             { title: 'Champ (C)', value: `${k.id}::field`, key: `${k.id}::field` }
           );
+        }
+        // 🔥 NOUVEAU: Ajouter une sous-entrée spéciale pour les branches (réponse directe)
+        if (isBranch) {
+          virtuals.push({
+            title: '📊 Réponse de la branche',
+            value: `${k.id}::branch-response`,
+            key: `${k.id}::branch-response`
+          });
         }
         const children = [...virtuals, ...realChildren];
         return children.length ? { ...base, children } : base;
@@ -340,6 +352,11 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
       const isVirtual = String(v).includes('::');
       if (isVirtual) {
         const [nodeKey, kind] = String(v).split('::');
+        // 🔥 NOUVEAU: Traiter la sélection spéciale de branche (réponse directe)
+        if (kind === 'branch-response') {
+          onSelect({ kind: 'node', ref: `@select.${nodeKey}` });
+          continue;
+        }
         if (kind === 'option') onSelect({ kind: 'nodeOption', ref: `@select.${nodeKey}` });
         else onSelect({ kind: 'node', ref: `@value.${nodeKey}` });
         continue;

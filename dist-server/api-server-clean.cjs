@@ -1373,7 +1373,7 @@ async function getNodeValue(nodeId, submissionId, prisma68, valueMap) {
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     console.log(`[INTERPRETER][getNodeValue] valueMap hit ${nodeId} \u2192 ${formatDebugValue(val)}`);
-    return val !== null && val !== void 0 ? String(val) : null;
+    return val !== null && val !== void 0 ? String(val) : "0";
   }
   console.log(`[INTERPRETER][getNodeValue] DB fallback ${nodeId}`);
   const data = await prisma68.treeBranchLeafSubmissionData.findFirst({
@@ -1386,7 +1386,7 @@ async function getNodeValue(nodeId, submissionId, prisma68, valueMap) {
     }
   });
   console.log(`[INTERPRETER][getNodeValue] DB result ${nodeId} \u2192 ${formatDebugValue(data?.value ?? null)}`);
-  return data?.value || null;
+  return data?.value || "0";
 }
 async function getNodeLabel(nodeId, prisma68, labelMap) {
   if (labelMap && labelMap.has(nodeId)) {
@@ -1614,6 +1614,35 @@ function evaluateOperator(op, left, right) {
       return false;
   }
 }
+function compareValuesByOperator(op, cellValue, targetValue) {
+  if (!op) return false;
+  switch (op) {
+    case "equals":
+    case "==":
+      return String(cellValue) === String(targetValue);
+    case "notEquals":
+    case "!=":
+      return String(cellValue) !== String(targetValue);
+    case "greaterThan":
+    case ">":
+      return Number(cellValue) > Number(targetValue);
+    case "greaterOrEqual":
+    case ">=":
+      return Number(cellValue) >= Number(targetValue);
+    case "lessThan":
+    case "<":
+      return Number(cellValue) < Number(targetValue);
+    case "lessOrEqual":
+    case "<=":
+      return Number(cellValue) <= Number(targetValue);
+    case "contains":
+      return String(cellValue).includes(String(targetValue));
+    case "notContains":
+      return !String(cellValue).includes(String(targetValue));
+    default:
+      return false;
+  }
+}
 function getOperatorText(op) {
   const texts = {
     "isEmpty": "est vide",
@@ -1768,6 +1797,51 @@ function calculateExpression(expr) {
     return 0;
   }
 }
+async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma68, valuesCache, depth, valueMap, labelMap) {
+  if (!sourceOption || sourceOption.type === "select") {
+    return fieldId ? await getNodeValue(fieldId, submissionId, prisma68, valueMap) : null;
+  }
+  if (sourceOption.type === "field" && sourceOption.sourceField) {
+    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma68, valueMap);
+    console.log(`[TABLE] \u{1F525} Option 2 CHAMP: sourceField=${sourceOption.sourceField} \u2192 ${result}`);
+    return result;
+  }
+  if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
+    try {
+      const capacityResult = await interpretReference(
+        sourceOption.capacityRef,
+        submissionId,
+        prisma68,
+        valuesCache,
+        depth + 1,
+        valueMap,
+        labelMap
+      );
+      console.log(`[TABLE] \u{1F525} Option 3 CAPACIT\xC9: capacityRef=${sourceOption.capacityRef} \u2192 ${capacityResult.result}`);
+      return capacityResult.result;
+    } catch (error) {
+      console.error(`[TABLE] \u274C Erreur ex\xE9cution capacit\xE9 ${sourceOption.capacityRef}:`, error);
+      return null;
+    }
+  }
+  return null;
+}
+async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma68, labelMap) {
+  if (!sourceOption || sourceOption.type === "select") {
+    return fieldId ? await getNodeLabel(fieldId, prisma68, labelMap) : "Source";
+  }
+  if (sourceOption.type === "field" && sourceOption.sourceField) {
+    return await getNodeLabel(sourceOption.sourceField, prisma68, labelMap);
+  }
+  if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
+    const capacityId = sourceOption.capacityRef.replace("@value.", "").replace("formula:", "").replace("condition:", "").replace("table:", "");
+    if (labelMap && labelMap.has(capacityId)) {
+      return labelMap.get(capacityId) || capacityId;
+    }
+    return `Capacit\xE9: ${sourceOption.capacityRef}`;
+  }
+  return "Source";
+}
 async function interpretTable(tableId, submissionId, prisma68, valuesCache, depth, valueMap, labelMap) {
   console.log(`[TABLE] \u{1F4CA} D\xE9but interpr\xE9tation table: ${tableId}`);
   const cleanId = tableId.replace("@table.", "").replace("node-table:", "");
@@ -1883,7 +1957,8 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
   });
   const meta = table.meta;
   const lookup = meta?.lookup;
-  if (!lookup || !lookup.enabled) {
+  const isLookupActive = lookup && (lookup.enabled === true || lookup.columnLookupEnabled === true || lookup.rowLookupEnabled === true);
+  if (!isLookupActive) {
     console.error(`[TABLE] \u274C Lookup non configur\xE9 ou d\xE9sactiv\xE9`);
     return {
       result: "\u2205",
@@ -1897,10 +1972,21 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
   const colEnabled = lookup.columnLookupEnabled === true;
   if (rowEnabled && colEnabled && rowFieldId && colFieldId) {
     console.log(`[TABLE] \u{1F3AF} MODE 3 d\xE9tect\xE9: Croisement dynamique COLONNE \xD7 LIGNE`);
-  } else if (colEnabled && !rowEnabled && colFieldId && lookup.displayColumn) {
+  } else if (colEnabled && !rowEnabled && (colFieldId || lookup.columnSourceOption) && lookup.displayColumn) {
     console.log(`[TABLE] \u{1F3AF} MODE 1 d\xE9tect\xE9: COLONNE \xD7 displayColumn fixe`);
-    const colSelectorValue2 = await getNodeValue(colFieldId, submissionId, prisma68, valueMap);
-    const colLabel2 = await getNodeLabel(colFieldId, prisma68, labelMap);
+    const colSourceOption2 = lookup.columnSourceOption;
+    const colSelectorValue2 = await getSourceValue(
+      colSourceOption2,
+      lookup,
+      colFieldId,
+      submissionId,
+      prisma68,
+      valuesCache,
+      depth,
+      valueMap,
+      labelMap
+    );
+    const colLabel2 = await getSourceLabel(colSourceOption2, lookup, colFieldId, prisma68, labelMap);
     const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
     if (!colSelectorValue2) {
       return {
@@ -1910,32 +1996,191 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
       };
     }
     const results = [];
-    for (const fixedRowValue of displayColumns) {
-      const normalizedColSelector2 = String(colSelectorValue2).trim().toLowerCase();
-      const normalizedFixedRow = String(fixedRowValue).trim().toLowerCase();
+    if (lookup.extractValueRef) {
+      console.log(`[TABLE] \u{1F50E} MODE 1 - extractValueRef d\xE9tect\xE9: ${lookup.extractValueRef}, op=${lookup.extractOperator}`);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma68, valuesCache, depth + 1, valueMap, labelMap);
+      const targetValue = refResult.result;
+      const normalizedColSelector2 = String(colSelectorValue2 || "").trim().toLowerCase();
       const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedColSelector2);
       const colSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedColSelector2);
-      const fixedRowInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedRow);
-      const fixedRowInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedRow);
-      let colIndex = -1;
-      let rowIndex = -1;
-      if (colSelectorInCols2 !== -1 && fixedRowInRows !== -1) {
-        colIndex = colSelectorInCols2;
-        rowIndex = fixedRowInRows;
-      } else if (colSelectorInRows2 !== -1 && fixedRowInCols !== -1) {
-        colIndex = fixedRowInCols;
-        rowIndex = colSelectorInRows2;
-        console.log(`[TABLE] \u{1F504} MODE 1 - Inversion d\xE9tect\xE9e et corrig\xE9e pour ${fixedRowValue}`);
+      let finalColIndex2 = -1;
+      if (colSelectorInCols2 !== -1) finalColIndex2 = colSelectorInCols2;
+      else finalColIndex2 = colSelectorInRows2;
+      if (finalColIndex2 === -1) {
+        console.warn(`[TABLE] \u26A0\uFE0F MODE 1 extract - colonne non trouv\xE9e pour selector ${colSelectorValue2}`);
       } else {
-        colIndex = colSelectorInCols2 !== -1 ? colSelectorInCols2 : colSelectorInRows2;
-        rowIndex = fixedRowInRows !== -1 ? fixedRowInRows : fixedRowInCols;
+        const dataColIndex2 = finalColIndex2 - 1;
+        let foundRowIndex = -1;
+        for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+          const potentialVal = data[rIdx]?.[dataColIndex2];
+          if (compareValuesByOperator(lookup.extractOperator, potentialVal, targetValue)) {
+            foundRowIndex = rIdx;
+            break;
+          }
+        }
+        if (foundRowIndex !== -1) {
+          for (const fixedRowValue of displayColumns) {
+            const normalizedFixedRow = String(fixedRowValue).trim().toLowerCase();
+            const fixedRowInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedRow);
+            const fixedRowInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedRow);
+            let rowIndex = -1;
+            if (fixedRowInRows !== -1) rowIndex = fixedRowInRows;
+            else if (fixedRowInCols !== -1) rowIndex = fixedRowInCols;
+            if (rowIndex !== -1) {
+              const dataRowIndex2 = rowIndex;
+              const dataColIndexForDisplay = finalColIndex2 - 1;
+              const result2 = data[dataRowIndex2]?.[dataColIndexForDisplay];
+              results.push({ row: fixedRowValue, value: result2 });
+              console.log(`[TABLE] \u2705 MODE 1 - extract result ${fixedRowValue}: ${result2}`);
+            }
+          }
+          const resultText2 = results.map((r) => `${r.row}=${r.value}`).join(", ");
+          const resultValues2 = results.map((r) => r.value);
+          const humanText3 = `Table "${table.name}"[extract ${lookup.extractValueRef} ${lookup.extractOperator} -> row=${rows[foundRowIndex]}] = ${resultText2}`;
+          return {
+            result: resultValues2.length === 1 ? String(resultValues2[0]) : JSON.stringify(resultValues2),
+            humanText: humanText3,
+            details: {
+              type: "table",
+              mode: 1,
+              tableId: table.id,
+              tableName: table.name,
+              lookup: {
+                column: { field: colLabel2, value: colSelectorValue2 },
+                rows: results,
+                multiple: results.length > 1,
+                extract: { ref: lookup.extractValueRef, operator: lookup.extractOperator, target: targetValue }
+              }
+            }
+          };
+        }
       }
-      if (colIndex !== -1 && rowIndex !== -1) {
-        const dataRowIndex2 = rowIndex - 1;
-        const dataColIndex2 = colIndex - 1;
-        const result2 = data[dataRowIndex2]?.[dataColIndex2];
-        results.push({ row: fixedRowValue, value: result2 });
-        console.log(`[TABLE] \u2705 MODE 1 - ${fixedRowValue}: ${result2}`);
+    }
+    let targetColIndex = -1;
+    if ((colSourceOption2?.type === "field" || colSourceOption2?.type === "capacity") && colSourceOption2?.operator && colSourceOption2?.comparisonColumn) {
+      console.log(`[TABLE] \u{1F525} MODE 1 - Option ${colSourceOption2.type === "field" ? "2" : "3"} avec op\xE9rateur: ${colSourceOption2.operator} sur colonne "${colSourceOption2.comparisonColumn}"`);
+      const comparisonColName = colSourceOption2.comparisonColumn;
+      const normalizedComparisonCol = String(comparisonColName).trim().toLowerCase();
+      const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedComparisonCol);
+      const colSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedComparisonCol);
+      let colSelectorIndex = -1;
+      if (colSelectorInCols2 !== -1) colSelectorIndex = colSelectorInCols2;
+      else if (colSelectorInRows2 !== -1) colSelectorIndex = colSelectorInRows2;
+      if (colSelectorIndex !== -1) {
+        const dataColIndex2 = colSelectorIndex - 1;
+        let foundRowIndex = -1;
+        for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+          const cellValue = colSelectorIndex === 0 ? rows[rIdx] : data[rIdx]?.[dataColIndex2];
+          if (compareValuesByOperator(colSourceOption2.operator, cellValue, colSelectorValue2)) {
+            foundRowIndex = rIdx;
+            console.log(`[TABLE] \u2705 MODE 1 Option ${colSourceOption2.type === "field" ? "2" : "3"} - Trouv\xE9 \xE0 ligne ${rIdx}: ${cellValue} ${colSourceOption2.operator} ${colSelectorValue2}`);
+            break;
+          }
+        }
+        if (foundRowIndex !== -1) {
+          for (const fixedColValue of displayColumns) {
+            const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
+            const fixedColInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedCol);
+            const fixedColInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedCol);
+            let colIndexForDisplay = -1;
+            if (fixedColInCols !== -1) colIndexForDisplay = fixedColInCols;
+            else if (fixedColInRows !== -1) colIndexForDisplay = fixedColInRows;
+            if (colIndexForDisplay !== -1) {
+              const dataColIndexForDisplay = colIndexForDisplay - 1;
+              const result2 = data[foundRowIndex]?.[dataColIndexForDisplay];
+              results.push({ row: fixedColValue, value: result2 });
+              console.log(`[TABLE] \u2705 MODE 1 Option ${colSourceOption2.type === "field" ? "2" : "3"} - R\xE9sultat ${fixedColValue}: ${result2} (\xE0 partir de ligne trouv\xE9e ${foundRowIndex})`);
+            }
+          }
+          targetColIndex = colSelectorIndex;
+        }
+      } else {
+        console.warn(`[TABLE] \u26A0\uFE0F MODE 1 - Colonne de comparaison non trouv\xE9e: ${comparisonColName}`);
+      }
+    }
+    if (targetColIndex === -1) {
+      if (colSourceOption2?.type === "capacity" && !colSourceOption2?.operator) {
+        console.log(`[TABLE] \u{1F525} MODE 1 Option 3 SANS op\xE9rateur - Chercher valeur num\xE9rique: ${colSelectorValue2}`);
+        const normalizedColSelector2 = String(colSelectorValue2).trim().toLowerCase();
+        let foundRowIndex = -1;
+        for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+          const rowValue = String(rows[rIdx]).trim().toLowerCase();
+          if (rowValue === normalizedColSelector2 || rows[rIdx] === colSelectorValue2) {
+            foundRowIndex = rIdx;
+            console.log(`[TABLE] \u2705 MODE 1 Option 3 - Trouv\xE9 \xE0 ligne ${rIdx}: ${rows[rIdx]}`);
+            break;
+          }
+        }
+        if (foundRowIndex === -1) {
+          const numericSelector = Number(colSelectorValue2);
+          if (!isNaN(numericSelector)) {
+            let closestRowIndex = -1;
+            let closestValue = -Infinity;
+            for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+              const rowNum = Number(rows[rIdx]);
+              if (!isNaN(rowNum)) {
+                if (rowNum === numericSelector) {
+                  foundRowIndex = rIdx;
+                  console.log(`[TABLE] \u2705 MODE 1 Option 3 - Match num\xE9rique exact \xE0 ligne ${rIdx}: ${rowNum}`);
+                  break;
+                }
+                if (rowNum <= numericSelector && rowNum > closestValue) {
+                  closestValue = rowNum;
+                  closestRowIndex = rIdx;
+                }
+              }
+            }
+            if (foundRowIndex === -1 && closestRowIndex !== -1) {
+              foundRowIndex = closestRowIndex;
+              console.log(`[TABLE] \u2705 MODE 1 Option 3 - Match par proximit\xE9 \xE0 ligne ${closestRowIndex}: valeur=${closestValue}, cherch\xE9e=${numericSelector}`);
+            }
+          }
+        }
+        if (foundRowIndex !== -1) {
+          for (const fixedColValue of displayColumns) {
+            const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
+            const colIndexForDisplay = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedCol);
+            if (colIndexForDisplay !== -1) {
+              const dataColIndexForDisplay = colIndexForDisplay - 1;
+              const result2 = data[foundRowIndex]?.[dataColIndexForDisplay];
+              results.push({ row: fixedColValue, value: result2 });
+              console.log(`[TABLE] \u2705 MODE 1 Option 3 - R\xE9sultat ${fixedColValue}: ${result2} (ligne ${foundRowIndex})`);
+            }
+          }
+          targetColIndex = 0;
+        } else {
+          console.warn(`[TABLE] \u26A0\uFE0F MODE 1 Option 3 - Valeur ${colSelectorValue2} non trouv\xE9e dans rows`);
+        }
+      }
+      if (targetColIndex === -1) {
+        for (const fixedRowValue of displayColumns) {
+          const normalizedColSelector2 = String(colSelectorValue2).trim().toLowerCase();
+          const normalizedFixedRow = String(fixedRowValue).trim().toLowerCase();
+          const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedColSelector2);
+          const colSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedColSelector2);
+          const fixedRowInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedRow);
+          const fixedRowInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedRow);
+          let colIndex = -1;
+          let rowIndex = -1;
+          if (colSelectorInCols2 !== -1 && fixedRowInRows !== -1) {
+            colIndex = colSelectorInCols2;
+            rowIndex = fixedRowInRows;
+          } else if (colSelectorInRows2 !== -1 && fixedRowInCols !== -1) {
+            colIndex = fixedRowInCols;
+            rowIndex = colSelectorInRows2;
+            console.log(`[TABLE] \u{1F504} MODE 1 - Inversion d\xE9tect\xE9e et corrig\xE9e pour ${fixedRowValue}`);
+          } else {
+            colIndex = colSelectorInCols2 !== -1 ? colSelectorInCols2 : colSelectorInRows2;
+            rowIndex = fixedRowInRows !== -1 ? fixedRowInRows : fixedRowInCols;
+          }
+          if (colIndex !== -1 && rowIndex !== -1) {
+            const dataRowIndex2 = rowIndex;
+            const dataColIndex2 = colIndex - 1;
+            const result2 = data[dataRowIndex2]?.[dataColIndex2];
+            results.push({ row: fixedRowValue, value: result2 });
+            console.log(`[TABLE] \u2705 MODE 1 - ${fixedRowValue}: ${result2}`);
+          }
+        }
       }
     }
     const resultText = results.map((r) => `${r.row}=${r.value}`).join(", ");
@@ -1958,8 +2203,19 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
     };
   } else if (rowEnabled && !colEnabled && rowFieldId && lookup.displayRow) {
     console.log(`[TABLE] \u{1F3AF} MODE 2 d\xE9tect\xE9: displayRow fixe \xD7 LIGNE`);
-    const rowSelectorValue2 = await getNodeValue(rowFieldId, submissionId, prisma68, valueMap);
-    const rowLabel2 = await getNodeLabel(rowFieldId, prisma68, labelMap);
+    const rowSourceOption2 = lookup.rowSourceOption;
+    const rowSelectorValue2 = await getSourceValue(
+      rowSourceOption2,
+      lookup,
+      rowFieldId,
+      submissionId,
+      prisma68,
+      valuesCache,
+      depth,
+      valueMap,
+      labelMap
+    );
+    const rowLabel2 = await getSourceLabel(rowSourceOption2, lookup, rowFieldId, prisma68, labelMap);
     const displayRows = Array.isArray(lookup.displayRow) ? lookup.displayRow : [lookup.displayRow];
     console.log(`[TABLE] \u{1F4CA} MODE 2 - Croisement: ligne=${rowLabel2}(${rowSelectorValue2}) \xD7 colonnes=${displayRows.join(", ")} (fixes)`);
     if (!rowSelectorValue2) {
@@ -1970,32 +2226,135 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
       };
     }
     const results = [];
-    for (const fixedColValue of displayRows) {
-      const normalizedRowSelector2 = String(rowSelectorValue2).trim().toLowerCase();
-      const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
+    if (lookup.extractValueRef) {
+      console.log(`[TABLE] \u{1F50E} MODE 2 - extractValueRef detected: ${lookup.extractValueRef}, op=${lookup.extractOperator}`);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma68, valuesCache, depth + 1, valueMap, labelMap);
+      const targetValue = refResult.result;
+      const normalizedRowSelector2 = String(rowSelectorValue2 || "").trim().toLowerCase();
       const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedRowSelector2);
       const rowSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedRowSelector2);
-      const fixedColInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedCol);
-      const fixedColInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedCol);
-      let rowIndex = -1;
-      let colIndex = -1;
-      if (rowSelectorInRows2 !== -1 && fixedColInCols !== -1) {
-        rowIndex = rowSelectorInRows2;
-        colIndex = fixedColInCols;
-      } else if (rowSelectorInCols2 !== -1 && fixedColInRows !== -1) {
-        rowIndex = fixedColInRows;
-        colIndex = rowSelectorInCols2;
-        console.log(`[TABLE] \u{1F504} MODE 2 - Inversion d\xE9tect\xE9e et corrig\xE9e pour ${fixedColValue}`);
+      let finalRowIndex2 = -1;
+      if (rowSelectorInRows2 !== -1) finalRowIndex2 = rowSelectorInRows2;
+      else finalRowIndex2 = rowSelectorInCols2;
+      if (finalRowIndex2 === -1) {
+        console.warn(`[TABLE] \u26A0\uFE0F MODE 2 extract - ligne non trouv\xE9e pour selector ${rowSelectorValue2}`);
       } else {
-        rowIndex = rowSelectorInRows2 !== -1 ? rowSelectorInRows2 : rowSelectorInCols2;
-        colIndex = fixedColInCols !== -1 ? fixedColInCols : fixedColInRows;
+        const dataRowIndex2 = finalRowIndex2;
+        let foundColIndex = -1;
+        for (let cIdx = 0; cIdx < columns.length; cIdx++) {
+          const valueAt = data[dataRowIndex2]?.[cIdx - 1];
+          if (compareValuesByOperator(lookup.extractOperator, valueAt, targetValue)) {
+            foundColIndex = cIdx;
+            break;
+          }
+        }
+        if (foundColIndex !== -1) {
+          for (const fixedColValue of displayRows) {
+            const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
+            const fixedColInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedCol);
+            const fixedColInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedCol);
+            let colIndex = -1;
+            if (fixedColInCols !== -1) colIndex = fixedColInCols;
+            else if (fixedColInRows !== -1) colIndex = fixedColInRows;
+            if (colIndex !== -1) {
+              const dataColIndex2 = colIndex - 1;
+              const result2 = data[dataRowIndex2]?.[dataColIndex2];
+              results.push({ column: fixedColValue, value: result2 });
+              console.log(`[TABLE] \u2705 MODE 2 - extract result ${fixedColValue}: ${result2}`);
+            }
+          }
+          const resultText2 = results.map((r) => `${r.column}=${r.value}`).join(", ");
+          const resultValues2 = results.map((r) => r.value);
+          const humanText3 = `Table "${table.name}"[extract ${lookup.extractValueRef} ${lookup.extractOperator} -> col=${columns[foundColIndex]}] = ${resultText2}`;
+          return {
+            result: resultValues2.length === 1 ? String(resultValues2[0]) : JSON.stringify(resultValues2),
+            humanText: humanText3,
+            details: {
+              type: "table",
+              mode: 2,
+              tableId: table.id,
+              tableName: table.name,
+              lookup: {
+                row: { field: rowLabel2, value: rowSelectorValue2 },
+                columns: results,
+                multiple: results.length > 1,
+                extract: { ref: lookup.extractValueRef, operator: lookup.extractOperator, target: targetValue }
+              }
+            }
+          };
+        }
       }
-      if (rowIndex !== -1 && colIndex !== -1) {
-        const dataRowIndex2 = rowIndex - 1;
-        const dataColIndex2 = colIndex - 1;
-        const result2 = data[dataRowIndex2]?.[dataColIndex2];
-        results.push({ column: fixedColValue, value: result2 });
-        console.log(`[TABLE] \u2705 MODE 2 - ${fixedColValue}: ${result2}`);
+    }
+    let targetRowIndex = -1;
+    if ((rowSourceOption2?.type === "field" || rowSourceOption2?.type === "capacity") && rowSourceOption2?.operator && rowSourceOption2?.comparisonColumn) {
+      console.log(`[TABLE] \u{1F525} MODE 2 - Option ${rowSourceOption2.type === "field" ? "2" : "3"} avec op\xE9rateur: ${rowSourceOption2.operator} sur ligne "${rowSourceOption2.comparisonColumn}"`);
+      const comparisonRowName = rowSourceOption2.comparisonColumn;
+      const normalizedComparisonRow = String(comparisonRowName).trim().toLowerCase();
+      const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedComparisonRow);
+      const rowSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedComparisonRow);
+      let rowSelectorIndex = -1;
+      if (rowSelectorInRows2 !== -1) rowSelectorIndex = rowSelectorInRows2;
+      else if (rowSelectorInCols2 !== -1) rowSelectorIndex = rowSelectorInCols2;
+      if (rowSelectorIndex !== -1) {
+        const dataRowIndex2 = rowSelectorIndex;
+        let foundColIndex = -1;
+        for (let cIdx = 0; cIdx < columns.length; cIdx++) {
+          const cellValue = data[dataRowIndex2]?.[cIdx - 1];
+          if (compareValuesByOperator(rowSourceOption2.operator, cellValue, rowSelectorValue2)) {
+            foundColIndex = cIdx;
+            console.log(`[TABLE] \u2705 MODE 2 Option ${rowSourceOption2.type === "field" ? "2" : "3"} - Trouv\xE9 \xE0 colonne ${cIdx}: ${cellValue} ${rowSourceOption2.operator} ${rowSelectorValue2}`);
+            break;
+          }
+        }
+        if (foundColIndex !== -1) {
+          const dataColIndexForFound = foundColIndex - 1;
+          for (const fixedRowValue of displayRows) {
+            const normalizedFixedRow = String(fixedRowValue).trim().toLowerCase();
+            const fixedRowInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedRow);
+            const fixedRowInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedRow);
+            let rowIndexForDisplay = -1;
+            if (fixedRowInRows !== -1) rowIndexForDisplay = fixedRowInRows;
+            else if (fixedRowInCols !== -1) rowIndexForDisplay = fixedRowInCols;
+            if (rowIndexForDisplay !== -1) {
+              const result2 = data[rowIndexForDisplay]?.[dataColIndexForFound];
+              results.push({ column: fixedRowValue, value: result2 });
+              console.log(`[TABLE] \u2705 MODE 2 Option ${rowSourceOption2.type === "field" ? "2" : "3"} - R\xE9sultat ${fixedRowValue}: ${result2} (depuis colonne trouv\xE9e ${foundColIndex})`);
+            }
+          }
+          targetRowIndex = rowSelectorIndex;
+        }
+      } else {
+        console.warn(`[TABLE] \u26A0\uFE0F MODE 2 - Ligne de comparaison non trouv\xE9e: ${comparisonRowName}`);
+      }
+    }
+    if (targetRowIndex === -1) {
+      for (const fixedColValue of displayRows) {
+        const normalizedRowSelector2 = String(rowSelectorValue2).trim().toLowerCase();
+        const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
+        const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedRowSelector2);
+        const rowSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedRowSelector2);
+        const fixedColInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFixedCol);
+        const fixedColInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFixedCol);
+        let rowIndex = -1;
+        let colIndex = -1;
+        if (rowSelectorInRows2 !== -1 && fixedColInCols !== -1) {
+          rowIndex = rowSelectorInRows2;
+          colIndex = fixedColInCols;
+        } else if (rowSelectorInCols2 !== -1 && fixedColInRows !== -1) {
+          rowIndex = fixedColInRows;
+          colIndex = rowSelectorInCols2;
+          console.log(`[TABLE] \u{1F504} MODE 2 - Inversion d\xE9tect\xE9e et corrig\xE9e pour ${fixedColValue}`);
+        } else {
+          rowIndex = rowSelectorInRows2 !== -1 ? rowSelectorInRows2 : rowSelectorInCols2;
+          colIndex = fixedColInCols !== -1 ? fixedColInCols : fixedColInRows;
+        }
+        if (rowIndex !== -1 && colIndex !== -1) {
+          const dataRowIndex2 = rowIndex;
+          const dataColIndex2 = colIndex - 1;
+          const result2 = data[dataRowIndex2]?.[dataColIndex2];
+          results.push({ column: fixedColValue, value: result2 });
+          console.log(`[TABLE] \u2705 MODE 2 - ${fixedColValue}: ${result2}`);
+        }
       }
     }
     const resultText = results.map((r) => `${r.column}=${r.value}`).join(", ");
@@ -2025,10 +2384,32 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
     };
   }
   console.log(`[TABLE] \u{1F4CB} Selectors MODE 3: row=${rowFieldId}, col=${colFieldId}`);
-  const rowSelectorValue = await getNodeValue(rowFieldId, submissionId, prisma68, valueMap);
-  const colSelectorValue = await getNodeValue(colFieldId, submissionId, prisma68, valueMap);
-  const rowLabel = await getNodeLabel(rowFieldId, prisma68, labelMap);
-  const colLabel = await getNodeLabel(colFieldId, prisma68, labelMap);
+  const rowSourceOption = lookup.rowSourceOption;
+  const colSourceOption = lookup.columnSourceOption;
+  const rowSelectorValue = await getSourceValue(
+    rowSourceOption,
+    lookup,
+    rowFieldId,
+    submissionId,
+    prisma68,
+    valuesCache,
+    depth,
+    valueMap,
+    labelMap
+  );
+  const colSelectorValue = await getSourceValue(
+    colSourceOption,
+    lookup,
+    colFieldId,
+    submissionId,
+    prisma68,
+    valuesCache,
+    depth,
+    valueMap,
+    labelMap
+  );
+  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma68, labelMap);
+  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma68, labelMap);
   console.log(`[TABLE] \u{1F4CA} Valeurs s\xE9lectionn\xE9es: row=${rowLabel}(${rowSelectorValue}), col=${colLabel}(${colSelectorValue})`);
   if (!rowSelectorValue || !colSelectorValue) {
     return {
@@ -2144,10 +2525,10 @@ async function interpretField(fieldId, submissionId, prisma68, valueMap, labelMa
   console.log(`[CHAMP] \u{1F4DD} D\xE9but interpr\xE9tation champ: ${fieldId}`);
   const value = await getNodeValue(fieldId, submissionId, prisma68, valueMap);
   const label = await getNodeLabel(fieldId, prisma68, labelMap);
-  console.log(`[CHAMP] \u{1F4CA} ${label} = ${value || "aucune donn\xE9e"}`);
-  const humanText = `${label}(${value || "aucune donn\xE9e"})`;
+  console.log(`[CHAMP] \u{1F4CA} ${label} = ${value}`);
+  const humanText = `${label}(${value})`;
   return {
-    result: value || "\u2205",
+    result: value || "0",
     humanText,
     details: {
       type: "field",
@@ -29499,6 +29880,21 @@ function mapJSONToColumns(updateData) {
     if (appearanceConfig.textSize) columnData.appearance_size = appearanceConfig.textSize;
     if (appearanceConfig.fieldWidth) columnData.appearance_width = appearanceConfig.fieldWidth;
     if (appearanceConfig.fieldVariant) columnData.appearance_variant = appearanceConfig.fieldVariant;
+    if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
+    if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
+    if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
+    if (appearanceConfig.collapsible !== void 0) columnData.section_collapsible = appearanceConfig.collapsible;
+    if (appearanceConfig.defaultCollapsed !== void 0) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
+    if (appearanceConfig.showChildrenCount !== void 0) columnData.section_showChildrenCount = appearanceConfig.showChildrenCount;
+    if (appearanceConfig.columnsDesktop !== void 0) columnData.section_columnsDesktop = appearanceConfig.columnsDesktop;
+    if (appearanceConfig.columnsMobile !== void 0) columnData.section_columnsMobile = appearanceConfig.columnsMobile;
+    if (appearanceConfig.gutter !== void 0) columnData.section_gutter = appearanceConfig.gutter;
+    if (appearanceConfig.maxFileSize !== void 0) columnData.file_maxSize = appearanceConfig.maxFileSize;
+    if (appearanceConfig.allowedTypes) columnData.file_allowedTypes = appearanceConfig.allowedTypes;
+    if (appearanceConfig.multiple !== void 0) columnData.file_multiple = appearanceConfig.multiple;
+    if (appearanceConfig.showPreview !== void 0) columnData.file_showPreview = appearanceConfig.showPreview;
+    if (appearanceConfig.visibleToUser !== void 0) columnData.data_visibleToUser = appearanceConfig.visibleToUser;
+    if (appearanceConfig.isRequired !== void 0) columnData.isRequired = appearanceConfig.isRequired;
   }
   if (metadata.appearance && typeof metadata.appearance === "object") {
     const metaAppearance = metadata.appearance;
@@ -46136,6 +46532,7 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
         id: true,
         label: true,
         calculatedValue: true,
+        metadata: true,
         calculatedAt: true,
         calculatedBy: true,
         type: true,
@@ -46144,6 +46541,36 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
     });
     if (!node) {
       return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+    }
+    try {
+      const meta = node.metadata;
+      if ((node.calculatedValue === null || node.calculatedValue === void 0 || node.calculatedValue === "") && meta?.copiedFromNodeId) {
+        let origId = meta.copiedFromNodeId;
+        if (typeof origId === "string" && origId.trim().startsWith("[")) {
+          try {
+            origId = JSON.parse(origId)[0];
+          } catch {
+          }
+        }
+        if (Array.isArray(origId) && origId.length > 0) origId = origId[0];
+        if (origId) {
+          const originalNode = await prisma.treeBranchLeafNode.findUnique({ where: { id: String(origId) }, select: { id: true, label: true, calculatedValue: true, calculatedAt: true, calculatedBy: true, type: true, fieldType: true } });
+          if (originalNode) {
+            return res.json({
+              success: true,
+              nodeId: originalNode.id,
+              label: originalNode.label,
+              value: originalNode.calculatedValue,
+              calculatedAt: originalNode.calculatedAt,
+              calculatedBy: originalNode.calculatedBy,
+              type: originalNode.type,
+              fieldType: originalNode.fieldType
+            });
+          }
+        }
+      }
+    } catch (metaErr) {
+      console.warn("[CalculatedValueController] error checking copiedFromNodeId fallback", metaErr);
     }
     return res.json({
       success: true,

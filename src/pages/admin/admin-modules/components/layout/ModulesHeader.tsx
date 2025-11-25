@@ -37,53 +37,53 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 	} = props;
 
 	return (
-		<div className="mb-6">
+		<div className="mb-6 text-slate-900">
 			<div className="mb-6 text-center">
-				<h1 className="text-3xl font-extrabold text-gray-800">Administration des Modules</h1>
-				<p className="text-gray-600 mt-2">Gérez les modules et leurs catégories pour votre organisation</p>
+				<h1 className="text-3xl font-black tracking-tight text-slate-900">Administration des Modules</h1>
+				<p className="text-base text-slate-600 mt-2">Gérez les modules et leurs catégories pour votre organisation</p>
 			</div>
 
 			{/* Cartes de statistiques */}
 			<Row gutter={[16, 16]} className="mb-4">
 				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow">
+					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
 						<div className="flex items-center justify-between">
 							<div>
-								<div className="text-sm text-gray-500">Total Catégories</div>
-								<div className="text-2xl font-bold">{categoriesCount}</div>
+								<div className="text-xs uppercase tracking-wide text-slate-500">Total Catégories</div>
+								<div className="text-2xl font-semibold text-slate-900">{categoriesCount}</div>
 							</div>
 							<AppstoreOutlined className="text-[#2C5967]" style={{ fontSize: 26 }} />
 						</div>
 					</Card>
 				</Col>
 				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow">
+					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
 						<div className="flex items-center justify-between">
 							<div>
-								<div className="text-sm text-gray-500">Modules (total)</div>
-								<div className="text-2xl font-bold">{totalModules}</div>
+								<div className="text-xs uppercase tracking-wide text-slate-500">Modules (total)</div>
+								<div className="text-2xl font-semibold text-slate-900">{totalModules}</div>
 							</div>
 							<RocketOutlined className="text-blue-600" style={{ fontSize: 26 }} />
 						</div>
 					</Card>
 				</Col>
 				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow">
+					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
 						<div className="flex items-center justify-between">
 							<div>
-								<div className="text-sm text-gray-500">Modules Actifs (global)</div>
-								<div className="text-2xl font-bold">{totalActiveGlobal}</div>
+								<div className="text-xs uppercase tracking-wide text-slate-500">Modules Actifs (global)</div>
+								<div className="text-2xl font-semibold text-slate-900">{totalActiveGlobal}</div>
 							</div>
 							<CheckCircleOutlined className="text-green-600" style={{ fontSize: 26 }} />
 						</div>
 					</Card>
 				</Col>
 				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow">
+					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
 						<div className="flex items-center justify-between">
 							<div>
-								<div className="text-sm text-gray-500">Actifs ({orgName || 'Orga'})</div>
-								<div className="text-2xl font-bold">{totalActiveForOrg}</div>
+								<div className="text-xs uppercase tracking-wide text-slate-500">Actifs ({orgName || 'Orga'})</div>
+								<div className="text-2xl font-semibold text-slate-900">{totalActiveForOrg}</div>
 							</div>
 							<CheckCircleOutlined className="text-emerald-600" style={{ fontSize: 26 }} />
 						</div>
@@ -92,9 +92,9 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 			</Row>
 
 			{/* Barre de filtres et actions */}
-			<div className="bg-white border rounded px-4 py-3 shadow-sm">
+			<div className="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm text-slate-900">
 				<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-					<div className="flex flex-1 items-center gap-3">
+					<div className="flex flex-1 items-center gap-3 text-slate-900">
 						<Input
 							placeholder="Rechercher un module…"
 							value={searchValue}

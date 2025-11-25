@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Dropdown, Input, Space, Tooltip } from 'antd';
+import { Card, Button, Dropdown, Input, Space, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, DragOutlined, PlusOutlined, MoreOutlined } from '@ant-design/icons';
 
 type TableToolbarProps = {
@@ -40,13 +40,13 @@ const TableToolbar: React.FC<TableToolbarProps> = ({
   ) }));
 
   return (
-    <div className={`w-full px-3 py-2 ${className || 'border rounded-md bg-white'}`}>
-      <div className="flex flex-wrap items-center gap-3">
+    <Card size="small" bordered={false} className={`w-full px-3 py-2 ${className || 'rounded-md bg-slate-800/40 text-white'}`}>
+      <div className="flex flex-wrap items-center gap-3 text-white">
         <div className="flex items-center gap-2 min-w-0 mr-auto">
           {icon}
           <span className="font-semibold truncate" title={title}>{title}</span>
           {typeof count === 'number' && (
-            <span className="text-xs text-gray-500">• {count}</span>
+            <span className="text-xs text-slate-300">• {count}</span>
           )}
         </div>
         <div className="flex-1 min-w-[220px] max-w-[440px]">

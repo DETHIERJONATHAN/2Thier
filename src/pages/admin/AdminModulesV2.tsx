@@ -651,7 +651,14 @@ const AdminModulesV2: React.FC = () => {
         {/* 📊 EN-TÊTE AVEC STATISTIQUES */}
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
           <Col span={24}>
-            <Card>
+            <Card
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '8px',
+                boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                border: '1px solid #f0f0f0'
+              }}
+            >
               <Row gutter={[16, 16]}>
                 <Col span={24}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -692,7 +699,18 @@ const AdminModulesV2: React.FC = () => {
               {/* STATISTIQUES */}
               <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
                 <Col xs={24} sm={12} md={6}>
-                  <Card size="small" style={{ textAlign: 'center' }}>
+                  <Card 
+                    size="small" 
+                    style={{ 
+                      textAlign: 'center',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #f0f0f0',
+                      boxShadow: '0 1px 4px rgba(0, 0, 0, 0.06)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
                     <Badge count={stats.totalCategories} showZero color="#52c41a">
                       <FolderOutlined style={{ fontSize: 24 }} />
                     </Badge>
@@ -704,7 +722,18 @@ const AdminModulesV2: React.FC = () => {
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} md={6}>
-                  <Card size="small" style={{ textAlign: 'center' }}>
+                  <Card 
+                    size="small" 
+                    style={{ 
+                      textAlign: 'center',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #f0f0f0',
+                      boxShadow: '0 1px 4px rgba(0, 0, 0, 0.06)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
                     <Badge count={stats.totalModules} showZero color="#1890ff">
                       <FileOutlined style={{ fontSize: 24 }} />
                     </Badge>
@@ -716,7 +745,18 @@ const AdminModulesV2: React.FC = () => {
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} md={6}>
-                  <Card size="small" style={{ textAlign: 'center' }}>
+                  <Card 
+                    size="small" 
+                    style={{ 
+                      textAlign: 'center',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #f0f0f0',
+                      boxShadow: '0 1px 4px rgba(0, 0, 0, 0.06)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
                     <Badge count={stats.globalCategories} showZero color="#faad14">
                       <CrownOutlined style={{ fontSize: 24 }} />
                     </Badge>
@@ -746,41 +786,56 @@ const AdminModulesV2: React.FC = () => {
 
         {/* 🔍 BARRE DE RECHERCHE ET FILTRES */}
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} md={8}>
-            <Input
-              placeholder="Rechercher catégories et modules..."
-              prefix={<SearchOutlined />}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              allowClear
-            />
-          </Col>
-          <Col xs={24} md={8}>
-            <Select
-              placeholder="Filtrer par catégorie"
-              style={{ width: '100%' }}
-              value={selectedCategoryId}
-              onChange={setSelectedCategoryId}
+          <Col span={24}>
+            <Card
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                border: '1px solid #f0f0f0'
+              }}
+              styles={{ body: { padding: '16px' } }}
             >
-              <Option value="all">Toutes les catégories</Option>
-              {categories.map(cat => (
-                <Option key={cat.id} value={cat.id}>
-                  {cat.name} ({cat.modules.length} modules)
-                </Option>
-              ))}
-            </Select>
-          </Col>
-          <Col xs={24} md={8}>
-            <Segmented
-              value={viewMode}
-              onChange={setViewMode}
-              options={[
-                { label: 'Grille', value: 'grid', icon: <AppstoreOutlined /> },
-                { label: 'Liste', value: 'list', icon: <SortAscendingOutlined /> },
-                { label: 'Arbre', value: 'tree', icon: <FolderOutlined /> }
-              ]}
-              style={{ width: '100%' }}
-            />
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8}>
+                  <Input
+                    placeholder="Rechercher catégories et modules..."
+                    prefix={<SearchOutlined />}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    allowClear
+                    style={{ borderRadius: '6px' }}
+                  />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Select
+                    placeholder="Filtrer par catégorie"
+                    style={{ width: '100%' }}
+                    value={selectedCategoryId}
+                    onChange={setSelectedCategoryId}
+                  >
+                    <Option value="all">Toutes les catégories</Option>
+                    {categories.map(cat => (
+                      <Option key={cat.id} value={cat.id}>
+                        {cat.name} ({cat.modules.length} modules)
+                      </Option>
+                    ))}
+                  </Select>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Segmented
+                    value={viewMode}
+                    onChange={setViewMode}
+                    options={[
+                      { label: 'Grille', value: 'grid', icon: <AppstoreOutlined /> },
+                      { label: 'Liste', value: 'list', icon: <SortAscendingOutlined /> },
+                      { label: 'Arbre', value: 'tree', icon: <FolderOutlined /> }
+                    ]}
+                    style={{ width: '100%' }}
+                  />
+                </Col>
+              </Row>
+            </Card>
           </Col>
         </Row>
 
@@ -801,7 +856,7 @@ const AdminModulesV2: React.FC = () => {
                       <Card
                         title={
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: category.iconColor }}>
+                            <span style={{ color: category.iconColor, fontSize: '18px' }}>
                               {getIconComponent(category.icon)}
                             </span>
                             <span>{category.name}</span>
@@ -852,6 +907,12 @@ const AdminModulesV2: React.FC = () => {
                           </Dropdown>
                         }
                         size="small"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)'
+                        }}
+                        styles={{ header: { borderBottom: '1px solid #f0f0f0' } }}
                       >
                         <div style={{ marginBottom: 12 }}>
                           <Text type="secondary">{category.description}</Text>
@@ -920,11 +981,15 @@ const AdminModulesV2: React.FC = () => {
                                   <Card
                                     size="small"
                                     style={{ 
-                                      marginBottom: 8,
-                                      borderColor: module.isActiveInOrg ? '#52c41a' : '#d9d9d9',
-                                      backgroundColor: module.isActiveInOrg ? '#f6ffed' : '#fafafa'
+                                      marginBottom: 12,
+                                      borderColor: '#f0f0f0',
+                                      backgroundColor: '#ffffff',
+                                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                                      border: '1px solid #e8e8e8',
+                                      borderLeft: `4px solid ${module.isActiveInOrg ? '#52c41a' : '#d9d9d9'}`
                                     }}
-                                    styles={{ body: { padding: '12px' } }}
+                                    styles={{ body: { padding: '12px 16px' } }}
+                                    hoverable
                                   >
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
@@ -993,7 +1058,14 @@ const AdminModulesV2: React.FC = () => {
             )}
 
             {viewMode === 'list' && (
-              <Card>
+              <Card
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                  border: '1px solid #f0f0f0'
+                }}
+              >
                 <Table
                   dataSource={filteredCategories.flatMap(cat => [
                     { 
@@ -1115,10 +1187,27 @@ const AdminModulesV2: React.FC = () => {
           <TabPane tab="Statistiques" key="stats">
             <Row gutter={[16, 16]}>
               <Col span={24}>
-                <Card title="Analyse détaillée du système">
+                <Card 
+                  title="Analyse détaillée du système"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                    border: '1px solid #f0f0f0'
+                  }}
+                >
                   <Row gutter={[16, 16]}>
                     <Col xs={24} md={12}>
-                      <Card size="small" title="Répartition par catégorie">
+                      <Card 
+                        size="small" 
+                        title="Répartition par catégorie"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #f0f0f0',
+                          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.06)',
+                          borderRadius: '8px'
+                        }}
+                      >
                         <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                           {categories.map(cat => (
                             <div key={cat.id} style={{ 
@@ -1136,7 +1225,16 @@ const AdminModulesV2: React.FC = () => {
                       </Card>
                     </Col>
                     <Col xs={24} md={12}>
-                      <Card size="small" title="Résumé global">
+                      <Card 
+                        size="small" 
+                        title="Résumé global"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #f0f0f0',
+                          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.06)',
+                          borderRadius: '8px'
+                        }}
+                      >
                         <Space direction="vertical" style={{ width: '100%' }}>
                           <div>
                             <Text>Catégories globales: </Text>

@@ -83,7 +83,8 @@ type TableLookupPayload = NormalizedTableInstance | TableLookupApiResponse | nul
 export function useTBLTableLookup(
   fieldId: string | undefined,
   nodeId: string | undefined,
-  enabled: boolean = true // ✅ NOUVEAU: Paramètre pour activer/désactiver le lookup
+  enabled: boolean = true, // ✅ NOUVEAU: Paramètre pour activer/désactiver le lookup
+  formData?: Record<string, any> // 🆕 ÉTAPE 2.5: Valeurs du formulaire pour filtrage dynamique
 ): TableLookupResult {
   const { api } = useAuthenticatedApi();
   const [options, setOptions] = useState<TableLookupOption[]>([]);
@@ -171,8 +172,53 @@ export function useTBLTableLookup(
 
         // 2. Charger le tableau référencé - IMPORTANT: Utiliser nodeId (ID du champ SELECT) pas tableReference
         if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${nodeId}/table/lookup (tableRef=${selectConfig.tableReference})`);
+        
+        // 🆕 ÉTAPE 2.5: Construire les formValues pour le filtrage dynamique
+        let queryParams = '';
+        if (formData && Object.keys(formData).length > 0) {
+          // 🔥 Filtrer les champs mirror TBL internes (évite les payloads trop volumineux)
+          const filteredFormData = Object.entries(formData)
+            .filter(([key]) => !key.startsWith('__mirror_'))
+            .reduce((acc, [key, value]) => {
+              acc[key] = value;
+              return acc;
+            }, {} as Record<string, any>);
+          
+          // 🔥 ÉTAPE 2.5.1: Charger les valeurs calculées manquantes depuis Prisma
+          // Les champs avec formules/data ont leurs valeurs dans calculatedValue, pas dans formData
+          // On doit les récupérer manuellement pour le filtrage
+          try {
+            // Récupérer tous les champs de l'arbre pour trouver les champs avec calculatedValue
+            const treeId = (window as any).__TBL_LAST_TREE_ID; // Stocké globalement par TBL.tsx (ligne 447)
+            if (treeId) {
+              const allNodesResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
+              const allNodes = allNodesResponse as Array<{ id: string; calculatedValue?: string | number | boolean; hasFormula?: boolean; hasData?: boolean }>;
+              
+              // Pour chaque nœud avec calculatedValue, l'ajouter aux formValues
+              for (const node of allNodes) {
+                if (node.calculatedValue !== null && node.calculatedValue !== undefined && node.calculatedValue !== '') {
+                  // Ne pas écraser si déjà présent dans formData
+                  if (!filteredFormData[node.id]) {
+                    filteredFormData[node.id] = node.calculatedValue;
+                    if (isTargetField) console.log(`[DEBUG][Test - liste] ✅ Ajout valeur calculée: ${node.id} = ${node.calculatedValue}`);
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('[useTBLTableLookup] Erreur chargement valeurs calculées:', err);
+          }
+          
+          // Uniquement si des valeurs utilisateur existent
+          if (Object.keys(filteredFormData).length > 0) {
+            const formValues = JSON.stringify(filteredFormData);
+            queryParams = `?formValues=${encodeURIComponent(formValues)}`;
+            if (isTargetField) console.log(`[DEBUG][Test - liste] 📊 formValues filtrées (avec calculatedValues):`, filteredFormData);
+          }
+        }
+        
         const table = await api.get<TableLookupPayload>(
-          `/api/treebranchleaf/nodes/${nodeId}/table/lookup`,
+          `/api/treebranchleaf/nodes/${nodeId}/table/lookup${queryParams}`,
           { suppressErrorLogForStatuses: [404] }
         );
         if (isTargetField) {
@@ -235,7 +281,7 @@ export function useTBLTableLookup(
     return () => {
       cancelled = true;
     };
-  }, [fieldId, nodeId, api, enabled]); // ✅ Ajout de 'enabled' aux dépendances
+  }, [fieldId, nodeId, api, enabled, formData]); // 🆕 Ajout de formData aux dépendances (re-fetch si formData change)
 
   return { options, loading, error, tableData, config };
 }

@@ -427,17 +427,20 @@ export const NODE_TYPES: Record<string, NodeType> = {
 // 🧠 PANELS MAPPING - Chargement dynamique des panneaux UI
 // =============================================================================
 
+const universalPanelImporter = () => import('../components/Parameters/panels/FieldAppearance/UniversalPanel');
+
 export const FieldAppearancePanels = {
-  TEXT: () => import('../components/Parameters/panels/FieldAppearance/TextPanel'),
-  NUMBER: () => import('../components/Parameters/panels/FieldAppearance/NumberPanel'),
-  BOOL: () => import('../components/Parameters/panels/FieldAppearance/BoolPanel'),
-  SELECT: () => import('../components/Parameters/panels/FieldAppearance/SelectPanel'),
-  MULTISELECT: () => import('../components/Parameters/panels/FieldAppearance/MultiSelectPanel'),
-  DATE: () => import('../components/Parameters/panels/FieldAppearance/DateTimePanel'),
-  FILE: () => import('../components/Parameters/panels/FieldAppearance/FilePanel'),
-  IMAGE: () => import('../components/Parameters/panels/FieldAppearance/ImagePanel'),
-  DATA: () => import('../components/Parameters/panels/FieldAppearance/RepeaterPanel'),
-  LEAF_REPEATER: () => import('../components/Parameters/panels/FieldAppearance/RepeaterPanel')
+  DEFAULT: universalPanelImporter,
+  TEXT: universalPanelImporter,
+  NUMBER: universalPanelImporter,
+  BOOL: universalPanelImporter,
+  SELECT: universalPanelImporter,
+  MULTISELECT: universalPanelImporter,
+  DATE: universalPanelImporter,
+  FILE: universalPanelImporter,
+  IMAGE: universalPanelImporter,
+  DATA: universalPanelImporter,
+  LEAF_REPEATER: universalPanelImporter
 };
 
 export const CapabilityPanels = {
@@ -950,114 +953,204 @@ export class TreeBranchLeafRegistry {
   }
 
   static mapAppearanceConfigToTBL(appearanceConfig: Record<string, unknown>): Record<string, unknown> {
-    // Mappe la configuration d'apparence vers les champs TBL
-    const size = appearanceConfig.size as string || 'md';
-    const variant = appearanceConfig.variant as string || 'default';
-    
-    // Mapping des tailles vers des largeurs
+    const size = (appearanceConfig.size as string) || 'md';
+    const variant = (appearanceConfig.variant as string) || 'default';
+    const explicitWidth = typeof appearanceConfig.width === 'string' ? appearanceConfig.width.trim() : '';
+
     const widthMap: Record<string, string> = {
-      'sm': '200px',
-      'md': '300px',
-      'lg': '400px'
+      sm: '200px',
+      md: '300px',
+      lg: '400px'
     };
-    
-    // Mapping complet vers les colonnes Prisma
+
+    const toNumberOrNull = (val: unknown) => {
+      if (val === null || val === undefined || val === '') {
+        return null;
+      }
+      const parsed = Number(val);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const toBooleanOrNull = (val: unknown) => {
+      if (typeof val === 'boolean') {
+        return val;
+      }
+      if (val === 'true') return true;
+      if (val === 'false') return false;
+      return null;
+    };
+
+    const selectMode = (appearanceConfig.selectMode || appearanceConfig.mode) as string | undefined;
+    const isMultiMode = selectMode ? ['multiple', 'checkboxes', 'tags'].includes(selectMode) : undefined;
+
+    const fileAccept = appearanceConfig.fileAccept || appearanceConfig.accept;
+    const fileMaxSize = appearanceConfig.fileMaxSize ?? appearanceConfig.maxFileSize ?? appearanceConfig.maxSize;
+    const imageMaxSize = appearanceConfig.imageMaxSize ?? appearanceConfig.maxSize;
+    const imageRatio = appearanceConfig.imageRatio ?? appearanceConfig.ratio;
+    const imageCrop = appearanceConfig.imageCrop ?? appearanceConfig.crop;
+    const imageThumbnails = appearanceConfig.imageThumbnails ?? appearanceConfig.thumbnails;
+
+    const repeaterMin = appearanceConfig.minItems ?? appearanceConfig.repeaterMinItems;
+    const repeaterMax = appearanceConfig.maxItems ?? appearanceConfig.repeaterMaxItems;
+    const repeaterButtonLabel = appearanceConfig.addButtonLabel ?? appearanceConfig.repeaterAddButtonLabel;
+    const repeaterButtonSize = appearanceConfig.buttonSize ?? appearanceConfig.repeaterButtonSize;
+    const repeaterButtonWidth = appearanceConfig.buttonWidth ?? appearanceConfig.repeaterButtonWidth;
+    const repeaterIconOnly = appearanceConfig.iconOnly ?? appearanceConfig.repeaterIconOnly;
+
     const result: Record<string, unknown> = {
-      // Apparence générale
       appearance_size: size,
-      appearance_width: widthMap[size] || '300px',
+      appearance_width: explicitWidth || widthMap[size] || '300px',
       appearance_variant: variant,
-      
-      // Configuration champs texte
+
+      section_columnsDesktop: toNumberOrNull(appearanceConfig.columnsDesktop ?? appearanceConfig.section_columnsDesktop),
+      section_columnsMobile: toNumberOrNull(appearanceConfig.columnsMobile ?? appearanceConfig.section_columnsMobile),
+      section_gutter: toNumberOrNull(appearanceConfig.gutter ?? appearanceConfig.section_gutter),
+      section_collapsible: toBooleanOrNull(appearanceConfig.collapsible),
+      section_defaultCollapsed: toBooleanOrNull(appearanceConfig.defaultCollapsed),
+      section_showChildrenCount: toBooleanOrNull(appearanceConfig.showChildrenCount),
+
       text_placeholder: appearanceConfig.placeholder || null,
-      text_maxLength: appearanceConfig.maxLength ? Number(appearanceConfig.maxLength) : null,
-      text_minLength: appearanceConfig.minLength ? Number(appearanceConfig.minLength) : null,
+      text_maxLength: toNumberOrNull(appearanceConfig.maxLength),
+      text_minLength: toNumberOrNull(appearanceConfig.minLength),
       text_mask: appearanceConfig.mask || null,
       text_regex: appearanceConfig.regex || null,
-      
-      // Configuration champs nombre
-      number_min: appearanceConfig.min ? Number(appearanceConfig.min) : null,
-      number_max: appearanceConfig.max ? Number(appearanceConfig.max) : null,
-      number_step: appearanceConfig.step ? Number(appearanceConfig.step) : null,
-      number_decimals: appearanceConfig.decimals ? Number(appearanceConfig.decimals) : null,
+
+      number_min: toNumberOrNull(appearanceConfig.min),
+      number_max: toNumberOrNull(appearanceConfig.max),
+      number_step: toNumberOrNull(appearanceConfig.step),
+      number_decimals: toNumberOrNull(appearanceConfig.decimals),
       number_prefix: appearanceConfig.prefix || null,
       number_suffix: appearanceConfig.suffix || null,
       number_unit: appearanceConfig.unit || null,
-      
-      // Configuration champs date
+
       date_format: appearanceConfig.format || null,
-      date_showTime: appearanceConfig.showTime ? Boolean(appearanceConfig.showTime) : null,
+      date_showTime: toBooleanOrNull(appearanceConfig.showTime),
       date_minDate: appearanceConfig.minDate || null,
       date_maxDate: appearanceConfig.maxDate || null,
-      
-      // Configuration champs select
-      select_mode: appearanceConfig.mode || null,
-      select_allowClear: appearanceConfig.allowClear ? Boolean(appearanceConfig.allowClear) : null,
-      select_showSearch: appearanceConfig.showSearch ? Boolean(appearanceConfig.showSearch) : null,
-      
-      // Configuration tooltip d'aide
+
+      select_allowClear: toBooleanOrNull(appearanceConfig.selectAllowClear ?? appearanceConfig.allowClear),
+      select_searchable: toBooleanOrNull(appearanceConfig.selectSearchable ?? appearanceConfig.searchable),
+      select_multiple: typeof isMultiMode === 'boolean' ? isMultiMode : toBooleanOrNull(appearanceConfig.select_multiple),
+
+      file_allowedTypes: Array.isArray(fileAccept) ? fileAccept.join(',') : fileAccept || null,
+      file_maxSize: toNumberOrNull(fileMaxSize),
+      file_multiple: toBooleanOrNull(appearanceConfig.fileMultiple ?? appearanceConfig.multiple),
+      file_showPreview: toBooleanOrNull(appearanceConfig.fileShowPreview),
+
+      image_maxSize: toNumberOrNull(imageMaxSize),
+      image_ratio: imageRatio || null,
+      image_crop: toBooleanOrNull(imageCrop),
+      image_thumbnails: imageThumbnails || null,
+
       text_helpTooltipType: appearanceConfig.helpTooltipType || 'none',
       text_helpTooltipText: appearanceConfig.helpTooltipText || null,
-      text_helpTooltipImage: appearanceConfig.helpTooltipImage || null
+      text_helpTooltipImage: appearanceConfig.helpTooltipImage || null,
+
+      data_visibleToUser: toBooleanOrNull(appearanceConfig.visibleToUser),
+      isRequired: toBooleanOrNull(appearanceConfig.isRequired),
+
+      repeater_minItems: toNumberOrNull(repeaterMin),
+      repeater_maxItems: toNumberOrNull(repeaterMax),
+      repeater_addButtonLabel: repeaterButtonLabel || null,
+      repeater_buttonSize: repeaterButtonSize || null,
+      repeater_buttonWidth: repeaterButtonWidth || null,
+      repeater_iconOnly: toBooleanOrNull(repeaterIconOnly)
     };
-    
-    // Nettoyer les valeurs null/undefined
+
     Object.keys(result).forEach(key => {
       if (result[key] === null || result[key] === undefined) {
         delete result[key];
       }
     });
-    
+
     return result;
   }
 
   static mapTBLToAppearanceConfig(tblData: Record<string, unknown>): Record<string, unknown> {
-    // Mappe les champs TBL vers la configuration d'apparence
+    const boolOrUndefined = (val: unknown) => {
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === 'boolean') return val;
+      if (val === 'true') return true;
+      if (val === 'false') return false;
+      return undefined;
+    };
+
+    const numberOrUndefined = (val: unknown) => {
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === 'number') return val;
+      const parsed = Number(val);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    };
+
+    const selectMode = tblData.select_multiple ? 'multiple' : 'single';
+
     const result: Record<string, unknown> = {
-      // Apparence générale
       size: tblData.appearance_size || 'md',
       variant: tblData.appearance_variant || 'default',
-      
-      // Configuration champs texte
-      placeholder: tblData.text_placeholder || null,
-      maxLength: tblData.text_maxLength || null,
-      minLength: tblData.text_minLength || null,
-      mask: tblData.text_mask || null,
-      regex: tblData.text_regex || null,
-      
-      // Configuration champs nombre
-      min: tblData.number_min || null,
-      max: tblData.number_max || null,
-      step: tblData.number_step || null,
-      decimals: tblData.number_decimals || null,
-      prefix: tblData.number_prefix || null,
-      suffix: tblData.number_suffix || null,
-      unit: tblData.number_unit || null,
-      
-      // Configuration champs date
-      format: tblData.date_format || null,
-      showTime: tblData.date_showTime || null,
-      minDate: tblData.date_minDate || null,
-      maxDate: tblData.date_maxDate || null,
-      
-      // Configuration champs select
-      mode: tblData.select_mode || null,
-      allowClear: tblData.select_allowClear || null,
-      showSearch: tblData.select_showSearch || null,
-      
-      // Configuration tooltip d'aide
+      width: tblData.appearance_width || '',
+
+      columnsDesktop: numberOrUndefined(tblData.section_columnsDesktop),
+      columnsMobile: numberOrUndefined(tblData.section_columnsMobile),
+      gutter: numberOrUndefined(tblData.section_gutter),
+      collapsible: boolOrUndefined(tblData.section_collapsible),
+      defaultCollapsed: boolOrUndefined(tblData.section_defaultCollapsed),
+      showChildrenCount: boolOrUndefined(tblData.section_showChildrenCount),
+
+      placeholder: tblData.text_placeholder || undefined,
+      maxLength: numberOrUndefined(tblData.text_maxLength),
+      minLength: numberOrUndefined(tblData.text_minLength),
+      mask: tblData.text_mask || undefined,
+      regex: tblData.text_regex || undefined,
+
+      min: numberOrUndefined(tblData.number_min),
+      max: numberOrUndefined(tblData.number_max),
+      step: numberOrUndefined(tblData.number_step),
+      decimals: numberOrUndefined(tblData.number_decimals),
+      prefix: tblData.number_prefix || undefined,
+      suffix: tblData.number_suffix || undefined,
+      unit: tblData.number_unit || undefined,
+
+      format: tblData.date_format || undefined,
+      showTime: boolOrUndefined(tblData.date_showTime),
+      minDate: tblData.date_minDate || undefined,
+      maxDate: tblData.date_maxDate || undefined,
+
+      selectMode,
+      selectAllowClear: boolOrUndefined(tblData.select_allowClear),
+      selectSearchable: boolOrUndefined(tblData.select_searchable),
+      selectShowSearch: boolOrUndefined(tblData.select_searchable),
+
+      fileAccept: tblData.file_allowedTypes || undefined,
+      fileMaxSize: numberOrUndefined(tblData.file_maxSize),
+      fileMultiple: boolOrUndefined(tblData.file_multiple),
+      fileShowPreview: boolOrUndefined(tblData.file_showPreview),
+
+      imageMaxSize: numberOrUndefined(tblData.image_maxSize),
+      imageRatio: tblData.image_ratio || undefined,
+      imageCrop: boolOrUndefined(tblData.image_crop),
+      imageThumbnails: tblData.image_thumbnails || undefined,
+
       helpTooltipType: tblData.text_helpTooltipType || 'none',
-      helpTooltipText: tblData.text_helpTooltipText || null,
-      helpTooltipImage: tblData.text_helpTooltipImage || null
+      helpTooltipText: tblData.text_helpTooltipText || undefined,
+      helpTooltipImage: tblData.text_helpTooltipImage || undefined,
+
+      visibleToUser: boolOrUndefined(tblData.data_visibleToUser),
+      isRequired: boolOrUndefined(tblData.isRequired),
+
+      minItems: numberOrUndefined(tblData.repeater_minItems),
+      maxItems: numberOrUndefined(tblData.repeater_maxItems),
+      addButtonLabel: tblData.repeater_addButtonLabel || undefined,
+      buttonSize: tblData.repeater_buttonSize || undefined,
+      buttonWidth: tblData.repeater_buttonWidth || undefined,
+      iconOnly: boolOrUndefined(tblData.repeater_iconOnly)
     };
-    
-    // Nettoyer les valeurs null/undefined
+
     Object.keys(result).forEach(key => {
-      if (result[key] === null || result[key] === undefined) {
+      if (result[key] === undefined) {
         delete result[key];
       }
     });
-    
+
     return result;
   }
 }

@@ -57,6 +57,582 @@ interface CloneRepeaterOptions {
   templateNodeId?: string;
 }
 
+type FontWeightValue = number | 'normal' | 'bold' | 'lighter' | 'bolder';
+
+const BASE_SUFFIX_KEY = '__BASE__';
+const REPEATER_ADD_BUTTON_STYLE = {
+  backgroundColor: '#0b5c6b',
+  borderColor: '#094c58',
+  color: '#ffffff'
+};
+
+const suffixFromString = (value?: string | null): string | undefined => {
+  if (!value) return undefined;
+  const dashMatch = value.match(/-(\d+)$/);
+  if (dashMatch?.[1]) return dashMatch[1];
+  const copyMatch = value.match(/\((?:copie|copy)\s*([^)]+)\)/i);
+  if (copyMatch?.[1]) return copyMatch[1];
+  return undefined;
+};
+
+const extractFieldSuffix = (field: TBLField): string => {
+  const meta = (field.metadata || {}) as Record<string, unknown>;
+  const repeaterIndex = (field as any).repeaterInstanceIndex ?? meta.repeaterInstanceIndex;
+  if (typeof repeaterIndex === 'number' || typeof repeaterIndex === 'string') {
+    return String(repeaterIndex);
+  }
+  const metaSuffix = (meta.copySuffix || meta.suffix || meta.instanceSuffix) as string | undefined;
+  if (metaSuffix) return String(metaSuffix);
+  const idSuffix = suffixFromString(field.id);
+  if (idSuffix) return idSuffix;
+  const labelSuffix = suffixFromString(field.label);
+  if (labelSuffix) return labelSuffix;
+  const sharedRefSuffix = suffixFromString((field as any).sharedReferenceName);
+  if (sharedRefSuffix) return sharedRefSuffix;
+  return BASE_SUFFIX_KEY;
+};
+
+const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string; fields: TBLField[] }> => {
+  const groups = new Map<string, TBLField[]>();
+  for (const field of fields) {
+    const suffix = extractFieldSuffix(field);
+    if (!groups.has(suffix)) {
+      groups.set(suffix, []);
+    }
+    groups.get(suffix)!.push(field);
+  }
+  const toNumeric = (value: string): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const compareSuffix = (left: string, right: string): number => {
+    if (left === right) return 0;
+    if (left === BASE_SUFFIX_KEY) return -1;
+    if (right === BASE_SUFFIX_KEY) return 1;
+    const leftNum = toNumeric(left);
+    const rightNum = toNumeric(right);
+    if (leftNum !== null && rightNum !== null) {
+      return leftNum - rightNum;
+    }
+    if (leftNum !== null) return -1;
+    if (rightNum !== null) return 1;
+    return left.localeCompare(right, 'fr', { numeric: true, sensitivity: 'base' });
+  };
+
+  const entries = Array.from(groups.entries()).sort((a, b) => compareSuffix(a[0], b[0]));
+  
+  // Recalculer isLastInCopyGroup pour chaque groupe APRÈS le tri
+  return entries.map(([suffix, groupedFields]) => {
+    const fieldsWithUpdatedFlag = groupedFields.map((field, idx, arr) => {
+      // Seules les copies (suffix !== BASE_SUFFIX_KEY) doivent avoir le bouton de suppression
+      const isCopy = suffix !== BASE_SUFFIX_KEY;
+      const isLast = idx === arr.length - 1;
+      return {
+        ...field,
+        isLastInCopyGroup: isCopy && isLast
+      };
+    });
+    return { suffix, fields: fieldsWithUpdatedFlag };
+  });
+};
+
+interface DisplayAppearanceTokens {
+  size: 'sm' | 'md' | 'lg';
+  variant: string;
+  align: 'left' | 'center' | 'right';
+  accentColor: string;
+  backgroundColor: string;
+  borderColor: string;
+  textColor: string;
+  labelColor: string;
+  labelFontSize: number;
+  labelFontWeight: FontWeightValue;
+  labelUppercase: boolean;
+  valueFontSize: number;
+  valueFontWeight: FontWeightValue;
+  borderWidth: number;
+  radius: number;
+  shadow?: string;
+  minHeight: number;
+  paddingX: number;
+  paddingY: number;
+}
+
+interface DisplayAppearanceResolution {
+  tokens: DisplayAppearanceTokens;
+  styleOverrides?: React.CSSProperties;
+}
+
+const DISPLAY_SIZE_PRESETS: Record<'sm' | 'md' | 'lg', Partial<DisplayAppearanceTokens>> = {
+  sm: { paddingX: 8, paddingY: 8, labelFontSize: 11, valueFontSize: 12, minHeight: 60 },
+  md: { paddingX: 12, paddingY: 12, labelFontSize: 13, valueFontSize: 14, minHeight: 80 },
+  lg: { paddingX: 16, paddingY: 16, labelFontSize: 15, valueFontSize: 18, minHeight: 100 }
+};
+
+const STATUS_ACCENTS: Record<string, string> = {
+  info: '#0ea5e9',
+  success: '#16a34a',
+  warning: '#f97316',
+  danger: '#ef4444',
+  error: '#ef4444',
+  alert: '#f97316',
+  primary: '#3b82f6',
+  neutral: '#64748b'
+};
+
+const DEFAULT_DISPLAY_ACCENT = '#0f766e';
+const DEFAULT_DISPLAY_BACKGROUND = 'linear-gradient(135deg, #0f766e 0%, #0b4f46 100%)';
+const DEFAULT_DISPLAY_BORDER = 'rgba(6,80,70,0.55)';
+const DEFAULT_DISPLAY_LABEL = '#ecfdf5';
+const DEFAULT_DISPLAY_TEXT = '#f8fffb';
+const DEFAULT_DISPLAY_SHADOW = '0 25px 45px rgba(5,50,45,0.25)';
+
+const DEFAULT_DISPLAY_TOKENS: DisplayAppearanceTokens = {
+  size: 'md',
+  variant: 'default',
+  align: 'center',
+  accentColor: DEFAULT_DISPLAY_ACCENT,
+  backgroundColor: DEFAULT_DISPLAY_BACKGROUND,
+  borderColor: DEFAULT_DISPLAY_BORDER,
+  textColor: '#334155',
+  labelColor: DEFAULT_DISPLAY_ACCENT,
+  labelFontSize: 13,
+  labelFontWeight: 600,
+  labelUppercase: false,
+  valueFontSize: 14,
+  valueFontWeight: 700,
+  borderWidth: 2,
+  radius: 12,
+  shadow: undefined,
+  minHeight: 80,
+  paddingX: 12,
+  paddingY: 12
+};
+
+const pickDefined = <T,>(...values: Array<T | null | undefined>): T | undefined => {
+  for (const value of values) {
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
+const toNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const coerceFontWeight = (value: unknown, fallback: FontWeightValue): FontWeightValue => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const normalized = value.trim().toLowerCase();
+    if (['normal', 'bold', 'lighter', 'bolder'].includes(normalized)) {
+      return normalized as FontWeightValue;
+    }
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+};
+
+const parseAlignPreference = (value: unknown, fallback: DisplayAppearanceTokens['align']): DisplayAppearanceTokens['align'] => {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'left' || normalized === 'center' || normalized === 'right') return normalized;
+  if (normalized === 'start') return 'left';
+  if (normalized === 'end') return 'right';
+  return fallback;
+};
+
+const safeColor = (value: unknown, fallback: string): string => {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  return fallback;
+};
+
+const extractHexTuple = (color: string): [number, number, number] | undefined => {
+  const normalized = color.replace('#', '');
+  if (normalized.length === 3) {
+    const expanded = normalized.split('').map((char) => char + char).join('');
+    const intVal = parseInt(expanded, 16);
+    if (Number.isNaN(intVal)) return undefined;
+    return [
+      (intVal >> 16) & 255,
+      (intVal >> 8) & 255,
+      intVal & 255
+    ];
+  }
+  if (normalized.length === 6) {
+    const intVal = parseInt(normalized, 16);
+    if (Number.isNaN(intVal)) return undefined;
+    return [
+      (intVal >> 16) & 255,
+      (intVal >> 8) & 255,
+      intVal & 255
+    ];
+  }
+  return undefined;
+};
+
+const withAlpha = (color: string, alpha: number, fallbackAccent?: string): string => {
+  if (typeof color === 'string' && color.trim().startsWith('#')) {
+    const tuple = extractHexTuple(color.trim());
+    if (tuple) {
+      return `rgba(${tuple[0]}, ${tuple[1]}, ${tuple[2]}, ${alpha})`;
+    }
+  }
+  if (fallbackAccent && fallbackAccent !== color) {
+    return withAlpha(fallbackAccent, alpha);
+  }
+  return `rgba(14,165,233,${alpha})`;
+};
+
+const buildDefaultVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
+  borderColor: withAlpha(accent, 0.35, accent),
+  backgroundColor: withAlpha(accent, 0.12, accent),
+  labelColor: accent
+});
+
+const buildOutlineVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
+  borderColor: accent,
+  backgroundColor: '#ffffff',
+  labelColor: accent,
+  borderWidth: 2
+});
+
+const buildFilledVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
+  borderColor: accent,
+  backgroundColor: accent,
+  labelColor: '#ffffff',
+  textColor: '#ffffff',
+  shadow: '0 10px 30px rgba(15,23,42,0.2)'
+});
+
+const buildGhostVariant = (): Partial<DisplayAppearanceTokens> => ({
+  borderColor: 'transparent',
+  backgroundColor: 'transparent',
+  labelColor: '#475569',
+  textColor: '#0f172a',
+  borderWidth: 0
+});
+
+const buildBorderlessVariant = (): Partial<DisplayAppearanceTokens> => ({
+  borderColor: 'transparent',
+  backgroundColor: '#ffffff',
+  labelColor: '#475569',
+  borderWidth: 0
+});
+
+const buildSoftVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
+  borderColor: withAlpha(accent, 0.25, accent),
+  backgroundColor: withAlpha(accent, 0.18, accent),
+  labelColor: accent,
+  borderWidth: 1
+});
+
+const buildBadgeVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
+  borderColor: 'transparent',
+  backgroundColor: withAlpha(accent, 0.2, accent),
+  labelColor: accent,
+  textColor: accent,
+  borderWidth: 0,
+  radius: 999,
+  minHeight: 48,
+  paddingX: 14,
+  paddingY: 10
+});
+
+const buildGlassVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
+  borderColor: withAlpha(accent, 0.35, accent),
+  backgroundColor: 'rgba(15,23,42,0.18)',
+  textColor: '#ffffff',
+  labelColor: '#ffffff',
+  shadow: '0 25px 45px rgba(15,23,42,0.35)',
+  borderWidth: 1
+});
+
+const DISPLAY_VARIANT_BUILDERS: Record<string, (accent: string) => Partial<DisplayAppearanceTokens>> = {
+  default: buildDefaultVariant,
+  outline: buildOutlineVariant,
+  filled: buildFilledVariant,
+  ghost: buildGhostVariant,
+  borderless: buildBorderlessVariant,
+  soft: buildSoftVariant,
+  badge: buildBadgeVariant,
+  glass: buildGlassVariant
+};
+
+const resolveDisplayAppearance = (field: TBLField): DisplayAppearanceResolution => {
+  const appearance = (field.appearanceConfig || {}) as Record<string, unknown>;
+  const metadataAppearance = (field.metadata && typeof field.metadata === 'object'
+    ? ((field.metadata as Record<string, unknown>).appearance as Record<string, unknown> | undefined)
+    : undefined) || {};
+  const appearanceStyle = typeof appearance.style === 'object' && appearance.style
+    ? (appearance.style as React.CSSProperties)
+    : undefined;
+  const metadataAppearanceStyle = typeof metadataAppearance.style === 'object' && metadataAppearance.style
+    ? (metadataAppearance.style as React.CSSProperties)
+    : undefined;
+
+  const rawSize = pickDefined(
+    appearance.size as string | undefined,
+    metadataAppearance.size as string | undefined,
+    (field as unknown as { appearance_size?: string }).appearance_size,
+    'md'
+  ) as string;
+  const normalizedSize = ['sm', 'md', 'lg'].includes((rawSize || '').toLowerCase())
+    ? (rawSize as 'sm' | 'md' | 'lg')
+    : 'md';
+
+  const rawVariant = pickDefined(
+    appearance.variant as string | undefined,
+    metadataAppearance.variant as string | undefined,
+    (field as unknown as { appearance_variant?: string }).appearance_variant,
+    'default'
+  ) as string;
+  const normalizedVariant = (rawVariant || 'default').toLowerCase();
+
+  const intentKey = pickDefined(
+    appearance.intent as string | undefined,
+    appearance.tone as string | undefined,
+    metadataAppearance.intent as string | undefined,
+    metadataAppearance.tone as string | undefined
+  );
+
+  const hasCustomPalette = Boolean(pickDefined(
+    appearance.accentColor as string | undefined,
+    appearance.primaryColor as string | undefined,
+    appearance.color as string | undefined,
+    appearance.backgroundColor as string | undefined,
+    appearance.cardBackground as string | undefined,
+    appearanceStyle?.backgroundColor,
+    metadataAppearance.accentColor as string | undefined,
+    metadataAppearance.primaryColor as string | undefined,
+    metadataAppearance.color as string | undefined,
+    metadataAppearance.backgroundColor as string | undefined,
+    metadataAppearance.cardBackground as string | undefined,
+    metadataAppearanceStyle?.backgroundColor
+  ));
+
+  const initialAccent = pickDefined(
+    appearance.accentColor as string | undefined,
+    appearance.primaryColor as string | undefined,
+    appearance.color as string | undefined,
+    metadataAppearance.accentColor as string | undefined,
+    STATUS_ACCENTS[normalizedVariant],
+    intentKey ? STATUS_ACCENTS[(intentKey || '').toLowerCase()] : undefined,
+    DEFAULT_DISPLAY_ACCENT
+  ) as string;
+
+  const tokens: DisplayAppearanceTokens = {
+    ...DEFAULT_DISPLAY_TOKENS,
+    ...DISPLAY_SIZE_PRESETS[normalizedSize],
+    size: normalizedSize,
+    variant: normalizedVariant,
+    accentColor: initialAccent
+  };
+
+  let variantBuilder = DISPLAY_VARIANT_BUILDERS[normalizedVariant];
+  if (!variantBuilder && STATUS_ACCENTS[normalizedVariant]) {
+    tokens.accentColor = STATUS_ACCENTS[normalizedVariant];
+    variantBuilder = DISPLAY_VARIANT_BUILDERS.soft;
+  }
+  if (!variantBuilder) {
+    const statusAccent = intentKey ? STATUS_ACCENTS[(intentKey || '').toLowerCase()] : undefined;
+    if (statusAccent) {
+      tokens.accentColor = statusAccent;
+      variantBuilder = DISPLAY_VARIANT_BUILDERS.soft;
+    }
+  }
+  if (!variantBuilder) {
+    variantBuilder = DISPLAY_VARIANT_BUILDERS.default;
+  }
+  Object.assign(tokens, variantBuilder(tokens.accentColor));
+
+  if (!hasCustomPalette && tokens.variant === 'default') {
+    tokens.backgroundColor = DEFAULT_DISPLAY_BACKGROUND;
+    tokens.borderColor = DEFAULT_DISPLAY_BORDER;
+    tokens.textColor = DEFAULT_DISPLAY_TEXT;
+    tokens.labelColor = DEFAULT_DISPLAY_LABEL;
+    tokens.shadow = tokens.shadow ?? DEFAULT_DISPLAY_SHADOW;
+  }
+
+  tokens.backgroundColor = safeColor(
+    pickDefined(
+      appearance.backgroundColor as string | undefined,
+      appearance.cardBackground as string | undefined,
+      appearanceStyle?.backgroundColor,
+      metadataAppearance.backgroundColor as string | undefined,
+      metadataAppearance.cardBackground as string | undefined,
+      metadataAppearanceStyle?.backgroundColor
+    ),
+    tokens.backgroundColor
+  );
+
+  tokens.borderColor = safeColor(
+    pickDefined(
+      appearance.borderColor as string | undefined,
+      appearance.cardBorderColor as string | undefined,
+      (appearance.style as React.CSSProperties | undefined)?.borderColor,
+      metadataAppearance.borderColor as string | undefined
+    ),
+    tokens.borderColor
+  );
+
+  tokens.textColor = safeColor(
+    pickDefined(
+      appearance.textColor as string | undefined,
+      appearance.valueColor as string | undefined,
+      metadataAppearance.textColor as string | undefined,
+      metadataAppearance.valueColor as string | undefined
+    ),
+    tokens.textColor
+  );
+
+  tokens.labelColor = safeColor(
+    pickDefined(
+      appearance.labelColor as string | undefined,
+      appearance.badgeColor as string | undefined,
+      metadataAppearance.labelColor as string | undefined
+    ),
+    tokens.labelColor
+  );
+
+  tokens.align = parseAlignPreference(
+    pickDefined(
+      appearance.textAlign as string | undefined,
+      appearance.align as string | undefined,
+      appearance.contentAlign as string | undefined,
+      metadataAppearance.textAlign as string | undefined
+    ),
+    tokens.align
+  );
+
+  const minHeightOverride = toNumber(pickDefined(appearance.minHeight, appearance.cardMinHeight, metadataAppearance.minHeight));
+  if (typeof minHeightOverride === 'number') {
+    tokens.minHeight = minHeightOverride;
+  }
+
+  const radiusOverride = toNumber(pickDefined(appearance.borderRadius, appearance.radius, metadataAppearance.borderRadius));
+  if (typeof radiusOverride === 'number') {
+    tokens.radius = radiusOverride;
+  }
+
+  const borderWidthOverride = toNumber(pickDefined(appearance.borderWidth, metadataAppearance.borderWidth));
+  if (typeof borderWidthOverride === 'number') {
+    tokens.borderWidth = borderWidthOverride;
+  }
+
+  const labelSizeOverride = toNumber(pickDefined(appearance.labelFontSize, metadataAppearance.labelFontSize));
+  if (typeof labelSizeOverride === 'number') {
+    tokens.labelFontSize = labelSizeOverride;
+  }
+
+  tokens.labelFontWeight = coerceFontWeight(
+    pickDefined(appearance.labelFontWeight, metadataAppearance.labelFontWeight),
+    tokens.labelFontWeight
+  );
+
+  tokens.labelUppercase = pickDefined(appearance.labelUppercase as boolean | undefined, metadataAppearance.labelUppercase as boolean | undefined, tokens.labelUppercase) ?? tokens.labelUppercase;
+
+  const valueSizeOverride = toNumber(pickDefined(appearance.valueFontSize, metadataAppearance.valueFontSize));
+  if (typeof valueSizeOverride === 'number') {
+    tokens.valueFontSize = valueSizeOverride;
+  }
+
+  tokens.valueFontWeight = coerceFontWeight(
+    pickDefined(appearance.valueFontWeight, metadataAppearance.valueFontWeight, appearance.fontWeight),
+    tokens.valueFontWeight
+  );
+
+  const paddingAll = toNumber(pickDefined(appearance.cardPadding, appearance.padding));
+  if (typeof paddingAll === 'number') {
+    tokens.paddingX = paddingAll;
+    tokens.paddingY = paddingAll;
+  }
+  const paddingX = toNumber(pickDefined(appearance.cardPaddingX, appearance.paddingX));
+  if (typeof paddingX === 'number') tokens.paddingX = paddingX;
+  const paddingY = toNumber(pickDefined(appearance.cardPaddingY, appearance.paddingY));
+  if (typeof paddingY === 'number') tokens.paddingY = paddingY;
+
+  const elevation = toNumber(pickDefined(appearance.elevation, metadataAppearance.elevation));
+  if (typeof elevation === 'number' && elevation > 0) {
+    tokens.shadow = tokens.shadow ?? `0 ${Math.min(elevation, 8)}px ${18 + elevation * 2}px rgba(15,23,42,${0.08 + elevation * 0.02})`;
+  }
+
+  if (typeof appearance.shadow === 'string' && appearance.shadow.trim()) {
+    tokens.shadow = appearance.shadow.trim();
+  }
+
+  const styleOverrides = [appearance.cardStyle, appearance.style, metadataAppearance.cardStyle, metadataAppearance.style]
+    .find((candidate): candidate is React.CSSProperties => !!candidate && typeof candidate === 'object' && !Array.isArray(candidate));
+
+  return { tokens, styleOverrides };
+};
+
+const buildDisplayCardStyle = (
+  tokens: DisplayAppearanceTokens,
+  overrides?: React.CSSProperties
+): React.CSSProperties => {
+  const style: React.CSSProperties = {
+    border: tokens.borderWidth > 0 ? `${tokens.borderWidth}px solid ${tokens.borderColor}` : 'none',
+    borderRadius: tokens.radius,
+    minHeight: tokens.minHeight,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    textAlign: tokens.align,
+    boxShadow: tokens.shadow
+  };
+
+  if (typeof tokens.backgroundColor === 'string' && tokens.backgroundColor.includes('gradient')) {
+    style.background = tokens.backgroundColor;
+  } else {
+    style.backgroundColor = tokens.backgroundColor;
+  }
+
+  return {
+    ...style,
+    ...overrides
+  };
+};
+
+const buildDisplayLabelStyle = (tokens: DisplayAppearanceTokens): React.CSSProperties => {
+  const LINE_HEIGHT_RATIO = 1.2;
+  const lineHeightPx = tokens.labelFontSize * LINE_HEIGHT_RATIO;
+  const twoLineHeightPx = lineHeightPx * 2;
+
+  return {
+    color: tokens.labelColor,
+    fontSize: `${tokens.labelFontSize}px`,
+    fontWeight: tokens.labelFontWeight,
+    textTransform: tokens.labelUppercase ? 'uppercase' : undefined,
+    letterSpacing: tokens.labelUppercase ? '0.05em' : undefined,
+    marginBottom: 4,
+    display: 'block',
+    lineHeight: `${lineHeightPx}px`,
+    minHeight: `${twoLineHeightPx}px`,
+    maxHeight: `${twoLineHeightPx}px`,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'normal'
+  };
+};
+
+const buildDisplayValueStyle = (tokens: DisplayAppearanceTokens): React.CSSProperties => ({
+  color: tokens.textColor,
+  fontSize: `${tokens.valueFontSize}px`,
+  fontWeight: tokens.valueFontWeight,
+  textAlign: tokens.align
+});
+
 // 🔧 FONCTION CRITIQUE: Namespacing pour les champs du repeater
 const namespaceRepeaterField = (
   srcField: TBLField,
@@ -445,24 +1021,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     return [customGutter, 16];
   }, [isMobile]);
   
-  // Fallback pour compatibilité
-  const formRowGutter: [number, number] = useMemo(() => [
-    isMobile ? 12 : 24,
-    isMobile ? 12 : 24
-  ], [isMobile]);
-  const dataRowGutter: [number, number] = useMemo(() => [
-    isMobile ? 12 : 16,
-    16
-  ], [isMobile]);
-  
   // 📱 Fonction pour calculer les spans de colonnes responsive
   const getResponsiveColSpan = useCallback((section: TBLSection) => {
-    const columnsDesktop = section.config?.columnsDesktop ?? 2;
-    const columnsMobile = section.config?.columnsMobile ?? 1;
+    const columnsDesktop = section.config?.columnsDesktop ?? 6;
+    const columnsMobile = section.config?.columnsMobile ?? 2;
     
     // Calculer les spans pour chaque breakpoint
-    const spanDesktop = Math.floor(24 / columnsDesktop);
-    const spanMobile = Math.floor(24 / columnsMobile);
+      const spanDesktop = Math.floor(24 / Math.max(columnsDesktop, 1));
+      const spanMobile = Math.floor(24 / Math.max(columnsMobile, 1));
     
     return {
       xs: spanMobile,     // Mobile
@@ -471,6 +1037,201 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       lg: spanDesktop,    // Desktop
       xl: spanDesktop,    // Large desktop
       xxl: spanDesktop    // Extra large desktop
+    };
+  }, []);
+
+  const clampValue = useCallback((value: number, min: number, max: number) => {
+    if (Number.isNaN(value)) return min;
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+  }, []);
+
+  const coerceNumber = useCallback((value: unknown): number | undefined => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const parsed = Number(value.trim());
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return undefined;
+  }, []);
+
+  const extractWidthHints = useCallback((field: TBLField) => {
+    const appearance = (field.appearanceConfig || {}) as Record<string, unknown>;
+    const layout = appearance.layout as Record<string, unknown> | undefined;
+    const metadata = (field.metadata || {}) as Record<string, unknown> | undefined;
+    const metadataAppearance = (metadata?.appearance as Record<string, unknown> | undefined);
+    const metadataLayout = metadataAppearance?.layout as Record<string, unknown> | undefined;
+    const configRecord = field.config as unknown as Record<string, unknown> | undefined;
+
+    const rawWidth =
+      appearance.fieldWidth ??
+      layout?.fieldWidth ??
+      layout?.width ??
+      appearance.width ??
+      metadataAppearance?.fieldWidth ??
+      metadataLayout?.width ??
+      configRecord?.fieldWidth ??
+      (field as unknown as { fieldWidth?: unknown }).fieldWidth ??
+      (field as unknown as { width?: unknown }).width ??
+      (field as unknown as { appearance_width?: unknown }).appearance_width ??
+      configRecord?.width;
+
+    const hintDesktop =
+      coerceNumber(layout?.desktopColumns) ??
+      coerceNumber(metadataLayout?.desktopColumns);
+
+    const hintMobile =
+      coerceNumber(layout?.mobileColumns) ??
+      coerceNumber(metadataLayout?.mobileColumns);
+
+    return { rawWidth, hintDesktop, hintMobile };
+  }, [coerceNumber]);
+
+  const parseWidthToken = useCallback((token: unknown, maxColumns: number): number | undefined => {
+    if (!token) return undefined;
+    if (typeof token === 'number' && Number.isFinite(token)) {
+      if (token <= 0) return undefined;
+      if (token <= maxColumns) return Math.round(token);
+      return maxColumns;
+    }
+    if (typeof token !== 'string') return undefined;
+    const normalized = token.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (/^\d+(\.\d+)?(px|rem|em)$/.test(normalized)) return undefined;
+    if (['full', 'full-width', 'wide', 'stretch', 'max'].includes(normalized)) return maxColumns;
+    if (['auto', 'fit', 'content', 'natural'].includes(normalized)) return undefined;
+    if (['half', '1/2', '50%', 'two-columns', 'two cols', 'two col'].includes(normalized)) {
+      return Math.max(1, Math.round(maxColumns / 2));
+    }
+    if (['third', 'one-third', '1/3', '33%', 'third-width'].includes(normalized)) {
+      return Math.max(1, Math.round(maxColumns / 3));
+    }
+    if (['two-thirds', '2/3', '66%'].includes(normalized)) {
+      return Math.max(1, Math.round((2 * maxColumns) / 3));
+    }
+    if (['quarter', '1/4', '25%'].includes(normalized)) {
+      return Math.max(1, Math.round(maxColumns / 4));
+    }
+    if (['three-quarters', '3/4', '75%'].includes(normalized)) {
+      return Math.max(1, Math.round((3 * maxColumns) / 4));
+    }
+    if (['double', 'large'].includes(normalized)) {
+      return Math.min(maxColumns, 2);
+    }
+    const colsMatch = normalized.match(/^(span-)?(\d+)\s*(cols?|columns?)?$/);
+    if (colsMatch) {
+      return clampValue(parseInt(colsMatch[2], 10), 1, maxColumns);
+    }
+    const fractionMatch = normalized.match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (fractionMatch) {
+      const numerator = parseInt(fractionMatch[1], 10);
+      const denominator = parseInt(fractionMatch[2], 10);
+      if (denominator > 0) {
+        return clampValue(Math.round((numerator / denominator) * maxColumns), 1, maxColumns);
+      }
+    }
+    const percentMatch = normalized.match(/^(\d+(?:\.\d+)?)%$/);
+    if (percentMatch) {
+      const ratio = Number(percentMatch[1]) / 100;
+      if (!Number.isNaN(ratio) && ratio > 0) {
+        return clampValue(Math.round(ratio * maxColumns), 1, maxColumns);
+      }
+    }
+    const numeric = Number(normalized);
+    if (!Number.isNaN(numeric) && numeric > 0) {
+      return clampValue(Math.round(numeric), 1, maxColumns);
+    }
+    return undefined;
+  }, [clampValue]);
+
+  const inferDefaultDesktopColumns = useCallback((field: TBLField, columnsDesktop: number) => {
+    const type = (field.type || '').toLowerCase();
+    const variant = (field.appearanceConfig as { variant?: string } | undefined)?.variant;
+    if (
+      type === 'textarea' ||
+      type === 'text_area' ||
+      type.includes('repeater') ||
+      type.includes('tableau') ||
+      variant === 'textarea'
+    ) {
+      return columnsDesktop;
+    }
+    if ((field as any).isConditional && (field as any).parentFieldId) {
+      return Math.max(1, Math.round(columnsDesktop / 2));
+    }
+    return 1;
+  }, []);
+
+  const getFieldColProps = useCallback(
+    (targetSection: TBLSection, field: TBLField, options?: { forceFullWidth?: boolean }) => {
+      const columnsDesktop = Math.max(1, targetSection.config?.columnsDesktop ?? 6);
+      const columnsMobile = Math.max(1, targetSection.config?.columnsMobile ?? 2);
+      const spanDesktop = Math.max(1, Math.floor(24 / columnsDesktop));
+      const spanMobile = Math.max(1, Math.floor(24 / columnsMobile));
+      const baseSpans = getResponsiveColSpan(targetSection);
+
+      const { rawWidth, hintDesktop, hintMobile } = extractWidthHints(field);
+
+      const desktopColumns = options?.forceFullWidth
+        ? columnsDesktop
+        : clampValue(
+            clampValue(hintDesktop ? Math.round(hintDesktop) : inferDefaultDesktopColumns(field, columnsDesktop), 1, columnsDesktop),
+            1,
+            columnsDesktop
+          );
+
+      const parsedFromToken = options?.forceFullWidth
+        ? columnsDesktop
+        : parseWidthToken(rawWidth, columnsDesktop);
+
+      const finalDesktopColumns = options?.forceFullWidth
+        ? columnsDesktop
+        : clampValue(parsedFromToken ?? desktopColumns, 1, columnsDesktop);
+
+      const mobileFromHint = hintMobile ? clampValue(Math.round(hintMobile), 1, columnsMobile) : undefined;
+      const ratioBasedMobile = Math.max(1, Math.round((finalDesktopColumns / columnsDesktop) * columnsMobile));
+      const finalMobileColumns = options?.forceFullWidth
+        ? columnsMobile
+        : clampValue(mobileFromHint ?? ratioBasedMobile, 1, columnsMobile);
+
+      const desktopSpan = clampValue(spanDesktop * finalDesktopColumns, spanDesktop, 24);
+      const mobileSpan = clampValue(spanMobile * finalMobileColumns, spanMobile, 24);
+
+      const fallbackXs = baseSpans?.xs ?? 24;
+      const fallbackSm = baseSpans?.sm ?? fallbackXs;
+      const fallbackMd = baseSpans?.md ?? spanDesktop;
+      const fallbackLg = baseSpans?.lg ?? fallbackMd;
+      const fallbackXl = baseSpans?.xl ?? fallbackLg;
+      const fallbackXxl = baseSpans?.xxl ?? fallbackXl;
+
+      const resolvedMobileSpan = options?.forceFullWidth ? 24 : mobileSpan;
+      const resolvedDesktopSpan = options?.forceFullWidth ? 24 : desktopSpan;
+
+      return {
+        xs: resolvedMobileSpan ?? fallbackXs,
+        sm: resolvedMobileSpan ?? fallbackSm,
+        md: resolvedDesktopSpan ?? fallbackMd,
+        lg: resolvedDesktopSpan ?? fallbackLg,
+        xl: resolvedDesktopSpan ?? fallbackXl,
+        xxl: resolvedDesktopSpan ?? fallbackXxl
+      };
+    },
+    [clampValue, extractWidthHints, getResponsiveColSpan, inferDefaultDesktopColumns, parseWidthToken]
+  );
+
+  const getUniformDisplayColProps = useCallback((section: TBLSection) => {
+    const columnsDesktop = Math.max(1, section.config?.columnsDesktop ?? 4);
+    const columnsMobile = Math.max(1, section.config?.columnsMobile ?? 1);
+    const spanDesktop = Math.floor(24 / columnsDesktop);
+    const spanMobile = Math.floor(24 / columnsMobile);
+    return {
+      xs: spanMobile,
+      sm: spanMobile,
+      md: spanDesktop,
+      lg: spanDesktop,
+      xl: spanDesktop,
+      xxl: spanDesktop
     };
   }, []);
   
@@ -522,24 +1283,51 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // ✅ Sélection stricte des champs de la copie courante dans la section (évite la suppression d'autres copies)
       const getSuffixFromId = (id?: string) => String(id || '').match(/-(\d+)$/)?.[1] || null;
+      
+      // 🔥 MÉTHODE PRINCIPALE: Chercher par suffixe d'ID (plus fiable car l'ID est immuable)
+      const suffixToMatch = String(effectiveIndex);
+      
       const fieldsInSameCopy = section.fields.filter(sf => {
-  const metaIndex = (sf as any).repeaterInstanceIndex;
-  const suffix = getSuffixFromId(sf.id);
-  const sameRepeater = (sf as any).parentRepeaterId === repeaterId;
-  const sameIndex = String(metaIndex) === String(effectiveIndex) || (suffix && Number(suffix) === Number(effectiveIndex));
-        return sameRepeater && sameIndex && (sf as any).isDeletableCopy === true;
+        const metaIndex = (sf as any).repeaterInstanceIndex;
+        const suffix = getSuffixFromId(sf.id);
+        const sameRepeater = (sf as any).parentRepeaterId === repeaterId;
+        // ✅ NOUVEAU: Accepter si le suffixe correspond OU si l'index metadata correspond
+        const sameIndex = suffix === suffixToMatch || String(metaIndex) === suffixToMatch;
+        // ✅ NOUVEAU: Ne pas exiger isDeletableCopy - le suffixe suffit pour identifier une copie
+        const isCopy = suffix !== null || (sf as any).isDeletableCopy === true;
+        return sameRepeater && sameIndex && isCopy;
       });
 
-      // ✅ Recherche dans allNodes: uniquement les nœuds avec métadonnées correspondantes
+      // ✅ Recherche dans allNodes: par suffixe d'ID ET/OU métadonnées
       const fieldsInNewSection = (allNodes || []).filter(n => {
-  const meta: any = n.metadata || {};
-  const sameRepeater = meta.repeaterParentId === repeaterId;
-  const metaIndex = meta.repeaterInstanceIndex;
-  const suffix = getSuffixFromId(n.id);
-  const sameIndex = String(metaIndex) === String(effectiveIndex) || (suffix && Number(suffix) === Number(effectiveIndex));
-        if (!sameRepeater || !sameIndex) return false;
+        const meta: any = n.metadata || {};
+        const sameRepeater = meta.repeaterParentId === repeaterId;
+        const metaIndex = meta.repeaterInstanceIndex;
+        const suffix = getSuffixFromId(n.id);
+        // ✅ NOUVEAU: Accepter si le suffixe correspond OU si l'index metadata correspond
+        const sameIndex = suffix === suffixToMatch || String(metaIndex) === suffixToMatch;
+        if (!sameIndex) return false;
+        // Accepter si même repeater OU si suffixe identifie clairement une copie de ce repeater
+        if (!sameRepeater && !meta.sourceTemplateId) return false;
         const notInCurrentSection = !section.fields.some((sf: any) => sf.id === n.id);
         return notInCurrentSection;
+      });
+      
+      // 🔥 FALLBACK AGRESSIF: Rechercher tous les nœuds avec le même suffixe dans tout l'arbre
+      const allNodesWithSameSuffix = (allNodes || []).filter(n => {
+        const suffix = getSuffixFromId(n.id);
+        if (suffix !== suffixToMatch) return false;
+        // Vérifier que c'est bien une copie (a sourceTemplateId ou copiedFromNodeId)
+        const meta: any = n.metadata || {};
+        const isCopy = !!(meta.sourceTemplateId || meta.copiedFromNodeId);
+        return isCopy;
+      });
+      
+      dlog('🔍 [DELETE COPY GROUP] Recherche par suffixe:', { 
+        suffixToMatch, 
+        fieldsInSameCopy: fieldsInSameCopy.length, 
+        fieldsInNewSection: fieldsInNewSection.length,
+        allNodesWithSameSuffix: allNodesWithSameSuffix.length 
       });
 
       // ✅ Fallback supplémentaire: pattern d'ID namespacé "${repeaterId}_${effectiveIndex}_<originalFieldId>"
@@ -552,12 +1340,17 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         }
       }
 
-      const allFieldsToDelete = Array.from(new Map([...fieldsInSameCopy, ...fieldsInNewSection].map(x => [x.id, x])).values());
+      // 🔥 NOUVEAU: Fusionner toutes les sources de champs à supprimer (section + allNodes + suffixe global)
+      const allFieldsToDelete = Array.from(new Map([
+        ...fieldsInSameCopy, 
+        ...fieldsInNewSection,
+        ...allNodesWithSameSuffix  // ✅ Inclure les nœuds trouvés par suffixe
+      ].map(x => [x.id, x])).values());
       // DEBUG: Inspect optimistic ids and suffixes
       try {
         const debugList = allFieldsToDelete.map(x => ({ id: x.id, suffix: getSuffixFromId(x.id), label: x.label }));
         dlog('[DELETE COPY GROUP] All fields to delete (optimistic):', { count: allFieldsToDelete.length, list: debugList });
-  } catch { /* noop */ }
+      } catch { /* noop */ }
       if (allFieldsToDelete.length === 0) {
         dlog('⚠️ [DELETE COPY GROUP] Aucun champ détecté pour cette instance, rien à supprimer.');
         return;
@@ -575,125 +1368,78 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         dlog('[DELETE COPY GROUP] Failed to dispatch optimistic tbl-repeater-updated (silent)');
       }
 
-      const BATCH_SIZE = 5;
-      const MAX_RETRIES = 3;
-      const DELAY_MS = 500;
-      let globalSuccess = 0;
-      let globalFailed = 0;
-      const globalFailedFields: Array<{ label: string; id: string; lastError: string }> = [];
+      // 🔥 OPTIMISATION: Le serveur fait la cascade - on n'envoie qu'un DELETE par nœud UNIQUE
+      // Les 404 sont ignorés car le serveur peut avoir déjà supprimé le nœud en cascade
+      const MAX_RETRIES = 2;
+      const DELAY_MS = 300;
       const globalSuccessIds: string[] = [];
+      const alreadyDeletedOnServer = new Set<string>();
 
-      const deleteWithRetry = async (node: any, retry = 0) => {
+      const deleteWithRetry = async (node: any, retry = 0): Promise<{ status: 'success' | 'skipped' | 'failed', id: string, serverDeletedIds: string[] }> => {
+        // Skip si déjà supprimé par une cascade précédente
+        if (alreadyDeletedOnServer.has(node.id)) {
+          return { status: 'skipped', id: node.id, serverDeletedIds: [] };
+        }
+        
         try {
           const response = await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}`, { suppressErrorLogForStatuses: [404] });
-          // ✨ CRITIQUE: Le serveur peut retourner les IDs supprimés (CASCADE + display nodes)
-          console.log('🔍 [DELETE RESPONSE]', { nodeId: node.id, response, deletedIds: response?.data?.deletedIds, responseData: response?.data });
-          const serverDeletedIds = response?.data?.deletedIds || response?.deletedIds || [node.id];
-          console.log('✅ [EXTRACTED IDS]', { nodeId: node.id, count: serverDeletedIds.length, serverDeletedIds });
-          console.table(serverDeletedIds.map((id: string) => ({ id, suffix: id.match(/-(\d+)$/)?.[1] || 'BASE' })));
-          return { status: 'success' as const, id: node.id, label: node.label, serverDeletedIds };
+          // ✨ Le serveur retourne les IDs supprimés (CASCADE + display nodes)
+          const serverDeletedIds: string[] = response?.deletedIds || response?.data?.deletedIds || [node.id];
+          console.log('✅ [DELETE OK]', { nodeId: node.id, serverDeleted: serverDeletedIds.length });
+          // Marquer ces IDs comme supprimés pour éviter de les re-supprimer
+          serverDeletedIds.forEach(id => alreadyDeletedOnServer.add(id));
+          return { status: 'success', id: node.id, serverDeletedIds };
         } catch (err: any) {
           const status = err?.status || 500;
-          const errMsg = err?.data?.error || err?.message || 'Erreur inconnue';
+          // 404 = déjà supprimé (cascade serveur) → considéré comme succès
+          if (status === 404) {
+            alreadyDeletedOnServer.add(node.id);
+            return { status: 'success', id: node.id, serverDeletedIds: [node.id] };
+          }
+          // 500 → retry
           if (status === 500 && retry < MAX_RETRIES) {
             await new Promise(r => setTimeout(r, DELAY_MS * (retry + 1)));
             return deleteWithRetry(node, retry + 1);
           }
-          if (status === 404) return { status: 'success' as const, id: node.id, label: node.label, serverDeletedIds: [node.id] };
-          return { status: 'failed' as const, id: node.id, label: node.label, error: errMsg, serverDeletedIds: [] };
+          console.warn('❌ [DELETE FAIL]', { nodeId: node.id, status, error: err?.message });
+          return { status: 'failed', id: node.id, serverDeletedIds: [] };
         }
       };
 
-      for (let i = 0; i < allFieldsToDelete.length; i += BATCH_SIZE) {
-        const batch = allFieldsToDelete.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(batch.map(b => deleteWithRetry(b)));
-        for (const r of results) {
-          if (r.status === 'success') {
-            globalSuccess++;
-            globalSuccessIds.push(r.id);
-            // ✨ CRITIQUE: Collecter TOUS les IDs retournés par le serveur (incluant CASCADE + display nodes)
-            if (r.serverDeletedIds && Array.isArray(r.serverDeletedIds)) {
-              for (const serverId of r.serverDeletedIds) {
-                if (!globalSuccessIds.includes(serverId)) {
-                  globalSuccessIds.push(serverId);
-                }
-              }
-            }
-          } else {
-            globalFailed++;
-            globalFailedFields.push({ label: r.label || '', id: r.id, lastError: String((r as any).error || '') });
-          }
-        }
-        if (i + BATCH_SIZE < allFieldsToDelete.length) await new Promise(res => setTimeout(res, DELAY_MS));
-      }
-
-      dlog('🗑️ [DELETE COPY GROUP] Suppression terminée - Succès:', globalSuccess, '❌ Échecs:', globalFailed);
-      if (globalFailed > 0) console.warn('🗑️ [DELETE COPY GROUP] Champs non supprimés:', globalFailedFields.map(f => `${f.label} (${f.lastError})`));
-
-      // Extra cleanup ciblée: supprimer uniquement les display nodes de CETTE instance (évite suppression autres copies)
-      try {
-        const removedSet = new Set(globalSuccessIds);
-        let nodesForScan = Array.isArray(allNodes) && allNodes.length > 0 ? allNodes : [];
-        if (!nodesForScan || nodesForScan.length === 0) {
-          try {
-            const resp = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
-            nodesForScan = Array.isArray(resp) ? resp as any[] : (resp?.data || resp?.nodes || []);
-          } catch (err) {
-            console.warn('[DELETE COPY GROUP] Unable to fetch full tree for extra deletion:', err);
-            nodesForScan = allNodes || [];
-          }
-        }
-        const extraCandidates = (nodesForScan || []).filter(n => {
-          const meta: any = n.metadata || {};
-          if (!meta) return false;
-          // Doit appartenir au même repeater ET même instance
-          if (meta.repeaterParentId !== repeaterId) return false;
-          if (meta.repeaterInstanceIndex !== effectiveIndex) return false;
-          // Doit ressembler à un display node généré (variables, autoCreate, sourceTemplateId)
-          const looksLikeDisplay = !!(meta.autoCreateDisplayNode || meta.copiedFromNodeId || meta.fromVariableId || meta.sourceTemplateId);
-          if (!looksLikeDisplay) return false;
-          // Ne pas re-supprimer ceux déjà dans la liste
-          if (removedSet.has(n.id)) return false;
-          return true;
-        });
-        if (extraCandidates.length) {
-          dlog('[DELETE COPY GROUP] Display nodes supplémentaires détectés pour instance:', extraCandidates.map(e => e.id));
-          const extraIdsToRemove: string[] = [];
-          for (let i = 0; i < extraCandidates.length; i += BATCH_SIZE) {
-            const batch = extraCandidates.slice(i, i + BATCH_SIZE);
-            const res = await Promise.all(batch.map(b => deleteWithRetry(b)));
-            for (const r of res) {
-              if (r.status === 'success') extraIdsToRemove.push(r.id);
-              else console.warn('[DELETE COPY GROUP] Failed to delete display node', r.id, (r as any).error);
+      // Supprimer séquentiellement pour éviter les conflits de cascade
+      for (const field of allFieldsToDelete) {
+        const result = await deleteWithRetry(field);
+        if (result.status === 'success') {
+          globalSuccessIds.push(result.id);
+          // Ajouter les IDs cascade du serveur
+          for (const serverId of result.serverDeletedIds) {
+            if (!globalSuccessIds.includes(serverId)) {
+              globalSuccessIds.push(serverId);
             }
           }
-          if (extraIdsToRemove.length) {
-            for (const id of extraIdsToRemove) if (!globalSuccessIds.includes(id)) globalSuccessIds.push(id);
-            dlog('[DELETE COPY GROUP] Display nodes supprimés (instance ciblée):', extraIdsToRemove.length);
-          }
         }
-      } catch (e) {
-        console.warn('[DELETE COPY GROUP] Extra cleanup ciblée erreur:', e);
       }
 
+      dlog('🗑️ [DELETE COPY GROUP] Suppression terminée - Total IDs supprimés:', globalSuccessIds.length);
+
+      // ✨ MISE À JOUR LOCALE SANS RECHARGEMENT
+      // Émettre un événement avec les IDs supprimés pour que le composant parent filtre localement
       try {
-        // ✨ MISE À JOUR LOCALE SANS RECHARGEMENT VISIBLE + REFETCH SILENCIEUX
-        // On émet un événement avec les IDs supprimés pour que le composant parent filtre localement
         const eventTreeId = resolveEventTreeId();
         window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { 
           detail: { 
             treeId: eventTreeId, 
             nodeId: repeaterId, 
             source: 'delete-copy-group-finished', 
-            suppressReload: true, // Pas de rechargement visible immédiat
-            forceRefresh: true,   // ✅ Déclenche un refetch silencieux après 800ms
+            suppressReload: true,  // Pas de rechargement visible
+            forceRefresh: false,   // ❌ PAS de refetch - la mise à jour locale suffit
             deletedIds: globalSuccessIds, 
             timestamp: Date.now() 
           } 
         }));
-        dlog('[DELETE COPY GROUP] Dispatched final tbl-repeater-updated (deletedIds) - SILENT UPDATE + FORCE REFRESH', globalSuccessIds);
+        dlog('[DELETE COPY GROUP] Dispatched final tbl-repeater-updated (deletedIds) - LOCAL UPDATE ONLY', globalSuccessIds);
         
-        // Backwards-compatible light event for other listeners if needed
+        // Événement léger pour autres listeners
         window.dispatchEvent(new CustomEvent('delete-copy-group-finished', { 
           detail: { 
             treeId: eventTreeId, 
@@ -703,20 +1449,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           } 
         }));
         
-        // ❌ SUPPRESSION DE L'ÉVÉNEMENT TBL_LOCAL_FILTER_DELETED
-        // Le forceRefresh + refetch silencieux gère déjà correctement la mise à jour
-        // Pas besoin de filtrage temporaire
         console.log('✨ [DELETE COPY GROUP] Mise à jour locale sans rechargement:', globalSuccessIds.length, 'éléments');
         
-        // Ensure local retransform/computation runs in dependent components if they rely on memoized values
-        try {
-          window.dispatchEvent(new CustomEvent('TBL_FORM_DATA_CHANGED', { 
-            detail: { 
-              reason: 'delete-copy-group-finished', 
-              deletedIds: globalSuccessIds 
-            } 
-          }));
-        } catch {/* noop */}
+        // Déclencher une mise à jour du formData pour les composants dépendants
+        window.dispatchEvent(new CustomEvent('TBL_FORM_DATA_CHANGED', { 
+          detail: { 
+            reason: 'delete-copy-group-finished', 
+            deletedIds: globalSuccessIds 
+          } 
+        }));
       } catch {
         dlog('⚠️ [DELETE COPY GROUP] Impossible de dispatch final tbl-repeater-updated (silent)');
       }
@@ -907,7 +1648,26 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // ⛔️ Déporter TOUS les champs appartenant à une copie réelle vers le parent répéteur
       // On ne les rend pas à leur position brute dans section.fields; ils seront insérés
       // à la position du répéteur pour respecter la règle "les copies démarrent ici".
-      const belongsToRealCopy = Boolean((field as any).parentRepeaterId && (field as any).sourceTemplateId);
+      // ⚠️ NOTE: A copy should be treated as "repeater-local" ONLY when its parentRepeaterId
+      // references a repeater that actually lives in THIS SECTION. If the copy was moved to
+      // another section/tab through the transformer (e.g., redistributed to its source template),
+      // we must still render it normally here.
+      const belongsToRealCopy = Boolean(
+        (field as any).parentRepeaterId &&
+        (field as any).sourceTemplateId &&
+        // The parent repeater (field.parentRepeaterId) must be a field in the current section
+        section.fields.some(sf => sf.id === (field as any).parentRepeaterId)
+      );
+      if ((field as any).parentRepeaterId && (field as any).sourceTemplateId && !belongsToRealCopy) {
+        // Log the special case for debugging: copy in section but the parent repeater is NOT in this section
+        try {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔁 [COPY LOCATION] Copy appears in section (rendering):', { fieldId: field.id, label: field.label, parentRepeaterId: (field as any).parentRepeaterId, sectionId: section.id });
+          } else {
+            dlog('🔁 [COPY LOCATION] Copy appears in section (rendering):', { fieldId: field.id, label: field.label, parentRepeaterId: (field as any).parentRepeaterId, sectionId: section.id });
+          }
+        } catch { /* noop */ }
+      }
       if (belongsToRealCopy) {
         return;
       }
@@ -1042,6 +1802,23 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         };
 
         const templateNodeIds = getTemplateNodeIdsInTreeOrder(expandTemplateNodeIds(templateNodeIdsRaw));
+        
+        // 🔍 DIAGNOSTIC: Logger les templateNodeIds pour analyser la configuration
+        console.log('🔍 [REPEATER CONFIG]', {
+          repeaterId: field.id,
+          repeaterLabel: field.label,
+          templateNodeIdsRaw: JSON.stringify(templateNodeIdsRaw),
+          templateNodeIdsExpanded: JSON.stringify(templateNodeIds),
+          allNodesCount: allNodes?.length || 0
+        });
+        
+        // 🔍 DÉTAIL: Afficher les labels des champs à dupliquer
+        const templateFields = templateNodeIds.map(tid => {
+          const node = allNodes?.find(n => n.id === tid);
+          return node ? `${node.label} (${tid})` : `[NOT FOUND] ${tid}`;
+        });
+        console.log('🔍 [REPEATER TEMPLATES]', templateFields);
+        
         // 🎯 CORRECTION : Utiliser le label du champ (ex: "Versant", "Toiture") pour le bouton
         const repeaterLabel = field.label || field.name || 'Entrée';
         
@@ -1058,6 +1835,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         
         // NOUVEAU: Regrouper les COPIES RÉELLES à la position du répéteur, par rang d'encodage
         // 1) Récupérer toutes les copies de ce répéteur
+        // 🎯 IMPORTANT: Ne chercher que dans la section courante - les copies cross-section 
+        // restent dans leur section d'origine
         const copyFieldsAll = fields.filter(f => (f as any).parentRepeaterId === field.id && (f as any).sourceTemplateId);
 
         // 2) Construire mapping templateId -> liste de copies, triées par duplicatedAt puis index dans le label (fallback)
@@ -2340,6 +3119,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       parentFieldId: (f as any).parentFieldId,
       hasSharedRefId: !!(f.sharedReferenceId || (f as any).sharedReferenceIds),
       order: f.order
+      , subTabKey: (f as any).subTabKey,
+      parentRepeaterId: (f as any).parentRepeaterId,
+      sourceTemplateId: (f as any).sourceTemplateId || (f.metadata as any)?.sourceTemplateId,
+      isDeletableCopy: !!(f as any).isDeletableCopy
     }));
     console.log(`�🚨🚨 [ULTRA DEBUG] ORDEREDFIELDS Section "${section.title}" (${section.sectionName}): ${orderedFields.length} champs`, fieldDetails);
     
@@ -2375,19 +3158,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // Le refetch silencieux (forceRefresh) gère déjà correctement la mise à jour
     let fieldsAfterDeletion = orderedFields;
     
-    // 🔥 FILTRE CRITIQUE: Exclure les COPIES de répéteurs (identifiées par metadata.sourceTemplateId)
-    // Ces copies ne doivent s'afficher que dans le répéteur lui-même, pas comme des champs normaux
-    const result = fieldsAfterDeletion.filter(field => {
-      const meta = (field.metadata || {}) as any;
-      const sourceTemplateId = meta?.sourceTemplateId;
-      const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
-      const isPhysicalRepeaterCopy = Boolean(meta?.duplicatedFromRepeater);
-      if (sourceTemplateId && !isPhysicalRepeaterCopy && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
-        console.log(`🚫 [COPY-FILTER] Exclusion de template repeater: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
-        return false;
-      }
-      return true;
-    });
+    // ✅ FILTRE SIMPLE: On affiche TOUS les champs, y compris les copies de répéteurs
+    // Les copies d'originals de répéteurs doivent s'afficher là où elles sont placées
+    const result = fieldsAfterDeletion;
     
     // LOG DÉTAILLÉ pour champs conditionnels injectés
     orderedFields.forEach(field => {
@@ -2550,12 +3323,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   // Rendre éditable si c'est un lookup (rowBased/columnBased) OU un répétable
   // ⚠️ Ne PAS traiter les résultats de matrice comme éditables: ils doivent s'afficher via BackendValueDisplay
   if ((hasTableCapability && hasRowOrColumnMode) || isRepeater) {
+      const editableColProps = getFieldColProps(section, field, { forceFullWidth: isRepeater });
       return (
         <Col
           key={field.id}
-          xs={24}
-          sm={12}
-          lg={6}
+          {...editableColProps}
           className="mb-2"
         >
           <TBLFieldRendererAdvanced
@@ -3093,48 +3865,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     };
 
     // 🎨 Style de la carte selon le type de champ
-    const getCardStyle = () => {
-      let borderColor = '#0ea5e9'; // Bleu par défaut
-      let backgroundColor = '#f0f9ff';
-      
-      // Couleurs selon le type
-      if (field.type === 'number') {
-        borderColor = '#059669'; // Vert pour les nombres
-        backgroundColor = '#ecfdf5';
-      } else if (field.type === 'select') {
-        borderColor = '#7c3aed'; // Violet pour les sélections
-        backgroundColor = '#faf5ff';
-      } else if (field.type === 'boolean') {
-        borderColor = '#dc2626'; // Rouge pour booléens
-        backgroundColor = '#fef2f2';
-      }
-      
-      return {
-        textAlign: 'center' as const,
-        border: `2px solid ${borderColor}`,
-        borderRadius: '12px',
-        backgroundColor,
-        minHeight: '80px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      };
-    };
-
+    const displayColProps = getUniformDisplayColProps(section);
+    const displayAppearance = resolveDisplayAppearance(field);
+    const cardStyle = buildDisplayCardStyle(displayAppearance.tokens, displayAppearance.styleOverrides);
+    const labelStyle = buildDisplayLabelStyle(displayAppearance.tokens);
+    const valueStyle = buildDisplayValueStyle(displayAppearance.tokens);
+    const cardSize = displayAppearance.tokens.size === 'lg' ? 'default' : 'small';
+    const bodyPadding = `${displayAppearance.tokens.paddingY}px ${displayAppearance.tokens.paddingX}px`;
     return (
-      <Col key={field.id} {...getResponsiveColSpan(section)}>
+      <Col key={field.id} {...displayColProps}>
         <Card
-          size="small"
-          style={getCardStyle()}
-          styles={{ body: { padding: '12px 8px' } }}
+          size={cardSize}
+          style={cardStyle}
+          styles={{ body: { padding: bodyPadding } }}
         >
-          <div>
-            <Text strong style={{ 
-              color: '#0ea5e9', 
-              fontSize: '13px',
-              display: 'block',
-              marginBottom: '4px'
-            }}>
+          <div style={{ width: '100%', textAlign: displayAppearance.tokens.align }}>
+            <Text style={labelStyle}>
               {field.label}
             </Text>
             {(() => {
@@ -3154,11 +3900,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               // La carte bleue ENVELOPPE TOUJOURS dans un <Text> avec le bon style
 
               return (
-                <Text style={{ 
-                  color: '#64748b', 
-                  fontSize: '12px',
-                  fontWeight: 'bold'
-                }}>
+                <Text style={valueStyle}>
                   {displayValue ?? '---'}
                 </Text>
               );
@@ -3234,7 +3976,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             {/* Style spécial pour les champs des sections données */}
             {(section.isDataSection || section.title === 'Données' || section.title.includes('Données')) ? (
               <div style={{ marginBottom: '16px' }}>
-                <Row gutter={dataRowGutter} justify="center">
+                <Row gutter={getDataRowGutter(section)} justify="center">
                   {(() => {
                     const filteredFields = orderedFields.filter(field => {
                       const meta = (field.metadata || {}) as any;
@@ -3242,6 +3984,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
                       const isPhysicalRepeaterCopy = Boolean(meta?.duplicatedFromRepeater);
                       const isRepeaterVariant = Boolean((field as any).parentRepeaterId) || (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId));
+                      
+                      // 🎯 DEBUG SPÉCIAL PANNEAU
+                      const isPanneauField = field.label?.includes('Panneau') || field.label?.includes('panneau');
+                      if (isPanneauField) {
+                        console.log(`🎯🎯🎯 [PANNEAU FILTER DEBUG] Champ Panneau dans filtrage DATA SECTION:`, {
+                          label: field.label,
+                          id: field.id,
+                          sourceTemplateId,
+                          fieldParentId,
+                          isPhysicalRepeaterCopy,
+                          isRepeaterVariant,
+                          duplicatedFromRepeater: meta?.duplicatedFromRepeater,
+                          willBeExcluded: isRepeaterVariant && !isPhysicalRepeaterCopy
+                        });
+                      }
+                      
                       if (sourceTemplateId && !isPhysicalRepeaterCopy && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
                         console.log(`🚫 [COPY-FILTER] Exclusion de template DATA SECTION: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
                         return false;
@@ -3254,17 +4012,27 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     
                     console.log(`🎯🎯🎯 [DATA SECTION ROW] Rendering ${filteredFields.length} filtered fields in Row:`, filteredFields.map(f => ({ id: f.id, label: f.label })));
                     
-                    return filteredFields.map(field => {
-                      const rendered = renderDataSectionField(field);
-                      console.log(`✅✅✅ [DATA SECTION FIELD RENDERED] "${field.label}" -> JSX element:`, rendered);
-                      return rendered;
-                    });
+                    const groupedBySuffix = groupDisplayFieldsBySuffix(filteredFields);
+                    return groupedBySuffix.reduce<React.ReactElement[]>((elements, { suffix, fields: groupedFields }) => {
+                      if (groupedFields.length > 0) {
+                        console.log(`🎯 [DATA SECTION GROUP] Suffix "${suffix}" -> ${groupedFields.length} champs`);
+                      }
+                      const groupElements = groupedFields.map((field) => {
+                        const rendered = renderDataSectionField(field);
+                        console.log(`✅✅✅ [DATA SECTION FIELD RENDERED] (suffix: ${suffix}) "${field.label}" -> JSX element:`, rendered);
+                        return rendered;
+                      });
+                      return elements.concat(groupElements);
+                    }, []);
                   })()}
                 </Row>
               </div>
             ) : visibilityFilteredFields.length > 0 ? (
-              <Row gutter={formRowGutter} className="tbl-form-row">
-                {visibilityFilteredFields.map((field) => {
+              <Row gutter={getFormRowGutter(section)} className="tbl-form-row">
+                {(() => {
+                  const groupedBySuffix = groupDisplayFieldsBySuffix(visibilityFilteredFields);
+                  return groupedBySuffix.flatMap(({ suffix, fields: groupedFields }) =>
+                    groupedFields.map((field) => {
                   // 🚨🚨🚨 DEBUG: Log pour chaque champ rendu avec détails complets
                   console.log('��� [ULTRA DEBUG] RENDU CHAMP:', {
                     id: field.id,
@@ -3302,6 +4070,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     const buttonSize = (field as any).repeater_buttonSize ?? (field as any).repeaterButtonSize ?? 'middle'; // tiny, small, middle, large
                     const buttonWidth = (field as any).repeater_buttonWidth ?? (field as any).repeaterButtonWidth ?? 'auto'; // auto, half, full
                     const iconOnly = isAddButton ? false : ((field as any).repeater_iconOnly ?? (field as any).repeaterIconOnly ?? false); // add button shows label
+                    const buttonColProps = getFieldColProps(section, field, {
+                      forceFullWidth: buttonWidth === 'full' || buttonWidth === 'full-width'
+                    });
                     
                     // 🔍 DEBUG CRITIQUE : Afficher TOUTES les propriétés du field
                     if (isAddButton) {
@@ -3325,13 +4096,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     return (
                       <Col 
                         key={field.id}
-                        xs={24}
-                        sm={12}
-                        md={8}
-                        lg={6}
-                        xl={6}
+                        {...buttonColProps}
                         className="mb-2 tbl-form-col"
-                        style={{}}
                       >
                         {/* Rendre le bouton d'ajout dans le même wrapper qu'un champ pour alignement parfait */}
                         <Form.Item
@@ -3344,7 +4110,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           style={{ width: '150px' }}
                         >
                           <Button
-                            type={isAddButton ? 'dashed' : 'dashed'}
+                            type={isAddButton ? 'default' : 'dashed'}
                             ghost={false}
                             size={isAddButton ? 'middle' : 'middle'}
                             block={false}
@@ -3356,10 +4122,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               width: '150px',
                               fontSize: '14px',
                               borderRadius: '6px',
-                              borderStyle: 'dashed',
-                              backgroundColor: isAddButton ? '#fff' : undefined,
-                              borderColor: isAddButton ? '#d9d9d9' : undefined,
-                              color: isAddButton ? undefined : undefined,
+                              borderStyle: isAddButton ? 'solid' : 'dashed',
+                              backgroundColor: isAddButton ? REPEATER_ADD_BUTTON_STYLE.backgroundColor : undefined,
+                              borderColor: isAddButton ? REPEATER_ADD_BUTTON_STYLE.borderColor : undefined,
+                              color: isAddButton ? REPEATER_ADD_BUTTON_STYLE.color : undefined,
+                              fontWeight: isAddButton ? 600 : undefined,
+                              boxShadow: isAddButton ? '0 6px 20px rgba(11,92,107,0.25)' : undefined,
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -3605,15 +4373,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       parentFieldId: (field as any).parentFieldId,
                       parentOptionValue: (field as any).parentOptionValue
                     });
+                    const conditionalKey = `${field.id}__pf_${(field as any).parentFieldId || 'none'}`;
+                    const injectedConditionalColProps = getFieldColProps(section, field);
                     
                     return (
                       <Col
-                        key={`${field.id}__pf_${(field as any).parentFieldId || 'none'}`}
-                        xs={24}
-                        sm={12}
-                        md={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 8}
-                        lg={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
-                        xl={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
+                        key={conditionalKey}
+                        {...injectedConditionalColProps}
                         className="mb-2 tbl-form-col conditional-field-injected"
                         data-parent-field-id={(field as any).parentFieldId || ''}
                         data-parent-option-value={String((field as any).parentOptionValue ?? '')}
@@ -3672,15 +4438,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                         
                         // ⚡ INJECTION RÉELLE : Rendre les conditionalFields directement après le champ
                         const conditionalFieldsToRender = selectedOption.conditionalFields.map((condField: any, condIdx: number) => {
+                          const conditionalColProps = getFieldColProps(section, condField);
                           
                           return (
                             <Col
                               key={`${field.id}_conditional_${condIdx}`}
-                              xs={24}
-                              sm={12}
-                              md={condField.type === 'textarea' || condField.type === 'TEXTAREA' ? 24 : 8}
-                              lg={condField.type === 'textarea' || condField.type === 'TEXTAREA' ? 24 : 6}
-                              xl={condField.type === 'textarea' || condField.type === 'TEXTAREA' ? 24 : 6}
+                              {...conditionalColProps}
                               className="mb-2 tbl-form-col"
                             >
                               <TBLFieldRendererAdvanced
@@ -3698,15 +4461,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                         });
                         
                         // Retourner un Fragment contenant le champ principal ET ses conditionalFields
+                        const injectedMainFieldColProps = getFieldColProps(section, field);
                         return (
                           <React.Fragment key={field.id}>
                             {/* Champ principal */}
                             <Col
-                              xs={24}
-                              sm={12}
-                              md={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 8}
-                              lg={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
-                              xl={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
+                              {...injectedMainFieldColProps}
                               className="mb-2 tbl-form-col"
                             >
                               <TBLFieldRendererAdvanced
@@ -3720,7 +4480,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 treeId={treeId}
                               />
                             </Col>
-                            {/* ConditionalFields injectés */}
                             {conditionalFieldsToRender}
                           </React.Fragment>
                         );
@@ -3729,14 +4488,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   }
 
                   // Rendu normal des champs (si pas d'injection de conditionalFields)
+                  const defaultFormColProps = getFieldColProps(section, field);
                   return (
                     <Col
                       key={field.id}
-                      xs={24}
-                      sm={12}
-                      md={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 8}
-                      lg={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
-                      xl={field.type === 'textarea' || field.type === 'TEXTAREA' ? 24 : 6}
+                      {...defaultFormColProps}
                       className="mb-2 tbl-form-col"
                     >
                       {/* Contrôles de copies: on garde seulement ➕ (sur le dernier champ du groupe) et un bouton 🗑️ pour supprimer TOUTE la copie (sur le dernier champ du groupe) */}
@@ -3765,26 +4521,44 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             {/* ➕ Plus par champ désactivé: on ne garde que le bouton + du répéteur */}
                             
                             {/* 🗑️ BOUTON SUPPRIMER TOUTE LA COPIE (affiché sur le dernier champ du groupe) */}
-                            {(field as any).isLastInCopyGroup && (field as any).parentRepeaterId && (
-                              <Button
-                                type="text"
-                                danger
-                                size="small"
-                                shape="circle"
-                                icon={<DeleteOutlined />}
-                                title={`Supprimer cette copie`}
-                                style={{
-                                  marginTop: '4px',
-                                  minWidth: '24px',
-                                  height: '24px',
-                                  padding: '0',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                                onClick={() => handleDeleteCopyGroup(field)}
-                              />
-                            )}
+                            {(() => {
+                              const isLastInGroup = (field as any).isLastInCopyGroup === true;
+                              const isCopyField = field.id.includes('-'); // Copies have suffix like "xxx-1", "xxx-2"
+                              const shouldShowDelete = isLastInGroup && isCopyField;
+                              
+                              // Debug pour comprendre pourquoi le bouton n'apparaît pas
+                              if (field.label?.includes('Inclinaison') || field.label?.includes('Orientation')) {
+                                console.log('🗑️ [DELETE BUTTON DEBUG]', {
+                                  label: field.label,
+                                  id: field.id,
+                                  isLastInGroup,
+                                  isCopyField,
+                                  shouldShowDelete,
+                                  parentRepeaterId: (field as any).parentRepeaterId
+                                });
+                              }
+                              
+                              return shouldShowDelete ? (
+                                <Button
+                                  type="text"
+                                  danger
+                                  size="small"
+                                  shape="circle"
+                                  icon={<DeleteOutlined />}
+                                  title={`Supprimer cette copie`}
+                                  style={{
+                                    marginTop: '4px',
+                                    minWidth: '24px',
+                                    height: '24px',
+                                    padding: '0',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  onClick={() => handleDeleteCopyGroup(field)}
+                                />
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       )}
@@ -3804,7 +4578,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       )}
                     </Col>
                   );
-                })}
+                    })
+                  );
+                })()}
               </Row>
             ) : null}
             

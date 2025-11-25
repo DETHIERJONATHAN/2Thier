@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { Modal, Select, Form, Input } from 'antd';
+import { Modal, Select, Form, Input, ConfigProvider, theme as antdTheme } from 'antd';
 import {
   DndContext,
   DragStartEvent,
@@ -364,8 +364,46 @@ export default function AdminModulesPage() {
   const totalActiveGlobal = modules.filter((m) => !!m.active).length;
   const totalActiveForOrg = modules.filter((m) => !!m.isActiveForOrg).length;
 
+  const modulesTheme = useMemo(() => ({
+    algorithm: antdTheme.defaultAlgorithm,
+    token: {
+      colorBgLayout: '#f6f8fb',
+      colorBgContainer: '#ffffff',
+      colorBorder: '#e2e8f0',
+      colorText: '#0f172a',
+      colorTextSecondary: '#475569',
+      borderRadiusLG: 14,
+      controlHeightLG: 48,
+    },
+    components: {
+      Card: {
+        colorBgContainer: '#ffffff',
+        borderRadiusLG: 16,
+        boxShadowSecondary: '0 10px 30px rgba(15, 23, 42, 0.08)',
+      },
+      Modal: {
+        colorBgElevated: '#ffffff',
+        headerBg: '#ffffff',
+        borderRadiusLG: 18,
+      },
+      Input: {
+        colorBgContainer: '#ffffff',
+      },
+      Select: {
+        colorBgContainer: '#ffffff',
+      },
+      Dropdown: {
+        colorBgElevated: '#ffffff',
+      },
+      Switch: {
+        colorPrimary: '#2563eb',
+      },
+    },
+  }), []);
+
   return (
-    <div className="p-6">
+    <ConfigProvider theme={modulesTheme}>
+      <div className="admin-modules-surface min-h-screen bg-slate-50 p-6">
       <NotificationsContainer />
       <ModulesHeader
         categoriesCount={filteredSections.length}
@@ -595,5 +633,6 @@ export default function AdminModulesPage() {
         )}
       </Modal>
     </div>
+  </ConfigProvider>
   );
 }

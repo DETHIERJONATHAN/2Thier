@@ -392,6 +392,15 @@ export interface TreeBranchLeafNode {
   appearance_size?: string;
   appearance_width?: string;
   appearance_variant?: string;
+  appearanceConfig?: Record<string, unknown> | null;
+  
+  // Configuration layout des sections
+  section_collapsible?: boolean;
+  section_defaultCollapsed?: boolean;
+  section_showChildrenCount?: boolean;
+  section_columnsDesktop?: number;
+  section_columnsMobile?: number;
+  section_gutter?: number;
   
   // Configuration texte COMPLÈTE
   text_placeholder?: string;
@@ -681,6 +690,20 @@ const extractSubTabValue = (node?: TreeBranchLeafNode | null): unknown => {
   return undefined;
 };
 
+const buildSectionConfig = (node?: TreeBranchLeafNode | null): TBLSectionConfig | undefined => {
+  if (!node) return undefined;
+  const config: TBLSectionConfig = {
+    columnsDesktop: node.section_columnsDesktop ?? undefined,
+    columnsMobile: node.section_columnsMobile ?? undefined,
+    gutter: node.section_gutter ?? undefined,
+    collapsible: node.section_collapsible ?? undefined,
+    defaultCollapsed: node.section_defaultCollapsed ?? undefined,
+    showChildrenCount: node.section_showChildrenCount ?? undefined
+  };
+  const hasValue = Object.values(config).some(value => value !== undefined);
+  return hasValue ? config : undefined;
+};
+
 const resolveSubTabAssignments = (
   originalNode: TreeBranchLeafNode,
   resolvedNode: TreeBranchLeafNode,
@@ -703,6 +726,15 @@ const resolveSubTabAssignments = (
   return [];
 };
 
+export interface TBLSectionConfig {
+  columnsDesktop?: number;
+  columnsMobile?: number;
+  gutter?: number;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
+  showChildrenCount?: boolean;
+}
+
 export interface TBLSection {
   id: string;
   name: string;
@@ -713,6 +745,8 @@ export interface TBLSection {
   order: number;
   isDataSection?: boolean; // 🎯 Nouvelle propriété pour identifier les sections données TreeBranchLeaf
   metadata?: Record<string, unknown>;
+  config?: TBLSectionConfig;
+  subsections?: TBLSection[];
 }
 
 export interface TBLTab {
@@ -1532,6 +1566,27 @@ export const transformNodesToTBLComplete = (
   const processedNodeIds = new Set<string>(); // 🎯 ÉVITER LES DOUBLONS
   const detectedSections = new Map<string, { node: TreeBranchLeafNode, fields: TBLField[] }>(); // 🎯 SECTIONS DÉTECTÉES
   
+  // 🔍 PREMIÈRE PASSE PRÉALABLE: Construire la map templateId -> tabId d'origine AVANT le processing
+  const templateToTabMap = new Map<string, string>();
+  niveau1Nodes.forEach(ongletNode => {
+    const ongletChildren = childrenMap.get(ongletNode.id) || [];
+    const collectTemplateIds = (nodeId: string) => {
+      const children = childrenMap.get(nodeId) || [];
+      children.forEach(child => {
+        if (child.type === 'leaf_field' || child.type === 'leaf_section' || child.type === 'leaf_group') {
+          templateToTabMap.set(child.id, ongletNode.id);
+          collectTemplateIds(child.id); // Récursif pour les enfants
+        }
+      });
+    };
+    ongletChildren.forEach(child => {
+      templateToTabMap.set(child.id, ongletNode.id);
+      collectTemplateIds(child.id);
+    });
+  });
+  
+  if (verbose()) console.log('🗺️ [TAB MAPPING EARLY] Template → Tab mapping créée:', templateToTabMap.size, 'templates');
+  
   const processNodeRecursively = (nodeId: string, currentLevel: number = 2): TBLField[] => {
     const children = childrenMap.get(nodeId) || [];
     const processedFields: TBLField[] = [];
@@ -1555,6 +1610,11 @@ export const transformNodesToTBLComplete = (
           // 🏗️ C'EST UNE SECTION = CRÉER UNE SOUS-SECTION TBL
           if (verbose()) dlog(`      📦 Section détectée: "${child.label}" - traitement des champs de la section`);
       const sectionFields = processNodeRecursively(child.id, currentLevel + 1);
+          
+          // 🆕 CHERCHER LES COPIES DE CETTE SECTION DEPUIS D'AUTRES ONGLETS
+          // (Les copies créées dans un répéteur d'un autre onglet mais qui doivent aller dans cette section)
+          const _sectionFieldBaseIds = sectionFields.map(f => f.id);
+          
           detectedSections.set(child.id, { node: child, fields: sectionFields });
           if (verbose()) dlog(`      ✅ Section "${child.label}" créée avec ${sectionFields.length} champs`);
           // ⚡ IMPORTANT: Ajouter aussi les champs à la liste principale pour qu'ils soient disponibles
@@ -1702,8 +1762,9 @@ export const transformNodesToTBLComplete = (
       // Traiter RÉCURSIVEMENT tous les descendants à partir du niveau 2
       const ongletFields = processNodeRecursively(ongletNode.id, 2);
       
-      // Trier tous les champs par ordre global
+      // Trier tous les champs par ordre global sans exclure les copies croisées
       const sortedFields = ongletFields.sort((a, b) => a.order - b.order);
+      const sortedFieldsFiltered = sortedFields;
       
       // 🎯 UTILISER LES VRAIES SECTIONS DÉTECTÉES
       const ongletSections: TBLSection[] = [];
@@ -1721,7 +1782,22 @@ export const transformNodesToTBLComplete = (
           // Garder les copies de répéteurs pour que les sections puissent les exposer.
           // Le rendu des repeaters dans TBLSectionRenderer s'appuie sur ces champs
           // (parentRepeaterId, sourceTemplateId) pour injecter les instances dynamiques.
+          
+          // Garder les champs exactement tels qu'ils ont été récupérés dans la section
           const sectionFieldsFiltered = sectionData.fields;
+          
+          // 🔍🔍🔍 DIAGNOSTIC FORCE - Sections Devis/PV
+          if (sectionData.node.label?.includes('Devis') || sectionData.node.label?.includes('PV')) {
+            console.log(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Field count:`, sectionFieldsFiltered.length);
+            console.log(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Field IDs:`, sectionFieldsFiltered.map(f => f.id));
+            const panneauInSection = sectionFieldsFiltered.filter(f => 
+              f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || 
+              f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
+              f.id.startsWith('f117b34a-') || 
+              f.id.startsWith('fb35d781-')
+            );
+            console.log(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Panneau fields found:`, panneauInSection.length, panneauInSection.map(f => ({ id: f.id, label: f.label })));
+          }
           
           ongletSections.push({
             id: `${sectionId}-section`,
@@ -1733,6 +1809,8 @@ export const transformNodesToTBLComplete = (
             isDataSection: true // 🎯 TOUTES les sections TreeBranchLeaf sont des sections données
             ,
             metadata: typeof sectionData.node.metadata === 'object' ? sectionData.node.metadata as Record<string, unknown> : {}
+            ,
+            config: buildSectionConfig(sectionData.node)
           });
           
           // 🎯 Log pour vérifier la création des sections données
@@ -1741,8 +1819,7 @@ export const transformNodesToTBLComplete = (
         
         // Ajouter une section pour les champs qui ne sont dans aucune section
         const fieldsInSections = sectionsForTab.flatMap(([, sectionData]) => sectionData.fields.map(f => f.id));
-        const fieldsNotInSections = sortedFields.filter(f => !fieldsInSections.includes(f.id));
-        
+        const fieldsNotInSections = sortedFieldsFiltered.filter(f => !fieldsInSections.includes(f.id));
         const fieldsNotInSectionsFiltered = fieldsNotInSections;
         
         if (fieldsNotInSectionsFiltered.length > 0) {
@@ -1755,10 +1832,12 @@ export const transformNodesToTBLComplete = (
             order: sectionsForTab.length
             ,
             metadata: typeof ongletNode.metadata === 'object' ? ongletNode.metadata as Record<string, unknown> : {}
+            ,
+            config: buildSectionConfig(ongletNode)
           });
         }
       } else {
-        const sortedFieldsFiltered = sortedFields;
+        // Pas de sections détectées, utiliser les champs déjà filtrés (sans copies cross-tab)
         
         // Pas de sections détectées, créer une section par défaut
         ongletSections.push({
@@ -1770,13 +1849,15 @@ export const transformNodesToTBLComplete = (
           order: 0
           ,
           metadata: typeof ongletNode.metadata === 'object' ? ongletNode.metadata as Record<string, unknown> : {}
+          ,
+          config: buildSectionConfig(ongletNode)
         });
       }
       
       // Construire l'onglet
       const tabSubTabsMap = new Map<string, string>();
       // Déduire les subTabs depuis les champs (subTabKey) ou depuis metadata du noeud onglet
-      (ongletFields || []).forEach(f => {
+      (sortedFieldsFiltered || []).forEach(f => {
         const keys = Array.isArray((f as any).subTabKeys) && (f as any).subTabKeys.length
           ? (f as any).subTabKeys
           : ((f as any).subTabKey ? [ (f as any).subTabKey ] : []);
@@ -1801,6 +1882,18 @@ export const transformNodesToTBLComplete = (
 
       const inferredSubTabs = Array.from(tabSubTabsMap.entries()).map(([k, v]) => ({ key: k, label: v }));
 
+      // 🎯 DÉTERMINER le bon tab pour chaque champ AVANT de construire l'objet tab
+      const fieldsForThisTab: TBLField[] = [];
+      
+      sortedFields.forEach(field => {
+        // Assign all fields to their current tab without forcing them back to the template tab
+        fieldsForThisTab.push(field);
+        if (!fieldsByTab[ongletNode.id]) {
+          fieldsByTab[ongletNode.id] = [];
+        }
+        fieldsByTab[ongletNode.id].push(field);
+      });
+
       const tab: TBLTab = {
         id: ongletNode.id,
         name: ongletNode.label,
@@ -1809,17 +1902,19 @@ export const transformNodesToTBLComplete = (
         sections: ongletSections,
         allFields: sectionsForTab.length > 0 ? 
           ongletSections.flatMap(section => section.fields) : // Utiliser tous les champs des sections
-          sortedFields // Ou tous les champs si pas de sections
+          fieldsForThisTab // Utiliser SEULEMENT les champs qui appartiennent vraiment à cet onglet
         ,
         subTabs: inferredSubTabs.length > 0 ? inferredSubTabs : undefined
       };
       
       tabs.push(tab);
-      fieldsByTab[tab.id] = tab.allFields;
+      
       sectionsByTab[tab.id] = ongletSections;
       
   if (verbose()) dlog(`✅ [TBL-PRISMA] Onglet "${tab.label}" créé: ${sortedFields.length} champs dynamiques`);
     });
+  
+  // 🆕 TROISIÈME PASSE supprimée: les copies restent désormais dans l'onglet/section où elles ont été créées
   
   // 5️⃣ Construire l'arbre final DYNAMIQUEMENT
   const treeRootNode = nodes.find(n => n.parentId === null && n.type === 'root') || nodes[0];
@@ -1835,6 +1930,23 @@ export const transformNodesToTBLComplete = (
     totalFields,
     totalSections: Object.values(sectionsByTab).flat().length 
   });
+  
+  // 🔍🔍🔍 DIAGNOSTIC GLOBAL - Tous les champs "Panneau"
+  console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Recherche champs Panneau dans fieldsByTab');
+  const allFieldsGlobal = Object.values(fieldsByTab).flat();
+  const panneauFieldsGlobal = allFieldsGlobal.filter(f => 
+    f.label?.includes('Panneau') || f.label?.includes('panneau') ||
+    f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || 
+    f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
+    f.id.startsWith('f117b34a-') || 
+    f.id.startsWith('fb35d781-')
+  );
+  console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Panneau fields trouvés:', panneauFieldsGlobal.length, panneauFieldsGlobal.map(f => ({
+    id: f.id,
+    label: f.label,
+    tabId: Object.entries(fieldsByTab).find(([_, fields]) => fields.includes(f))?.[0],
+    metadata: (f as any).metadata
+  })));
   
   return { tree, tabs, fieldsByTab, sectionsByTab };
 };
@@ -1994,12 +2106,67 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
           resolvedFieldsByTab[tabId] = resolvedFields;
         }
 
+        // 🔍🔍🔍 DIAGNOSTIC: Chercher les champs "Panneau" et "N° de panneau"
+        // FORCE TOUJOURS LES LOGS DIAGNOSTICS (verbose désactivé temporairement)
+        if (process.env.NODE_ENV === 'development') {
+          const allFields = Object.values(resolvedFieldsByTab).flat();
+          const panneauFields = allFields.filter(f => 
+            f.label?.includes('Panneau') || f.label?.includes('panneau') ||
+            f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
+            f.id.startsWith('f117b34a-') || f.id.startsWith('fb35d781-')
+          );
+          console.log('🔍🔍🔍 [DIAGNOSTIC PANNEAU] Tous les champs "Panneau" trouvés:', panneauFields.map(f => ({
+            id: f.id,
+            label: f.label,
+            parentId: (f as any).parentId,
+            sourceTemplateId: (f as any).sourceTemplateId,
+            copySuffix: (f.metadata as any)?.copySuffix
+            , subTabKey: (f as any).subTabKey,
+            subTabKeys: (f as any).subTabKeys
+          })));
+        }
+
         const resolvedSectionsByTab: Record<string, TBLSection[]> = {};
         for (const [tabId, sections] of Object.entries(transformedData.sectionsByTab)) {
-          const resolvedSections = sections.map(section => ({
-            ...section,
-            fields: resolvedFieldsByTab[tabId]?.filter(field => section.fields.some(sectionField => sectionField.id === field.id)) || section.fields
-          }));
+          const resolvedSections = sections.map(section => {
+            // 🆕 CROSS-SECTION COPY FIX: Inclure les copies dont le sourceTemplateId correspond à un champ de cette section
+            const sectionBaseFieldIds = section.fields.map(f => f.id);
+            
+            // ✅ Champs du tab actuel
+            const _currentTabFields = resolvedFieldsByTab[tabId] || [];
+            
+            // 🔍 CHERCHER AUSSI DANS TOUS LES AUTRES TABS pour les copies cross-tab
+            const allTabsFields = Object.values(resolvedFieldsByTab).flat();
+            
+            // 🔍🔍🔍 DIAGNOSTIC pour cette section
+            // FORCE TOUJOURS LES LOGS DIAGNOSTICS (verbose désactivé temporairement)
+            if (process.env.NODE_ENV === 'development' && (section.name?.includes('Devis') || section.name?.includes('PV'))) {
+              console.log(`🔍🔍🔍 [DIAGNOSTIC SECTION "${section.name}"] sectionBaseFieldIds:`, sectionBaseFieldIds);
+              const panneauInBase = sectionBaseFieldIds.filter(id => 
+                id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e'
+              );
+              console.log(`🔍🔍🔍 [DIAGNOSTIC SECTION "${section.name}"] Panneau fields in base?`, panneauInBase);
+            }
+            
+            const sectionFieldsResolved = allTabsFields.filter(field => {
+              // Garder les champs de base de la section
+              if (sectionBaseFieldIds.includes(field.id)) return true;
+              
+              // 🎯 NOUVEAU: Garder aussi les copies dont le sourceTemplateId est dans cette section
+              const sourceTemplateId = (field as any).sourceTemplateId || (field.metadata as any)?.sourceTemplateId;
+              if (sourceTemplateId && sectionBaseFieldIds.includes(sourceTemplateId)) {
+                if (verbose()) dlog(`🔗 [CROSS-TAB COPY] Ajout de "${field.label}" (du tab source) à section "${section.name}" du tab "${tabId}"`);
+                return true;
+              }
+              
+              return false;
+            });
+            
+            return {
+              ...section,
+              fields: sectionFieldsResolved
+            };
+          });
           resolvedSectionsByTab[tabId] = resolvedSections;
         }
 
@@ -2039,6 +2206,22 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
           ...section,
           fields: section.fields  // Fields already filtered in transform based on current state
         }));
+
+        // 🔎 Pour chaque section, lister les champs Panneau présents (diagnostic plus fin)
+        Object.entries(sectionsByTab).forEach(([tabId, secs]) => {
+          secs.forEach(sec => {
+            const found = (sec.fields || []).filter(f => 
+              (f.label && (f.label.includes('Panneau') || f.label.includes('panneau'))) ||
+              f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' ||
+              f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
+              f.id.startsWith('f117b34a-') ||
+              f.id.startsWith('fb35d781-')
+            );
+          if (found.length > 0) {
+            console.log('🔎 [DIAGNOSTIC SECTION] Panneau fields in section:', { tabId, sectionId: sec.id, sectionName: sec.name, fields: found.map(f => ({ id: f.id, label: f.label, parentRepeaterId: (f as any).parentRepeaterId, sourceTemplateId: (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId, subTabKey: (f as any).subTabKey, subTabKeys: (f as any).subTabKeys, visible: f.visible })) });
+            }
+          });
+        });
         resolvedSectionsByTab[tabId] = resolvedSections;
       }
       
@@ -2049,7 +2232,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     } catch (err) {
       console.error('❌ [useTBLDataPrismaComplete] Retransform error:', err);
     }
-  }, [triggerRetransform, rawNodes]);
+  }, [triggerRetransform, rawNodes, sectionsByTab]);
 
   const reconcileDuplicatedNodes = useCallback(async (duplicated: Array<{ id: string; parentId?: string; sourceTemplateId?: string }>) => {
     if (!duplicated || duplicated.length === 0) return;
@@ -2264,6 +2447,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     }
   }, [api, tree_id]);
 
+  const matchesCurrentTreeId = useCallback((eventTreeId?: string | number) => {
+    if (!tree_id || eventTreeId === undefined || eventTreeId === null) {
+      return false;
+    }
+    return String(eventTreeId) === String(tree_id);
+  }, [tree_id]);
+
   useEffect(() => {
     if (disabled) return;
     if (formDataVersion < 1) return;
@@ -2361,6 +2551,37 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     updateRawRef.current = updateRawNodes;
     fetchDataRef.current = fetchData;
   }, [retransformWithCurrentFormData, reconcileDuplicatedNodes, updateRawNodes, fetchData]);
+
+  useEffect(() => {
+    if (!tree_id || disabled) return;
+
+    const handleNodeUpdated = (event: Event) => {
+      try {
+        const customEvent = event as CustomEvent<{ node?: Partial<TreeBranchLeafNode>; treeId?: string | number }>;
+        const { node, treeId: eventTreeId } = customEvent.detail || {};
+        if (!node || !matchesCurrentTreeId(eventTreeId)) {
+          return;
+        }
+
+        updateRawRef.current(prev => {
+          const next = [...prev];
+          const idx = next.findIndex(existing => existing.id === node.id);
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], ...node } as TreeBranchLeafNode;
+            return next;
+          }
+          return [...next, node as TreeBranchLeafNode];
+        });
+
+        setFormDataVersion(v => v + 1);
+      } catch (err) {
+        console.error('❌ [TBL Hook] handleNodeUpdated failed:', err);
+      }
+    };
+
+    window.addEventListener('tbl-node-updated', handleNodeUpdated);
+    return () => window.removeEventListener('tbl-node-updated', handleNodeUpdated);
+  }, [tree_id, disabled, matchesCurrentTreeId]);
 
   // 🔄 Écouter les changements de paramètres repeater pour recharger les données
   useEffect(() => {
@@ -2611,81 +2832,115 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
               // Map sectionsByTab to mutate locally
               const newSectionsByTab = { ...(sectionsByTabRef.current || {}) };
+              
+              // 🎯 DEBUG: Afficher tous les onglets disponibles
+              console.log(`🔍🔍🔍 [INJECTION OPTIMISTE] Onglets disponibles dans sectionsByTab:`, Object.keys(newSectionsByTab));
+              Object.keys(newSectionsByTab).forEach(tabId => {
+                const sections = newSectionsByTab[tabId] || [];
+                console.log(`   - Tab "${tabId}": ${sections.length} sections`);
+                sections.forEach(s => {
+                  console.log(`      • Section "${s.name}" (${s.id}): ${s.fields.length} champs`);
+                });
+              });
+              
               let injected = 0;
               missingIds.forEach(id => {
                 const node = rawMap.get(id);
                 if (!node) return;
                 const field = buildMinimalField(node);
-                // Try to find a section that already contains fields with this parentRepeaterId
+                
+                // CRITICAL: For copies, find the TEMPLATE FIELD section (not repeater button!) and place copy NEXT TO original
+                const sourceTemplateId = (node.metadata as any)?.sourceTemplateId;
+                const parentRepeaterId = node.parentId;
                 let inserted = false;
-                for (const tabId of Object.keys(newSectionsByTab)) {
-                  const secs = newSectionsByTab[tabId] || [];
-                  for (let si = 0; si < secs.length; si++) {
-                    const section = secs[si];
-                    // Try to find by several heuristics: parentRepeaterId, field id === parentId (template field), or sourceTemplateId
-                    const idx = section.fields.findIndex(f => {
-                      const meta = (f as any).metadata || {};
-                      return (f as any).parentRepeaterId === node.parentId || (f as any).id === node.parentId || meta.repeaterParentId === node.parentId || (f as any).sourceTemplateId === node.parentId || (meta && meta.sourceTemplateId === node.parentId);
-                    });
-                    if (idx !== -1) {
-                      // insert after the last sibling with same parentRepeaterId
-                      let lastIdx = idx;
-                      for (let j = idx + 1; j < section.fields.length; j++) {
-                        if ((section.fields[j] as any).parentRepeaterId === node.parentId) lastIdx = j;
-                        else break;
-                      }
-                      const nextFields = [ ...section.fields ];
-                      nextFields.splice(lastIdx + 1, 0, field);
-                      secs[si] = { ...section, fields: nextFields } as any;
-                      inserted = true;
-                      injected++;
-                      break;
-                    }
-                  }
-                  if (inserted) break;
+                
+                console.log(`🔍 [COPY DEBUG] Processing copy field: "${field.label}", sourceTemplateId="${sourceTemplateId}", parentRepeaterId="${parentRepeaterId}"`);
+                
+                // 🎯 DEBUG SPÉCIAL PANNEAU
+                const isPanneauField = field.label?.includes('Panneau') || field.label?.includes('panneau');
+                if (isPanneauField) {
+                  console.log(`🎯🎯🎯 [PANNEAU DEBUG] Champ Panneau détecté: "${field.label}"`);
+                  console.log(`🎯 sourceTemplateId: ${sourceTemplateId}`);
+                  console.log(`🎯 field.id: ${(field as any).id}`);
+                  console.log(`🎯 parentRepeaterId: ${parentRepeaterId}`);
+                  console.log(`🎯 field.metadata:`, node.metadata);
                 }
-
-                // If not inserted, attempt a more deterministic insertion near parent repeater field across all tabs
-                if (!inserted) {
-                  // Heuristic: find tab & section containing parent repeater template field by id or metadata
-                  const parentId = node.parentId;
-                  const tabCandidates = Object.keys(sectionsByTabRef.current || newSectionsByTab);
-                  let bestInserted = false;
-                  for (const tabId of tabCandidates) {
-                    const secs = (sectionsByTabRef.current || newSectionsByTab)[tabId];
-                    if (!secs || secs.length === 0) continue;
+                
+                // Priority 1: Find the ORIGINAL TEMPLATE FIELD in the sections (not the repeater button!)
+                // The copy should go right after the template field, in the SAME section as the template
+                if (sourceTemplateId) {
+                  console.log(`🔍 [COPY PLACEMENT] Looking for template with sourceTemplateId="${sourceTemplateId}" in ${Object.keys(newSectionsByTab).length} tabs`);
+                  
+                  if (isPanneauField) {
+                    console.log(`🎯🎯🎯 [PANNEAU SEARCH] Recherche de l'original pour "${field.label}"...`);
+                    console.log(`🎯 [PANNEAU SEARCH] Tabs disponibles: [${Object.keys(newSectionsByTab).join(', ')}]`);
+                  }
+                  
+                  for (const tabId of Object.keys(newSectionsByTab)) {
+                    const secs = newSectionsByTab[tabId] || [];
+                    if (isPanneauField) {
+                      console.log(`🎯 [PANNEAU SEARCH] Tab "${tabId}": ${secs.length} sections`);
+                    } else {
+                      console.log(`🔍 [COPY PLACEMENT] Tab "${tabId}": checking ${secs.length} sections`);
+                    }
+                    
                     for (let si = 0; si < secs.length; si++) {
                       const section = secs[si];
-                      const foundIdx = section.fields.findIndex(f => (f as any).id === parentId || (f as any).sourceTemplateId === parentId || ((f as any).metadata || {}).repeaterParentId === parentId || ((f as any).parentRepeaterId) === parentId);
-                      if (foundIdx !== -1) {
-                        // Insert after last sibling with same parent id
-                        let lastIdx = foundIdx;
-                        for (let j = foundIdx + 1; j < section.fields.length; j++) {
-                          if ((section.fields[j] as any).parentRepeaterId === parentId) lastIdx = j;
-                          else break;
+                      const allFieldIds = section.fields.map(f => (f as any).id);
+                      const allFieldLabels = section.fields.map(f => (f as any).label);
+                      
+                      if (isPanneauField) {
+                        console.log(`🎯 [PANNEAU SEARCH] Section "${section.name}" (${section.id}):`);
+                        console.log(`   - ${section.fields.length} champs`);
+                        console.log(`   - IDs: [${allFieldIds.join(', ')}]`);
+                        console.log(`   - Labels: [${allFieldLabels.join(', ')}]`);
+                        console.log(`   - Recherche de sourceTemplateId="${sourceTemplateId}"...`);
+                      } else {
+                        console.log(`🔍 [COPY PLACEMENT] Section "${section.name}" (${section.id}): ${section.fields.length} fields [${allFieldIds.join(', ')}]`);
+                      }
+                      
+                      // Find the original template field by its ID
+                      const templateFieldIdx = section.fields.findIndex(f => (f as any).id === sourceTemplateId);
+                      
+                      if (templateFieldIdx !== -1) {
+                        if (isPanneauField) {
+                          console.log(`✅✅✅ [PANNEAU FOUND] Template trouvé! "${(section.fields[templateFieldIdx] as any).label}" à l'index ${templateFieldIdx} dans section "${section.name}"`);
                         }
+                        console.log(`✅ [COPY PLACEMENT] Found template field "${(section.fields[templateFieldIdx] as any).label}" in section "${section.name}"`);
+                        // Place the copy right after the template field in the SAME section
                         const nextFields = [ ...section.fields ];
-                        nextFields.splice(lastIdx + 1, 0, field);
+                        nextFields.splice(templateFieldIdx + 1, 0, field);
                         secs[si] = { ...section, fields: nextFields } as any;
-                        bestInserted = true;
+                        inserted = true;
+                        console.log(`✅ [COPY PLACEMENT] Copy "${field.label}" placed in section "${section.name}" (next to template field)`);
+                        if (isPanneauField) {
+                          console.log(`✅✅✅ [PANNEAU PLACED] Copie "${field.label}" placée dans section "${section.name}" après template`);
+                        }
                         injected++;
                         break;
+                      } else if (isPanneauField) {
+                        console.log(`❌ [PANNEAU SEARCH] Template ID "${sourceTemplateId}" NON TROUVÉ dans cette section`);
                       }
                     }
-                    if (bestInserted) break;
+                    if (inserted) break;
                   }
-                  if (!bestInserted) {
-                    // Last resort append to first section of first tab
-                    const fallbackTabId = tabCandidates[0];
-                    if (fallbackTabId) {
-                      const secs = (sectionsByTabRef.current || newSectionsByTab)[fallbackTabId];
-                      if (secs && secs.length > 0) {
-                        const sec0 = secs[0];
-                        secs[0] = { ...sec0, fields: [...(sec0.fields || []), field] } as any;
-                        injected++;
-                      }
-                    }
+                  
+                  if (isPanneauField && !inserted) {
+                    console.error(`❌❌❌ [PANNEAU ERROR] Impossible de trouver le template pour "${field.label}" avec sourceTemplateId="${sourceTemplateId}"`);
+                    console.error(`❌ Aucun champ avec cet ID n'existe dans aucune section de newSectionsByTab!`);
                   }
+                } else {
+                  console.warn(`⚠️ [COPY PLACEMENT] Copy "${field.label}" has NO sourceTemplateId in metadata!`);
+                  if (isPanneauField) {
+                    console.error(`❌❌❌ [PANNEAU ERROR] "${field.label}" n'a PAS de sourceTemplateId dans les metadata!`);
+                  }
+                }
+
+                // Fallback: If no sourceTemplateId match, skip placement and do NOT add to Bloc section
+                // Copies without proper sourceTemplateId will be filtered or handled elsewhere
+                if (!inserted) {
+                  console.warn(`⚠️ [COPY PLACEMENT] Copy "${field.label}" has no template match (sourceTemplateId="${sourceTemplateId}"), skipping placement`);
+                  // Do NOT force insert into first section - let the normal data flow handle it
                 }
               });
 

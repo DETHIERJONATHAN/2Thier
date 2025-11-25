@@ -87,12 +87,12 @@ const IconPicker: React.FC<IconPickerProps> = ({ value, onChange, withColor = fa
                   <button
                     key={ic.id}
                     type="button"
-                    className={`flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-50 border w-full ${selected === ic.name ? 'border-blue-500' : 'border-transparent'}`}
+                    className={`flex flex-col items-center gap-1 p-2 rounded hover:bg-slate-800/40 border w-full ${selected === ic.name ? 'border-blue-500' : 'border-transparent'}`}
                     onClick={() => onChange?.({ name: ic.name, color })}
                     title={`${ic.name} • ${cat}`}
                   >
                     <IconRenderer name={ic.name} color={color} />
-                    <span className="text-[10px] text-gray-600 truncate w-full">{ic.name}</span>
+                    <span className="text-[10px] text-slate-300 truncate w-full">{ic.name}</span>
                   </button>
                 ))}
             </React.Fragment>

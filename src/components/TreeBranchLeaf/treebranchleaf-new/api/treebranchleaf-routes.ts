@@ -1596,9 +1596,16 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       return res.status(403).json({ error: 'AccÃ¨s non autorisÃ© Ã  cet arbre' });
     }
 
-    // RÃ©cupÃ©rer les enfants existants pour Ã©viter les doublons
+    // 🔍 Récupérer les copies existantes par metadata.sourceTemplateId dans tout l'arbre
+    // (Les copies ont le même parentId que les originaux, pas le repeater)
     const existingChildren = await prisma.treeBranchLeafNode.findMany({
-      where: { parentId: nodeId },
+      where: { 
+        treeId: parentNode.treeId,
+        metadata: {
+          path: ['sourceTemplateId'],
+          not: Prisma.DbNull
+        }
+      },
       select: { id: true, metadata: true }
     });
 
@@ -1624,6 +1631,17 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
 
     console.log(`ðŸ” [DUPLICATE-TEMPLATES] ${templateNodes.length} templates Ã  dupliquer`);
 
+    // 🎯 DEBUG: Afficher la structure complète de chaque template
+    for (const template of templateNodes) {
+      console.log(`🎯 [DUPLICATE-TEMPLATES] Template à dupliquer:`, {
+        id: template.id,
+        label: template.label,
+        type: template.type,
+        parentId: template.parentId,
+        treeId: template.treeId
+      });
+    }
+
     // Dupliquer chaque template en COPIE PROFONDE (utilise deepCopyNodeInternal)
     const duplicatedSummaries: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }> = [];
     const duplicatedNodeIds = new Set<string>();
@@ -1638,7 +1656,6 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       const labelSuffix = ` (Copie ${copyNumber})`;
 
       const result = await deepCopyNodeInternal(req as unknown as MinimalReq, template.id, {
-        targetParentId: nodeId,
         labelSuffix,
         suffixNum: copyNumber,
         preserveSharedReferences: true  // ðŸ”— PRÃ‰SERVER les rÃ©fÃ©rences partagÃ©es pour les copies de templates
@@ -2049,9 +2066,9 @@ async function deepCopyNodeInternal(
         })() : oldNode.link_params,
         link_targetNodeId: oldNode.link_targetNodeId && idMap.has(oldNode.link_targetNodeId) ? idMap.get(oldNode.link_targetNodeId)! : oldNode.link_targetNodeId,
         link_targetTreeId: oldNode.link_targetTreeId,
-        // 📊 TABLE: Copier table_activeId, table_instances et table_name du noeud original
-        // ✅ IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiées
-        table_activeId: oldNode.table_activeId ? `${oldNode.table_activeId}-${__copySuffixNum}` : null,
+        // 📊 TABLE: Pour les LOOKUPS (capabilities.table), garder la même référence de table
+        // Les copies doivent pointer vers la MÊME table source, pas une copie de la table
+        table_activeId: oldNode.table_activeId || null,
         table_instances: (() => {
           console.log('\n[DEEP-COPY-TABLE] DÉBUT table_instances');
           console.log('[DEEP-COPY-TABLE] oldNode.table_instances existe?', !!oldNode.table_instances);
@@ -2085,24 +2102,19 @@ async function deepCopyNodeInternal(
           console.log('[DEEP-COPY-TABLE] Keys:', Object.keys(rawInstances));
           const updatedInstances: Record<string, unknown> = {};
           for (const [key, value] of Object.entries(rawInstances)) {
-            // ✅ FIX: Vérifier si la clé a DÉJÀ un suffixe numérique (-1, -2, etc.)
-            // Ne pas utiliser includes('-') car UUIDs contiennent des tirets!
-            const hasSuffixRegex = /-\d+$/;  // Suffixe numérique à la fin
-            const newKey = hasSuffixRegex.test(key) ? key : `${key}-${__copySuffixNum}`;
-            console.log(`[DEEP-COPY-TABLE] Key: "${key}" => "${newKey}"`);
+            // Pour les lookups de table, on garde la même référence (pas de suffixe)
+            // Les copies pointent vers la MÊME table source que l'original
+            const newKey = key;  // Garder la clé originale
+            console.log(`[DEEP-COPY-TABLE] Key: "${key}" => "${newKey}" (unchanged for lookup)`);
             
             if (value && typeof value === 'object') {
               const tableInstanceObj = value as Record<string, unknown>;
               const updatedObj = { ...tableInstanceObj };
               if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === 'string') {
                 const oldTableId = tableInstanceObj.tableId;
-                // ✅ FIX: Vérifier si le tableId a DÉJÀ un suffixe numérique (-1, -2, etc.)
-                // Ne pas utiliser includes('-') car UUIDs contiennent des tirets!
-                const hasSuffixRegex = /-\d+$/;  // Suffixe numérique à la fin
-                updatedObj.tableId = hasSuffixRegex.test(oldTableId)
-                  ? oldTableId 
-                  : `${oldTableId}-${__copySuffixNum}`;
-                console.log(`[DEEP-COPY-TABLE]   tableId: "${oldTableId}" => "${updatedObj.tableId}"`);
+                // Pour les lookups, garder le même tableId (pas de suffixe)
+                updatedObj.tableId = oldTableId;
+                console.log(`[DEEP-COPY-TABLE]   tableId: "${oldTableId}" => "${updatedObj.tableId}" (unchanged for lookup)`);
               }
               updatedInstances[newKey] = updatedObj;
             } else {
@@ -2123,12 +2135,28 @@ async function deepCopyNodeInternal(
         repeater_buttonSize: oldNode.repeater_buttonSize,
         repeater_buttonWidth: oldNode.repeater_buttonWidth,
         repeater_iconOnly: oldNode.repeater_iconOnly,
-        // METADATA: noter la provenance et supprimer les shared refs (copie indÃ©pendante)
-        metadata: {
-          ...(typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {}),
-          copiedFromNodeId: oldNode.id,
-          copySuffix: __copySuffixNum,
-        } as Prisma.InputJsonValue,
+        // METADATA: noter la provenance et garder les lookups de table intacts
+        metadata: (() => {
+          const baseMeta = typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {};
+          const newMeta = {
+            ...baseMeta,
+            copiedFromNodeId: oldNode.id,
+            copySuffix: __copySuffixNum,
+          };
+          
+          // Pour les lookups de table (metadata.capabilities.table), garder les références originales
+          // Ne PAS ajouter de suffixe aux activeId/tableId car les copies doivent pointer vers la même table source
+          if (baseMeta.capabilities && typeof baseMeta.capabilities === 'object') {
+            const caps = baseMeta.capabilities as Record<string, unknown>;
+            if (caps.table && typeof caps.table === 'object') {
+              // Les tableIds dans capabilities.table.instances doivent rester identiques (lookup source)
+              // Pas de modification nécessaire - on garde telles quelles
+              console.log('[DEEP-COPY] Preserving metadata.capabilities.table as-is (lookup source)');
+            }
+          }
+          
+          return newMeta;
+        })() as Prisma.InputJsonValue,
         // SHARED REFS â†’ conditionnellement prÃ©servÃ©es ou supprimÃ©es
         isSharedReference: preserveSharedReferences ? oldNode.isSharedReference : false,
         sharedReferenceId: preserveSharedReferences ? oldNode.sharedReferenceId : null,
@@ -2277,6 +2305,36 @@ async function deepCopyNodeInternal(
         } catch (e) {
           console.warn('[TreeBranchLeaf API] Warning updating linkedTableIds during deep copy:', (e as Error).message);
         }
+      }
+
+      // SelectConfig (pour les champs SELECT avec lookup)
+      const selectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
+        where: { nodeId: oldId }
+      });
+      if (selectConfig) {
+        console.log(`[DEEP-COPY] Copie du selectConfig pour ${oldId} → ${newId}`);
+        await prisma.treeBranchLeafSelectConfig.create({
+          data: {
+            id: randomUUID(),
+            nodeId: newId,
+            options: selectConfig.options as Prisma.InputJsonValue,
+            multiple: selectConfig.multiple,
+            searchable: selectConfig.searchable,
+            allowCustom: selectConfig.allowCustom,
+            optionsSource: selectConfig.optionsSource,
+            tableReference: selectConfig.tableReference, // IMPORTANT: Garder la même table (pas de suffixe)
+            keyColumn: selectConfig.keyColumn,
+            keyRow: selectConfig.keyRow, // IMPORTANT: Garder le même keyRow (Inclinaison, pas Orientation)
+            valueColumn: selectConfig.valueColumn,
+            valueRow: selectConfig.valueRow,
+            displayColumn: selectConfig.displayColumn,
+            displayRow: selectConfig.displayRow,
+            dependsOnNodeId: selectConfig.dependsOnNodeId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        });
+        console.log(`[DEEP-COPY] ✅ selectConfig copié avec keyRow="${selectConfig.keyRow}", keyColumn="${selectConfig.keyColumn}"`);
       }
     }
 
@@ -3435,10 +3493,12 @@ const updateOrMoveNode = async (req, res) => {
             });
           }
         } else if (existingNode.type.startsWith('leaf_')) {
-          // Les champs peuvent Ãªtre sous des branches ou d'autres champs
-          if (newParentNode.type !== 'branch' && !newParentNode.type.startsWith('leaf_')) {
+          // Les champs peuvent Ãªtre sous n'importe quel parent SAUF les options SELECT
+          const isSelectOption = newParentNode.type.startsWith('leaf_') && newParentNode.subType === 'SELECT';
+          
+          if (isSelectOption) {
             return res.status(400).json({ 
-              error: 'Les champs ne peuvent Ãªtre dÃ©placÃ©s que sous des branches ou d\'autres champs' 
+              error: 'Les champs ne peuvent pas Ãªtre dÃ©placÃ©s sous une option SELECT' 
             });
           }
         } else if (existingNode.type === 'branch') {
@@ -7061,13 +7121,224 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
   }
 });
 
+// ╔═══════════════════════════════════════════════════════════════════════╗
+// ║ 🔥 FONCTION FILTRAGE DES TABLES                                       ║
+// ╚═══════════════════════════════════════════════════════════════════════╝
+
+/**
+ * Applique les filtres configurés sur les lignes d'un tableau
+ * @param matrix - La matrice du tableau (lignes)
+ * @param columns - Les colonnes du tableau
+ * @param filters - Les filtres à appliquer { column, operator, valueRef }
+ * @param submissionId - ID de la soumission pour résoudre les références
+ * @param prisma - Instance Prisma
+ * @returns Indices des lignes qui passent TOUS les filtres (logique AND)
+ */
+async function applyTableFilters(
+  matrix: unknown[][],
+  columns: string[],
+  filters: Array<{ column: string; operator: string; valueRef: string }>,
+  submissionId: string,
+  prisma: PrismaClient
+): Promise<number[]> {
+  if (!filters || filters.length === 0) {
+    return matrix.map((_, i) => i); // Tous les indices si pas de filtres
+  }
+
+  console.log(`[applyTableFilters] 🔥 Application de ${filters.length} filtre(s)`);
+  
+  // Résoudre toutes les valueRef en valeurs concrètes
+  const resolvedFilters = await Promise.all(
+    filters.map(async (filter) => {
+      const value = await resolveValueRef(filter.valueRef, submissionId, prisma);
+      console.log(`[applyTableFilters] Filtre "${filter.column}" ${filter.operator} "${filter.valueRef}" → valeur résolue: "${value}"`);
+      return { ...filter, resolvedValue: value };
+    })
+  );
+
+  // Filtrer les lignes
+  const matchingIndices: number[] = [];
+  
+  for (let rowIndex = 0; rowIndex < matrix.length; rowIndex++) {
+    const row = matrix[rowIndex];
+    let passesAllFilters = true;
+
+    for (const filter of resolvedFilters) {
+      const columnIndex = columns.indexOf(filter.column);
+      if (columnIndex === -1) {
+        console.warn(`[applyTableFilters] ⚠️ Colonne "${filter.column}" introuvable`);
+        passesAllFilters = false;
+        break;
+      }
+
+      const cellValue = row[columnIndex];
+      const passes = compareValues(cellValue, filter.operator, filter.resolvedValue);
+      
+      if (!passes) {
+        passesAllFilters = false;
+        break;
+      }
+    }
+
+    if (passesAllFilters) {
+      matchingIndices.push(rowIndex);
+    }
+  }
+
+  console.log(`[applyTableFilters] ✅ ${matchingIndices.length}/${matrix.length} lignes passent les filtres`);
+  return matchingIndices;
+}
+
+/**
+ * Résout une valueRef en valeur concrète
+ * Supporte: @select.{nodeId}, @value.{nodeId}, node-formula:{formulaId}
+ */
+async function resolveValueRef(
+  valueRef: string,
+  submissionId: string,
+  prisma: PrismaClient
+): Promise<unknown> {
+  if (!valueRef) return null;
+
+  // @select.{nodeId} - Récupérer la réponse sélectionnée
+  if (valueRef.startsWith('@select.')) {
+    const nodeId = valueRef.replace('@select.', '');
+    const submission = await prisma.nodeSubmission.findFirst({
+      where: { id: submissionId },
+      select: { selectedAnswers: true }
+    });
+    if (submission?.selectedAnswers && typeof submission.selectedAnswers === 'object') {
+      const answers = submission.selectedAnswers as Record<string, unknown>;
+      return answers[nodeId] ?? null;
+    }
+    return null;
+  }
+
+  // @value.{nodeId} - Récupérer la valeur du champ
+  if (valueRef.startsWith('@value.')) {
+    const nodeId = valueRef.replace('@value.', '');
+    const submission = await prisma.nodeSubmission.findFirst({
+      where: { id: submissionId },
+      select: { fieldValues: true }
+    });
+    if (submission?.fieldValues && typeof submission.fieldValues === 'object') {
+      const values = submission.fieldValues as Record<string, unknown>;
+      return values[nodeId] ?? null;
+    }
+    return null;
+  }
+
+  // node-formula:{formulaId} - Récupérer le résultat de la formule
+  if (valueRef.startsWith('node-formula:')) {
+    const formulaId = valueRef.replace('node-formula:', '');
+    try {
+      const result = await evaluateFormulaOrchestrated(formulaId, submissionId);
+      return result.value ?? null;
+    } catch (error) {
+      console.error(`[resolveValueRef] ❌ Erreur évaluation formule ${formulaId}:`, error);
+      return null;
+    }
+  }
+
+  // Valeur littérale
+  return valueRef;
+}
+
+/**
+ * Compare deux valeurs selon un opérateur
+ */
+function compareValues(
+  cellValue: unknown,
+  operator: string,
+  compareValue: unknown
+): boolean {
+  // Normaliser les valeurs pour comparaison
+  const normalizedCell = normalizeForComparison(cellValue);
+  const normalizedCompare = normalizeForComparison(compareValue);
+
+  switch (operator) {
+    case 'equals':
+    case '=':
+      return normalizedCell === normalizedCompare;
+    
+    case 'notEquals':
+    case '!=':
+      return normalizedCell !== normalizedCompare;
+    
+    case 'greaterThan':
+    case '>':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell > normalizedCompare;
+      }
+      return String(normalizedCell) > String(normalizedCompare);
+    
+    case 'greaterThanOrEqual':
+    case '>=':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell >= normalizedCompare;
+      }
+      return String(normalizedCell) >= String(normalizedCompare);
+    
+    case 'lessThan':
+    case '<':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell < normalizedCompare;
+      }
+      return String(normalizedCell) < String(normalizedCompare);
+    
+    case 'lessThanOrEqual':
+    case '<=':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell <= normalizedCompare;
+      }
+      return String(normalizedCell) <= String(normalizedCompare);
+    
+    case 'contains':
+      return String(normalizedCell).includes(String(normalizedCompare));
+    
+    case 'notContains':
+      return !String(normalizedCell).includes(String(normalizedCompare));
+    
+    case 'startsWith':
+      return String(normalizedCell).startsWith(String(normalizedCompare));
+    
+    case 'endsWith':
+      return String(normalizedCell).endsWith(String(normalizedCompare));
+    
+    default:
+      console.warn(`[compareValues] ⚠️ Opérateur inconnu: ${operator}`);
+      return false;
+  }
+}
+
+/**
+ * Normalise une valeur pour la comparaison
+ */
+function normalizeForComparison(value: unknown): string | number | null {
+  if (value === null || value === undefined) return null;
+  
+  // Si c'est déjà un nombre, le retourner
+  if (typeof value === 'number') return value;
+  
+  // Convertir en string et nettoyer
+  const str = String(value).trim();
+  
+  // Essayer de parser en nombre
+  const num = Number(str);
+  if (!isNaN(num) && isFinite(num)) return num;
+  
+  // Retourner la string
+  return str;
+}
+
 router.get('/nodes/:nodeId/tables/options', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    const { tableId, dimension = 'columns' } = req.query as {
+    const { tableId, dimension = 'columns', submissionId } = req.query as {
       tableId?: string;
       dimension?: string;
+      submissionId?: string;
     };
 
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
@@ -7083,25 +7354,77 @@ router.get('/nodes/:nodeId/tables/options', async (req, res) => {
 
     const { table, tables } = normalized;
 
+    // 🔥 NOUVEAU: Récupérer la configuration lookup pour les filtres
+    const rawLookup = (table.meta && typeof table.meta.lookup === 'object')
+      ? (table.meta.lookup as Record<string, unknown>)
+      : undefined;
+
+    // 🔥 NOUVEAU: Appliquer les filtres si configurés
+    let filteredMatrix = table.matrix;
+    let filteredRecords = table.records;
+    let filteredRows = table.rows;
+
+    if (rawLookup && dimension === 'rows' && submissionId) {
+      // Mode LIGNE: appliquer les filtres rowSourceOption
+      const sourceOption = rawLookup.rowSourceOption as any;
+      if (sourceOption?.filters && Array.isArray(sourceOption.filters) && sourceOption.filters.length > 0) {
+        console.log(`[tables/options] 🔥 Application des filtres LIGNE (${sourceOption.filters.length} filtres)`);
+        
+        const filteredIndices = await applyTableFilters(
+          table.matrix,
+          table.columns,
+          sourceOption.filters,
+          submissionId,
+          prisma
+        );
+        
+        filteredMatrix = filteredIndices.map(i => table.matrix[i]);
+        filteredRecords = filteredIndices.map(i => table.records[i]);
+        filteredRows = filteredIndices.map(i => table.rows[i]);
+        
+        console.log(`[tables/options] ✅ Filtrage terminé: ${table.rows.length} → ${filteredRows.length} lignes`);
+      }
+    } else if (rawLookup && dimension === 'columns' && submissionId) {
+      // Mode COLONNE: appliquer les filtres columnSourceOption
+      const sourceOption = rawLookup.columnSourceOption as any;
+      if (sourceOption?.filters && Array.isArray(sourceOption.filters) && sourceOption.filters.length > 0) {
+        console.log(`[tables/options] 🔥 Application des filtres COLONNE (${sourceOption.filters.length} filtres)`);
+        
+        const filteredIndices = await applyTableFilters(
+          table.matrix,
+          table.columns,
+          sourceOption.filters,
+          submissionId,
+          prisma
+        );
+        
+        filteredMatrix = filteredIndices.map(i => table.matrix[i]);
+        filteredRecords = filteredIndices.map(i => table.records[i]);
+        filteredRows = filteredIndices.map(i => table.rows[i]);
+        
+        console.log(`[tables/options] ✅ Filtrage terminé: ${table.rows.length} → ${filteredRows.length} lignes`);
+      }
+    }
+
     if (dimension === 'rows') {
-      const items = table.rows.map((label, index) => ({ value: label, label, index }));
+      const items = filteredRows.map((label, index) => ({ value: label, label, index }));
       return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
     }
 
     if (dimension === 'records') {
       return res.json({
-        items: table.records,
+        items: filteredRecords,
         table: { id: table.id, type: table.type, name: table.name },
         tables,
       });
     }
 
-    // Par dÃ©faut: colonnes
+    // Par défaut: colonnes
     const items = table.columns.map((label, index) => ({ value: label, label, index }));
     return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching table options:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des options du tableau' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des options du tableau' });
   }
 });
 
@@ -9893,12 +10216,390 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
 
 // GET /api/treebranchleaf/nodes/:nodeId/table/lookup
 // RÃ©cupÃ¨re le tableau ACTIF d'un noeud pour lookup (utilisÃ© par useTBLTableLookup)
+// ═════════════════════════════════════════════════════════════════════════════
+// 🔥 ÉTAPE 2.5 - Fonction pour filtrer les options selon les critères du filtre
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Applique le filtrage ÉTAPE 2.5 aux options d'un SELECT basé sur une table
+ * 
+ * NOTE: Le filterValueRef est supposé être une COLONNE de la même table
+ * (ou au minimum, un nom de colonne qui doit être trouvé dans le tableau)
+ * 
+ * @param options - Les options générées du SELECT
+ * @param filterConfig - La configuration du filtre (filterColumn, filterOperator, filterValueRef)
+ * @param columns - Les noms des colonnes de la table
+ * @param rows - Les labels des lignes de la table
+ * @param data - Les données de la table
+ * @param keyType - Le type de clé ('column' ou 'row')
+ * @returns Les options filtrées
+ */
+function applyStep25Filtering(
+  options: Array<{ value: string; label: string }>,
+  filterConfig: any,
+  columns: string[],
+  rows: string[],
+  data: any[][],
+  keyType: 'column' | 'row',
+  formValues?: Record<string, any>
+): Array<{ value: string; label: string }> {
+  // 🆕 SUPPORT DES FILTRES MULTIPLES ET CONDITIONNELS
+  
+  // CAS 1: Filtres conditionnels (différents filtres selon valeur d'un champ)
+  if (filterConfig?.conditionalFilters) {
+    return applyConditionalFilters(options, filterConfig.conditionalFilters, columns, rows, data, keyType, formValues);
+  }
+  
+  // CAS 2: Filtres multiples indépendants (tous appliqués avec AND)
+  if (filterConfig?.filters && Array.isArray(filterConfig.filters)) {
+    return applyMultipleFilters(options, filterConfig.filters, columns, rows, data, keyType, formValues);
+  }
+  
+  // CAS 3: Filtre simple (ancien format - rétrocompatibilité)
+  if (!filterConfig?.filterColumn || !filterConfig?.filterOperator || !filterConfig?.filterValueRef) {
+    return options; // Pas de filtre ÉTAPE 2.5
+  }
+
+  console.log(`[applyStep25Filtering] 🔥 ÉTAPE 2.5 - Filtrage simple: colonne="${filterConfig.filterColumn}", op="${filterConfig.filterOperator}", ref="${filterConfig.filterValueRef}"`);
+
+  // Trouver l'index de la colonne à filtrer
+  const normalizedFilterColName = String(filterConfig.filterColumn).trim().toLowerCase();
+  const filterColIndex = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFilterColName);
+
+  if (filterColIndex === -1) {
+    console.warn(`[applyStep25Filtering] ⚠️ Colonne de filtrage non trouvée: "${filterConfig.filterColumn}"`);
+    return options;
+  }
+
+  // 🆕 RÉSOUDRE LA RÉFÉRENCE DE VALEUR
+  let comparisonValue: any;
+  let isNodeReference = false;
+  const valueRef = String(filterConfig.filterValueRef);
+  
+  if (valueRef.startsWith('node-formula:')) {
+    // 🎯 CAS 1: Référence à un champ du formulaire
+    const nodeId = valueRef.replace('node-formula:', '');
+    comparisonValue = formValues?.[nodeId];
+    isNodeReference = true;
+    
+    if (comparisonValue === undefined || comparisonValue === null) {
+      console.warn(`[applyStep25Filtering] ⚠️ Valeur du nœud "${nodeId}" non trouvée dans formValues`);
+      return options; // Pas de filtrage si la valeur n'est pas disponible
+    }
+    
+    console.log(`[applyStep25Filtering] ✅ Valeur résolue depuis nœud ${nodeId}: ${comparisonValue}`);
+  } else {
+    // 🎯 CAS 2: Référence à une colonne du tableau (ancien comportement)
+    const normalizedValueColName = valueRef.trim().toLowerCase();
+    const valueColIndex = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedValueColName);
+
+    if (valueColIndex === -1) {
+      console.warn(`[applyStep25Filtering] ⚠️ Colonne de comparaison non trouvée: "${filterConfig.filterValueRef}"`);
+      return options;
+    }
+    
+    comparisonValue = valueColIndex;
+    isNodeReference = false;
+  }
+
+  // Filtrer les options
+  const filteredOptions = options.filter((option) => {
+    // Pour chaque option, trouver la ligne correspondante
+    let matchingRowIndex = -1;
+    
+    if (keyType === 'column') {
+      // Les options correspondent aux labels de lignes (colonne A)
+      // Chercher la ligne qui a ce label
+      const normalizedValue = String(option.value).trim().toLowerCase();
+      matchingRowIndex = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedValue);
+      console.log(`[applyStep25Filtering] 🔎 Recherche option "${option.value}" → rowIndex=${matchingRowIndex}`);
+    } else if (keyType === 'row') {
+      // Les options correspondent aux valeurs d'une ligne spécifique
+      // TODO: implémenter si nécessaire
+      return true;
+    }
+
+    // Si trouvé, récupérer la valeur et appliquer l'opérateur
+    if (matchingRowIndex !== -1) {
+      // ⚠️ CRITICAL: rows[] ET data[] incluent TOUS LES DEUX le header à l'index 0
+      // rows[0] = "Onduleur" (header), data[0] = ["P min WC", "MODELE", ...] (header row)
+      // rows[1] = "SMA Sunny Boy 1.5", data[1] = [3000, "model1", ...]
+      // Donc: matchingRowIndex pointe directement vers le bon index dans data[]
+      const dataIndex = matchingRowIndex;
+      
+      const filterCellValue = filterColIndex === 0 ? rows[matchingRowIndex] : data[dataIndex]?.[filterColIndex - 1];
+      
+      console.log(`[applyStep25Filtering] 🔍 DEBUG dataIndex=${dataIndex}, filterColIndex=${filterColIndex}, data[${dataIndex}]?.[${filterColIndex - 1}] = ${data[dataIndex]?.[filterColIndex - 1]}`);
+      
+      // 🆕 Déterminer la valeur de comparaison
+      let valueCellValue;
+      if (isNodeReference) {
+        // Référence de nœud → utiliser la valeur du formulaire
+        valueCellValue = comparisonValue;
+      } else {
+        // Référence de colonne → extraire depuis la ligne
+        const valueColIndex = comparisonValue;
+        valueCellValue = valueColIndex === 0 ? rows[matchingRowIndex] : data[dataIndex]?.[valueColIndex - 1];
+      }
+      
+      console.log(`[applyStep25Filtering] 📊 Option "${option.value}": filterValue=${filterCellValue} (type: ${typeof filterCellValue}), comparisonValue=${valueCellValue} (type: ${typeof valueCellValue}), operator=${filterConfig.filterOperator}`);
+      
+      // Appliquer l'opérateur de comparaison
+      const matches = compareValuesByOperator(filterConfig.filterOperator, filterCellValue, valueCellValue);
+
+      if (matches) {
+        console.log(`[applyStep25Filtering] ✅ Option ACCEPTÉE: "${option.value}" → ${filterCellValue} ${filterConfig.filterOperator} ${valueCellValue}`);
+      } else {
+        console.log(`[applyStep25Filtering] ❌ Option REJETÉE: "${option.value}" → ${filterCellValue} ${filterConfig.filterOperator} ${valueCellValue}`);
+      }
+
+      return matches;
+    }
+
+    // Par défaut, garder l'option (pas de ligne trouvée)
+    console.log(`[applyStep25Filtering] ⚠️ Option "${option.value}" - ligne non trouvée, CONSERVÉE par défaut`);
+    return true;
+  });
+
+  console.log(`[applyStep25Filtering] 📊 Résultat du filtrage: ${filteredOptions.length} options sur ${options.length} conservées`);
+  return filteredOptions;
+}
+
+/**
+ * 🆕 FILTRES CONDITIONNELS
+ * Applique différents filtres selon la valeur d'un champ de condition
+ */
+function applyConditionalFilters(
+  options: Array<{ value: string; label: string }>,
+  conditionalConfig: any,
+  columns: string[],
+  rows: string[],
+  data: any[][],
+  keyType: 'column' | 'row',
+  formValues?: Record<string, any>
+): Array<{ value: string; label: string }> {
+  console.log(`[applyConditionalFilters] 🔀 Filtres conditionnels basés sur le champ: ${conditionalConfig.ifNodeId}`);
+  
+  // Récupérer la valeur du champ de condition
+  const conditionValue = formValues?.[conditionalConfig.ifNodeId];
+  
+  if (!conditionValue) {
+    console.log(`[applyConditionalFilters] ⚠️ Champ de condition non rempli, aucun filtre appliqué`);
+    return options;
+  }
+  
+  console.log(`[applyConditionalFilters] 📋 Valeur de condition: "${conditionValue}"`);
+  
+  // Trouver le cas correspondant
+  const matchingCase = conditionalConfig.cases?.find((c: any) => 
+    String(c.when).toLowerCase() === String(conditionValue).toLowerCase()
+  );
+  
+  if (!matchingCase) {
+    console.log(`[applyConditionalFilters] ⚠️ Aucun cas trouvé pour la valeur "${conditionValue}"`);
+    return options;
+  }
+  
+  console.log(`[applyConditionalFilters] ✅ Cas trouvé: "${matchingCase.when}" → ${matchingCase.filters?.length || 0} filtres`);
+  
+  // Appliquer les filtres du cas correspondant
+  return applyMultipleFilters(options, matchingCase.filters || [], columns, rows, data, keyType, formValues);
+}
+
+/**
+ * 🆕 FILTRES MULTIPLES INDÉPENDANTS
+ * Applique plusieurs filtres avec logique AND (tous doivent être respectés)
+ */
+function applyMultipleFilters(
+  options: Array<{ value: string; label: string }>,
+  filters: any[],
+  columns: string[],
+  rows: string[],
+  data: any[][],
+  keyType: 'column' | 'row',
+  formValues?: Record<string, any>
+): Array<{ value: string; label: string }> {
+  if (!filters || filters.length === 0) {
+    return options;
+  }
+  
+  console.log(`[applyMultipleFilters] 🔥 Application de ${filters.length} filtres indépendants (AND)`);
+  
+  let filteredOptions = options;
+  
+  // Appliquer chaque filtre successivement
+  for (let i = 0; i < filters.length; i++) {
+    const filter = filters[i];
+    console.log(`[applyMultipleFilters] 📌 Filtre ${i + 1}/${filters.length}: colonne="${filter.column}", op="${filter.operator}"`);
+    
+    filteredOptions = applySingleFilter(filteredOptions, filter, columns, rows, data, keyType, formValues);
+    
+    console.log(`[applyMultipleFilters] → Résultat après filtre ${i + 1}: ${filteredOptions.length} options restantes`);
+    
+    // Optimisation: si plus d'options, arrêter
+    if (filteredOptions.length === 0) {
+      console.log(`[applyMultipleFilters] ⚠️ Aucune option restante après filtre ${i + 1}, arrêt`);
+      break;
+    }
+  }
+  
+  console.log(`[applyMultipleFilters] 📊 Résultat final: ${filteredOptions.length} options sur ${options.length}`);
+  return filteredOptions;
+}
+
+/**
+ * Applique un seul filtre sur les options
+ */
+function applySingleFilter(
+  options: Array<{ value: string; label: string }>,
+  filter: any,
+  columns: string[],
+  rows: string[],
+  data: any[][],
+  keyType: 'column' | 'row',
+  formValues?: Record<string, any>
+): Array<{ value: string; label: string }> {
+  const filterColumn = filter.column;
+  const filterOperator = filter.operator;
+  const filterValueRef = filter.valueRef;
+  
+  if (!filterColumn || !filterOperator || !filterValueRef) {
+    console.warn(`[applySingleFilter] ⚠️ Filtre incomplet, ignoré`);
+    return options;
+  }
+  
+  // Trouver l'index de la colonne à filtrer
+  const normalizedFilterColName = String(filterColumn).trim().toLowerCase();
+  const filterColIndex = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFilterColName);
+
+  if (filterColIndex === -1) {
+    console.warn(`[applySingleFilter] ⚠️ Colonne de filtrage non trouvée: "${filterColumn}"`);
+    return options;
+  }
+
+  // 🆕 RÉSOUDRE LA RÉFÉRENCE DE VALEUR
+  let comparisonValue: any;
+  const valueRef = String(filterValueRef);
+  
+  // 🔥 RÉSOLUTION DES RÉFÉRENCES @select.xxx, @input.xxx, @formula.xxx
+  if (valueRef.includes('@')) {
+    // Pattern pour détecter les références: @select.{nodeId}, @input.{nodeId}, etc.
+    const refPattern = /@(select|input|formula|calc|repeater)\.([a-f0-9\-]+)/gi;
+    let resolvedValue = valueRef;
+    
+    resolvedValue = resolvedValue.replace(refPattern, (match, type, nodeId) => {
+      const formValue = formValues?.[nodeId];
+      
+      if (formValue !== undefined && formValue !== null && formValue !== '') {
+        console.log(`[applySingleFilter] ✅ Référence résolue: ${match} → "${formValue}"`);
+        return String(formValue);
+      } else {
+        console.warn(`[applySingleFilter] ⚠️ Référence "${match}" (nodeId: ${nodeId}) non trouvée dans formValues`);
+        return match; // Garder la référence si non trouvée
+      }
+    });
+    
+    comparisonValue = resolvedValue;
+  } else if (valueRef.startsWith('node-formula:') || valueRef.startsWith('node-')) {
+    // Ancien format: Référence à un champ du formulaire
+    const nodeId = valueRef.replace(/^node-formula:/, '').replace(/^node-/, '');
+    comparisonValue = formValues?.[nodeId];
+    
+    if (comparisonValue === undefined || comparisonValue === null || comparisonValue === '') {
+      console.warn(`[applySingleFilter] ⚠️ Valeur du nœud "${nodeId}" non trouvée dans formValues - Utilisation de 0 par défaut`);
+      console.warn(`[applySingleFilter] 📋 FormValues disponibles:`, Object.keys(formValues || {}).join(', '));
+      comparisonValue = 0; // Utiliser 0 par défaut au lieu de retourner toutes les options
+    } else {
+      console.log(`[applySingleFilter] ✅ Valeur résolue depuis nœud ${nodeId}: ${comparisonValue}`);
+    }
+  } else {
+    // Valeur statique
+    comparisonValue = filterValueRef;
+    console.log(`[applySingleFilter] ✅ Valeur statique: ${comparisonValue}`);
+  }
+
+  // Filtrer les options
+  const filteredOptions = options.filter((option) => {
+    let matchingRowIndex = -1;
+    
+    if (keyType === 'column') {
+      const normalizedValue = String(option.value).trim().toLowerCase();
+      matchingRowIndex = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedValue);
+    } else if (keyType === 'row') {
+      return true; // TODO: implémenter si nécessaire
+    }
+
+    if (matchingRowIndex !== -1) {
+      const dataIndex = matchingRowIndex;
+      const filterCellValue = filterColIndex === 0 ? rows[matchingRowIndex] : data[dataIndex]?.[filterColIndex - 1];
+      
+      const matches = compareValuesByOperator(filterOperator, filterCellValue, comparisonValue);
+
+      if (!matches) {
+        console.log(`[applySingleFilter] ❌ "${option.value}" rejeté: ${filterCellValue} ${filterOperator} ${comparisonValue}`);
+      }
+
+      return matches;
+    }
+
+    return true;
+  });
+
+  return filteredOptions;
+}
+
+/**
+ * Compare deux valeurs selon un opérateur
+ * (Identique à la fonction dans operation-interpreter.ts)
+ */
+function compareValuesByOperator(op: string | undefined | null, cellValue: any, targetValue: any): boolean {
+  if (!op) return false;
+  switch (op) {
+    case 'equals':
+    case '==':
+      return String(cellValue) === String(targetValue);
+    case 'notEquals':
+    case '!=':
+      return String(cellValue) !== String(targetValue);
+    case 'greaterThan':
+    case '>':
+      return Number(cellValue) > Number(targetValue);
+    case 'greaterOrEqual':
+    case '>=':
+      return Number(cellValue) >= Number(targetValue);
+    case 'lessThan':
+    case '<':
+      return Number(cellValue) < Number(targetValue);
+    case 'lessOrEqual':
+    case '<=':
+      return Number(cellValue) <= Number(targetValue);
+    case 'contains':
+      return String(cellValue).includes(String(targetValue));
+    case 'notContains':
+      return !String(cellValue).includes(String(targetValue));
+    default:
+      return false;
+  }
+}
+
 router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
     console.log(`[TreeBranchLeaf API] ðŸ” GET active table/lookup for node: ${nodeId}`);
+
+    // Parser les formValues depuis le query string
+    let formValues: Record<string, any> = {};
+    if (req.query.formValues) {
+      try {
+        formValues = JSON.parse(String(req.query.formValues));
+        console.log(`[TreeBranchLeaf API] Form values recues:`, formValues);
+      } catch (error) {
+        console.warn(`[TreeBranchLeaf API] Erreur parsing formValues:`, error);
+      }
+    }
+
 
     // VÃ©rifier l'accÃ¨s au nÅ“ud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
@@ -10103,6 +10804,19 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           sample: options.slice(0, 3)
         });
 
+        // 🔥 ÉTAPE 2.5 : Appliquer le filtrage si configuré
+        const lookup = table.meta?.lookup as any;
+        const filterConfig = lookup?.columnSourceOption;
+        // Support NOUVEAU format (filters[]) + ANCIEN format (filterColumn/filterOperator/filterValueRef)
+        const hasNewFormat = filterConfig?.filters && Array.isArray(filterConfig.filters) && filterConfig.filters.length > 0;
+        const hasOldFormat = filterConfig?.filterColumn && filterConfig?.filterOperator && filterConfig?.filterValueRef;
+        
+        if (hasNewFormat || hasOldFormat) {
+          const filteredOptions = applyStep25Filtering(options, filterConfig, columns, rows, data, 'row', formValues);
+          console.log(`[TreeBranchLeaf API] 🔥 ÉTAPE 2.5 appliqué (${hasNewFormat ? 'filters[]' : 'single'}): ${filteredOptions.length} options sur ${options.length}`);
+          return res.json({ options: filteredOptions });
+        }
+
         return res.json({ options });
       }
 
@@ -10148,6 +10862,21 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           sample: options.slice(0, 3)
         });
 
+        // 🔥 ÉTAPE 2.5 : Appliquer le filtrage si configuré
+        const lookup = table.meta?.lookup as any;
+        const filterConfig = lookup?.columnSourceOption;
+        // Support NOUVEAU format (filters[]) + ANCIEN format (filterColumn/filterOperator/filterValueRef)
+        const hasNewFormat = filterConfig?.filters && Array.isArray(filterConfig.filters) && filterConfig.filters.length > 0;
+        const hasOldFormat = filterConfig?.filterColumn && filterConfig?.filterOperator && filterConfig?.filterValueRef;
+        
+        if (hasNewFormat || hasOldFormat) {
+          const filteredOptions = applyStep25Filtering(options, filterConfig, columns, rows, data, 'column', formValues);
+          console.log(`[TreeBranchLeaf API] 🔥 ÉTAPE 2.5 appliqué (${hasNewFormat ? 'filters[]' : 'single'}): ${filteredOptions.length} options sur ${options.length}`);
+          console.log(`[TreeBranchLeaf API] 📋 Premières options APRÈS filtrage:`, filteredOptions.slice(0, 5).map(o => o.label || o.value));
+          return res.json({ options: filteredOptions });
+        }
+
+        console.log(`[TreeBranchLeaf API] 📋 Premières options SANS filtrage:`, options.slice(0, 5).map(o => o.label || o.value));
         return res.json({ options });
       }
     }
@@ -10207,6 +10936,16 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
         } catch (e) {
           console.warn(`[TreeBranchLeaf API] ⚠️ Auto-upsert select-config a échoué (non bloquant):`, e);
         }
+        
+        // 🔥 ÉTAPE 2.5 : Appliquer le filtrage si configuré (même pour AUTO-DEFAULT)
+        const lookup = table.meta?.lookup as any;
+        const filterConfig = lookup?.columnSourceOption;
+        if (filterConfig?.filterColumn && filterConfig?.filterOperator && filterConfig?.filterValueRef) {
+          const filteredOptions = applyStep25Filtering(autoOptions, filterConfig, columns, rows, data, 'column', formValues);
+          console.log(`[TreeBranchLeaf API] 🔥 ÉTAPE 2.5 appliqué à AUTO-DEFAULT: ${filteredOptions.length} options sur ${autoOptions.length}`);
+          return res.json({ options: filteredOptions, autoDefault: { source: 'columnA', keyColumnCandidate: firstColHeader } });
+        }
+        
         return res.json({ options: autoOptions, autoDefault: { source: 'columnA', keyColumnCandidate: firstColHeader } });
       }
     }
@@ -12771,6 +13510,7 @@ export {
 };
 
 export default router;
+
 
 
 

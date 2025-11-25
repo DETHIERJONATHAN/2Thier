@@ -202,6 +202,80 @@ button:focus-visible {
   border-radius: 6px;
 }
 
+/* === Admin Modules UI refinements === */
+.admin-toggle.ant-switch {
+  background-color: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  min-width: 42px;
+  height: 22px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-toggle.ant-switch .ant-switch-handle {
+  top: 1px;
+}
+
+.admin-toggle.ant-switch .ant-switch-handle::before {
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+}
+
+.admin-toggle.ant-switch:hover {
+  background-color: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.admin-toggle.ant-switch-checked {
+  background-color: #22c55e;
+  border-color: #16a34a;
+}
+
+.admin-toggle[data-variant='warning'].ant-switch-checked {
+  background-color: #f97316;
+  border-color: #ea580c;
+}
+
+.admin-toggle[data-variant='info'].ant-switch-checked {
+  background-color: #2563eb;
+  border-color: #1d4ed8;
+}
+
+.admin-toggle.ant-switch-disabled {
+  opacity: 0.6;
+  background-color: #e2e8f0 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.admin-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  letter-spacing: 0.02em;
+}
+
+.admin-chip--blue {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.admin-chip--green {
+  background-color: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+
+.admin-chip--amber {
+  background-color: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
 /* === Compactage et hiérarchie: bande sur carte racine uniquement === */
 /* Bande colorée uniquement pour la carte racine de l’onglet */
 .cfg-advanced-panel .cfg-tab-pane > .cfg-pane-card::before { width: 6px; display: block; }
@@ -262,4 +336,30 @@ button:focus-visible {
   background: #fff;
 }
 .cfg-advanced-panel [data-kind="formules"] .formula-toolbar button:hover { background: #f5f5f5; }
+
+/* === Admin Modules typography === */
+.admin-modules-surface {
+  color: #0f172a;
+}
+
+.admin-modules-surface h1,
+.admin-modules-surface h2,
+.admin-modules-surface h3,
+.admin-modules-surface h4,
+.admin-modules-surface h5,
+.admin-modules-surface h6,
+.admin-modules-surface p,
+.admin-modules-surface span,
+.admin-modules-surface label,
+.admin-modules-surface strong,
+.admin-modules-surface .ant-typography,
+.admin-modules-surface .ant-form-item-label > label {
+  color: #0f172a;
+}
+
+.admin-modules-surface .muted,
+.admin-modules-surface .helper-text,
+.admin-modules-surface .text-muted {
+  color: #475569 !important;
+}
 

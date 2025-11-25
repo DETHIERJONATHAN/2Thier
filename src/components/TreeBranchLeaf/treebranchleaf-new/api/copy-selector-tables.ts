@@ -93,6 +93,15 @@ export async function copySelectorTablesAfterNodeCopy(
         continue;
       }
 
+      // 🎯 SKIP si le selector a un selectConfig (lookup vers table partagée, pas de copie nécessaire)
+      const hasSelectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
+        where: { nodeId: originalSelector.id }
+      });
+      if (hasSelectConfig) {
+        console.log(`   ⏭️ Selector ${originalSelector.label}: utilise selectConfig (lookup), pas de copie de table`);
+        continue;
+      }
+
       console.log(`\n   📍 Selector: ${originalSelector.label}`);
       console.log(`      - Original ID: ${originalSelector.id.substring(0, 12)}...`);
       console.log(`      - Copié ID: ${copiedSelectorId.substring(0, 12)}...`);

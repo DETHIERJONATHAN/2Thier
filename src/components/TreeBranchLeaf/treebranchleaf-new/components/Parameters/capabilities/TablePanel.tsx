@@ -161,11 +161,11 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Divider, Input, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col, Badge, Alert } from 'antd';
+import { Button, Card, Divider, Input, Select, Space, Switch, Table, Tooltip, Typography, message, Progress, Spin, Timeline, Statistic, Row, Col } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import * as XLSX from 'xlsx';
-import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, EyeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 
 const { Title, Text } = Typography;
@@ -208,6 +208,17 @@ type TableLookupSelectors = {
   valueFieldId?: string | null;
 };
 
+// 🔥 NOUVEAU: Type pour les 3 options de source de données
+type TableLookupSourceOption = {
+  type: 'select' | 'field' | 'capacity'; // Type de source
+  selectedField?: string | null; // Pour option SELECT: colonne/ligne de la table
+  sourceField?: string | null; // Pour option CHAMP: champ du formulaire
+  capacityRef?: string | null; // Pour option CAPACITÉ: référence à la capacité
+  comparisonColumn?: string | null; // 🔥 NOUVEAU: colonne de la table pour comparer (pour CHAMP et CAPACITÉ)
+  operator?: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'plus' | 'minus';
+  description?: string;
+};
+
 type TableLookupConfig = {
   enabled?: boolean;
   columnLookupEnabled?: boolean; // NOUVEAU: contrôle affichage section COLONNE
@@ -222,6 +233,9 @@ type TableLookupConfig = {
   exposeColumns?: TableLookupExpose[];
   selectors?: TableLookupSelectors;
   fallbackValue?: string | number | null;
+  // 🔥 NOUVEAU: Options pour les 3 sources de données
+  columnSourceOption?: TableLookupSourceOption; // Pour lookup COLONNE
+  rowSourceOption?: TableLookupSourceOption; // Pour lookup LIGNE
   // 🔥 NOUVEAU: Filtrage conditionnel des options de lookup
   filterConditions?: {
     enabled?: boolean;
@@ -238,6 +252,25 @@ type TableLookupCondition = {
   operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
   compareWithRef?: string; // Référence NodeTreeSelector vers un champ/formule
   description?: string; // Description lisible de la condition
+  // ✨ NOUVEAU: Filtrage conditionnel SI...ALORS...SINON (optionnel)
+  conditionalFilter?: {
+    enabled?: boolean; // Activer le mode conditionnel pour ce filtre
+    conditions: Array<{
+      field: string; // Référence @select.xxx, @input.xxx, etc.
+      operator: 'notEmpty' | 'isEmpty' | 'equals' | 'notEquals' | 'contains' | 'notContains' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan' | 'greaterThanOrEqual' | 'lessThanOrEqual';
+      value: string; // Valeur à comparer
+    }>;
+    onMatch: { // Filtre à appliquer si toutes les conditions sont vraies
+      column: string;
+      operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
+      valueRef: string; // Référence @select.xxx, @input.xxx, etc.
+    };
+    onElse?: { // Filtre à appliquer si au moins une condition est fausse (optionnel)
+      column: string;
+      operator: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'contains' | 'notContains';
+      valueRef: string;
+    };
+  };
 };
 
 type TableMeta = {
@@ -436,6 +469,19 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   const [showNodeTreeSelector, setShowNodeTreeSelector] = useState<boolean>(false);
   const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
   
+  // 🔥 NOUVEAU: États pour le filtrage ÉTAPE 2.5 du SELECT
+  const [showNodeTreeSelectorFilter, setShowNodeTreeSelectorFilter] = useState<boolean>(false);
+  const [currentFilterFieldType, setCurrentFilterFieldType] = useState<'select' | null>(null);
+  const [currentFilterIndex, setCurrentFilterIndex] = useState<number | null>(null);
+  
+  // 🔥 NOUVEAU: États pour les sélecteurs CAPACITÉ
+  const [showCapacitySelectorColumn, setShowCapacitySelectorColumn] = useState<boolean>(false);
+  const [showCapacitySelectorRow, setShowCapacitySelectorRow] = useState<boolean>(false);
+  
+  // 🔥 NOUVEAU: États pour la sélection des lignes via arborescence
+  const [showRowTreeSelector, setShowRowTreeSelector] = useState<boolean>(false);
+  const [currentRowSelectorType, setCurrentRowSelectorType] = useState<'select' | 'field' | 'capacity' | null>(null);
+  
   // ⚡ ULTRA-NOUVEAU: États pour le filtrage temps réel
   const [realtimePreview, setRealtimePreview] = useState(false);
   const [testMode, setTestMode] = useState(false);
@@ -563,7 +609,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         const options: TreeFieldOption[] = (Array.isArray(nodes) ? nodes : [])
           .filter((node) => {
             const nodeIdCandidate = node.id as string | undefined;
-            if (!nodeIdCandidate || nodeIdCandidate === nodeId) return false;
+            if (!nodeIdCandidate) return false; // 🆕 Supprimer la vérification nodeIdCandidate === nodeId pour INCLURE le champ courant
             const type = (node.type as string | undefined) || '';
             return type.startsWith('leaf_');
           })
@@ -763,11 +809,12 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         };
         
         const nextCfg: TableConfig = { ...prevCfg, meta: nextMeta };
+        console.log('[updateLookupConfig] Calling debouncedSave');
         debouncedSave(nextCfg);
         return nextCfg;
       });
     },
-    [setCfg, debouncedSave]
+    [debouncedSave]
   );
 
   // ⚡ ULTRA-NOUVEAU: Évaluation temps réel des conditions
@@ -781,7 +828,6 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     try {
       // Simuler l'évaluation des conditions (remplacer par vraie logique)
       const conditions = lookupConfig.filterConditions.conditions.map(condition => {
-        const testValue = testMode ? testValues[condition.compareWithRef] : 'valeur_courante';
         const result = Math.random() > 0.5; // Simulation
         const filterTarget = condition.filterByColumn ? `Colonne "${condition.filterByColumn}"` : 
                            condition.filterByRow ? `Ligne "${condition.filterByRow}"` : 'Non configuré';
@@ -807,7 +853,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     } finally {
       setEvaluationLoading(false);
     }
-  }, [lookupConfig.filterConditions, testMode, testValues, cfg.rows]);
+  }, [lookupConfig.filterConditions, cfg.rows]);
 
   // Auto-évaluation quand les conditions changent
   useEffect(() => {
@@ -1700,331 +1746,864 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Configuration COLONNE - visible uniquement si switch ON */}
                 {lookupConfig.columnLookupEnabled && (
-                <div style={{ minWidth: 280 }}>
-                  <Text type="secondary" strong>Champ colonne a transformer en liste</Text>
-                  <Select
-                    size="small"
-                    showSearch
-                    placeholder={fieldsLoading ? 'Chargement...' : 'Selectionner un champ'}
-                    value={lookupConfig.selectors?.columnFieldId || undefined}
-                    options={fieldSelectOptions}
-                    onChange={(value) => {
-                      console.log('[TablePanel][COLUMN] Selection champ:', { value, activeId, nodeId });
-                      
-                      updateLookupConfig((prev) => ({
-                        ...prev,
-                        selectors: { ...(prev.selectors || {}), columnFieldId: value || null },
-                      }));
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* ENCADRÉ PRINCIPAL: Sélection du type de source + configuration */}
+                  <div style={{ padding: '12px', background: '#f0f9ff', border: '1px solid #91d5ff', borderRadius: '6px' }}>
+                    
+                    {/* ÉTAPE 1: Choisir le type de source */}
+                    <div style={{ marginBottom: 16 }}>
+                      <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                        📌 ÉTAPE 1: Sélectionner la source pour traiter la colonne
+                      </Text>
+                      <Space direction="vertical" style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="radio"
+                            name="columnSourceType"
+                            value="select"
+                            checked={lookupConfig.columnSourceOption?.type === 'select' || !lookupConfig.columnSourceOption}
+                            onChange={() => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                columnSourceOption: { ...(prev.columnSourceOption || {}), type: 'select', description: 'Colonne de la table' }
+                              }));
+                            }}
+                            disabled={readOnly}
+                          />
+                          <label style={{ cursor: 'pointer', flex: 1 }}>
+                            <Text>1. SELECT - Un champ du formulaire devient liste déroulante</Text>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginLeft: 24 }}>
+                              Sélectionner une colonne/ligne de la table
+                            </Text>
+                          </label>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="radio"
+                            name="columnSourceType"
+                            value="field"
+                            checked={lookupConfig.columnSourceOption?.type === 'field'}
+                            onChange={() => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                columnSourceOption: { ...(prev.columnSourceOption || {}), type: 'field', description: 'Valeur du champ' }
+                              }));
+                            }}
+                            disabled={readOnly}
+                          />
+                          <label style={{ cursor: 'pointer', flex: 1 }}>
+                            <Text>2. CHAMP - Utiliser la valeur du champ du formulaire</Text>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginLeft: 24 }}>
+                              La valeur sera utilisée pour traiter la table
+                            </Text>
+                          </label>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="radio"
+                            name="columnSourceType"
+                            value="capacity"
+                            checked={lookupConfig.columnSourceOption?.type === 'capacity'}
+                            onChange={() => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                columnSourceOption: { ...(prev.columnSourceOption || {}), type: 'capacity', description: 'Réponse de la capacité' }
+                              }));
+                            }}
+                            disabled={readOnly}
+                          />
+                          <label style={{ cursor: 'pointer', flex: 1 }}>
+                            <Text>3. CAPACITÉ - Utiliser une capacité (formule/condition/table)</Text>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginLeft: 24 }}>
+                              La réponse sera utilisée pour traiter la table
+                            </Text>
+                          </label>
+                        </div>
+                      </Space>
+                    </div>
 
-                      // Activer la capacite Table sur le champ selectionne
-                      if (value && activeId) {
-                        console.log('[TablePanel][COLUMN] Activation capacite Table pour champ:', value);
-                        (async () => {
-                          try {
-                            // 🔧 FIX CRITIQUE : Mettre à jour la config lookup dans meta pour l'interpreter
-                            const updatedLookupConfig = {
-                              ...lookupConfig,
-                              enabled: true,
-                              columnLookupEnabled: true,
-                              // ✅ PRÉSERVER rowLookupEnabled (ne pas écraser si déjà activé)
-                              rowLookupEnabled: lookupConfig.rowLookupEnabled ?? false,
-                              selectors: {
-                                ...lookupConfig.selectors,
-                                columnFieldId: value,
-                              },
-                            };
-                            
-                            // Sauvegarder la config lookup dans l'instance de table
-                            const updatedCfg = {
-                              ...cfg,
-                              meta: {
-                                ...cfg.meta,
-                                lookup: updatedLookupConfig,
-                              },
-                            };
-                            setCfg(updatedCfg);
-                            
-                            // Sauvegarder dans la base (table instance)
-                            await debouncedSave(updatedCfg);
-                            
-                            const payload = {
-                              enabled: true,
-                              activeId: activeId,
-                              currentTable: {
-                                type: 'columns',
-                                tableId: activeId,
-                                mode: 'columns',
-                                columnBased: true,
-                                rowBased: false,
-                                // 🔧 FIX: Ajouter keyColumn pour que l'interpréteur sache quelle colonne extraire
-                                keyColumn: lookupConfig.keyColumn || null,
-                                valueColumn: lookupConfig.valueColumn || null,
-                                displayColumn: lookupConfig.displayColumn || null,
-                              },
-                            };
-                            console.log('[TablePanel][COLUMN] Payload PUT initial:', payload);
-                            await updateTableCapability(value, payload);
-                            console.log('[TablePanel][COLUMN] Capacite Table activee pour:', value);
-                            
-                            message.success('Champ transforme en liste !');
-                          } catch (error) {
-                            console.error('[TablePanel][COLUMN] Erreur activation capacite:', error);
-                            message.error('Erreur activation de la capacite Table');
-                          }
-                        })();
-                      } else if (!value && lookupConfig.selectors?.columnFieldId) {
-                        // Desactiver la capacite si on deselectionne
-                        const prevFieldId = lookupConfig.selectors.columnFieldId;
-                        console.log('[TablePanel][COLUMN] Desactivation capacite Table pour:', prevFieldId);
-                        (async () => {
-                            try {
-                              // Tentative de désactivation - rien à faire si l'appel n'est pas nécessaire
-                              // (placeholder pour futures actions)
-                            } catch (error) {
-                              console.error('[TablePanel][COLUMN] Erreur desactivation:', error);
-                            }
-                        })();
-                      }
-                    }}
-                    disabled={readOnly || fieldsLoading}
-                    allowClear
-                    optionFilterProp="label"
-                    loading={fieldsLoading}
-                  />
-                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                    Ce champ deviendra une liste deroulante
-                  </Text>
-                </div>
-                )}
-
-                {/* Configuration BLOC COLONNE */}
-                {lookupConfig.selectors?.columnFieldId && (
-                  <>
-                    <Divider style={{ margin: '12px 0' }} />
-                    <div style={{ padding: '12px', background: '#f0f9ff', border: '1px solid #bae7ff', borderRadius: '6px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <span style={{ fontSize: 18 }}>📊</span>
-                        <Text strong style={{ fontSize: 14 }}>Configuration Lookup COLONNE</Text>
-                      </div>
+                    {/* ÉTAPE 2: Sélectionner dans l'arborescence selon l'option choisie */}
+                    <div style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid #91d5ff' }}>
+                      <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                        📌 ÉTAPE 2: Sélectionner dans l'arborescence
+                      </Text>
                       
-                      {/* Quelle colonne extraire ? */}
-                      <div style={{ marginBottom: 12 }}>
-                        <Text type="secondary" strong style={{ fontSize: 12 }}>Quelle colonne extraire ?</Text>
+                      {/* OPTION 1: SELECT */}
+                      {lookupConfig.columnSourceOption?.type === 'select' && (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Champ colonne à transformer en liste:
+                          </Text>
+                          <Select
+                            size="small"
+                            showSearch
+                            placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
+                            value={lookupConfig.selectors?.columnFieldId || undefined}
+                            options={fieldSelectOptions}
+                            onChange={(value) => {
+                              // Mettre à jour la config lookup via updateLookupConfig
+                              // qui gérera automatiquement la sauvegarde via debouncedSave
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                enabled: true,
+                                columnLookupEnabled: true,
+                                rowLookupEnabled: prev.rowLookupEnabled ?? false,
+                                selectors: { ...(prev.selectors || {}), columnFieldId: value || null },
+                              }));
+
+                              if (value && activeId) {
+                                (async () => {
+                                  try {
+                                    
+                                    const payload = {
+                                      enabled: true,
+                                      activeId: activeId,
+                                      currentTable: {
+                                        type: 'columns',
+                                        tableId: activeId,
+                                        mode: 'columns',
+                                        columnBased: true,
+                                        rowBased: false,
+                                        keyColumn: lookupConfig.keyColumn || null,
+                                        valueColumn: lookupConfig.valueColumn || null,
+                                        displayColumn: lookupConfig.displayColumn || null,
+                                      },
+                                    };
+                                    await updateTableCapability(value, payload);
+                                    message.success('Champ transformé en liste !');
+                                  } catch (error) {
+                                    console.error('Erreur activation capacité:', error);
+                                    message.error('Erreur activation de la capacité Table');
+                                  }
+                                })();
+                              }
+                            }}
+                            disabled={readOnly || fieldsLoading}
+                            allowClear
+                            optionFilterProp="label"
+                            loading={fieldsLoading}
+                            style={{ width: '100%' }}
+                          />
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                            Ce champ deviendra une liste déroulante
+                          </Text>
+                        </div>
+                      )}
+
+                      {/* 🔥 ÉTAPE 2.5: Filtrage pour SELECT - Mode unifié avec filtres multiples */}
+                      {lookupConfig.columnSourceOption?.type === 'select' && lookupConfig.selectors?.columnFieldId && (
+                        <div style={{ paddingTop: 12, borderTop: '1px solid #91d5ff', marginBottom: 12, background: '#f6f8fa', padding: '12px', borderRadius: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <Text type="secondary" strong style={{ fontSize: 12 }}>
+                              📌 ÉTAPE 2.5: Filtrer les données du SELECT
+                            </Text>
+                          </div>
+                          
+                          {/* MODE UNIFIÉ: Filtres multiples avec structure complète */}
+                          <div style={{ marginBottom: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                              <Text strong style={{ fontSize: 12 }}>🔥 Filtres (logique AND)</Text>
+                              <Button
+                                size="small"
+                                type="dashed"
+                                onClick={() => {
+                                  updateLookupConfig((prev) => {
+                                    const currentFilters = prev.columnSourceOption?.filters || [];
+                                    return {
+                                      ...prev,
+                                      columnSourceOption: {
+                                        ...(prev.columnSourceOption || {}),
+                                        filters: [...currentFilters, { column: null, operator: 'greaterThan', valueRef: null }]
+                                      }
+                                    };
+                                  });
+                                }}
+                                disabled={readOnly}
+                              >
+                                + Ajouter un filtre
+                              </Button>
+                            </div>
+                            <Text type="secondary" style={{ fontSize: 10, display: 'block', marginBottom: 12 }}>
+                              Tous les filtres doivent être respectés (logique AND). Cliquez sur "+ Ajouter un filtre" pour commencer.
+                            </Text>
+                            
+                            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                              {(lookupConfig.columnSourceOption?.filters || []).map((filter: any, index: number) => (
+                                <div key={index} style={{ background: '#fff', padding: 16, borderRadius: 6, border: '1px solid #d9d9d9' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                                    <Text strong style={{ fontSize: 12 }}>Filtre {index + 1}</Text>
+                                    <Button
+                                      size="small"
+                                      danger
+                                      type="text"
+                                      onClick={() => {
+                                        updateLookupConfig((prev) => ({
+                                          ...prev,
+                                          columnSourceOption: {
+                                            ...(prev.columnSourceOption || {}),
+                                            filters: prev.columnSourceOption?.filters?.filter((_: any, i: number) => i !== index) || []
+                                          }
+                                        }));
+                                      }}
+                                      disabled={readOnly}
+                                    >
+                                      ✕
+                                    </Button>
+                                  </div>
+                                  
+                                  <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                                    {/* Colonne */}
+                                    <div>
+                                      <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                                        🔍 Colonne de la table:
+                                      </Text>
+                                      <Select
+                                        size="small"
+                                        showSearch
+                                        placeholder="Sélectionner une colonne..."
+                                        value={filter.column || undefined}
+                                        options={(cfg.columns || []).map(col => ({ label: col, value: col }))}
+                                        onChange={(value) => {
+                                          updateLookupConfig((prev) => {
+                                            const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                            newFilters[index] = { ...newFilters[index], column: value };
+                                            return {
+                                              ...prev,
+                                              columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters }
+                                            };
+                                          });
+                                        }}
+                                        disabled={readOnly}
+                                        allowClear
+                                        style={{ width: '100%' }}
+                                      />
+                                    </div>
+
+                                    {/* Opérateur */}
+                                    {filter.column && (
+                                      <div>
+                                        <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                                          ⚙️ Opérateur de comparaison:
+                                        </Text>
+                                        <Select
+                                          size="small"
+                                          value={filter.operator || 'equals'}
+                                          options={[
+                                            { label: '= (égal)', value: 'equals' },
+                                            { label: '≠ (différent)', value: 'notEquals' },
+                                            { label: '> (supérieur)', value: 'greaterThan' },
+                                            { label: '< (inférieur)', value: 'lessThan' },
+                                            { label: '≥ (supérieur ou égal)', value: 'greaterOrEqual' },
+                                            { label: '≤ (inférieur ou égal)', value: 'lessOrEqual' },
+                                            { label: 'contient', value: 'contains' },
+                                            { label: 'ne contient pas', value: 'notContains' },
+                                          ]}
+                                          onChange={(value) => {
+                                            updateLookupConfig((prev) => {
+                                              const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                                              newFilters[index] = { ...newFilters[index], operator: value };
+                                              return {
+                                                ...prev,
+                                                columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters }
+                                              };
+                                            });
+                                          }}
+                                          disabled={readOnly}
+                                          style={{ width: '100%' }}
+                                        />
+                                      </div>
+                                    )}
+
+                                    {/* Valeur via NodeTreeSelector */}
+                                    {filter.column && (
+                                      <div>
+                                        <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                                          🌳 Comparer avec (valeur de l'arborescence):
+                                        </Text>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                          <div style={{ flex: 1, padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: '4px', minHeight: 32, display: 'flex', alignItems: 'center' }}>
+                                            <Text type="secondary" style={{ fontSize: 11 }}>
+                                              {filter.valueRef 
+                                                ? `✓ ${filter.valueRef}` 
+                                                : 'Aucune sélection'}
+                                            </Text>
+                                          </div>
+                                          <Button
+                                            size="small"
+                                            type="primary"
+                                            onClick={() => {
+                                              setCurrentFilterIndex(index);
+                                              setShowNodeTreeSelectorFilter(true);
+                                              setCurrentFilterFieldType('select');
+                                            }}
+                                            disabled={readOnly}
+                                          >
+                                            🌳 Sélectionner
+                                          </Button>
+                                        </div>
+                                        <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block', color: '#999' }}>
+                                          Sélectionnez un champ, formule, répétition, référence, condition ou table
+                                        </Text>
+                                      </div>
+                                    )}
+                                  </Space>
+                                </div>
+                              ))}
+                              
+                              {(!lookupConfig.columnSourceOption?.filters || lookupConfig.columnSourceOption.filters.length === 0) && (
+                                <div style={{ padding: 24, textAlign: 'center', background: '#fafafa', borderRadius: 6, border: '1px dashed #d9d9d9' }}>
+                                  <Text type="secondary">Aucun filtre configuré. Cliquez sur "+ Ajouter un filtre" pour commencer.</Text>
+                                </div>
+                              )}
+                            </Space>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* OPTION 2: CHAMP */}
+                      {lookupConfig.columnSourceOption?.type === 'field' && (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Champ dont on prend la valeur:
+                          </Text>
+                          <Select
+                            size="small"
+                            showSearch
+                            placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
+                            value={lookupConfig.columnSourceOption?.sourceField || undefined}
+                            options={fieldSelectOptions}
+                            onChange={(value) => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                columnSourceOption: { ...(prev.columnSourceOption || {}), sourceField: value || null }
+                              }));
+                            }}
+                            disabled={readOnly || fieldsLoading}
+                            allowClear
+                            optionFilterProp="label"
+                            loading={fieldsLoading}
+                            style={{ width: '100%' }}
+                          />
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                            Sa valeur sera utilisée pour traiter la table
+                          </Text>
+                        </div>
+                      )}
+                      
+                      {/* OPTION 3: CAPACITÉ */}
+                      {lookupConfig.columnSourceOption?.type === 'capacity' && (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Capacité à exécuter (formule/condition/table):
+                          </Text>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <div style={{ flex: 1, padding: '8px 12px', background: '#f5f5f5', border: '1px solid #d9d9d9', borderRadius: '4px', minHeight: 32, display: 'flex', alignItems: 'center' }}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>
+                                {lookupConfig.columnSourceOption?.capacityRef ? `✓ ${lookupConfig.columnSourceOption.capacityRef}` : 'Aucune sélection'}
+                              </Text>
+                            </div>
+                            <Button
+                              size="small"
+                              type="primary"
+                              onClick={() => setShowCapacitySelectorColumn(true)}
+                              disabled={readOnly}
+                            >
+                              Sélectionner
+                            </Button>
+                          </div>
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                            Sa réponse sera utilisée pour traiter la table (PAS de champ sélectionné)
+                          </Text>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 🔥 ÉTAPE 2.5: Sélection de la colonne de comparaison (pour CHAMP et CAPACITÉ) */}
+                    {((lookupConfig.columnSourceOption?.type === 'field' && lookupConfig.columnSourceOption?.sourceField) ||
+                      (lookupConfig.columnSourceOption?.type === 'capacity' && lookupConfig.columnSourceOption?.capacityRef)) && (
+                      <div style={{ paddingTop: 12, borderTop: '1px solid #91d5ff', marginBottom: 12 }}>
+                        <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                          📌 ÉTAPE 2.5: Colonne de la table à comparer
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 10, marginBottom: 8, display: 'block' }}>
+                          Sélectionner la colonne de la table où chercher la valeur:
+                        </Text>
                         <Select
                           size="small"
-                          placeholder="Selectionner une colonne..."
-                          value={lookupConfig.keyColumn}
+                          showSearch
+                          placeholder="Sélectionner une colonne..."
+                          value={lookupConfig.columnSourceOption?.comparisonColumn || undefined}
                           options={columnOptions}
-                          allowClear
                           onChange={(value) => {
-                            updateLookupConfig((prev) => ({ ...prev, keyColumn: value || undefined }));
-                            
-                            if (lookupConfig.selectors?.columnFieldId && activeId) {
-                              (async () => {
-                                try {
-                                  await updateTableCapability(lookupConfig.selectors?.columnFieldId, {
-                                    enabled: true,
-                                    activeId,
-                                    currentTable: {
-                                      type: cfg.type,
-                                      tableId: activeId,
-                                      keyColumn: value || null,
-                                      valueColumn: lookupConfig.valueColumn || null,
-                                      displayColumn: lookupConfig.displayColumn || null,
-                                    },
-                                  });
-                                } catch (error) {
-                                  console.error('Erreur keyColumn:', error);
-                                }
-                              })();
-                            }
+                            updateLookupConfig((prev) => ({
+                              ...prev,
+                              columnSourceOption: { ...(prev.columnSourceOption || {}), comparisonColumn: value || null }
+                            }));
                           }}
                           disabled={readOnly}
-                          style={{ width: '100%', marginTop: 4 }}
+                          allowClear
+                          optionFilterProp="label"
+                          style={{ width: '100%' }}
                         />
-                        <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                          {lookupConfig.keyColumn ? `Affichera: ${lookupConfig.keyColumn}` : 'Ex: Janvier'}
+                        <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
+                          Ex: Si vous avez sélectionné le champ "Revenu net imposable", choisissez ici la colonne "Revenu" de la table
                         </Text>
                       </div>
+                    )}
 
-                      {/* Champs de reponse colonne */}
-                      {lookupConfig.keyColumn && (
-                        <div style={{ paddingLeft: 12, borderLeft: '3px solid #1890ff' }}>
-                          <Text type="secondary" strong style={{ fontSize: 12 }}>Colonne(s) a afficher</Text>
+                    {/* ÉTAPE 3: Configuration du traitement (opérateur) */}
+                    {((lookupConfig.columnSourceOption?.type === 'select' && lookupConfig.selectors?.columnFieldId) ||
+                      (lookupConfig.columnSourceOption?.type === 'field' && lookupConfig.columnSourceOption?.sourceField) ||
+                      (lookupConfig.columnSourceOption?.type === 'capacity' && lookupConfig.columnSourceOption?.capacityRef)) && (
+                      <div style={{ paddingTop: 12, borderTop: '1px solid #91d5ff' }}>
+                        <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                          📌 ÉTAPE 3: Configuration du traitement
+                        </Text>
+                        
+                        <div style={{ marginBottom: 12 }}>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Source sélectionnée:
+                          </Text>
+                          <div style={{ padding: '8px 12px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: '4px' }}>
+                            <Text strong style={{ fontSize: 12, color: '#0050b3' }}>
+                              {lookupConfig.columnSourceOption?.type === 'select' && fieldOptions.find(f => f.value === lookupConfig.selectors?.columnFieldId)?.label}
+                              {lookupConfig.columnSourceOption?.type === 'field' && fieldOptions.find(f => f.value === lookupConfig.columnSourceOption?.sourceField)?.label}
+                              {lookupConfig.columnSourceOption?.type === 'capacity' && fieldOptions.find(f => f.value === lookupConfig.columnSourceOption?.capacityRef)?.label}
+                            </Text>
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: 12 }}>
+                          <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                            Opérateur à appliquer sur la source:
+                          </Text>
+                          <Space style={{ width: '100%', display: 'flex', flexWrap: 'wrap' }}>
+                            {['equals', 'notEquals', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'plus', 'minus'].map((op) => {
+                              const labels = {
+                                equals: '= (égal)',
+                                notEquals: '≠ (différent)',
+                                greaterThan: '> (supérieur)',
+                                lessThan: '< (inférieur)',
+                                greaterOrEqual: '≥ (sup. ou égal)',
+                                lessOrEqual: '≤ (inf. ou égal)',
+                                plus: '+ (addition)',
+                                minus: '- (soustraction)',
+                              } as Record<string, string>;
+                              return (
+                                <label key={op} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <input
+                                    type="radio"
+                                    name="columnOperator"
+                                    value={op}
+                                    checked={lookupConfig.columnSourceOption?.operator === op || (!lookupConfig.columnSourceOption?.operator && op === 'equals')}
+                                    onChange={() => {
+                                      updateLookupConfig((prev) => ({
+                                        ...prev,
+                                        columnSourceOption: { ...(prev.columnSourceOption || {}), operator: op as any }
+                                      }));
+                                    }}
+                                    disabled={readOnly}
+                                  />
+                                  <Text style={{ fontSize: 11, cursor: 'pointer' }}>{labels[op]}</Text>
+                                </label>
+                              );
+                            })}
+                          </Space>
+                        </div>
+
+                        {/* ÉTAPE 4: Colonnes à afficher */}
+                        <div style={{ paddingTop: 12, borderTop: '1px solid #91d5ff' }}>
+                          <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                            📌 ÉTAPE 4: Colonnes à afficher
+                          </Text>
                           <Select
                             size="small"
                             mode="multiple"
-                            placeholder="Selectionner colonne(s)..."
+                            placeholder="Sélectionner colonne(s)..."
                             value={Array.isArray(lookupConfig.displayColumn) ? lookupConfig.displayColumn : (lookupConfig.displayColumn ? [lookupConfig.displayColumn] : [])}
                             options={columnOptions}
                             allowClear
                             onChange={(values) => {
-                              // Stocker TOUTES les valeurs sélectionnées (array)
-                              updateLookupConfig((prev) => ({ ...prev, displayColumn: values }));
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                displayColumn: values
+                              }));
                             }}
                             disabled={readOnly}
                             style={{ width: '100%', marginTop: 4 }}
                           />
                           <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block' }}>
-                            Ex: Janvier, Fevrier... (plusieurs possibles)
+                            Ex: Janvier, Février... (plusieurs possibles)
                           </Text>
                         </div>
-                      )}
-                    </div>
-                  </>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 )}
+
+
 
                 {/* Configuration LIGNE - visible uniquement si switch ON */}
                 {lookupConfig.rowLookupEnabled && (
                 <>
                 <Divider style={{ margin: '12px 0' }} />
-                <div style={{ minWidth: 280 }}>
-                  <Text type="secondary" strong>Champ ligne a transformer en liste</Text>
-                  <Select
-                    size="small"
-                    showSearch
-                    placeholder={fieldsLoading ? 'Chargement...' : 'Selectionner un champ'}
-                    value={lookupConfig.selectors?.rowFieldId}
-                    options={fieldSelectOptions}
-                    onChange={(value) => {
-                      updateLookupConfig((prev) => ({
-                        ...prev,
-                        selectors: { ...(prev.selectors || {}), rowFieldId: value || null },
-                      }));
-
-                      if (value && activeId) {
-                        (async () => {
-                          try {
-                            // 🔧 FIX CRITIQUE : Mettre à jour la config lookup dans meta pour l'interpreter
-                            const updatedLookupConfig = {
-                              ...lookupConfig,
-                              enabled: true,
-                              // ✅ PRÉSERVER columnLookupEnabled (ne pas écraser si déjà activé)
-                              columnLookupEnabled: lookupConfig.columnLookupEnabled ?? false,
-                              rowLookupEnabled: true,
-                              selectors: {
-                                ...lookupConfig.selectors,
-                                rowFieldId: value,
-                              },
-                            };
-                            
-                            // Sauvegarder la config lookup dans l'instance de table
-                            const updatedCfg = {
-                              ...cfg,
-                              meta: {
-                                ...cfg.meta,
-                                lookup: updatedLookupConfig,
-                              },
-                            };
-                            setCfg(updatedCfg);
-                            
-                            // Sauvegarder dans la base (table instance)
-                            await debouncedSave(updatedCfg);
-                            
-                            await updateTableCapability(value, {
-                              enabled: true,
-                              activeId,
-                              currentTable: {
-                                type: cfg.type,
-                                tableId: activeId,
-                                rowBased: true,
-                                columnBased: false,
-                                // 🔧 FIX: Ajouter keyRow pour que l'interpréteur sache quelle ligne extraire
-                                keyRow: lookupConfig.keyRow || null,
-                                valueRow: lookupConfig.valueRow || null,
-                                displayRow: lookupConfig.displayRow || null,
-                              },
-                            });
-                            message.success('Champ ligne active !');
-                          } catch (error) {
-                            console.error('Erreur rowFieldId:', error);
-                          }
-                        })();
-                      }
-                    }}
-                    disabled={readOnly || fieldsLoading}
-                    allowClear
-                    optionFilterProp="label"
-                    loading={fieldsLoading}
-                  />
-                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                    Ce champ deviendra une liste deroulante (ligne)
-                  </Text>
-                </div>
-
-                {/* Configuration BLOC LIGNE */}
-                {lookupConfig.selectors?.rowFieldId && (
-                  <div style={{ padding: '12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '6px', marginTop: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 18 }}>📈</span>
-                      <Text strong style={{ fontSize: 14 }}>Configuration Lookup LIGNE</Text>
-                    </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* ENCADRÉ PRINCIPAL: Sélection du type de source + configuration */}
+                  <div style={{ padding: '12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '6px' }}>
                     
-                    {/* Quelle ligne extraire ? */}
-                    <div style={{ marginBottom: 12 }}>
-                      <Text type="secondary" strong style={{ fontSize: 12 }}>Quelle ligne extraire ?</Text>
-                      <Select
-                        size="small"
-                        placeholder="Selectionner une ligne..."
-                        value={lookupConfig.keyRow}
-                        options={rowOptions}
-                        allowClear
-                        onChange={(value) => {
-                          updateLookupConfig((prev) => ({ ...prev, keyRow: value || undefined }));
-                          
-                          if (lookupConfig.selectors?.rowFieldId && activeId) {
-                            (async () => {
-                              try {
-                                await updateTableCapability(lookupConfig.selectors?.rowFieldId, {
-                                  enabled: true,
-                                  activeId,
-                                  currentTable: {
-                                    type: cfg.type,
-                                    tableId: activeId,
-                                    keyRow: value || null,
-                                    valueRow: lookupConfig.valueRow || null,
-                                    displayRow: lookupConfig.displayRow || null,
-                                  },
-                                });
-                              } catch (error) {
-                                console.error('Erreur keyRow:', error);
-                              }
-                            })();
-                          }
-                        }}
-                        disabled={readOnly}
-                        style={{ width: '100%', marginTop: 4 }}
-                      />
-                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                        {lookupConfig.keyRow ? `Affichera: ${lookupConfig.keyRow}` : 'Ex: Ventes'}
+                    {/* ÉTAPE 1: Choisir le type de source */}
+                    <div style={{ marginBottom: 16 }}>
+                      <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                        📌 ÉTAPE 1: Sélectionner la source pour traiter la ligne
                       </Text>
+                      <Space direction="vertical" style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="radio"
+                            name="rowSourceType"
+                            value="select"
+                            checked={lookupConfig.rowSourceOption?.type === 'select' || !lookupConfig.rowSourceOption}
+                            onChange={() => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                rowSourceOption: { ...(prev.rowSourceOption || {}), type: 'select', description: 'Ligne de la table' }
+                              }));
+                            }}
+                            disabled={readOnly}
+                          />
+                          <label style={{ cursor: 'pointer', flex: 1 }}>
+                            <Text>1. SELECT - Un champ du formulaire devient liste déroulante</Text>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginLeft: 24 }}>
+                              Sélectionner une ligne du tableau
+                            </Text>
+                          </label>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="radio"
+                            name="rowSourceType"
+                            value="field"
+                            checked={lookupConfig.rowSourceOption?.type === 'field'}
+                            onChange={() => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                rowSourceOption: { ...(prev.rowSourceOption || {}), type: 'field', description: 'Valeur du champ' }
+                              }));
+                            }}
+                            disabled={readOnly}
+                          />
+                          <label style={{ cursor: 'pointer', flex: 1 }}>
+                            <Text>2. CHAMP - Utiliser la valeur du champ du formulaire</Text>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginLeft: 24 }}>
+                              La valeur sera utilisée pour traiter la table
+                            </Text>
+                          </label>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="radio"
+                            name="rowSourceType"
+                            value="capacity"
+                            checked={lookupConfig.rowSourceOption?.type === 'capacity'}
+                            onChange={() => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                rowSourceOption: { ...(prev.rowSourceOption || {}), type: 'capacity', description: 'Réponse de la capacité' }
+                              }));
+                            }}
+                            disabled={readOnly}
+                          />
+                          <label style={{ cursor: 'pointer', flex: 1 }}>
+                            <Text>3. CAPACITÉ - Utiliser une capacité (formule/condition/table)</Text>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginLeft: 24 }}>
+                              La réponse sera utilisée pour traiter la table
+                            </Text>
+                          </label>
+                        </div>
+                      </Space>
                     </div>
 
-                    {/* Champs de reponse ligne */}
-                    {lookupConfig.keyRow && (
-                      <div style={{ paddingLeft: 12, borderLeft: '3px solid #fa8c16' }}>
-                        <Text type="secondary" strong style={{ fontSize: 12 }}>Ligne(s) a afficher</Text>
+                    {/* ÉTAPE 2: Sélectionner dans l'arborescence selon l'option choisie */}
+                    <div style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid #ffd591' }}>
+                      <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                        📌 ÉTAPE 2: Sélectionner dans l'arborescence
+                      </Text>
+                      
+                      {/* OPTION 1: SELECT */}
+                      {lookupConfig.rowSourceOption?.type === 'select' && (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Champ ligne à transformer en liste:
+                          </Text>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <Select
+                              size="small"
+                              showSearch
+                              placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
+                              value={lookupConfig.selectors?.rowFieldId || undefined}
+                              options={fieldSelectOptions}
+                              onChange={(value) => {
+                                updateLookupConfig((prev) => ({
+                                  ...prev,
+                                  selectors: { ...(prev.selectors || {}), rowFieldId: value || null },
+                                }));
+
+                                if (value && activeId) {
+                                  (async () => {
+                                    try {
+                                      const updatedLookupConfig = {
+                                        ...lookupConfig,
+                                        enabled: true,
+                                        columnLookupEnabled: lookupConfig.columnLookupEnabled ?? false,
+                                        rowLookupEnabled: true,
+                                        selectors: {
+                                          ...lookupConfig.selectors,
+                                          rowFieldId: value,
+                                        },
+                                      };
+                                      
+                                      const updatedCfg = {
+                                        ...cfg,
+                                        meta: {
+                                          ...cfg.meta,
+                                          lookup: updatedLookupConfig,
+                                        },
+                                      };
+                                      setCfg(updatedCfg);
+                                      await debouncedSave(updatedCfg);
+                                      
+                                      await updateTableCapability(value, {
+                                        enabled: true,
+                                        activeId,
+                                        currentTable: {
+                                          type: cfg.type,
+                                          tableId: activeId,
+                                          rowBased: true,
+                                          columnBased: false,
+                                          keyRow: lookupConfig.keyRow || null,
+                                          valueRow: lookupConfig.valueRow || null,
+                                          displayRow: lookupConfig.displayRow || null,
+                                        },
+                                      });
+                                      message.success('Champ ligne activé !');
+                                    } catch (error) {
+                                      console.error('Erreur rowFieldId:', error);
+                                    }
+                                  })();
+                                }
+                              }}
+                              disabled={readOnly || fieldsLoading}
+                              allowClear
+                              optionFilterProp="label"
+                              loading={fieldsLoading}
+                              style={{ flex: 1 }}
+                            />
+                            <Button
+                              size="small"
+                              type="dashed"
+                              onClick={() => {
+                                setCurrentRowSelectorType('select');
+                                setShowRowTreeSelector(true);
+                              }}
+                              disabled={readOnly}
+                            >
+                              🌳 Arborescence
+                            </Button>
+                          </div>
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                            Ce champ deviendra une liste déroulante avec les valeurs des lignes du tableau
+                          </Text>
+                          <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 2, color: '#1890ff', fontWeight: 'bold' }}>
+                            💡 Conseil: Vous pouvez sélectionner une <strong>branche</strong> (par ex: "Alimentation") et utiliser "📊 Réponse de la branche" pour récupérer directement la réponse quand l'utilisateur choisit une option !
+                          </Text>
+                        </div>
+                      )}
+                      
+                      {/* OPTION 2: CHAMP */}
+                      {lookupConfig.rowSourceOption?.type === 'field' && (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Champ dont on prend la valeur:
+                          </Text>
+                          <Select
+                            size="small"
+                            showSearch
+                            placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
+                            value={lookupConfig.rowSourceOption?.sourceField || undefined}
+                            options={fieldSelectOptions}
+                            onChange={(value) => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                rowSourceOption: { ...(prev.rowSourceOption || {}), sourceField: value || null }
+                              }));
+                            }}
+                            disabled={readOnly || fieldsLoading}
+                            allowClear
+                            optionFilterProp="label"
+                            loading={fieldsLoading}
+                            style={{ width: '100%' }}
+                          />
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                            Sa valeur sera utilisée pour traiter la table
+                          </Text>
+                        </div>
+                      )}
+                      
+                      {/* OPTION 3: CAPACITÉ */}
+                      {lookupConfig.rowSourceOption?.type === 'capacity' && (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Capacité à exécuter (formule/condition/table):
+                          </Text>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <div style={{ flex: 1, padding: '8px 12px', background: '#f5f5f5', border: '1px solid #d9d9d9', borderRadius: '4px', minHeight: 32, display: 'flex', alignItems: 'center' }}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>
+                                {lookupConfig.rowSourceOption?.capacityRef ? `✓ ${lookupConfig.rowSourceOption.capacityRef}` : 'Aucune sélection'}
+                              </Text>
+                            </div>
+                            <Button
+                              size="small"
+                              type="primary"
+                              onClick={() => setShowCapacitySelectorRow(true)}
+                              disabled={readOnly}
+                            >
+                              Sélectionner
+                            </Button>
+                          </div>
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                            Sa réponse sera utilisée pour traiter la table (PAS de champ sélectionné)
+                          </Text>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 🔥 ÉTAPE 2.5: Sélection de la ligne de comparaison (pour CHAMP et CAPACITÉ) */}
+                    {((lookupConfig.rowSourceOption?.type === 'field' && lookupConfig.rowSourceOption?.sourceField) ||
+                      (lookupConfig.rowSourceOption?.type === 'capacity' && lookupConfig.rowSourceOption?.capacityRef)) && (
+                      <div style={{ paddingTop: 12, borderTop: '1px solid #ffd591', marginBottom: 12 }}>
+                        <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                          📌 ÉTAPE 2.5: Ligne de la table à comparer
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 10, marginBottom: 8, display: 'block' }}>
+                          Sélectionner la ligne de la table où chercher la valeur:
+                        </Text>
                         <Select
                           size="small"
-                          mode="multiple"
-                          placeholder="Selectionner ligne(s)..."
-                          value={Array.isArray(lookupConfig.displayRow) ? lookupConfig.displayRow : (lookupConfig.displayRow ? [lookupConfig.displayRow] : [])}
+                          showSearch
+                          placeholder="Sélectionner une ligne..."
+                          value={lookupConfig.rowSourceOption?.comparisonColumn || undefined}
                           options={rowOptions}
-                          allowClear
-                          onChange={(values) => {
-                            // Stocker TOUTES les valeurs sélectionnées (array)
-                            updateLookupConfig((prev) => ({ ...prev, displayRow: values }));
+                          onChange={(value) => {
+                            updateLookupConfig((prev) => ({
+                              ...prev,
+                              rowSourceOption: { ...(prev.rowSourceOption || {}), comparisonColumn: value || null }
+                            }));
                           }}
                           disabled={readOnly}
-                          style={{ width: '100%', marginTop: 4 }}
+                          allowClear
+                          optionFilterProp="label"
+                          style={{ width: '100%' }}
                         />
-                        <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block' }}>
-                          Ex: Ventes, Couts... (plusieurs possibles)
+                        <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
+                          Ex: Si vous avez sélectionné le champ "Revenu net imposable", choisissez ici la ligne "Revenu" de la table
                         </Text>
                       </div>
                     )}
+
+                    {/* ÉTAPE 3: Configuration du traitement (opérateur) */}
+                    {((lookupConfig.rowSourceOption?.type === 'select' && lookupConfig.selectors?.rowFieldId) ||
+                      (lookupConfig.rowSourceOption?.type === 'field' && lookupConfig.rowSourceOption?.sourceField) ||
+                      (lookupConfig.rowSourceOption?.type === 'capacity' && lookupConfig.rowSourceOption?.capacityRef)) && (
+                      <div style={{ paddingTop: 12, borderTop: '1px solid #ffd591' }}>
+                        <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                          📌 ÉTAPE 3: Configuration du traitement
+                        </Text>
+                        
+                        <div style={{ marginBottom: 12 }}>
+                          <Text type="secondary" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>
+                            Source sélectionnée:
+                          </Text>
+                          <div style={{ padding: '8px 12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '4px' }}>
+                            <Text strong style={{ fontSize: 12, color: '#ad6800' }}>
+                              {lookupConfig.rowSourceOption?.type === 'select' && fieldOptions.find(f => f.value === lookupConfig.selectors?.rowFieldId)?.label}
+                              {lookupConfig.rowSourceOption?.type === 'field' && fieldOptions.find(f => f.value === lookupConfig.rowSourceOption?.sourceField)?.label}
+                              {lookupConfig.rowSourceOption?.type === 'capacity' && fieldOptions.find(f => f.value === lookupConfig.rowSourceOption?.capacityRef)?.label}
+                            </Text>
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: 12 }}>
+                          <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                            Opérateur à appliquer sur la source:
+                          </Text>
+                          <Space style={{ width: '100%', display: 'flex', flexWrap: 'wrap' }}>
+                            {['equals', 'notEquals', 'greaterThan', 'lessThan', 'greaterOrEqual', 'lessOrEqual', 'plus', 'minus'].map((op) => {
+                              const labels = {
+                                equals: '= (égal)',
+                                notEquals: '≠ (différent)',
+                                greaterThan: '> (supérieur)',
+                                lessThan: '< (inférieur)',
+                                greaterOrEqual: '≥ (sup. ou égal)',
+                                lessOrEqual: '≤ (inf. ou égal)',
+                                plus: '+ (addition)',
+                                minus: '- (soustraction)',
+                              } as Record<string, string>;
+                              return (
+                                <label key={op} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <input
+                                    type="radio"
+                                    name="rowOperator"
+                                    value={op}
+                                    checked={lookupConfig.rowSourceOption?.operator === op || (!lookupConfig.rowSourceOption?.operator && op === 'equals')}
+                                    onChange={() => {
+                                      updateLookupConfig((prev) => ({
+                                        ...prev,
+                                        rowSourceOption: { ...(prev.rowSourceOption || {}), operator: op as any }
+                                      }));
+                                    }}
+                                    disabled={readOnly}
+                                  />
+                                  <Text style={{ fontSize: 11, cursor: 'pointer' }}>{labels[op]}</Text>
+                                </label>
+                              );
+                            })}
+                          </Space>
+                        </div>
+
+                        {/* ÉTAPE 4: Lignes à afficher */}
+                        <div style={{ paddingTop: 12, borderTop: '1px solid #ffd591' }}>
+                          <Text type="secondary" strong style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
+                            📌 ÉTAPE 4: Lignes à afficher
+                          </Text>
+                          <Select
+                            size="small"
+                            mode="multiple"
+                            placeholder="Sélectionner ligne(s)..."
+                            value={Array.isArray(lookupConfig.displayRow) ? lookupConfig.displayRow : (lookupConfig.displayRow ? [lookupConfig.displayRow] : [])}
+                            options={rowOptions}
+                            allowClear
+                            onChange={(values) => {
+                              updateLookupConfig((prev) => ({
+                                ...prev,
+                                displayRow: values
+                              }));
+                            }}
+                            disabled={readOnly}
+                            style={{ width: '100%', marginTop: 4 }}
+                          />
+                          <Text type="secondary" style={{ fontSize: 10, marginTop: 2, display: 'block' }}>
+                            Ex: Ventes, Coûts... (plusieurs possibles)
+                          </Text>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
                 </>
                 )}
 
@@ -2044,7 +2623,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                 )}
 
                 {/* 🔥 NOUVEAU: Section filtrage par lookup */}
-                {(lookupConfig.keyColumn || lookupConfig.keyRow) && (
+                {(lookupConfig.columnLookupEnabled || lookupConfig.rowLookupEnabled) && (
                   <div style={{ padding: '12px', background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '6px', marginTop: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <FilterOutlined style={{ color: '#fa8c16' }} />
@@ -2498,7 +3077,109 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
             </div>
       </Space>
 
-      {/* 🔥 NOUVEAU: NodeTreeSelector pour les conditions */}
+      {/* 🔥 NodeTreeSelector pour l'option 3 CAPACITÉ (COLONNE) */}
+      <NodeTreeSelector
+        nodeId={nodeId}
+        open={showCapacitySelectorColumn}
+        onClose={() => setShowCapacitySelectorColumn(false)}
+        onSelect={(selected: NodeTreeSelectorValue) => {
+          updateLookupConfig((prev) => ({
+            ...prev,
+            columnSourceOption: { ...(prev.columnSourceOption || {}), capacityRef: selected.ref || null }
+          }));
+          setShowCapacitySelectorColumn(false);
+        }}
+        selectionContext="token"
+        allowMulti={false}
+      />
+
+      {/* 🔥 NodeTreeSelector pour l'option 3 CAPACITÉ (LIGNE) */}
+      <NodeTreeSelector
+        nodeId={nodeId}
+        open={showCapacitySelectorRow}
+        onClose={() => setShowCapacitySelectorRow(false)}
+        onSelect={(selected: NodeTreeSelectorValue) => {
+          updateLookupConfig((prev) => ({
+            ...prev,
+            rowSourceOption: { ...(prev.rowSourceOption || {}), capacityRef: selected.ref || null }
+          }));
+          setShowCapacitySelectorRow(false);
+        }}
+        selectionContext="token"
+        allowMulti={false}
+      />
+
+      {/* 🔥 NOUVEAU: NodeTreeSelector pour la sélection des LIGNES */}
+      <NodeTreeSelector
+        nodeId={nodeId}
+        open={showRowTreeSelector}
+        onClose={() => {
+          setShowRowTreeSelector(false);
+          setCurrentRowSelectorType(null);
+        }}
+        onSelect={(selected: NodeTreeSelectorValue) => {
+          // Sélectionner le champ ligne via l'arborescence
+          if (currentRowSelectorType === 'select') {
+            updateLookupConfig((prev) => ({
+              ...prev,
+              selectors: { ...(prev.selectors || {}), rowFieldId: selected.ref || null },
+            }));
+            
+            // Activer la capacité automatiquement
+            if (selected.ref && activeId) {
+              (async () => {
+                try {
+                  const updatedLookupConfig = {
+                    ...lookupConfig,
+                    enabled: true,
+                    columnLookupEnabled: lookupConfig.columnLookupEnabled ?? false,
+                    rowLookupEnabled: true,
+                    selectors: {
+                      ...lookupConfig.selectors,
+                      rowFieldId: selected.ref,
+                    },
+                  };
+                  
+                  const updatedCfg = {
+                    ...cfg,
+                    meta: {
+                      ...cfg.meta,
+                      lookup: updatedLookupConfig,
+                    },
+                  };
+                  setCfg(updatedCfg);
+                  await debouncedSave(updatedCfg);
+                  
+                  await updateTableCapability(selected.ref, {
+                    enabled: true,
+                    activeId,
+                    currentTable: {
+                      type: cfg.type,
+                      tableId: activeId,
+                      rowBased: true,
+                      columnBased: false,
+                      keyRow: lookupConfig.keyRow || null,
+                      valueRow: lookupConfig.valueRow || null,
+                      displayRow: lookupConfig.displayRow || null,
+                    },
+                  });
+                  message.success('✅ Champ ligne sélectionné et activé !');
+                } catch (error) {
+                  console.error('Erreur activation champ ligne:', error);
+                  message.error('Erreur lors de l\'activation du champ ligne');
+                }
+              })();
+            }
+          }
+          
+          setShowRowTreeSelector(false);
+          setCurrentRowSelectorType(null);
+        }}
+        selectionContext="token"
+        allowMulti={false}
+      />
+
+      {/* 🔥 NodeTreeSelector pour les conditions */}
       <NodeTreeSelector
         nodeId={nodeId}
         open={showNodeTreeSelector}
@@ -2507,6 +3188,36 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           setCurrentConditionId(null);
         }}
         onSelect={handleNodeTreeSelection}
+        selectionContext="token"
+        allowMulti={false}
+      />
+
+      {/* 🔥 NOUVEAU: NodeTreeSelector pour ÉTAPE 2.5 (Filtrage SELECT) */}
+      <NodeTreeSelector
+        nodeId={nodeId}
+        open={showNodeTreeSelectorFilter}
+        onClose={() => {
+          setShowNodeTreeSelectorFilter(false);
+          setCurrentFilterFieldType(null);
+        }}
+        onSelect={(selected: NodeTreeSelectorValue) => {
+          if (currentFilterFieldType === 'select') {
+            if (currentFilterIndex !== null) {
+              // Mode multi-filtre: mettre à jour le filtre à l'index spécifique
+              updateLookupConfig((prev) => {
+                const newFilters = [...(prev.columnSourceOption?.filters || [])];
+                newFilters[currentFilterIndex] = { ...newFilters[currentFilterIndex], valueRef: selected.ref || null };
+                return {
+                  ...prev,
+                  columnSourceOption: { ...(prev.columnSourceOption || {}), filters: newFilters }
+                };
+              });
+            }
+          }
+          setShowNodeTreeSelectorFilter(false);
+          setCurrentFilterFieldType(null);
+          setCurrentFilterIndex(null);
+        }}
         selectionContext="token"
         allowMulti={false}
       />

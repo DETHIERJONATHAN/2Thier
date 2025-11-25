@@ -259,9 +259,11 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           }
         }
       } else if (draggedNode.type?.startsWith('leaf_')) {
-        // Les champs peuvent être sous des branches ou d'autres champs
-        if (newParent && newParent.type !== 'branch' && !newParent.type?.startsWith('leaf_')) {
-          console.error('❌ Les champs ne peuvent être déplacés que sous des branches ou d\'autres champs');
+        // ✅ Les champs peuvent être déplacés à peu près n'importe où
+        // Sous des branches, d'autres champs, sections, etc.
+        // La seule restriction: pas sous les options SELECT
+        if (newParent && newParent.type?.startsWith('leaf_') && newParent.subType === 'SELECT') {
+          console.error('❌ Les champs ne peuvent pas être déplacés sous une option SELECT');
           return false;
         }
       } else if (draggedNode.type === 'branch') {
