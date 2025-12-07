@@ -27410,9 +27410,10 @@ ${"\u2550".repeat(80)}`);
     // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
   } = options;
   try {
-    if (variableCopyCache.has(originalVarId)) {
-      const cachedId = variableCopyCache.get(originalVarId);
-      console.log(`\u267B\uFE0F Variable d\xE9j\xE0 copi\xE9e (cache): ${originalVarId} \u2192 ${cachedId}`);
+    const cacheKey = `${originalVarId}|${newNodeId}`;
+    if (variableCopyCache.has(cacheKey)) {
+      const cachedId = variableCopyCache.get(cacheKey);
+      console.log(`\u267B\uFE0F Variable d\xE9j\xE0 copi\xE9e pour ce n\u0153ud (cache): ${originalVarId} \u2192 ${cachedId}`);
       const cached = await prisma68.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
@@ -28120,7 +28121,8 @@ ${"\u2550".repeat(80)}`);
         } catch (e) {
           console.warn(`\u26A0\uFE0F Erreur MAJ display node (r\xE9utilisation):`, e.message);
         }
-        variableCopyCache.set(originalVarId, existingForNode.id);
+        const cacheKey2 = `${originalVarId}|${finalNodeId2}`;
+        variableCopyCache.set(cacheKey2, existingForNode.id);
       }
     } catch (e) {
       console.warn(`\u26A0\uFE0F V\xE9rification variable existante par nodeId \xE9chou\xE9e:`, e.message);
@@ -28291,7 +28293,8 @@ ${"\u2550".repeat(80)}`);
         console.warn(`\u26A0\uFE0F Synchronisation capacit\xE9s condition/table sur le n\u0153ud d'affichage:`, e.message);
       }
     }
-    variableCopyCache.set(originalVarId, newVariable.id);
+    const cacheKeyFinal = `${originalVarId}|${finalNodeId2}`;
+    variableCopyCache.set(cacheKeyFinal, newVariable.id);
     if (capacityType && newSourceRef) {
       const parsed = parseSourceRef2(newSourceRef);
       if (parsed && parsed.id) {

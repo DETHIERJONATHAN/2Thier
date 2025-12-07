@@ -169,10 +169,13 @@ export async function copyVariableWithCapacities(
   try {
     // ═══════════════════════════════════════════════════════════════════════
     // 🔍 ÉTAPE 1 : Vérifier le cache
+    // 🚨 BUG FIX: Le cache doit être basé sur (originalVarId, newNodeId) pour que
+    // chaque nœud ait SA PROPRE COPIE de variable avec suffixe correct!
     // ═══════════════════════════════════════════════════════════════════════
-    if (variableCopyCache.has(originalVarId)) {
-      const cachedId = variableCopyCache.get(originalVarId)!;
-      console.log(`♻️ Variable déjà copiée (cache): ${originalVarId} → ${cachedId}`);
+    const cacheKey = `${originalVarId}|${newNodeId}`;
+    if (variableCopyCache.has(cacheKey)) {
+      const cachedId = variableCopyCache.get(cacheKey)!;
+      console.log(`♻️ Variable déjà copiée pour ce nœud (cache): ${originalVarId} → ${cachedId}`);
       
       // Récupérer les infos depuis la base pour retourner un résultat complet
       const cached = await prisma.treeBranchLeafNodeVariable.findUnique({
@@ -1115,7 +1118,9 @@ export async function copyVariableWithCapacities(
         }
 
         // Mettre en cache l'ID réutilisé pour éviter d'autres créations
-        variableCopyCache.set(originalVarId, existingForNode.id);
+        // 🚨 BUG FIX: Utiliser cacheKey (originalVarId|newNodeId) au lieu de originalVarId seul
+        const cacheKey = `${originalVarId}|${finalNodeId}`;
+        variableCopyCache.set(cacheKey, existingForNode.id);
         
         // ⚠️ NE PAS RETOURNER ICI - Continuer pour copier les capacités de cette variable
         // pour ce nouveau nœud/contexte !
@@ -1319,8 +1324,10 @@ export async function copyVariableWithCapacities(
 
     // ═══════════════════════════════════════════════════════════════════════
     // 🔗 ÉTAPE 6 : Mettre en cache
+    // 🚨 BUG FIX: Utiliser cacheKey (originalVarId|finalNodeId) au lieu de originalVarId seul
     // ═══════════════════════════════════════════════════════════════════════
-    variableCopyCache.set(originalVarId, newVariable.id);
+    const cacheKeyFinal = `${originalVarId}|${finalNodeId}`;
+    variableCopyCache.set(cacheKeyFinal, newVariable.id);
 
     // ═══════════════════════════════════════════════════════════════════════
     // 🔄 ÉTAPE 7 : Mise à jour bidirectionnelle des linked...
