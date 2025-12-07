@@ -1,0 +1,23 @@
+{
+  "id": "54adf56b-ee04-44bf-be20-9636be4383d6",
+  "label": "Orientation-Inclinaison",
+  "metadata": {
+    "capabilities": {
+      "datas": [
+        {
+          "id": "data_1764152177490",
+          "name": "Donnée 1",
+          "config": {
+            "unit": "",
+            "precision": 2,
+            "sourceRef": "@table.0d6cf685-fdce-4efc-ab99-ef9847e18f8e",
+            "sourceType": "tree",
+            "displayFormat": "number",
+            "visibleToUser": false
+          }
+        }
+      ]
+    }
+  },
+  "table_activeId": "0d6cf685-fdce-4efc-ab99-ef9847e18f8e"
+}

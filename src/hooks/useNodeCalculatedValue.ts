@@ -98,50 +98,14 @@ export function useNodeCalculatedValue(
         }
       }
       
-      // 🔁 Client-side fallback: if no valid value returned, try nodeId without '-1' and copiedFromNodeId
+      // 🔥 DÉSACTIVÉ: Plus de fallback automatique sur l'original!
+      // Les champs copié's doivent rester INDÉPENDANTS de leur template original
+      // Chaque copie a sa propre valeur calculée stockée en base
+      // Si la valeur est vide, elle le reste jusqu'à ce qu'elle soit calculée
       if ((extractedValue === null || extractedValue === undefined || extractedValue === '') && nodeId) {
-        try {
-          // Try without suffix (-1, -2, -3, etc.)
-          if (typeof nodeId === 'string') {
-            const suffixMatch = nodeId.match(/^(.+)-(\d+)$/);
-            if (suffixMatch) {
-              const [, plainId] = suffixMatch;
-              console.log(`🔄 [useNodeCalculatedValue] Trying fallback: ${nodeId} -> ${plainId}`);
-              const respPlain = await api.get(`/api/tree-nodes/${plainId}/calculated-value`);
-              if (respPlain?.success && respPlain?.value !== undefined && respPlain?.value !== null) {
-                console.log(`✅ [useNodeCalculatedValue] Fallback réussi pour ${nodeId}: ${respPlain.value}`);
-                setValue(respPlain.value as string | number | boolean | null);
-                setCalculatedAt(respPlain.calculatedAt as string | undefined);
-                setCalculatedBy(`${respPlain.calculatedBy} (copy fallback)` as string | undefined);
-                return;
-              }
-            }
-          }
-
-          // Try metadata.copiedFromNodeId
-          try {
-            const nodeInfo = await api.get(`/api/treebranchleaf/nodes/${nodeId}`);
-            const copiedFrom = nodeInfo?.metadata?.copiedFromNodeId || nodeInfo?.metadata?.copied_from_node_id || nodeInfo?.metadata?.sourceTemplateId || undefined;
-            if (copiedFrom) {
-              let orig = copiedFrom;
-              if (typeof orig === 'string' && orig.trim().startsWith('[')) {
-                try { orig = JSON.parse(orig)[0]; } catch { /* ignore */ }
-              }
-              if (Array.isArray(orig) && orig.length > 0) orig = orig[0];
-              if (typeof orig === 'string' && orig) {
-                const resp2 = await api.get(`/api/tree-nodes/${String(orig)}/calculated-value`);
-                if (resp2?.success && resp2?.value !== undefined && resp2?.value !== null) {
-                  setValue(resp2.value as string | number | boolean | null);
-                  setCalculatedAt(resp2.calculatedAt as string | undefined);
-                  setCalculatedBy(resp2.calculatedBy as string | undefined);
-                  return;
-                }
-              }
-            }
-          } catch { /* ignore */ }
-        } catch (fallbackErr) {
-          console.warn('[useNodeCalculatedValue] client fallback error', fallbackErr);
-        }
+        console.log(`⚠️ [useNodeCalculatedValue] Champ copié ${nodeId} - AUCUNE valeur calculée actuellement (c'est normal)`);
+        // Ne pas chercher l'original - on l'affiche vide intentionnellement!
+        setValue(null);
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -176,6 +140,23 @@ export function useNodeCalculatedValue(
     };
     window.addEventListener('tbl-force-retransform', handler);
     return () => window.removeEventListener('tbl-force-retransform', handler);
+  }, [fetchCalculatedValue, nodeId]);
+
+  // 🔔 Rafraîchir aussi quand un événement tbl-node-updated est dispatché avec notre nodeId
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (event: Event) => {
+      try {
+        const detail = (event as CustomEvent<{ node?: { id?: string } }>).detail;
+        if (!detail?.node?.id || detail.node.id === nodeId) {
+          fetchCalculatedValue();
+        }
+      } catch (err) {
+        // noop
+      }
+    };
+    window.addEventListener('tbl-node-updated', handler);
+    return () => window.removeEventListener('tbl-node-updated', handler);
   }, [fetchCalculatedValue, nodeId]);
 
   const refresh = useCallback(() => {

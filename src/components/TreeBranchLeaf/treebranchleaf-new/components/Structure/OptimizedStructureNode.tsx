@@ -249,10 +249,52 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
   // Icône du nœud
   const nodeIcon = getNodeIcon(node.type);
 
-  // Fonction pour rendre les icônes de capacités
+  // Fonction pour obtenir TOUS les sous-onglets associés au nœud
+  const getAssociatedSubTabs = () => {
+    const rawSubTab = node.metadata?.subTab;
+    if (Array.isArray(rawSubTab)) {
+      return rawSubTab.filter(tab => tab && typeof tab === 'string' && tab.trim()); // Tous les sous-onglets valides
+    }
+    return typeof rawSubTab === 'string' && rawSubTab ? [rawSubTab] : [];
+  };
+
+  // Fonction pour rendre les informations de capacités avec sous-onglet
   const renderCapabilityIcons = () => {
     const icons = [];
+    const subTabs = getAssociatedSubTabs();
     
+    // Style commun pour les badges
+    const badgeStyle = {
+      fontSize: '8px',
+      padding: '1px 4px',
+      borderRadius: '4px',
+      marginLeft: '2px',
+      color: '#fff',
+      fontWeight: 500 as const,
+      maxWidth: '60px',
+      overflow: 'hidden' as const,
+      textOverflow: 'ellipsis' as const,
+      whiteSpace: 'nowrap' as const,
+      display: 'inline-block'
+    };
+    
+    // TOUJOURS afficher TOUS les sous-onglets s'ils existent, indépendamment des capacités
+    subTabs.forEach((subTab, index) => {
+      icons.push(
+        <span 
+          key={`subtab-${index}`} 
+          title={`Sous-onglet: ${subTab}`}
+          style={{ 
+            ...badgeStyle,
+            backgroundColor: '#1890ff'
+          }}
+        >
+          {subTab}
+        </span>
+      );
+    });
+    
+    // Puis ajouter les icônes de capacités en plus (si elles existent)
     // 🔧 FIX: Utiliser hasFormula au lieu de formulaConfig pour être cohérent avec le nouveau système
     if (node.hasFormula) {
       icons.push(

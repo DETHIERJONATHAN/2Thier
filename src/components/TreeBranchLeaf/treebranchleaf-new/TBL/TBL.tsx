@@ -108,6 +108,7 @@ const TBL: React.FC<TBLProps> = ({
     address: ""
   });
   const [leadId, setLeadId] = useState<string | undefined>(urlLeadId); // État local pour leadId
+  const lastLeadFetchRef = useRef<{ leadId: string; api: typeof api } | null>(null);
   
   // États pour les modals de lead
   const [leadSelectorVisible, setLeadSelectorVisible] = useState(false);
@@ -134,47 +135,52 @@ const TBL: React.FC<TBLProps> = ({
 
   // Charger les données Lead si leadId fourni
   useEffect(() => {
-    // console.log('🔍 [TBL] useEffect loadLead - leadId:', leadId, 'api:', !!api);
-    if (leadId && api) {
-      const loadLead = async () => {
-        try {
-          // console.log('🔍 [TBL] Appel API /api/leads/' + leadId);
-          const response = await api.get(`/api/leads/${leadId}`);
-          // console.log('🔍 [TBL] Réponse API lead:', response);
-          // console.log('🔍 [TBL] response.success:', response.success);
-          // console.log('🔍 [TBL] response.data:', response.data);
-          
-          // L'API retourne directement l'objet lead ou une structure {success, data}
-          const lead = response.success ? response.data : response;
-          
-          if (lead && lead.id) {
-            const newClientData = {
-              id: lead.id,
-              name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
-              email: lead.email || '',
-              phone: lead.phone || '',
-              address: lead.data?.address || ''
-            };
-            // console.log('🔍 [TBL] Mise à jour clientData:', newClientData);
-            setClientData(newClientData);
-            
-            // 🆕 Injecter le leadId dans formData pour les lookups de table
-            setFormData(prev => ({
-              ...prev,
-              __leadId: lead.id
-            }));
-          } else {
-            console.warn('🔍 [TBL] Lead non trouvé ou invalide');
-          }
-        } catch (error) {
+    if (!leadId || !api) {
+      return;
+    }
+
+    const lastFetch = lastLeadFetchRef.current;
+    if (lastFetch && lastFetch.leadId === leadId && lastFetch.api === api) {
+      return;
+    }
+
+    lastLeadFetchRef.current = { leadId, api };
+    let isCancelled = false;
+
+    const loadLead = async () => {
+      try {
+        const response = await api.get(`/api/leads/${leadId}`);
+        const lead = response.success ? response.data : response;
+
+        if (!isCancelled && lead && lead.id) {
+          const newClientData = {
+            id: lead.id,
+            name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
+            email: lead.email || '',
+            phone: lead.phone || '',
+            address: lead.data?.address || ''
+          };
+          setClientData(newClientData);
+          setFormData(prev => ({
+            ...prev,
+            __leadId: lead.id
+          }));
+        } else if (!lead || !lead.id) {
+          console.warn('🔍 [TBL] Lead non trouvé ou invalide');
+        }
+      } catch (error) {
+        if (!isCancelled) {
           console.error('❌ [TBL] Erreur chargement lead:', error);
           message.error('Erreur lors du chargement des données du lead');
-        } finally {
-          // noop: état de chargement dédié retiré
         }
-      };
-      loadLead();
-    }
+      }
+    };
+
+    loadLead();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [leadId, api]);
 
   // Fonctions pour gérer les leads
@@ -383,12 +389,13 @@ const TBL: React.FC<TBLProps> = ({
     
     const handleForceRetransform = (event: Event) => {
           const detail = (event as CustomEvent<{ source?: string; skipFormReload?: boolean; forceRemote?: boolean }>).detail;
-          // Preserve old behavior: ignore when skipFormReload provided or autosave
-          if (detail?.skipFormReload || detail?.source === 'autosave') {
+          const forceRemote = !!detail?.forceRemote;
+          // 🔥 CRITICAL: If forceRemote is true, ALWAYS process even if autosave is ignoring
+          // This ensures duplicated nodes with variables are properly reloaded
+          if (!forceRemote && (detail?.skipFormReload || detail?.source === 'autosave')) {
             console.error('⏭️ [TBL] Ignoring tbl-force-retransform (auto-save/no-reload hint)');
             return;
           }
-          const forceRemote = !!detail?.forceRemote;
           const debugId = (detail as any)?.eventDebugId || null;
           console.error(`🔄 [TBL] Received tbl-force-retransform event (forceRemote=${forceRemote})`, { debugId });
 
@@ -1814,7 +1821,7 @@ const TBL: React.FC<TBLProps> = ({
 
           {/* Contenu principal */}
           <Col xs={24} lg={16} xl={18}>
-            <Card className="h-full shadow-sm" bodyStyle={{ padding: isMobile ? 16 : isTablet ? 20 : 24 }}>
+            <Card className="h-full shadow-sm" styles={{ body: { padding: isMobile ? 16 : isTablet ? 20 : 24 } }}>
               {/* Dev panel capabilities (diagnostic) */}
               {useFixed && (() => { try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } })() && (
                 <div className="mb-4">
@@ -2095,6 +2102,7 @@ const TBL: React.FC<TBLProps> = ({
                         // Passer explicitement la liste de subTabs définie au niveau de l'onglet
                         tabSubTabs={tab.subTabs}
                         tabId={tab.id}
+                        submissionId={submissionId}
                       />
                     </div>
                   )
@@ -2507,6 +2515,7 @@ interface TBLTabContentWithSectionsProps {
   validationActions?: any;
   tabSubTabs?: { key: string; label: string }[] | undefined;
   tabId?: string;
+  submissionId?: string | null;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -2522,7 +2531,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   disabled = false
   ,
   tabSubTabs,
-  tabId
+  tabId,
+  submissionId
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -2572,19 +2582,40 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       .filter(Boolean);
   };
 
-  // Subtabs: déduire depuis les champs (subTabKey). Les champs sans subTabKey vont dans la catégorie 'default'.
+  // Subtabs: RESPECTER L'ORDRE DU TREEBRANCH LEAF (metadata.subTabs en priorité)
   const allSubTabs = useMemo(() => {
-    const set = new Map<string, string>();
+    const orderedTabs: { key: string; label: string }[] = [];
+    const addedKeys = new Set<string>();
     let hasDefault = false;
-    // collect explicit keys
-    const addExplicitKey = (k?: string | null) => {
+    
+    // 1️⃣ PRIORITÉ: Ajouter les sous-onglets depuis metadata.subTabs dans l'ordre TreeBranchLeaf
+    try {
+      if (Array.isArray(tabSubTabs)) {
+        tabSubTabs.forEach((st) => {
+          if (!st) return;
+          const key = typeof st === 'string' ? st : (st.key || String(st));
+          const label = typeof st === 'string' ? st : (st.label || key);
+          if (!addedKeys.has(key)) {
+            orderedTabs.push({ key, label });
+            addedKeys.add(key);
+          }
+        });
+      }
+    } catch { /* ignore */ }
+    
+    // 2️⃣ SECONDAIRE: Ajouter les sous-onglets trouvés dans les champs (qui ne sont pas déjà dans metadata)
+    const addFieldKey = (k?: string | null) => {
       if (!k) return;
       const key = String(k);
-      if (!set.has(key)) set.set(key, key);
+      if (!addedKeys.has(key)) {
+        orderedTabs.push({ key, label: key });
+        addedKeys.add(key);
+      }
     };
-    sections.forEach(s => s.fields.forEach(f => getFieldSubTabs(f).forEach(addExplicitKey)));
-    fields.forEach(f => getFieldSubTabs(f).forEach(addExplicitKey));
-    // detect if any field has no subTabKey (unassigned)
+    sections.forEach(s => s.fields.forEach(f => getFieldSubTabs(f).forEach(addFieldKey)));
+    fields.forEach(f => getFieldSubTabs(f).forEach(addFieldKey));
+    
+    // 3️⃣ Détecter si des champs n'ont pas de sous-onglet assigné
     const detectDefault = (field: any) => {
       if (getFieldSubTabs(field).length === 0) hasDefault = true;
     };
@@ -2597,20 +2628,13 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     });
     // For top-level fields (not in sections), always include in detection
     fields.forEach(f => detectDefault(f));
-    // Si le tab a une metadata.subTabs explicite, l'ajouter aussi pour l'affichage même si aucun champ n'est assigné
-    try {
-      if (Array.isArray(tabSubTabs)) {
-        tabSubTabs.forEach((st) => {
-          if (!st) return;
-          const key = typeof st === 'string' ? st : (st.key || String(st));
-          const label = typeof st === 'string' ? st : (st.label || key);
-          if (!set.has(key)) set.set(key, label);
-        });
-      }
-    } catch { /* ignore */ }
-    // Add 'Général' only if there are unassigned fields
-    if (hasDefault && !set.has('__default__')) set.set('__default__', 'Général');
-    return Array.from(set.entries()).map(([key, label]) => ({ key, label }));
+    
+    // 4️⃣ Ajouter 'Général' seulement s'il y a des champs non assignés
+    if (hasDefault && !addedKeys.has('__default__')) {
+      orderedTabs.push({ key: '__default__', label: 'Général' });
+    }
+    
+    return orderedTabs;
   }, [sections, fields, tabSubTabs]);
 
   const [activeSubTab, setActiveSubTab] = useState<string | undefined>(allSubTabs.length > 0 ? allSubTabs[0].key : undefined);
@@ -2686,6 +2710,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               allNodes={rawNodes}
               allSections={sections}
               disabled={disabled}
+              submissionId={submissionId}
             />
           ))}
         </div>
@@ -2738,6 +2763,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             allNodes={rawNodes}
             allSections={sections}
             disabled={disabled}
+            submissionId={submissionId}
           />
         </div>
       );

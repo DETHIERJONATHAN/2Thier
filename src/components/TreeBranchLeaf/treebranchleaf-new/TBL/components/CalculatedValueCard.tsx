@@ -100,6 +100,24 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
     setRefreshToken((token) => token + 1);
   };
 
+  // 🔔 Si l'événement global tbl-node-updated contient notre nodeId, forcer un refresh
+  useEffect(() => {
+    const handler = (event: Event) => {
+      try {
+        const custom = event as CustomEvent<{ node?: { id?: string } }>;
+        const node = custom.detail?.node;
+        if (node && node.id && node.id === nodeId) {
+          console.log('🔔 [CalculatedValueCard] tbl-node-updated reçu pour nodeId -> refresh', nodeId);
+          forceRefresh();
+        }
+      } catch (e) {
+        // noop
+      }
+    };
+    window.addEventListener('tbl-node-updated', handler);
+    return () => window.removeEventListener('tbl-node-updated', handler);
+  }, [nodeId]);
+
   const extractResultValue = useCallback((result: Record<string, unknown>) => {
     let backendValue = (result.value ?? result.calculatedValue ?? null) as unknown;
     if (backendValue && typeof backendValue === 'object' && !Array.isArray(backendValue)) {

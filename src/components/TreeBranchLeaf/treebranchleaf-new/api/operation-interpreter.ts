@@ -29,6 +29,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { evaluateExpression } from './formulaEngine.js';
 
 function formatDebugValue(value: unknown): string {
   if (value === null || value === undefined) return '∅';
@@ -75,7 +76,7 @@ export interface InterpretResult {
 /**
  * 🎯 Types de références possibles dans le système TBL
  */
-type ReferenceType = 'field' | 'formula' | 'condition' | 'table';
+type ReferenceType = 'field' | 'formula' | 'condition' | 'table' | 'value';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔍 MODULE 1 : IDENTIFICATION DU TYPE DE RÉFÉRENCE
@@ -107,6 +108,15 @@ type ReferenceType = 'field' | 'formula' | 'condition' | 'table';
 function identifyReferenceType(ref: string): ReferenceType {
   // 🆕 DÉTECTION RAPIDE - Vérifier les préfixes AVANT de nettoyer
   // Car @value. et @table. sont des indices cruciaux du type réel
+  if (ref.startsWith('@value.condition:') || ref.startsWith('@value.node-condition:')) {
+    return 'condition';
+  }
+  if (ref.startsWith('@value.node-formula:')) {
+    return 'formula';
+  }
+  if (ref.startsWith('@value.node-table:')) {
+    return 'table';
+  }
   if (ref.startsWith('@value.')) {
     return 'value'; // 🆕 Reconnaître explicitement le type 'value'
   }
@@ -157,6 +167,49 @@ function identifyReferenceType(ref: string): ReferenceType {
   
   // Par défaut, considérer comme un champ
   return 'field';
+}
+
+/**
+ * 🔍 Identifie le type d'un UUID ambigu en interrogeant la base de données
+ * 
+ * Cette fonction vérifie si un UUID est une condition, formule, table, ou champ
+ * en interrogeant Prisma.
+ * 
+ * @param id - UUID à vérifier
+ * @param prisma - Client Prisma
+ * @returns Type de référence trouvé ('condition' | 'formula' | 'table' | 'field')
+ */
+async function identifyReferenceTypeFromDB(id: string, prisma: PrismaClient): Promise<ReferenceType> {
+  try {
+    // ✅ Vérifier si c'est une condition
+    const conditionNode = await prisma.treeBranchLeafNode.findUnique({
+      where: { id },
+      select: { type: true }
+    });
+    
+    if (conditionNode) {
+      if (conditionNode.type === 'condition') {
+        console.log(`[IDENTIFY] ✅ ${id} est une CONDITION`);
+        return 'condition';
+      }
+      if (conditionNode.type === 'node_formula') {
+        console.log(`[IDENTIFY] ✅ ${id} est une FORMULE`);
+        return 'formula';
+      }
+      if (conditionNode.type === 'node_table') {
+        console.log(`[IDENTIFY] ✅ ${id} est une TABLE`);
+        return 'table';
+      }
+      console.log(`[IDENTIFY] ✅ ${id} est un CHAMP (type: ${conditionNode.type})`);
+      return 'field';
+    }
+    
+    console.log(`[IDENTIFY] ⚠️ ${id} non trouvé en BD, défaut: CHAMP`);
+    return 'field';
+  } catch (error) {
+    console.error(`[IDENTIFY] ❌ Erreur lors de l'identification en BD:`, error);
+    return 'field'; // Défaut : considérer comme champ
+  }
 }
 
 /**
@@ -285,15 +338,11 @@ async function enrichDataFromSubmission(
  * Cette fonction interroge d'abord le valueMap (mode preview ou cache enrichi),
  * puis fait un fallback vers TreeBranchLeafSubmissionData si nécessaire.
  * 
- * ⚠️ NOUVEAU COMPORTEMENT (DEFAULT = 0) :
- * - Le champ n'a pas encore été rempli par l'utilisateur → retourne "0"
- * - Le champ est calculé mais pas encore évalué → retourne "0"
- * - Le champ est optionnel et laissé vide → retourne "0"
- * 
- * JUSTIFICATION :
- * - Les formules mathématiques ne peuvent pas calculer avec NULL/undefined
- * - Par défaut à 0 permet à la formule de s'exécuter sans blocage
- * - Exemple: 50000 - (0 * 5000) = 50000 au lieu de s'arrêter
+ * ⚙️ OPTIONS :
+ * - `preserveEmpty=true` → retourne `null` si aucune donnée réelle n'existe
+ *   (utile pour les opérateurs `isEmpty` / `isNotEmpty`).
+ * - Par défaut, la fonction continue de retourner "0" pour éviter de casser
+ *   les formules numériques lorsqu'une valeur manque.
  * 
  * @param nodeId - ID du nœud à récupérer
  * @param submissionId - ID de la soumission en cours
@@ -305,17 +354,29 @@ async function enrichDataFromSubmission(
  * await getNodeValue("702d1b09...", "tbl-1759750447813...", prisma, valueMap)
  * → "1450" (si présent) ou "0" (si absent)
  */
+interface GetNodeValueOptions {
+  /**
+   * Lorsque true, la fonction retournera null/undefined si aucune donnée n'existe
+   * réellement, au lieu de forcer la valeur de secours "0".
+   */
+  preserveEmpty?: boolean;
+}
+
 async function getNodeValue(
   nodeId: string,
   submissionId: string,
   prisma: PrismaClient,
-  valueMap?: Map<string, unknown>
+  valueMap?: Map<string, unknown>,
+  options?: GetNodeValueOptions
 ): Promise<string | null> {
   // 🎯 PRIORITÉ 1: Vérifier dans valueMap si fourni
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     console.log(`[INTERPRETER][getNodeValue] valueMap hit ${nodeId} → ${formatDebugValue(val)}`);
-    return val !== null && val !== undefined ? String(val) : "0"; // DEFAULT: "0"
+    if (val === null || val === undefined) {
+      return options?.preserveEmpty ? null : "0";
+    }
+    return String(val);
   }
 
   console.log(`[INTERPRETER][getNodeValue] DB fallback ${nodeId}`);
@@ -334,7 +395,11 @@ async function getNodeValue(
   console.log(`[INTERPRETER][getNodeValue] DB result ${nodeId} → ${formatDebugValue(data?.value ?? null)}`);
   
   // Retourner la valeur ou "0" par défaut
-  return data?.value || "0"; // DEFAULT: "0"
+  if (data?.value === null || data?.value === undefined) {
+    return options?.preserveEmpty ? null : "0";
+  }
+
+  return String(data.value);
 }
 
 /**
@@ -457,7 +522,16 @@ async function interpretReference(
   // 🔍 ÉTAPE 3 : Identifier le type de référence
   // ═══════════════════════════════════════════════════════════════════════
   // 🆕 Si le type est connu du contexte (p.ex. @table.xxx), l'utiliser en priorité
-  const type = knownType || identifyReferenceType(ref);
+  let type = knownType || identifyReferenceType(ref);
+  
+  // 🔍 Si c'est un UUID ambigu (pas de préfixe), vérifier en BD
+  const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  
+  if (type === 'field' && uuidRegex.test(cleanRef)) {
+    console.log(`[INTERPRÉTATION] 🔍 UUID ambigu détecté: ${cleanRef}, vérification en BD...`);
+    type = await identifyReferenceTypeFromDB(cleanRef, prisma);
+  }
+  
   console.log(`[INTERPRÉTATION] 🔍 Type identifié: ${type} pour ref: ${ref} (depth=${depth}${knownType ? `, contexte: ${knownType}` : ''})`);
   
   // ═══════════════════════════════════════════════════════════════════════
@@ -677,14 +751,51 @@ async function interpretCondition(
   // ═══════════════════════════════════════════════════════════════════════
   // 📊 ÉTAPE 3 : Récupérer la valeur LEFT (côté gauche de la condition)
   // ═══════════════════════════════════════════════════════════════════════
+  const resolveOperandReference = async (ref: string | undefined): Promise<{ value: string | null; label: string }> => {
+    if (!ref) {
+      return { value: null, label: 'Inconnu' };
+    }
+
+    const operandType = identifyReferenceType(ref);
+    if (operandType === 'field' || operandType === 'value') {
+      const operandId = normalizeRef(ref);
+      const value = await getNodeValue(operandId, submissionId, prisma, valueMap, { preserveEmpty: true });
+      const label = await getNodeLabel(operandId, prisma, labelMap);
+      return { value, label };
+    }
+
+    const interpreted = await interpretReference(
+      ref,
+      submissionId,
+      prisma,
+      valuesCache,
+      depth + 1,
+      valueMap,
+      labelMap,
+      operandType
+    );
+
+    const labelFromDetails = interpreted.details?.conditionName
+      || interpreted.details?.formulaName
+      || interpreted.details?.tableName
+      || interpreted.details?.label
+      || interpreted.details?.name
+      || `Référence ${operandType}`;
+
+    return {
+      value: interpreted.result,
+      label: labelFromDetails
+    };
+  };
+
   const leftRef = when.left?.ref;
   let leftValue: string | null = null;
   let leftLabel = 'Inconnu';
-  
+
   if (leftRef) {
-    const leftNodeId = leftRef.replace('@value.', '');
-    leftValue = await getNodeValue(leftNodeId, submissionId, prisma, valueMap);
-    leftLabel = await getNodeLabel(leftNodeId, prisma, labelMap);
+    const leftInfo = await resolveOperandReference(leftRef);
+    leftValue = leftInfo.value;
+    leftLabel = leftInfo.label;
     console.log(`[CONDITION] 📊 LEFT: ${leftLabel} = ${leftValue}`);
   }
   
@@ -696,10 +807,9 @@ async function interpretCondition(
   let rightLabel = 'Inconnu';
   
   if (rightRef) {
-    // C'est une référence à un autre champ
-    const rightNodeId = rightRef.replace('@value.', '');
-    rightValue = await getNodeValue(rightNodeId, submissionId, prisma, valueMap);
-    rightLabel = await getNodeLabel(rightNodeId, prisma, labelMap);
+    const rightInfo = await resolveOperandReference(rightRef);
+    rightValue = rightInfo.value;
+    rightLabel = rightInfo.label;
     console.log(`[CONDITION] 📊 RIGHT (ref): ${rightLabel} = ${rightValue}`);
   } else if (when.right?.value !== undefined) {
     // C'est une valeur fixe
@@ -906,6 +1016,82 @@ function compareValuesByOperator(op: string | undefined | null, cellValue: any, 
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// 🧰 UTILITAIRES COMMUNS POUR LES LOOKUP (normalisation + recherche numérique)
+// ═══════════════════════════════════════════════════════════════════════
+
+const normalizeLookupValue = (value: unknown): string => String(value ?? '').trim().toLowerCase();
+
+const parseNumericLookupValue = (value: unknown): number => {
+  if (typeof value === 'number') return value;
+  const raw = String(value ?? '').trim();
+  if (!raw) return NaN;
+  const sanitized = raw.replace(/,/g, '.').replace(/[^0-9+\-\.]/g, '');
+  if (!sanitized) return NaN;
+  return Number(sanitized);
+};
+
+function findClosestIndexInLabels(
+  targetValue: unknown,
+  labels: Array<unknown>,
+  allowedIndices?: number[]
+): { index: number; matchType: 'text' | 'numeric'; matchedValue?: unknown } | null {
+  const indices = allowedIndices && allowedIndices.length ? allowedIndices : labels.map((_, idx) => idx);
+  const normalizedTarget = normalizeLookupValue(targetValue);
+
+  for (const idx of indices) {
+    const label = labels[idx];
+    if (normalizeLookupValue(label) === normalizedTarget || label === targetValue) {
+      return { index: idx, matchType: 'text', matchedValue: label };
+    }
+  }
+
+  const numericTarget = parseNumericLookupValue(targetValue);
+  if (isNaN(numericTarget)) {
+    return null;
+  }
+
+  let exactIndex = -1;
+  let upperIndex = -1;
+  let upperValue = Infinity;
+  let lowerIndex = -1;
+  let lowerValue = -Infinity;
+
+  for (const idx of indices) {
+    const labelValue = parseNumericLookupValue(labels[idx]);
+    if (isNaN(labelValue)) continue;
+
+    if (labelValue === numericTarget) {
+      exactIndex = idx;
+      break;
+    }
+
+    if (labelValue >= numericTarget && labelValue < upperValue) {
+      upperValue = labelValue;
+      upperIndex = idx;
+    }
+
+    if (labelValue <= numericTarget && labelValue > lowerValue) {
+      lowerValue = labelValue;
+      lowerIndex = idx;
+    }
+  }
+
+  if (exactIndex !== -1) {
+    return { index: exactIndex, matchType: 'numeric', matchedValue: numericTarget };
+  }
+
+  if (upperIndex !== -1) {
+    return { index: upperIndex, matchType: 'numeric', matchedValue: upperValue };
+  }
+
+  if (lowerIndex !== -1) {
+    return { index: lowerIndex, matchType: 'numeric', matchedValue: lowerValue };
+  }
+
+  return null;
+}
+
 /**
  * 📝 Traduit un opérateur en texte humain français
  * 
@@ -927,6 +1113,141 @@ function getOperatorText(op: string): string {
   };
   
   return texts[op] || op;
+}
+
+type FormulaExpressionPart =
+  | { type: 'literal'; value: string }
+  | { type: 'placeholder'; encoded: string };
+
+interface FormulaReferenceMeta {
+  refId: string;
+  refType: ReferenceType;
+  rawToken: string;
+}
+
+interface FormulaExpressionBuildResult {
+  expression: string;
+  parts: FormulaExpressionPart[];
+  roleToEncoded: Record<string, string>;
+  encodedMeta: Record<string, FormulaReferenceMeta>;
+}
+
+const RE_NODE_FORMULA = /node-formula:[a-z0-9-]+/i;
+const RE_LEGACY_FORMULA = /formula:[a-z0-9-]+/i;
+const UUID_REGEX = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function encodeRef(refType: ReferenceType, refId: string): string {
+  return `${refType}::${refId}`;
+}
+
+function tryParseTokenReference(token?: string | null): FormulaReferenceMeta | null {
+  if (!token || typeof token !== 'string') return null;
+
+  const rawToken = token;
+  let normalizedToken = token.trim();
+  const wrapperMatch = normalizedToken.match(/^\{\{\s*(.+?)\s*\}\}$/);
+  if (wrapperMatch && wrapperMatch[1]) {
+    normalizedToken = wrapperMatch[1];
+  }
+
+  const createMeta = (refType: ReferenceType, refId: string): FormulaReferenceMeta => ({ refType, refId, rawToken });
+
+  if (normalizedToken.startsWith('@value.condition:')) {
+    return createMeta('condition', normalizedToken.slice('@value.condition:'.length));
+  }
+  if (normalizedToken.startsWith('@value.node-condition:')) {
+    return createMeta('condition', normalizedToken.slice('@value.node-condition:'.length));
+  }
+  if (normalizedToken.startsWith('@value.')) {
+    return createMeta('value', normalizedToken.slice('@value.'.length));
+  }
+  if (normalizedToken.startsWith('@table.')) {
+    return createMeta('table', normalizedToken.slice('@table.'.length));
+  }
+  if (normalizedToken.startsWith('@condition.')) {
+    return createMeta('condition', normalizedToken.slice('@condition.'.length));
+  }
+  if (normalizedToken.startsWith('@select.')) {
+    const cleaned = normalizedToken.slice('@select.'.length).split('.')[0];
+    return cleaned ? createMeta('value', cleaned) : null;
+  }
+
+  const formulaMatch = normalizedToken.match(RE_NODE_FORMULA) || normalizedToken.match(RE_LEGACY_FORMULA);
+  if (formulaMatch && formulaMatch[0]) {
+    const normalized = formulaMatch[0].startsWith('node-formula:')
+      ? formulaMatch[0].slice('node-formula:'.length)
+      : formulaMatch[0].slice('formula:'.length);
+    return createMeta('formula', normalized);
+  }
+
+  if (normalizedToken.startsWith('node-formula:')) {
+    return createMeta('formula', normalizedToken.slice('node-formula:'.length));
+  }
+  if (normalizedToken.startsWith('node-table:')) {
+    return createMeta('table', normalizedToken.slice('node-table:'.length));
+  }
+  if (normalizedToken.startsWith('node-condition:')) {
+    return createMeta('condition', normalizedToken.slice('node-condition:'.length));
+  }
+
+  if (normalizedToken.startsWith('shared-ref-') || normalizedToken.startsWith('node_') || UUID_REGEX.test(normalizedToken)) {
+    return createMeta('field', normalizedToken);
+  }
+
+  return null;
+}
+
+function buildFormulaExpression(tokens: any[]): FormulaExpressionBuildResult {
+  const parts: FormulaExpressionPart[] = [];
+  const roleToEncoded: Record<string, string> = {};
+  const encodedMeta: Record<string, FormulaReferenceMeta> = {};
+  const exprSegments: string[] = [];
+  let varIndex = 0;
+
+  const appendLiteral = (value: string) => {
+    exprSegments.push(value);
+    parts.push({ type: 'literal', value });
+  };
+
+  const registerReference = (meta: FormulaReferenceMeta) => {
+    const encoded = encodeRef(meta.refType, meta.refId);
+    if (!encodedMeta[encoded]) encodedMeta[encoded] = meta;
+    const role = `var_${varIndex++}`;
+    roleToEncoded[role] = encoded;
+    const placeholder = `{{${role}}}`;
+    exprSegments.push(placeholder);
+    parts.push({ type: 'placeholder', encoded });
+  };
+
+  for (const rawToken of tokens) {
+    if (typeof rawToken === 'string') {
+      const refMeta = tryParseTokenReference(rawToken);
+      if (refMeta) {
+        registerReference(refMeta);
+        continue;
+      }
+      if (rawToken === 'CONCAT') {
+        appendLiteral('&');
+        continue;
+      }
+      appendLiteral(rawToken);
+    } else if (rawToken && typeof rawToken === 'object') {
+      const refStr = typeof rawToken.ref === 'string'
+        ? rawToken.ref
+        : typeof rawToken.value === 'string'
+          ? rawToken.value
+          : typeof rawToken.nodeId === 'string'
+            ? rawToken.nodeId
+            : '';
+      if (refStr) {
+        const refMeta = tryParseTokenReference(refStr) || { refType: 'field', refId: refStr, rawToken: refStr };
+        registerReference(refMeta);
+      }
+    }
+  }
+
+  const expression = exprSegments.join(' ');
+  return { expression, parts, roleToEncoded, encodedMeta };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1015,123 +1336,129 @@ async function interpretFormula(
   
   console.log(`[FORMULE] ✅ Formule trouvée: ${formula.name}`);
   
-  const tokens = formula.tokens as any[];
+  const tokens = Array.isArray(formula.tokens) ? formula.tokens : [];
   console.log(`[FORMULE] 📋 Tokens:`, JSON.stringify(tokens));
-  
-  // ═══════════════════════════════════════════════════════════════════════
-  // 🔍 ÉTAPE 2 : Parcourir et interpréter les tokens
-  // ═══════════════════════════════════════════════════════════════════════
-  let expression = '';        // Expression mathématique pure (ex: "1450/1000")
-  let humanExpression = '';   // Expression avec labels (ex: "Prix(1450)/Conso(1000)")
-  const tokenDetails = [];    // Détails de chaque token pour traçabilité
-  
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    console.log(`[FORMULE] 🔍 Token ${i}:`, token);
-    
-    // ═══════════════════════════════════════════════════════════════════
-    // CAS 1 : Token est une STRING (format: "@value.xxx", "@table.xxx", "@condition.xxx" ou opérateur)
-    // ═══════════════════════════════════════════════════════════════════
-    if (typeof token === 'string') {
-      
-      // Vérifier si c'est une référence (peut être @value, @table, @condition, etc.)
-      const refMatch = token.match(/^@(value|table|condition)\.([A-Za-z0-9_:-]+)$/);
-      if (refMatch) {
-        const refType = refMatch[1];  // 'value', 'table', ou 'condition'
-        const refId = refMatch[2];
-        console.log(`[FORMULE] 🔄 Interprétation récursive de: ${refId} (type: ${refType})`);
-        
-        // 🆕 Passer refType comme contexte connu au lieu de laisser identifyReferenceType() deviner
-        const refResult = await interpretReference(
-          refId,
-          submissionId,
-          prisma,
-          valuesCache,
-          depth + 1,  // ⚠️ IMPORTANT : Incrémenter la profondeur
-          valueMap,
-          labelMap,
-          refType as ReferenceType  // 🆕 Contexte connu du token
-        );
-        
-        const label = await getNodeLabel(refId, prisma, labelMap);
-        
-        expression += refResult.result;
-        humanExpression += `${label}(${refResult.result})`;
-        
-        tokenDetails.push({
-          type: 'reference',
-          ref: refId,
-          refType: refType,
-          label,
-          value: refResult.result,
-          details: refResult.details
-        });
-        
-        console.log(`[FORMULE] ✅ Référence résolue: ${label} = ${refResult.result}`);
-      } else {
-        // C'est un opérateur ou nombre
-        expression += token;
-        humanExpression += token;
-        tokenDetails.push({ type: 'operator', value: token });
-        console.log(`[FORMULE] ➕ Opérateur ajouté: ${token}`);
+
+  const buildResult = buildFormulaExpression(tokens);
+  if (!buildResult.expression.trim()) {
+    console.warn('[FORMULE] ⚠️ Expression vide, retour 0');
+    return {
+      result: '0',
+      humanText: '0',
+      details: {
+        type: 'formula',
+        formulaId: formula.id,
+        formulaName: formula.name,
+        tokens: [],
+        expression: '',
+        humanExpression: '',
+        calculatedResult: 0
       }
+    };
+  }
+
+  const valueCacheByEncoded = new Map<string, number>();
+  const labelCacheByEncoded = new Map<string, string>();
+  const detailCacheByEncoded = new Map<string, InterpretResult>();
+
+  const resolveVariable = async (encoded: string): Promise<number> => {
+    if (valueCacheByEncoded.has(encoded)) {
+      return valueCacheByEncoded.get(encoded)!;
     }
-    // ═══════════════════════════════════════════════════════════════════
-    // CAS 2 : Token est un OBJECT (format: { type: "ref", ref: "..." })
-    // ═══════════════════════════════════════════════════════════════════
-    else if (token && typeof token === 'object' && token.type === 'ref') {
-      // Nettoyer la référence des préfixes @value./@table./@condition.
-      let ref = token.ref
-        .replace('@value.', '')
-        .replace('@table.', '')
-        .replace('@condition.', '');
-      
-      console.log(`[FORMULE] 🔄 Interprétation récursive de (object): ${ref}`);
-      
+    const meta = buildResult.encodedMeta[encoded];
+    if (!meta || !meta.refId) {
+      valueCacheByEncoded.set(encoded, 0);
+      labelCacheByEncoded.set(encoded, meta?.rawToken || encoded);
+      return 0;
+    }
+
+    try {
       const refResult = await interpretReference(
-        ref,
+        meta.refId,
         submissionId,
         prisma,
         valuesCache,
         depth + 1,
         valueMap,
-        labelMap
+        labelMap,
+        meta.refType
       );
-      
-      const label = await getNodeLabel(ref, prisma, labelMap);
-      
-      expression += refResult.result;
-      humanExpression += `${label}(${refResult.result})`;
-      
-      tokenDetails.push({
-        type: 'reference',
-        ref,
-        label,
-        value: refResult.result,
-        details: refResult.details
-      });
-      
-      console.log(`[FORMULE] ✅ Référence résolue (object): ${label} = ${refResult.result}`);
+      detailCacheByEncoded.set(encoded, refResult);
+      const numeric = Number(refResult.result);
+      const safeValue = Number.isFinite(numeric) ? numeric : 0;
+      valueCacheByEncoded.set(encoded, safeValue);
+
+      if (meta.refType === 'formula') {
+        const label = refResult.details?.formulaName || refResult.details?.label || `Formule ${meta.refId}`;
+        labelCacheByEncoded.set(encoded, label);
+      } else {
+        const label = await getNodeLabel(meta.refId, prisma, labelMap).catch(() => meta.refId);
+        labelCacheByEncoded.set(encoded, label || meta.refId);
+      }
+
+      return safeValue;
+    } catch (error) {
+      console.error('[FORMULE] ❌ Erreur résolution variable:', { encoded, error });
+      valueCacheByEncoded.set(encoded, 0);
+      labelCacheByEncoded.set(encoded, meta?.rawToken || encoded);
+      return 0;
     }
+  };
+
+  let evaluation: { value: number; errors: string[] };
+  try {
+    evaluation = await evaluateExpression(buildResult.expression, buildResult.roleToEncoded, {
+      resolveVariable,
+      divisionByZeroValue: 0,
+      strictVariables: false
+    });
+  } catch (error) {
+    console.error('[FORMULE] ❌ Erreur evaluateExpression:', error);
+    return {
+      result: '∅',
+      humanText: 'Erreur de calcul de la formule',
+      details: {
+        type: 'formula',
+        formulaId: formula.id,
+        formulaName: formula.name,
+        tokens: tokens.map(token => ({ type: 'raw', value: token })),
+        expression: buildResult.expression,
+        humanExpression: buildResult.expression,
+        calculatedResult: 0,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    };
   }
-  
-  console.log(`[FORMULE] 📝 Expression construite: ${expression}`);
-  console.log(`[FORMULE] 📝 Expression humaine: ${humanExpression}`);
-  
-  // ═══════════════════════════════════════════════════════════════════════
-  // ⚡ ÉTAPE 3 : Calculer le résultat de l'expression
-  // ═══════════════════════════════════════════════════════════════════════
-  const calculatedResult = calculateExpression(expression);
-  console.log(`[FORMULE] ⚡ Résultat calculé: ${calculatedResult}`);
-  
-  // ═══════════════════════════════════════════════════════════════════════
-  // 📝 ÉTAPE 4 : Construire le texte humain
-  // ═══════════════════════════════════════════════════════════════════════
+
+  const humanExpression = buildResult.parts
+    .map(part => {
+      if (part.type === 'literal') return part.value;
+      const label = labelCacheByEncoded.get(part.encoded) || buildResult.encodedMeta[part.encoded]?.refId || part.encoded;
+      const value = valueCacheByEncoded.get(part.encoded) ?? 0;
+      return `${label}(${value})`;
+    })
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const calculatedResult = evaluation.value;
   const humanText = `${humanExpression} = ${calculatedResult}`;
-  
-  // ═══════════════════════════════════════════════════════════════════════
-  // 📤 ÉTAPE 5 : Retourner le résultat structuré
-  // ═══════════════════════════════════════════════════════════════════════
+
+  const tokenDetails = buildResult.parts.map(part => {
+    if (part.type === 'literal') {
+      return { type: 'literal', value: part.value };
+    }
+    const meta = buildResult.encodedMeta[part.encoded];
+    return {
+      type: 'reference',
+      ref: meta?.refId,
+      refType: meta?.refType,
+      label: labelCacheByEncoded.get(part.encoded) || meta?.refId,
+      value: valueCacheByEncoded.get(part.encoded) ?? 0,
+      details: detailCacheByEncoded.get(part.encoded)?.details || null
+    };
+  });
+
   return {
     result: String(calculatedResult),
     humanText,
@@ -1140,56 +1467,12 @@ async function interpretFormula(
       formulaId: formula.id,
       formulaName: formula.name,
       tokens: tokenDetails,
-      expression,
+      expression: buildResult.expression,
       humanExpression,
-      calculatedResult
+      calculatedResult,
+      evaluationErrors: evaluation.errors
     }
   };
-}
-
-/**
- * 🧮 Calcule une expression mathématique de manière sécurisée
- * 
- * SÉCURITÉ :
- * ----------
- * - Nettoie l'expression (garde seulement nombres et opérateurs)
- * - Utilise Function() avec "use strict" pour évaluation sécurisée
- * - Gestion des erreurs avec fallback à 0
- * 
- * OPÉRATEURS SUPPORTÉS :
- * ----------------------
- * +, -, *, /, (), décimales (.)
- * 
- * @param expr - Expression à calculer (ex: "1450/1000")
- * @returns Résultat numérique
- * 
- * @example
- * calculateExpression("1450/1000") → 1.45
- * calculateExpression("(100+50)*2") → 300
- */
-function calculateExpression(expr: string): number {
-  try {
-    // Nettoyer l'expression : garde seulement chiffres et opérateurs
-    const cleanExpr = expr.replace(/[^0-9+\-*/.()]/g, '');
-    
-    console.log(`[CALCUL] 🧮 Expression nettoyée: ${cleanExpr}`);
-    
-    // Vérifier si l'expression est valide (contient au moins un chiffre)
-    if (!/\d/.test(cleanExpr)) {
-      console.log(`[CALCUL] ⚠️ Expression invalide (aucun nombre détecté), retour 0`);
-      return 0;
-    }
-    
-    // Évaluer de manière sécurisée
-    const result = Function(`"use strict"; return (${cleanExpr})`)();
-    
-    console.log(`[CALCUL] ✅ Résultat: ${result}`);
-    
-    return result;
-  } catch (error) {
-    console.error(`[CALCUL] ❌ Erreur calcul expression: ${expr}`, error);
-    return 0;
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1265,6 +1548,10 @@ async function getSourceValue(
   
   // Option 2 (CHAMP): récupérer la valeur du champ source
   if (sourceOption.type === 'field' && sourceOption.sourceField) {
+    console.log(`[TABLE] 🔍 DEBUG CHAMP: sourceOption=`, JSON.stringify(sourceOption, null, 2));
+    console.log(`[TABLE] 🔍 DEBUG CHAMP: submissionId=${submissionId}, sourceField=${sourceOption.sourceField}`);
+    console.log(`[TABLE] 🔍 DEBUG CHAMP: valueMap has ${valueMap?.size || 0} entries:`, valueMap ? Array.from(valueMap.keys()).slice(0, 5) : 'NO_VALUE_MAP');
+    
     const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma, valueMap);
     console.log(`[TABLE] 🔥 Option 2 CHAMP: sourceField=${sourceOption.sourceField} → ${result}`);
     return result;
@@ -1511,23 +1798,27 @@ async function interpretTable(
   const colFieldId = lookup.selectors?.columnFieldId;
   const rowEnabled = lookup.rowLookupEnabled === true;
   const colEnabled = lookup.columnLookupEnabled === true;
+  const rowSourceOption = lookup.rowSourceOption;
+  const colSourceOption = lookup.columnSourceOption;
+
+  const hasRowSelector = Boolean(rowFieldId || (rowSourceOption && rowSourceOption.type && rowSourceOption.type !== 'select'));
+  const hasColSelector = Boolean(colFieldId || (colSourceOption && colSourceOption.type && colSourceOption.type !== 'select'));
   
   // ═══════════════════════════════════════════════════════════════════════
   // 🎯 DÉTECTION DU MODE (3 modes possibles)
   // ═══════════════════════════════════════════════════════════════════════
   
-  // MODE 3 : Les DEUX toggles activés (système existant - croisement dynamique)
-  if (rowEnabled && colEnabled && rowFieldId && colFieldId) {
+  // MODE 3 : Les DEUX toggles activés ET les deux fieldIds configurés (croisement dynamique complet)
+  if (rowEnabled && colEnabled && hasRowSelector && hasColSelector) {
     console.log(`[TABLE] 🎯 MODE 3 détecté: Croisement dynamique COLONNE × LIGNE`);
     // Le code existant continue ici (récupération des deux valeurs + croisement)
   }
   
-  // MODE 1 : Seulement COLONNE activée (croisement avec displayColumn fixe)
-  else if (colEnabled && !rowEnabled && (colFieldId || lookup.columnSourceOption) && lookup.displayColumn) {
-    console.log(`[TABLE] 🎯 MODE 1 détecté: COLONNE × displayColumn fixe`);
+  // MODE 1 : COLONNE activée avec displayColumn (peut avoir ligne activée mais sans rowFieldId)
+  else if (colEnabled && (colFieldId || colSourceOption) && lookup.displayColumn && !(rowEnabled && colEnabled && hasRowSelector && hasColSelector)) {
+    console.log(`[TABLE] 🎯 MODE 1 détecté: COLONNE × displayColumn fixe (rowEnabled=${rowEnabled}, rowFieldId=${rowFieldId})`);
     
     // 🔥 NOUVEAU: Support des 3 options de source (SELECT/CHAMP/CAPACITÉ)
-    const colSourceOption = lookup.columnSourceOption;
     const colSelectorValue = await getSourceValue(
       colSourceOption,
       lookup,
@@ -1739,75 +2030,36 @@ async function interpretTable(
 
     // Boucle sur CHAQUE ligne à afficher (UNIQUEMENT si Option 2 n'a pas trouvé de match)
     if (targetColIndex === -1) {
-      // 🔥 NOUVEAU: Pour Option 3 CAPACITÉ SANS opérateur, traiter comme valeur numérique à chercher dans rows
-      if (colSourceOption?.type === 'capacity' && !colSourceOption?.operator) {
-        console.log(`[TABLE] 🔥 MODE 1 Option 3 SANS opérateur - Chercher valeur numérique: ${colSelectorValue}`);
-        const normalizedColSelector = String(colSelectorValue).trim().toLowerCase();
-        
-        // Chercher la ligne où la première colonne (rows[]) contient cette valeur
-        // 🔥 ÉTAPE 2.5: Boucler SEULEMENT sur les indices filtrés
-        let foundRowIndex = -1;
-        for (const rIdx of validRowIndices) {
-          const rowValue = String(rows[rIdx]).trim().toLowerCase();
-          // Essayer match exact ET match numérique
-          if (rowValue === normalizedColSelector || rows[rIdx] === colSelectorValue) {
-            foundRowIndex = rIdx;
-            console.log(`[TABLE] ✅ MODE 1 Option 3 - Trouvé à ligne ${rIdx}: ${rows[rIdx]}`);
-            break;
-          }
-        }
-        
-        if (foundRowIndex === -1) {
-          // Si pas de match exact, chercher par proximité/plage (pour les valeurs numériques)
-          // 🔥 ÉTAPE 2.5: Chercher SEULEMENT parmi les indices filtrés
-          const numericSelector = Number(colSelectorValue);
-          if (!isNaN(numericSelector)) {
-            // Chercher la ligne avec la valeur la plus proche (inférieure ou égale)
-            let closestRowIndex = -1;
-            let closestValue = -Infinity;
-            
-            for (const rIdx of validRowIndices) {
-              const rowNum = Number(rows[rIdx]);
-              if (!isNaN(rowNum)) {
-                // Si match exact
-                if (rowNum === numericSelector) {
-                  foundRowIndex = rIdx;
-                  console.log(`[TABLE] ✅ MODE 1 Option 3 - Match numérique exact à ligne ${rIdx}: ${rowNum}`);
-                  break;
-                }
-                // Sinon chercher la valeur la plus proche
-                if (rowNum <= numericSelector && rowNum > closestValue) {
-                  closestValue = rowNum;
-                  closestRowIndex = rIdx;
-                }
-              }
-            }
-            
-            // Si pas de match exact mais on a trouvé une valeur proche
-            if (foundRowIndex === -1 && closestRowIndex !== -1) {
-              foundRowIndex = closestRowIndex;
-              console.log(`[TABLE] ✅ MODE 1 Option 3 - Match par proximité à ligne ${closestRowIndex}: valeur=${closestValue}, cherchée=${numericSelector}`);
-            }
-          }
-        }
-        
-        if (foundRowIndex !== -1) {
-          // On a trouvé la ligne, retourner les valeurs de displayColumns pour cette ligne
+      // 🔥 NOUVEAU: Pour les options CHAMP / CAPACITÉ sans opérateur, lire la valeur numérique et trouver la ligne la plus proche (priorité au supérieur)
+      const hasOperatorConfig = Boolean(colSourceOption?.operator && colSourceOption?.comparisonColumn);
+      const isNumericSourceWithoutOperator = (colSourceOption?.type === 'capacity' || colSourceOption?.type === 'field') && !hasOperatorConfig;
+      if (isNumericSourceWithoutOperator) {
+        const optionLabel = colSourceOption?.type === 'field' ? 'Option 2' : 'Option 3';
+        console.log(`[TABLE] 🔥 MODE 1 ${optionLabel} SANS opérateur - Recherche intelligente de ligne pour ${colSelectorValue}`);
+
+        const match = findClosestIndexInLabels(colSelectorValue, rows, validRowIndices);
+        if (match) {
+          const foundRowIndex = match.index;
+          console.log(`[TABLE] ✅ MODE 1 ${optionLabel} - Ligne trouvée ${foundRowIndex} (${rows[foundRowIndex]}) via ${match.matchType}`);
+
           for (const fixedColValue of displayColumns) {
-            const normalizedFixedCol = String(fixedColValue).trim().toLowerCase();
-            const colIndexForDisplay = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFixedCol);
-            
+            const normalizedFixedCol = normalizeLookupValue(fixedColValue);
+            const fixedColInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedFixedCol);
+            const fixedColInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedFixedCol);
+            let colIndexForDisplay = -1;
+            if (fixedColInCols !== -1) colIndexForDisplay = fixedColInCols;
+            else if (fixedColInRows !== -1) colIndexForDisplay = fixedColInRows;
+
             if (colIndexForDisplay !== -1) {
-              // Récupérer la valeur de data[foundRowIndex][colIndexForDisplay - 1]
               const dataColIndexForDisplay = colIndexForDisplay - 1;
               const result = data[foundRowIndex]?.[dataColIndexForDisplay];
               results.push({ row: fixedColValue, value: result });
-              console.log(`[TABLE] ✅ MODE 1 Option 3 - Résultat ${fixedColValue}: ${result} (ligne ${foundRowIndex})`);
+              console.log(`[TABLE] ✅ MODE 1 ${optionLabel} - Résultat ${fixedColValue}: ${result} (ligne ${foundRowIndex})`);
             }
           }
-          targetColIndex = 0; // Marquer qu'on a traité
+          targetColIndex = 0;
         } else {
-          console.warn(`[TABLE] ⚠️ MODE 1 Option 3 - Valeur ${colSelectorValue} non trouvée dans rows`);
+          console.warn(`[TABLE] ⚠️ MODE 1 ${optionLabel} - Impossible de trouver une ligne pour ${colSelectorValue}`);
         }
       }
       
@@ -1815,7 +2067,9 @@ async function interpretTable(
       if (targetColIndex === -1) {
         for (const fixedRowValue of displayColumns) {
           // Normalisation pour matching robuste
-          const normalizedColSelector = String(colSelectorValue).trim().toLowerCase();
+          // 🔧 FIX: Enlever le suffixe (-1, -2, etc.) pour les champs copiés dans les repeaters
+          const colSelectorWithoutSuffix = String(colSelectorValue).replace(/-\d+$/, '');
+          const normalizedColSelector = colSelectorWithoutSuffix.trim().toLowerCase();
           const normalizedFixedRow = String(fixedRowValue).trim().toLowerCase();
           
           // Chercher dans colonnes ET lignes (auto-détection)
@@ -1879,11 +2133,10 @@ async function interpretTable(
   }
   
   // MODE 2 : Seulement LIGNE activée (croisement avec displayRow fixe)
-  else if (rowEnabled && !colEnabled && rowFieldId && lookup.displayRow) {
+  else if (rowEnabled && !colEnabled && hasRowSelector && lookup.displayRow) {
     console.log(`[TABLE] 🎯 MODE 2 détecté: displayRow fixe × LIGNE`);
     
     // 🔥 NOUVEAU: Support des 3 options de source (SELECT/CHAMP/CAPACITÉ)
-    const rowSourceOption = lookup.rowSourceOption;
     const rowSelectorValue = await getSourceValue(
       rowSourceOption,
       lookup,
@@ -1996,11 +2249,12 @@ async function interpretTable(
       else if (rowSelectorInCols !== -1) rowSelectorIndex = rowSelectorInCols;
       
       if (rowSelectorIndex !== -1) {
-        // Chercher la première colonne où data[rowSelectorIndex][col-1] operator rowSelectorValue
-        const dataRowIndex = rowSelectorIndex;
+        // 🔥 FIX: Si rowSelectorIndex = 0 (première ligne), les valeurs sont dans rows[], pas data[]
+        // Pour data[], on doit mapper l'index correctement
         let foundColIndex = -1;
         for (let cIdx = 0; cIdx < columns.length; cIdx++) {
-          const cellValue = data[dataRowIndex]?.[cIdx - 1];
+          // Si on compare la première ligne (index 0), prendre la valeur depuis columns[], pas data[]
+          const cellValue = rowSelectorIndex === 0 ? columns[cIdx] : data[rowSelectorIndex - 1]?.[cIdx - 1];
           if (compareValuesByOperator(rowSourceOption.operator, cellValue, rowSelectorValue)) {
             foundColIndex = cIdx;
             console.log(`[TABLE] ✅ MODE 2 Option ${rowSourceOption.type === 'field' ? '2' : '3'} - Trouvé à colonne ${cIdx}: ${cellValue} ${rowSourceOption.operator} ${rowSelectorValue}`);
@@ -2021,7 +2275,8 @@ async function interpretTable(
             
             if (rowIndexForDisplay !== -1) {
               // Utiliser rowIndexForDisplay (la ligne à afficher) et la colonne trouvée par l'opérateur
-              const result = data[rowIndexForDisplay]?.[dataColIndexForFound];
+              // 🔥 FIX: Gérer le cas où rowIndexForDisplay === 0
+              const result = rowIndexForDisplay === 0 ? columns[foundColIndex] : data[rowIndexForDisplay - 1]?.[dataColIndexForFound];
               results.push({ column: fixedRowValue, value: result });
               console.log(`[TABLE] ✅ MODE 2 Option ${rowSourceOption.type === 'field' ? '2' : '3'} - Résultat ${fixedRowValue}: ${result} (depuis colonne trouvée ${foundColIndex})`);
             }
@@ -2035,6 +2290,58 @@ async function interpretTable(
 
     // Boucle sur CHAQUE colonne à afficher (UNIQUEMENT si Option 2 n'a pas trouvé de match)
     if (targetRowIndex === -1) {
+      const hasRowOperatorConfig = Boolean(rowSourceOption?.operator && rowSourceOption?.comparisonColumn);
+      const isRowNumericSource = (rowSourceOption?.type === 'field' || rowSourceOption?.type === 'capacity') && !hasRowOperatorConfig;
+
+      if (isRowNumericSource) {
+        const optionLabel = rowSourceOption?.type === 'field' ? 'Option 2' : 'Option 3';
+        console.log(`[TABLE] 🔥 MODE 2 ${optionLabel} SANS opérateur - Recherche intelligente de colonne pour ${rowSelectorValue}`);
+
+        const match = findClosestIndexInLabels(rowSelectorValue, rows);
+        if (match) {
+          const foundRowIndex = match.index;
+          console.log(`[TABLE] ✅ MODE 2 ${optionLabel} - Ligne trouvée ${foundRowIndex} (${rows[foundRowIndex]}) via ${match.matchType}`);
+
+          for (const fixedColValue of displayRows) {
+            const normalizedFixedCol = normalizeLookupValue(fixedColValue);
+            const fixedColInCols = columns.findIndex(c => normalizeLookupValue(c) === normalizedFixedCol);
+            const fixedColInRows = rows.findIndex(r => normalizeLookupValue(r) === normalizedFixedCol);
+            let colIndexForDisplay = -1;
+            if (fixedColInCols !== -1) colIndexForDisplay = fixedColInCols;
+            else if (fixedColInRows !== -1) colIndexForDisplay = fixedColInRows;
+
+            if (colIndexForDisplay !== -1) {
+              const dataColIndexForDisplay = colIndexForDisplay - 1;
+              const result = data[foundRowIndex]?.[dataColIndexForDisplay];
+              results.push({ column: fixedColValue, value: result });
+              console.log(`[TABLE] ✅ MODE 2 ${optionLabel} - Résultat ${fixedColValue}: ${result} (ligne ${foundRowIndex})`);
+            }
+          }
+
+          const resultText = results.map(r => `${r.column}=${r.value}`).join(', ');
+          const resultValues = results.map(r => r.value);
+          const humanText = `Table "${table.name}"[${rowLabel}=${rowSelectorValue}, ${displayRows.join('+')}(fixes)] = ${resultText}`;
+
+          return {
+            result: resultValues.length === 1 ? String(resultValues[0]) : JSON.stringify(resultValues),
+            humanText,
+            details: {
+              type: 'table',
+              mode: 2,
+              tableId: table.id,
+              tableName: table.name,
+              lookup: {
+                row: { field: rowLabel, value: rowSelectorValue },
+                columns: results,
+                multiple: results.length > 1
+              }
+            }
+          };
+        } else {
+          console.warn(`[TABLE] ⚠️ MODE 2 ${optionLabel} - Impossible de trouver une ligne pour ${rowSelectorValue}`);
+        }
+      }
+
       for (const fixedColValue of displayRows) {
         // Normalisation
         const normalizedRowSelector = String(rowSelectorValue).trim().toLowerCase();
@@ -2099,6 +2406,8 @@ async function interpretTable(
     };
   }
   
+
+  
   // ❌ Configuration invalide
   else {
     console.error(`[TABLE] ❌ Configuration lookup invalide`);
@@ -2119,10 +2428,7 @@ async function interpretTable(
   // 📊 ÉTAPE 4 : Récupérer les valeurs sélectionnées par l'utilisateur
   // 🔥 NOUVEAU: Support des 3 options de source (SELECT/CHAMP/CAPACITÉ)
   // ═══════════════════════════════════════════════════════════════════════
-  const rowSourceOption = lookup.rowSourceOption;
-  const colSourceOption = lookup.columnSourceOption;
-  
-  const rowSelectorValue = await getSourceValue(
+  let rowSelectorValue = await getSourceValue(
     rowSourceOption,
     lookup,
     rowFieldId,
@@ -2133,7 +2439,7 @@ async function interpretTable(
     valueMap,
     labelMap
   );
-  const colSelectorValue = await getSourceValue(
+  let colSelectorValue = await getSourceValue(
     colSourceOption,
     lookup,
     colFieldId,
@@ -2146,6 +2452,8 @@ async function interpretTable(
   );
   const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma, labelMap);
   const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma, labelMap);
+  const rowSourceType = rowSourceOption?.type || (rowFieldId ? 'select' : undefined);
+  const colSourceType = colSourceOption?.type || (colFieldId ? 'select' : undefined);
   
   console.log(`[TABLE] 📊 Valeurs sélectionnées: row=${rowLabel}(${rowSelectorValue}), col=${colLabel}(${colSelectorValue})`);
   
@@ -2190,12 +2498,42 @@ async function interpretTable(
   });
   
   // 🔍 Chercher rowSelectorValue dans rows ET columns
-  const rowSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedRowSelector);
-  const rowSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedRowSelector);
+  let rowSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedRowSelector);
+  let rowSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedRowSelector);
   
   // 🔍 Chercher colSelectorValue dans rows ET columns
-  const colSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedColSelector);
-  const colSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedColSelector);
+  let colSelectorInRows = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedColSelector);
+  let colSelectorInCols = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedColSelector);
+
+  if (rowSelectorInRows === -1 && rowSelectorInCols === -1 && (rowSourceType === 'field' || rowSourceType === 'capacity')) {
+    const rowMatch = findClosestIndexInLabels(rowSelectorValue, rows);
+    if (rowMatch) {
+      rowSelectorInRows = rowMatch.index;
+      rowSelectorValue = String(rows[rowMatch.index]);
+    } else {
+      const columnIndices = columns.map((_, idx) => idx).filter(idx => idx > 0);
+      const colMatch = findClosestIndexInLabels(rowSelectorValue, columns, columnIndices);
+      if (colMatch) {
+        rowSelectorInCols = colMatch.index;
+        rowSelectorValue = String(columns[colMatch.index]);
+      }
+    }
+  }
+
+  if (colSelectorInCols === -1 && colSelectorInRows === -1 && (colSourceType === 'field' || colSourceType === 'capacity')) {
+    const columnIndices = columns.map((_, idx) => idx).filter(idx => idx > 0);
+    const colMatch = findClosestIndexInLabels(colSelectorValue, columns, columnIndices);
+    if (colMatch) {
+      colSelectorInCols = colMatch.index;
+      colSelectorValue = String(columns[colMatch.index]);
+    } else {
+      const rowMatch = findClosestIndexInLabels(colSelectorValue, rows);
+      if (rowMatch) {
+        colSelectorInRows = rowMatch.index;
+        colSelectorValue = String(rows[rowMatch.index]);
+      }
+    }
+  }
   
   console.log(`[TABLE] 🔍 Auto-détection positions:`, {
     rowSelector: { value: rowSelectorValue, inRows: rowSelectorInRows, inCols: rowSelectorInCols },

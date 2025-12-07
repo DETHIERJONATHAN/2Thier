@@ -196,11 +196,18 @@ export function useTBLTableLookup(
               
               // Pour chaque nœud avec calculatedValue, l'ajouter aux formValues
               for (const node of allNodes) {
-                if (node.calculatedValue !== null && node.calculatedValue !== undefined && node.calculatedValue !== '') {
-                  // Ne pas écraser si déjà présent dans formData
-                  if (!filteredFormData[node.id]) {
-                    filteredFormData[node.id] = node.calculatedValue;
-                    if (isTargetField) console.log(`[DEBUG][Test - liste] ✅ Ajout valeur calculée: ${node.id} = ${node.calculatedValue}`);
+                if (node.calculatedValue === null || node.calculatedValue === undefined || node.calculatedValue === '') {
+                  continue;
+                }
+
+                const existingValue = filteredFormData[node.id];
+                const isComputedField = Boolean(node.hasFormula || node.hasData);
+                const shouldOverride = isComputedField || existingValue === undefined || existingValue === null || existingValue === '';
+
+                if (shouldOverride) {
+                  filteredFormData[node.id] = node.calculatedValue;
+                  if (isTargetField) {
+                    console.log(`[DEBUG][Test - liste] ✅ Valeur calculée injectée (${shouldOverride ? 'override' : 'set'}) pour ${node.id}: ${node.calculatedValue}`);
                   }
                 }
               }
@@ -293,21 +300,43 @@ function extractOptions(
   payload: TableLookupPayload,
   config: TreeBranchLeafSelectConfig
 ): TableLookupOption[] {
+  console.log('🔍 [extractOptions] ENTRÉE:', {
+    payload: payload,
+    payloadType: typeof payload,
+    isArray: Array.isArray(payload),
+    hasDirectOptions: hasDirectOptions(payload),
+    isNormalizedInstance: isNormalizedInstance(payload),
+    keys: payload && typeof payload === 'object' ? Object.keys(payload) : []
+  });
+  
   if (hasDirectOptions(payload)) {
+    console.log('✅ [extractOptions] Utilisation du chemin hasDirectOptions (payload.options)');
     return sanitizeDirectOptions(payload.options);
   }
 
   if (isNormalizedInstance(payload)) {
+    console.log('✅ [extractOptions] Utilisation du chemin isNormalizedInstance (table complète)');
     return extractOptionsFromTable(payload, config);
   }
 
+  console.log('❌ [extractOptions] Aucun chemin reconnu - retour array vide');
   return [];
 }
 
 function hasDirectOptions(payload: TableLookupPayload): payload is TableLookupApiResponse & { options: unknown[] } {
-  return Boolean(
+  const hasOptions = Boolean(
     payload && typeof payload === 'object' && Array.isArray((payload as TableLookupApiResponse).options)
   );
+  
+  console.log('🔍 [hasDirectOptions] Test:', {
+    payload: payload,
+    isObject: payload && typeof payload === 'object',
+    hasOptionsProperty: payload && typeof payload === 'object' && 'options' in payload,
+    optionsIsArray: payload && typeof payload === 'object' && Array.isArray((payload as any).options),
+    result: hasOptions
+  });
+  
+  return hasOptions;
 }
 
 function isNormalizedInstance(payload: TableLookupPayload): payload is NormalizedTableInstance {
@@ -412,23 +441,54 @@ function extractOptionsFromTable(
 }
 
   function sanitizeDirectOptions(rawOptions: unknown[]): TableLookupOption[] {
+    console.log('🔍 [sanitizeDirectOptions] ENTRÉE:', {
+      type: typeof rawOptions,
+      isArray: Array.isArray(rawOptions),
+      length: Array.isArray(rawOptions) ? rawOptions.length : 'N/A',
+      first3: Array.isArray(rawOptions) ? rawOptions.slice(0, 3) : rawOptions
+    });
+    
     const safeOptions: TableLookupOption[] = [];
 
+    if (!Array.isArray(rawOptions)) {
+      console.warn('⚠️ [sanitizeDirectOptions] rawOptions n\'est pas un array:', rawOptions);
+      return safeOptions;
+    }
+
     rawOptions.forEach((entry, index) => {
-      if (!entry || typeof entry !== 'object') return;
+      console.log(`🔍 [sanitizeDirectOptions] Traitement option [${index}]:`, {
+        entry,
+        type: typeof entry,
+        isObject: entry && typeof entry === 'object'
+      });
+      
+      if (!entry || typeof entry !== 'object') {
+        console.log(`⚠️ [sanitizeDirectOptions] Option [${index}] ignorée (pas un objet)`);
+        return;
+      }
+      
       const option = entry as Record<string, unknown>;
       const value = option.value ?? option.key ?? option.id;
       const label = option.label ?? option.display ?? value;
 
-      if (value === undefined || value === null) return;
+      console.log(`🔍 [sanitizeDirectOptions] Option [${index}] extraite:`, { value, label });
 
-      safeOptions.push({
+      if (value === undefined || value === null) {
+        console.log(`⚠️ [sanitizeDirectOptions] Option [${index}] ignorée (value undefined/null)`);
+        return;
+      }
+
+      const finalOption = {
         value: typeof value === 'number' || typeof value === 'string' ? value : String(value),
         label: typeof label === 'string' || typeof label === 'number' ? String(label) : `Option ${index + 1}`,
         disabled: typeof option.disabled === 'boolean' ? option.disabled : undefined,
-      });
+      };
+      
+      console.log(`✅ [sanitizeDirectOptions] Option [${index}] ajoutée:`, finalOption);
+      safeOptions.push(finalOption);
     });
 
-    console.log('📊 [extractOptions] Options générées (direct):', safeOptions);
+    console.log('📊 [sanitizeDirectOptions] Options générées (direct):', safeOptions);
+    console.log(`🎯 [sanitizeDirectOptions] RÉSULTAT: ${safeOptions.length} options sur ${rawOptions?.length || 0} entrées`);
     return safeOptions;
   }

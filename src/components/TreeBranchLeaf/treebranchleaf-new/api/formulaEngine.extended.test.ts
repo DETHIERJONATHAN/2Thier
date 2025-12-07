@@ -73,4 +73,16 @@ describe('FormulaEngine extended', () => {
     const res = await evaluateTokens(tokens, { resolveVariable: () => 0 });
     expect(res.errors).toContain('unknown_function');
   });
+
+  it('gère fonctions trigonométriques et racine/pi', async () => {
+    const expr = 'PI() * cos(radians(60)) + RACINE(16) + atan(1)';
+    const { value } = await evaluateExpression(expr, roleMap, { resolveVariable: makeResolver({}) });
+    expect(value).toBeCloseTo(Math.PI * 0.5 + 4 + Math.atan(1), 10);
+  });
+
+  it('gère sierreur / iferror', async () => {
+    const expr = 'sierreur( {{a}} / {{b}}, 42 ) + sierreur( {{c}}, 7 )';
+    const { value } = await evaluateExpression(expr, roleMap, { resolveVariable: makeResolver({ nodeA: 10, nodeB: 0, nodeC: 5 }) });
+    expect(value).toBeCloseTo(42 + 5, 5);
+  });
 });

@@ -1,19 +1,26 @@
-/**
- * 🌳 SYSTÈME DE VALIDATION HIÉRARCHIQUE AVANCÉ - TreeBranchLeaf
+﻿/**
+ * ­ƒî│ SYST├êME DE VALIDATION HI├ëRARCHIQUE AVANC├ë - TreeBranchLeaf
  * 
- * Système de validation généalogique complet pour éviter toute erreur de structure
+ * Syst├¿me de validation g├®n├®alogique complet pour ├®viter toute erreur de structure
  * 
- * ARCHITECTURE (mise à jour) :
+ * ARCHITECTURE (mise ├á jour) :
  * - Niveau 1 : Arbre (racine unique)
- * - Niveau 2+ : Branches (peuvent être imbriquées à l'infini sous l'arbre ou d'autres branches)
- * - Niveau 3+ : Champs/Options/Champs+Options (démarrent au niveau 3, puis imbrication infinie)
+ * - Niveau 2+ : Branches (peuvent ├¬tre imbriqu├®es ├á l'infini sous l'arbre ou d'autres branches)
+ * - Niveau 3+ : Champs/Options/Champs+Options (d├®marrent au niveau 3, puis imbrication infinie)
  */
 
 // =============================================================================
-// 🎯 TYPES DE BASE
+// ­ƒÄ» TYPES DE BASE
 // =============================================================================
 
-export type NodeType = 'tree' | 'branch' | 'section' | 'leaf_field' | 'leaf_option' | 'leaf_option_field' | 'leaf_repeater';
+export type NodeType =
+  | 'tree'
+  | 'branch'
+  | 'section'
+  | 'leaf_field'
+  | 'leaf_option'
+  | 'leaf_option_field'
+  | 'leaf_repeater';
 export type NodeSubType = 'data' | 'SELECT' | 'TEXT' | 'NUMBER' | 'EMAIL' | 'TEL' | 'DATE' | 'TEXTAREA' | 'CHECKBOX' | 'RADIO';
 
 export interface TreeNode {
@@ -44,27 +51,27 @@ export interface TreeIntegrityResult {
 }
 
 // =============================================================================
-// 🧮 CALCUL DE GÉNÉALOGIE ET NIVEAUX AVANCÉ
+// ­ƒº« CALCUL DE G├ëN├ëALOGIE ET NIVEAUX AVANC├ë
 // =============================================================================
 
 /**
- * Calcule la généalogie complète d'un nœud (chemin depuis la racine)
- * Retourne un tableau des IDs depuis la racine jusqu'au nœud
+ * Calcule la g├®n├®alogie compl├¿te d'un n┼ôud (chemin depuis la racine)
+ * Retourne un tableau des IDs depuis la racine jusqu'au n┼ôud
  */
 export function calculateGenealogy(nodeId: string, nodesMap: Map<string, TreeNode>): string[] {
   const genealogy: string[] = [];
   let currentNode = nodesMap.get(nodeId);
   const visitedNodes = new Set<string>(); // Protection contre les cycles
   
-  // Remonter la hiérarchie jusqu'à la racine
+  // Remonter la hi├®rarchie jusqu'├á la racine
   while (currentNode) {
     // Protection contre les cycles infinis
     if (visitedNodes.has(currentNode.id)) {
-      throw new Error(`🔄 Cycle détecté dans la hiérarchie au nœud ${currentNode.id} (${currentNode.label})`);
+      throw new Error(`­ƒöä Cycle d├®tect├® dans la hi├®rarchie au n┼ôud ${currentNode.id} (${currentNode.label})`);
     }
     visitedNodes.add(currentNode.id);
     
-    genealogy.unshift(currentNode.id); // Ajouter au début pour avoir l'ordre racine -> enfant
+    genealogy.unshift(currentNode.id); // Ajouter au d├®but pour avoir l'ordre racine -> enfant
     
     if (!currentNode.parentId) {
       break; // Racine atteinte
@@ -72,9 +79,9 @@ export function calculateGenealogy(nodeId: string, nodesMap: Map<string, TreeNod
     
     currentNode = nodesMap.get(currentNode.parentId);
     
-    // Protection supplémentaire contre la profondeur excessive
+    // Protection suppl├®mentaire contre la profondeur excessive
     if (genealogy.length > 100) {
-      throw new Error('🚫 Profondeur hiérarchique excessive détectée (>100 niveaux)');
+      throw new Error('­ƒÜ½ Profondeur hi├®rarchique excessive d├®tect├®e (>100 niveaux)');
     }
   }
   
@@ -82,7 +89,7 @@ export function calculateGenealogy(nodeId: string, nodesMap: Map<string, TreeNod
 }
 
 /**
- * Calcule le niveau hiérarchique d'un nœud dans l'arbre
+ * Calcule le niveau hi├®rarchique d'un n┼ôud dans l'arbre
  * Le niveau 1 = racine, niveau 2 = branches, niveau 3+ = champs/options
  */
 export function calculateNodeLevel(nodeId: string, nodesMap: Map<string, TreeNode>): number {
@@ -90,13 +97,13 @@ export function calculateNodeLevel(nodeId: string, nodesMap: Map<string, TreeNod
     const genealogy = calculateGenealogy(nodeId, nodesMap);
     return genealogy.length;
   } catch (error) {
-    console.error('❌ Erreur lors du calcul du niveau:', error);
+    console.error('ÔØî Erreur lors du calcul du niveau:', error);
     return -1; // Erreur
   }
 }
 
 /**
- * Vérifie qu'un nœud ne deviendrait pas son propre ancêtre (prévention des cycles)
+ * V├®rifie qu'un n┼ôud ne deviendrait pas son propre anc├¬tre (pr├®vention des cycles)
  */
 export function wouldCreateCycle(childId: string, newParentId: string, nodesMap: Map<string, TreeNode>): boolean {
   if (childId === newParentId) return true;
@@ -105,7 +112,7 @@ export function wouldCreateCycle(childId: string, newParentId: string, nodesMap:
     const parentGenealogy = calculateGenealogy(newParentId, nodesMap);
     return parentGenealogy.includes(childId);
   } catch {
-    return true; // En cas d'erreur, considérer comme un cycle potentiel
+    return true; // En cas d'erreur, consid├®rer comme un cycle potentiel
   }
 }
 
@@ -118,9 +125,9 @@ export function getGenealogyPath(nodeId: string, nodesMap: Map<string, TreeNode>
     const labels = genealogy
       .map(id => nodesMap.get(id)?.label || `[${id}]`)
       .join(' > ');
-    return labels || 'Nœud isolé';
+    return labels || 'N┼ôud isol├®';
   } catch (error) {
-    return `❌ Erreur: ${error instanceof Error ? error.message : 'Chemin invalide'}`;
+    return `ÔØî Erreur: ${error instanceof Error ? error.message : 'Chemin invalide'}`;
   }
 }
 
@@ -142,7 +149,8 @@ export function getTreeStatistics(nodesMap: Map<string, TreeNode>): {
       leaf_field: 0,
       leaf_option: 0,
       leaf_option_field: 0,
-      leaf_repeater: 0
+      leaf_repeater: 0,
+      section: 0
     } as Record<NodeType, number>,
     maxDepth: 0,
     rootNodes: 0,
@@ -164,7 +172,7 @@ export function getTreeStatistics(nodesMap: Map<string, TreeNode>): {
       stats.maxDepth = level;
     }
     
-    // Détecter les orphelins
+    // D├®tecter les orphelins
     if (node.parentId && !nodesMap.has(node.parentId)) {
       stats.orphanNodes++;
     }
@@ -174,11 +182,11 @@ export function getTreeStatistics(nodesMap: Map<string, TreeNode>): {
 }
 
 // =============================================================================
-// 🎯 VALIDATION HIÉRARCHIQUE ROBUSTE
+// ­ƒÄ» VALIDATION HI├ëRARCHIQUE ROBUSTE
 // =============================================================================
 
 /**
- * Valide qu'un type de nœud peut exister à un niveau donné
+ * Valide qu'un type de n┼ôud peut exister ├á un niveau donn├®
  */
 export function validateNodeTypeAtLevel(nodeType: NodeType, level: number): boolean {
   switch (nodeType) {
@@ -186,21 +194,18 @@ export function validateNodeTypeAtLevel(nodeType: NodeType, level: number): bool
       return level === 1; // Racine uniquement
     
     case 'branch':
-      // Les branches sont autorisées à n'importe quel niveau (racine ou imbriquée)
+      // Les branches sont autoris├®es ├á n'importe quel niveau (racine ou imbriqu├®e)
       return level >= 1;
     
     case 'section':
-      // Les sections sont autorisées à partir du niveau 1 (sous une branche)
+      // Les sections sont autoris├®es ├á partir du niveau 1 (sous une branche)
       return level >= 1;
     
     case 'leaf_field':
     case 'leaf_option':
     case 'leaf_option_field':
-      // Les champs sont autorisés à partir du niveau 1 (sous une branche/section)
-      return level >= 1;
-    
     case 'leaf_repeater':
-      // Les blocs répétables sont autorisés à partir du niveau 1 (sous une branche/section)
+      // Les champs sont autoris├®s ├á partir du niveau 1 (sous une branche/section)
       return level >= 1;
     
     default:
@@ -209,45 +214,45 @@ export function validateNodeTypeAtLevel(nodeType: NodeType, level: number): bool
 }
 
 /**
- * Obtient la règle détaillée pour un type de nœud
+ * Obtient la r├¿gle d├®taill├®e pour un type de n┼ôud
  */
 function getDetailedLevelRule(nodeType: NodeType): string {
   switch (nodeType) {
     case 'tree':
       return 'Les arbres sont des racines (niveau 1 uniquement)';
     case 'branch':
-  return 'Les branches peuvent être créées à partir du niveau 2, sous l\'arbre ou sous une autre branche';
+  return 'Les branches peuvent ├¬tre cr├®├®es ├á partir du niveau 2, sous l\'arbre ou sous une autre branche';
     case 'leaf_field':
-      return 'Les champs doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les champs doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_option':
-      return 'Les options doivent être créées au niveau 2 ou plus (sous des branches)';
+      return 'Les options doivent ├¬tre cr├®├®es au niveau 2 ou plus (sous des branches)';
     case 'leaf_option_field':
-      return 'Les champs+options doivent être créés au niveau 2 ou plus (sous des branches)';
-    case 'leaf_repeater':
-      return 'Les blocs répétables doivent être créés au niveau 2 ou plus (sous des branches/sections)';
+      return 'Les champs+options doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_select':
-      return 'Les sélecteurs doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les s├®lecteurs doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_text':
-      return 'Les champs texte doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les champs texte doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_email':
-      return 'Les champs email doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les champs email doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_phone':
-      return 'Les champs téléphone doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les champs t├®l├®phone doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_date':
-      return 'Les champs date doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les champs date doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_number':
-      return 'Les champs numériques doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les champs num├®riques doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     case 'leaf_checkbox':
-      return 'Les cases à cocher doivent être créées au niveau 2 ou plus (sous des branches)';
+      return 'Les cases ├á cocher doivent ├¬tre cr├®├®es au niveau 2 ou plus (sous des branches)';
     case 'leaf_radio':
-      return 'Les boutons radio doivent être créés au niveau 2 ou plus (sous des branches)';
+      return 'Les boutons radio doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
+    case 'leaf_repeater':
+      return 'Les blocs r├®p├®tables doivent ├¬tre cr├®├®s au niveau 2 ou plus (sous des branches)';
     default:
-      return 'Type de nœud inconnu';
+      return 'Type de n┼ôud inconnu';
   }
 }
 
 /**
- * Validation spécialisée pour les éléments leaf (champs, options, champs+options)
+ * Validation sp├®cialis├®e pour les ├®l├®ments leaf (champs, options, champs+options)
  */
 function validateLeafElement(
   parentType: NodeType,
@@ -257,18 +262,18 @@ function validateLeafElement(
   elementName: string
 ): ValidationResult {
   
-  // ❌ NIVEAU 3+ OBLIGATOIRE : Pas directement sous l'arbre !
+  // ÔØî NIVEAU 3+ OBLIGATOIRE : Pas directement sous l'arbre !
   if (parentType === 'tree') {
     return {
       isValid: false,
-      reason: `Les ${elementName} ne peuvent pas être créés directement sous l'arbre`,
+      reason: `Les ${elementName} ne peuvent pas ├¬tre cr├®├®s directement sous l'arbre`,
       level: childLevel,
       errorCode: 'LEAF_NEEDS_BRANCH_PARENT',
-      suggestion: 'Créez d\'abord une branche au niveau 2, puis ajoutez vos éléments dedans'
+      suggestion: 'Cr├®ez d\'abord une branche au niveau 2, puis ajoutez vos ├®l├®ments dedans'
     };
   }
   
-  // ✅ NIVEAU 2+ : Sous des branches, sections ou autres leaf_* 
+  // Ô£à NIVEAU 2+ : Sous des branches, sections ou autres leaf_* 
   if (parentType === 'branch' || parentType === 'section' || parentType.startsWith('leaf_')) {
     return {
       isValid: true,
@@ -279,15 +284,15 @@ function validateLeafElement(
   
   return {
     isValid: false,
-    reason: `Les ${elementName} ne peuvent être créés que sous des branches ou d'autres éléments leaf (niveau 3+)`,
+    reason: `Les ${elementName} ne peuvent ├¬tre cr├®├®s que sous des branches ou d'autres ├®l├®ments leaf (niveau 3+)`,
     level: childLevel,
     errorCode: 'INVALID_LEAF_PARENT',
-    suggestion: 'Glissez cet élément vers une branche ou un autre champ'
+    suggestion: 'Glissez cet ├®l├®ment vers une branche ou un autre champ'
   };
 }
 
 /**
- * Validation principale des relations parent-enfant avec généalogie complète
+ * Validation principale des relations parent-enfant avec g├®n├®alogie compl├¿te
  */
 export function validateParentChildRelation(
   parentType: NodeType,
@@ -314,7 +319,7 @@ export function validateParentChildRelation(
       };
     }
   } else {
-    // Niveau par défaut basé sur le type
+    // Niveau par d├®faut bas├® sur le type
     actualParentLevel = parentType === 'tree' ? 1 : parentType === 'branch' ? 2 : 3;
   }
   
@@ -324,13 +329,13 @@ export function validateParentChildRelation(
   if (!validateNodeTypeAtLevel(childType, childLevel)) {
     return {
       isValid: false,
-      reason: `Le type ${childType} ne peut pas être placé au niveau ${childLevel}. ${getDetailedLevelRule(childType)}`,
+      reason: `Le type ${childType} ne peut pas ├¬tre plac├® au niveau ${childLevel}. ${getDetailedLevelRule(childType)}`,
       level: childLevel,
       errorCode: 'INVALID_LEVEL'
     };
   }
   
-  // Vérification des cycles si les données sont disponibles
+  // V├®rification des cycles si les donn├®es sont disponibles
   if (nodesMap && parentId) {
     try {
       const genealogy = calculateGenealogy(parentId, nodesMap);
@@ -343,14 +348,14 @@ export function validateParentChildRelation(
     } catch (error) {
       return {
         isValid: false,
-        reason: error instanceof Error ? error.message : 'Erreur de généalogie',
+        reason: error instanceof Error ? error.message : 'Erreur de g├®n├®alogie',
         level: childLevel,
         errorCode: 'GENEALOGY_ERROR'
       };
     }
   }
   
-  // Validation des relations spécifiques avec codes d'erreur
+  // Validation des relations sp├®cifiques avec codes d'erreur
   switch (childType) {
     case 'tree':
       return {
@@ -358,7 +363,7 @@ export function validateParentChildRelation(
         reason: 'Un arbre ne peut pas avoir de parent (c\'est la racine)',
         level: childLevel,
         errorCode: 'TREE_CANNOT_HAVE_PARENT',
-        suggestion: 'Les arbres sont des éléments racines et ne peuvent être imbriqués'
+        suggestion: 'Les arbres sont des ├®l├®ments racines et ne peuvent ├¬tre imbriqu├®s'
       };
     
     case 'branch':
@@ -373,22 +378,27 @@ export function validateParentChildRelation(
       }
       return {
         isValid: false,
-        reason: `Les branches/sections doivent être sous l'arbre ou une autre branche/section (parent actuel: ${parentType})`,
+        reason: `Les branches/sections doivent ├¬tre sous l'arbre ou une autre branche/section (parent actuel: ${parentType})`,
         level: childLevel,
         errorCode: 'BRANCH_INVALID_PARENT',
-        suggestion: 'Placez cet élément sous l\'arbre ou une branche/section existante'
+        suggestion: 'Placez cet ├®l├®ment sous l\'arbre ou une branche/section existante'
       };
     
     case 'leaf_field':
     case 'leaf_option_field':
+    case 'leaf_repeater':
       return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 
-        childType === 'leaf_field' ? 'champs' : 'champs+options');
+        childType === 'leaf_field'
+          ? 'champs'
+          : childType === 'leaf_repeater'
+            ? 'blocs r├®p├®tables'
+            : 'champs+options');
     
     case 'leaf_option':
       return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'options');
     
     case 'leaf_select':
-      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'sélecteurs');
+      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 's├®lecteurs');
     
     case 'leaf_text':
       return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'champs texte');
@@ -397,50 +407,24 @@ export function validateParentChildRelation(
       return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'champs email');
     
     case 'leaf_phone':
-      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'champs téléphone');
+      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'champs t├®l├®phone');
     
     case 'leaf_date':
       return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'champs date');
     
     case 'leaf_number':
-      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'champs numériques');
+      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'champs num├®riques');
     
     case 'leaf_checkbox':
-      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'cases à cocher');
+      return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'cases ├á cocher');
     
     case 'leaf_radio':
       return validateLeafElement(parentType, actualParentLevel, childType, childLevel, 'boutons radio');
     
-    case 'leaf_repeater':
-      // Le repeater est un conteneur qui peut être sous une branche/section
-      if (parentType === 'tree') {
-        return {
-          isValid: false,
-          reason: 'Les blocs répétables ne peuvent pas être créés directement sous l\'arbre',
-          level: childLevel,
-          errorCode: 'REPEATER_NEEDS_BRANCH_PARENT',
-          suggestion: 'Créez d\'abord une branche, puis ajoutez le bloc répétable dedans'
-        };
-      }
-      // Sous une branche, section ou autre leaf_* : OK
-      if (parentType === 'branch' || parentType === 'section' || parentType.startsWith('leaf_')) {
-        return {
-          isValid: true,
-          level: childLevel,
-          errorCode: undefined
-        };
-      }
-      return {
-        isValid: false,
-        reason: 'Les blocs répétables ne peuvent être créés que sous des branches ou sections',
-        level: childLevel,
-        errorCode: 'REPEATER_INVALID_PARENT'
-      };
-    
     default:
       return {
         isValid: false,
-        reason: `Type de nœud non reconnu: ${childType}`,
+        reason: `Type de n┼ôud non reconnu: ${childType}`,
         level: childLevel,
         errorCode: 'UNKNOWN_NODE_TYPE',
         suggestion: 'Contactez le support technique'
@@ -449,11 +433,11 @@ export function validateParentChildRelation(
 }
 
 // =============================================================================
-// 🚀 FONCTIONS UTILITAIRES AVANCÉES
+// ­ƒÜÇ FONCTIONS UTILITAIRES AVANC├ëES
 // =============================================================================
 
 /**
- * Valide une opération de déplacement de nœud avec vérification complète
+ * Valide une op├®ration de d├®placement de n┼ôud avec v├®rification compl├¿te
  */
 export function validateNodeMove(
   sourceNodeId: string,
@@ -467,32 +451,32 @@ export function validateNodeMove(
   if (!sourceNode) {
     return {
       isValid: false,
-      reason: 'Nœud source introuvable',
+      reason: 'N┼ôud source introuvable',
       errorCode: 'SOURCE_NOT_FOUND',
-      suggestion: 'Actualisez la page et réessayez'
+      suggestion: 'Actualisez la page et r├®essayez'
     };
   }
   
   if (!targetNode) {
     return {
       isValid: false,
-      reason: 'Nœud cible introuvable', 
+      reason: 'N┼ôud cible introuvable', 
       errorCode: 'TARGET_NOT_FOUND',
-      suggestion: 'Actualisez la page et réessayez'
+      suggestion: 'Actualisez la page et r├®essayez'
     };
   }
   
-  // Vérification des cycles AVANT validation hiérarchique
+  // V├®rification des cycles AVANT validation hi├®rarchique
   if (wouldCreateCycle(sourceNodeId, targetNodeId, nodesMap)) {
     return {
       isValid: false,
-      reason: `Impossible de déplacer "${sourceNode.label}" vers "${targetNode.label}" : cela créerait un cycle dans l'arbre`,
+      reason: `Impossible de d├®placer "${sourceNode.label}" vers "${targetNode.label}" : cela cr├®erait un cycle dans l'arbre`,
       errorCode: 'WOULD_CREATE_CYCLE',
-      suggestion: 'Choisissez une cible qui n\'est pas un descendant du nœud à déplacer'
+      suggestion: 'Choisissez une cible qui n\'est pas un descendant du n┼ôud ├á d├®placer'
     };
   }
   
-  // Validation hiérarchique avec informations complètes
+  // Validation hi├®rarchique avec informations compl├¿tes
   const validation = validateParentChildRelation(
     targetNode.type,
     targetNode.subType || 'data',
@@ -512,7 +496,7 @@ export function validateNodeMove(
 }
 
 /**
- * Obtient la liste des types de nœuds autorisés pour un parent donné
+ * Obtient la liste des types de n┼ôuds autoris├®s pour un parent donn├®
  */
 export function getAllowedChildTypes(
   parentType: NodeType,
@@ -521,7 +505,7 @@ export function getAllowedChildTypes(
 ): NodeType[] {
   
   const allowedTypes: NodeType[] = [];
-  const allTypes: NodeType[] = ['tree', 'branch', 'section', 'leaf_field', 'leaf_option', 'leaf_option_field', 'leaf_repeater'];
+  const allTypes: NodeType[] = ['tree', 'branch', 'leaf_field', 'leaf_option', 'leaf_option_field'];
   
   for (const childType of allTypes) {
     const validation = validateParentChildRelation(
@@ -540,7 +524,7 @@ export function getAllowedChildTypes(
 }
 
 /**
- * Génère un message d'erreur détaillé et localisé
+ * G├®n├¿re un message d'erreur d├®taill├® et localis├®
  */
 export function getValidationErrorMessage(
   parentType: NodeType,
@@ -558,43 +542,43 @@ export function getValidationErrorMessage(
   );
   
   if (validation.isValid) {
-    return '✅ Opération valide';
+    return 'Ô£à Op├®ration valide';
   }
 
-  // Messages personnalisés selon le code d'erreur
+  // Messages personnalis├®s selon le code d'erreur
   switch (validation.errorCode) {
     case 'BRANCH_ONLY_UNDER_TREE':
-      return '🚫 Règle mise à jour: les branches sont permises à partir du niveau 2 sous l\'arbre ou une autre branche';
+      return '­ƒÜ½ R├¿gle mise ├á jour: les branches sont permises ├á partir du niveau 2 sous l\'arbre ou une autre branche';
     case 'BRANCH_INVALID_PARENT':
-      return '🚫 Les branches doivent être sous l\'arbre ou une autre branche';
+      return '­ƒÜ½ Les branches doivent ├¬tre sous l\'arbre ou une autre branche';
     
     case 'LEAF_NEEDS_BRANCH_PARENT': {
       const elementName = childType === 'leaf_field' ? 'champs' : 
                          childType === 'leaf_option' ? 'options' : 'champs+options';
-      return `🚫 Les ${elementName} doivent être créés au niveau 3 ou plus. Créez d'abord une branche`;
+      return `­ƒÜ½ Les ${elementName} doivent ├¬tre cr├®├®s au niveau 3 ou plus. Cr├®ez d'abord une branche`;
     }
     
     case 'TREE_CANNOT_HAVE_PARENT':
-      return '🚫 Un arbre est une racine et ne peut pas avoir de parent';
+      return '­ƒÜ½ Un arbre est une racine et ne peut pas avoir de parent';
     
     case 'WOULD_CREATE_CYCLE':
-      return '🔄 Cette opération créerait un cycle dans l\'arbre (nœud qui deviendrait son propre parent)';
+      return '­ƒöä Cette op├®ration cr├®erait un cycle dans l\'arbre (n┼ôud qui deviendrait son propre parent)';
     
     case 'CORRUPTED_HIERARCHY':
-      return '💥 Structure d\'arbre corrompue détectée. Rechargez la page';
+      return '­ƒÆÑ Structure d\'arbre corrompue d├®tect├®e. Rechargez la page';
     
     case 'INVALID_LEVEL':
-      return `📏 Niveau incorrect pour ce type de nœud. ${validation.reason}`;
+      return `­ƒôÅ Niveau incorrect pour ce type de n┼ôud. ${validation.reason}`;
     
     default: {
-      const message = validation.reason || '❌ Relation parent-enfant non autorisée';
-      return validation.suggestion ? `${message} (💡 ${validation.suggestion})` : message;
+      const message = validation.reason || 'ÔØî Relation parent-enfant non autoris├®e';
+      return validation.suggestion ? `${message} (­ƒÆí ${validation.suggestion})` : message;
     }
   }
 }
 
 /**
- * Vérifie l'intégrité complète d'un arbre
+ * V├®rifie l'int├®grit├® compl├¿te d'un arbre
  */
 export function validateTreeIntegrity(nodesMap: Map<string, TreeNode>): TreeIntegrityResult {
   const errors: string[] = [];
@@ -604,34 +588,34 @@ export function validateTreeIntegrity(nodesMap: Map<string, TreeNode>): TreeInte
   // Statistiques de base
   const stats = getTreeStatistics(nodesMap);
   
-  // Vérifications globales
+  // V├®rifications globales
   if (stats.rootNodes === 0) {
-    errors.push('❌ Aucun nœud racine trouvé');
+    errors.push('ÔØî Aucun n┼ôud racine trouv├®');
   } else if (stats.rootNodes > 1) {
-    warnings.push(`⚠️ Plusieurs nœuds racines détectés (${stats.rootNodes})`);
+    warnings.push(`ÔÜá´©Å Plusieurs n┼ôuds racines d├®tect├®s (${stats.rootNodes})`);
   }
   
   if (stats.orphanNodes > 0) {
-    errors.push(`❌ ${stats.orphanNodes} nœud(s) orphelin(s) détecté(s)`);
+    errors.push(`ÔØî ${stats.orphanNodes} n┼ôud(s) orphelin(s) d├®tect├®(s)`);
   }
   
-  // Vérifier chaque nœud individuellement
+  // V├®rifier chaque n┼ôud individuellement
   for (const [nodeId, node] of nodesMap) {
     try {
-      // Vérifier que le niveau correspond au type
+      // V├®rifier que le niveau correspond au type
       const level = calculateNodeLevel(nodeId, nodesMap);
       maxDepth = Math.max(maxDepth, level);
       
       if (level === -1) {
-        errors.push(`❌ Impossible de calculer le niveau du nœud "${node.label}"`);
+        errors.push(`ÔØî Impossible de calculer le niveau du n┼ôud "${node.label}"`);
         continue;
       }
       
       if (!validateNodeTypeAtLevel(node.type, level)) {
-        errors.push(`❌ Nœud "${node.label}" (${node.type}) au niveau ${level} incorrect. ${getDetailedLevelRule(node.type)}`);
+        errors.push(`ÔØî N┼ôud "${node.label}" (${node.type}) au niveau ${level} incorrect. ${getDetailedLevelRule(node.type)}`);
       }
       
-      // Vérifier la relation avec le parent
+      // V├®rifier la relation avec le parent
       if (node.parentId) {
         const parent = nodesMap.get(node.parentId);
         if (parent) {
@@ -642,24 +626,24 @@ export function validateTreeIntegrity(nodesMap: Map<string, TreeNode>): TreeInte
             node.subType || 'data'
           );
           if (!validation.isValid) {
-            errors.push(`❌ Relation invalide: "${parent.label}" -> "${node.label}": ${validation.reason}`);
+            errors.push(`ÔØî Relation invalide: "${parent.label}" -> "${node.label}": ${validation.reason}`);
           }
         } else {
-          errors.push(`❌ Nœud "${node.label}" référence un parent inexistant: ${node.parentId}`);
+          errors.push(`ÔØî N┼ôud "${node.label}" r├®f├®rence un parent inexistant: ${node.parentId}`);
         }
       }
       
-      // Vérifications spécifiques par type
+      // V├®rifications sp├®cifiques par type
       switch (node.type) {
         case 'tree':
           if (node.parentId) {
-            errors.push(`❌ L'arbre "${node.label}" ne peut pas avoir de parent`);
+            errors.push(`ÔØî L'arbre "${node.label}" ne peut pas avoir de parent`);
           }
           break;
         
         case 'branch':
           if (level < 2) {
-            errors.push(`❌ La branche "${node.label}" doit être au niveau 2 ou plus (actuellement: ${level})`);
+            errors.push(`ÔØî La branche "${node.label}" doit ├¬tre au niveau 2 ou plus (actuellement: ${level})`);
           }
           break;
         
@@ -667,23 +651,23 @@ export function validateTreeIntegrity(nodesMap: Map<string, TreeNode>): TreeInte
         case 'leaf_option':
         case 'leaf_option_field':
           if (level < 3) {
-            errors.push(`❌ L'élément "${node.label}" (${node.type}) doit être au niveau 3 ou plus (actuellement: ${level})`);
+            errors.push(`ÔØî L'├®l├®ment "${node.label}" (${node.type}) doit ├¬tre au niveau 3 ou plus (actuellement: ${level})`);
           }
           break;
       }
       
     } catch (error) {
-      errors.push(`❌ Erreur lors de la validation du nœud "${node.label}": ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+      errors.push(`ÔØî Erreur lors de la validation du n┼ôud "${node.label}": ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     }
   }
   
-  // Vérifications de performance
+  // V├®rifications de performance
   if (maxDepth > 20) {
-    warnings.push(`⚠️ Profondeur importante détectée (${maxDepth} niveaux). Cela pourrait affecter les performances.`);
+    warnings.push(`ÔÜá´©Å Profondeur importante d├®tect├®e (${maxDepth} niveaux). Cela pourrait affecter les performances.`);
   }
   
   if (nodesMap.size > 1000) {
-    warnings.push(`⚠️ Nombre important de nœuds (${nodesMap.size}). Considérez diviser en plusieurs arbres.`);
+    warnings.push(`ÔÜá´©Å Nombre important de n┼ôuds (${nodesMap.size}). Consid├®rez diviser en plusieurs arbres.`);
   }
   
   return {
@@ -696,37 +680,37 @@ export function validateTreeIntegrity(nodesMap: Map<string, TreeNode>): TreeInte
 }
 
 // =============================================================================
-// 📋 RÈGLES D'INTERFACE ET CONFIGURATION
+// ­ƒôï R├êGLES D'INTERFACE ET CONFIGURATION
 // =============================================================================
 
 /**
- * Règles spécifiques pour l'affichage et l'UI
+ * R├¿gles sp├®cifiques pour l'affichage et l'UI
  */
 export const UI_RULES = {
   /**
-   * Types de nœuds qui peuvent être glissés depuis la palette
+   * Types de n┼ôuds qui peuvent ├¬tre gliss├®s depuis la palette
    */
   DRAGGABLE_PALETTE_TYPES: ['branch', 'leaf_field', 'leaf_option', 'leaf_option_field'] as NodeType[],
   
   /**
-   * Types de nœuds qui acceptent des drops
+   * Types de n┼ôuds qui acceptent des drops
    */
   DROPPABLE_TYPES: ['tree', 'branch', 'leaf_field', 'leaf_option_field'] as NodeType[],
   
   /**
-   * Niveaux maximum autorisés (0 = illimité)
+   * Niveaux maximum autoris├®s (0 = illimit├®)
    */
   MAX_LEVELS: 0, // Infini pour les niveaux 3+
   
   /**
-   * Messages d'erreur standardisés pour l'UI
+   * Messages d'erreur standardis├®s pour l'UI
    */
   ERROR_MESSAGES: {
-    INVALID_LEVEL: 'Ce type de nœud ne peut pas être placé à ce niveau',
-  BRANCH_ONLY_LEVEL_2: 'Les branches sont autorisées à partir du niveau 2 (sous l\'arbre ou une autre branche)',
-    FIELDS_LEVEL_3_PLUS: 'Les champs/options ne peuvent être créés qu\'à partir du niveau 3',
-    WOULD_CREATE_CYCLE: 'Cette action créerait un cycle dans l\'arbre',
-    CORRUPTED_STRUCTURE: 'Structure d\'arbre corrompue détectée'
+    INVALID_LEVEL: 'Ce type de n┼ôud ne peut pas ├¬tre plac├® ├á ce niveau',
+  BRANCH_ONLY_LEVEL_2: 'Les branches sont autoris├®es ├á partir du niveau 2 (sous l\'arbre ou une autre branche)',
+    FIELDS_LEVEL_3_PLUS: 'Les champs/options ne peuvent ├¬tre cr├®├®s qu\'├á partir du niveau 3',
+    WOULD_CREATE_CYCLE: 'Cette action cr├®erait un cycle dans l\'arbre',
+    CORRUPTED_STRUCTURE: 'Structure d\'arbre corrompue d├®tect├®e'
   },
 
   /**
@@ -740,114 +724,114 @@ export const UI_RULES = {
 } as const;
 
 /**
- * Configuration des types de champs disponibles avec métadonnées
+ * Configuration des types de champs disponibles avec m├®tadonn├®es
  */
 export const FIELD_TYPES_CONFIG = {
   TEXT: { 
     label: 'Texte', 
-    icon: '📝', 
+    icon: '­ƒôØ', 
     category: 'input',
     description: 'Champ de saisie de texte simple',
     validation: ['required', 'minLength', 'maxLength', 'pattern']
   },
   NUMBER: { 
     label: 'Nombre', 
-    icon: '🔢', 
+    icon: '­ƒöó', 
     category: 'input',
-    description: 'Champ numérique avec validation',
+    description: 'Champ num├®rique avec validation',
     validation: ['required', 'min', 'max', 'step']
   },
   EMAIL: { 
     label: 'Email', 
-    icon: '📧', 
+    icon: '­ƒôº', 
     category: 'input',
     description: 'Champ email avec validation automatique',
     validation: ['required', 'email']
   },
   TEL: { 
-    label: 'Téléphone', 
-    icon: '📞', 
+    label: 'T├®l├®phone', 
+    icon: '­ƒô×', 
     category: 'input',
-    description: 'Champ téléphone avec formatage',
+    description: 'Champ t├®l├®phone avec formatage',
     validation: ['required', 'phone']
   },
   DATE: { 
     label: 'Date', 
-    icon: '📅', 
+    icon: '­ƒôà', 
     category: 'input',
-    description: 'Sélecteur de date',
+    description: 'S├®lecteur de date',
     validation: ['required', 'dateFormat', 'minDate', 'maxDate']
   },
   TEXTAREA: { 
     label: 'Texte long', 
-    icon: '📄', 
+    icon: '­ƒôä', 
     category: 'input',
     description: 'Zone de texte multi-lignes',
     validation: ['required', 'minLength', 'maxLength']
   },
   SELECT: { 
-    label: 'Liste déroulante', 
-    icon: '📋', 
+    label: 'Liste d├®roulante', 
+    icon: '­ƒôï', 
     category: 'select',
     description: 'Liste de choix avec options',
     validation: ['required'],
     requiresOptions: true
   },
   CHECKBOX: { 
-    label: 'Case à cocher', 
-    icon: '☑️', 
+    label: 'Case ├á cocher', 
+    icon: 'Ôÿæ´©Å', 
     category: 'choice',
-    description: 'Case à cocher booléenne',
+    description: 'Case ├á cocher bool├®enne',
     validation: ['required']
   },
   RADIO: { 
     label: 'Bouton radio', 
-    icon: '🔘', 
+    icon: '­ƒöÿ', 
     category: 'choice',
-    description: 'Sélection unique parmi plusieurs choix',
+    description: 'S├®lection unique parmi plusieurs choix',
     validation: ['required'],
     requiresOptions: true
   }
 } as const;
 
 /**
- * Thèmes de couleur pour les différents types de nœuds
+ * Th├¿mes de couleur pour les diff├®rents types de n┼ôuds
  */
 export const NODE_THEMES = {
   tree: {
     backgroundColor: '#1f2937',
     textColor: '#ffffff',
     borderColor: '#374151',
-    icon: '🌳'
+    icon: '­ƒî│'
   },
   branch: {
     backgroundColor: '#3b82f6',
     textColor: '#ffffff', 
     borderColor: '#2563eb',
-    icon: '🌿'
+    icon: '­ƒî┐'
   },
   leaf_field: {
     backgroundColor: '#10b981',
     textColor: '#ffffff',
     borderColor: '#059669',
-    icon: '📝'
+    icon: '­ƒôØ'
   },
   leaf_option: {
     backgroundColor: '#f59e0b',
     textColor: '#ffffff',
     borderColor: '#d97706',
-    icon: '⚪'
+    icon: 'ÔÜ¬'
   },
   leaf_option_field: {
     backgroundColor: '#8b5cf6',
     textColor: '#ffffff',
     borderColor: '#7c3aed',
-    icon: '🎯'
+    icon: '­ƒÄ»'
   },
   section: {
     backgroundColor: '#6b7280',
     textColor: '#ffffff',
     borderColor: '#4b5563',
-    icon: '📋'
+    icon: '­ƒôï'
   }
 } as const;

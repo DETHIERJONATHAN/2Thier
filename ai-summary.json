@@ -1,0 +1,19 @@
+{
+  "restructuredFiles": [
+    {
+      "path": "src/components/TreeBranchLeaf/treebranchleaf-new/repeat/services/shared-helpers.ts",
+      "notes": "Centralized repeat helper logic (auth context, linked field updates, response builders) to avoid drift across modules."
+    },
+    {
+      "path": "src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts",
+      "notes": "Aligned route imports with new helper module and analyzed deep copy pipeline ahead of extraction."
+    }
+  ],
+  "remainingWork": [
+    "Lift deepCopyNodeInternal into repeat/services to finish Task 2 of the migration plan.",
+    "Refactor the duplicate-templates route and selector-table copier to consume the new deep copy service.",
+    "Implement the repeat executor module plus backend capability toggle (Task 3).",
+    "Expose the frontend toggle to switch between legacy and new repeat flows (Task 4).",
+    "Add regression tests covering duplication, selector table propagation, and variable copy flows (Task 5)."
+  ]
+}

@@ -88,7 +88,9 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
           // Skip if same as primary
           if (fbId === nodeId) continue;
           try {
-            const resp = await api.get(`/api/tree-nodes/${fbId}/calculated-value`);
+            const resp = await api.get(`/api/tree-nodes/${fbId}/calculated-value`, {
+              params: submissionId ? { submissionId } : undefined
+            });
             if (resp?.success && resp?.value !== undefined && resp?.value !== null) {
               if (cancelled) return;
               setFallbackValueFound(resp.value);

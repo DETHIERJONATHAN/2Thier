@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "lookup": {
+      "mode": "matrix",
+      "enabled": true,
+      "filterConditions": {
+        "enabled": true,
+        "conditions": [
+          {
+            "operator": "equals",
+            "compareColumn": "Orientation",
+            "compareWithRef": "@select.1203df47-e87e-42fd-b178-31afd89b9c83"
+          }
+        ],
+        "filterLogic": "AND"
+      },
+      "columnSourceOption": {
+        "filterColumn": "Orientation",
+        "filterOperator": "equals",
+        "filterValueRef": "@select.1203df47-e87e-42fd-b178-31afd89b9c83"
+      }
+    }
+  }
+}

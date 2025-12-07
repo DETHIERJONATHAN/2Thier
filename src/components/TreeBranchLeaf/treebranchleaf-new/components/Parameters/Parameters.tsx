@@ -8,7 +8,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm, Tag, Checkbox } from 'antd';
 import type { InputRef } from 'antd';
-import { 
+import {
   SettingOutlined, 
   AppstoreOutlined, 
   BgColorsOutlined,
@@ -19,11 +19,32 @@ import {
   ApiOutlined,
   LinkOutlined,
   TagsOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  HolderOutlined
 } from '@ant-design/icons';
+import { 
+  DndContext, 
+  closestCenter, 
+  KeyboardSensor, 
+  PointerSensor, 
+  useSensor, 
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import { 
+  arrayMove, 
+  SortableContext, 
+  sortableKeyboardCoordinates, 
+  verticalListSortingStrategy 
+} from '@dnd-kit/sortable';
+import { 
+  useSortable 
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useDebouncedCallback } from '../../hooks/useDebouncedCallback';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { CapabilityPanels, FieldAppearancePanels, TreeBranchLeafRegistry } from '../../core/registry';
+import { normalizeSubTabValues } from '../../utils/subTabNormalization';
 import SharedReferencePanel from './capabilities/SharedReferencePanel';
 import type { 
   TreeBranchLeafTree, 
@@ -33,31 +54,218 @@ import type {
   NodeTypeKey
 } from '../../types';
 
-// Simple editor pour un tableau de sous-onglets (labels)
-const SubTabsEditor: React.FC<{ value: string[]; onChange: (next: string[]) => void }> = ({ value = [], onChange }) => {
+const EMPTY_SUBTAB_LIST: string[] = [];
+
+const arraysAreEqual = (a: string[], b: string[]): boolean => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const normalizeSubTabValue = (value: unknown): string[] => {
+  const normalized = normalizeSubTabValues(value);
+  return normalized.length > 0 ? normalized : EMPTY_SUBTAB_LIST;
+};
+
+// Composant pour un sous-onglet triable
+const SortableSubTabTag: React.FC<{ 
+  id: string; 
+  label: string; 
+  onRemove: (label: string) => void;
+}> = ({ id, label, onRemove }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('🗑️ [SortableSubTabTag] Suppression du tag:', label);
+    onRemove(label);
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={{
+        ...style,
+        display: 'inline-flex'
+      }}
+    >
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '0 8px',
+          backgroundColor: '#fafafa',
+          border: '1px solid #d9d9d9',
+          borderRadius: '4px',
+          userSelect: 'none',
+          fontSize: '12px'
+        }}
+      >
+        <span
+          {...attributes}
+          {...listeners}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            cursor: 'grab',
+            padding: '2px 0'
+          }}
+        >
+          <HolderOutlined style={{ fontSize: 10, color: '#999' }} />
+        </span>
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={handleDelete}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            cursor: 'pointer',
+            marginLeft: '2px',
+            fontSize: '12px',
+            color: '#999',
+            fontWeight: 'bold',
+            padding: '0 2px',
+            borderRadius: '2px',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '16px',
+            height: '16px',
+            border: 'none',
+            backgroundColor: 'transparent',
+            margin: 0,
+            lineHeight: '1',
+            pointerEvents: 'auto'
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#ff7875';
+            (e.currentTarget as HTMLButtonElement).style.color = '#fff';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+            (e.currentTarget as HTMLButtonElement).style.color = '#999';
+          }}
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Editor pour un tableau de sous-onglets avec glisser-déposer
+const SubTabsEditor: React.FC<{ value?: string[]; onChange: (next: string[]) => void }> = ({ value, onChange }) => {
   const [input, setInput] = useState('');
+  const externalValue = Array.isArray(value) ? value : EMPTY_SUBTAB_LIST;
+  // État local pour affichage immédiat pendant le débogage (avant que le serveur ne réponde)
+  const [localValue, setLocalValue] = useState<string[]>(externalValue);
+
+  // Synchroniser l'état local avec les props reçues du parent
+  useEffect(() => {
+    const next = Array.isArray(value) ? value : EMPTY_SUBTAB_LIST;
+    setLocalValue((prev) => (arraysAreEqual(prev, next) ? prev : next));
+  }, [value]);
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 3,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   const add = () => {
     const trimmed = (input || '').trim();
-    if (!trimmed) return;
-    if (value.includes(trimmed)) {
+    console.log('🔹 [SubTabsEditor] Tentative d\'ajout:', { input, trimmed, currentValue: localValue });
+    if (!trimmed) {
+      console.warn('🔹 [SubTabsEditor] Input vide, abandon');
+      return;
+    }
+    if (localValue.includes(trimmed)) {
+      console.warn('🔹 [SubTabsEditor] Valeur déjà présente:', trimmed);
       setInput('');
       return;
     }
-    onChange([...value, trimmed]);
+    console.log('🔹 [SubTabsEditor] Ajout du sous-onglet:', trimmed);
+    const newValue = [...localValue, trimmed];
+    setLocalValue(newValue);
+    onChange(newValue);
     setInput('');
   };
+
   const remove = (label: string) => {
-    onChange(value.filter(v => v !== label));
+    console.log('🗑️ [SubTabsEditor] Suppression du sous-onglet:', label, 'avant:', localValue);
+    const newValue = localValue.filter(v => v !== label);
+    console.log('🗑️ [SubTabsEditor] Suppression - après:', newValue);
+    setLocalValue(newValue);
+    onChange(newValue);
   };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = localValue.indexOf(active.id as string);
+      const newIndex = localValue.indexOf(over?.id as string);
+
+      const newOrder = arrayMove(localValue, oldIndex, newIndex);
+      setLocalValue(newOrder);
+      onChange(newOrder);
+    }
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        {value.map((label) => (
-          <Tag key={label} closable onClose={() => remove(label)}>{label}</Tag>
-        ))}
-      </div>
+      <DndContext 
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          <SortableContext items={localValue} strategy={verticalListSortingStrategy}>
+            {localValue.map((label) => (
+              <SortableSubTabTag
+                key={label}
+                id={label}
+                label={label}
+                onRemove={remove}
+              />
+            ))}
+          </SortableContext>
+        </div>
+      </DndContext>
+      
       <div style={{ display: 'flex', gap: 8 }}>
-        <Input size="small" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ajouter un sous-onglet" />
+        <Input 
+          size="small" 
+          value={input} 
+          onChange={(e) => setInput(e.target.value)} 
+          onPressEnter={add}
+          placeholder="Ajouter un sous-onglet" 
+        />
         <Button size="small" onClick={add}>Ajouter</Button>
       </div>
     </div>
@@ -82,29 +290,58 @@ interface ParametersProps {
   onNodeMetadataUpdated?: (node: TreeBranchLeafNode) => void; // 🔥 NEW: Direct callback for metadata changes
 }
 
+type LazyAppearanceComponent = React.LazyExoticComponent<React.ComponentType<unknown>>;
+
+const appearancePanelCache = new Map<string, LazyAppearanceComponent | null>();
+
+const getLazyAppearancePanel = (panelKey: string): LazyAppearanceComponent | null => {
+  const resolvedKey = panelKey || 'DEFAULT';
+  if (appearancePanelCache.has(resolvedKey)) {
+    return appearancePanelCache.get(resolvedKey) ?? null;
+  }
+
+  const importer = (FieldAppearancePanels as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)[resolvedKey]
+    || (FieldAppearancePanels as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)['DEFAULT'];
+
+  if (!importer) {
+    appearancePanelCache.set(resolvedKey, null);
+    return null;
+  }
+
+  const lazyComponent = React.lazy(importer);
+  appearancePanelCache.set(resolvedKey, lazyComponent);
+  return lazyComponent;
+};
+
 const Parameters: React.FC<ParametersProps> = (props) => {
   const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate, refreshTree, onDeleteNode, onSelectNodeId, onExpandNodeId, onNodeMetadataUpdated } = props;
   
   // Log to verify callback is provided
+  const metadataCallbackProvidedOnMountRef = useRef<boolean>(!!onNodeMetadataUpdated);
   useEffect(() => {
-    console.error(`🎯 [Parameters] Mounted with node: ${selectedNode?.id}, callback provided: ${!!onNodeMetadataUpdated}`);
+    console.error(`🎯 [Parameters] Mounted, callback provided: ${metadataCallbackProvidedOnMountRef.current}`);
     return () => {
-      console.error(`🎯 [Parameters] Unmounting`);
+      console.error('🎯 [Parameters] Unmounting');
     };
-  }, [selectedNode?.id, onNodeMetadataUpdated]);
+  }, []);
+
+  useEffect(() => {
+    if (selectedNode?.id) {
+      console.error(`🎯 [Parameters] Selected node changed: ${selectedNode.id}`);
+    }
+  }, [selectedNode?.id]);
   
   // Refs pour cleanup
   const mountedRef = useRef<boolean>(true);
 
   // 🔐 Hook API authentifié
   const { api } = useAuthenticatedApi();
-  const applyToChildrenRef = useRef(false);
-  const [applyToChildren, setApplyToChildren] = useState(false);
-  const [useServerCascade, setUseServerCascade] = useState(false);
   const [applyingSharedRefs, setApplyingSharedRefs] = useState(false);
   const [unlinkingSharedRefs, setUnlinkingSharedRefs] = useState(false);
   // 🛡️ Anti-duplication: suivi des duplications en cours par répéteur (repeaterId -> Set<templateId>)
   const inFlightDupByRepeaterRef = useRef<Map<string, Set<string>>>(new Map());
+  // 🗑️ Track des IDs supprimés récemment (pour filtrage immédiat avant refresh complet)
+  const recentlyDeletedIdsRef = useRef<Set<string>>(new Set());
 
   const capabilities = useMemo(() => registry.getAllCapabilities(), [registry]);
   const [openCaps, setOpenCaps] = useState<Set<string>>(new Set<string>(Array.from(panelState.openCapabilities || [])));
@@ -124,6 +361,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   // Repliable supprimé: état supprimé pour simplifier l'UI
   const [fieldType, setFieldType] = useState<string | undefined>(undefined);
   const [capsState, setCapsState] = useState<Record<string, boolean>>({});
+  const [localSubTabSelection, setLocalSubTabSelection] = useState<string[]>(() => normalizeSubTabValue(selectedNode?.metadata?.subTab));
   // Mémorise l'état précédent des capacités pour détecter les activations externes
   const prevCapsRef = useRef<Record<string, boolean>>({});
   const lastNodeIdRef = useRef<string | null>(null);
@@ -152,6 +390,93 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       mountedRef.current = false;
     };
   }, []);
+
+  // 🔄 Écouter les suppressions de copies pour rafraîchir les nodes
+  useEffect(() => {
+    const handleDeleteCopyEvent = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (!detail || !detail.deletedIds || !detail.nodeId) return;
+      
+      console.log('🗑️ [Parameters] Événement delete-copy-group-finished détecté:', {
+        nodeId: detail.nodeId,
+        deletedCount: detail.deletedIds.length,
+        selectedRepeaterId: selectedNode?.id
+      });
+      
+      // Ajouter immédiatement les IDs au Set des suppressions récentes
+      detail.deletedIds.forEach((id: string) => {
+        recentlyDeletedIdsRef.current.add(id);
+      });
+      
+      console.log('🗑️ [Parameters] IDs marqués comme supprimés:', detail.deletedIds.length, '→ Total:', recentlyDeletedIdsRef.current.size);
+      
+      // Si c'est le repeater actuel, rafraîchir l'arbre
+      if (selectedNode?.id === detail.nodeId && typeof refreshTree === 'function') {
+        console.log('🔄 [Parameters] Rafraîchissement de l\'arbre après suppression');
+        refreshTree();
+      }
+    };
+    
+    window.addEventListener('delete-copy-group-finished', handleDeleteCopyEvent);
+    
+    return () => {
+      window.removeEventListener('delete-copy-group-finished', handleDeleteCopyEvent);
+    };
+  }, [selectedNode?.id, refreshTree]);
+
+  useEffect(() => {
+    const next = normalizeSubTabValue(selectedNode?.metadata?.subTab);
+    setLocalSubTabSelection(prev => (arraysAreEqual(prev, next) ? prev : next));
+  }, [selectedNode?.id, selectedNode?.metadata?.subTab]);
+
+  const cascadeSubTabAssignments = useCallback(async (subTabValues: string[] | null) => {
+    if (!selectedNode) return;
+    const sanitizedList = normalizeSubTabValues(subTabValues ?? []);
+    const normalizedValue: string | string[] | null = sanitizedList.length === 0
+      ? null
+      : sanitizedList.length === 1
+        ? sanitizedList[0]
+        : sanitizedList;
+    const stack: TreeBranchLeafNode[] = selectedNode.children ? [...selectedNode.children] : [];
+    const toAssign: { id: string; meta: Record<string, unknown> }[] = [];
+    while (stack.length) {
+      const node = stack.pop()!;
+      if (node.children && node.children.length) stack.push(...node.children);
+      const type = node.type?.toLowerCase() ?? '';
+      const isLeaf = type.startsWith('leaf');
+      const isBranchOrSection = type === 'branch' || type === 'section';
+      if (!isLeaf && !isBranchOrSection) continue;
+      if (isBranchOrSection) {
+        const hasOwnSubTabs = Array.isArray((node.metadata as any)?.subTabs) && (node.metadata as any).subTabs.length > 0;
+        if (hasOwnSubTabs) continue;
+      }
+      const nextMeta = { ...(node.metadata || {}) } as Record<string, unknown>;
+      if (normalizedValue === null) {
+        delete nextMeta.subTab;
+      } else {
+        nextMeta.subTab = normalizedValue;
+      }
+      toAssign.push({ id: node.id, meta: nextMeta });
+    }
+    if (!toAssign.length) return;
+    try {
+      for (const item of toAssign) {
+        if (typeof onNodeUpdate === 'function') {
+          await onNodeUpdate({ id: item.id, metadata: item.meta });
+        }
+      }
+      if (typeof refreshTree === 'function') {
+        await Promise.resolve(refreshTree());
+      }
+      try {
+        window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode.id, treeId: tree?.id } }));
+      } catch {
+        /* noop */
+      }
+    } catch (err) {
+      console.error('❌ [Parameters] Erreur cascade sous-onglet:', err);
+    }
+  }, [onNodeUpdate, refreshTree, selectedNode, tree?.id]);
 
   const handleDeleteSelected = useCallback(async () => {
     if (!selectedNode) return;
@@ -283,6 +608,16 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           };
         }
       }
+
+      // 🔄 S'assurer que metadata.subTabs et metadata.subTab sont préservés
+      if (payload.metadata) {
+        const payloadMeta = payload.metadata as Record<string, unknown>;
+        apiData.metadata = {
+          ...(apiData.metadata as Record<string, unknown> || {}),
+          ...payloadMeta
+        };
+        console.log('🎯 [Parameters] Metadata complet après fusion:', apiData.metadata);
+      }
       
       // ✅ Utiliser la ref pour toujours avoir la dernière version
       const _updated = await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
@@ -352,6 +687,14 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       };
     }, [selectedNode]);
 
+  const appearancePanelKey = useMemo(() => {
+    if (fieldType) return String(fieldType).toUpperCase();
+    if (selectedNode?.type) return String(selectedNode.type).toUpperCase();
+    return 'DEFAULT';
+  }, [fieldType, selectedNode?.type]);
+
+  const LazyAppearancePanel = useMemo(() => getLazyAppearancePanel(appearancePanelKey), [appearancePanelKey]);
+
   const branchSubTabs = useMemo(() => {
     if (!selectedNode) return [] as string[];
     // If the selected branch defines its own subTabs, use them
@@ -390,20 +733,27 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       'selectedNode.metadata': selectedNode.metadata
     });
     
-    // 🆕 IMPORTANT : Utiliser l'état local actuel au lieu de selectedNode.metadata
-    // pour éviter d'écraser les valeurs qui viennent d'être modifiées
-    const currentMeta: RepeaterMetadata = {
+    // 🆕 IMPORTANT : Prioriser les valeurs de `partial`, puis l'état local
+    // ⚠️ CRITIQUE : Le merge doit ÉCRASER avec `partial` en priorité, sinon on garde les anciennes valeurs !
+    const merged: RepeaterMetadata = {
+      // Valeurs par défaut depuis l'état local
       templateNodeIds: repeaterTemplateIds,
       minItems: repeaterMinItems ?? undefined,
       maxItems: repeaterMaxItems ?? undefined,
-      addButtonLabel: repeaterAddLabel !== REPEATER_DEFAULT_LABEL ? repeaterAddLabel : undefined
+      addButtonLabel: repeaterAddLabel !== REPEATER_DEFAULT_LABEL ? repeaterAddLabel : undefined,
+      // ÉCRASEMENT avec les valeurs de `partial` (priorité absolue)
+      ...partial
     };
-    
-    const merged: RepeaterMetadata = { ...currentMeta, ...partial };
 
     console.log('📝 [commitRepeaterMetadata] APRÈS MERGE:', {
-      currentMeta,
-      merged
+      'partial.templateNodeIds (paramètre passé)': partial.templateNodeIds,
+      'repeaterTemplateIds (state React - PEUT ÊTRE STALE)': repeaterTemplateIds,
+      'merged.templateNodeIds (résultat final)': merged.templateNodeIds,
+      '👁️ Vérif': partial.templateNodeIds 
+        ? (JSON.stringify(partial.templateNodeIds) === JSON.stringify(merged.templateNodeIds)
+            ? '✅ OK - partial a bien priorité'
+            : `❌ ERREUR - merged diffère de partial !`)
+        : 'partial.templateNodeIds absent'
     });
 
     if (!Array.isArray(merged.templateNodeIds)) {
@@ -427,10 +777,17 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       }
     }
 
-    const nextMetadata = {
-      ...(selectedNode.metadata || {}),
-      repeater: merged
-    };
+    // 🔥 NETTOYAGE : Si templateNodeIds est vide, supprimer complètement repeater de metadata
+    const hasTemplates = merged.templateNodeIds && merged.templateNodeIds.length > 0;
+    const nextMetadata = hasTemplates
+      ? {
+          ...(selectedNode.metadata || {}),
+          repeater: merged
+        }
+      : (() => {
+          const { repeater, ...rest } = (selectedNode.metadata || {}) as any;
+          return rest;
+        })();
 
     console.log('📝 [commitRepeaterMetadata] METADATA FINALE:', nextMetadata);
 
@@ -443,7 +800,14 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       repeater_buttonWidth: merged.buttonWidth || 'auto',
       repeater_iconOnly: merged.iconOnly || false,
       repeater_minItems: merged.minItems ?? 0,
-      repeater_maxItems: merged.maxItems || null
+      repeater_maxItems: merged.maxItems || null,
+      // 🔥 CRITIQUE : Enregistrer AUSSI les templateNodeIds et templateNodeLabels dans les colonnes dédiées
+      repeater_templateNodeIds: merged.templateNodeIds && merged.templateNodeIds.length > 0 
+        ? JSON.stringify(merged.templateNodeIds) 
+        : null,
+      repeater_templateNodeLabels: partial.templateNodeLabels && Object.keys(partial.templateNodeLabels).length > 0
+        ? JSON.stringify(partial.templateNodeLabels)
+        : null
     };
 
     console.log('💾 [commitRepeaterMetadata] PAYLOAD COMPLET:', payload);
@@ -485,34 +849,26 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         const repeaterId = selectedNodeFromTree?.id || selectedNode.id;
         const childrenOfRepeater = deriveChildrenByParentId(nodes, repeaterId);
 
-        // 2) Set des templates déjà matérialisés via les enfants directs
+        // 2) Set des templates déjà matérialisés via les enfants directs UNIQUEMENT
+        // ⚠️ IMPORTANT: Ne pas inclure les nœuds supprimés ou déplacés ailleurs !
+        // 🗑️ FILTRER les IDs supprimés récemment AVANT de construire le Set
+        const recentlyDeleted = recentlyDeletedIdsRef.current;
         const existingSourceTemplateIds = new Set<string>();
         childrenOfRepeater.forEach(n => {
-          const meta = (n.metadata || {}) as any;
-          if (meta?.sourceTemplateId) existingSourceTemplateIds.add(meta.sourceTemplateId);
-        });
-
-        // 3) Filet de sécurité: inclure aussi les copies trouvées globalement via metadata.duplicatedFromRepeater
-        const flattenAll = (list: TreeBranchLeafNode[] | undefined): TreeBranchLeafNode[] => {
-          if (!list) return [];
-          const out: TreeBranchLeafNode[] = [];
-          const stack: TreeBranchLeafNode[] = [...list];
-          while (stack.length) {
-            const cur = stack.pop()!;
-            out.push(cur);
-            if (cur.children && cur.children.length) stack.push(...cur.children);
+          // Ignorer les nœuds supprimés récemment
+          if (recentlyDeleted.has(n.id)) {
+            console.log('🗑️ [commitRepeaterMetadata] Ignorer nœud supprimé récemment:', n.id, n.label);
+            return;
           }
-          return out;
-        };
-        const allNodesFlat = flattenAll(nodes);
-        allNodesFlat.forEach(n => {
+          
           const meta = (n.metadata || {}) as any;
-          if (meta?.duplicatedFromRepeater === repeaterId && meta?.sourceTemplateId) {
+          // Vérifier que c'est bien un enfant DIRECT et qu'il a un sourceTemplateId
+          if (n.parentId === repeaterId && meta?.sourceTemplateId) {
             existingSourceTemplateIds.add(meta.sourceTemplateId);
           }
         });
 
-        // 3bis) Anti-redup: ajouter les duplications EN COURS (in-flight) pour ce répéteur
+        // 3) Anti-redup: ajouter les duplications EN COURS (in-flight) pour ce répéteur
         const inflightSet = inFlightDupByRepeaterRef.current.get(repeaterId);
         if (inflightSet && inflightSet.size > 0) {
           inflightSet.forEach(id => existingSourceTemplateIds.add(id));
@@ -521,24 +877,116 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
         // 4) Calculer les gabarits à créer (sélectionnés - déjà existants)
         const toCreate = merged.templateNodeIds.filter(id => !existingSourceTemplateIds.has(id));
-
-        console.log('🧪 [commitRepeaterMetadata] Idempotence check:', {
-          repeaterId,
-          selectedTemplateIds: merged.templateNodeIds,
-          existingSourceTemplateIds: Array.from(existingSourceTemplateIds),
-          toCreate
+        
+        // 5) 🗑️ NOUVEAU : Calculer les copies à SUPPRIMER (existantes mais plus sélectionnées)
+        // On compare les sourceTemplateIds des copies existantes avec les templates sélectionnés
+        const selectedSet = new Set(merged.templateNodeIds);
+        console.log('👀 [commitRepeaterMetadata] Détection des copies à supprimer:', {
+          'merged.templateNodeIds': merged.templateNodeIds,
+          'selectedSet': Array.from(selectedSet),
+          'childrenOfRepeater.length': childrenOfRepeater.length
+        });
+        
+        const nodesToDelete: TreeBranchLeafNode[] = [];
+        
+        childrenOfRepeater.forEach(n => {
+          // Ignorer les nœuds déjà marqués comme supprimés
+          if (recentlyDeleted.has(n.id)) return;
+          
+          const meta = (n.metadata || {}) as any;
+          const sourceTemplateId = meta?.sourceTemplateId;
+          
+          // Si c'est une copie (a un sourceTemplateId) ET que son template n'est plus sélectionné
+          if (n.parentId === repeaterId && sourceTemplateId && !selectedSet.has(sourceTemplateId)) {
+            console.log(`🗑️ [commitRepeaterMetadata] Copie à supprimer: ${n.label} (${n.id.substring(0,8)}...) - template source: ${sourceTemplateId.substring(0,8)}...`);
+            nodesToDelete.push(n);
+          }
+        });
+        
+        console.log('🧙 [commitRepeaterMetadata] Récapitulatif des suppressions:', {
+          'Total copies à supprimer': nodesToDelete.length,
+          'Détails': nodesToDelete.map(n => ({
+            id: n.id.substring(0, 8) + '...',
+            label: n.label,
+            sourceTemplate: ((n.metadata as any)?.sourceTemplateId || 'N/A').substring(0, 8) + '...'
+          }))
+        });
+        
+        console.log('🧙 [commitRepeaterMetadata] Récapitulatif des suppressions:', {
+          'Total copies à supprimer': nodesToDelete.length,
+          'Détails': nodesToDelete.map(n => ({
+            id: n.id.substring(0, 8) + '...',
+            label: n.label,
+            sourceTemplate: ((n.metadata as any)?.sourceTemplateId || 'N/A').substring(0, 8) + '...'
+          }))
         });
 
-        if (toCreate.length > 0) {
-          // Marquer comme en cours pour éviter re-duplication avant hydratation
-          const map = inFlightDupByRepeaterRef.current;
-          const set = map.get(repeaterId) || new Set<string>();
-          toCreate.forEach(id => set.add(id));
-          map.set(repeaterId, set);
-          duplicateTemplatesPhysically(toCreate);
-        } else {
-          console.log('✅ [commitRepeaterMetadata] Aucune duplication nécessaire (idempotent)');
-        }
+        console.log('🧪 [commitRepeaterMetadata] Check idempotence:', {
+          repeaterId: repeaterId.substring(0, 8) + '...',
+          'selectedTemplateIds': merged.templateNodeIds.map(id => id.substring(0, 8) + '...'),
+          'existingSourceTemplateIds': Array.from(existingSourceTemplateIds).map(id => id.substring(0, 8) + '...'),
+          'toCreate (nouveaux)': toCreate.map(id => id.substring(0, 8) + '...'),
+          'toDelete (retirés)': nodesToDelete.map(n => ({ 
+            id: n.id.substring(0, 8) + '...', 
+            label: n.label, 
+            sourceTemplate: ((n.metadata as any)?.sourceTemplateId || '').substring(0, 8) + '...'
+          }))
+        });
+
+        // 6) 🔄 SÉQUENCE : Supprimer d'abord, puis créer après
+        // CRITIQUE : On doit attendre que les suppressions soient terminées AVANT de créer
+        const performDeletionsThenCreation = async () => {
+          console.log('📦 [performDeletionsThenCreation] Début séquence:', {
+            'nodesToDelete.length': nodesToDelete.length,
+            'toCreate.length': toCreate.length
+          });
+          // Étape A : Supprimer les copies désélectionnées
+          if (nodesToDelete.length > 0 && onDeleteNode) {
+            console.log('🗑️ [commitRepeaterMetadata] Suppression des copies désélectionnées:', nodesToDelete.map(n => `${n.label} (${n.id})`));
+            
+            // Marquer immédiatement comme supprimés
+            nodesToDelete.forEach(n => recentlyDeletedIdsRef.current.add(n.id));
+            
+            // ⏳ ATTENDRE que toutes les suppressions soient terminées
+            await Promise.all(
+              nodesToDelete.map(async (node) => {
+                try {
+                  await Promise.resolve(onDeleteNode(node));
+                  console.log(`✅ [commitRepeaterMetadata] Copie ${node.label} (${node.id}) supprimée avec succès`);
+                } catch (err) {
+                  console.error(`❌ [commitRepeaterMetadata] Échec suppression ${node.label}:`, err);
+                  // Retirer du tracking en cas d'échec
+                  recentlyDeletedIdsRef.current.delete(node.id);
+                }
+              })
+            );
+            
+            // Rafraîchir l'arbre après suppression
+            console.log('🔄 [commitRepeaterMetadata] Suppressions terminées, rafraîchissement...');
+            await refreshTree?.();
+            
+            // ⏳ Petit délai pour laisser l'état se stabiliser
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+
+          // Étape B : Créer les nouvelles copies (SEULEMENT après suppressions)
+          if (toCreate.length > 0) {
+            console.log('➕ [commitRepeaterMetadata] Création des nouvelles copies:', toCreate);
+            // Marquer comme en cours pour éviter re-duplication avant hydratation
+            const map = inFlightDupByRepeaterRef.current;
+            const set = map.get(repeaterId) || new Set<string>();
+            toCreate.forEach(id => set.add(id));
+            map.set(repeaterId, set);
+            duplicateTemplatesPhysically(toCreate);
+          } else if (nodesToDelete.length === 0) {
+            console.log('✅ [commitRepeaterMetadata] Aucune modification nécessaire (idempotent)');
+          }
+        };
+
+        // Lancer la séquence
+        performDeletionsThenCreation().catch(err => {
+          console.error('❌ [commitRepeaterMetadata] Erreur durant la séquence suppression/création:', err);
+        });
       } catch (e) {
         console.warn('⚠️ [commitRepeaterMetadata] Échec contrôle idempotence, fallback duplication complète:', e);
         // Fallback ultra conservateur si une erreur survient
@@ -595,6 +1043,39 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       } else {
         inFlightDupByRepeaterRef.current.set(repeaterId, inflightSet);
         console.log('🧹 [Parameters] Nettoyage in-flight PARTIEL:', Array.from(inflightSet));
+      }
+    }
+    
+    // 🗑️ Nettoyer TOUS les IDs supprimés après un refresh complet
+    // Raison: `recentlyDeletedIdsRef` ne sert qu'à filtrer TEMPORAIREMENT avant que `nodes` soit à jour
+    // Une fois que `nodes` est rafraîchi, on peut tout vider car les copies vraiment supprimées ne sont plus dans `nodes`
+    if (recentlyDeletedIdsRef.current.size > 0) {
+      const allNodeIds = new Set<string>();
+      const collectIds = (list: TreeBranchLeafNode[]) => {
+        list.forEach(n => {
+          allNodeIds.add(n.id);
+          if (n.children) collectIds(n.children);
+        });
+      };
+      collectIds(nodes);
+      
+      // Retirer TOUS les IDs qui ne sont plus dans l'arbre (= vraiment supprimés)
+      const initialSize = recentlyDeletedIdsRef.current.size;
+      const remainingIds = new Set<string>();
+      
+      recentlyDeletedIdsRef.current.forEach(id => {
+        if (allNodeIds.has(id)) {
+          // L'ID existe toujours → garder dans le tracking temporaire
+          remainingIds.add(id);
+        }
+        // Sinon, il a été confirmé supprimé → on ne le garde PAS
+      });
+      
+      recentlyDeletedIdsRef.current = remainingIds;
+      
+      const cleanedCount = initialSize - remainingIds.size;
+      if (cleanedCount > 0) {
+        console.log(`🗑️ [Parameters] Nettoyage IDs supprimés confirmés: ${cleanedCount} → Reste: ${recentlyDeletedIdsRef.current.size}`);
       }
     }
   }, [nodes, selectedNode?.id]);
@@ -663,15 +1144,58 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       
       const repeaterMeta = (selectedNode.metadata?.repeater as RepeaterMetadata) || {};
       console.log('🔍 [Parameters] repeaterMeta après cast:', JSON.stringify(repeaterMeta, null, 2));
+
+      const parseTemplateIdsFromColumn = (): string[] | undefined => {
+        const raw = (selectedNode as any)?.repeater_templateNodeIds;
+        if (!raw) return undefined;
+        try {
+          if (Array.isArray(raw)) return raw.filter((id): id is string => typeof id === 'string');
+          if (typeof raw === 'string') {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : undefined;
+          }
+        } catch (err) {
+          console.warn('⚠️ [Parameters] Impossible de parser repeater_templateNodeIds:', err);
+        }
+        return undefined;
+      };
+
+      const deriveTemplateIdsFromCopies = (): string[] => {
+        if (!selectedNodeFromTree?.id) return [];
+        const deriveChildrenByParentId = (all: TreeBranchLeafNode[], parentId?: string | null) => {
+          if (!parentId) return [] as TreeBranchLeafNode[];
+          const stack: TreeBranchLeafNode[] = [...all];
+          const out: TreeBranchLeafNode[] = [];
+          while (stack.length) {
+            const n = stack.pop()!;
+            if (n.parentId === parentId) out.push(n);
+            if (n.children && n.children.length) stack.push(...n.children);
+          }
+          return out;
+        };
+
+        const directChildren = deriveChildrenByParentId(nodes, selectedNodeFromTree.id);
+        const uniqueIds = new Set<string>();
+        directChildren.forEach(child => {
+          const sourceId = (child.metadata as any)?.sourceTemplateId;
+          if (typeof sourceId === 'string') uniqueIds.add(sourceId);
+        });
+        return Array.from(uniqueIds);
+      };
       
+      const columnTemplateIds = parseTemplateIdsFromColumn();
+      const fallbackTemplateIds = deriveTemplateIdsFromCopies();
       const templateIds = Array.isArray(repeaterMeta.templateNodeIds)
         ? repeaterMeta.templateNodeIds
-        : (selectedNodeFromTree?.children?.map(child => child.id) ?? []);
+        : columnTemplateIds
+          ?? (fallbackTemplateIds.length > 0 ? fallbackTemplateIds : []);
 
       console.log('🔍 [Parameters] Template IDs extraits:', {
         templateIds,
         'Array.isArray(repeaterMeta.templateNodeIds)': Array.isArray(repeaterMeta.templateNodeIds),
-        'repeaterMeta.templateNodeIds': repeaterMeta.templateNodeIds
+        'repeaterMeta.templateNodeIds': repeaterMeta.templateNodeIds,
+        columnTemplateIds,
+        fallbackTemplateIds
       });
       
       setRepeaterTemplateIds(templateIds);
@@ -1036,51 +1560,46 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             const parentBranch = findParentBranch(selectedNode.id);
             const parentSubTabs = parentBranch ? (Array.isArray(parentBranch.metadata?.subTabs) ? parentBranch.metadata?.subTabs as string[] : []) : [];
 
-            // Show even if there's only one subTab (developer convenience)
-            if (!parentSubTabs || parentSubTabs.length === 0) return null;
-
-            // Small debug log to help diagnose cases where parentSubTabs should exist
-            console.debug('[Parameters] parentBranch:', parentBranch?.id, 'parentSubTabs:', parentSubTabs);
-
-            // Support both single and multiple values
-            const rawSubTab = selectedNode?.metadata?.subTab;
-            const currentValue = Array.isArray(rawSubTab) 
-              ? rawSubTab 
-              : typeof rawSubTab === 'string' && rawSubTab 
-                ? [rawSubTab] 
-                : [];
-
             return (
               <div style={{ marginTop: 12 }}>
                 <strong style={{ fontSize: 12 }}>Affectation Sous-onglet</strong>
-                <div style={{ marginTop: 6 }}>
-                  <Select
-                    mode="multiple"
-                    size="small"
-                    value={currentValue}
-                    key={`subtab-select-${selectedNode?.id}`}
-                    onChange={(values) => {
-                      const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
-                      if (!values || values.length === 0) {
-                        delete nextMeta.subTab;
-                      } else if (values.length === 1) {
-                        // Single selection: store as string for backward compatibility
-                        nextMeta.subTab = values[0];
-                      } else {
-                        // Multiple selections: store as array
-                        nextMeta.subTab = values;
-                      }
-                      patchNode({ metadata: nextMeta });
-                      emitMetadataUpdate(nextMeta);
-                    }}
-                    style={{ width: '100%' }}
-                    placeholder="Sélectionnez un ou plusieurs sous-onglets"
-                    allowClear
-                    maxTagCount="responsive"
-                  >
-                    {parentSubTabs.map(st => <Select.Option key={st} value={st}>{st}</Select.Option>)}
-                  </Select>
-                </div>
+                {(!parentSubTabs || parentSubTabs.length === 0) ? (
+                  <div style={{ marginTop: 6, padding: '8px 12px', backgroundColor: '#fafafa', border: '1px solid #e8e8e8', borderRadius: 4, fontSize: 12, color: '#999' }}>
+                    ℹ️ Créer d'abord des sous-onglets sur la branche parent "<strong>{parentBranch?.label || 'parent'}</strong>"
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 6 }}>
+                    <Select
+                      mode="multiple"
+                      size="small"
+                      value={localSubTabSelection}
+                      key={`subtab-select-${selectedNode?.id}`}
+                      onChange={(values) => {
+                        const rawValues = Array.isArray(values) ? values : EMPTY_SUBTAB_LIST;
+                        const nextValues = normalizeSubTabValue(rawValues);
+                        setLocalSubTabSelection(nextValues);
+                        const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
+                        if (!nextValues || nextValues.length === 0) {
+                          nextMeta.subTab = null;
+                        } else if (nextValues.length === 1) {
+                          // Single selection: store as string for backward compatibility
+                          nextMeta.subTab = nextValues[0];
+                        } else {
+                          // Multiple selections: store as array
+                          nextMeta.subTab = nextValues;
+                        }
+                        patchNode({ metadata: nextMeta });
+                        emitMetadataUpdate(nextMeta);
+                      }}
+                      style={{ width: '100%' }}
+                      placeholder="Sélectionnez un ou plusieurs sous-onglets"
+                      allowClear
+                      maxTagCount="responsive"
+                    >
+                      {parentSubTabs.map(st => <Select.Option key={st} value={st}>{st}</Select.Option>)}
+                    </Select>
+                  </div>
+                )}
               </div>
             );
           })()
@@ -1091,102 +1610,52 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           <div style={{ marginTop: 12 }}>
             <h5 style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>Sous-onglets (visuel)</h5>
             <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-              {/* Contrôle: sélectionner le sous-onglet du noeud (branche) et optionnellement l'appliquer aux enfants */}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <strong style={{ fontSize: 12 }}>Affectation Sous-onglet (branche)</strong>
-                  <div style={{ marginTop: 6 }}>
-                    <Select
-                      mode="multiple"
-                      size="small"
-                      value={Array.isArray((selectedNode?.metadata?.subTab))
-                        ? (selectedNode?.metadata?.subTab as string[])
-                        : typeof (selectedNode?.metadata?.subTab) === 'string' && selectedNode?.metadata?.subTab
-                          ? [(selectedNode?.metadata?.subTab as string)]
-                          : []
+              {/* Contrôle: sélectionner le sous-onglet du noeud (branche) */}
+              <div>
+                <strong style={{ fontSize: 12 }}>Affectation Sous-onglet (branche)</strong>
+                <div style={{ marginTop: 6 }}>
+                  <Select
+                    mode="multiple"
+                    size="small"
+                    value={localSubTabSelection}
+                    onChange={(values) => {
+                      const rawValues = Array.isArray(values) ? values : EMPTY_SUBTAB_LIST;
+                      const nextValues = normalizeSubTabValue(rawValues);
+                      setLocalSubTabSelection(nextValues);
+                      const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
+                      if (!nextValues || nextValues.length === 0) {
+                        nextMeta.subTab = null;
+                      } else if (nextValues.length === 1) {
+                        nextMeta.subTab = nextValues[0];
+                      } else {
+                        nextMeta.subTab = nextValues;
                       }
-                      onChange={(values) => {
-                        const nextMeta = { ...(selectedNode?.metadata || {}) } as Record<string, unknown>;
-                        if (!values || values.length === 0) {
-                          delete nextMeta.subTab;
-                        } else if (values.length === 1) {
-                          nextMeta.subTab = values[0];
-                        } else {
-                          nextMeta.subTab = values;
-                        }
-                        // Toujours patcher le noeud courant
-                        if (applyToChildrenRef.current && useServerCascade) {
-                          patchNode({ metadata: nextMeta, cascadeSubTab: true });
-                        } else {
-                          patchNode({ metadata: nextMeta });
-                        }
-                        emitMetadataUpdate(nextMeta);
-                        // Si checkbox applyToChildren est cochée, on effectue la propagation
-                        const subTabValue = values && values.length > 0 ? values : null;
-                        if (applyToChildrenRef.current && subTabValue && !useServerCascade) {
-                          // Déclencher propagation asynchrone
-                          void (async () => {
-                            try {
-                              const toAssign: { id: string; meta: Record<string, unknown> }[] = [];
-                              const stack2: TreeBranchLeafNode[] = [selectedNode];
-                              while (stack2.length) {
-                                const n = stack2.pop()!;
-                                if (n.children && n.children.length) stack2.push(...n.children);
-                                // Apply to all descendant leaf nodes
-                                if (n.type && n.type.startsWith('leaf')) {
-                                  const nextMeta2 = { ...(n.metadata || {}) } as Record<string, unknown>;
-                                  nextMeta2.subTab = subTabValue.length === 1 ? subTabValue[0] : subTabValue;
-                                  toAssign.push({ id: n.id, meta: nextMeta2 });
-                                }
-                                // Also apply to branch nodes that don't define their own subTabs (inheritance)
-                                if (n.type === 'branch' || n.type === 'section') {
-                                  const hasOwnSubTabs = Array.isArray((n.metadata as any)?.subTabs) && (n.metadata as any).subTabs.length > 0;
-                                  if (!hasOwnSubTabs) {
-                                    const nextMeta2 = { ...(n.metadata || {}) } as Record<string, unknown>;
-                                    nextMeta2.subTab = subTabValue.length === 1 ? subTabValue[0] : subTabValue;
-                                    toAssign.push({ id: n.id, meta: nextMeta2 });
-                                  }
-                                }
-                              }
-                              if (toAssign.length) {
-                                for (const t of toAssign) {
-                                  if (typeof onNodeUpdate === 'function') {
-                                    await onNodeUpdate({ id: t.id, metadata: t.meta });
-                                  }
-                                }
-                                if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
-                                try { window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode.id, treeId: tree?.id } })); } catch { /* noop */ }
-                              }
-                            } catch (e) {
-                              console.error('❌ [Parameters] Erreur propagation subTab vers enfants:', e);
-                            }
-                          })();
-                        }
-                      }}
-                      placeholder="Sélectionnez un ou plusieurs sous-onglets"
-                      allowClear
-                      maxTagCount="responsive"
-                      style={{ width: '100%' }}
-                    >
-                      {branchSubTabs.map(st => <Select.Option key={st} value={st}>{st}</Select.Option>)}
-                    </Select>
-                  </div>
+                      patchNode({ metadata: nextMeta });
+                      emitMetadataUpdate(nextMeta);
+                      const cascadeValue = nextValues && nextValues.length > 0 ? nextValues : null;
+                      void cascadeSubTabAssignments(cascadeValue);
+                    }}
+                    placeholder="Sélectionnez un ou plusieurs sous-onglets"
+                    allowClear
+                    maxTagCount="responsive"
+                    style={{ width: '100%' }}
+                  >
+                    {branchSubTabs.map(st => <Select.Option key={st} value={st}>{st}</Select.Option>)}
+                  </Select>
                 </div>
-                <div style={{ width: 270, display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: '#666' }}>Appliquer aux enfants</label>
-                  <Checkbox checked={applyToChildren} onChange={(e) => { setApplyToChildren(e.target.checked); applyToChildrenRef.current = e.target.checked; }} />
-                  <div style={{ width: 120, display: 'flex', gap: 6, alignItems: 'center', marginLeft: 8 }}>
-                    <label style={{ fontSize: 12, color: '#666' }}>Côté serveur</label>
-                    <Checkbox checked={useServerCascade} onChange={(e) => setUseServerCascade(e.target.checked)} />
-                  </div>
+                <div style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
+                  Toute modification s'applique automatiquement aux enfants (champs et branches sans sous-onglets dédiés).
                 </div>
               </div>
               <div style={{ fontSize: 12, color: '#666' }}>Créer des sous-onglets pour organiser visuellement les champs (Affectation via le champ : sélectionnez le champ puis éditez 'Affectation Sous-onglet' dans ses paramètres).</div>
               <SubTabsEditor
-                value={Array.isArray(selectedNode?.metadata?.subTabs) ? (selectedNode?.metadata?.subTabs as string[]) : []}
+                value={Array.isArray(selectedNode?.metadata?.subTabs) ? (selectedNode?.metadata?.subTabs as string[]) : EMPTY_SUBTAB_LIST}
                 onChange={(next) => {
+                  console.log('🎯 [SubTabsEditor onChange] Avant patchNode:', { next, currentNode: selectedNode?.id, currentMetadata: selectedNode?.metadata });
                   const nextMetadata = { ...(selectedNode?.metadata || {}), subTabs: next } as Record<string, unknown>;
+                  console.log('🎯 [SubTabsEditor onChange] Métadonnées à envoyer:', nextMetadata);
                   patchNode({ metadata: nextMetadata });
+                  console.log('🎯 [SubTabsEditor onChange] Après patchNode appelé');
                   emitMetadataUpdate(nextMetadata);
                   // Émettre un événement pour que TBL refetch si besoin
                   try {
@@ -1209,35 +1678,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     <Select size="small" style={{ minWidth: 160 }} placeholder="Affecter tous les champs (via champ)" value={undefined} onChange={async (val) => {
                     if (!val) return;
                     try {
-                      const toAssign = [] as { id: string; meta: Record<string, unknown> }[];
-                      const stack2: TreeBranchLeafNode[] = [selectedNode];
-                      while (stack2.length) {
-                        const n = stack2.pop()!;
-                        if (n.children && n.children.length) stack2.push(...n.children);
-                        if (n.type && n.type.startsWith('leaf')) {
-                          const nextMeta = { ...(n.metadata || {}) } as Record<string, unknown>;
-                          nextMeta.subTab = val;
-                          toAssign.push({ id: n.id, meta: nextMeta });
-                        }
-                      }
-                      if (toAssign.length === 0) return;
-                      if (useServerCascade) {
-                        // Fast path: update the branch with cascade flag (server will update descendants)
-                        const nextMetaBranch = { ...(selectedNode?.metadata || {}), subTab: val };
-                        if (typeof onNodeUpdate === 'function') {
-                          await onNodeUpdate({ id: selectedNode.id, metadata: nextMetaBranch, cascadeSubTab: true } as any);
-                        }
-                      } else {
-                        // Update sequentially to avoid too many POSTs at once
-                        for (const t of toAssign) {
-                          if (typeof onNodeUpdate === 'function') {
-                            await onNodeUpdate({ id: t.id, metadata: t.meta });
-                          }
-                        }
-                      }
-                      if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
-                      try { window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode.id, treeId: tree?.id } })); } catch { /* noop */ }
-                      console.log('✅ [Parameters] Affectation bulk appliquée:', val, 'sur', toAssign.length, 'champs');
+                      const nextMetaBranch = { ...(selectedNode?.metadata || {}), subTab: val } as Record<string, unknown>;
+                      patchNode({ metadata: nextMetaBranch });
+                      emitMetadataUpdate(nextMetaBranch);
+                      await cascadeSubTabAssignments([val]);
+                      console.log('✅ [Parameters] Affectation bulk appliquée:', val);
                     } catch (e) {
                       console.error('❌ [Parameters] Erreur lors de l\'affectation bulk:', e);
                     }
@@ -1377,7 +1822,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #e8e8e8', backgroundColor: '#f7f7f7' }}>
               <strong style={{ fontSize: 12 }}>
                 <BgColorsOutlined style={{ marginRight: 6, fontSize: 11 }} />
-                Configuration Apparence ({(fieldType || selectedNode?.type || 'DEFAULT')?.toUpperCase()})
+                Configuration Apparence ({appearancePanelKey})
               </strong>
               <Button 
                 type="text" 
@@ -1390,68 +1835,57 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             </div>
             
             <div style={{ padding: 8 }}>
-              {(() => {
-                const fieldTypeUpper = (fieldType || selectedNode?.type || 'DEFAULT')?.toUpperCase();
-                const panelImporter = (FieldAppearancePanels as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)[fieldTypeUpper || '']
-                  || (FieldAppearancePanels as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)['DEFAULT'];
-
-                if (!panelImporter) {
-                  return (
-                    <div style={{ padding: 8, fontSize: 11, color: '#999', textAlign: 'center' }}>
-                      Panneau d'apparence pour "{fieldType}" en cours de développement...
-                    </div>
-                  );
-                }
-                
-                const LazyAppearancePanel = React.lazy(panelImporter);
-                return (
-                  <React.Suspense fallback={<div style={{ padding: 8, fontSize: 11, textAlign: 'center' }}>Chargement...</div>}>
-                    <div 
-                      style={{ 
-                        fontSize: '11px',
-                        // Compactage des éléments internes
-                        '--ant-typography-margin-bottom': '4px',
-                        '--ant-form-item-margin-bottom': '6px'
-                      } as React.CSSProperties & Record<string, string>}
-                    >
-                      <LazyAppearancePanel 
-                        value={hydratedAppearanceConfig}
-                        onChange={(config: Record<string, unknown>) => {
-                          console.log('🎨 [Apparence] Changement détecté:', config);
-                          
-                          // Mapper vers les champs TBL
-                          const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(config);
-                          console.log('🎨 [Apparence] Mapping TBL généré:', tblMapping);
-                          
-                          // ✅ EXTRAIRE LES PARAMÈTRES REPEATER POUR LES COLONNES DÉDIÉES
-                          // RepeaterPanel envoie les valeurs DIRECTEMENT à la racine de config
-                          // ⚠️ IMPORTANT : Utiliser l'état local pour les valeurs repeater, car `config` peut être partiel
-                          const repeaterColumns = {
-                            repeater_addButtonLabel: (config.addButtonLabel && String(config.addButtonLabel).trim()) || null,
-                            repeater_buttonSize: config.buttonSize || 'middle',
-                            repeater_buttonWidth: config.buttonWidth || 'auto',
-                            repeater_iconOnly: config.iconOnly === true,
-                            repeater_minItems: config.minItems != null ? Number(config.minItems) : repeaterMinItems ?? 0,
-                            repeater_maxItems: config.maxItems != null ? Number(config.maxItems) : repeaterMaxItems ?? null,
-                          };
-                          console.warn('🔁 [Apparence] Colonnes repeater extraites:', repeaterColumns);
-                          
-                          // ✅ SAUVEGARDE AVEC COLONNES REPEATER
-                          const payload = { 
-                            appearanceConfig: config,
-                            ...tblMapping,
-                            ...repeaterColumns
-                          };
-                          console.warn('💾 [Apparence] PAYLOAD COMPLET ENVOYÉ:', payload);
-                          
-                          patchNode(payload);
-                        }}
-                        readOnly={props.readOnly}
-                      />
-                    </div>
-                  </React.Suspense>
-                );
-              })()}
+              {LazyAppearancePanel ? (
+                <React.Suspense fallback={<div style={{ padding: 8, fontSize: 11, textAlign: 'center' }}>Chargement...</div>}>
+                  <div 
+                    style={{ 
+                      fontSize: '11px',
+                      // Compactage des éléments internes
+                      '--ant-typography-margin-bottom': '4px',
+                      '--ant-form-item-margin-bottom': '6px'
+                    } as React.CSSProperties & Record<string, string>}
+                  >
+                    <LazyAppearancePanel 
+                      value={hydratedAppearanceConfig}
+                      onChange={(config: Record<string, unknown>) => {
+                        console.log('🎨 [Apparence] Changement détecté:', config);
+                        
+                        // Mapper vers les champs TBL
+                        const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(config);
+                        console.log('🎨 [Apparence] Mapping TBL généré:', tblMapping);
+                        
+                        // ✅ EXTRAIRE LES PARAMÈTRES REPEATER POUR LES COLONNES DÉDIÉES
+                        // RepeaterPanel envoie les valeurs DIRECTEMENT à la racine de config
+                        // ⚠️ IMPORTANT : Utiliser l'état local pour les valeurs repeater, car `config` peut être partiel
+                        const repeaterColumns = {
+                          repeater_addButtonLabel: (config.addButtonLabel && String(config.addButtonLabel).trim()) || null,
+                          repeater_buttonSize: config.buttonSize || 'middle',
+                          repeater_buttonWidth: config.buttonWidth || 'auto',
+                          repeater_iconOnly: config.iconOnly === true,
+                          repeater_minItems: config.minItems != null ? Number(config.minItems) : repeaterMinItems ?? 0,
+                          repeater_maxItems: config.maxItems != null ? Number(config.maxItems) : repeaterMaxItems ?? null,
+                        };
+                        console.warn('🔁 [Apparence] Colonnes repeater extraites:', repeaterColumns);
+                        
+                        // ✅ SAUVEGARDE AVEC COLONNES REPEATER
+                        const payload = { 
+                          appearanceConfig: config,
+                          ...tblMapping,
+                          ...repeaterColumns
+                        };
+                        console.warn('💾 [Apparence] PAYLOAD COMPLET ENVOYÉ:', payload);
+                        
+                        patchNode(payload);
+                      }}
+                      readOnly={props.readOnly}
+                    />
+                  </div>
+                </React.Suspense>
+              ) : (
+                <div style={{ padding: 8, fontSize: 11, color: '#999', textAlign: 'center' }}>
+                  Panneau d'apparence pour "{appearancePanelKey}" en cours de développement...
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1527,40 +1961,19 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     });
                     
                     console.log('🏷️ [Parameters] Template node labels FINAL:', templateNodeLabels);
+                    console.log('🏁 [onChange] Prêt à appeler commitRepeaterMetadata:', {
+                      'selectedIds (passé en param)': selectedIds,
+                      'templateNodeLabels': templateNodeLabels,
+                      'repeaterTemplateIds (state actuel - STALE !)': repeaterTemplateIds,
+                      '⚠️': 'repeaterTemplateIds peut être ancien car setState est async'
+                    });
                     
-                    // 🗑️ Supprimer les copies existantes des templates retirés
-                    try {
-                      const removed = (prevIds || []).filter(id => !nextIds.includes(id));
-                      if (removed.length > 0) {
-                        console.log('🗑️ [Repeater] Templates retirés → suppression des copies:', removed);
-                        const childrenOfRepeater = selectedNodeFromTree?.children || [];
-                        for (const templateId of removed) {
-                          const copies = childrenOfRepeater.filter(n => {
-                            const meta = (n.metadata || {}) as any;
-                            return meta?.sourceTemplateId === templateId;
-                          });
-                          for (const copy of copies) {
-                            // Purge metadata.repeater.* non nécessaire si suppression totale du nœud
-                            if (typeof onDeleteNode === 'function') {
-                              await Promise.resolve(onDeleteNode(copy));
-                            } else if (tree) {
-                              await api.delete(`/api/treebranchleaf/trees/${tree.id}/nodes/${copy.id}`);
-                            }
-                          }
-                        }
-                        // Rafraîchir l'arbre après suppressions
-                        if (typeof refreshTree === 'function') {
-                          await Promise.resolve(refreshTree());
-                        }
-                      }
-                    } catch (e) {
-                      console.warn('⚠️ [Repeater] Échec suppression copies lors du retrait de template:', e);
-                    }
-
                     commitRepeaterMetadata({ 
                       templateNodeIds: selectedIds,
                       templateNodeLabels
                     });
+                    
+                    console.log('🎯 [onChange] ========== FIN CHANGEMENT TEMPLATE ==========');
                   }}
                   allowClear
                 >
@@ -1821,40 +2234,67 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 return 'text'; // Très discret si pas activé
               };
               
+              // Obtenir le sous-onglet associé au nœud sélectionné
+              const getAssociatedSubTab = () => {
+                const rawSubTab = selectedNode?.metadata?.subTab;
+                if (Array.isArray(rawSubTab)) {
+                  return rawSubTab.length > 0 ? rawSubTab[0] : null; // Prendre le premier s'il y en a plusieurs
+                }
+                return typeof rawSubTab === 'string' && rawSubTab ? rawSubTab : null;
+              };
+              
+              const associatedSubTab = getAssociatedSubTab();
+              
               return (
-                <Tooltip key={cap.key} title={`${cap.label}${hasData ? ' (avec données)' : isActive ? ' (activé)' : ' (désactivé)'}`}>
-                  <Button
-                    type={getButtonType()}
-                    size="small"
-                    icon={getCapabilityIcon(cap.key)}
-                    onClick={() => {
-                      if (!props.readOnly) {
-                        // Simple toggle de l'ouverture du panneau - PAS d'activation automatique
-                        setOpenCaps(prev => {
-                          const next = new Set(prev);
-                          if (next.has(cap.key)) {
-                            next.delete(cap.key);
-                          } else {
-                            next.add(cap.key);
-                          }
-                          return next;
-                        });
-                      }
-                    }}
-                    disabled={props.readOnly}
-                    style={{ 
-                      width: 32, 
-                      height: 24,
-                      padding: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderColor: isOpen ? '#1890ff' : undefined,
-                      backgroundColor: hasData ? '#1890ff' : isOpen ? '#f0f9ff' : undefined,
-                      color: hasData ? 'white' : undefined
-                    }}
-                  />
-                </Tooltip>
+                <div key={cap.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <Tooltip title={`${cap.label}${hasData ? ' (avec données)' : isActive ? ' (activé)' : ' (désactivé)'}${associatedSubTab ? ` - Sous-onglet: ${associatedSubTab}` : ''}`}>
+                    <Button
+                      type={getButtonType()}
+                      size="small"
+                      icon={getCapabilityIcon(cap.key)}
+                      onClick={() => {
+                        if (!props.readOnly) {
+                          // Simple toggle de l'ouverture du panneau - PAS d'activation automatique
+                          setOpenCaps(prev => {
+                            const next = new Set(prev);
+                            if (next.has(cap.key)) {
+                              next.delete(cap.key);
+                            } else {
+                              next.add(cap.key);
+                            }
+                            return next;
+                          });
+                        }
+                      }}
+                      disabled={props.readOnly}
+                      style={{ 
+                        width: 32, 
+                        height: 24,
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderColor: isOpen ? '#1890ff' : undefined,
+                        backgroundColor: hasData ? '#1890ff' : isOpen ? '#f0f9ff' : undefined,
+                        color: hasData ? 'white' : undefined
+                      }}
+                    />
+                  </Tooltip>
+                  {/* Afficher le sous-onglet associé en petit texte sous l'icône */}
+                  {associatedSubTab && (
+                    <span style={{ 
+                      fontSize: 9, 
+                      color: '#666', 
+                      maxWidth: 60, 
+                      textAlign: 'center',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {associatedSubTab}
+                    </span>
+                  )}
+                </div>
               );
             })}
           </div>

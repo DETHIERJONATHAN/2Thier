@@ -249,9 +249,9 @@ export async function copyVariableWithCapacities(
   options: CopyVariableOptions = {}
 ): Promise<CopyVariableResult> {
   
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`�🚀🚀 [ENTRY] copyVariableWithCapacities APPELÉE !`);
-  console.log(`�🔗 COPIE VARIABLE: ${originalVarId}`);
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`[ENTRY] copyVariableWithCapacities called`);
+  console.log(`[COPY] variable: ${originalVarId}`);
   console.log(`   Suffixe: ${suffix}`);
   console.log(`   Nouveau nœud: ${newNodeId}`);
   console.log(`   Options:`, {
@@ -262,7 +262,7 @@ export async function copyVariableWithCapacities(
     variableCopyCacheSize: options.variableCopyCache?.size,
     autoCreateDisplayNode: options.autoCreateDisplayNode
   });
-  console.log(`${'═'.repeat(80)}\n`);
+  console.log(`${'='.repeat(80)}\n`);
 
   const {
     formulaIdMap = new Map(),
@@ -496,109 +496,51 @@ export async function copyVariableWithCapacities(
     } else if (autoCreateDisplayNode) {
       // Créer un nœud d'affichage DÉDIÉ avec un ID unique dérivé de l'ancien nodeId + suffixe
       try {
-        const parseJsonIfNeeded = (value: unknown): unknown => {
-          if (typeof value !== 'string') return value ?? undefined;
-          const trimmed = value.trim();
-          if (!trimmed) return undefined;
-          const first = trimmed[0];
-          const last = trimmed[trimmed.length - 1];
-          const looksJson = (first === '[' && last === ']') || (first === '{' && last === '}');
-          if (!looksJson) return value;
-          try {
-            return JSON.parse(trimmed);
-          } catch {
-            return value;
-          }
-        };
-
         const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId! },
-          select: {
-            id: true,
-            parentId: true,
-            treeId: true,
-            order: true,
-            linkedTableIds: true,
-            hasTable: true,
-            table_name: true,
-            table_activeId: true,
+          select: { 
+            id: true, 
+            parentId: true, 
+            treeId: true, 
+            order: true, 
+            linkedTableIds: true, 
+            hasTable: true, 
+            table_name: true, 
+            table_activeId: true, 
             table_instances: true,
-            metadata: true,
+            // 🔑 IMPORTANT: Récupérer subtab pour que la copie soit dans le bon sous-onglet
             subtab: true,
             subtabs: true,
+            metadata: true,
           }
         });
         if (originalOwnerNode) {
-          // Chercher ou créer la section d'affichage sous le même parent
-          let displayParentId: string | null = originalOwnerNode.parentId || null;
-          if (originalOwnerNode.parentId) {
-            const existingSection = await prisma.treeBranchLeafNode.findFirst({
-              where: { treeId: originalOwnerNode.treeId, parentId: originalOwnerNode.parentId, type: 'section', label: { equals: displaySectionLabel } },
-              select: { id: true, order: true }
-            });
-            if (existingSection) {
-              displayParentId = existingSection.id;
-            } else {
-              // Créer la section d'affichage manquante
-              const nowCreate = new Date();
-              const secId = `section-${originalOwnerNode.parentId}-nouveau`;
-              try {
-                try {
-                const createdSection = await prisma.treeBranchLeafNode.create({
-                  data: {
-                    id: secId,
-                    treeId: originalOwnerNode.treeId,
-                    parentId: originalOwnerNode.parentId,
-                    type: 'section' as any,
-                    subType: null as any,
-                    label: displaySectionLabel,
-                    description: null,
-                    order: (originalOwnerNode.order ?? 0) + 0.5,
-                    isRequired: false,
-                    isVisible: true,
-                    isActive: true,
-                    isMultiple: false as any,
-                    fieldConfig: null as any,
-                    conditionConfig: null as any,
-                    formulaConfig: null as any,
-                    tableConfig: null as any,
-                    apiConfig: null as any,
-                    linkConfig: null as any,
-                    defaultValue: null as any,
-                    calculatedValue: null as any,
-                    metadata: { autoCreated: true, reason: 'display-section-missing' } as any,
-                    createdAt: nowCreate,
-                    updatedAt: nowCreate,
-                    hasAPI: false,
-                    hasCondition: false,
-                    hasData: false,
-                    hasFormula: false,
-                    hasLink: false,
-                    hasMarkers: false,
-                    hasTable: false,
-                    linkedTableIds: [] as any,
-                    linkedConditionIds: [] as any,
-                    linkedFormulaIds: [] as any,
-                    linkedVariableIds: [] as any,
-                    appearance_size: 'md' as any,
-                    appearance_variant: null as any,
-                    appearance_width: '100%' as any,
-                    fieldType: null as any,
-                    fieldSubType: null as any,
-                    field_label: null as any,
-                  }
-                });
-                displayParentId = createdSection.id;
-                console.log(`✅ Section d'affichage créée automatiquement: ${displaySectionLabel} (${createdSection.id}`);
-              } catch (sectionErr) {
-                // Si la section existe déjà (race condition), rester sous le parent direct
-                console.warn(`⚠️ Impossible de créer la section (probablement existe déjà): ${(sectionErr as Error).message}`);
-                // displayParentId reste = originalOwnerNode.parentId
-              }
-              } catch (e) {
-                console.warn(`⚠️ Impossible de créer la section d'affichage manquante: ${(e as Error).message}`);
-              }
-            }
+          // ═══════════════════════════════════════════════════════════════════════════════════════
+          // 🔑 RÈGLE: Déterminer le parent du display node
+          // ═══════════════════════════════════════════════════════════════════════════════════════
+          // 
+          // CONTEXTE DE REPEATER (isFromRepeaterDuplication): 
+          //   - Si c'est une variable LIÉE (originalVar.nodeId != newNodeId), le parent DOIT être newNodeId
+          //   - Cela crée le display node comme enfant du nœud instance
+          //
+          // CONTEXTE NORMAL:
+          //   - Le parent = le parent de l'original (même section)
+          // 
+          // ═══════════════════════════════════════════════════════════════════════════════════════
+          
+          // 🔍 Déterminer si c'est une variable LIÉE (dans repeatContext, la variable appartient à un autre nœud)
+          const isLinkedVariable = options.isFromRepeaterDuplication && 
+                                   originalVar.nodeId !== newNodeId;
+          
+          let displayParentId: string | null;
+          if (isLinkedVariable) {
+            // 🔗 Variable LIÉE: créer le display node COMME ENFANT du nœud instance (newNodeId)
+            displayParentId = newNodeId;
+            console.log(`📌 [LINKED_VAR] Display node pour variable liée sera enfant de: ${newNodeId}`);
+          } else {
+            // 📍 Variable DIRECTE: créer le display node dans la même section que l'original
+            displayParentId = originalOwnerNode.parentId || null;
+            console.log(`📌 [DIRECT_VAR] Display node pour variable directe sera dans même parent: ${displayParentId}`);
           }
 
           // Générer un ID unique pour le nœud d'affichage (ex: <oldVarNodeId>-<suffix>)
@@ -606,41 +548,6 @@ export async function copyVariableWithCapacities(
           finalNodeId = displayNodeId;
 
           const now = new Date();
-          const ownerMetadata = originalOwnerNode.metadata && typeof originalOwnerNode.metadata === 'object'
-            ? JSON.parse(JSON.stringify(originalOwnerNode.metadata)) as Record<string, unknown>
-            : {};
-
-          const ownerSubTabRaw = ownerMetadata?.subTab
-            ?? ownerMetadata?.subTabKey
-            ?? parseJsonIfNeeded(originalOwnerNode.subtab ?? undefined);
-          const ownerSubTabsRaw = ownerMetadata?.subTabs
-            ?? parseJsonIfNeeded(originalOwnerNode.subtabs ?? undefined);
-
-          const ownerSubTabsArray = Array.isArray(ownerSubTabsRaw)
-            ? (ownerSubTabsRaw as unknown[]).map(entry => String(entry))
-            : undefined;
-
-          const metadataForDisplay: Record<string, unknown> = {
-            ...ownerMetadata,
-            fromVariableId: `${originalVar.id}-${suffix}`,
-            autoCreatedDisplayNode: true,
-          };
-
-          if (ownerSubTabRaw !== undefined) {
-            metadataForDisplay.subTab = ownerSubTabRaw;
-          }
-          if (ownerSubTabsArray?.length) {
-            metadataForDisplay.subTabs = ownerSubTabsArray;
-          }
-
-          const formatSubTabColumn = (value: unknown): string | null => {
-            if (value === null || value === undefined) return null;
-            if (Array.isArray(value)) {
-              return value.length ? JSON.stringify(value) : null;
-            }
-            return typeof value === 'string' ? value : String(value);
-          };
-
           const displayNodeData = {
             id: displayNodeId,
             treeId: originalOwnerNode.treeId,
@@ -663,9 +570,10 @@ export async function copyVariableWithCapacities(
             linkConfig: null as any,
             defaultValue: null as any,
             calculatedValue: null as any,
-            metadata: metadataForDisplay as any,
-            subtab: formatSubTabColumn(ownerSubTabRaw),
-            subtabs: ownerSubTabsArray?.length ? JSON.stringify(ownerSubTabsArray) : null,
+            metadata: { fromVariableId: `${originalVar.id}-${suffix}` } as any,
+            // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+            subtab: originalOwnerNode.subtab,
+            subtabs: originalOwnerNode.subtabs,
             createdAt: now,
             updatedAt: now,
             hasAPI: false,
@@ -741,10 +649,10 @@ export async function copyVariableWithCapacities(
           const maybeExisting = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
           if (maybeExisting) {
             await prisma.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
-            console.log(`✅ Nœud d'affichage existant mis à jour: ${displayNodeId}`);
+            console.log('[CREATE DISPLAY] Nœud d\'affichage existant mis à jour:', { id: displayNodeId, parentId: displayParentId, metadata: displayNodeData.metadata });
           } else {
             await prisma.treeBranchLeafNode.create({ data: displayNodeData as any });
-            console.log(`✅ Nœud d'affichage créé: ${displayNodeId}`);
+            console.log('[CREATE DISPLAY] Nœud d\'affichage créé:', { id: displayNodeId, parentId: displayParentId, metadata: displayNodeData.metadata });
           }
         } else {
           console.warn(`⚠️ Impossible de récupérer le nœud propriétaire original ${originalVar.nodeId}. Fallback newNodeId.`);
@@ -1082,7 +990,8 @@ export async function copyVariableWithCapacities(
 export async function createDisplayNodeForExistingVariable(
   variableId: string,
   prisma: PrismaClient,
-  displaySectionLabel = 'Nouveau Section'
+  displaySectionLabel = 'Nouveau Section',
+  suffix: string | number = 'nouveau'
 ): Promise<{ displayNodeId: string; created: boolean }>
 {
   const v = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
@@ -1090,75 +999,34 @@ export async function createDisplayNodeForExistingVariable(
 
   const owner = await prisma.treeBranchLeafNode.findUnique({
     where: { id: v.nodeId },
-    select: { id: true, parentId: true, treeId: true, order: true, linkedTableIds: true, hasTable: true, table_name: true, table_activeId: true, table_instances: true }
+    select: { 
+      id: true, 
+      parentId: true, 
+      treeId: true, 
+      order: true, 
+      linkedTableIds: true, 
+      hasTable: true, 
+      table_name: true, 
+      table_activeId: true, 
+      table_instances: true,
+      // 🔑 IMPORTANT: Récupérer subtab pour que la copie soit dans le bon sous-onglet
+      subtab: true,
+      subtabs: true,
+    }
   });
   if (!owner) throw new Error(`Nœud propriétaire introuvable: ${v.nodeId}`);
 
-  // Trouver/Créer la section d'affichage
-  let displayParentId: string | null = owner.parentId;
-  if (owner.parentId) {
-    const section = await prisma.treeBranchLeafNode.findFirst({
-      where: { treeId: owner.treeId, parentId: owner.parentId, type: 'section', label: { equals: displaySectionLabel } },
-      select: { id: true }
-    });
-    if (section) {
-      displayParentId = section.id;
-    } else {
-      // Créer si manquante
-      const now = new Date();
-      const newSectionId = `section-${owner.parentId}-nouveau`;
-      try {
-        await prisma.treeBranchLeafNode.create({
-          data: {
-            id: newSectionId,
-            treeId: owner.treeId,
-            parentId: owner.parentId,
-            type: 'section' as any,
-            subType: null as any,
-            label: displaySectionLabel,
-            description: null,
-            order: (owner.order ?? 0) + 0.5,
-            isRequired: false,
-            isVisible: true,
-            isActive: true,
-            isMultiple: false as any,
-            fieldConfig: null as any,
-            conditionConfig: null as any,
-            formulaConfig: null as any,
-            tableConfig: null as any,
-            apiConfig: null as any,
-            linkConfig: null as any,
-            defaultValue: null as any,
-            calculatedValue: null as any,
-            metadata: { autoCreated: true, reason: 'display-section-missing' } as any,
-            createdAt: now,
-            updatedAt: now,
-            hasAPI: false,
-            hasCondition: false,
-            hasData: false,
-            hasFormula: false,
-            hasLink: false,
-            hasMarkers: false,
-            hasTable: false,
-            linkedTableIds: [] as any,
-            linkedConditionIds: [] as any,
-            linkedFormulaIds: [] as any,
-            linkedVariableIds: [] as any,
-            appearance_size: 'md' as any,
-            appearance_variant: null as any,
-            appearance_width: '100%' as any,
-            fieldType: null as any,
-            fieldSubType: null as any,
-            field_label: null as any,
-          }
-        });
-        displayParentId = newSectionId;
-      } catch {
-        // Fallback: rester sous le parent direct
-        displayParentId = owner.parentId;
-      }
-    }
-  }
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 🔑 RÈGLE FONDAMENTALE: Les copies doivent rester DANS LA MÊME SECTION que l'original
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // 
+  // PRINCIPE: Chaque copie doit être placée dans la même section que le champ original.
+  // PAS de création de Section-1, Section-2, etc.
+  // Le parent de la copie = le parent de l'original (TOUJOURS)
+  // 
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  const displayParentId: string | null = owner.parentId;
+  console.log(`📌 [createDisplayNodeForExistingVariable] RÈGLE: Copie dans le MÊME parent que l'original: ${displayParentId}`);
 
   const now = new Date();
   const baseData = {
@@ -1184,6 +1052,9 @@ export async function createDisplayNodeForExistingVariable(
     defaultValue: null as any,
     calculatedValue: null as any,
     metadata: { fromVariableId: variableId } as any,
+    // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+    subtab: owner.subtab,
+    subtabs: owner.subtabs,
     createdAt: now,
     updatedAt: now,
     hasAPI: false,

@@ -17,6 +17,23 @@ interface FormulaPanelProps {
 
 type FormulaInstance = { id: string; name: string; tokens: string[]; enabled?: boolean };
 
+const NODE_FORMULA_REGEX = /node-formula:[a-z0-9-]+/i;
+const LEGACY_FORMULA_REGEX = /formula:[a-z0-9-]+/i;
+
+const extractFormulaAlias = (token?: string | null): string | null => {
+  if (!token || typeof token !== 'string') return null;
+  const nodeFormulaMatch = token.match(NODE_FORMULA_REGEX);
+  if (nodeFormulaMatch && nodeFormulaMatch[0]) {
+    return nodeFormulaMatch[0];
+  }
+  const legacyFormulaMatch = token.match(LEGACY_FORMULA_REGEX);
+  if (legacyFormulaMatch && legacyFormulaMatch[0]) {
+    const suffix = legacyFormulaMatch[0].slice('formula:'.length);
+    return suffix ? `node-formula:${suffix}` : null;
+  }
+  return null;
+};
+
 const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, readOnly }) => {
   // API optimisée pour éviter les conflits
   const { api } = useOptimizedApi();
@@ -45,6 +62,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
   const [testValues, setTestValues] = useState<Record<string, string>>({});
   const [testResult, setTestResult] = useState<string>('');
   const [testError, setTestError] = useState<string>('');
+  const [isEvaluating, setIsEvaluating] = useState(false);
   
   // Modal de suppression
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -245,6 +263,19 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
     handleTokensChange([...localTokens, t]);
   }, [localTokens, handleTokensChange]);
 
+  const mathFunctionButtons = useMemo(() => ([
+    { key: 'radians', label: 'Radians (→ rad)', token: 'RADIANS(', tooltip: 'Convertit un angle en degrés vers des radians' },
+    { key: 'sqrt', label: 'Racine √', token: 'RACINE(', tooltip: 'Calcule la racine carrée (alias SQRT)' },
+    { key: 'cos', label: 'Cosinus', token: 'COS(', tooltip: 'Renvoie le cosinus (argument en radians)' },
+    { key: 'atan', label: 'Atan', token: 'ATAN(', tooltip: 'Renvoie l’arc tangente (résultat en radians)' },
+    { key: 'sierreur', label: 'SIERREUR', token: 'SIERREUR(', tooltip: 'SIERREUR(valeur; secours) — nécessite une valeur de repli' },
+    { key: 'pi', label: 'PI()', token: 'PI()', tooltip: 'Constante π (utilisez pi(*facteur) pour multiplier)' },
+    { key: 'int', label: 'INT', token: 'INT(', tooltip: 'Arrondit vers l’entier inférieur (alias FINT)' },
+    { key: 'row', label: 'ROW', token: 'ROW(', tooltip: 'Génère une séquence d’index numériques' },
+    { key: 'indirect', label: 'INDIRECT', token: 'INDIRECT(', tooltip: 'Crée une plage à partir d’un texte (ex: "1:10")' },
+    { key: 'sumproduct', label: 'SUMPRODUCT', token: 'SUMPRODUCT(', tooltip: 'Somme des produits de plusieurs plages (alias SOMMEPROD)' }
+  ]), []);
+
   const removeLast = useCallback(() => {
     if (!localTokens?.length) return;
     handleTokensChange(localTokens.slice(0, -1));
@@ -334,8 +365,135 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
     if (!ref || typeof ref !== 'string') return undefined;
     if (ref.startsWith('@value.')) return ref.slice('@value.'.length);
     if (ref.startsWith('@select.')) return ref.slice('@select.'.length).split('.')[0];
+    const formulaAlias = extractFormulaAlias(ref);
+    if (formulaAlias) return formulaAlias;
     return undefined;
   }, []);
+
+  const referencedNodeIds = useMemo(() => {
+    return Array.from(new Set(localTokens.map(extractNodeIdFromRef).filter(Boolean))) as string[];
+  }, [localTokens, extractNodeIdFromRef]);
+
+  const buildEvaluationExpression = useCallback(() => {
+    const rolesMap: Record<string, string> = {};
+    const parts: string[] = [];
+    const formulaRoleCache = new Map<string, string>();
+
+    const getFormulaRole = (alias: string) => {
+      if (formulaRoleCache.has(alias)) {
+        return formulaRoleCache.get(alias) as string;
+      }
+      const sanitized = alias.replace(/[^A-Za-z0-9]/g, '_');
+      const role = `formula_${sanitized}`;
+      formulaRoleCache.set(alias, role);
+      return role;
+    };
+
+    for (const rawToken of localTokens) {
+      if (!rawToken || typeof rawToken !== 'string') continue;
+      if (rawToken === 'CONCAT') {
+        parts.push('&');
+        continue;
+      }
+
+      const formulaAlias = extractFormulaAlias(rawToken);
+      if (formulaAlias) {
+        const roleKey = getFormulaRole(formulaAlias);
+        rolesMap[roleKey] = formulaAlias;
+        parts.push(`{{${roleKey}}}`);
+        continue;
+      }
+
+      if (rawToken.startsWith('@value.')) {
+        const nodeId = rawToken.slice('@value.'.length);
+        if (!nodeId) continue;
+        rolesMap[nodeId] = nodeId;
+        parts.push(`{{${nodeId}}}`);
+        continue;
+      }
+
+      if (rawToken.startsWith('@select.')) {
+        const nodeId = rawToken.slice('@select.'.length).split('.')[0];
+        if (!nodeId) continue;
+        rolesMap[nodeId] = nodeId;
+        parts.push(`{{${nodeId}}}`);
+        continue;
+      }
+
+      parts.push(rawToken);
+    }
+
+    const expr = parts.join(' ').replace(/\s+/g, ' ').trim();
+    return { expr, rolesMap };
+  }, [localTokens]);
+
+  const buildTestValuesPayload = useCallback(() => {
+    const payload: Record<string, number | string> = {};
+    referencedNodeIds.forEach((nodeId) => {
+      const raw = testValues[nodeId];
+      if (raw === undefined || raw === null || raw === '') {
+        return;
+      }
+      const normalized = raw.replace(',', '.');
+      const numeric = Number(normalized);
+      payload[nodeId] = Number.isFinite(numeric) ? numeric : raw;
+    });
+    return payload;
+  }, [referencedNodeIds, testValues]);
+
+  const handleEvaluate = useCallback(async () => {
+    if (!localTokens.length) {
+      setTestResult('');
+      setTestError('Ajoutez des éléments à la formule pour lancer un test.');
+      return;
+    }
+
+    const { expr, rolesMap } = buildEvaluationExpression();
+    if (!expr) {
+      setTestResult('');
+      setTestError('Impossible de construire l\'expression à partir des éléments saisis.');
+      return;
+    }
+
+    setIsEvaluating(true);
+    setTestError('');
+    try {
+      const response = await api.post('/api/treebranchleaf/evaluate/formula', {
+        expr,
+        rolesMap,
+        values: buildTestValuesPayload(),
+        options: { strict: false }
+      }) as { value?: number | string | null; errors?: string[] };
+
+      const value = response?.value;
+      setTestResult(value === null || value === undefined ? '' : String(value));
+      const responseErrors = Array.isArray(response?.errors) ? response.errors.filter(Boolean) : [];
+      setTestError(responseErrors.length ? responseErrors.join(', ') : '');
+    } catch (err) {
+      setTestResult('');
+      let messageText = 'Erreur pendant l\'évaluation';
+      if (err && typeof err === 'object') {
+        const maybe = err as { response?: { data?: Record<string, unknown> }; message?: string };
+        const data = maybe.response?.data;
+        if (data) {
+          const details = typeof data['details'] === 'string' ? data['details']
+            : typeof data['error'] === 'string' ? data['error']
+            : typeof data['message'] === 'string' ? data['message']
+            : null;
+          if (details) {
+            messageText = details;
+          }
+        } else if (maybe.message) {
+          messageText = maybe.message;
+        }
+      }
+      setTestError(messageText);
+    } finally {
+      if (mountedRef.current) {
+        setIsEvaluating(false);
+      }
+    }
+  }, [localTokens, buildEvaluationExpression, api, buildTestValuesPayload]);
 
   // Chargement des nœuds pour le cache
   const loadNode = useCallback(async (id: string) => {
@@ -351,9 +509,8 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
 
   // Charger les nœuds référencés
   useEffect(() => {
-    const ids = localTokens.map(extractNodeIdFromRef).filter(Boolean) as string[];
-    ids.forEach(loadNode);
-  }, [localTokens, extractNodeIdFromRef, loadNode]);
+    referencedNodeIds.forEach(loadNode);
+  }, [referencedNodeIds, loadNode]);
 
   // Ne pas afficher tant que pas chargé
   if (!isLoaded) {
@@ -427,9 +584,9 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
         <div style={{ marginTop: 8 }}>
           <Space direction="vertical" style={{ width: '100%' }} size={8}>
             <Space wrap>
-              {(Array.from(new Set(localTokens.map(extractNodeIdFromRef).filter(Boolean))) as string[]).map(id => (
+              {referencedNodeIds.map(id => (
                 <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <TokenChip token={`@value.${id}`} />
+                  <TokenChip token={id.startsWith('node-formula:') ? id : `@value.${id}`} />
                   <Input
                     size="small"
                     placeholder="Valeur de test"
@@ -441,40 +598,9 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
               ))}
             </Space>
             
-            <Button size="small" type="primary" onClick={() => {
-              try {
-                setTestError('');
-                const expr = localTokens.map(tok => {
-                  if (tok === 'CONCAT') return '+';
-                  if (['+', '-', '*', '/', '(', ')'].includes(tok)) return tok;
-                  if (/^".*"$/.test(tok)) return tok;
-                  if (/^[-+]?[0-9]*\.?[0-9]+$/.test(tok)) return tok;
-                  
-                  if (tok.startsWith('@value.')) {
-                    const id = tok.slice('@value.'.length);
-                    const v = (testValues[id] ?? '').trim();
-                    const num = Number(v.replace(',', '.'));
-                    return Number.isFinite(num) ? String(num) : JSON.stringify(v);
-                  }
-                  if (tok.startsWith('@select.')) {
-                    const id = tok.slice('@select.'.length).split('.')[0];
-                    const v = testValues[id] ?? '';
-                    return JSON.stringify(v);
-                  }
-                  
-                  return JSON.stringify(tok);
-                }).join(' ');
-                
-                const fn = new Function(`return (${expr});`);
-                const res = fn();
-                setTestResult(String(res));
-              } catch (e: unknown) {
-                setTestResult('');
-                const hasMessage = (x: unknown): x is { message: unknown } => !!x && typeof x === 'object' && 'message' in x;
-                const msg = hasMessage(e) ? String(e.message) : 'Erreur pendant l\'évaluation';
-                setTestError(msg);
-              }
-            }}>Évaluer</Button>
+            <Button size="small" type="primary" onClick={handleEvaluate} loading={isEvaluating}>
+              Évaluer
+            </Button>
             
             {testError ? (
               <Text type="danger">Erreur: {testError}</Text>
@@ -505,6 +631,17 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
           <Divider type="vertical" />
           <Tooltip title="Supprimer le dernier élément"><Button size="small" danger disabled={!localTokens?.length} onClick={removeLast}>⟲ Annuler dernier</Button></Tooltip>
           <Tooltip title="Vider la formule"><Button size="small" danger disabled={!localTokens?.length} onClick={clearAll}>🗑️ Vider</Button></Tooltip>
+        </Space>
+      </div>
+
+      <div style={{ marginBottom: 8 }}>
+        <Text type="secondary" style={{ marginRight: 8 }}>Fonctions de calcul :</Text>
+        <Space wrap size={6}>
+          {mathFunctionButtons.map(btn => (
+            <Tooltip key={btn.key} title={btn.tooltip}>
+              <Button size="small" onClick={() => appendToken(btn.token)}>{btn.label}</Button>
+            </Tooltip>
+          ))}
         </Space>
       </div>
       

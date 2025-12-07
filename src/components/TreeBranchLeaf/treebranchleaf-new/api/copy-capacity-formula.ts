@@ -79,11 +79,18 @@ function rewriteFormulaTokens(
   if (!tokens) return tokens as Prisma.InputJsonValue;
 
   const rewriteString = (str: string): string => {
-    // Regex pour capturer @value.<ID> avec UUID ou node_xxx
-    return str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_match, nodeId: string) => {
-      // 1. Chercher dans la map
+    // ✅ FIX REPEATER REFERENCES (02/12/2025):
+    // PROBLÈME: Les shared-ref du repeater n'étaient pas suffixées
+    // SOLUTION: Traiter TOUTES les références (@value.<ID>) de la même manière
+    // - Si trouvée dans la map → utiliser le mapping
+    // - Sinon si suffixe fourni → ajouter le suffixe
+    // - Y compris pour les shared-ref!
+    return str.replace(/@value\.([A-Za-z0-9_:-]+(?:-[A-Za-z0-9]+)*)/g, (_match, nodeId: string) => {
+      
+      // 1. Chercher dans la map des nœuds mappés (y compris les shared-ref mappées)
       const mappedId = idMap.get(nodeId);
       if (mappedId) {
+        console.log(`🔄 [FORMULA-TOKENS] Mapping trouvé: ${nodeId} → ${mappedId}`);
         return `@value.${mappedId}`;
       }
       
@@ -92,11 +99,13 @@ function rewriteFormulaTokens(
         // Vérifier si l'ID a déjà un suffixe
         const hasSuffix = /-\d+$/.test(nodeId);
         if (!hasSuffix) {
+          console.log(`➕ [FORMULA-TOKENS] Suffixe ajouté: ${nodeId} → ${nodeId}-${suffix}`);
           return `@value.${nodeId}-${suffix}`;
         }
       }
       
       // 3. Sinon garder tel quel
+      console.log(`⚪ [FORMULA-TOKENS] Inchangé: ${nodeId}`);
       return `@value.${nodeId}`;
     });
   };

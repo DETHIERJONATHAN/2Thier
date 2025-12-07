@@ -16,6 +16,7 @@ import { prisma } from './lib/prisma';
 
 // 🔥 ROUTES TBL SPÉCIALISÉES
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
+import tableRoutesNewRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/table-routes-new';
 import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES STOCKÉES
 
 // 🌐 ROUTES GESTION SITES WEB
@@ -35,6 +36,7 @@ import imageUploadRouter from './api/image-upload';
 import aiContentRouter from './api/ai-content';
 import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
+import createRepeatRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes';
 
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
 import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
@@ -218,6 +220,10 @@ app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
 app.use('/api', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
+app.use('/api/treebranchleaf', tableRoutesNewRouter); // 📊 ROUTES TABLES NORMALISÉES
+const repeatRouter = createRepeatRouter(prisma);
+app.use('/api/treebranchleaf/repeat', repeatRouter); // 🔁 Compatibilité historique
+app.use('/api/repeat', repeatRouter); // 🔁 Nouveau point d'entrée stabilisé pour le frontend
 console.log('✅ [API-SERVER-CLEAN] Routes configurées');
 
 app.get('/health', (_req, res) => {

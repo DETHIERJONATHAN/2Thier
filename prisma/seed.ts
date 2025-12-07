@@ -24,10 +24,12 @@ async function main() {
   if (!org) {
     org = await prisma.organization.create({
       data: {
+        id: generateId(),
         name: ORG_NAME,
         description: 'Organisation principale CRM',
         website: 'https://www.2thier.com',
-        phone: '+32 470 00 00 00'
+        phone: '+32 470 00 00 00',
+        updatedAt: new Date()
       }
     });
     console.log('🏢 Organisation créée:', org.id);

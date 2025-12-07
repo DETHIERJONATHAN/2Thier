@@ -1,0 +1,25 @@
+{
+  "id": "0d6cf685-fdce-4efc-ab99-ef9847e18f8e",
+  "name": "Import O-I.xlsx",
+  "meta": {
+    "lookup": {
+      "enabled": true,
+      "selectors": {
+        "columnFieldId": "1203df47-e87e-42fd-b178-31afd89b9c83"
+      },
+      "rowSourceOption": {
+        "type": "field",
+        "operator": "greaterOrEqual",
+        "description": "Valeur du champ",
+        "sourceField": "a2538f3a-0f05-434e-b5bd-9474944fc939",
+        "comparisonColumn": "Orientation"
+      },
+      "rowLookupEnabled": true,
+      "columnSourceOption": {
+        "type": "select",
+        "description": "Colonne de la table"
+      },
+      "columnLookupEnabled": true
+    }
+  }
+}

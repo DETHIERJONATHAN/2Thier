@@ -32,7 +32,7 @@ const DevisPage = lazy(() => import('./pages/DevisPage'));
 // const TreeBranchLeafLayoutV2 = lazy(() => import('./pages/Formulaire/TreeBranchLeafLayoutV2'));
 
 // TBL - Nouveau système de formulaires connectés
-const TBLPage = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL'));
+const TBLPage = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL.tsx'));
 
 // TreeBranchLeaf Wrapper - Interface 3 colonnes complète
 const TreeBranchLeafWrapper = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TreeBranchLeafWrapper'));

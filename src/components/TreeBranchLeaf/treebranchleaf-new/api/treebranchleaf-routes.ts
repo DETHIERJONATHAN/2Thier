@@ -31,7 +31,8 @@ import { gunzipSync } from 'zlib'; // GardÃ© uniquement pour decompressIfNeede
 // ðŸŽ¯ NOUVEAU SYSTÃˆME UNIVERSEL D'INTERPRÃ‰TATION TBL
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import { evaluateVariableOperation } from './operation-interpreter.js';
-import { copyVariableWithCapacities, copyLinkedVariablesFromNode, createDisplayNodeForExistingVariable } from './copy-variable-with-capacities.js';
+// Use the repeat service implementation — central source of truth for variable copying
+import { copyVariableWithCapacities, copyLinkedVariablesFromNode, createDisplayNodeForExistingVariable } from './repeat/services/variable-copy-engine.js';
 import { copySelectorTablesAfterNodeCopy } from './copy-selector-tables.js';
 import { getNodeIdForLookup } from '../../../../utils/node-helpers.js';
 
@@ -130,48 +131,47 @@ function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAd
 }
 
 // =============================================================================
-// ðŸ”Ž Helpers de rÃ©solution d'opÃ©ration (sourceRef -> objet dÃ©taillÃ©)
+// =============================================================================
+// �🔢 NODE DATA (VARIABLE EXPOSÉE) - Donnée d'un nœud
 // =============================================================================
 
-type OpType = 'formula' | 'condition' | 'table';
-function parseSourceRef(sourceRef?: string | null): { type: OpType; id: string } | null {
-  if (!sourceRef || typeof sourceRef !== 'string') return null;
-  const [rawType, rawId] = sourceRef.split(':');
-  let type = (rawType || '').toLowerCase();
-  // Normaliser les prÃ©fixes Ã©ventuels (ex: node-formula:...)
-  if (type.startsWith('node-')) type = type.replace(/^node-/, '');
-  const id = (rawId || '').trim();
-  if (!id) return null;
-  if (type === 'formula' || type === 'formule') return { type: 'formula', id };
-  if (type === 'condition') return { type: 'condition', id };
-  if (type === 'table') return { type: 'table', id };
-  return null;
-}
-// Types prÃ©cis des enregistrements selon la source
-type ConditionRecord = { id: string; name: string; description?: string | null; conditionSet?: unknown; nodeId: string } | null | undefined;
-type FormulaRecord = { id: string; name: string; description?: string | null; tokens?: unknown; nodeId: string } | null | undefined;
-type TableRecord = { id: string; name: string; description?: string | null; type?: string | null; nodeId: string } | null | undefined;
+type VariableResolutionResult = {
+  variable: Prisma.TreeBranchLeafNodeVariable | null;
+  ownerNodeId: string | null;
+  proxiedFromNodeId: string | null;
+};
 
-function buildOperationDetail(type: OpType, record: ConditionRecord | FormulaRecord | TableRecord): Prisma.InputJsonValue {
-  if (!record) return null;
-  if (type === 'condition') {
-    const { id, name, description, conditionSet, nodeId } = record as NonNullable<ConditionRecord>;
-    return { type: 'condition', id, name, description: description || null, conditionSet: conditionSet ?? null, nodeId } as const;
+const resolveNodeVariable = async (
+  nodeId: string,
+  linkedVariableIds?: string[] | null
+): Promise<VariableResolutionResult> => {
+  const directVariable = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId } });
+  if (directVariable) {
+    return { variable: directVariable, ownerNodeId: nodeId, proxiedFromNodeId: null };
   }
-  if (type === 'formula') {
-    const { id, name, description, tokens, nodeId } = record as NonNullable<FormulaRecord>;
-    return { type: 'formula', id, name, description: description || null, tokens: tokens ?? null, nodeId } as const;
-  }
-  if (type === 'table') {
-    const { id, name, description, type: tableType, nodeId } = record as NonNullable<TableRecord>;
-    return { type: 'table', id, name, description: description || null, tableType: tableType || 'basic', nodeId } as const;
-  }
-  return null;
-}
 
-// =============================================================================
-// ðŸ§© RÃ©solution des rÃ©fÃ©rences (labels + valeurs)
-// =============================================================================
+  const candidateIds = (linkedVariableIds || [])
+    .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+
+  if (candidateIds.length === 0) {
+    return { variable: null, ownerNodeId: null, proxiedFromNodeId: null };
+  }
+
+  const linkedVariable = await prisma.treeBranchLeafNodeVariable.findFirst({
+    where: { id: { in: candidateIds } },
+  });
+
+  if (!linkedVariable) {
+    return { variable: null, ownerNodeId: null, proxiedFromNodeId: null };
+  }
+
+  return {
+    variable: linkedVariable,
+    ownerNodeId: linkedVariable.nodeId,
+    proxiedFromNodeId: nodeId,
+  };
+};
+
 type LabelMap = Map<string, string | null>;
 type ValuesMap = Map<string, string | null>;
 
@@ -293,6 +293,13 @@ function resolveActionsLabels(actions: unknown, labels: LabelMap) {
     };
   });
 }
+
+// =============================================================================
+// ðŸ”— Helpers de maintenance automatique des colonnes linked*Ids
+// =============================================================================
+type LinkedField = 'linkedFormulaIds' | 'linkedConditionIds' | 'linkedTableIds' | 'linkedVariableIds';
+
+const uniq = <T,>(arr: T[]): T[] => Array.from(new Set(arr));
 
 async function getNodeLinkedField(
   client: PrismaClient | Prisma.TransactionClient,
@@ -1334,39 +1341,35 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
       return res.status(404).json({ error: 'Arbre non trouvÃ©' });
     }
 
-    // Récupérer tous les nœuds de l'arbre
-    let nodesRaw: any[] = [];
-    try {
-      nodesRaw = await prisma.treeBranchLeafNode.findMany({ where: { treeId } });
-    } catch (prismaErr: any) {
-      // Prisma P2022: missing column(s) in DB - provide helpful guidance
-      if (prismaErr?.code === 'P2022') {
-        console.error('[TreeBranchLeaf API] Prisma missing column error (P2022):', prismaErr.meta || prismaErr.message);
-        // Include details for the user (devs) - don't log secrets
-        return res.status(500).json({
-          error: 'Erreur base de données: colonne manquante détectée par Prisma (P2022).',
-          details: prismaErr?.meta || prismaErr?.message,
-          hint: 'Vérifiez que vous avez appliqué toutes les migrations `npx prisma migrate dev` et régénéré le client `npx prisma generate`.'
-        });
-      }
-      // Re-propagate other Prisma errors as server errors and log stack
-      console.error('[TreeBranchLeaf API] Unexpected Prisma error fetching nodes:', prismaErr);
-      return res.status(500).json({ error: 'Erreur serveur lors de la récupération des nœuds', details: prismaErr?.message });
-    }
-    console.log('🔍 [GET /trees/:treeId/nodes] Nœuds bruts récupérés en base:', nodesRaw.length);
+    const nodes = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId },
+      include: {
+        _count: {
+          select: {
+            other_TreeBranchLeafNode: true
+          }
+        },
+        TreeBranchLeafNodeTable: {
+          include: {
+            tableColumns: {
+              orderBy: { columnIndex: 'asc' }
+            },
+            tableRows: {
+              orderBy: { rowIndex: 'asc' }
+            }
+          }
+        }
+      },
+      orderBy: [
+        { order: 'asc' },
+        { createdAt: 'asc' }
+      ]
+    });
+    console.log('ðŸ” [TBL-ROUTES] NÅ“uds trouvÃ©s:', nodes.length);
 
-    // 🔄 MIGRATION : Reconstruire les données JSON depuis les colonnes dédiées
-    console.log('🔧 [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour', nodesRaw.length, 'nœuds');
-    const reconstructedNodes: Array<Record<string, unknown>> = [];
-    for (const nodeItem of nodesRaw) {
-      try {
-        reconstructedNodes.push(buildResponseFromColumns(nodeItem));
-      } catch (e) {
-        console.error('[TreeBranchLeaf API] Erreur reconstruction noeud:', { nodeId: (nodeItem as any)?.id, error: e });
-        // Fallback: push a minimal node object so UI receives something instead of crashing
-        reconstructedNodes.push({ id: (nodeItem as any)?.id, label: (nodeItem as any)?.label || 'Nœud', metadata: nodeItem?.metadata || {} });
-      }
-    }
+    // ðŸ”„ MIGRATION : Reconstruire les donnÃ©es JSON depuis les colonnes dÃ©diÃ©es
+    console.log('ðŸ”„ [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour', nodes.length, 'nÅ“uds');
+    const reconstructedNodes = nodes.map(node => buildResponseFromColumns(node));
     
     // ðŸš¨ DEBUG TOOLTIP FINAL : VÃ©rifier ce qui va Ãªtre envoyÃ© au client
     const nodesWithTooltips = reconstructedNodes.filter(node => 
@@ -1386,8 +1389,8 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
 
     res.json(reconstructedNodes);
   } catch (error) {
-    console.error('[TreeBranchLeaf API] Error fetching nodes:', error, (error as any)?.stack);
-    res.status(500).json({ error: 'Impossible de récupérer les nœuds', details: String(error) });
+    console.error('[TreeBranchLeaf API] Error fetching nodes:', error);
+    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer les nÅ“uds' });
   }
 });
 
@@ -1596,16 +1599,9 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       return res.status(403).json({ error: 'AccÃ¨s non autorisÃ© Ã  cet arbre' });
     }
 
-    // 🔍 Récupérer les copies existantes par metadata.sourceTemplateId dans tout l'arbre
-    // (Les copies ont le même parentId que les originaux, pas le repeater)
+    // RÃ©cupÃ©rer les enfants existants pour Ã©viter les doublons
     const existingChildren = await prisma.treeBranchLeafNode.findMany({
-      where: { 
-        treeId: parentNode.treeId,
-        metadata: {
-          path: ['sourceTemplateId'],
-          not: Prisma.DbNull
-        }
-      },
+      where: { parentId: nodeId },
       select: { id: true, metadata: true }
     });
 
@@ -1631,31 +1627,27 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
 
     console.log(`ðŸ” [DUPLICATE-TEMPLATES] ${templateNodes.length} templates Ã  dupliquer`);
 
-    // 🎯 DEBUG: Afficher la structure complète de chaque template
-    for (const template of templateNodes) {
-      console.log(`🎯 [DUPLICATE-TEMPLATES] Template à dupliquer:`, {
-        id: template.id,
-        label: template.label,
-        type: template.type,
-        parentId: template.parentId,
-        treeId: template.treeId
-      });
-    }
-
     // Dupliquer chaque template en COPIE PROFONDE (utilise deepCopyNodeInternal)
     const duplicatedSummaries: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }> = [];
-    const duplicatedNodeIds = new Set<string>();
     for (const template of templateNodes) {
-      // Compter les copies existantes + celles crÃ©Ã©es dans cette passe
-      const existingCopiesCount = existingChildren.filter(child => {
+      // 🚨 FIX: Compter SEULEMENT les copies valides (avec sourceTemplateId correct)
+      // Ignorer les copies orphelines sans metadata correcte
+      const validExistingCopies = existingChildren.filter(child => {
         const meta = child.metadata as any;
-        return meta?.sourceTemplateId === template.id;
-      }).length;
+        return meta?.sourceTemplateId === template.id && meta?.copySuffix != null;
+      });
       const createdSoFar = duplicatedSummaries.filter(d => d.sourceTemplateId === template.id).length;
-      const copyNumber = existingCopiesCount + createdSoFar + 1;
+      const copyNumber = validExistingCopies.length + createdSoFar + 1;
+      
+      console.log(`🔍 [DEBUG-ROUTE] Template: "${template.label}" (${template.id})`);
+      console.log(`🔍 [DEBUG-ROUTE] validExistingCopies: ${validExistingCopies.length}`, validExistingCopies.map(c => ({ id: c.id, copySuffix: (c.metadata as any)?.copySuffix })));
+      console.log(`🔍 [DEBUG-ROUTE] createdSoFar: ${createdSoFar}`);
+      console.log(`🔍 [DEBUG-ROUTE] copyNumber calculé: ${copyNumber}`);
+      
       const labelSuffix = ` (Copie ${copyNumber})`;
 
       const result = await deepCopyNodeInternal(req as unknown as MinimalReq, template.id, {
+        targetParentId: nodeId,
         labelSuffix,
         suffixNum: copyNumber,
         preserveSharedReferences: true  // ðŸ”— PRÃ‰SERVER les rÃ©fÃ©rences partagÃ©es pour les copies de templates
@@ -1689,7 +1681,6 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       console.log(`🎯 [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : 'NULL');
       
       if (created) {
-        duplicatedNodeIds.add(created.id);
         duplicatedSummaries.push({
           id: created.id,
           label: created.label,
@@ -1730,38 +1721,12 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
         // ℹ️ NOTE: Les variables liées (linkedVariableIds) sont DÉJÀ copiées par deepCopyNodeInternal
         // avec autoCreateDisplayNode: true, donc pas besoin d'appeler copyLinkedVariablesFromNode ici
         console.log(`ℹ️ [DUPLICATE-TEMPLATES] Variables liées déjà copiées par deepCopyNodeInternal pour ${newRootId}`);
-
-        if (result?.idMap && typeof result.idMap === 'object') {
-          Object.values(result.idMap).forEach((newId) => {
-            if (typeof newId === 'string' && newId) {
-              duplicatedNodeIds.add(newId);
-            }
-          });
-        }
       }
 
     }
     console.log(`ðŸŽ‰ [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} nÅ“uds dupliquÃ©s (deep) avec succÃ¨s`);
-
-    let duplicatedNodesPayload: Record<string, unknown>[] = [];
-    if (duplicatedNodeIds.size > 0) {
-      try {
-        const nodes = await prisma.treeBranchLeafNode.findMany({
-          where: {
-            treeId: parentNode.treeId,
-            id: { in: Array.from(duplicatedNodeIds) }
-          }
-        });
-        duplicatedNodesPayload = nodes.map(node => buildResponseFromColumns(node));
-        console.log(`📦 [DUPLICATE-TEMPLATES] Payload complet gÃ©nÃ©rÃ© pour ${duplicatedNodesPayload.length} nÅ“uds`);
-      } catch (payloadError) {
-        console.warn('⚠️ [DUPLICATE-TEMPLATES] Impossible de rÃ©cupÃ©rer le payload complet des nouveaux nÅ“uds', payloadError);
-      }
-    }
-
     res.status(201).json({
       duplicated: duplicatedSummaries.map(n => ({ id: n.id, label: n.label, type: n.type, parentId: n.parentId, sourceTemplateId: n.sourceTemplateId })),
-      nodes: duplicatedNodesPayload,
       count: duplicatedSummaries.length
     });
   } catch (error) {
@@ -2066,9 +2031,9 @@ async function deepCopyNodeInternal(
         })() : oldNode.link_params,
         link_targetNodeId: oldNode.link_targetNodeId && idMap.has(oldNode.link_targetNodeId) ? idMap.get(oldNode.link_targetNodeId)! : oldNode.link_targetNodeId,
         link_targetTreeId: oldNode.link_targetTreeId,
-        // 📊 TABLE: Pour les LOOKUPS (capabilities.table), garder la même référence de table
-        // Les copies doivent pointer vers la MÊME table source, pas une copie de la table
-        table_activeId: oldNode.table_activeId || null,
+        // 📊 TABLE: Copier table_activeId, table_instances et table_name du noeud original
+        // ✅ IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiées
+        table_activeId: oldNode.table_activeId ? `${oldNode.table_activeId}-${__copySuffixNum}` : null,
         table_instances: (() => {
           console.log('\n[DEEP-COPY-TABLE] DÉBUT table_instances');
           console.log('[DEEP-COPY-TABLE] oldNode.table_instances existe?', !!oldNode.table_instances);
@@ -2102,19 +2067,24 @@ async function deepCopyNodeInternal(
           console.log('[DEEP-COPY-TABLE] Keys:', Object.keys(rawInstances));
           const updatedInstances: Record<string, unknown> = {};
           for (const [key, value] of Object.entries(rawInstances)) {
-            // Pour les lookups de table, on garde la même référence (pas de suffixe)
-            // Les copies pointent vers la MÊME table source que l'original
-            const newKey = key;  // Garder la clé originale
-            console.log(`[DEEP-COPY-TABLE] Key: "${key}" => "${newKey}" (unchanged for lookup)`);
+            // ✅ FIX: Vérifier si la clé a DÉJÀ un suffixe numérique (-1, -2, etc.)
+            // Ne pas utiliser includes('-') car UUIDs contiennent des tirets!
+            const hasSuffixRegex = /-\d+$/;  // Suffixe numérique à la fin
+            const newKey = hasSuffixRegex.test(key) ? key : `${key}-${__copySuffixNum}`;
+            console.log(`[DEEP-COPY-TABLE] Key: "${key}" => "${newKey}"`);
             
             if (value && typeof value === 'object') {
               const tableInstanceObj = value as Record<string, unknown>;
               const updatedObj = { ...tableInstanceObj };
               if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === 'string') {
                 const oldTableId = tableInstanceObj.tableId;
-                // Pour les lookups, garder le même tableId (pas de suffixe)
-                updatedObj.tableId = oldTableId;
-                console.log(`[DEEP-COPY-TABLE]   tableId: "${oldTableId}" => "${updatedObj.tableId}" (unchanged for lookup)`);
+                // ✅ FIX: Vérifier si le tableId a DÉJÀ un suffixe numérique (-1, -2, etc.)
+                // Ne pas utiliser includes('-') car UUIDs contiennent des tirets!
+                const hasSuffixRegex = /-\d+$/;  // Suffixe numérique à la fin
+                updatedObj.tableId = hasSuffixRegex.test(oldTableId)
+                  ? oldTableId 
+                  : `${oldTableId}-${__copySuffixNum}`;
+                console.log(`[DEEP-COPY-TABLE]   tableId: "${oldTableId}" => "${updatedObj.tableId}"`);
               }
               updatedInstances[newKey] = updatedObj;
             } else {
@@ -2135,28 +2105,12 @@ async function deepCopyNodeInternal(
         repeater_buttonSize: oldNode.repeater_buttonSize,
         repeater_buttonWidth: oldNode.repeater_buttonWidth,
         repeater_iconOnly: oldNode.repeater_iconOnly,
-        // METADATA: noter la provenance et garder les lookups de table intacts
-        metadata: (() => {
-          const baseMeta = typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {};
-          const newMeta = {
-            ...baseMeta,
-            copiedFromNodeId: oldNode.id,
-            copySuffix: __copySuffixNum,
-          };
-          
-          // Pour les lookups de table (metadata.capabilities.table), garder les références originales
-          // Ne PAS ajouter de suffixe aux activeId/tableId car les copies doivent pointer vers la même table source
-          if (baseMeta.capabilities && typeof baseMeta.capabilities === 'object') {
-            const caps = baseMeta.capabilities as Record<string, unknown>;
-            if (caps.table && typeof caps.table === 'object') {
-              // Les tableIds dans capabilities.table.instances doivent rester identiques (lookup source)
-              // Pas de modification nécessaire - on garde telles quelles
-              console.log('[DEEP-COPY] Preserving metadata.capabilities.table as-is (lookup source)');
-            }
-          }
-          
-          return newMeta;
-        })() as Prisma.InputJsonValue,
+        // METADATA: noter la provenance et supprimer les shared refs (copie indÃ©pendante)
+        metadata: {
+          ...(typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {}),
+          copiedFromNodeId: oldNode.id,
+          copySuffix: __copySuffixNum,
+        } as Prisma.InputJsonValue,
         // SHARED REFS â†’ conditionnellement prÃ©servÃ©es ou supprimÃ©es
         isSharedReference: preserveSharedReferences ? oldNode.isSharedReference : false,
         sharedReferenceId: preserveSharedReferences ? oldNode.sharedReferenceId : null,
@@ -2306,66 +2260,38 @@ async function deepCopyNodeInternal(
           console.warn('[TreeBranchLeaf API] Warning updating linkedTableIds during deep copy:', (e as Error).message);
         }
       }
-
-      // SelectConfig (pour les champs SELECT avec lookup)
-      const selectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
-        where: { nodeId: oldId }
-      });
-      if (selectConfig) {
-        console.log(`[DEEP-COPY] Copie du selectConfig pour ${oldId} → ${newId}`);
-        await prisma.treeBranchLeafSelectConfig.create({
-          data: {
-            id: randomUUID(),
-            nodeId: newId,
-            options: selectConfig.options as Prisma.InputJsonValue,
-            multiple: selectConfig.multiple,
-            searchable: selectConfig.searchable,
-            allowCustom: selectConfig.allowCustom,
-            optionsSource: selectConfig.optionsSource,
-            tableReference: selectConfig.tableReference, // IMPORTANT: Garder la même table (pas de suffixe)
-            keyColumn: selectConfig.keyColumn,
-            keyRow: selectConfig.keyRow, // IMPORTANT: Garder le même keyRow (Inclinaison, pas Orientation)
-            valueColumn: selectConfig.valueColumn,
-            valueRow: selectConfig.valueRow,
-            displayColumn: selectConfig.displayColumn,
-            displayRow: selectConfig.displayRow,
-            dependsOnNodeId: selectConfig.dependsOnNodeId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }
-        });
-        console.log(`[DEEP-COPY] ✅ selectConfig copié avec keyRow="${selectConfig.keyRow}", keyColumn="${selectConfig.keyColumn}"`);
-      }
     }
 
     // Cache global pour éviter de copier deux fois la même variable
-        // Cache global pour éviter de copier deux fois la même variable
-        const variableCopyCache = new Map<string, string>();
-        
-        for (const oldNodeId of toCopy) {
-          const newNodeId = idMap.get(oldNodeId)!;
-          const oldNode = byId.get(oldNodeId)!;
+    const variableCopyCache = new Map<string, string>();
 
-          // Mapper les IDs linked du nœud original vers leurs versions suffixées
-          // Les formules et conditions doivent aussi avoir le suffixe appliqué
-          const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [])
+    for (const oldNodeId of toCopy) {
+      const newNodeId = idMap.get(oldNodeId)!;
+      const oldNode = byId.get(oldNodeId)!;
+
+      // Mapper les IDs linked du nœud original vers leurs versions suffixées
+      // Les formules et conditions doivent aussi avoir le suffixe appliqué
+      const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [])
+        .map(id => {
+          const mappedId = formulaIdMap.get(id);
+          // ✅ Si déjà mappé (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
+          return mappedId ?? `${id}-${__copySuffixNum}`;
+        })
+        .filter(Boolean);
+
+      const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [])
             .map(id => {
-              const mappedId = formulaIdMap.get(id) || id;
-              return `${mappedId}-${__copySuffixNum}`;
-            })
-            .filter(Boolean);
-          
-          const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [])
-            .map(id => {
-              const mappedId = conditionIdMap.get(id) || id;
-              return `${mappedId}-${__copySuffixNum}`;
+              const mappedId = conditionIdMap.get(id);
+              // ✅ Si déjà mappé (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
+              return mappedId ?? `${id}-${__copySuffixNum}`;
             })
             .filter(Boolean);
           
           const newLinkedTableIds = (Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : [])
             .map(id => {
-              const mappedId = tableIdMap.get(id) || id;
-              return `${mappedId}-${__copySuffixNum}`;
+              const mappedId = tableIdMap.get(id);
+              // ✅ Si déjà mappé (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
+              return mappedId ?? `${id}-${__copySuffixNum}`;
             })
             .filter(Boolean);
           
@@ -2675,38 +2601,13 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
   // âœ… Ã‰TAPE 1 : Migration depuis appearanceConfig (NOUVEAU systÃ¨me prioritaire)
   if (Object.keys(appearanceConfig).length > 0) {
     console.log('ðŸ”„ [mapJSONToColumns] Traitement appearanceConfig:', appearanceConfig);
-    // 🎨 Apparence générale (pour TOUS les champs)
     if (appearanceConfig.size) columnData.appearance_size = appearanceConfig.size;
     if (appearanceConfig.width) columnData.appearance_width = appearanceConfig.width;
     if (appearanceConfig.variant) columnData.appearance_variant = appearanceConfig.variant;
-    
-    // Compatibilité avec anciens noms
+    // Copier tous les autres champs d'apparence possibles
     if (appearanceConfig.textSize) columnData.appearance_size = appearanceConfig.textSize;
     if (appearanceConfig.fieldWidth) columnData.appearance_width = appearanceConfig.fieldWidth;
     if (appearanceConfig.fieldVariant) columnData.appearance_variant = appearanceConfig.fieldVariant;
-    
-    // 💡 Configuration tooltip d'aide (pour TOUS les champs)
-    if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
-    if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
-    if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
-    
-    // 📂 Configuration sections/branches
-    if (appearanceConfig.collapsible !== undefined) columnData.section_collapsible = appearanceConfig.collapsible;
-    if (appearanceConfig.defaultCollapsed !== undefined) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
-    if (appearanceConfig.showChildrenCount !== undefined) columnData.section_showChildrenCount = appearanceConfig.showChildrenCount;
-    if (appearanceConfig.columnsDesktop !== undefined) columnData.section_columnsDesktop = appearanceConfig.columnsDesktop;
-    if (appearanceConfig.columnsMobile !== undefined) columnData.section_columnsMobile = appearanceConfig.columnsMobile;
-    if (appearanceConfig.gutter !== undefined) columnData.section_gutter = appearanceConfig.gutter;
-    
-    // 📎 Configuration fichiers
-    if (appearanceConfig.maxFileSize !== undefined) columnData.file_maxSize = appearanceConfig.maxFileSize;
-    if (appearanceConfig.allowedTypes) columnData.file_allowedTypes = appearanceConfig.allowedTypes;
-    if (appearanceConfig.multiple !== undefined) columnData.file_multiple = appearanceConfig.multiple;
-    if (appearanceConfig.showPreview !== undefined) columnData.file_showPreview = appearanceConfig.showPreview;
-    
-    // 🔧 Propriétés avancées universelles
-    if (appearanceConfig.visibleToUser !== undefined) columnData.data_visibleToUser = appearanceConfig.visibleToUser;
-    if (appearanceConfig.isRequired !== undefined) columnData.isRequired = appearanceConfig.isRequired;
   }
   
   // âœ… Ã‰TAPE 1bis : Migration depuis metadata.appearance (fallback)
@@ -2724,9 +2625,16 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     console.log('ðŸ”„ [mapJSONToColumns] ðŸ”¥ Traitement metadata.repeater:', repeaterMeta);
     
     // Sauvegarder templateNodeIds en JSON dans la colonne dÃ©diÃ©e
-    if (repeaterMeta.templateNodeIds && Array.isArray(repeaterMeta.templateNodeIds)) {
-      columnData.repeater_templateNodeIds = JSON.stringify(repeaterMeta.templateNodeIds);
-      console.log('âœ… [mapJSONToColumns] repeater_templateNodeIds sauvegardÃ©:', repeaterMeta.templateNodeIds);
+    if ('templateNodeIds' in repeaterMeta) {
+      if (Array.isArray(repeaterMeta.templateNodeIds)) {
+        columnData.repeater_templateNodeIds = repeaterMeta.templateNodeIds.length > 0
+          ? JSON.stringify(repeaterMeta.templateNodeIds)
+          : null;
+        console.log('âœ… [mapJSONToColumns] repeater_templateNodeIds sauvegardÃ©:', repeaterMeta.templateNodeIds);
+      } else {
+        columnData.repeater_templateNodeIds = null;
+        console.log('âœ… [mapJSONToColumns] repeater_templateNodeIds remis Ã  NULL (valeur non-array)');
+      }
     }
     
     // ðŸ·ï¸ SAUVEGARDER templateNodeLabels en JSON dans la colonne dÃ©diÃ©e
@@ -2744,23 +2652,36 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (repeaterMeta.buttonWidth) columnData.repeater_buttonWidth = repeaterMeta.buttonWidth;
     if (repeaterMeta.iconOnly !== undefined) columnData.repeater_iconOnly = repeaterMeta.iconOnly;
   }
-
-  // âœ… Ã‰TAPE X : Migration pour subTabs / subTab
-  if (Array.isArray(metadata.subTabs)) {
-    // Sauvegarder la liste en JSON dans la colonne dédiée 'subtabs'
-    columnData.subtabs = JSON.stringify(metadata.subTabs);
-    console.log('ðŸ’¤ [mapJSONToColumns] subtabs column sauvegardée:', metadata.subTabs);
-  }
-  if (metadata.subTab !== undefined) {
-    if (Array.isArray(metadata.subTab)) {
-      columnData.subtab = metadata.subTab.length ? JSON.stringify(metadata.subTab) : null;
+  
+  // ✅ ÉTAPE 1quater : Migration depuis metadata.subTabs (CRUCIAL!)
+  // 🎯 Les sous-onglets (array) DOIVENT être sauvegardés dans la colonne 'subtabs'
+  if ('subTabs' in metadata) {
+    if (Array.isArray(metadata.subTabs) && metadata.subTabs.length > 0) {
+      columnData.subtabs = JSON.stringify(metadata.subTabs);
+      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTabs sauvegardé en colonne subtabs:', metadata.subTabs);
     } else {
-      columnData.subtab = metadata.subTab || null;
+      columnData.subtabs = null;
+      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTabs vidé : colonne subtabs remise à NULL');
     }
-    console.log('ðŸ’¤ [mapJSONToColumns] subtab column sauvegardée:', metadata.subTab);
   }
   
-  // âœ… Ã‰TAPE 2 : Migration configuration champs texte
+  // ✅ ÉTAPE 1quinquies : Migration metadata.subTab (assignment champ individuel)
+  // 🎯 L'assignment d'un champ à un sous-onglet (string ou array) va dans la colonne 'subtab'
+  if ('subTab' in metadata) {
+    const subTabValue = metadata.subTab;
+    if (typeof subTabValue === 'string' && subTabValue.trim().length > 0) {
+      columnData.subtab = subTabValue;
+      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTab (string assignment) sauvegardé en colonne subtab:', subTabValue);
+    } else if (Array.isArray(subTabValue) && subTabValue.length > 0) {
+      columnData.subtab = JSON.stringify(subTabValue);
+      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTab (array assignment) sauvegardé en colonne subtab:', subTabValue);
+    } else {
+      columnData.subtab = null;
+      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTab vidé : colonne subtab remise à NULL');
+    }
+  }
+  
+  // ✅ ÉTAPE 2 : Migration configuration champs texte
   const textConfig = metadata.textConfig || fieldConfig.text || fieldConfig.textConfig || {};
   if (Object.keys(textConfig).length > 0) {
     if (textConfig.placeholder) columnData.text_placeholder = textConfig.placeholder;
@@ -2986,44 +2907,6 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     ...(node.metadata || {}),
     appearance
   };
-
-  // Reconstruire les subTabs depuis la colonne `subtabs` si elle existe
-  if (node.subtabs) {
-    try {
-      const parsed = JSON.parse(node.subtabs as string);
-      if (Array.isArray(parsed)) {
-        (cleanedMetadata as any).subTabs = parsed;
-        console.log('ðŸ” [buildResponseFromColumns] Reconstruit subTabs depuis colonne subtabs:', parsed);
-      }
-    } catch { /* noop */ }
-  }
-
-  // Reconstruire le subTab depuis la colonne `subtab` si elle existe
-  if (node.subtab !== undefined && node.subtab !== null) {
-    const rawSubTab = node.subtab as string;
-    let parsedSubTab: string | string[] = rawSubTab;
-    if (typeof rawSubTab === 'string') {
-      const trimmed = rawSubTab.trim();
-      if (trimmed.startsWith('[')) {
-        try {
-          const candidate = JSON.parse(trimmed);
-          if (Array.isArray(candidate)) {
-            parsedSubTab = candidate;
-          }
-        } catch {
-          parsedSubTab = rawSubTab;
-        }
-      } else if (trimmed.includes(',')) {
-        parsedSubTab = trimmed.split(',').map(part => part.trim()).filter(Boolean);
-      } else {
-        parsedSubTab = trimmed;
-      }
-    }
-    try {
-      (cleanedMetadata as any).subTab = parsedSubTab;
-      console.log('ðŸ” [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:', (cleanedMetadata as any).subTab);
-    } catch { /* noop */ }
-  }
   
   // ðŸ” DEBUG: Log metadata pour "Test - liste"
   if (node.id === '131a7b51-97d5-4f40-8a5a-9359f38939e8') {
@@ -3032,18 +2915,11 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     console.log('ðŸ” [buildResponseFromColumns][Test - liste] metadata.capabilities:', 
       (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : 'N/A');
   }
-
-  if (cleanedMetadata && cleanedMetadata.subTabs) {
-    try {
-      console.log('ðŸ” [buildResponseFromColumns] metadata.subTabs present for node', node.id, JSON.stringify((cleanedMetadata as any).subTabs));
-    } catch(e) { /* noop */ }
-  }
   
   // ðŸ”¥ INJECTER repeater dans cleanedMetadata
-  const metadataWithRepeater = {
-    ...cleanedMetadata,
-    repeater: repeater
-  };
+  const metadataWithRepeater = repeater.templateNodeIds && repeater.templateNodeIds.length > 0
+    ? { ...cleanedMetadata, repeater: repeater }
+    : cleanedMetadata;
 
   // ðŸ” LOG SPÃ‰CIAL POUR LES RÃ‰PÃ‰TABLES
   if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
@@ -3057,7 +2933,36 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     });
   }
 
-  console.log('ðŸŽ¯ [buildResponseFromColumns] metadata.repeater final:', metadataWithRepeater.repeater);
+  console.log('[buildResponseFromColumns] metadata.repeater final:', metadataWithRepeater.repeater);
+
+  // Reconstruire subTabs depuis la colonne 'subtabs' (array de noms de sous-onglets)
+  if (node.subtabs) {
+    try {
+      const parsedSubTabs = JSON.parse(node.subtabs);
+      if (Array.isArray(parsedSubTabs)) {
+        metadataWithRepeater.subTabs = parsedSubTabs;
+        console.log('[buildResponseFromColumns] OK subTabs reconstruits:', parsedSubTabs);
+      }
+    } catch (e) {
+      console.error('[buildResponseFromColumns] Erreur parse subtabs:', e);
+    }
+  }
+  
+  // Reconstruire subTab depuis la colonne 'subtab' (string assignment du champ)
+  if (node.subtab) {
+    try {
+      let subTabValue = node.subtab;
+      if (typeof node.subtab === 'string' && node.subtab.startsWith('\"')) {
+        subTabValue = JSON.parse(node.subtab);
+      }
+      if (subTabValue && typeof subTabValue === 'string') {
+        metadataWithRepeater.subTab = subTabValue;
+        console.log('[buildResponseFromColumns] OK subTab (assignment) reconstruit:', subTabValue);
+      }
+    } catch (e) {
+      console.error('[buildResponseFromColumns] Erreur parse subtab:', e);
+    }
+  }
 
   const result = {
     ...node,
@@ -3250,20 +3155,28 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
  */
 function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<string, unknown> {
   const { metadata, fieldConfig: _fieldConfig, appearanceConfig: _appearanceConfig, ...cleanData } = updateData;
-
-  // 🔧 PRESERVER metadata CAPABILITIES + SUBTABS/SUBTAB
-  // Nous autorisons explicitement certaines clés metadata à traverser la suppression JSON
+  
+  // ðŸ”¥ CORRECTION : PrÃ©server metadata.capabilities pour les formules multiples
   if (metadata && typeof metadata === 'object') {
     const metaObj = metadata as Record<string, unknown>;
-    const preserved: Record<string, unknown> = {};
-    if (metaObj.capabilities) preserved.capabilities = metaObj.capabilities;
-    if (metaObj.subTabs) preserved.subTabs = metaObj.subTabs;
-    if (metaObj.subTab) preserved.subTab = metaObj.subTab;
-    // Si au moins une clé doit être préservée, renvoyer le cleanData avec metadata réduit
-    if (Object.keys(preserved).length > 0) {
+    const preservedMeta: Record<string, unknown> = {};
+    
+    if (metaObj.capabilities) {
+      preservedMeta.capabilities = metaObj.capabilities;
+    }
+    if ('subTabs' in metaObj) {
+      preservedMeta.subTabs = metaObj.subTabs;
+      console.log('🎯 [removeJSONFromUpdate] Préservation de metadata.subTabs:', metaObj.subTabs);
+    }
+    if ('subTab' in metaObj) {
+      preservedMeta.subTab = metaObj.subTab;
+      console.log('🎯 [removeJSONFromUpdate] Préservation de metadata.subTab:', metaObj.subTab);
+    }
+    
+    if (Object.keys(preservedMeta).length > 0) {
       return {
         ...cleanData,
-        metadata: preserved
+        metadata: preservedMeta
       };
     }
   }
@@ -3321,9 +3234,6 @@ const updateOrMoveNode = async (req, res) => {
     const { treeId, nodeId } = req.params;
     const { organizationId } = req.user!;
     const updateData = req.body || {};
-    // Flag: cascade subTab to descendants (server-side optimized variant)
-    const cascadeSubTab = !!updateData.cascadeSubTab;
-    if ('cascadeSubTab' in updateData) delete updateData.cascadeSubTab;
     
     console.log('ðŸ”„ [updateOrMoveNode] AVANT migration - donnÃ©es reÃ§ues:', {
       hasMetadata: !!updateData.metadata,
@@ -3353,13 +3263,6 @@ const updateOrMoveNode = async (req, res) => {
       hasFieldConfigInFinal: !!updateObj.fieldConfig,
       columnData: columnData
     });
-
-    // DEBUG: show the actual metadata object intended to be written
-    try {
-      console.log('ðŸ”„ [updateOrMoveNode] updateObj.metadata CONTENT:', JSON.stringify(updateObj.metadata || null));
-    } catch(e) {
-      console.warn('ðŸ”„ [updateOrMoveNode] Failed to stringify updateObj.metadata', e);
-    }
 
   // ðŸ§© IMPORTANT: Normaliser les rÃ©fÃ©rences partagÃ©es si le nÅ“ud est une COPIE (ID avec suffixe "-N")
   // Concerne les Ã©critures directes envoyÃ©es par le frontend (single/array)
@@ -3392,32 +3295,13 @@ const updateOrMoveNode = async (req, res) => {
       where: { id: nodeId, treeId }
     });
 
-    // Si les colonnes dédiées pour subTabs/subTab existent en base et ne sont pas dans updateObj,
-    // les préremplir pour éviter la perte involontaire lors de l'update.
-    try {
-      const selectedColumns = await prisma.treeBranchLeafNode.findUnique({
-        where: { id: nodeId },
-        select: { subtabs: true, subtab: true }
-      });
-      if (selectedColumns) {
-        if (!('subtabs' in updateObj) && selectedColumns.subtabs !== undefined) {
-          updateObj.subtabs = selectedColumns.subtabs;
-          console.log('ðŸ’¤ [updateOrMoveNode] Prérempli updateObj.subtabs depuis la base');
-        }
-        if (!('subtab' in updateObj) && selectedColumns.subtab !== undefined) {
-          updateObj.subtab = selectedColumns.subtab;
-          console.log('ðŸ’¤ [updateOrMoveNode] Prérempli updateObj.subtab depuis la base');
-        }
-      }
-    } catch (e) { console.warn('ðŸ’¤ [updateOrMoveNode] Error while pre-filling subtabs/subtab from base', e); }
-
     if (!existingNode) {
-      // ðŸš¨ DEBUG: Chercher le nÅ“ud sans contrainte de treeId pour voir s'il existe ailleurs
+      // 🔍 DEBUG: Chercher le nœud sans contrainte de treeId pour voir s'il existe ailleurs
       const nodeAnyTree = await prisma.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
       });
-      
-      console.error('âŒ [updateOrMoveNode] NÅ“ud non trouvÃ© - DEBUG:', {
+
+      console.error('❌ [updateOrMoveNode] Nœud non trouvé - DEBUG:', {
         nodeId,
         treeId,
         organizationId,
@@ -3425,9 +3309,9 @@ const updateOrMoveNode = async (req, res) => {
         nodeActualTreeId: nodeAnyTree?.treeId,
         allNodesInTree: await prisma.treeBranchLeafNode.count({ where: { treeId } })
       });
-      
-      return res.status(404).json({ 
-        error: 'NÅ“ud non trouvÃ©',
+
+      return res.status(404).json({
+        error: 'Nœud non trouvé',
         debug: {
           nodeId,
           treeId,
@@ -3437,11 +3321,11 @@ const updateOrMoveNode = async (req, res) => {
       });
     }
 
-    // Extraire paramÃ¨tres potentiels de dÃ©placement
-  const targetId: string | undefined = updateData.targetId;
-  const position: 'before' | 'after' | 'child' | undefined = updateData.position;
+    // Extraire paramètres potentiels de déplacement
+    const targetId: string | undefined = updateData.targetId;
+    const position: 'before' | 'after' | 'child' | undefined = updateData.position;
 
-    // Si targetId/position sont fournis, on calcule parentId/insertIndex Ã  partir de ceux-ci
+    // Si targetId/position sont fournis, on calcule parentId/insertIndex à partir de ceux-ci
     let newParentId: string | null | undefined = updateData.parentId; // undefined = pas de changement
     let desiredIndex: number | undefined = undefined; // index parmi les siblings (entier)
 
@@ -3493,12 +3377,10 @@ const updateOrMoveNode = async (req, res) => {
             });
           }
         } else if (existingNode.type.startsWith('leaf_')) {
-          // Les champs peuvent Ãªtre sous n'importe quel parent SAUF les options SELECT
-          const isSelectOption = newParentNode.type.startsWith('leaf_') && newParentNode.subType === 'SELECT';
-          
-          if (isSelectOption) {
+          // Les champs peuvent Ãªtre sous des branches ou d'autres champs
+          if (newParentNode.type !== 'branch' && !newParentNode.type.startsWith('leaf_')) {
             return res.status(400).json({ 
-              error: 'Les champs ne peuvent pas Ãªtre dÃ©placÃ©s sous une option SELECT' 
+              error: 'Les champs ne peuvent Ãªtre dÃ©placÃ©s que sous des branches ou d\'autres champs' 
             });
           }
         } else if (existingNode.type === 'branch') {
@@ -3607,40 +3489,22 @@ const updateOrMoveNode = async (req, res) => {
       console.warn('ðŸ”¥ [updateOrMoveNode] Synchronisation metadata.repeater:', updatedRepeaterMetadata);
     }
     
-    const result = await prisma.treeBranchLeafNode.updateMany({
-      where: { id: nodeId, treeId },
-      data: { ...(updateObj as Prisma.TreeBranchLeafNodeUpdateManyMutationInput), updatedAt: new Date() }
+    // CRITIQUE : Si repeater_templateNodeIds est explicitement NULL, supprimer metadata.repeater
+    if ('repeater_templateNodeIds' in updateObj && updateObj.repeater_templateNodeIds === null) {
+      const currentMetadata = existingNode.metadata as any || {};
+      if (currentMetadata.repeater) {
+        const { repeater, ...metadataWithoutRepeater } = currentMetadata;
+        updateObj.metadata = metadataWithoutRepeater;
+        console.warn('[updateOrMoveNode] Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL');
+      }
+    }
+    
+    await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { ...(updateObj as Prisma.TreeBranchLeafNodeUpdateInput), updatedAt: new Date() }
     });
 
-    if (result.count === 0) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
-    }
-
     const updatedNode = await prisma.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
-
-    // If requested, perform a server-side cascade update for subTab on descendants
-    try {
-      if (cascadeSubTab && updateObj.subtab !== undefined && updateObj.subtab !== null) {
-        const subTabStr = String(updateObj.subtab);
-        console.log('ðŸ“— [updateOrMoveNode] CascadeSubTab activé: mise à jour SQL pour', nodeId, 'valeur:', subTabStr);
-        await prisma.$executeRaw`
-          WITH RECURSIVE descendants AS (
-            SELECT id FROM "public"."TreeBranchLeafNode" WHERE id = ${nodeId}
-            UNION ALL
-            SELECT n.id FROM "public"."TreeBranchLeafNode" n JOIN descendants d ON n."parentId" = d.id
-          )
-          UPDATE "public"."TreeBranchLeafNode" t
-          SET "subtab" = ${subTabStr}, "updatedAt" = NOW()
-          WHERE t.id IN (SELECT id FROM descendants)
-            AND (
-              t.type LIKE 'leaf_%'
-              OR COALESCE(jsonb_array_length(t.subtabs), 0) = 0
-            );
-        `;
-      }
-    } catch (e) {
-      console.error('âŒ [updateOrMoveNode] Erreur lors du cascadeSubTab SQL:', e);
-    }
     
     console.log('ðŸ”„ [updateOrMoveNode] APRÃˆS mise Ã  jour - nÅ“ud brut Prisma:', {
       'updatedNode.metadata': updatedNode?.metadata,
@@ -3738,15 +3602,27 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
     // Supprimer en partant des feuilles (profondeur dÃ©croissante) pour Ã©viter les contraintes FK parentId
     toDelete.sort((a, b) => (depth.get(b)! - depth.get(a)!));
 
-    // Suppression transactionnelle
+    // Suppression transactionnelle (tentative par élément - ignorer les erreurs individuelles)
+    const deletedSubtreeIds: string[] = [];
     await prisma.$transaction(async (tx) => {
       for (const id of toDelete) {
-        await tx.treeBranchLeafNode.delete({ where: { id } });
+        try {
+          await tx.treeBranchLeafNode.delete({ where: { id } });
+          deletedSubtreeIds.push(id);
+        } catch (err) {
+          // Ignorer les erreurs individuelles (ex: id dÃ©jÃ  supprimÃ©) et logger
+          console.warn('[DELETE SUBTREE] Failed to delete node', id, (err as Error).message);
+        }
       }
     });
 
     // Post-suppression: supprimer les rÃ©fÃ©rences suffixÃ©es orphelines (copies "-1") si elles ne sont plus rÃ©fÃ©rencÃ©es ailleurs
-    let deletedOrphans = 0;
+  let deletedOrphans = 0;
+  const deletedOrphansIds: string[] = [];
+  // Declare deletedExtra variables in outer scope to ensure they are always defined for the final response
+  // Note: deletedExtra and deletedExtraIds are declared below this comment block
+  let deletedExtra = 0;
+  const deletedExtraIds: string[] = [];
     if (referencedIds.size > 0) {
       const remaining = await prisma.treeBranchLeafNode.findMany({ where: { treeId } });
       const stillRef = new Set<string>();
@@ -3759,7 +3635,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       const isCopySuffixed = (id: string) => /-\d+$/.test(id);
       const orphanRoots = Array.from(referencedIds).filter(id => !stillRef.has(id) && remaining.some(n => n.id === id) && isCopySuffixed(id));
 
-      if (orphanRoots.length > 0) {
+  if (orphanRoots.length > 0) {
         // Construire ordre de suppression feuilles -> racines
         const byParent = new Map<string, string[]>();
         for (const n of remaining) {
@@ -3786,6 +3662,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           for (const id of ordered) {
             await tx.treeBranchLeafNode.delete({ where: { id } });
             deletedOrphans++;
+            deletedOrphansIds.push(id);
           }
         });
       }
@@ -3800,164 +3677,196 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       const nodesToScan = remainingNodes;
       const removedSet = new Set(toDelete);
 
-      // Construire un set de template/roots potentiels liÃ©s (sourceTemplateId / copiedFromNodeId)
-      const relatedTemplateIds = new Set<string>();
-      const deletedSuffixes = new Set<string>(); // Suffixes des nœuds supprimés
-      const deletedParentIds = new Set<string>(); // ParentIds des nœuds supprimés (pour identifier la branche)
-      
-      console.log('🗑️ [DELETE DEBUG] Nœuds à supprimer:', toDelete);
-      
-      for (const rid of toDelete) {
-        const n = allNodes.find(x => x.id === rid);
-        if (!n) continue;
-        const dm: any = n.metadata || {};
-        if (dm?.sourceTemplateId) relatedTemplateIds.add(String(dm.sourceTemplateId));
-        if (dm?.copiedFromNodeId) relatedTemplateIds.add(String(dm.copiedFromNodeId));
-        
-        // Extraire le suffixe du nœud supprimé (ex: "node-xyz-2" → "-2")
-        const match = String(rid).match(/-(\d+)$/);
-        if (match) {
-          deletedSuffixes.add(match[1]); // Stocker juste le numéro (ex: "2")
-          console.log(`🔢 [DELETE DEBUG] Nœud ${rid} a le suffixe: -${match[1]}, parentId: ${n.parentId || 'N/A'}`);
+        // Build a set of (duplicatedFromRepeater|copySuffix) pairs for removed nodes to enable
+        // conservative matching of display nodes created for that copy instance. Also capture a
+        // list of objects to be used for label-based fallback matching when metadata is missing.
+        const removedRepeaterCopyPairs = new Set<string>();
+        const removedRepeaterCopyObjects: Array<{ repeaterId: string | null; copySuffix: string | null }> = [];
+  // relatedTemplateIds removed: we don't use template id-only matching (too broad)
+        const extractSuffixFromLabel = (label: string | null | undefined): string | null => {
+          if (!label) return null;
+          const l = String(label);
+          const m1 = /\(Copie\s*([0-9]+)\)$/i.exec(l);
+          if (m1 && m1[1]) return m1[1];
+          const m2 = /[-–—]\s*(\d+)$/i.exec(l);
+          if (m2 && m2[1]) return m2[1];
+          return null;
+        };
+        for (const rid of toDelete) {
+          const n = allNodes.find(x => x.id === rid);
+          if (!n) continue;
+          const dm: any = n.metadata || {};
+          const rId = dm?.duplicatedFromRepeater || n.parentId || null;
+          const cs = (dm?.copySuffix ?? dm?.suffixNum) ?? extractSuffixFromLabel(n.label) ?? null;
+          // skip building relatedTemplateIds: avoid template-only deletion heuristics
+          if (rId && cs != null) {
+            removedRepeaterCopyPairs.add(`${rId}|${String(cs)}`);
+            removedRepeaterCopyObjects.push({ repeaterId: rId, copySuffix: String(cs) });
+          } else {
+            // Keep it for a fallback attempt (if label-based suffix exists)
+            if (rId || n.label) {
+              const fallbackSuffix = cs;
+              removedRepeaterCopyObjects.push({ repeaterId: rId, copySuffix: fallbackSuffix });
+            }
+          }
         }
-        
-        // Stocker le parentId pour identifier la branche
-        if (n.parentId) {
-          deletedParentIds.add(n.parentId);
-        }
-      }
-      
-      console.log('🔢 [DELETE DEBUG] Suffixes détectés:', Array.from(deletedSuffixes));
-      console.log('👨‍👩‍👧 [DELETE DEBUG] ParentIds des nœuds supprimés:', Array.from(deletedParentIds));
 
       // Trouver candidats additionnels qui ressemblent Ã  des nÃ¸uds d'affichage
-      const extraCandidates = nodesToScan.filter(n => {
+  const debugDelete = typeof process !== 'undefined' && process.env && process.env.DEBUG_TBL_DELETE === '1';
+  const extraCandidates = nodesToScan.filter(n => {
         const meta: any = n.metadata || {};
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
         if (!looksLikeDisplay) return false;
         if (removedSet.has(n.id)) return false;
-        
-        // 1. Champs d'affichage liés par copiedFromNodeId/sourceTemplateId
-        // CORRECTIF CRITIQUE: Vérifier aussi que les suffixes correspondent
-        if (meta.copiedFromNodeId && (removedSet.has(String(meta.copiedFromNodeId)) || relatedTemplateIds.has(String(meta.copiedFromNodeId)))) {
-          // Extraire les suffixes pour comparaison
-          const copiedFromMatch = String(meta.copiedFromNodeId).match(/-(\d+)$/);
-          const nodeMatch = String(n.id).match(/-(\d+)$/);
-          const copiedFromSuffix = copiedFromMatch ? copiedFromMatch[1] : null;
-          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
-          
-          // RÈGLE: Le nœud ne doit être supprimé QUE si son suffixe correspond aux suffixes en cours de suppression
-          if (nodeSuffix) {
-            // Le nœud a un suffixe → vérifier qu'il est dans deletedSuffixes
-            if (!deletedSuffixes.has(nodeSuffix)) {
-              console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → copiedFromNodeId match MAIS suffixe -${nodeSuffix} non supprimé (on supprime: ${Array.from(deletedSuffixes).join(', ')})`);
-              return false;
+        if (meta.copiedFromNodeId) {
+          // Support string, array, or JSON array representation for copiedFromNodeId
+          try {
+            const normalizedCopiedFrom: string[] = [];
+            if (Array.isArray(meta.copiedFromNodeId)) {
+              meta.copiedFromNodeId.forEach((v: unknown) => { if (v) normalizedCopiedFrom.push(String(v)); });
+            } else if (typeof meta.copiedFromNodeId === 'string') {
+              const s = String(meta.copiedFromNodeId);
+              if (s.trim().startsWith('[')) {
+                try {
+                  const parsed = JSON.parse(s);
+                  if (Array.isArray(parsed)) parsed.forEach((v: unknown) => { if (v) normalizedCopiedFrom.push(String(v)); });
+                } catch { normalizedCopiedFrom.push(s); }
+              } else normalizedCopiedFrom.push(s);
+            } else {
+              normalizedCopiedFrom.push(String(meta.copiedFromNodeId));
+            }
+            for (const rid of Array.from(removedSet)) {
+              if (normalizedCopiedFrom.includes(String(rid))) {
+                if (debugDelete) console.log('[DELETE DEBUG] matched via copiedFromNodeId include', { candidateId: n.id, removedId: rid });
+                return true;
+              }
+            }
+          } catch {
+            if (removedSet.has(String(meta.copiedFromNodeId))) {
+              if (debugDelete) console.log('[DELETE DEBUG] matched via copiedFromNodeId direct', { candidateId: n.id, copiedFrom: meta.copiedFromNodeId });
+              return true;
             }
           }
-          
-          // Si les deux ont des suffixes, ils doivent être identiques
-          if (copiedFromSuffix && nodeSuffix && copiedFromSuffix !== nodeSuffix) {
-            console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → copiedFromNodeId match MAIS suffixe différent (${nodeSuffix} != ${copiedFromSuffix})`);
-            return false; // Ne pas supprimer si les suffixes ne correspondent pas
+        }
+  // If the display references a template id used by removed copies, we must NOT delete
+  // it purely because of the template id: that would delete displays for other copies.
+  // Only delete when the display metadata explicitly ties it to the removed copy instance
+  // (either via copiedFromNodeId directly matching a removed id, or duplicatedFromRepeater+copySuffix
+  // meta matching a removed pair). Do not delete if display only cites a template by id.
+  if (meta.copiedFromNodeId) {
+    try {
+      const normalizedCopiedFromIds: string[] = [];
+      if (Array.isArray(meta.copiedFromNodeId)) {
+        meta.copiedFromNodeId.forEach((v: unknown) => {
+          if (!v) return; if (typeof v === 'object' && (v as any).id) normalizedCopiedFromIds.push(String((v as any).id)); else normalizedCopiedFromIds.push(String(v));
+          if (debugDelete && looksLikeDisplay && !shouldDelete) {
+            console.log('[DELETE DEBUG] Candidate not deleted, metadata:', { id: n.id, meta });
           }
-          
-          console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → copiedFromNodeId match (suffixe: ${nodeSuffix})`);
+        });
+      } else if (typeof meta.copiedFromNodeId === 'string') {
+        const s = String(meta.copiedFromNodeId);
+        if (s.trim().startsWith('[')) {
+          try {
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed)) parsed.forEach((v: unknown) => { if (!v) return; if (typeof v === 'object' && (v as any).id) normalizedCopiedFromIds.push(String((v as any).id)); else normalizedCopiedFromIds.push(String(v)); });
+          } catch { normalizedCopiedFromIds.push(s); }
+        } else normalizedCopiedFromIds.push(s);
+      } else {
+        normalizedCopiedFromIds.push(String(meta.copiedFromNodeId));
+      }
+      for (const rid of Array.from(removedSet)) {
+        if (normalizedCopiedFromIds.includes(String(rid))) {
+          if (debugDelete) console.log('[DELETE DEBUG] matched via normalizedCopiedFromIds', { candidateId: n.id, removedId: rid });
           return true;
         }
-        if (meta.sourceTemplateId && (removedSet.has(String(meta.sourceTemplateId)) || relatedTemplateIds.has(String(meta.sourceTemplateId)))) {
-          // Même vérification pour sourceTemplateId
-          const sourceMatch = String(meta.sourceTemplateId).match(/-(\d+)$/);
-          const nodeMatch = String(n.id).match(/-(\d+)$/);
-          const sourceSuffix = sourceMatch ? sourceMatch[1] : null;
-          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
-          
-          // RÈGLE: Le nœud ne doit être supprimé QUE si son suffixe correspond aux suffixes en cours de suppression
-          if (nodeSuffix) {
-            if (!deletedSuffixes.has(nodeSuffix)) {
-              console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → sourceTemplateId match MAIS suffixe -${nodeSuffix} non supprimé (on supprime: ${Array.from(deletedSuffixes).join(', ')})`);
-              return false;
-            }
-          }
-          
-          if (sourceSuffix && nodeSuffix && sourceSuffix !== nodeSuffix) {
-            console.log(`⏭️ [DELETE SKIP] Nœud ${n.id} (${n.label}) → sourceTemplateId match MAIS suffixe différent (${nodeSuffix} != ${sourceSuffix})`);
-            return false;
-          }
-          
-          console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → sourceTemplateId match (suffixe: ${nodeSuffix})`);
-          return true;
-        }
-        
-        // 2. Champs d'affichage liés par fromVariableId
-        if (meta.fromVariableId) {
-          const fromVarStr = String(meta.fromVariableId || '');
-          for (const rid of Array.from(removedSet)) {
-            const ridStr = String(rid);
-            if (fromVarStr === ridStr) {
-              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId equals ${rid}`);
-              return true;
-            }
-            const m = ridStr.match(/-(\d+)$/);
-            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
-              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId endsWith suffix -${m[1]} referencing ${rid}`);
-              return true;
-            }
-          }
-          for (const tid of Array.from(relatedTemplateIds)) {
-            const tidStr = String(tid);
-            if (fromVarStr === tidStr) {
-              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId equals template ${tid}`);
-              return true;
-            }
-            const m = tidStr.match(/-(\d+)$/);
-            if (m && fromVarStr.endsWith(`-${m[1]}`)) {
-              console.log(`✅ [DELETE MATCH] Nœud ${n.id} (${n.label}) → fromVariableId endsWith suffix -${m[1]} referencing template ${tid}`);
-              return true;
-            }
-          }
-        }
-        
-        // 3. CORRECTIF: Supprimer les frères/sœurs (même parentId) avec le même suffixe
-        // Ex: Si on supprime "Versant-2" (parent X), supprimer tous les champs du même parent avec "-2"
-        // ⚠️ CRITIQUE: Vérifier AUSSI le suffixe pour éviter de supprimer -1 lors de suppression de -2
-        if (deletedSuffixes.size > 0 && n.parentId && deletedParentIds.has(n.parentId)) {
-          const nodeMatch = String(n.id).match(/-(\d+)$/);
-          const nodeSuffix = nodeMatch ? nodeMatch[1] : null;
-          
-          // ✅ RÈGLE STRICTE: Le noeud doit avoir un suffixe ET ce suffixe doit être dans deletedSuffixes
-          if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
-            console.log(`✅ [DELETE MATCH SUFFIXE] Nœud ${n.id} (${n.label}) → même parent + suffixe -${nodeSuffix} (on supprime: -${Array.from(deletedSuffixes).join(', -')})`);
-            return true; // Même branche + même suffixe → à supprimer
-          }
-          
-          // Aussi vérifier le label pour les display nodes
-          const labelMatch = String(n.label || '').match(/-(\d+)$/);
-          const labelSuffix = labelMatch ? labelMatch[1] : null;
-          if (labelSuffix && deletedSuffixes.has(labelSuffix)) {
-            console.log(`✅ [DELETE MATCH SUFFIXE LABEL] Nœud ${n.id} (${n.label}) → label avec suffixe -${labelSuffix} (on supprime: -${Array.from(deletedSuffixes).join(', -')})`);
+      }
+    } catch {
+      if (removedSet.has(String(meta.copiedFromNodeId))) {
+        if (debugDelete) console.log('[DELETE DEBUG] matched via copiedFromNodeId simple', { candidateId: n.id, copiedFrom: meta.copiedFromNodeId });
+        return true;
+      }
+    }
+  }
+  if (meta.copiedFromNodeId && meta.duplicatedFromRepeater && (meta.copySuffix != null || meta.suffixNum != null)) {
+    const key = `${meta.duplicatedFromRepeater}|${String(meta.copySuffix ?? meta.suffixNum)}`;
+    if (removedRepeaterCopyPairs.has(key)) {
+      if (debugDelete) console.log('[DELETE DEBUG] matched via removedRepeaterCopyPairs', { candidateId: n.id, key });
+      return true;
+    }
+  }
+        // If the display claims to be part of a duplicated instance and that instance is among the removed pairs => delete
+        if (meta?.duplicatedFromRepeater && (meta?.copySuffix != null || meta?.suffixNum != null)) {
+          const key = `${meta.duplicatedFromRepeater}|${String(meta.copySuffix ?? meta.suffixNum)}`;
+          if (removedRepeaterCopyPairs.has(key)) {
+            if (debugDelete) console.log('[DELETE DEBUG] matched via removedRepeaterCopyPairs (fallback)', { candidateId: n.id, key });
             return true;
           }
-          
-          // Vérifier fromVariableId pour le suffixe
-          if (meta.fromVariableId) {
-            const varMatch = String(meta.fromVariableId).match(/-(\d+)$/);
-            const varSuffix = varMatch ? varMatch[1] : null;
-            if (varSuffix && deletedSuffixes.has(varSuffix)) {
-              console.log(`✅ [DELETE MATCH SUFFIXE VAR] Nœud ${n.id} (${n.label}) → fromVariableId avec suffixe -${varSuffix} (on supprime: -${Array.from(deletedSuffixes).join(', -')})`);
-              return true;
+        }
+        if (meta.fromVariableId) {
+          // fromVariableId may be a string, an array, or a serialized JSON. Normalize to an array and test membership
+          try {
+            const normalizedFromVariableIds: string[] = [];
+            if (Array.isArray(meta.fromVariableId)) {
+              meta.fromVariableId.forEach((v: unknown) => {
+                if (!v) return;
+                if (typeof v === 'object' && (v as any).id) normalizedFromVariableIds.push(String((v as any).id));
+                else normalizedFromVariableIds.push(String(v));
+              });
+            } else if (typeof meta.fromVariableId === 'string') {
+              // If it looks like a JSON array, try to parse
+              const s = String(meta.fromVariableId);
+              if (s.trim().startsWith('[')) {
+                try {
+                  const parsed = JSON.parse(s);
+                  if (Array.isArray(parsed)) parsed.forEach((v: unknown) => { if (!v) return; if (typeof v === 'object' && (v as any).id) normalizedFromVariableIds.push(String((v as any).id)); else normalizedFromVariableIds.push(String(v)); });
+                } catch { normalizedFromVariableIds.push(s); }
+              } else {
+                normalizedFromVariableIds.push(s);
+              }
+            } else {
+              normalizedFromVariableIds.push(String(meta.fromVariableId));
+            }
+            for (const rid of Array.from(removedSet)) {
+              if (normalizedFromVariableIds.some(v => String(v).includes(String(rid)))) {
+                if (debugDelete) console.log('[DELETE DEBUG] matched via fromVariableId normalized', { candidateId: n.id, removedId: rid });
+                return true;
+              }
+            }
+          } catch {
+            // fallback to string matching
+            for (const rid of Array.from(removedSet)) {
+              if (String(meta.fromVariableId).includes(String(rid))) {
+                if (debugDelete) console.log('[DELETE DEBUG] matched via fromVariableId string include', { candidateId: n.id, removedId: rid });
+                return true;
+              }
             }
           }
-          
-          // ⏭️ Si le noeud a le même parent MAIS un suffixe différent, NE PAS supprimer
-          if (nodeSuffix && !deletedSuffixes.has(nodeSuffix)) {
-            console.log(`⏭️ [DELETE SKIP SUFFIXE] Nœud ${n.id} (${n.label}) → même parent MAIS suffixe -${nodeSuffix} différent (on supprime seulement: -${Array.from(deletedSuffixes).join(', -')})`);
+        }
+
+        // Fallback: If the display node has no duplication metadata at all, but its parent
+        // corresponds to a repeater and its label contains the same suffix as a removed copy,
+        // treat it as linked and delete. This covers legacy data where metadata is missing.
+        if (!meta?.duplicatedFromRepeater && !meta?.copiedFromNodeId && !meta?.fromVariableId && (!meta?.copySuffix && !meta?.suffixNum)) {
+          const label = String(n.label || '');
+          for (const obj of removedRepeaterCopyObjects) {
+            if (!obj.repeaterId || !obj.copySuffix) continue;
+            if (n.parentId === obj.repeaterId) {
+              // possible patterns: " (Copie N)" or "-N" at the end
+              const reCopie = new RegExp(`\\\\(Copie\\\\s*${obj.copySuffix}\\\\)$`, 'i');
+              const reDash = new RegExp(`-${obj.copySuffix}$`);
+              if (reCopie.test(label) || reDash.test(label)) {
+                if (debugDelete) console.log('[DELETE DEBUG] matched via label suffix heuristic', { candidateId: n.id, label, obj });
+                return true;
+              }
+            }
           }
         }
-        
+        // Suffix heuristic: -N
+        // NOTE: don't rely on generic label suffix heuristics to avoid accidental matches across
+        // unrelated repeaters (legacy code removed). Only delete if it is directly linked via
+        // copiedFromNodeId, duplicatedFromRepeater+copySuffix or fromVariableId containing deleted id.
         return false;
       });
-      
-      console.log(`📊 [DELETE DEBUG] ${extraCandidates.length} candidats supplémentaires trouvés:`, extraCandidates.map(c => ({ id: c.id, label: c.label, parentId: c.parentId })));
 
       if (extraCandidates.length > 0) {
         // Supprimer ces candidats (ordre enfants -> parents)
@@ -3982,43 +3891,89 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           }
         }
         const ordered = Array.from(delSet).sort((a, b) => (ddepth.get(b)! - ddepth.get(a)!));
-        let deletedExtra = 0;
-        const deletedExtraIds: string[] = [];
+  // reused outer deletedExtra / deletedExtraIds
         await prisma.$transaction(async (tx) => {
           for (const id of ordered) {
+            const candidateNode = remainingNodes.find(x => x.id === id);
+            if (debugDelete && candidateNode) console.log('[DELETE DEBUG] Extra candidate to delete:', { id: candidateNode.id, label: candidateNode.label, metadata: candidateNode.metadata });
             try {
               await tx.treeBranchLeafNode.delete({ where: { id } });
               deletedExtra++;
               deletedExtraIds.push(id);
             } catch (e) {
+              // Ignorer les erreurs individuelles (ex: id dÃ©jÃ  supprimÃ©), mais logger
               console.warn('[DELETE EXTRA] Failed to delete node', id, (e as Error).message);
             }
           }
         });
-        console.log('[DELETE] Extra display nodes deleted:', deletedExtra);
-        console.log(' [DELETE FINAL] Total supprimé:', toDelete.length, '+ extra:', deletedExtra, '= ', toDelete.length + deletedExtra);
-        
-        const allDeletedIds = [...toDelete, ...deletedExtraIds];
-        res.json({ 
-          success: true, 
-          message: `Sous-arbre supprimé (${toDelete.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`, 
-          deletedCount: allDeletedIds.length, 
-          deletedOrphans,
-          deletedIds: allDeletedIds
-        });
-        return;
+  console.log('[DELETE] Extra display nodes deleted:', deletedExtra);
+  console.log('[DELETE] Extra display node IDs deleted:', deletedExtraIds);
       }
     } catch (e) {
       console.warn('[DELETE] Extra cleanup failed', (e as Error).message);
     }
 
-    res.json({ 
-      success: true, 
-      message: `Sous-arbre supprimé (${toDelete.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`, 
-      deletedCount: toDelete.length, 
-      deletedOrphans,
-      deletedIds: toDelete
+    const allDeletedSet = new Set<string>([...deletedSubtreeIds, ...deletedOrphansIds, ...deletedExtraIds]);
+    const allDeletedIds = Array.from(allDeletedSet);
+    res.json({
+      success: true,
+      message: `Sous-arbre supprimé (${deletedSubtreeIds.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`,
+      deletedCount: deletedSubtreeIds.length,
+      deletedIds: allDeletedIds, // merged: subtree + orphan + extra display nodes
+      deletedOrphansCount: deletedOrphans,
+      deletedOrphansIds,
+      deletedExtraCount: deletedExtra,
+      deletedExtraIds
     });
+    // Final aggressive cleanup pass: recursively scan metadata for any string/array/object that
+    // references a removed id and delete those nodes as well. This handles malformed or unexpected
+    // metadata shapes that our other heuristics may miss.
+    try {
+      const remainingAfterFirstPass = await prisma.treeBranchLeafNode.findMany({ where: { treeId } });
+      const deeperDeletedIds: string[] = [];
+      const removedIdStrings = allDeletedIds.map(i => String(i));
+      const containsRemovedId = (val: unknown): boolean => {
+        if (val == null) return false;
+        if (typeof val === 'string') {
+          // check direct equality or contains patterns
+          for (const rid of removedIdStrings) {
+            if (val === rid) return true;
+            if (val.includes(rid)) return true;
+          }
+          return false;
+        }
+        if (typeof val === 'number' || typeof val === 'boolean') return false;
+        if (Array.isArray(val)) return val.some(v => containsRemovedId(v));
+        if (typeof val === 'object') {
+          for (const k of Object.keys(val as any)) {
+            if (containsRemovedId((val as any)[k])) return true;
+          }
+        }
+        return false;
+      };
+      const extraToDelete = remainingAfterFirstPass.filter(n => {
+        if (!n.metadata) return false;
+        try { return containsRemovedId(n.metadata); } catch { return false; }
+      }).map(x => x.id);
+      if (extraToDelete.length > 0) {
+        const dd: string[] = [];
+        await prisma.$transaction(async (tx) => {
+          for (const id of extraToDelete) {
+            try {
+              await tx.treeBranchLeafNode.delete({ where: { id } });
+              dd.push(id);
+            } catch (err) {
+              console.warn('[AGGRESSIVE CLEANUP] Failed to delete node', id, (err as Error).message);
+            }
+          }
+        });
+        if (dd.length > 0) {
+          console.log('[AGGRESSIVE CLEANUP] Additional deleted nodes (by metadata scan):', dd);
+        }
+      }
+    } catch (e) {
+      console.warn('[AGGRESSIVE CLEANUP] Failed aggressive metadata scan:', (e as Error).message);
+    }
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting node subtree:', error);
     res.status(500).json({ error: 'Impossible de supprimer le nÅ“ud et ses descendants' });
@@ -4645,13 +4600,7 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
       },
     });
 
-    if (!tableData) {
-      console.log(`[table/lookup] 404 - Table rÃ©fÃ©rencÃ©e ${tableReference} non trouvÃ©e`);
-      return res.status(404).json({ error: 'Table de rÃ©fÃ©rence non trouvÃ©e.' });
-    }
-
-    // VÃ©rifier l'accÃ¨s Ã  l'arbre parent (sÃ©curitÃ©)
-    const parentNode = await prisma.treeBranchLeafNode.findUnique({
+      const parentNode = await prisma.treeBranchLeafNode.findUnique({
       where: { id: tableData.nodeId },
       select: { TreeBranchLeafTree: { select: { organizationId: true } } }
     });
@@ -4781,79 +4730,46 @@ router.get('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
   try {
     const { treeId, nodeId } = req.params;
     const { organizationId } = req.user!;
-    console.log('ðŸ›°ï¸ [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s', treeId, nodeId);
+    console.log('🛠️ [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s', treeId, nodeId);
 
-    // VÃ©rifier l'appartenance de l'arbre Ã  l'organisation (ou accÃ¨s super admin)
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // VÃ©rifier que le nÅ“ud existe dans cet arbre
     const node = await prisma.treeBranchLeafNode.findFirst({
-      where: {
-        id: nodeId,
-        treeId,
-      },
-      select: { id: true, data_activeId: true },
+      where: { id: nodeId, treeId },
+      select: { id: true, data_activeId: true, linkedVariableIds: true },
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Noeud non trouve' });
     }
 
-    const variable = await prisma.treeBranchLeafNodeVariable.findUnique({
-      where: { nodeId },
-      select: {
-  id: true,
-  displayName: true,
-        exposedKey: true,
-        displayFormat: true,
-        unit: true,
-        precision: true,
-        visibleToUser: true,
-        isReadonly: true,
-        defaultValue: true,
-        metadata: true,
-  // Exposer aussi la configuration de la source
-  sourceType: true,
-  sourceRef: true,
-  fixedValue: true,
-  selectedNodeId: true,
-      },
-    });
+    const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
 
     if (variable) {
-      const { sourceType, sourceRef, fixedValue, selectedNodeId, exposedKey } = variable as {
-        sourceType?: string | null;
-        sourceRef?: string | null;
-        fixedValue?: string | null;
-        selectedNodeId?: string | null;
-        exposedKey?: string | null;
-        [k: string]: unknown;
-      };
-      console.log('ðŸ›°ï¸ [TBL NEW ROUTE][GET /data] payload keys=%s hasSource=%s ref=%s fixed=%s selNode=%s',
-        Object.keys(variable).join(','), !!sourceType, sourceRef, fixedValue, selectedNodeId);
+      const { sourceType, sourceRef, fixedValue, selectedNodeId, exposedKey } = variable;
+      console.log('🧰 [TBL NEW ROUTE][GET /data] payload keys=%s hasSource=%s ref=%s fixed=%s selNode=%s (owner=%s proxied=%s)',
+        Object.keys(variable).join(','), !!sourceType, sourceRef, fixedValue, selectedNodeId, ownerNodeId, proxiedFromNodeId);
       if (!sourceType && !sourceRef) {
-        console.log('âš ï¸ [TBL NEW ROUTE][GET /data] Aucune sourceType/sourceRef retournÃ©e pour nodeId=%s (exposedKey=%s)', nodeId, exposedKey);
+        console.log('⚠️ [TBL NEW ROUTE][GET /data] Aucune sourceType/sourceRef retournee pour nodeId=%s (exposedKey=%s)', nodeId, exposedKey);
       }
     } else {
-      console.log('â„¹ï¸ [TBL NEW ROUTE][GET /data] variable inexistante nodeId=%s â†’ {}', nodeId);
+      console.log('ℹ️ [TBL NEW ROUTE][GET /data] variable inexistante nodeId=%s -> {} (owner=%s proxied=%s)', nodeId, ownerNodeId, proxiedFromNodeId);
     }
 
-    // Construire une réponse qui expose aussi la variable réellement utilisée par le nœud
-    const usedVariableId = node?.data_activeId || (variable ? (variable as { id?: string }).id || null : null);
-    // Retourner un objet vide si aucune variable n'existe encore (Ã©vite les 404 cÃ´tÃ© client)
+    const usedVariableId = node.data_activeId || variable?.id || null;
     if (variable) {
-      return res.json({ ...variable, usedVariableId });
+      return res.json({ ...variable, usedVariableId, ownerNodeId, proxiedFromNodeId });
     }
-    return res.json({ usedVariableId });
+    return res.json({ usedVariableId, ownerNodeId, proxiedFromNodeId });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node data:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la donnÃ©e du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la recuperation de la donnee du noeud' });
   }
 });
 
@@ -4893,7 +4809,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         id: nodeId,
         treeId,
       },
-      select: { id: true, label: true },
+      select: { id: true, label: true, linkedVariableIds: true },
     });
 
     if (!node) {
@@ -4904,15 +4820,19 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
     const safeExposedKey: string | null = typeof exposedKey === 'string' && exposedKey.trim() ? exposedKey.trim() : null;
     const displayName = safeExposedKey || node.label || `var_${String(nodeId).slice(0, 4)}`;
 
-    // ðŸ”— RÃ‰CUPÃ‰RATION DE L'ANCIENNE VARIABLE pour comparaison des rÃ©fÃ©rences
-    const oldVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
-      where: { nodeId },
-      select: { id: true, sourceRef: true, metadata: true }
-    });
+    const { variable: previousVariable, ownerNodeId } = await resolveNodeVariable(
+      nodeId,
+      node.linkedVariableIds
+    );
+    const targetNodeId = ownerNodeId ?? nodeId;
+    const proxiedTargetNodeId = nodeId === targetNodeId ? null : nodeId;
+    if (proxiedTargetNodeId) {
+      console.log('📎 [TBL NEW ROUTE][PUT /data] node %s proxied vers variable du noeud %s', nodeId, targetNodeId);
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       const variable = await tx.treeBranchLeafNodeVariable.upsert({
-        where: { nodeId },
+        where: { nodeId: targetNodeId },
         update: {
           exposedKey: safeExposedKey || undefined,
           displayName,
@@ -4932,7 +4852,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         },
         create: {
           id: randomUUID(),
-          nodeId,
+          nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
           displayFormat: typeof displayFormat === 'string' ? displayFormat : 'number',
@@ -5001,14 +4921,24 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         console.log(`[TBL] ✅ data_activeId/table_activeId="${tableId}" configurés`);
       }
       
-      await tx.treeBranchLeafNode.update({
-        where: { id: nodeId },
-        data: nodeUpdateData
-      });
+      const nodesToUpdate = new Set<string>([targetNodeId]);
+      if (nodeId !== targetNodeId) {
+        nodesToUpdate.add(nodeId);
+      }
+
+      for (const target of nodesToUpdate) {
+        await tx.treeBranchLeafNode.update({
+          where: { id: target },
+          data: nodeUpdateData
+        });
+      }
 
       // ðŸ”— MAJ linkedVariableIds du nÅ“ud propriÃ©taire
       try {
-        await addToNodeLinkedField(tx, nodeId, 'linkedVariableIds', [variable.id]);
+        await addToNodeLinkedField(tx, targetNodeId, 'linkedVariableIds', [variable.id]);
+        if (nodeId !== targetNodeId) {
+          await addToNodeLinkedField(tx, nodeId, 'linkedVariableIds', [variable.id]);
+        }
       } catch (e) {
         console.warn('[TreeBranchLeaf API] Warning updating owner linkedVariableIds:', (e as Error).message);
       }
@@ -5051,7 +4981,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           return ids;
         };
 
-        const oldIds = await getReferencedIds(oldVariable);
+        const oldIds = await getReferencedIds(previousVariable);
         const newIds = await getReferencedIds(variable);
 
         const idsToAdd = [...newIds].filter(id => !oldIds.has(id));
@@ -5091,26 +5021,26 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           return variableIds;
         };
 
-        const oldVariableRefs = await getNodeReferencedVariableIds(oldVariable);
+        const oldVariableRefs = await getNodeReferencedVariableIds(previousVariable);
         const newVariableRefs = await getNodeReferencedVariableIds(variable);
 
         const variableIdsToAdd = [...newVariableRefs].filter(id => !oldVariableRefs.has(id));
         const variableIdsToRemove = [...oldVariableRefs].filter(id => !newVariableRefs.has(id));
 
         if (variableIdsToAdd.length > 0) {
-          console.log(`[TBL] Adding ${variableIdsToAdd.length} variable references to node ${nodeId}.`);
-          await addToNodeLinkedField(tx, nodeId, 'linkedVariableIds', variableIdsToAdd);
+          console.log(`[TBL] Adding ${variableIdsToAdd.length} variable references to node ${targetNodeId}.`);
+          await addToNodeLinkedField(tx, targetNodeId, 'linkedVariableIds', variableIdsToAdd);
         }
         if (variableIdsToRemove.length > 0) {
-          console.log(`[TBL] Removing ${variableIdsToRemove.length} variable references from node ${nodeId}.`);
-          await removeFromNodeLinkedField(tx, nodeId, 'linkedVariableIds', variableIdsToRemove);
+          console.log(`[TBL] Removing ${variableIdsToRemove.length} variable references from node ${targetNodeId}.`);
+          await removeFromNodeLinkedField(tx, targetNodeId, 'linkedVariableIds', variableIdsToRemove);
         }
 
         // 🔗 NOUVEAU: Backfill linkedVariableIds pour tous les lookups de la table associée
         try {
           // Récupérer le nœud propriétaire pour accéder à ses tables
           const nodeData = await tx.treeBranchLeafNode.findUnique({
-            where: { id: nodeId },
+            where: { id: targetNodeId },
             select: { linkedTableIds: true }
           });
 
@@ -5188,15 +5118,18 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
       return variable;
     });
 
-    // Exposer aussi l'identifiant effectivement utilisé par le nœud (préférence à data_activeId)
+    const ownerIdForResponse = targetNodeId;
+    const proxiedNodeIdForResponse = proxiedTargetNodeId;
+
     try {
       const nodeAfter = await prisma.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { data_activeId: true }
       });
-      return res.json({ ...updated, usedVariableId: nodeAfter?.data_activeId || (updated as { id?: string }).id || null });
+      const usedVariableId = nodeAfter?.data_activeId || (updated as { id?: string }).id || null;
+      return res.json({ ...updated, usedVariableId, ownerNodeId: ownerIdForResponse, proxiedFromNodeId: proxiedNodeIdForResponse });
     } catch {
-      return res.json(updated);
+      return res.json({ ...updated, ownerNodeId: ownerIdForResponse, proxiedFromNodeId: proxiedNodeIdForResponse });
     }
   } catch (error) {
     const err = error as unknown as { code?: string };
@@ -5233,20 +5166,17 @@ router.delete('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
     // VÃ©rifier que le nÅ“ud existe
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
-      select: { id: true }
+      select: { id: true, linkedVariableIds: true }
     });
 
     if (!node) {
       return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
     }
 
-    // RÃ©cupÃ©rer la variable pour obtenir la sourceRef
-    const variable = await prisma.treeBranchLeafNodeVariable.findUnique({
-      where: { nodeId },
-      select: { id: true, sourceRef: true }
-    });
+    // RÃ©soudre la variable (support des nÅ“uds proxys/display)
+    const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
 
-    if (!variable) {
+    if (!variable || !ownerNodeId) {
       return res.status(404).json({ error: 'Variable non trouvÃ©e' });
     }
 
@@ -5259,14 +5189,17 @@ router.delete('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 
     // Supprimer la variable elle-mÃªme
     await prisma.treeBranchLeafNodeVariable.delete({
-      where: { nodeId }
+      where: { nodeId: ownerNodeId }
     });
 
-    // DÃ©sactiver la capacitÃ© "DonnÃ©es" sur le nÅ“ud
-    await prisma.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { hasData: false, updatedAt: new Date() }
-    });
+    // DÃ©sactiver la capacitÃ© "DonnÃ©es" sur le nÅ“ud propriÃ©taire et les proxys impactÃ©s
+    const nodesToDisable = Array.from(new Set([ownerNodeId, proxiedFromNodeId].filter(Boolean))) as string[];
+    if (nodesToDisable.length > 0) {
+      await prisma.treeBranchLeafNode.updateMany({
+        where: { id: { in: nodesToDisable } },
+        data: { hasData: false, updatedAt: new Date() }
+      });
+    }
 
     // Nettoyer les rÃ©fÃ©rences Ã  cette variable dans tout l'arbre
     try {
@@ -6406,6 +6339,59 @@ const isJsonObject = (value: TableJsonValue | null | undefined): value is TableJ
 
 const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value ?? null)) as T;
 
+// ==================================================================================
+// 🔎 FONCTION DE FILTRAGE D'OPTIONS DE TABLE PAR FILTRE SIMPLE
+// ==================================================================================
+function applySingleFilter(
+  filter: any,
+  options: Array<{ value: string; label: string }>,
+  tableData: NormalizedTable,
+  formValues: Record<string, any>
+): Array<{ value: string; label: string }> {
+  const { columnName, operator, value: filterValue } = filter;
+
+  console.log(`[applySingleFilter] 📌 Filtre: colonne="${columnName}", op="${operator}"`);
+
+  // Résoudre la valeur du filtre si c'est une référence @select
+  let resolvedValue = filterValue;
+  let nodeId: string | undefined = undefined;
+  if (typeof filterValue === 'string' && filterValue.startsWith('@select.')) {
+    nodeId = filterValue.replace('@select.', '');
+    resolvedValue = formValues[nodeId];
+    console.log(`[applySingleFilter] 🔗 Résolution @select: ${filterValue} -> ${resolvedValue}`);
+  } else {
+    console.log(`[applySingleFilter] ✅ Valeur statique: ${filterValue}`);
+  }
+
+  // Si pas de valeur résolue, on garde toutes les options
+  if (resolvedValue === undefined || resolvedValue === null || resolvedValue === '') {
+    console.log(`[applySingleFilter] ⚠️ Valeur du nœud "${nodeId}" non trouvée dans formValues`);
+    return options;
+  }
+
+  // Trouver l'index de la colonne
+  const colIndex = tableData.columns.indexOf(columnName);
+  if (colIndex === -1) {
+    console.warn(`[applySingleFilter] ⚠️ Colonne "${columnName}" introuvable`);
+    return options;
+  }
+
+  // Filtrer les options
+  return options.filter(option => {
+    const rowIndex = tableData.data.findIndex(row => row[0] === option.value);
+    if (rowIndex === -1) return false;
+
+    const cellValue = tableData.data[rowIndex][colIndex];
+    const result = compareValues(cellValue, resolvedValue, operator);
+    
+    if (!result) {
+      console.log(`[applySingleFilter] ❌ "${option.value}" rejeté: ${cellValue} ${operator} ${resolvedValue}`);
+    }
+    
+    return result;
+  });
+}
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ðŸ—œï¸ COMPRESSION POUR GROS TABLEAUX
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -7121,224 +7107,13 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
   }
 });
 
-// ╔═══════════════════════════════════════════════════════════════════════╗
-// ║ 🔥 FONCTION FILTRAGE DES TABLES                                       ║
-// ╚═══════════════════════════════════════════════════════════════════════╝
-
-/**
- * Applique les filtres configurés sur les lignes d'un tableau
- * @param matrix - La matrice du tableau (lignes)
- * @param columns - Les colonnes du tableau
- * @param filters - Les filtres à appliquer { column, operator, valueRef }
- * @param submissionId - ID de la soumission pour résoudre les références
- * @param prisma - Instance Prisma
- * @returns Indices des lignes qui passent TOUS les filtres (logique AND)
- */
-async function applyTableFilters(
-  matrix: unknown[][],
-  columns: string[],
-  filters: Array<{ column: string; operator: string; valueRef: string }>,
-  submissionId: string,
-  prisma: PrismaClient
-): Promise<number[]> {
-  if (!filters || filters.length === 0) {
-    return matrix.map((_, i) => i); // Tous les indices si pas de filtres
-  }
-
-  console.log(`[applyTableFilters] 🔥 Application de ${filters.length} filtre(s)`);
-  
-  // Résoudre toutes les valueRef en valeurs concrètes
-  const resolvedFilters = await Promise.all(
-    filters.map(async (filter) => {
-      const value = await resolveValueRef(filter.valueRef, submissionId, prisma);
-      console.log(`[applyTableFilters] Filtre "${filter.column}" ${filter.operator} "${filter.valueRef}" → valeur résolue: "${value}"`);
-      return { ...filter, resolvedValue: value };
-    })
-  );
-
-  // Filtrer les lignes
-  const matchingIndices: number[] = [];
-  
-  for (let rowIndex = 0; rowIndex < matrix.length; rowIndex++) {
-    const row = matrix[rowIndex];
-    let passesAllFilters = true;
-
-    for (const filter of resolvedFilters) {
-      const columnIndex = columns.indexOf(filter.column);
-      if (columnIndex === -1) {
-        console.warn(`[applyTableFilters] ⚠️ Colonne "${filter.column}" introuvable`);
-        passesAllFilters = false;
-        break;
-      }
-
-      const cellValue = row[columnIndex];
-      const passes = compareValues(cellValue, filter.operator, filter.resolvedValue);
-      
-      if (!passes) {
-        passesAllFilters = false;
-        break;
-      }
-    }
-
-    if (passesAllFilters) {
-      matchingIndices.push(rowIndex);
-    }
-  }
-
-  console.log(`[applyTableFilters] ✅ ${matchingIndices.length}/${matrix.length} lignes passent les filtres`);
-  return matchingIndices;
-}
-
-/**
- * Résout une valueRef en valeur concrète
- * Supporte: @select.{nodeId}, @value.{nodeId}, node-formula:{formulaId}
- */
-async function resolveValueRef(
-  valueRef: string,
-  submissionId: string,
-  prisma: PrismaClient
-): Promise<unknown> {
-  if (!valueRef) return null;
-
-  // @select.{nodeId} - Récupérer la réponse sélectionnée
-  if (valueRef.startsWith('@select.')) {
-    const nodeId = valueRef.replace('@select.', '');
-    const submission = await prisma.nodeSubmission.findFirst({
-      where: { id: submissionId },
-      select: { selectedAnswers: true }
-    });
-    if (submission?.selectedAnswers && typeof submission.selectedAnswers === 'object') {
-      const answers = submission.selectedAnswers as Record<string, unknown>;
-      return answers[nodeId] ?? null;
-    }
-    return null;
-  }
-
-  // @value.{nodeId} - Récupérer la valeur du champ
-  if (valueRef.startsWith('@value.')) {
-    const nodeId = valueRef.replace('@value.', '');
-    const submission = await prisma.nodeSubmission.findFirst({
-      where: { id: submissionId },
-      select: { fieldValues: true }
-    });
-    if (submission?.fieldValues && typeof submission.fieldValues === 'object') {
-      const values = submission.fieldValues as Record<string, unknown>;
-      return values[nodeId] ?? null;
-    }
-    return null;
-  }
-
-  // node-formula:{formulaId} - Récupérer le résultat de la formule
-  if (valueRef.startsWith('node-formula:')) {
-    const formulaId = valueRef.replace('node-formula:', '');
-    try {
-      const result = await evaluateFormulaOrchestrated(formulaId, submissionId);
-      return result.value ?? null;
-    } catch (error) {
-      console.error(`[resolveValueRef] ❌ Erreur évaluation formule ${formulaId}:`, error);
-      return null;
-    }
-  }
-
-  // Valeur littérale
-  return valueRef;
-}
-
-/**
- * Compare deux valeurs selon un opérateur
- */
-function compareValues(
-  cellValue: unknown,
-  operator: string,
-  compareValue: unknown
-): boolean {
-  // Normaliser les valeurs pour comparaison
-  const normalizedCell = normalizeForComparison(cellValue);
-  const normalizedCompare = normalizeForComparison(compareValue);
-
-  switch (operator) {
-    case 'equals':
-    case '=':
-      return normalizedCell === normalizedCompare;
-    
-    case 'notEquals':
-    case '!=':
-      return normalizedCell !== normalizedCompare;
-    
-    case 'greaterThan':
-    case '>':
-      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
-        return normalizedCell > normalizedCompare;
-      }
-      return String(normalizedCell) > String(normalizedCompare);
-    
-    case 'greaterThanOrEqual':
-    case '>=':
-      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
-        return normalizedCell >= normalizedCompare;
-      }
-      return String(normalizedCell) >= String(normalizedCompare);
-    
-    case 'lessThan':
-    case '<':
-      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
-        return normalizedCell < normalizedCompare;
-      }
-      return String(normalizedCell) < String(normalizedCompare);
-    
-    case 'lessThanOrEqual':
-    case '<=':
-      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
-        return normalizedCell <= normalizedCompare;
-      }
-      return String(normalizedCell) <= String(normalizedCompare);
-    
-    case 'contains':
-      return String(normalizedCell).includes(String(normalizedCompare));
-    
-    case 'notContains':
-      return !String(normalizedCell).includes(String(normalizedCompare));
-    
-    case 'startsWith':
-      return String(normalizedCell).startsWith(String(normalizedCompare));
-    
-    case 'endsWith':
-      return String(normalizedCell).endsWith(String(normalizedCompare));
-    
-    default:
-      console.warn(`[compareValues] ⚠️ Opérateur inconnu: ${operator}`);
-      return false;
-  }
-}
-
-/**
- * Normalise une valeur pour la comparaison
- */
-function normalizeForComparison(value: unknown): string | number | null {
-  if (value === null || value === undefined) return null;
-  
-  // Si c'est déjà un nombre, le retourner
-  if (typeof value === 'number') return value;
-  
-  // Convertir en string et nettoyer
-  const str = String(value).trim();
-  
-  // Essayer de parser en nombre
-  const num = Number(str);
-  if (!isNaN(num) && isFinite(num)) return num;
-  
-  // Retourner la string
-  return str;
-}
-
 router.get('/nodes/:nodeId/tables/options', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    const { tableId, dimension = 'columns', submissionId } = req.query as {
+    const { tableId, dimension = 'columns' } = req.query as {
       tableId?: string;
       dimension?: string;
-      submissionId?: string;
     };
 
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
@@ -7354,77 +7129,25 @@ router.get('/nodes/:nodeId/tables/options', async (req, res) => {
 
     const { table, tables } = normalized;
 
-    // 🔥 NOUVEAU: Récupérer la configuration lookup pour les filtres
-    const rawLookup = (table.meta && typeof table.meta.lookup === 'object')
-      ? (table.meta.lookup as Record<string, unknown>)
-      : undefined;
-
-    // 🔥 NOUVEAU: Appliquer les filtres si configurés
-    let filteredMatrix = table.matrix;
-    let filteredRecords = table.records;
-    let filteredRows = table.rows;
-
-    if (rawLookup && dimension === 'rows' && submissionId) {
-      // Mode LIGNE: appliquer les filtres rowSourceOption
-      const sourceOption = rawLookup.rowSourceOption as any;
-      if (sourceOption?.filters && Array.isArray(sourceOption.filters) && sourceOption.filters.length > 0) {
-        console.log(`[tables/options] 🔥 Application des filtres LIGNE (${sourceOption.filters.length} filtres)`);
-        
-        const filteredIndices = await applyTableFilters(
-          table.matrix,
-          table.columns,
-          sourceOption.filters,
-          submissionId,
-          prisma
-        );
-        
-        filteredMatrix = filteredIndices.map(i => table.matrix[i]);
-        filteredRecords = filteredIndices.map(i => table.records[i]);
-        filteredRows = filteredIndices.map(i => table.rows[i]);
-        
-        console.log(`[tables/options] ✅ Filtrage terminé: ${table.rows.length} → ${filteredRows.length} lignes`);
-      }
-    } else if (rawLookup && dimension === 'columns' && submissionId) {
-      // Mode COLONNE: appliquer les filtres columnSourceOption
-      const sourceOption = rawLookup.columnSourceOption as any;
-      if (sourceOption?.filters && Array.isArray(sourceOption.filters) && sourceOption.filters.length > 0) {
-        console.log(`[tables/options] 🔥 Application des filtres COLONNE (${sourceOption.filters.length} filtres)`);
-        
-        const filteredIndices = await applyTableFilters(
-          table.matrix,
-          table.columns,
-          sourceOption.filters,
-          submissionId,
-          prisma
-        );
-        
-        filteredMatrix = filteredIndices.map(i => table.matrix[i]);
-        filteredRecords = filteredIndices.map(i => table.records[i]);
-        filteredRows = filteredIndices.map(i => table.rows[i]);
-        
-        console.log(`[tables/options] ✅ Filtrage terminé: ${table.rows.length} → ${filteredRows.length} lignes`);
-      }
-    }
-
     if (dimension === 'rows') {
-      const items = filteredRows.map((label, index) => ({ value: label, label, index }));
+      const items = table.rows.map((label, index) => ({ value: label, label, index }));
       return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
     }
 
     if (dimension === 'records') {
       return res.json({
-        items: filteredRecords,
+        items: table.records,
         table: { id: table.id, type: table.type, name: table.name },
         tables,
       });
     }
 
-    // Par défaut: colonnes
+    // Par dÃ©faut: colonnes
     const items = table.columns.map((label, index) => ({ value: label, label, index }));
     return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching table options:', error);
-    res.status(500).json({ error: 'Erreur lors de la récupération des options du tableau' });
+    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des options du tableau' });
   }
 });
 
@@ -10216,390 +9939,12 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
 
 // GET /api/treebranchleaf/nodes/:nodeId/table/lookup
 // RÃ©cupÃ¨re le tableau ACTIF d'un noeud pour lookup (utilisÃ© par useTBLTableLookup)
-// ═════════════════════════════════════════════════════════════════════════════
-// 🔥 ÉTAPE 2.5 - Fonction pour filtrer les options selon les critères du filtre
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Applique le filtrage ÉTAPE 2.5 aux options d'un SELECT basé sur une table
- * 
- * NOTE: Le filterValueRef est supposé être une COLONNE de la même table
- * (ou au minimum, un nom de colonne qui doit être trouvé dans le tableau)
- * 
- * @param options - Les options générées du SELECT
- * @param filterConfig - La configuration du filtre (filterColumn, filterOperator, filterValueRef)
- * @param columns - Les noms des colonnes de la table
- * @param rows - Les labels des lignes de la table
- * @param data - Les données de la table
- * @param keyType - Le type de clé ('column' ou 'row')
- * @returns Les options filtrées
- */
-function applyStep25Filtering(
-  options: Array<{ value: string; label: string }>,
-  filterConfig: any,
-  columns: string[],
-  rows: string[],
-  data: any[][],
-  keyType: 'column' | 'row',
-  formValues?: Record<string, any>
-): Array<{ value: string; label: string }> {
-  // 🆕 SUPPORT DES FILTRES MULTIPLES ET CONDITIONNELS
-  
-  // CAS 1: Filtres conditionnels (différents filtres selon valeur d'un champ)
-  if (filterConfig?.conditionalFilters) {
-    return applyConditionalFilters(options, filterConfig.conditionalFilters, columns, rows, data, keyType, formValues);
-  }
-  
-  // CAS 2: Filtres multiples indépendants (tous appliqués avec AND)
-  if (filterConfig?.filters && Array.isArray(filterConfig.filters)) {
-    return applyMultipleFilters(options, filterConfig.filters, columns, rows, data, keyType, formValues);
-  }
-  
-  // CAS 3: Filtre simple (ancien format - rétrocompatibilité)
-  if (!filterConfig?.filterColumn || !filterConfig?.filterOperator || !filterConfig?.filterValueRef) {
-    return options; // Pas de filtre ÉTAPE 2.5
-  }
-
-  console.log(`[applyStep25Filtering] 🔥 ÉTAPE 2.5 - Filtrage simple: colonne="${filterConfig.filterColumn}", op="${filterConfig.filterOperator}", ref="${filterConfig.filterValueRef}"`);
-
-  // Trouver l'index de la colonne à filtrer
-  const normalizedFilterColName = String(filterConfig.filterColumn).trim().toLowerCase();
-  const filterColIndex = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFilterColName);
-
-  if (filterColIndex === -1) {
-    console.warn(`[applyStep25Filtering] ⚠️ Colonne de filtrage non trouvée: "${filterConfig.filterColumn}"`);
-    return options;
-  }
-
-  // 🆕 RÉSOUDRE LA RÉFÉRENCE DE VALEUR
-  let comparisonValue: any;
-  let isNodeReference = false;
-  const valueRef = String(filterConfig.filterValueRef);
-  
-  if (valueRef.startsWith('node-formula:')) {
-    // 🎯 CAS 1: Référence à un champ du formulaire
-    const nodeId = valueRef.replace('node-formula:', '');
-    comparisonValue = formValues?.[nodeId];
-    isNodeReference = true;
-    
-    if (comparisonValue === undefined || comparisonValue === null) {
-      console.warn(`[applyStep25Filtering] ⚠️ Valeur du nœud "${nodeId}" non trouvée dans formValues`);
-      return options; // Pas de filtrage si la valeur n'est pas disponible
-    }
-    
-    console.log(`[applyStep25Filtering] ✅ Valeur résolue depuis nœud ${nodeId}: ${comparisonValue}`);
-  } else {
-    // 🎯 CAS 2: Référence à une colonne du tableau (ancien comportement)
-    const normalizedValueColName = valueRef.trim().toLowerCase();
-    const valueColIndex = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedValueColName);
-
-    if (valueColIndex === -1) {
-      console.warn(`[applyStep25Filtering] ⚠️ Colonne de comparaison non trouvée: "${filterConfig.filterValueRef}"`);
-      return options;
-    }
-    
-    comparisonValue = valueColIndex;
-    isNodeReference = false;
-  }
-
-  // Filtrer les options
-  const filteredOptions = options.filter((option) => {
-    // Pour chaque option, trouver la ligne correspondante
-    let matchingRowIndex = -1;
-    
-    if (keyType === 'column') {
-      // Les options correspondent aux labels de lignes (colonne A)
-      // Chercher la ligne qui a ce label
-      const normalizedValue = String(option.value).trim().toLowerCase();
-      matchingRowIndex = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedValue);
-      console.log(`[applyStep25Filtering] 🔎 Recherche option "${option.value}" → rowIndex=${matchingRowIndex}`);
-    } else if (keyType === 'row') {
-      // Les options correspondent aux valeurs d'une ligne spécifique
-      // TODO: implémenter si nécessaire
-      return true;
-    }
-
-    // Si trouvé, récupérer la valeur et appliquer l'opérateur
-    if (matchingRowIndex !== -1) {
-      // ⚠️ CRITICAL: rows[] ET data[] incluent TOUS LES DEUX le header à l'index 0
-      // rows[0] = "Onduleur" (header), data[0] = ["P min WC", "MODELE", ...] (header row)
-      // rows[1] = "SMA Sunny Boy 1.5", data[1] = [3000, "model1", ...]
-      // Donc: matchingRowIndex pointe directement vers le bon index dans data[]
-      const dataIndex = matchingRowIndex;
-      
-      const filterCellValue = filterColIndex === 0 ? rows[matchingRowIndex] : data[dataIndex]?.[filterColIndex - 1];
-      
-      console.log(`[applyStep25Filtering] 🔍 DEBUG dataIndex=${dataIndex}, filterColIndex=${filterColIndex}, data[${dataIndex}]?.[${filterColIndex - 1}] = ${data[dataIndex]?.[filterColIndex - 1]}`);
-      
-      // 🆕 Déterminer la valeur de comparaison
-      let valueCellValue;
-      if (isNodeReference) {
-        // Référence de nœud → utiliser la valeur du formulaire
-        valueCellValue = comparisonValue;
-      } else {
-        // Référence de colonne → extraire depuis la ligne
-        const valueColIndex = comparisonValue;
-        valueCellValue = valueColIndex === 0 ? rows[matchingRowIndex] : data[dataIndex]?.[valueColIndex - 1];
-      }
-      
-      console.log(`[applyStep25Filtering] 📊 Option "${option.value}": filterValue=${filterCellValue} (type: ${typeof filterCellValue}), comparisonValue=${valueCellValue} (type: ${typeof valueCellValue}), operator=${filterConfig.filterOperator}`);
-      
-      // Appliquer l'opérateur de comparaison
-      const matches = compareValuesByOperator(filterConfig.filterOperator, filterCellValue, valueCellValue);
-
-      if (matches) {
-        console.log(`[applyStep25Filtering] ✅ Option ACCEPTÉE: "${option.value}" → ${filterCellValue} ${filterConfig.filterOperator} ${valueCellValue}`);
-      } else {
-        console.log(`[applyStep25Filtering] ❌ Option REJETÉE: "${option.value}" → ${filterCellValue} ${filterConfig.filterOperator} ${valueCellValue}`);
-      }
-
-      return matches;
-    }
-
-    // Par défaut, garder l'option (pas de ligne trouvée)
-    console.log(`[applyStep25Filtering] ⚠️ Option "${option.value}" - ligne non trouvée, CONSERVÉE par défaut`);
-    return true;
-  });
-
-  console.log(`[applyStep25Filtering] 📊 Résultat du filtrage: ${filteredOptions.length} options sur ${options.length} conservées`);
-  return filteredOptions;
-}
-
-/**
- * 🆕 FILTRES CONDITIONNELS
- * Applique différents filtres selon la valeur d'un champ de condition
- */
-function applyConditionalFilters(
-  options: Array<{ value: string; label: string }>,
-  conditionalConfig: any,
-  columns: string[],
-  rows: string[],
-  data: any[][],
-  keyType: 'column' | 'row',
-  formValues?: Record<string, any>
-): Array<{ value: string; label: string }> {
-  console.log(`[applyConditionalFilters] 🔀 Filtres conditionnels basés sur le champ: ${conditionalConfig.ifNodeId}`);
-  
-  // Récupérer la valeur du champ de condition
-  const conditionValue = formValues?.[conditionalConfig.ifNodeId];
-  
-  if (!conditionValue) {
-    console.log(`[applyConditionalFilters] ⚠️ Champ de condition non rempli, aucun filtre appliqué`);
-    return options;
-  }
-  
-  console.log(`[applyConditionalFilters] 📋 Valeur de condition: "${conditionValue}"`);
-  
-  // Trouver le cas correspondant
-  const matchingCase = conditionalConfig.cases?.find((c: any) => 
-    String(c.when).toLowerCase() === String(conditionValue).toLowerCase()
-  );
-  
-  if (!matchingCase) {
-    console.log(`[applyConditionalFilters] ⚠️ Aucun cas trouvé pour la valeur "${conditionValue}"`);
-    return options;
-  }
-  
-  console.log(`[applyConditionalFilters] ✅ Cas trouvé: "${matchingCase.when}" → ${matchingCase.filters?.length || 0} filtres`);
-  
-  // Appliquer les filtres du cas correspondant
-  return applyMultipleFilters(options, matchingCase.filters || [], columns, rows, data, keyType, formValues);
-}
-
-/**
- * 🆕 FILTRES MULTIPLES INDÉPENDANTS
- * Applique plusieurs filtres avec logique AND (tous doivent être respectés)
- */
-function applyMultipleFilters(
-  options: Array<{ value: string; label: string }>,
-  filters: any[],
-  columns: string[],
-  rows: string[],
-  data: any[][],
-  keyType: 'column' | 'row',
-  formValues?: Record<string, any>
-): Array<{ value: string; label: string }> {
-  if (!filters || filters.length === 0) {
-    return options;
-  }
-  
-  console.log(`[applyMultipleFilters] 🔥 Application de ${filters.length} filtres indépendants (AND)`);
-  
-  let filteredOptions = options;
-  
-  // Appliquer chaque filtre successivement
-  for (let i = 0; i < filters.length; i++) {
-    const filter = filters[i];
-    console.log(`[applyMultipleFilters] 📌 Filtre ${i + 1}/${filters.length}: colonne="${filter.column}", op="${filter.operator}"`);
-    
-    filteredOptions = applySingleFilter(filteredOptions, filter, columns, rows, data, keyType, formValues);
-    
-    console.log(`[applyMultipleFilters] → Résultat après filtre ${i + 1}: ${filteredOptions.length} options restantes`);
-    
-    // Optimisation: si plus d'options, arrêter
-    if (filteredOptions.length === 0) {
-      console.log(`[applyMultipleFilters] ⚠️ Aucune option restante après filtre ${i + 1}, arrêt`);
-      break;
-    }
-  }
-  
-  console.log(`[applyMultipleFilters] 📊 Résultat final: ${filteredOptions.length} options sur ${options.length}`);
-  return filteredOptions;
-}
-
-/**
- * Applique un seul filtre sur les options
- */
-function applySingleFilter(
-  options: Array<{ value: string; label: string }>,
-  filter: any,
-  columns: string[],
-  rows: string[],
-  data: any[][],
-  keyType: 'column' | 'row',
-  formValues?: Record<string, any>
-): Array<{ value: string; label: string }> {
-  const filterColumn = filter.column;
-  const filterOperator = filter.operator;
-  const filterValueRef = filter.valueRef;
-  
-  if (!filterColumn || !filterOperator || !filterValueRef) {
-    console.warn(`[applySingleFilter] ⚠️ Filtre incomplet, ignoré`);
-    return options;
-  }
-  
-  // Trouver l'index de la colonne à filtrer
-  const normalizedFilterColName = String(filterColumn).trim().toLowerCase();
-  const filterColIndex = columns.findIndex(c => String(c).trim().toLowerCase() === normalizedFilterColName);
-
-  if (filterColIndex === -1) {
-    console.warn(`[applySingleFilter] ⚠️ Colonne de filtrage non trouvée: "${filterColumn}"`);
-    return options;
-  }
-
-  // 🆕 RÉSOUDRE LA RÉFÉRENCE DE VALEUR
-  let comparisonValue: any;
-  const valueRef = String(filterValueRef);
-  
-  // 🔥 RÉSOLUTION DES RÉFÉRENCES @select.xxx, @input.xxx, @formula.xxx
-  if (valueRef.includes('@')) {
-    // Pattern pour détecter les références: @select.{nodeId}, @input.{nodeId}, etc.
-    const refPattern = /@(select|input|formula|calc|repeater)\.([a-f0-9\-]+)/gi;
-    let resolvedValue = valueRef;
-    
-    resolvedValue = resolvedValue.replace(refPattern, (match, type, nodeId) => {
-      const formValue = formValues?.[nodeId];
-      
-      if (formValue !== undefined && formValue !== null && formValue !== '') {
-        console.log(`[applySingleFilter] ✅ Référence résolue: ${match} → "${formValue}"`);
-        return String(formValue);
-      } else {
-        console.warn(`[applySingleFilter] ⚠️ Référence "${match}" (nodeId: ${nodeId}) non trouvée dans formValues`);
-        return match; // Garder la référence si non trouvée
-      }
-    });
-    
-    comparisonValue = resolvedValue;
-  } else if (valueRef.startsWith('node-formula:') || valueRef.startsWith('node-')) {
-    // Ancien format: Référence à un champ du formulaire
-    const nodeId = valueRef.replace(/^node-formula:/, '').replace(/^node-/, '');
-    comparisonValue = formValues?.[nodeId];
-    
-    if (comparisonValue === undefined || comparisonValue === null || comparisonValue === '') {
-      console.warn(`[applySingleFilter] ⚠️ Valeur du nœud "${nodeId}" non trouvée dans formValues - Utilisation de 0 par défaut`);
-      console.warn(`[applySingleFilter] 📋 FormValues disponibles:`, Object.keys(formValues || {}).join(', '));
-      comparisonValue = 0; // Utiliser 0 par défaut au lieu de retourner toutes les options
-    } else {
-      console.log(`[applySingleFilter] ✅ Valeur résolue depuis nœud ${nodeId}: ${comparisonValue}`);
-    }
-  } else {
-    // Valeur statique
-    comparisonValue = filterValueRef;
-    console.log(`[applySingleFilter] ✅ Valeur statique: ${comparisonValue}`);
-  }
-
-  // Filtrer les options
-  const filteredOptions = options.filter((option) => {
-    let matchingRowIndex = -1;
-    
-    if (keyType === 'column') {
-      const normalizedValue = String(option.value).trim().toLowerCase();
-      matchingRowIndex = rows.findIndex(r => String(r).trim().toLowerCase() === normalizedValue);
-    } else if (keyType === 'row') {
-      return true; // TODO: implémenter si nécessaire
-    }
-
-    if (matchingRowIndex !== -1) {
-      const dataIndex = matchingRowIndex;
-      const filterCellValue = filterColIndex === 0 ? rows[matchingRowIndex] : data[dataIndex]?.[filterColIndex - 1];
-      
-      const matches = compareValuesByOperator(filterOperator, filterCellValue, comparisonValue);
-
-      if (!matches) {
-        console.log(`[applySingleFilter] ❌ "${option.value}" rejeté: ${filterCellValue} ${filterOperator} ${comparisonValue}`);
-      }
-
-      return matches;
-    }
-
-    return true;
-  });
-
-  return filteredOptions;
-}
-
-/**
- * Compare deux valeurs selon un opérateur
- * (Identique à la fonction dans operation-interpreter.ts)
- */
-function compareValuesByOperator(op: string | undefined | null, cellValue: any, targetValue: any): boolean {
-  if (!op) return false;
-  switch (op) {
-    case 'equals':
-    case '==':
-      return String(cellValue) === String(targetValue);
-    case 'notEquals':
-    case '!=':
-      return String(cellValue) !== String(targetValue);
-    case 'greaterThan':
-    case '>':
-      return Number(cellValue) > Number(targetValue);
-    case 'greaterOrEqual':
-    case '>=':
-      return Number(cellValue) >= Number(targetValue);
-    case 'lessThan':
-    case '<':
-      return Number(cellValue) < Number(targetValue);
-    case 'lessOrEqual':
-    case '<=':
-      return Number(cellValue) <= Number(targetValue);
-    case 'contains':
-      return String(cellValue).includes(String(targetValue));
-    case 'notContains':
-      return !String(cellValue).includes(String(targetValue));
-    default:
-      return false;
-  }
-}
-
 router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
     console.log(`[TreeBranchLeaf API] ðŸ” GET active table/lookup for node: ${nodeId}`);
-
-    // Parser les formValues depuis le query string
-    let formValues: Record<string, any> = {};
-    if (req.query.formValues) {
-      try {
-        formValues = JSON.parse(String(req.query.formValues));
-        console.log(`[TreeBranchLeaf API] Form values recues:`, formValues);
-      } catch (error) {
-        console.warn(`[TreeBranchLeaf API] Erreur parsing formValues:`, error);
-      }
-    }
-
 
     // VÃ©rifier l'accÃ¨s au nÅ“ud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
@@ -10804,19 +10149,6 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           sample: options.slice(0, 3)
         });
 
-        // 🔥 ÉTAPE 2.5 : Appliquer le filtrage si configuré
-        const lookup = table.meta?.lookup as any;
-        const filterConfig = lookup?.columnSourceOption;
-        // Support NOUVEAU format (filters[]) + ANCIEN format (filterColumn/filterOperator/filterValueRef)
-        const hasNewFormat = filterConfig?.filters && Array.isArray(filterConfig.filters) && filterConfig.filters.length > 0;
-        const hasOldFormat = filterConfig?.filterColumn && filterConfig?.filterOperator && filterConfig?.filterValueRef;
-        
-        if (hasNewFormat || hasOldFormat) {
-          const filteredOptions = applyStep25Filtering(options, filterConfig, columns, rows, data, 'row', formValues);
-          console.log(`[TreeBranchLeaf API] 🔥 ÉTAPE 2.5 appliqué (${hasNewFormat ? 'filters[]' : 'single'}): ${filteredOptions.length} options sur ${options.length}`);
-          return res.json({ options: filteredOptions });
-        }
-
         return res.json({ options });
       }
 
@@ -10862,21 +10194,6 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           sample: options.slice(0, 3)
         });
 
-        // 🔥 ÉTAPE 2.5 : Appliquer le filtrage si configuré
-        const lookup = table.meta?.lookup as any;
-        const filterConfig = lookup?.columnSourceOption;
-        // Support NOUVEAU format (filters[]) + ANCIEN format (filterColumn/filterOperator/filterValueRef)
-        const hasNewFormat = filterConfig?.filters && Array.isArray(filterConfig.filters) && filterConfig.filters.length > 0;
-        const hasOldFormat = filterConfig?.filterColumn && filterConfig?.filterOperator && filterConfig?.filterValueRef;
-        
-        if (hasNewFormat || hasOldFormat) {
-          const filteredOptions = applyStep25Filtering(options, filterConfig, columns, rows, data, 'column', formValues);
-          console.log(`[TreeBranchLeaf API] 🔥 ÉTAPE 2.5 appliqué (${hasNewFormat ? 'filters[]' : 'single'}): ${filteredOptions.length} options sur ${options.length}`);
-          console.log(`[TreeBranchLeaf API] 📋 Premières options APRÈS filtrage:`, filteredOptions.slice(0, 5).map(o => o.label || o.value));
-          return res.json({ options: filteredOptions });
-        }
-
-        console.log(`[TreeBranchLeaf API] 📋 Premières options SANS filtrage:`, options.slice(0, 5).map(o => o.label || o.value));
         return res.json({ options });
       }
     }
@@ -10936,16 +10253,6 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
         } catch (e) {
           console.warn(`[TreeBranchLeaf API] ⚠️ Auto-upsert select-config a échoué (non bloquant):`, e);
         }
-        
-        // 🔥 ÉTAPE 2.5 : Appliquer le filtrage si configuré (même pour AUTO-DEFAULT)
-        const lookup = table.meta?.lookup as any;
-        const filterConfig = lookup?.columnSourceOption;
-        if (filterConfig?.filterColumn && filterConfig?.filterOperator && filterConfig?.filterValueRef) {
-          const filteredOptions = applyStep25Filtering(autoOptions, filterConfig, columns, rows, data, 'column', formValues);
-          console.log(`[TreeBranchLeaf API] 🔥 ÉTAPE 2.5 appliqué à AUTO-DEFAULT: ${filteredOptions.length} options sur ${autoOptions.length}`);
-          return res.json({ options: filteredOptions, autoDefault: { source: 'columnA', keyColumnCandidate: firstColHeader } });
-        }
-        
         return res.json({ options: autoOptions, autoDefault: { source: 'columnA', keyColumnCandidate: firstColHeader } });
       }
     }
@@ -13327,26 +12634,15 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       targetNodeId?: string;
     };
 
+    console.warn('⚠️ [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.');
+    // Hint for automated clients
+    res.set('X-Deprecated-API', '/api/repeat');
     console.log('ðŸ”„ [COPY-LINKED-VAR] DÃ©but - nodeId:', nodeId, 'variableId:', variableId, 'newSuffix:', newSuffix);
 
-    // IMPORTANT (stabilité routes): cette petite route utilitaire a été placée
-    // ici historiquement. Ne pas "remonter" ce handler en top-level sans
-    // revalider l’ordre d’enregistrement et le scoping middleware.
-    // Des déplacements hâtifs avaient provoqué des comportements non désirés.
-    // Si un refactor est nécessaire, le faire dans une PR dédiée avec tests.
-    // (revert) route utilitaire initialement placée ici
-    router.post('/variables/:variableId/create-display', async (req, res) => {
-      try {
-        const { variableId } = req.params as { variableId: string };
-        const { label } = (req.body || {}) as { label?: string };
-        const result = await createDisplayNodeForExistingVariable(variableId, prisma, label || 'Nouveau Section');
-        res.status(201).json(result);
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.error('❌ [/variables/:variableId/create-display] Erreur:', msg);
-        res.status(400).json({ error: msg });
-      }
-    });
+    // NOTE: the '/variables/:variableId/create-display' util route was nested
+    // under the copy-linked-variable handler historically. That caused
+    // registration order/visibility issues. We moved it to a top-level route
+    // (see below) and this nested declaration no longer applies.
 
 
     if (!variableId || newSuffix === undefined) {
@@ -13484,8 +12780,26 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
 });
 
 // ==================================================================================
+// 🔎 ROUTE UTILITAIRE: créer / mettre à jour le nœud d'affichage pour une variable
+// ==================================================================================
+router.post('/variables/:variableId/create-display', async (req, res) => {
+  try {
+    const { variableId } = req.params as { variableId: string };
+    const { label, suffix } = (req.body || {}) as { label?: string; suffix?: string | number };
+    const result = await createDisplayNodeForExistingVariable(variableId, prisma, label || 'Nouveau Section', suffix ?? 'nouveau');
+    res.status(201).json(result);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('❌ [/variables/:variableId/create-display] Erreur:', msg);
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ==================================================================================
 // 🔎 ROUTE UTILITAIRE: rechercher des variables par displayName (partiel)
 // ==================================================================================
+// =============================================================================
+
 router.get('/variables/search', async (req, res) => {
   try {
     const q = String(req.query.displayName || '').trim();
@@ -13502,15 +12816,6 @@ router.get('/variables/search', async (req, res) => {
 });
 
 
-// Exporter les helpers utiles pour les tests et la logique externe
-export {
-  mapJSONToColumns,
-  removeJSONFromUpdate,
-  buildResponseFromColumns
-};
-
 export default router;
-
-
 
 

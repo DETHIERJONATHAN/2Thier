@@ -759,9 +759,24 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         value: option.value,
         label: option.label,
         description: option.path || option.type || '',
+        // Conserver l'ID pour l'afficher dans le tooltip
+        nodeId: option.value,
       })),
     [fieldOptions]
   );
+  
+  // 🔍 Fonction de rendu des options avec tooltip affichant l'ID
+  const fieldOptionRender = useCallback((option: { label?: React.ReactNode; value?: string; data?: { nodeId?: string; label?: string } }) => (
+    <Tooltip 
+      title={`ID: ${option.data?.nodeId || option.value}`} 
+      placement="right"
+      mouseEnterDelay={0.5}
+    >
+      <span style={{ display: 'block', width: '100%' }}>
+        {option.data?.label || option.label}
+      </span>
+    </Tooltip>
+  ), []);
   // const resultFieldSelectOptions = useMemo(
   //   () =>
   //     fieldOptions
@@ -1842,6 +1857,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
                             value={lookupConfig.selectors?.columnFieldId || undefined}
                             options={fieldSelectOptions}
+                            optionRender={fieldOptionRender}
                             onChange={(value) => {
                               // Mettre à jour la config lookup via updateLookupConfig
                               // qui gérera automatiquement la sauvegarde via debouncedSave
@@ -2074,6 +2090,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
                             value={lookupConfig.columnSourceOption?.sourceField || undefined}
                             options={fieldSelectOptions}
+                            optionRender={fieldOptionRender}
                             onChange={(value) => {
                               updateLookupConfig((prev) => ({
                                 ...prev,
@@ -2347,6 +2364,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                               placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
                               value={lookupConfig.selectors?.rowFieldId || undefined}
                               options={fieldSelectOptions}
+                              optionRender={fieldOptionRender}
                               onChange={(value) => {
                                 updateLookupConfig((prev) => ({
                                   ...prev,
@@ -2436,6 +2454,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             placeholder={fieldsLoading ? 'Chargement...' : 'Sélectionner un champ'}
                             value={lookupConfig.rowSourceOption?.sourceField || undefined}
                             options={fieldSelectOptions}
+                            optionRender={fieldOptionRender}
                             onChange={(value) => {
                               updateLookupConfig((prev) => ({
                                 ...prev,

@@ -20,11 +20,62 @@ export const useBackendValue = (
   const { api } = useAuthenticatedApi();
   const [value, setValue] = useState<unknown>(undefined);
   const [loading, setLoading] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   // 🎯 STABILISER formData : Créer un hash stable pour éviter les re-rendus infinis
   const formDataHash = useMemo(() => {
     return JSON.stringify(formData);
   }, [formData]);
+
+  useEffect(() => {
+    if (!nodeId) {
+      return;
+    }
+
+    const shouldRefresh = (candidate?: string | string[]) => {
+      if (!candidate || !nodeId) {
+        return false;
+      }
+      if (Array.isArray(candidate)) {
+        return candidate.includes(nodeId);
+      }
+      return candidate === nodeId;
+    };
+
+    const handleNodeEvent = (event: Event) => {
+      const custom = event as CustomEvent<{
+        node?: { id?: string };
+        nodeId?: string;
+        targetNodeIds?: string[];
+      }>;
+      const detail = custom.detail;
+      const candidates: Array<string | string[] | undefined> = [detail?.node?.id, detail?.nodeId, detail?.targetNodeIds];
+      if (candidates.some(id => shouldRefresh(id))) {
+        setRefreshToken(token => token + 1);
+      }
+    };
+
+    const handleForceRetransform = (event: Event) => {
+      const custom = event as CustomEvent<{
+        nodeId?: string;
+        node?: { id?: string };
+        targetNodeIds?: string[];
+      }>;
+      const detail = custom.detail;
+      const candidates: Array<string | string[] | undefined> = [detail?.nodeId, detail?.node?.id, detail?.targetNodeIds];
+      if (candidates.some(id => shouldRefresh(id))) {
+        setRefreshToken(token => token + 1);
+      }
+    };
+
+    window.addEventListener('tbl-node-updated', handleNodeEvent as EventListener);
+    window.addEventListener('tbl-force-retransform', handleForceRetransform as EventListener);
+
+    return () => {
+      window.removeEventListener('tbl-node-updated', handleNodeEvent as EventListener);
+      window.removeEventListener('tbl-force-retransform', handleForceRetransform as EventListener);
+    };
+  }, [nodeId]);
 
   useEffect(() => {
     if (!nodeId || !treeId || !api) {
@@ -40,15 +91,23 @@ export const useBackendValue = (
         console.log(`🔍 [useBackendValue] Tentative de récupération de la valeur STOCKÉE pour nodeId: ${nodeId}`);
         try {
           const cachedResponse = await api.get<{
-            success: boolean;
-            value: unknown;
+            success?: boolean;
+            value?: unknown;
+            calculatedValue?: unknown;
             calculatedAt?: string;
             calculatedBy?: string;
           }>(`/api/tree-nodes/${nodeId}/calculated-value`);
 
-          if (cachedResponse?.success && cachedResponse?.value !== undefined && cachedResponse?.value !== null) {
-            console.log(`✅ [useBackendValue] VALEUR TROUVÉE DANS PRISMA pour nodeId: ${nodeId}`, cachedResponse.value);
-            setValue(cachedResponse.value);
+          const hasStoredValue = cachedResponse && typeof cachedResponse === 'object'
+            && (
+              (cachedResponse as Record<string, unknown>).value !== undefined && (cachedResponse as Record<string, unknown>).value !== null
+              || (cachedResponse as Record<string, unknown>).calculatedValue !== undefined && (cachedResponse as Record<string, unknown>).calculatedValue !== null
+            );
+
+          if (hasStoredValue) {
+            const storedValue = (cachedResponse as Record<string, unknown>).value ?? (cachedResponse as Record<string, unknown>).calculatedValue;
+            console.log(`✅ [useBackendValue] VALEUR TROUVÉE DANS PRISMA pour nodeId: ${nodeId}`, storedValue);
+            setValue(storedValue);
             setLoading(false);
             return; // 🎯 Sortir ici si valeur trouvée !
           }
@@ -183,7 +242,7 @@ export const useBackendValue = (
     };
 
     fetchBackendValue();
-  }, [nodeId, treeId, formDataHash, api]); // ✅ Utiliser formDataHash au lieu de formData
+  }, [nodeId, treeId, formDataHash, api, refreshToken]); // ✅ Utiliser formDataHash au lieu de formData
 
   return { value, loading };
 };

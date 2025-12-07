@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { useAuth } from '../../../auth/useAuth';
 
 // Interfaces pour la configuration
 export interface TreeBranchLeafVariable {
@@ -64,9 +65,12 @@ interface UseTreeBranchLeafConfigReturn {
  */
 export function useTreeBranchLeafConfig(): UseTreeBranchLeafConfigReturn {
   const { api } = useAuthenticatedApi();
+  const { currentOrganization } = useAuth();
   const [config, setConfig] = useState<TreeBranchLeafConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasFetchedRef = useRef(false);
+  const lastOrgIdRef = useRef<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -140,9 +144,18 @@ export function useTreeBranchLeafConfig(): UseTreeBranchLeafConfigReturn {
   }, [api]);
 
   // Charger la configuration au montage
+  const organizationId = currentOrganization?.id ?? null;
+
   useEffect(() => {
+    const shouldFetch = !hasFetchedRef.current || lastOrgIdRef.current !== organizationId;
+    if (!shouldFetch) {
+      return;
+    }
+
+    hasFetchedRef.current = true;
+    lastOrgIdRef.current = organizationId;
     fetchConfig();
-  }, [fetchConfig]);
+  }, [fetchConfig, organizationId]);
 
   return {
     config,

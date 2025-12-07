@@ -8,7 +8,8 @@ export type FormulaToken =
   | { type: 'operator'; value: string }
   | { type: 'paren'; value: '(' | ')' }
   | { type: 'func'; name: string; argCount?: number }
-  | { type: 'comma' };
+  | { type: 'comma' }
+  | { type: 'string'; value: string };
 
 export interface EvaluateOptions {
   resolveVariable: (nodeId: string) => Promise<number | null> | number | null;
@@ -30,6 +31,7 @@ const OP_PRECEDENCE: Record<string, number> = {
   '*': 2,
   '/': 2,
   '^': 3,
+  '&': 1,
   and: 0,
   or: 0
 };
@@ -39,6 +41,7 @@ const OP_ASSOC: Record<string, 'L' | 'R'> = {
   '*': 'L',
   '/': 'L',
   '^': 'R',
+  '&': 'L',
   and: 'L',
   or: 'L'
 };
@@ -98,7 +101,7 @@ function tokensFingerprint(tokens: FormulaToken[]): string {
 function validateExpression(expr: string, opts?: EvaluateOptions) {
   const maxLen = opts?.maxExpressionLength ?? 500;
   if (expr.length > maxLen) throw new Error('Expression trop longue');
-  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=]+$/;
+  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=&"\\]+$/;
   if (!allowed.test(expr)) throw new Error('Caractères non autorisés dans l\'expression');
 }
 
@@ -134,6 +137,27 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
       const numStr = working.slice(i, j);
       tokens.push({ type: 'number', value: parseFloat(numStr) });
       i = j; lastToken = tokens[tokens.length - 1];
+      continue;
+    }
+    // Littéral string
+    if (ch === '"') {
+      let j = i + 1;
+      let str = '';
+      while (j < working.length) {
+        const cc = working[j];
+        if (cc === '\\' && j + 1 < working.length) {
+          str += working[j + 1];
+          j += 2;
+          continue;
+        }
+        if (cc === '"') break;
+        str += cc;
+        j++;
+      }
+      if (j >= working.length) throw new Error('Chaîne non terminée');
+      tokens.push({ type: 'string', value: str });
+      i = j + 1;
+      lastToken = tokens[tokens.length - 1];
       continue;
     }
     // Identifiant (potentiellement fonction)
@@ -203,8 +227,8 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
       i++; lastToken = tokens[tokens.length - 1];
       continue;
     }
-    // Opérateurs simples arithmétiques
-    if ('+-*/^'.includes(ch)) {
+    // Opérateurs simples arithmétiques + concat (&)
+    if ('+-*/^&'.includes(ch)) {
       tokens.push({ type: 'operator', value: ch });
       i++; lastToken = tokens[tokens.length - 1];
       continue;
@@ -275,6 +299,7 @@ export function toRPN(tokens: FormulaToken[]): FormulaToken[] {
     switch (tk.type) {
       case 'number':
       case 'variable':
+      case 'string':
         output.push(tk);
         // Si nous sommes dans une fonction et que le token précédent est '(' ou ',' on compte cet argument
         if (funcStack.length) {
@@ -371,170 +396,441 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
     rpn = toRPN(tokens);
     rpnParseCount++;
   }
-  const stack: number[] = [];
+
+  type StackValue = number | number[] | string;
+  interface StackEntry {
+    value: StackValue;
+    hadError: boolean;
+  }
+
+  const stack: StackEntry[] = [];
+  const pushEntry = (value: StackValue, hadError: boolean) => {
+    stack.push({ value, hadError });
+  };
+  const popEntry = (): StackEntry | undefined => stack.pop();
+
   const scale = (opts.precisionScale && opts.precisionScale > 1) ? Math.floor(opts.precisionScale) : null;
   const toInternal = (v: number) => scale ? Math.round(v * scale) : v;
   const fromInternal = (v: number) => scale ? v / scale : v;
+
+  const normalizeNumber = (num: number): number => (Number.isFinite(num) ? num : 0);
+  const stringToNumber = (value: string): number => {
+    if (!value) return 0;
+    const normalized = value.trim().replace(/\s+/g, '').replace(',', '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const toNumber = (value: StackValue): number => {
+    if (Array.isArray(value)) return normalizeNumber(value[0] ?? 0);
+    if (typeof value === 'number') return normalizeNumber(value);
+    return stringToNumber(value);
+  };
+  const valueToArray = (value: StackValue): number[] => {
+    if (Array.isArray(value)) return value.map(normalizeNumber);
+    return [toNumber(value)];
+  };
+  const normalizeArrayResult = (values: number[]): StackValue => (values.length === 1 ? values[0] : values);
+  const mapNumericValue = (value: StackValue, mapper: (n: number) => number): StackValue => {
+    const mapped = valueToArray(value).map(mapper);
+    return normalizeArrayResult(mapped);
+  };
+  const broadcastNumericValues = (
+    a: StackValue,
+    b: StackValue,
+    mapper: (x: number, y: number) => number
+  ): StackValue | null => {
+    const arrA = valueToArray(a);
+    const arrB = valueToArray(b);
+    const lenA = arrA.length;
+    const lenB = arrB.length;
+    const len = Math.max(lenA, lenB);
+    if (lenA > 1 && lenB > 1 && lenA !== lenB) return null;
+    const result: number[] = [];
+    for (let i = 0; i < len; i++) {
+      const va = arrA[lenA === 1 ? 0 : i];
+      const vb = arrB[lenB === 1 ? 0 : i];
+      result.push(mapper(va, vb));
+    }
+    return normalizeArrayResult(result);
+  };
+  const flattenNumericArgs = (args: StackValue[]): number[] => args.flatMap(valueToArray);
+  const valueToString = (value: StackValue): string => {
+    if (Array.isArray(value)) return value.length === 1 ? String(value[0]) : value.join(',');
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '0';
+    return value;
+  };
+  const sanitizeNumericResult = (value: StackValue, ctx?: Record<string, unknown>): StackValue => {
+    if (Array.isArray(value)) {
+      const sanitized = value.map(v => {
+        if (!Number.isFinite(v)) {
+          pushError('invalid_result', ctx);
+          return 0;
+        }
+        return v;
+      });
+      return normalizeArrayResult(sanitized);
+    }
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      pushError('invalid_result', ctx);
+      return 0;
+    }
+    return value;
+  };
+  const valueHasNumericError = (value: StackValue): boolean => {
+    if (Array.isArray(value)) return value.some(v => !Number.isFinite(v));
+    if (typeof value === 'number') return !Number.isFinite(value);
+    return false;
+  };
+
   for (const tk of rpn) {
-    if (tk.type === 'number') stack.push(tk.value);
+    if (tk.type === 'number') pushEntry(tk.value, false);
+    else if (tk.type === 'string') pushEntry(tk.value, false);
     else if (tk.type === 'variable') {
       let v: number | null;
+      const beforeErrors = errors.length;
       try { v = await opts.resolveVariable(tk.name); } catch { v = null; }
       if (v == null || !Number.isFinite(v)) {
         if (opts.strictVariables) pushError('unknown_variable', { nodeId: tk.name });
         v = 0;
       }
-      stack.push(v);
+      const hadError = errors.length > beforeErrors;
+      pushEntry(v, hadError);
     } else if (tk.type === 'operator') {
-      const b = stack.pop();
-      const a = stack.pop();
-      if (typeof a !== 'number' || typeof b !== 'number') { pushError('stack_underflow', { op: tk.value }); return { value: 0, errors }; }
-      let r = 0;
+      const entryB = popEntry();
+      const entryA = popEntry();
+      if (!entryA || !entryB) { pushError('stack_underflow', { op: tk.value }); return { value: 0, errors }; }
+      const beforeErrors = errors.length;
+      let resultValue: StackValue = 0;
       switch (tk.value) {
-        case '+':
-          if (scale) r = fromInternal(toInternal(a) + toInternal(b)); else r = a + b; break;
-        case '-':
-          if (scale) r = fromInternal(toInternal(a) - toInternal(b)); else r = a - b; break;
-        case '*':
-          if (scale) r = fromInternal(Math.round(toInternal(a) * toInternal(b) / scale)); else r = a * b; break;
-        case '/':
-          if (b === 0) { pushError('division_by_zero', { a, b }); r = opts.divisionByZeroValue ?? 0; }
-          else {
-            if (scale) r = fromInternal(Math.round(toInternal(a) * scale / toInternal(b)));
-            else r = a / b;
+        case '+': {
+          const res = broadcastNumericValues(entryA.value, entryB.value, (a, b) => {
+            if (scale) return fromInternal(toInternal(a) + toInternal(b));
+            return a + b;
+          });
+          if (res === null) {
+            pushError('array_length_mismatch', { op: '+' });
+            resultValue = 0;
+          } else {
+            resultValue = sanitizeNumericResult(res, { op: '+' });
           }
           break;
-        case '^':
-          // Utiliser Math.pow (peut générer Infinity si grand)
-          r = Math.pow(a, b);
-          if (!Number.isFinite(r)) { pushError('invalid_result', { op: '^', a, b }); r = 0; }
+        }
+        case '-': {
+          const res = broadcastNumericValues(entryA.value, entryB.value, (a, b) => {
+            if (scale) return fromInternal(toInternal(a) - toInternal(b));
+            return a - b;
+          });
+          if (res === null) {
+            pushError('array_length_mismatch', { op: '-' });
+            resultValue = 0;
+          } else {
+            resultValue = sanitizeNumericResult(res, { op: '-' });
+          }
           break;
-        case 'and':
-          r = (a !== 0 && b !== 0) ? 1 : 0;
+        }
+        case '*': {
+          const res = broadcastNumericValues(entryA.value, entryB.value, (a, b) => {
+            if (scale) return fromInternal(Math.round(toInternal(a) * toInternal(b) / scale));
+            return a * b;
+          });
+          if (res === null) {
+            pushError('array_length_mismatch', { op: '*' });
+            resultValue = 0;
+          } else {
+            resultValue = sanitizeNumericResult(res, { op: '*' });
+          }
           break;
-        case 'or':
-          r = (a !== 0 || b !== 0) ? 1 : 0;
+        }
+        case '/': {
+          const res = broadcastNumericValues(entryA.value, entryB.value, (a, b) => {
+            if (b === 0) {
+              pushError('division_by_zero', { a, b });
+              return opts.divisionByZeroValue ?? 0;
+            }
+            if (scale) return fromInternal(Math.round(toInternal(a) * scale / toInternal(b)));
+            return a / b;
+          });
+          if (res === null) {
+            pushError('array_length_mismatch', { op: '/' });
+            resultValue = 0;
+          } else {
+            resultValue = sanitizeNumericResult(res, { op: '/' });
+          }
           break;
+        }
+        case '^': {
+          const res = broadcastNumericValues(entryA.value, entryB.value, (a, b) => Math.pow(a, b));
+          if (res === null) {
+            pushError('array_length_mismatch', { op: '^' });
+            resultValue = 0;
+          } else {
+            resultValue = sanitizeNumericResult(res, { op: '^' });
+          }
+          break;
+        }
+        case 'and': {
+          const res = broadcastNumericValues(entryA.value, entryB.value, (a, b) => (a !== 0 && b !== 0 ? 1 : 0));
+          resultValue = res === null ? 0 : res;
+          if (res === null) pushError('array_length_mismatch', { op: 'and' });
+          break;
+        }
+        case 'or': {
+          const res = broadcastNumericValues(entryA.value, entryB.value, (a, b) => (a !== 0 || b !== 0 ? 1 : 0));
+          resultValue = res === null ? 0 : res;
+          if (res === null) pushError('array_length_mismatch', { op: 'or' });
+          break;
+        }
+        case '&': {
+          const str = valueToString(entryA.value) + valueToString(entryB.value);
+          resultValue = str;
+          break;
+        }
         default:
           pushError('unknown_operator', { op: tk.value });
+          resultValue = 0;
       }
-      stack.push(r);
+      const hadError = entryA.hadError || entryB.hadError || errors.length > beforeErrors;
+      pushEntry(resultValue, hadError);
     } else if (tk.type === 'func') {
       const argc = tk.argCount ?? 0;
       if (stack.length < argc) { pushError('stack_underflow', { func: tk.name }); return { value: 0, errors }; }
-      const args: number[] = [];
-      for (let i = 0; i < argc; i++) args.unshift(stack.pop() as number);
-      let r = 0;
+      const argEntries: StackEntry[] = [];
+      for (let i = 0; i < argc; i++) {
+        const entry = popEntry();
+        if (!entry) { pushError('stack_underflow', { func: tk.name }); return { value: 0, errors }; }
+        argEntries.unshift(entry);
+      }
+      const args = argEntries.map(e => e.value);
+      let r: StackValue = 0;
       logicMetrics.functions[tk.name] = (logicMetrics.functions[tk.name] || 0) + 1;
+      const beforeErrors = errors.length;
       switch (tk.name) {
         case 'min':
-          r = Math.min(...args);
+          r = Math.min(...flattenNumericArgs(args));
           break;
         case 'max':
-          r = Math.max(...args);
+          r = Math.max(...flattenNumericArgs(args));
           break;
         case 'eq':
-          r = (args[0] ?? 0) === (args[1] ?? 0) ? 1 : 0; break;
+          r = toNumber(args[0] ?? 0) === toNumber(args[1] ?? 0) ? 1 : 0;
+          break;
         case 'neq':
-          r = (args[0] ?? 0) !== (args[1] ?? 0) ? 1 : 0; break;
+          r = toNumber(args[0] ?? 0) !== toNumber(args[1] ?? 0) ? 1 : 0;
+          break;
         case 'gt':
-          r = (args[0] ?? 0) > (args[1] ?? 0) ? 1 : 0; break;
+          r = toNumber(args[0] ?? 0) > toNumber(args[1] ?? 0) ? 1 : 0;
+          break;
         case 'gte':
-          r = (args[0] ?? 0) >= (args[1] ?? 0) ? 1 : 0; break;
+          r = toNumber(args[0] ?? 0) >= toNumber(args[1] ?? 0) ? 1 : 0;
+          break;
         case 'lt':
-          r = (args[0] ?? 0) < (args[1] ?? 0) ? 1 : 0; break;
+          r = toNumber(args[0] ?? 0) < toNumber(args[1] ?? 0) ? 1 : 0;
+          break;
         case 'lte':
-          r = (args[0] ?? 0) <= (args[1] ?? 0) ? 1 : 0; break;
+          r = toNumber(args[0] ?? 0) <= toNumber(args[1] ?? 0) ? 1 : 0;
+          break;
         case 'round': {
-          const value = args[0] ?? 0;
-          const decimals = Math.max(0, Math.min(12, Math.floor(args[1] ?? 0)));
+          const decimals = Math.max(0, Math.min(12, Math.floor(toNumber(args[1] ?? 0))));
           const factor = Math.pow(10, decimals);
-          r = Math.round(value * factor) / factor;
-          if (scale) r = fromInternal(toInternal(r));
+          r = mapNumericValue(args[0] ?? 0, value => {
+            const rounded = Math.round(value * factor) / factor;
+            return scale ? fromInternal(toInternal(rounded)) : rounded;
+          });
           break; }
         case 'abs':
-          r = Math.abs(args[0] ?? 0);
+          r = mapNumericValue(args[0] ?? 0, Math.abs);
           break;
         case 'ceil':
-          r = Math.ceil(args[0] ?? 0);
+          r = mapNumericValue(args[0] ?? 0, Math.ceil);
           break;
         case 'floor':
-          r = Math.floor(args[0] ?? 0);
+          r = mapNumericValue(args[0] ?? 0, Math.floor);
+          break;
+        case 'int':
+          r = mapNumericValue(args[0] ?? 0, Math.floor);
           break;
         case 'if': {
-          // if(condition, a, b) -> condition != 0 ? a : b
-          const cond = args[0] ?? 0;
+          const cond = toNumber(args[0] ?? 0);
           const aVal = args[1] ?? 0;
-            const bVal = args[2] ?? 0;
+          const bVal = args[2] ?? 0;
           if (argc < 2) { pushError('invalid_result', { func: 'if', reason: 'missing_args' }); r = 0; }
           else r = cond !== 0 ? aVal : bVal;
           break; }
-        case 'and': {
-          // and(a,b,...) -> 1 si tous != 0
-          r = args.every(v => (v ?? 0) !== 0) ? 1 : 0;
-          break; }
-        case 'or': {
-          // or(a,b,...) -> 1 si au moins un != 0
-          r = args.some(v => (v ?? 0) !== 0) ? 1 : 0;
-          break; }
-        case 'not': {
-          // not(a) -> 1 si a == 0
-          r = (args[0] ?? 0) === 0 ? 1 : 0;
-          break; }
-        case 'present': {
-          // present(a) -> 1 si a != 0
-          r = (args[0] ?? 0) !== 0 ? 1 : 0;
-          break; }
-        case 'empty': {
-          // empty(a) -> 1 si a == 0
-          r = (args[0] ?? 0) === 0 ? 1 : 0;
-          break; }
-        case 'sum': {
-          // sum(a,b,...) -> somme (ignore NaN)
-          r = args.reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0);
-          break; }
+        case 'and':
+          r = flattenNumericArgs(args).every(v => v !== 0) ? 1 : 0;
+          break;
+        case 'or':
+          r = flattenNumericArgs(args).some(v => v !== 0) ? 1 : 0;
+          break;
+        case 'not':
+          r = toNumber(args[0] ?? 0) === 0 ? 1 : 0;
+          break;
+        case 'present':
+          r = toNumber(args[0] ?? 0) !== 0 ? 1 : 0;
+          break;
+        case 'empty':
+          r = toNumber(args[0] ?? 0) === 0 ? 1 : 0;
+          break;
+        case 'sum':
+          r = flattenNumericArgs(args).reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0);
+          break;
         case 'avg': {
-          // avg(a,b,...) -> moyenne (0 si aucun argument)
-          if (!args.length) r = 0; else {
-            const valid = args.filter(v => Number.isFinite(v));
-            r = valid.length ? valid.reduce((a,b)=>a+b,0) / valid.length : 0;
-          }
+          const flat = flattenNumericArgs(args).filter(v => Number.isFinite(v));
+          r = flat.length ? flat.reduce((a, b) => a + b, 0) / flat.length : 0;
           break; }
-        case 'ifnull': {
-          // ifnull(a,b) -> a si a != 0 sinon b
-          r = (args[0] ?? 0) !== 0 ? (args[0] ?? 0) : (args[1] ?? 0);
-          break; }
+        case 'ifnull':
+          r = toNumber(args[0] ?? 0) !== 0 ? args[0] ?? 0 : args[1] ?? 0;
+          break;
         case 'coalesce': {
-          // coalesce(a,b,c,...) -> premier != 0
-            let found = 0;
-            for (const v of args) { if ((v ?? 0) !== 0) { found = v ?? 0; break; } }
-            r = found;
-            break; }
+          let found: StackValue = 0;
+          let hasFound = false;
+          for (const v of args) {
+            if (toNumber(v ?? 0) !== 0) { found = v ?? 0; hasFound = true; break; }
+          }
+          r = hasFound ? found : 0;
+          break; }
         case 'safediv': {
-          // safediv(a,b, fallback=0)
-          const aVal = args[0] ?? 0; const bVal = args[1] ?? 0; const fb = args[2] ?? 0;
-          if (bVal === 0) r = fb; else r = aVal / bVal;
+          const aVal = toNumber(args[0] ?? 0);
+          const bVal = toNumber(args[1] ?? 0);
+          const fb = toNumber(args[2] ?? 0);
+          r = bVal === 0 ? fb : aVal / bVal;
           break; }
         case 'percentage': {
-          // percentage(part, total) -> (part / total) * 100
-          const part = args[0] ?? 0; const total = args[1] ?? 0;
+          const part = toNumber(args[0] ?? 0);
+          const total = toNumber(args[1] ?? 0);
           r = total === 0 ? 0 : (part / total) * 100;
           break; }
         case 'ratio': {
-          // ratio(a,b) -> a / b
-          const aVal = args[0] ?? 0; const bVal = args[1] ?? 0;
+          const aVal = toNumber(args[0] ?? 0);
+          const bVal = toNumber(args[1] ?? 0);
           r = bVal === 0 ? 0 : aVal / bVal;
+          break; }
+        case 'radians':
+        case 'rad':
+          r = mapNumericValue(args[0] ?? 0, angle => angle * (Math.PI / 180));
+          break;
+        case 'sqrt':
+        case 'racine':
+          r = mapNumericValue(args[0] ?? 0, value => {
+            if (value < 0) {
+              pushError('invalid_result', { func: tk.name, value });
+              return 0;
+            }
+            return Math.sqrt(value);
+          });
+          break;
+        case 'cos':
+        case 'cosinus':
+          r = mapNumericValue(args[0] ?? 0, Math.cos);
+          break;
+        case 'atan':
+        case 'arctan':
+          r = mapNumericValue(args[0] ?? 0, Math.atan);
+          break;
+        case 'pi': {
+          const factor = argc >= 1 ? toNumber(args[0]) : 1;
+          r = Math.PI * factor;
+          break; }
+        case 'row': {
+          if (!args.length) {
+            pushError('invalid_result', { func: 'row', reason: 'missing_args' });
+            r = 0;
+            break;
+          }
+          const target = args[0];
+          if (Array.isArray(target)) r = target;
+          else r = mapNumericValue(target, value => value);
+          break; }
+        case 'indirect': {
+          const source = valueToString(args[0] ?? '');
+          const match = source.match(/^(-?\d+)\s*:\s*(-?\d+)$/);
+          if (match) {
+            const start = parseInt(match[1], 10);
+            const end = parseInt(match[2], 10);
+            const step = start <= end ? 1 : -1;
+            const length = Math.min(1000, Math.abs(end - start) + 1);
+            const seq: number[] = [];
+            for (let i = 0; i < length; i++) seq.push(start + i * step);
+            if (length < Math.abs(end - start) + 1) {
+              pushError('range_truncated', { func: 'indirect', start, end });
+            }
+            r = seq;
+          } else {
+            r = stringToNumber(source);
+          }
+          break; }
+        case 'sumproduct':
+        case 'sumprod': {
+          if (!args.length) { r = 0; break; }
+          const arrays = args.map(valueToArray);
+          const maxLen = Math.max(...arrays.map(arr => arr.length));
+          if (maxLen === 0) { r = 0; break; }
+          const variableArrays = arrays.filter(arr => arr.length > 1);
+          if (variableArrays.some(arr => arr.length !== maxLen)) {
+            pushError('array_length_mismatch', { func: tk.name });
+            r = 0;
+            break;
+          }
+          if (arrays.length === 1) {
+            r = arrays[0].reduce((acc, val) => acc + val, 0);
+            break;
+          }
+          let total = 0;
+          for (let i = 0; i < maxLen; i++) {
+            let product = 1;
+            for (const arr of arrays) {
+              const val = arr.length === 1 ? arr[0] : arr[i] ?? 0;
+              product *= val;
+            }
+            total += product;
+          }
+          r = total;
+          break; }
+        case 'sierreur':
+        case 'iferror': {
+          const primary = argEntries[0];
+          const fallback = argEntries[1];
+          const fallbackValue = fallback?.value ?? 0;
+          const primaryValue = primary?.value;
+          const usedFallback = !primary || primary.hadError || valueHasNumericError(primaryValue ?? 0 as StackValue);
+          r = usedFallback ? fallbackValue ?? 0 : primaryValue ?? 0;
           break; }
         default:
           pushError('unknown_function', { func: tk.name });
           r = 0;
       }
-      if (!Number.isFinite(r)) { pushError('invalid_result', { func: tk.name }); r = 0; }
-      stack.push(r);
+      if (typeof r === 'number' || Array.isArray(r)) {
+        r = sanitizeNumericResult(r, { func: tk.name });
+      }
+      const funcIntroducedErrors = errors.length > beforeErrors;
+      let hadError: boolean;
+      if (tk.name === 'sierreur' || tk.name === 'iferror') {
+        const primary = argEntries[0];
+        const fallback = argEntries[1];
+        const usedFallback = !primary || primary.hadError || valueHasNumericError(primary?.value ?? 0 as StackValue);
+        const sourceEntry = usedFallback ? fallback : primary;
+        hadError = funcIntroducedErrors || Boolean(sourceEntry?.hadError);
+      } else {
+        hadError = funcIntroducedErrors || argEntries.some(e => e.hadError);
+      }
+      pushEntry(r, hadError);
     }
   }
-  const out = stack.pop();
-  if (stack.length || typeof out !== 'number' || !Number.isFinite(out)) {
+  const out = popEntry();
+  if (stack.length || !out) {
+    pushError('invalid_result');
+    const dt = Date.now() - t0;
+    logicMetrics.evaluations++;
+    logicMetrics.totalEvalMs += dt;
+    return { value: 0, errors };
+  }
+  let finalValue = out.value;
+  if (typeof finalValue === 'string') {
+    finalValue = stringToNumber(finalValue);
+  } else if (Array.isArray(finalValue)) {
+    finalValue = finalValue[0] ?? 0;
+  }
+  if (typeof finalValue !== 'number' || !Number.isFinite(finalValue)) {
     pushError('invalid_result');
     const dt = Date.now() - t0;
     logicMetrics.evaluations++;
@@ -544,7 +840,7 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
   const dt = Date.now() - t0;
   logicMetrics.evaluations++;
   logicMetrics.totalEvalMs += dt;
-  return { value: out, errors };
+  return { value: finalValue, errors };
 }
 
 // Helper haut-niveau: compile & évalue en une étape (utilisé potentiellement ailleurs)

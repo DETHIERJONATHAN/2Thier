@@ -12,6 +12,7 @@
 import { Router } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { addToNodeLinkedField } from './repeat/services/shared-helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -747,7 +748,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         return res.status(403).json({ error: 'Accès non autorisé' });
       }
 
-      // Mise à jour des métadonnées seulement
+      // Mise à jour des métadonnées seulement (sans créer de variables)
       const updatedTable = await prisma.treeBranchLeafNodeTable.update({
         where: { id: tableId },
         data: {
@@ -756,7 +757,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         },
       });
 
-      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] ✅ Métadonnées mises à jour avec succès`);
+      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] ✅ Métadonnées mises à jour - repeater créera les champs d'affichage`);
       return res.json(updatedTable);
     }
 

@@ -32,21 +32,22 @@ const MarkersPanel: React.FC<MarkersPanelProps> = ({ treeId, nodeId, value, onCh
     (async () => {
       try {
         setLoading(true);
+        // NOTE: Les endpoints /markers et /markers/available n'existent pas, commentés pour éviter la boucle infinie
         // Sélectionnés
-        if (!value || !Array.isArray((value as ValueShape).markerIds)) {
-          const selected = await api.get(`/api/treebranchleaf/nodes/${nodeId}/markers`);
-          const ids = Array.isArray(selected)
-            ? (selected.map((m: Partial<TreeBranchLeafMarker> & { markerId?: string } | string) => {
-                if (typeof m === 'string') return m;
-                return m.id || m.markerId || '';
-              }).filter(Boolean) as string[])
-            : [];
-          if (mounted) setSelectedIds(ids);
-          onChange?.({ ...(value || {}), markerIds: ids });
-        }
+        // if (!value || !Array.isArray((value as ValueShape).markerIds)) {
+        //   const selected = await api.get(`/api/treebranchleaf/nodes/${nodeId}/markers`);
+        //   const ids = Array.isArray(selected)
+        //     ? (selected.map((m: Partial<TreeBranchLeafMarker> & { markerId?: string } | string) => {
+        //         if (typeof m === 'string') return m;
+        //         return m.id || m.markerId || '';
+        //       }).filter(Boolean) as string[])
+        //     : [];
+        //   if (mounted) setSelectedIds(ids);
+        //   onChange?.({ ...(value || {}), markerIds: ids });
+        // }
         // Disponibles
-        const avail = await api.get(`/api/treebranchleaf/nodes/${nodeId}/markers/available`);
-        if (mounted && Array.isArray(avail)) setAvailable(avail);
+        // const avail = await api.get(`/api/treebranchleaf/nodes/${nodeId}/markers/available`);
+        // if (mounted && Array.isArray(avail)) setAvailable(avail);
   } catch {
         // silencieux (ne bloque pas le panneau)
       } finally {

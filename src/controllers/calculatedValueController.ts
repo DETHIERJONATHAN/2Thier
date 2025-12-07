@@ -7,19 +7,117 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
+
+const parseStoredStringValue = (raw?: string | null): string | number | boolean | null => {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+  const trimmed = String(raw).trim();
+  if (!trimmed || trimmed === '∅') {
+    return null;
+  }
+  const looksJson = (trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'));
+  if (looksJson) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === 'object' && parsed !== null) {
+        const candidate = parsed as Record<string, unknown>;
+        if (candidate.value !== undefined) return candidate.value as string | number | boolean | null;
+        if (candidate.result !== undefined) return candidate.result as string | number | boolean | null;
+      }
+      if (typeof parsed === 'string' || typeof parsed === 'number' || typeof parsed === 'boolean') {
+        return parsed;
+      }
+    } catch {
+      // ignore JSON parse errors and keep raw string
+    }
+  }
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  const numeric = Number(trimmed);
+  if (!Number.isNaN(numeric) && trimmed === numeric.toString()) {
+    return numeric;
+  }
+  return trimmed;
+};
+
+const extractValueFromOperationResult = (raw: unknown): string | number | boolean | null => {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+  if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+    return raw;
+  }
+  if (typeof raw === 'object') {
+    const record = raw as Record<string, unknown>;
+    const candidate = record.value ?? record.result ?? record.humanText ?? record.text;
+    if (candidate === undefined || candidate === null) {
+      return null;
+    }
+    if (typeof candidate === 'string' || typeof candidate === 'number' || typeof candidate === 'boolean') {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+const hasMeaningfulValue = (val: unknown): boolean => {
+  if (val === null || val === undefined) return false;
+  if (typeof val === 'string') {
+    return val.trim() !== '' && val.trim() !== '∅';
+  }
+  return true;
+};
+
+const toIsoString = (date?: Date | string | null): string | undefined => {
+  if (!date) {
+    return undefined;
+  }
+  try {
+    return date instanceof Date ? date.toISOString() : new Date(date).toISOString();
+  } catch {
+    return undefined;
+  }
+};
+
+type SubmissionDataSnapshot = {
+  value: string | null;
+  lastResolved: Date | null;
+  operationResult: unknown;
+  operationDetail: unknown;
+  operationSource: string | null;
+  sourceRef: string | null;
+  fieldLabel: string | null;
+};
 
 /**
  * GET /api/tree-nodes/:nodeId/calculated-value
  * 
  * Récupère la valeur calculée stockée dans Prisma
+ * 🔥 NOUVEAU: Invoke operation-interpreter for TBL fields if needed
  */
 router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
   try {
     const { nodeId } = req.params;
-    const { _submissionId } = req.query;
+
+    const pickQueryString = (key: string): string | undefined => {
+      const rawValue = (req.query as Record<string, unknown>)[key];
+      if (typeof rawValue === 'string') return rawValue;
+      if (Array.isArray(rawValue) && rawValue.length > 0 && typeof rawValue[0] === 'string') {
+        return rawValue[0];
+      }
+      return undefined;
+    };
+
+    const submissionId =
+      pickQueryString('submissionId') ||
+      pickQueryString('_submissionId') ||
+      pickQueryString('subId') ||
+      pickQueryString('tblSubmissionId');
 
     if (!nodeId) {
       return res.status(400).json({ error: 'nodeId requis' });
@@ -38,41 +136,212 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         calculatedAt: true,
         calculatedBy: true,
         type: true,
-        fieldType: true
+        fieldType: true,
+        treeId: true // ✨ Ajouté pour operation-interpreter
       }
     });
 
     if (!node) {
       return res.status(404).json({ error: 'Nœud non trouvé' });
     }
-    // 🎯 Si le nœud courant n'a pas de valeur calculée mais qu'il est une copie
-    // (metadata.copiedFromNodeId) -> retourner la valeur du noeud original
-    try {
-      const meta = (node as any).metadata as any;
-      if ((node.calculatedValue === null || node.calculatedValue === undefined || node.calculatedValue === '') && meta?.copiedFromNodeId) {
-        let origId = meta.copiedFromNodeId;
-        if (typeof origId === 'string' && origId.trim().startsWith('[')) {
-          try { origId = JSON.parse(origId)[0]; } catch { /* ignore */ }
+
+    const preferSubmissionData = Boolean(submissionId);
+    const forceFlag =
+      pickQueryString('force') ||
+      pickQueryString('forceRefresh') ||
+      pickQueryString('refresh') ||
+      pickQueryString('forceRecompute');
+    const forceRecompute = Boolean(
+      forceFlag && ['1', 'true', 'yes', 'force'].includes(forceFlag.toLowerCase())
+    );
+
+    let submissionDataEntry: SubmissionDataSnapshot | null = null;
+    let submissionResolvedValue: string | number | boolean | null = null;
+
+    if (preferSubmissionData && submissionId) {
+      submissionDataEntry = await prisma.treeBranchLeafSubmissionData.findUnique({
+        where: { submissionId_nodeId: { submissionId, nodeId } },
+        select: {
+          value: true,
+          lastResolved: true,
+          operationResult: true,
+          operationDetail: true,
+          operationSource: true,
+          sourceRef: true,
+          fieldLabel: true
         }
-        if (Array.isArray(origId) && origId.length > 0) origId = origId[0];
-        if (origId) {
-          const originalNode = await prisma.treeBranchLeafNode.findUnique({ where: { id: String(origId) }, select: { id: true, label: true, calculatedValue: true, calculatedAt: true, calculatedBy: true, type: true, fieldType: true } });
-          if (originalNode) {
+      });
+
+      if (submissionDataEntry) {
+        submissionResolvedValue = parseStoredStringValue(submissionDataEntry.value);
+        if (!hasMeaningfulValue(submissionResolvedValue)) {
+          submissionResolvedValue = extractValueFromOperationResult(submissionDataEntry.operationResult);
+        }
+      }
+
+      const needsSubmissionRecompute =
+        forceRecompute ||
+        !submissionDataEntry ||
+        !hasMeaningfulValue(submissionResolvedValue);
+
+      if (needsSubmissionRecompute) {
+        const variableMeta = await prisma.treeBranchLeafNodeVariable.findUnique({
+          where: { nodeId },
+          select: { nodeId: true, displayName: true, exposedKey: true, unit: true }
+        });
+
+        if (variableMeta) {
+          try {
+            const { evaluateVariableOperation } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
+            const evaluation = await evaluateVariableOperation(nodeId, submissionId, prisma);
+            const recomputedValue = evaluation.value ?? evaluation.operationResult ?? null;
+            const persistedValue =
+              recomputedValue === null || recomputedValue === undefined
+                ? null
+                : String(recomputedValue);
+            const resolvedAt = new Date();
+
+            await prisma.treeBranchLeafSubmissionData.upsert({
+              where: { submissionId_nodeId: { submissionId, nodeId } },
+              update: {
+                value: persistedValue,
+                operationDetail: evaluation.operationDetail,
+                operationResult: evaluation.operationResult,
+                operationSource: evaluation.operationSource,
+                sourceRef: evaluation.sourceRef,
+                fieldLabel: node.label,
+                isVariable: true,
+                variableDisplayName: variableMeta.displayName,
+                variableKey: variableMeta.exposedKey,
+                variableUnit: variableMeta.unit,
+                lastResolved: resolvedAt
+              },
+              create: {
+                id: randomUUID(),
+                submissionId,
+                nodeId,
+                value: persistedValue,
+                operationDetail: evaluation.operationDetail,
+                operationResult: evaluation.operationResult,
+                operationSource: evaluation.operationSource,
+                sourceRef: evaluation.sourceRef,
+                fieldLabel: node.label,
+                isVariable: true,
+                variableDisplayName: variableMeta.displayName,
+                variableKey: variableMeta.exposedKey,
+                variableUnit: variableMeta.unit,
+                lastResolved: resolvedAt
+              }
+            });
+
             return res.json({
               success: true,
-              nodeId: originalNode.id,
-              label: originalNode.label,
-              value: originalNode.calculatedValue,
-              calculatedAt: originalNode.calculatedAt,
-              calculatedBy: originalNode.calculatedBy,
-              type: originalNode.type,
-              fieldType: originalNode.fieldType
+              nodeId: node.id,
+              label: node.label,
+              value: recomputedValue,
+              calculatedAt: resolvedAt.toISOString(),
+              calculatedBy: evaluation.operationSource || 'operation-interpreter-auto',
+              type: node.type,
+              fieldType: node.fieldType,
+              submissionId,
+              sourceRef: evaluation.sourceRef,
+              operationDetail: evaluation.operationDetail,
+              operationResult: evaluation.operationResult,
+              freshCalculation: true
             });
+          } catch (recomputeErr) {
+            console.error('❌ [CalculatedValueController] Recompute error:', recomputeErr);
           }
         }
       }
-    } catch (metaErr) {
-      console.warn('[CalculatedValueController] error checking copiedFromNodeId fallback', metaErr);
+
+      if (submissionDataEntry && hasMeaningfulValue(submissionResolvedValue)) {
+        return res.json({
+          success: true,
+          nodeId: node.id,
+          label: node.label || submissionDataEntry.fieldLabel,
+          value: submissionResolvedValue,
+          calculatedAt: toIsoString(submissionDataEntry.lastResolved) || toIsoString(node.calculatedAt),
+          calculatedBy: submissionDataEntry.operationSource || node.calculatedBy,
+          type: node.type,
+          fieldType: node.fieldType,
+          submissionId,
+          sourceRef: submissionDataEntry.sourceRef,
+          operationDetail: submissionDataEntry.operationDetail,
+          operationResult: submissionDataEntry.operationResult,
+          fromSubmission: true
+        });
+      }
+    }
+
+    // 🔥 NOUVEAU: Si c'est un champ TBL avec une table lookup, invoquer operation-interpreter
+    const isTBLField = node.type === 'field' && node.metadata && typeof node.metadata === 'object';
+    const hasTableLookup = isTBLField && 
+      (node.metadata as any)?.lookup?.enabled === true && 
+      (node.metadata as any)?.lookup?.tableReference;
+
+    // Invoquer operation-interpreter si:
+    // 1. C'est un champ TBL avec table lookup ET
+    // 2. (Pas de valeur calculée OU valeur trop ancienne > 10s)
+    if (hasTableLookup && node.treeId) {
+      const now = new Date();
+      const calculatedAt = node.calculatedAt ? new Date(node.calculatedAt) : null;
+      const isStale = !calculatedAt || (now.getTime() - calculatedAt.getTime()) > 10000; // 10s
+      const hasNoValue = !node.calculatedValue || node.calculatedValue === '' || node.calculatedValue === '[]';
+      
+      if (isStale || hasNoValue) {
+        console.log(`🔥 [CalculatedValueController] Champ TBL "${node.label}" nécessite recalcul:`, {
+          nodeId, 
+          hasTableLookup, 
+          isStale, 
+          hasNoValue,
+          calculatedAt,
+          submissionId
+        });
+        
+        try {
+          // 🚀 INVOQUER OPERATION-INTERPRETER
+          const { evaluateVariableOperation } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
+          
+          const result = await evaluateVariableOperation(
+            nodeId,
+            submissionId || 'preview-calculated-value-request',
+            prisma
+          );
+          
+          console.log('🎯 [CalculatedValueController] Résultat operation-interpreter:', result);
+          
+          // Si on a un résultat, le stocker ET le retourner
+          if (result && result.operationResult !== undefined) {
+            const stringValue = String(result.operationResult);
+            
+            // Stocker dans la base
+            await prisma.treeBranchLeafNode.update({
+              where: { id: nodeId },
+              data: {
+                calculatedValue: stringValue,
+                calculatedAt: new Date(),
+                calculatedBy: 'operation-interpreter-auto'
+              }
+            });
+
+            return res.json({
+              success: true,
+              nodeId: node.id,
+              label: node.label,
+              value: stringValue,
+              calculatedAt: new Date().toISOString(),
+              calculatedBy: 'operation-interpreter-auto',
+              type: node.type,
+              fieldType: node.fieldType,
+              freshCalculation: true // 🔥 Marquer comme nouveau calcul
+            });
+          }
+        } catch (operationErr) {
+          console.error('❌ [CalculatedValueController] Erreur operation-interpreter:', operationErr);
+          // Continue avec la valeur existante si échec du calcul
+        }
+      }
     }
 
     // ✅ Retourner la valeur calculée du Nœud (par défaut)
@@ -109,6 +378,18 @@ router.post('/:nodeId/store-calculated-value', async (req: Request, res: Respons
     if (calculatedValue === undefined) {
       return res.status(400).json({ error: 'calculatedValue requis' });
     }
+
+    // 🎯 Log: debug trace de la requête
+    console.log('[CalculatedValueController] POST store-calculated-value', {
+      nodeId,
+      calculatedValue,
+      calculatedBy,
+      submissionId,
+      headers: {
+        organization: req.headers['x-organization-id'],
+        referer: req.headers['referer']
+      }
+    });
 
     // 🎯 Mettre à jour le nœud avec la valeur calculée
     const updated = await prisma.treeBranchLeafNode.update({

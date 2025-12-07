@@ -41,6 +41,7 @@ import { HelpTooltip } from '../../../../common/HelpTooltip';
 import { useTBLTooltip } from '../../../../../hooks/useTBLTooltip';
 import { useTBLValidationContext } from '../contexts/TBLValidationContext';
 import { useTBLTableLookup } from '../hooks/useTBLTableLookup';
+
 import type { RawTreeNode } from '../types';
 
 declare global {
@@ -72,6 +73,8 @@ const evaluateFilterConditions = (
 ): boolean => {
   if (!conditions || conditions.length === 0) return true;
   if (!tableData || !config) return true;
+  
+  console.log(`[evaluateFilterConditions] Évaluation pour option:`, option, `avec ${conditions.length} condition(s)`);
 
   const results = conditions.map(condition => {
     // 1. Extraire la valeur de référence depuis formData
@@ -83,8 +86,25 @@ const evaluateFilterConditions = (
     } else if (condition.compareWithRef?.startsWith('@select.')) {
       const fieldId = condition.compareWithRef.replace('@select.', '');
       referenceValue = formData[fieldId];
+    } else if (condition.compareWithRef?.startsWith('node-formula:')) {
+      // Support pour les références node-formula:
+      const nodeId = condition.compareWithRef.replace('node-formula:', '');
+      referenceValue = formData[nodeId];
+    } else if (condition.compareWithRef?.startsWith('formula:')) {
+      // Support pour les références formula:
+      const formulaId = condition.compareWithRef.replace('formula:', '');
+      referenceValue = formData[formulaId];
+    } else if (condition.compareWithRef && formData[condition.compareWithRef]) {
+      // Fallback: essayer directement l'ID
+      referenceValue = formData[condition.compareWithRef];
     }
-    // TODO: Ajouter le support pour formula:{id} et condition:{id}
+    
+    // Vérification de la valeur de référence
+    if (referenceValue === null || referenceValue === undefined || referenceValue === '') {
+      console.warn(`[evaluateFilterConditions] Valeur de référence non trouvée pour: ${condition.compareWithRef}`);
+      console.warn(`[evaluateFilterConditions] FormData disponible:`, Object.keys(formData));
+      return false; // Si pas de valeur de référence, la condition échoue
+    }
 
     // 2. Trouver la/les valeur(s) correspondante(s) dans le tableau pour cette option
     const tableValues: any[] = [];
@@ -112,38 +132,57 @@ const evaluateFilterConditions = (
 
     // 3. Comparer referenceValue avec chaque tableValue selon l'opérateur
     // Si plusieurs valeurs (colonne ET ligne), toutes doivent passer la condition
+    console.log(`[evaluateFilterConditions] Comparaison: referenceValue=${referenceValue}, tableValues:`, tableValues, `opérateur=${condition.operator}`);
+    
     const conditionResults = tableValues.map(tableValue => {
+      let result = false;
       switch (condition.operator) {
         case 'equals':
-          return String(referenceValue) === String(tableValue);
+          result = String(referenceValue).trim().toLowerCase() === String(tableValue).trim().toLowerCase();
+          break;
         case 'notEquals':
-          return String(referenceValue) !== String(tableValue);
+          result = String(referenceValue).trim().toLowerCase() !== String(tableValue).trim().toLowerCase();
+          break;
         case 'greaterThan':
-          return Number(referenceValue) > Number(tableValue);
+          result = Number(referenceValue) > Number(tableValue);
+          break;
         case 'lessThan':
-          return Number(referenceValue) < Number(tableValue);
+          result = Number(referenceValue) < Number(tableValue);
+          break;
         case 'greaterOrEqual':
-          return Number(referenceValue) >= Number(tableValue);
+          result = Number(referenceValue) >= Number(tableValue);
+          break;
         case 'lessOrEqual':
-          return Number(referenceValue) <= Number(tableValue);
+          result = Number(referenceValue) <= Number(tableValue);
+          break;
         case 'contains':
-          return String(tableValue).toLowerCase().includes(String(referenceValue).toLowerCase());
+          result = String(tableValue).toLowerCase().includes(String(referenceValue).toLowerCase());
+          break;
         case 'notContains':
-          return !String(tableValue).toLowerCase().includes(String(referenceValue).toLowerCase());
+          result = !String(tableValue).toLowerCase().includes(String(referenceValue).toLowerCase());
+          break;
         default:
-          return false;
+          result = false;
       }
+      
+      console.log(`[evaluateFilterConditions] ${String(referenceValue)} ${condition.operator} ${String(tableValue)} = ${result}`);
+      return result;
     });
     
     // Si colonne ET ligne: toutes les conditions doivent passer (AND)
     // Si seulement colonne OU ligne: au moins une doit passer
-    return conditionResults.every(result => result);
+    const conditionPassed = conditionResults.every(result => result);
+    console.log(`[evaluateFilterConditions] Condition ${condition.id} résultat: ${conditionPassed}`);
+    return conditionPassed;
   });
 
   // Combiner les résultats selon la logique
-  return filterLogic === 'AND' 
+  const finalResult = filterLogic === 'AND' 
     ? results.every(result => result) 
     : results.some(result => result);
+    
+  console.log(`[evaluateFilterConditions] Résultat final pour option "${option.value}": ${finalResult} (logique: ${filterLogic})`);
+  return finalResult;
 };
 
 // 🔧 Fonction utilitaire pour extraire une valeur depuis une colonne du tableau
@@ -153,46 +192,61 @@ const extractValueFromColumn = (
   tableData: {columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'},
   config: any
 ): any => {
-  if (tableData.type === 'columns') {
-    // Mode colonnes: trouver la ligne correspondante à cette option
-    const keyColIndex = config.keyColumn ? tableData.columns.indexOf(config.keyColumn) : 0;
-    const targetColIndex = tableData.columns.indexOf(targetColumn);
-    
-    if (keyColIndex >= 0 && targetColIndex >= 0) {
-      const matchingRowIndex = tableData.data.findIndex(row => String(row[keyColIndex]) === String(option.value));
-      if (matchingRowIndex >= 0) {
-        return tableData.data[matchingRowIndex][targetColIndex];
+  try {
+    if (tableData.type === 'columns') {
+      // Mode colonnes: trouver la ligne correspondante à cette option
+      const keyColIndex = config.keyColumn ? tableData.columns.indexOf(config.keyColumn) : 0;
+      const targetColIndex = tableData.columns.indexOf(targetColumn);
+      
+      if (keyColIndex >= 0 && targetColIndex >= 0) {
+        const matchingRowIndex = tableData.data.findIndex(row => {
+          const cellValue = row[keyColIndex];
+          const optionValue = option.value;
+          // Comparaison plus flexible
+          return String(cellValue).trim().toLowerCase() === String(optionValue).trim().toLowerCase();
+        });
+        if (matchingRowIndex >= 0 && tableData.data[matchingRowIndex][targetColIndex] !== undefined) {
+          return tableData.data[matchingRowIndex][targetColIndex];
+        }
       }
-    }
-  } else if (tableData.type === 'matrix') {
-    // Mode matrix selon keyColumn/keyRow
-    const targetColIndex = tableData.columns.indexOf(targetColumn);
-    
-    if (config.keyColumn) {
-      // Lookup par colonne: l'option correspond à une colonne
-      const optionColIndex = tableData.columns.indexOf(String(option.value));
-      if (optionColIndex >= 0 && targetColIndex >= 0) {
-        // Pour chaque ligne de données, comparer les colonnes
-        for (let rowIndex = 0; rowIndex < tableData.data.length; rowIndex++) {
-          const dataColIndex = optionColIndex - 1; // Décalage car data n'a pas colonne A
-          const targetDataColIndex = targetColIndex - 1;
-          if (dataColIndex >= 0 && targetDataColIndex >= 0) {
-            return tableData.data[rowIndex][targetDataColIndex];
+    } else if (tableData.type === 'matrix') {
+      // Mode matrix selon keyColumn/keyRow
+      const targetColIndex = tableData.columns.indexOf(targetColumn);
+      
+      if (config.keyColumn) {
+        // Lookup par colonne: l'option correspond à une colonne
+        const optionColIndex = tableData.columns.findIndex(col => 
+          String(col).trim().toLowerCase() === String(option.value).trim().toLowerCase()
+        );
+        if (optionColIndex >= 0 && targetColIndex >= 0) {
+          // Pour chaque ligne de données, comparer les colonnes
+          for (let rowIndex = 0; rowIndex < tableData.data.length; rowIndex++) {
+            const dataColIndex = optionColIndex - 1; // Décalage car data n'a pas colonne A
+            const targetDataColIndex = targetColIndex - 1;
+            if (dataColIndex >= 0 && targetDataColIndex >= 0 && 
+                tableData.data[rowIndex] && tableData.data[rowIndex][targetDataColIndex] !== undefined) {
+              return tableData.data[rowIndex][targetDataColIndex];
+            }
+          }
+        }
+      } else if (config.keyRow) {
+        // Lookup par ligne: trouver la colonne cible
+        const keyRowIndex = tableData.rows.findIndex(row => 
+          String(row).trim().toLowerCase() === String(config.keyRow).trim().toLowerCase()
+        );
+        if (keyRowIndex >= 0 && targetColIndex >= 0) {
+          const dataRowIndex = keyRowIndex - 1;
+          const dataColIndex = targetColIndex - 1;
+          if (dataRowIndex >= 0 && dataRowIndex < tableData.data.length &&
+              dataColIndex >= 0 && tableData.data[dataRowIndex] && 
+              dataColIndex < tableData.data[dataRowIndex].length) {
+            return tableData.data[dataRowIndex][dataColIndex];
           }
         }
       }
-    } else if (config.keyRow) {
-      // Lookup par ligne: trouver la colonne cible
-      const keyRowIndex = tableData.rows.indexOf(config.keyRow);
-      if (keyRowIndex >= 0 && targetColIndex >= 0) {
-        const dataRowIndex = keyRowIndex - 1;
-        const dataColIndex = targetColIndex - 1;
-        if (dataRowIndex >= 0 && dataRowIndex < tableData.data.length &&
-            dataColIndex >= 0 && dataColIndex < tableData.data[dataRowIndex].length) {
-          return tableData.data[dataRowIndex][dataColIndex];
-        }
-      }
     }
+  } catch (error) {
+    console.error('[extractValueFromColumn] Erreur:', error);
   }
   
   return null;
@@ -1644,9 +1698,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       return options?.dataActiveId || fallbackNodeId;
     };
 
+    const capabilities = field.capabilities || {};
+    const tableActiveId = capabilities?.table?.activeId as string | undefined;
+
     // 🚀 PRIORITÉ 1: Champs TreeBranchLeaf intelligents (générés dynamiquement)
     if (field.isTreeBranchLeafSmart && (field.hasData || field.hasFormula)) {
-      const caps = field.capabilities || {};
+      const caps = capabilities;
 
       // 1) Si une formule est disponible, on la privilégie
       const formulaId = caps?.formula?.activeId 
@@ -1725,7 +1782,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
     
     // 🎯 NOUVEAU SYSTÈME TreeBranchLeaf : Vérifier les capacités Data et Formula d'abord
-    const capabilities = field.capabilities || {};
     const dataInstances = capabilities.data?.instances;
     const hasDataCapability = Boolean(
       capabilities.data && (
@@ -2023,6 +2079,20 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         );
 
       case 'SELECT': {
+        // 🎯 DEBUG: Vérifier la configuration lookup pour diagnostic
+        if (fieldConfig.hasTable && field.capabilities?.table?.currentTable?.meta?.lookup) {
+          const lookup = field.capabilities.table.currentTable.meta.lookup;
+          console.log(`🔍 [LOOKUP DEBUG] Configuration pour "${field.label}":`, {
+            rowEnabled: lookup.rowLookupEnabled,
+            colEnabled: lookup.columnLookupEnabled,
+            rowFieldId: lookup.selectors?.rowFieldId,
+            colFieldId: lookup.selectors?.columnFieldId,
+            rowSourceOption: lookup.rowSourceOption,
+            colSourceOption: lookup.columnSourceOption,
+            displayColumn: lookup.displayColumn
+          });
+        }
+        
         // 🔥 OPTIONS DYNAMIQUES - PRIORITÉ: 1) Table Lookup (si activé), 2) Prisma Config, 3) Fallback
         const staticOptions = fieldConfig.selectConfig?.options || fieldConfig.options || [];
         let baseOptions = (fieldConfig.hasTable && tableLookup.options.length > 0) ? tableLookup.options : staticOptions;

@@ -76,8 +76,8 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
   return (
     <>
       {/* Feuilles directes du groupe courant */}
-      { /* SubTabs UI: afficher si plus d'un subtab */ }
-        {showSubTabs && (
+      {/* SubTabs UI: afficher si plus d'un subtab */}
+      {showSubTabs && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           {allSubTabs.map(st => (
             <button

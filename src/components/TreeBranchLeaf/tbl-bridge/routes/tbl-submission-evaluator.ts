@@ -1009,6 +1009,94 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       await applySharedReferenceValues(valueMap, overrides as Array<[string, unknown]>, effectiveTreeId);
     }
 
+    // 🔍 [Auto-Clean DEBUG] Logique d'auto-nettoyage pour les sélections Plan/Inclinaison
+    if (formData && typeof formData === 'object') {
+      const formEntries = Object.entries(formData as Record<string, unknown>);
+      console.log(`🔍 [Auto-Clean DEBUG] Vérification auto-nettoyage sur ${formEntries.length} champs formData`);
+      
+      // Mapping des références partagées pour chaque option
+      const sharedReferenceMapping = {
+        'plan': ['shared-ref-1764095668124-l53956', 'shared-ref-1764095679973-fad7d7', 'shared-ref-1764093957109-52vog', 'shared-ref-1764093355187-f83m8h'],
+        'inclinaison': ['shared-ref-1764093957109-52vog', 'shared-ref-1764093355187-f83m8h']
+      };
+
+      for (const [nodeId, value] of formEntries) {
+        if (!nodeId.startsWith('__') && value !== null && value !== undefined && value !== '') {
+          console.log(`🔍 [Auto-Clean DEBUG] Analyse du champ ${nodeId} = "${value}"`);
+          
+          // Récupérer le node pour vérifier s'il a des références partagées
+          const nodeInfo = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: nodeId },
+            select: { 
+              id: true, 
+              label: true, 
+              sharedReferenceIds: true,
+              TreeBranchLeafSelectConfig: {
+                select: {
+                  id: true,
+                  options: true
+                }
+              }
+            }
+          });
+
+          if (nodeInfo?.TreeBranchLeafSelectConfig?.options) {
+            // Les options sont maintenant stockées dans un JSON
+            const options = Array.isArray(nodeInfo.TreeBranchLeafSelectConfig.options) 
+              ? nodeInfo.TreeBranchLeafSelectConfig.options 
+              : [];
+            
+            console.log(`🔍 [Auto-Clean DEBUG] Node ${nodeId} (${nodeInfo.label}) a ${options.length} options`);
+            
+            // Trouver l'option sélectionnée
+            const selectedOption = options.find((opt: any) => opt.value === value);
+            if (selectedOption?.sharedReferenceIds?.length) {
+              console.log(`🔍 [Auto-Clean DEBUG] Option sélectionnée "${selectedOption.label}" (${selectedOption.value}) a des références partagées:`, selectedOption.sharedReferenceIds);
+              
+              // Identifier le type d'option (plan ou inclinaison)
+              let optionType: string | null = null;
+              if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.plan)) {
+                optionType = 'plan';
+              } else if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.inclinaison)) {
+                optionType = 'inclinaison';
+              }
+
+              if (optionType) {
+                console.log(`🔍 [Auto-Clean DEBUG] Option de type "${optionType}" détectée`);
+                
+                // Identifier les références à nettoyer (les autres types)
+                const referencesToClean = optionType === 'plan' 
+                  ? sharedReferenceMapping.inclinaison 
+                  : sharedReferenceMapping.plan;
+                
+                console.log(`🔍 [Auto-Clean DEBUG] Nettoyage des références:`, referencesToClean);
+                
+                // Trouver tous les nodes qui utilisent ces références dans l'arbre
+                const nodesToClean = await prisma.treeBranchLeafNode.findMany({
+                  where: {
+                    treeId: effectiveTreeId,
+                    sharedReferenceIds: { hasSome: referencesToClean }
+                  },
+                  select: { id: true, label: true, sharedReferenceIds: true }
+                });
+
+                console.log(`🔍 [Auto-Clean DEBUG] ${nodesToClean.length} nodes à nettoyer trouvés`);
+                
+                // Nettoyer ces nodes dans le valueMap (données temporaires)
+                for (const nodeToClean of nodesToClean) {
+                  if (valueMap.has(nodeToClean.id)) {
+                    const oldValue = valueMap.get(nodeToClean.id);
+                    valueMap.delete(nodeToClean.id);
+                    console.log(`🔍 [Auto-Clean DEBUG] ✅ Node ${nodeToClean.id} (${nodeToClean.label}) nettoyé (était: "${oldValue}")`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // 4) Récupérer les capacités de l'arbre
     const capacities = await prisma.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },

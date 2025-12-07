@@ -299,6 +299,32 @@ const buildDefaultVariant = (accent: string): Partial<DisplayAppearanceTokens> =
   labelColor: accent
 });
 
+const extractSubTabAssignments = (entity?: { subTabKey?: unknown; subTabKeys?: unknown }): string[] => {
+  if (!entity) return [];
+  const assignments: string[] = [];
+  const pushValue = (value: unknown) => {
+    if (typeof value === 'string' && value.trim()) {
+      assignments.push(value.trim());
+    } else if (value !== undefined && value !== null) {
+      const normalized = String(value).trim();
+      if (normalized) assignments.push(normalized);
+    }
+  };
+
+  if (Array.isArray((entity as any).subTabKeys)) {
+    (entity as any).subTabKeys.forEach(pushValue);
+  }
+
+  const single = (entity as any).subTabKey;
+  if (Array.isArray(single)) {
+    single.forEach(pushValue);
+  } else {
+    pushValue(single);
+  }
+
+  return Array.from(new Set(assignments));
+};
+
 const buildOutlineVariant = (accent: string): Partial<DisplayAppearanceTokens> => ({
   borderColor: accent,
   backgroundColor: '#ffffff',
@@ -849,6 +875,7 @@ interface TBLSectionRendererProps {
   level?: number; // Niveau de profondeur pour le style
   parentConditions?: Record<string, unknown>; // Conditions héritées du parent
   isValidation?: boolean; // Mode validation (affichage des erreurs)
+  submissionId?: string | null;
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -861,7 +888,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   disabled = false,
   level = 0,
   parentConditions = {},
-  isValidation = false
+  isValidation = false,
+  submissionId
 }) => {
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
@@ -886,6 +914,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // 🔥 FORCE RETRANSFORM LISTENER: Listen for displayAlways updates
   const [, forceUpdate] = useState({});
+  
+  // 🚫 PROTECTION ANTI-DOUBLE-CLIC pour les boutons de répétition
+  const [isRepeating, setIsRepeating] = useState<Record<string, boolean>>({});
+  const isRepeatingRef = useRef<Record<string, boolean>>({});
+  
   useEffect(() => {
     const handleForceRetransform = (event: Event) => {
       const customEvent = event as CustomEvent<{ nodeId: string; fieldName: string }>;
@@ -1990,11 +2023,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   if (isAlreadyInFinalFields) return;
 
                   const fieldLabelBase = cf.sharedReferenceName || cf.label || String(selectedValue ?? '');
+                  const inheritedSubTabs = extractSubTabAssignments(cf);
+                  const parentSubTabs = extractSubTabAssignments(f);
+                  const effectiveSubTabs = inheritedSubTabs.length > 0 ? inheritedSubTabs : parentSubTabs;
                   const fieldWithOrder = {
                     ...cf,
                     label: fieldLabelBase,
                     sharedReferenceName: fieldLabelBase,
                     order: nextOrder,
+                    subTabKeys: effectiveSubTabs.length ? effectiveSubTabs : undefined,
+                    subTabKey: effectiveSubTabs[0] ?? undefined,
                     isConditional: true,
                     parentFieldId: f.id,
                     parentOptionValue: selectedValue,
@@ -2986,12 +3024,17 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               if (conditionalNamespace?.labelPrefix && !fieldLabel.startsWith(`${conditionalNamespace.labelPrefix} -`)) {
                 fieldLabel = `${conditionalNamespace.labelPrefix} - ${fieldLabel}`;
               }
+              const inheritedSubTabs = extractSubTabAssignments(conditionalField);
+              const parentSubTabs = extractSubTabAssignments(field);
+              const effectiveSubTabs = inheritedSubTabs.length > 0 ? inheritedSubTabs : parentSubTabs;
               
               const fieldWithOrder = {
                 ...conditionalField,
                 label: fieldLabel,
                 sharedReferenceName: fieldLabel,
                 order: nextOrder,
+                subTabKeys: effectiveSubTabs.length ? effectiveSubTabs : undefined,
+                subTabKey: effectiveSubTabs[0] ?? undefined,
                 // Marquer comme champ conditionnel pour la logique interne seulement
                 isConditional: true,
                 parentFieldId: parentIdForInjection,
@@ -3356,10 +3399,32 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         fieldMetadata.tbl_auto_generated
       );
 
+      const isCopyWithSuffix = typeof field.id === 'string' && /^.+-\d+$/.test(field.id);
+      const isRepeaterCopy = Boolean(fieldMetadata.duplicatedFromRepeater || fieldMetadata.copySuffix || fieldMetadata.suffixNum);
+
+      // 🔑 Si le champ copié porte un suffixe -1, -2, ... on force
+      // un parentNodeId cohérent en utilisant le parent d'origine + ce suffixe.
+      // Cela permet à chaque copie (Versant 1, Versant 2, ...) d'avoir
+      // son propre conteneur backend séparé.
+      if ((isCopyWithSuffix || isRepeaterCopy) && fieldMetadata.parentNodeId && typeof field.id === 'string') {
+        const suffixMatch = field.id.match(/-(\d+)$/);
+        if (suffixMatch?.[1]) {
+          const baseParentId = String(fieldMetadata.parentNodeId).replace(/-\d+$/, '');
+          (field as any).parentNodeId = `${baseParentId}-${suffixMatch[1]}`;
+        }
+      }
+
       // ✅ Définition de resolveBackendNodeId AVANT utilisation
       const resolveBackendNodeId = (f: any): string | undefined => {
         try {
           const meta = (f && f.metadata) || {};
+          // ⚖️ RÈGLE IMPORTANTE: pour les champs d'affichage COPIÉS (suffixe ou duplications de répéteur),
+          // on privilégie l'ID DE LA COPIE comme clé backend pour que chaque versant
+          // ait sa propre valeur calculée, au lieu de réutiliser copiedFromNodeId.
+          if (isCopyWithSuffix || isRepeaterCopy) {
+            if (f?.id) return String(f.id);
+            if (f?.nodeId) return String(f.nodeId);
+          }
           // copiedFromNodeId can be array/string/JSON array -> prefer first item
           let cid = meta?.copiedFromNodeId;
           if (typeof cid === 'string' && cid.trim().startsWith('[')) {
@@ -3395,6 +3460,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           <CalculatedValueDisplay
             nodeId={nodeIdToUse}
             treeId={treeId}
+            submissionId={submissionId ?? undefined}
             placeholder="---"
             precision={options?.precision ?? 2}
             unit={options?.unit}
@@ -3404,7 +3470,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       };
 
       // 🔥 FIX PRIORITAIRE: Forcer l'affichage via CalculatedValueDisplay pour TOUTES les copies
-      const isCopyWithSuffix = typeof field.id === 'string' && /^.+-\d+$/.test(field.id);
       if (treeId && isCopyWithSuffix) {
         console.log(`🚀 [COPY FIX CHAMPS DONNÉES] Forçage CalculatedValueDisplay pour copie de données: ${field.id} (${field.label})`);
         return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
@@ -4117,6 +4182,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             danger={isRemoveInstanceButton}
                             icon={isAddButton ? <PlusOutlined /> : <MinusCircleOutlined />}
                             aria-label={isAddButton ? (field.label || 'Ajouter') : 'Répéteur'}
+                            disabled={isAddButton && isRepeating[repeaterParentId]}
+                            loading={isAddButton && isRepeating[repeaterParentId]}
                             style={{
                               height: isAddButton ? 32 : 32,
                               width: '150px',
@@ -4135,15 +4202,25 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             }}
                             onClick={async () => {
                             if (isAddButton) {
-                              // 🎯 NOUVELLE LOGIQUE: Utiliser l'API de copie réelle
-                              console.log(`\n${'🚀'.repeat(30)}`);
-                              console.log(`🚀🚀🚀 [CRÉATION VERSANT] Bouton "Ajouter Versant" cliqué !`);
-                              console.log(`🚀 repeaterParentId: ${repeaterParentId}`);
-                              console.log(`🚀 Utilisation de l'API de copie au lieu du namespace`);
-                              console.log(`${'🚀'.repeat(30)}\n`);
+                              // 🚫 PROTECTION: Empêcher les double-clics (via Ref pour immédiateté)
+                              if (isRepeatingRef.current[repeaterParentId]) {
+                                console.warn('⚠️ [REPEATER] Clic ignoré: opération déjà en cours (ref check)');
+                                return;
+                              }
                               
-                                let optimisticOk = true;
-                                try {
+                              // Verrouillage immédiat
+                              isRepeatingRef.current[repeaterParentId] = true;
+                              setIsRepeating(prev => ({ ...prev, [repeaterParentId]: true }));
+                              
+                              let optimisticOk = true;
+                              
+                              try {
+                                // 🎯 NOUVELLE LOGIQUE: Utiliser l'API de copie réelle
+                                console.log(`\n${'🚀'.repeat(30)}`);
+                                console.log(`🚀🚀🚀 [CRÉATION VERSANT] Bouton "Ajouter Versant" cliqué !`);
+                                console.log(`🚀 repeaterParentId: ${repeaterParentId}`);
+                                console.log(`🚀 Utilisation de l'API de copie au lieu du namespace`);
+                                console.log(`${'🚀'.repeat(30)}\n`);
                                 // Récupérer les templates depuis les métadonnées du repeater
                                 const parentField = section.fields.find(f => f.id === repeaterParentId);
                                 
@@ -4173,11 +4250,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   return;
                                 }
                                 
-                                      treeId={treeId}
-                                      formData={formData}
-                                console.log(`🔁 [COPY-API] Duplication des templates:`, { 
-                                  repeaterParentId, 
-                                  templateNodeIds 
+                                console.log(`🔁 [COPY-API] Préparation duplication via repeat endpoint:`, {
+                                  repeaterParentId,
+                                  templateNodeIds,
+                                  includeTotals: true
                                 });
                                 
                                 // 🎯 Premièrement: ajouter l'instance UI localement (optimistic UI)
@@ -4189,11 +4265,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 }
 
                                 // Appel à l'API de copie (opération asynchrone en arrière-plan)
-                                const response = await api.post(`/api/treebranchleaf/nodes/${repeaterParentId}/duplicate-templates`, {
-                                  templateNodeIds
-                                });
+                                const repeatRequestBody = {
+                                  includeTotals: true
+                                };
+
+                                const response = await api.post(
+                                  `/api/repeat/${repeaterParentId}/instances/execute`,
+                                  repeatRequestBody
+                                );
                                 
-                                console.log(`✅ [COPY-API] Copie créée:`, response);
+                                console.log(`✅ [COPY-API] Repeat execute terminé:`, response);
                                 
                                 // ✅ Réponse reçue. On n'appelle PAS TBL_FORCE_REFRESH pour éviter le rechargement
                                 // du formulaire complet et l'affichage d'un loader. On émet un événement local
@@ -4292,23 +4373,33 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                       detail: {
                                         source: 'duplicate-templates',
                                         treeId: eventTreeId,
-                                        forceRemote: shouldForceRemoteRetransform,
+                                        forceRemote: true, // 🔥 TOUJOURS forcer le rechargement depuis le serveur
                                         eventDebugId,
                                       }
                                     }));
+                                    console.log('🔄 [COPY-API] Dispatched tbl-force-retransform with forceRemote=true');
+                                    
+                                    // 🔥 FORCE COMPLETE PAGE RELOAD after short delay to ensure display nodes are visible
+                                    setTimeout(() => {
+                                      console.log('🔄 [COPY-API] FORCING COMPLETE PAGE RELOAD to display created variables');
+                                      window.location.reload();
+                                    }, 1500);
                                   } catch { /* ignore */ }
                                 } catch (e) {
                                   console.warn('⚠️ [COPY-API] Impossible de dispatch tbl-repeater-updated (silent)', e);
                                   console.warn('⚠️ [COPY-API] Error details:', { error: e, response });
                                 }
-                                
-                                } catch (error) {
-                                  console.error('❌ [COPY-API] Erreur lors de la copie:', error);
-                                  optimisticOk = false;
-                                }
+                              } catch (error) {
+                                console.error('❌ [COPY-API] Erreur lors de la copie:', error);
+                                optimisticOk = false;
+                              } finally {
+                                // 🔓 Réactiver le bouton après l'opération (succès ou échec)
+                                isRepeatingRef.current[repeaterParentId] = false;
+                                setIsRepeating(prev => ({ ...prev, [repeaterParentId]: false }));
+                              }
 
-                                // Si la duplication a échoué côté serveur, annuler l'optimistic UI
-                                if (!optimisticOk) {
+                              // Si la duplication a échoué côté serveur, annuler l'optimistic UI
+                              if (!optimisticOk) {
                                   try {
                                     const newCount = Math.max(0, (formData[instanceCountKey] as number || 1) - 1);
                                     onChange(instanceCountKey, newCount);
@@ -4608,6 +4699,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     disabled={disabled}
                     level={level + 1}
                     parentConditions={parentConditions}
+                    submissionId={submissionId}
                   />
                 ))}
               </>
@@ -4637,6 +4729,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       disabled={disabled}
                       level={level + 1}
                       parentConditions={parentConditions}
+                      submissionId={submissionId}
                     />
                   </Panel>
                 ))}
@@ -4675,6 +4768,7 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
   if (prevProps.disabled !== nextProps.disabled) return false;
   if (prevProps.treeId !== nextProps.treeId) return false;
   if (prevProps.level !== nextProps.level) return false;
+  if (prevProps.submissionId !== nextProps.submissionId) return false;
   // ⚠️ IMPORTANT: Si formData a changé (référence), forcer le re-render
   // Les champs conditionnels d'une section peuvent dépendre d'un select situé dans une AUTRE section (ex: Versant)
   // En comparant la référence, on garantit l'actualisation immédiate après toute sélection.
@@ -4692,7 +4786,7 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
   }
   
   // Comparer les VALEURS des champs de cette section uniquement
-  const prevFieldIds = prevProps.section.fields.map(f => f.id);
+  const prevFieldIds = (prevProps.section.fields || []).map(f => f.id);
   for (const fieldId of prevFieldIds) {
     if (prevProps.formData[fieldId] !== nextProps.formData[fieldId]) {
       return false; // Une valeur a changé, re-render

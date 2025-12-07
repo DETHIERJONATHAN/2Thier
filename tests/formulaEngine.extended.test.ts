@@ -73,7 +73,7 @@ describe('FormulaEngine extended', () => {
   });
 
   it('caractère illégal rejeté', () => {
-    expect(() => parseExpression('1 + alert("x")', roleMap, {})).toThrow(/non autorisés/i);
+    expect(() => parseExpression('1 + €', roleMap, {})).toThrow(/non autorisés/i);
   });
 
   it('fonction inconnue signale erreur', async () => {

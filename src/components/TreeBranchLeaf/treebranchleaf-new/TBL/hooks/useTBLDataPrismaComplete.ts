@@ -709,11 +709,13 @@ const resolveSubTabAssignments = (
   resolvedNode: TreeBranchLeafNode,
   nodeLookup: Map<string, TreeBranchLeafNode>
 ): string[] => {
-  const fromResolved = normalizeSubTabValues(extractSubTabValue(resolvedNode));
-  if (fromResolved.length > 0) return fromResolved;
-
   const direct = normalizeSubTabValues(extractSubTabValue(originalNode));
   if (direct.length > 0) return direct;
+
+  // Shared references inherit the template metadata. Keep it as a fallback only so the
+  // node-level subTab selection (where the reference is actually used) stays authoritative.
+  const fromResolved = normalizeSubTabValues(extractSubTabValue(resolvedNode));
+  if (fromResolved.length > 0) return fromResolved;
 
   const metadata = typeof originalNode.metadata === 'object' ? (originalNode.metadata as Record<string, unknown>) : undefined;
   const templateId = (metadata?.sourceTemplateId as string | undefined) || (metadata?.copiedFromNodeId as string | undefined);
@@ -724,6 +726,47 @@ const resolveSubTabAssignments = (
   }
 
   return [];
+};
+
+const collectSharedReferenceIds = (node?: TreeBranchLeafNode | null): string[] => {
+  if (!node) return [];
+  const ids: string[] = [];
+  const arrayValue = (node as unknown as { sharedReferenceIds?: unknown }).sharedReferenceIds;
+  if (Array.isArray(arrayValue)) {
+    arrayValue.forEach(value => {
+      if (typeof value === 'string' && value.trim().length > 0) {
+        ids.push(value.trim());
+      }
+    });
+  }
+
+  const singleValue = (node as unknown as { sharedReferenceId?: unknown }).sharedReferenceId;
+  if (typeof singleValue === 'string' && singleValue.trim().length > 0) {
+    ids.push(singleValue.trim());
+  }
+
+  return Array.from(new Set(ids));
+};
+
+const deriveCopySuffix = (
+  childId: string,
+  templateId?: string | null,
+  metadata?: Record<string, unknown>
+): string | null => {
+  if (templateId && childId.startsWith(`${templateId}-`) && childId.length > templateId.length + 1) {
+    return childId.slice(templateId.length + 1);
+  }
+
+  const metadataSuffix = metadata?.['copySuffix'];
+  if (typeof metadataSuffix === 'number' || typeof metadataSuffix === 'string') {
+    const suffix = String(metadataSuffix).trim();
+    if (suffix.length > 0) {
+      return suffix;
+    }
+  }
+
+  const fallbackMatch = childId.match(/-(\d+(?:-\d+)*)$/);
+  return fallbackMatch ? fallbackMatch[1] : null;
 };
 
 export interface TBLSectionConfig {
@@ -783,10 +826,13 @@ const transformPrismaNodeToField = (
       if (verbose()) {
         dlog(`🔗 [SHARED REF] Résolution: "${node.label}" → "${sourceTemplate.label}" (${sourceTemplate.id})`);
       }
+      const copySuffix = (node.metadata as Record<string, unknown> | null | undefined)?.copySuffix;
+      const isCopyInstance = copySuffix !== undefined || /-\d+$/.test(node.id);
+      const resolvedId = isCopyInstance ? node.id : sourceTemplate.id;
       // Merger les configurations (⚡ UTILISER L'ID DU TEMPLATE POUR PARTAGER LES DONNÉES)
       resolvedNode = {
         ...sourceTemplate,
-        id: sourceTemplate.id, // ⚡ MÊME ID = MÊMES DONNÉES PARTOUT
+        id: resolvedId,
         label: node.label || sourceTemplate.label, // Garde le label local si défini
         description: node.description || sourceTemplate.description,
         order: node.order,
@@ -1512,38 +1558,231 @@ export const transformNodesToTBLComplete = (
   // 1️⃣ Créer les maps de hiérarchie
   const nodeMap = new Map<string, TreeBranchLeafNode>();
   const childrenMap = new Map<string, TreeBranchLeafNode[]>();
-  
+  const effectiveParentMap = new Map<string, string | null>();
+  const copiesBySourceId = new Map<string, TreeBranchLeafNode[]>();
+
+  const getNodeMetadata = (node: TreeBranchLeafNode): Record<string, unknown> | undefined => {
+    return typeof node.metadata === 'object' && node.metadata !== null
+      ? (node.metadata as Record<string, unknown>)
+      : undefined;
+  };
+
   nodes.forEach(node => {
     nodeMap.set(node.id, node);
-    const parentId = node.parentId || 'root';
-    if (!childrenMap.has(parentId)) {
-      childrenMap.set(parentId, []);
+
+    const metadata = getNodeMetadata(node);
+    const sourceTemplateId =
+      (metadata?.['copiedFromNodeId'] as string | undefined)
+      || (metadata?.['copied_from_node_id'] as string | undefined)
+      || (metadata?.['sourceTemplateId'] as string | undefined);
+
+    if (sourceTemplateId) {
+      if (!copiesBySourceId.has(sourceTemplateId)) {
+        copiesBySourceId.set(sourceTemplateId, []);
+      }
+      copiesBySourceId.get(sourceTemplateId)!.push(node);
     }
-    childrenMap.get(parentId)!.push(node);
   });
+
+  nodes.forEach(node => {
+    const metadata = getNodeMetadata(node);
+    let effectiveParentId = (node.parentId ?? null) as string | null;
+
+    if (!effectiveParentId) {
+      const duplicatedFromRepeater = metadata?.['duplicatedFromRepeater']
+        || metadata?.['repeaterParentId']
+        || metadata?.['repeaterNodeId']
+        || metadata?.['repeaterParentNodeId'];
+      if (typeof duplicatedFromRepeater === 'string' && duplicatedFromRepeater.trim().length > 0) {
+        effectiveParentId = duplicatedFromRepeater.trim();
+      } else if (typeof duplicatedFromRepeater === 'number') {
+        effectiveParentId = String(duplicatedFromRepeater);
+      }
+    }
+
+    if (!effectiveParentId) {
+      const templateSourceId = (metadata?.['sourceTemplateId'] as string | undefined)
+        || (metadata?.['copiedFromNodeId'] as string | undefined)
+        || (metadata?.['copied_from_node_id'] as string | undefined);
+      if (templateSourceId) {
+        const templateNode = nodeMap.get(templateSourceId);
+        const templateParent = templateNode?.parentId ?? effectiveParentMap.get(templateSourceId) ?? null;
+        if (templateParent) {
+          effectiveParentId = templateParent;
+        }
+      }
+    }
+
+    effectiveParentMap.set(node.id, effectiveParentId);
+    const parentKey = effectiveParentId ?? 'root';
+    if (!childrenMap.has(parentKey)) {
+      childrenMap.set(parentKey, []);
+    }
+    childrenMap.get(parentKey)!.push(node);
+  });
+
+  if (verbose()) dlog(`📊 [INJECT ORPHANS] Building childrenMap: ${childrenMap.size} parent groups, ${nodes.length} total nodes`);
+
+  const orphanedCopies: TreeBranchLeafNode[] = [];
+  nodes.forEach(node => {
+    const metadata = getNodeMetadata(node);
+    if (node.parentId && effectiveParentMap.get(node.id) === null) {
+      const sourceTemplateId =
+        (metadata?.['copiedFromNodeId'] as string | undefined)
+        || (metadata?.['copied_from_node_id'] as string | undefined)
+        || (metadata?.['sourceTemplateId'] as string | undefined);
+
+      if (sourceTemplateId) {
+        const sourceNode = nodeMap.get(sourceTemplateId);
+        if (sourceNode?.parentId) {
+          effectiveParentMap.set(node.id, sourceNode.parentId);
+          if (!childrenMap.has(sourceNode.parentId)) {
+            childrenMap.set(sourceNode.parentId, []);
+          }
+          childrenMap.get(sourceNode.parentId)!.push(node);
+          orphanedCopies.push(node);
+          if (verbose()) dlog(`  ✅ [INJECT] "${node.label}" (${node.id}) → parent ${sourceNode.parentId}`);
+        }
+      }
+    }
+  });
+
+  if (orphanedCopies.length > 0 && verbose()) {
+    dlog(`🔗 [INJECT ORPHANS] Re-parented ${orphanedCopies.length} orphaned copies`);
+  }
+
+  if (verbose()) dlog(`🔗 [INHERIT SHARED REFS] Propagating sharedReferenceIds from templates to copies...`);
+  const processedRefCopies = new Set<string>();
+  nodes.forEach(node => {
+    const metadata = getNodeMetadata(node);
+    const templateId =
+      (metadata?.['copiedFromNodeId'] as string | undefined)
+      || (metadata?.['copied_from_node_id'] as string | undefined)
+      || (metadata?.['sourceTemplateId'] as string | undefined);
+
+    if (templateId && !processedRefCopies.has(node.id)) {
+      const templateNode = nodeMap.get(templateId);
+      const templateRefs = collectSharedReferenceIds(templateNode);
+
+      if (templateRefs.length > 0) {
+        const copySuffix = deriveCopySuffix(node.id, templateNode?.id, metadata);
+        const resolvedRefs = copySuffix
+          ? templateRefs.map(refId => {
+              const candidate = `${refId}-${copySuffix}`;
+              return nodeMap.has(candidate) ? candidate : refId;
+            })
+          : templateRefs;
+
+        if (resolvedRefs.length > 0 && !Array.isArray((node as any).sharedReferenceIds)) {
+          (node as any).sharedReferenceIds = resolvedRefs;
+          processedRefCopies.add(node.id);
+          if (verbose()) dlog(`  ✅ [INHERIT] "${node.label}" inherited ${resolvedRefs.length} shared refs from "${templateNode?.label}"`);
+        }
+      }
+    }
+  });
+
+  if (processedRefCopies.size > 0 && verbose()) {
+    dlog(`🔗 [INHERIT SHARED REFS] Inherited shared refs for ${processedRefCopies.size} copies`);
+  }
+
+  if (verbose()) dlog(`📋 [COPY CHILDREN] Propagating template children to option copies...`);
+  const processedCopies = new Set<string>();
+  nodes.forEach(node => {
+    const metadata = getNodeMetadata(node);
+    const templateId =
+      (metadata?.['copiedFromNodeId'] as string | undefined)
+      || (metadata?.['copied_from_node_id'] as string | undefined)
+      || (metadata?.['sourceTemplateId'] as string | undefined);
+
+    if (templateId && !processedCopies.has(node.id)) {
+      const templateNode = nodeMap.get(templateId);
+      const templateChildren = childrenMap.get(templateId) || [];
+
+      if (templateChildren.length > 0) {
+        const copySuffix = deriveCopySuffix(node.id, templateNode?.id, metadata);
+
+        templateChildren.forEach(templateChild => {
+          const childCopyId = copySuffix ? `${templateChild.id}-${copySuffix}` : `${templateChild.id}-copy`;
+          const childCopyNode = nodeMap.get(childCopyId) || nodeMap.get(templateChild.id);
+
+          if (childCopyNode && childCopyNode.id !== templateChild.id) {
+            if (!childrenMap.has(node.id)) {
+              childrenMap.set(node.id, []);
+            }
+            const existing = childrenMap.get(node.id)!.find(c => c.id === childCopyNode.id);
+            if (!existing) {
+              childrenMap.get(node.id)!.push(childCopyNode);
+              if (verbose()) dlog(`  ✅ [CHILD COPY] "${childCopyNode.label}" → parent ${node.label}`);
+            }
+          }
+        });
+
+        processedCopies.add(node.id);
+      }
+    }
+  });
+
+  if (processedCopies.size > 0 && verbose()) {
+    dlog(`📋 [COPY CHILDREN] Propagated children for ${processedCopies.size} option copies`);
+  }
   
   // ✅ 1.5️⃣ NOUVELLE LOGIQUE : Stocker TOUTES les références partagées (single ET multiple)
   // On ne modifie PAS childrenMap, on stocke juste quelles options ont des refs actives
   const activeSharedReferences = new Map<string, string[]>(); // optionId -> [refNodeIds]
 
   nodes.forEach(node => {
-    const ids: string[] = [];
-    if (Array.isArray((node as unknown as { sharedReferenceIds?: string[] }).sharedReferenceIds)) {
-      ids.push(...((node as unknown as { sharedReferenceIds?: string[] }).sharedReferenceIds as string[]));
-    }
-    const single = (node as unknown as { sharedReferenceId?: string }).sharedReferenceId;
-    if (typeof single === 'string' && single.trim().length > 0) {
-      ids.push(single);
+    const isOption = node.type === 'leaf_option' || node.type === 'leaf_option_field';
+    if (!isOption) return;
+
+    const ownIds = collectSharedReferenceIds(node);
+    let resolvedIds = ownIds;
+
+    if (resolvedIds.length === 0) {
+      const metadata = getNodeMetadata(node);
+      const templateOptionId =
+        (metadata?.['copiedFromNodeId'] as string | undefined)
+        || (metadata?.['copied_from_node_id'] as string | undefined)
+        || (metadata?.['sourceTemplateId'] as string | undefined);
+
+      if (templateOptionId) {
+        const templateNode = nodeMap.get(templateOptionId);
+        const templateSharedRefs = collectSharedReferenceIds(templateNode);
+
+        if (templateSharedRefs.length > 0) {
+          const suffix = deriveCopySuffix(node.id, templateNode?.id, metadata);
+
+          if (suffix) {
+            const resolvedFromTemplate = templateSharedRefs.map(refId => {
+              const candidateId = `${refId}-${suffix}`;
+              if (nodeMap.has(candidateId)) {
+                return candidateId;
+              }
+
+              const copyCandidates = copiesBySourceId.get(refId);
+              if (copyCandidates && copyCandidates.length > 0) {
+                const matchingCopy = copyCandidates.find(copyNode => deriveCopySuffix(copyNode.id, refId, getNodeMetadata(copyNode)) === suffix);
+                if (matchingCopy) {
+                  return matchingCopy.id;
+                }
+              }
+
+              return refId;
+            });
+
+            resolvedIds = resolvedFromTemplate;
+          } else {
+            resolvedIds = templateSharedRefs;
+          }
+        }
+      }
     }
 
-    if (ids.length > 0) {
-      const isOption = node.type === 'leaf_option' || node.type === 'leaf_option_field';
-      if (isOption) {
-        // 🎯 STOCKER TOUTES les options avec références, la sélection sera vérifiée dynamiquement
-        // Dédupliquer pour éviter doublons potentiels
-        const uniqueIds = Array.from(new Set(ids));
-        activeSharedReferences.set(node.id, uniqueIds);
-        if (verbose()) dlog(`🔗 [TBL-PRISMA] Option "${node.label}" stockée avec ${uniqueIds.length} références partagées (single/array)`);
+    if (resolvedIds.length > 0) {
+      const uniqueIds = Array.from(new Set(resolvedIds));
+      activeSharedReferences.set(node.id, uniqueIds);
+      if (verbose()) {
+        dlog(`🔗 [TBL-PRISMA] Option "${node.label}" stockée avec ${uniqueIds.length} références partagées (résolues)`);
       }
     }
   });
@@ -1552,12 +1791,25 @@ export const transformNodesToTBLComplete = (
   // ❌ FILTRER LES RÉFÉRENCES PARTAGÉES - Elles ne sont PAS des onglets !
   const allRootChildren = childrenMap.get('root') || [];
   const niveau1Nodes = allRootChildren.filter(node => !node.isSharedReference);
+  const orphanedSharedRefs = allRootChildren.filter(node => node.isSharedReference);
+  
+  if (orphanedSharedRefs.length > 0 && niveau1Nodes.length > 0) {
+    const firstTabId = niveau1Nodes[0].id;
+    if (!childrenMap.has(firstTabId)) {
+      childrenMap.set(firstTabId, []);
+    }
+    childrenMap.get(firstTabId)!.push(...orphanedSharedRefs);
+    orphanedSharedRefs.forEach(ref => {
+      effectiveParentMap.set(ref.id, firstTabId);
+    });
+    if (verbose()) dlog(`🔗 [INJECT SHARED REFS] ${orphanedSharedRefs.length} orphaned shared refs → first tab`);
+  }
   
   if (verbose()) {
     const filteredCount = allRootChildren.length - niveau1Nodes.length;
-    if (filteredCount > 0) {
-      dlog(`🚫 [TBL-PRISMA] ${filteredCount} références partagées EXCLUES des onglets:`, 
-        allRootChildren.filter(n => n.isSharedReference).map(n => n.label));
+    if (filteredCount > 0 && orphanedSharedRefs.length !== filteredCount) {
+      dlog(`🚫 [TBL-PRISMA] Non-root references:`, 
+        allRootChildren.filter(n => !n.isSharedReference && niveau1Nodes.indexOf(n) === -1).map(n => n.label));
     }
     dlog('🔍 [TBL-PRISMA] Onglets (Niveau 1):', niveau1Nodes.length, niveau1Nodes.map(n => `${n.label} (order: ${n.order})`));
   }
@@ -1736,10 +1988,6 @@ export const transformNodesToTBLComplete = (
           const linkedChildren = childrenMap.get(child.id) || [];
           if (linkedChildren.length > 0) {
             if (verbose()) dlog(`        🔗 LIENS depuis option "${child.label}": ${linkedChildren.length} éléments`);
-            // Marquer tous les enfants liés comme traités pour éviter les doublons
-            linkedChildren.forEach(linkedChild => {
-              processedNodeIds.add(linkedChild.id);
-            });
             const linkedFields = processNodeRecursively(child.id, currentLevel + 1);
             processedFields.push(...linkedFields);
           }

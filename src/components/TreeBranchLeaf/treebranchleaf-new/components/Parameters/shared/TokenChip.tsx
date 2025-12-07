@@ -11,6 +11,8 @@ export type TokenChipProps = {
 // Cache simple en mémoire pour limiter les appels API
 const nodeMetaCache: Record<string, { label: string; type?: string }> = {};
 const formulaMetaCache: Record<string, { name: string }> = {};
+const conditionMetaCache: Record<string, { name: string }> = {};
+const tableMetaCache: Record<string, { name: string }> = {};
 
 const normalizeToken = (raw: string) => {
   if (!raw) return '';
@@ -50,6 +52,8 @@ const baseTokenKind = (rawToken: string) => {
   }
   
   if (token.startsWith('formula:')) return 'formula' as const;
+  if (token.startsWith('condition:') || token.startsWith('node-condition:')) return 'conditionRef' as const;
+  if (token.startsWith('@table.') || token.startsWith('node-table:') || token.startsWith('table:')) return 'tableRef' as const;
   if (token.startsWith('@value.') || token.includes('@value.')) return 'nodeValue' as const;
   if (token.startsWith('@select.') || token.includes('@select.')) return 'nodeOption' as const;
   if (token.startsWith('#')) return 'marker' as const;
@@ -209,6 +213,57 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove }) => {
           }
           return;
         }
+        if (kind === 'conditionRef') {
+          const id = normToken.startsWith('condition:')
+            ? normToken.slice('condition:'.length)
+            : normToken.slice('node-condition:'.length);
+          const cacheKey = `condition:${id}`;
+          setColor('volcano');
+          setIcon('⚖️');
+          setTooltip('Condition réutilisable');
+          if (conditionMetaCache[cacheKey]) {
+            if (!cancelled) setLabel(conditionMetaCache[cacheKey].name);
+            return;
+          }
+          try {
+            const data = await api.get(`/api/treebranchleaf/reusables/conditions/${id}`) as { name?: string; nodeLabel?: string } | null;
+            const displayName = data?.name ? `${data.name}${data.nodeLabel ? ` (${data.nodeLabel})` : ''}` : `Condition — ${id.slice(0, 8)}...`;
+            conditionMetaCache[cacheKey] = { name: displayName };
+            if (!cancelled) setLabel(displayName);
+          } catch {
+            const fallback = `Condition — ${id.slice(0, 8)}...`;
+            conditionMetaCache[cacheKey] = { name: fallback };
+            if (!cancelled) { setLabel(fallback); setColor('red'); }
+          }
+          return;
+        }
+
+        if (kind === 'tableRef') {
+          const id = normToken.startsWith('@table.')
+            ? normToken.slice('@table.'.length)
+            : normToken.replace(/^node-table:/, '').replace(/^table:/, '');
+          const cacheKey = `table:${id}`;
+          setColor('geekblue');
+          setIcon('📊');
+          setTooltip('Tableau réutilisable');
+          if (tableMetaCache[cacheKey]) {
+            if (!cancelled) setLabel(tableMetaCache[cacheKey].name);
+            return;
+          }
+          try {
+            const tablesRes = await api.get('/api/treebranchleaf/reusables/tables') as { items?: Array<{ id: string; name: string; type?: string }> };
+            const table = tablesRes?.items?.find(t => t.id === id);
+            const displayName = table ? `${table.name}${table.type ? ` (${table.type})` : ''}` : `Table — ${id.slice(0, 8)}...`;
+            tableMetaCache[cacheKey] = { name: displayName };
+            if (!cancelled) setLabel(displayName);
+          } catch {
+            const fallback = `Table — ${id.slice(0, 8)}...`;
+            tableMetaCache[cacheKey] = { name: fallback };
+            if (!cancelled) { setLabel(fallback); setColor('red'); }
+          }
+          return;
+        }
+
         // Constantes et opérateurs
         if (kind === 'operator') { setColor('gold'); setLabel(token); setIcon('➕'); setTooltip('Opérateur'); return; }
         if (kind === 'string') { setColor('cyan'); setLabel(token); setIcon('"'); setTooltip('Texte'); return; }

@@ -2,6 +2,8 @@ export const normalizeSubTabValues = (value: unknown): string[] => {
   const camelBoundary = /[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ]/;
   const isLowercase = (char: string) => /[a-zà-ÿ]/.test(char);
 
+  const stripQuotes = (input: string): string => input.replace(/^['"]+|['"]+$/g, '');
+
   const splitCamelCase = (input: string): string[] => {
     if (!input) return [];
     let segments: string[] = [];
@@ -22,13 +24,34 @@ export const normalizeSubTabValues = (value: unknown): string[] => {
     return noSplit ? [input] : segments;
   };
 
+  const tryParseJsonArray = (raw: string): string[] | null => {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (!Array.isArray(parsed)) return null;
+      return parsed
+        .map(item => (typeof item === 'string' ? item : String(item)))
+        .map(stripQuotes)
+        .filter(Boolean);
+    } catch {
+      return null;
+    }
+  };
+
   const cleanAndSplit = (raw: string): string[] => {
     if (!raw) return [];
     const trimmedRaw = raw.trim();
     if (!trimmedRaw) return [];
+
+    const jsonArray = tryParseJsonArray(trimmedRaw);
+    if (jsonArray) {
+      return jsonArray.flatMap(splitCamelCase);
+    }
+
     const parts = trimmedRaw.includes(',') ? trimmedRaw.split(',') : [trimmedRaw];
     return parts
-      .map(part => part.trim())
+      .map(part => stripQuotes(part.trim()))
       .filter(Boolean)
       .flatMap(splitCamelCase);
   };
