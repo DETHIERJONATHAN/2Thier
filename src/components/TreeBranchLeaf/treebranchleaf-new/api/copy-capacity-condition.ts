@@ -151,6 +151,14 @@ function rewriteConditionSet(
 
     const mapNodeIdString = (raw: string): string => {
       if (typeof raw !== 'string') return raw as unknown as string;
+      
+      // Cas 0: shared-ref (NOUVEAU - doit être traité avant node-formula)
+      if (raw.startsWith('shared-ref-')) {
+        const mapped = nodeIdMap.get(raw);
+        if (mapped) return mapped;
+        return suffix !== undefined && !/-\d+$/.test(raw) ? `${raw}-${suffix}` : raw;
+      }
+      
       // Cas 1: node-formula déjà couvert mais double sécurité
       if (raw.startsWith('node-formula:')) {
         const id = raw.replace('node-formula:', '');

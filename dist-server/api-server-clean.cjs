@@ -26832,6 +26832,11 @@ function rewriteConditionSet(conditionSet, nodeIdMap, formulaIdMap, suffix) {
     const parsed = JSON.parse(str);
     const mapNodeIdString = (raw) => {
       if (typeof raw !== "string") return raw;
+      if (raw.startsWith("shared-ref-")) {
+        const mapped = nodeIdMap.get(raw);
+        if (mapped) return mapped;
+        return suffix !== void 0 && !/-\d+$/.test(raw) ? `${raw}-${suffix}` : raw;
+      }
       if (raw.startsWith("node-formula:")) {
         const id = raw.replace("node-formula:", "");
         const mapped = formulaIdMap.get(id);
