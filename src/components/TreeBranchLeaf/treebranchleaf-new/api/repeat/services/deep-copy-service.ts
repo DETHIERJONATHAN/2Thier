@@ -926,6 +926,9 @@ export async function deepCopyNodeInternal(
     }
 
     const newLinkedVariableIds: string[] = [];
+    // 🔗 Tracker: Map de ownerNodeId -> liste des variables copiées pour ce owner
+    const copiedVarsByOwner = new Map<string, string[]>();
+    
     if (sourceLinkedVariableIds.size > 0) {
       for (const linkedVarId of sourceLinkedVariableIds) {
         const isSharedRef = linkedVarId.startsWith('shared-ref-');
@@ -956,6 +959,18 @@ export async function deepCopyNodeInternal(
               if (copyResult.displayNodeId) {
                 displayNodeIds.push(copyResult.displayNodeId);
               }
+              
+              // 🔗 Track: Retrouver le nœud propriétaire de la variable originale
+              const originalVar = await prisma.treeBranchLeafNodeVariable.findUnique({
+                where: { id: linkedVarId },
+                select: { nodeId: true }
+              });
+              if (originalVar?.nodeId) {
+                if (!copiedVarsByOwner.has(originalVar.nodeId)) {
+                  copiedVarsByOwner.set(originalVar.nodeId, []);
+                }
+                copiedVarsByOwner.get(originalVar.nodeId)!.push(copyResult.variableId);
+              }
             } else {
               newLinkedVariableIds.push(linkedVarId);
             }
@@ -982,6 +997,38 @@ export async function deepCopyNodeInternal(
             linkedVariableIds: newLinkedVariableIds.length > 0 ? { set: newLinkedVariableIds } : { set: [] }
           }
         });
+        
+        // 🔗 ÉTAPE CRÍTICA: Mettre à jour aussi les nœuds PROPRIÉTAIRES des variables
+        // Chaque nœud propriétaire doit avoir les variables copiées dans son linkedVariableIds
+        if (copiedVarsByOwner.size > 0) {
+          for (const [ownerNodeId, copiedVarIds] of copiedVarsByOwner) {
+            try {
+              // 1. Récupérer linkedVariableIds actuel du propriétaire
+              const ownerNode = await prisma.treeBranchLeafNode.findUnique({
+                where: { id: ownerNodeId },
+                select: { linkedVariableIds: true }
+              });
+              
+              if (ownerNode) {
+                // 2. Fusionner avec les variables copiées
+                const currentVarIds = ownerNode.linkedVariableIds || [];
+                const updatedVarIds = Array.from(new Set([...currentVarIds, ...copiedVarIds]));
+                
+                // 3. Mettre à jour le propriétaire
+                await prisma.treeBranchLeafNode.update({
+                  where: { id: ownerNodeId },
+                  data: {
+                    linkedVariableIds: { set: updatedVarIds }
+                  }
+                });
+                
+                console.log(`[DEEP-COPY] 🔗 Nœud propriétaire ${ownerNodeId} mis à jour avec ${copiedVarIds.length} variable(s) copiée(s)`);
+              }
+            } catch (e) {
+              console.warn(`[DEEP-COPY] ⚠️ Erreur lors de la mise à jour du nœud propriétaire ${ownerNodeId}:`, (e as Error).message);
+            }
+          }
+        }
       } catch (e) {
         console.warn('[DEEP-COPY] Erreur lors du UPDATE des linked***', (e as Error).message);
       }

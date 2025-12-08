@@ -53326,6 +53326,7 @@ async function deepCopyNodeInternal2(prisma68, req2, nodeId, opts) {
       sourceLinkedVariableIds.add(directVarIdForNode);
     }
     const newLinkedVariableIds = [];
+    const copiedVarsByOwner = /* @__PURE__ */ new Map();
     if (sourceLinkedVariableIds.size > 0) {
       for (const linkedVarId of sourceLinkedVariableIds) {
         const isSharedRef = linkedVarId.startsWith("shared-ref-");
@@ -53356,6 +53357,16 @@ async function deepCopyNodeInternal2(prisma68, req2, nodeId, opts) {
               if (copyResult.displayNodeId) {
                 displayNodeIds.push(copyResult.displayNodeId);
               }
+              const originalVar = await prisma68.treeBranchLeafNodeVariable.findUnique({
+                where: { id: linkedVarId },
+                select: { nodeId: true }
+              });
+              if (originalVar?.nodeId) {
+                if (!copiedVarsByOwner.has(originalVar.nodeId)) {
+                  copiedVarsByOwner.set(originalVar.nodeId, []);
+                }
+                copiedVarsByOwner.get(originalVar.nodeId).push(copyResult.variableId);
+              }
             } else {
               newLinkedVariableIds.push(linkedVarId);
             }
@@ -53376,6 +53387,29 @@ async function deepCopyNodeInternal2(prisma68, req2, nodeId, opts) {
             linkedVariableIds: newLinkedVariableIds.length > 0 ? { set: newLinkedVariableIds } : { set: [] }
           }
         });
+        if (copiedVarsByOwner.size > 0) {
+          for (const [ownerNodeId, copiedVarIds] of copiedVarsByOwner) {
+            try {
+              const ownerNode = await prisma68.treeBranchLeafNode.findUnique({
+                where: { id: ownerNodeId },
+                select: { linkedVariableIds: true }
+              });
+              if (ownerNode) {
+                const currentVarIds = ownerNode.linkedVariableIds || [];
+                const updatedVarIds = Array.from(/* @__PURE__ */ new Set([...currentVarIds, ...copiedVarIds]));
+                await prisma68.treeBranchLeafNode.update({
+                  where: { id: ownerNodeId },
+                  data: {
+                    linkedVariableIds: { set: updatedVarIds }
+                  }
+                });
+                console.log(`[DEEP-COPY] \u{1F517} N\u0153ud propri\xE9taire ${ownerNodeId} mis \xE0 jour avec ${copiedVarIds.length} variable(s) copi\xE9e(s)`);
+              }
+            } catch (e) {
+              console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur lors de la mise \xE0 jour du n\u0153ud propri\xE9taire ${ownerNodeId}:`, e.message);
+            }
+          }
+        }
       } catch (e) {
         console.warn("[DEEP-COPY] Erreur lors du UPDATE des linked***", e.message);
       }
