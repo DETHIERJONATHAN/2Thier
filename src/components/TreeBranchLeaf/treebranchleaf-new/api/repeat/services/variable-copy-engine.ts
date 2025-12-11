@@ -36,6 +36,7 @@ import {
   extractNodeIdFromSourceRef,
   type ParsedSourceRef
 } from '../utils/source-ref.js';
+import { linkVariableToAllCapacityNodes } from '../../universal-linking-system.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔗 IMPORTS DES MODULES DE COPIE DE CAPACITÉS
@@ -66,6 +67,10 @@ export interface CopyVariableResult {
   displayNodeId?: string;
   /** Message d'erreur éventuel */
   error?: string;
+  /** 🟢 NOUVEAU : Maps de capacités remplies pendant cette copie */
+  formulaIdMap?: Map<string, string>;
+  conditionIdMap?: Map<string, string>;
+  tableIdMap?: Map<string, string>;
 }
 
 /**
@@ -231,8 +236,28 @@ export async function copyVariableWithCapacities(
   // ═══════════════════════════════════════════════════════════════════════
   // 🆔 ÉTAPE 3 : Préparer les IDs cibles (peuvent être adaptés plus loin si collision)
   // ═══════════════════════════════════════════════════════════════════════
-  let newVarId = `${originalVarId}-${suffix}`;
-  let newExposedKey = `${originalVar.exposedKey}-${suffix}`;
+  const suffixToken = `${suffix}`;
+  const stripTrailingNumeric = (raw: string | null | undefined): string => {
+    if (!raw) return '';
+    const trimmed = raw.trim();
+    // Enlever TOUTES les séquences finales "-<nombre>" (ex: "foo-1-1" → "foo")
+    return trimmed.replace(/(?:-\d+)+\s*$/, '');
+  };
+
+  const appendSuffixOnce = (value: string | null | undefined) => {
+    if (!value) return value ?? '';
+    const base = stripTrailingNumeric(value);
+    return base.endsWith(`-${suffixToken}`) ? base : `${base}-${suffixToken}`;
+  };
+
+  const forceSingleSuffix = (value: string | null | undefined) => {
+    if (!value) return value ?? '';
+    const base = stripTrailingNumeric(value);
+    return `${base}-${suffixToken}`;
+  };
+
+  let newVarId = appendSuffixOnce(originalVarId);
+  let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
 
   console.log(`📝 Préparation des IDs:`);
   console.log(`   Variable (préliminaire): ${newVarId}`);
@@ -275,6 +300,14 @@ export async function copyVariableWithCapacities(
         // ═══════════════════════════════════════════════════════════════════
         // 🧮 COPIE FORMULE
         // ═══════════════════════════════════════════════════════════════════
+        const applySuffixOnceToSourceRef = (ref: string | null | undefined) => {
+          const parsedRef = parseSourceRef(ref || '');
+          if (!parsedRef) return ref;
+          const baseId = stripTrailingNumeric(parsedRef.id);
+          if (baseId.endsWith(`-${suffixToken}`)) return ref;
+          return applySuffixToSourceRef(`${parsedRef.prefix}${baseId}`, suffix);
+        };
+
         if (capacityType === 'formula') {
           console.log(`🧮 [COPY-VAR] Traitement FORMULE: ${parsed.id}`);
           // Vérifier si la formule a déjà été copiée
@@ -302,12 +335,12 @@ export async function copyVariableWithCapacities(
                 console.log(`✅ [COPY-VAR] Formule copiée et mappée: ${parsed.id} → ${formulaResult.newFormulaId}`);
                 emitCapacityEvent(formulaResult.newFormulaId, 'formula');
               } else {
-                newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, Number(suffix));
+                newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
                 console.log(`⚠️ [COPY-VAR] Échec copie formule (${formulaResult.error}), suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
               console.error(`❌ [COPY-VAR] Exception copie formule:`, (e as Error).message, (e as Error).stack);
-              newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, Number(suffix));
+              newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
         } 
@@ -339,12 +372,12 @@ export async function copyVariableWithCapacities(
                 console.log(`✅ Condition copiée et mappée: ${parsed.id} → ${conditionResult.newConditionId}`);
                 emitCapacityEvent(conditionResult.newConditionId, 'condition');
               } else {
-                newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
+                newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
                 console.log(`⚠️ Échec copie condition, suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
               console.error(`❌ Exception copie condition:`, (e as Error).message);
-              newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
+              newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
         }
@@ -377,12 +410,12 @@ export async function copyVariableWithCapacities(
                 console.log(`   📋 ${tableResult.columnsCount} colonnes, ${tableResult.rowsCount} lignes, ${tableResult.cellsCount} cellules`);
                 emitCapacityEvent(tableResult.newTableId, 'table');
               } else {
-                newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
+                newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
                 console.log(`⚠️ Échec copie table, suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
               console.error(`❌ Exception copie table:`, (e as Error).message);
-              newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
+              newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
         }
@@ -390,12 +423,17 @@ export async function copyVariableWithCapacities(
   // 📝 CHAMP (pas de copie, juste mapping)
   // ═══════════════════════════════════════════════════════════════════
         else if (capacityType === 'field') {
+          const isSharedRefField = parsed.id.startsWith('shared-ref-');
           // Mapper le nodeId du champ si disponible
           if (nodeIdMap.has(parsed.id)) {
             newSourceRef = nodeIdMap.get(parsed.id)!;
             console.log(`✅ Champ mappé: ${parsed.id} → ${newSourceRef}`);
+          } else if (isSharedRefField) {
+            // Ne pas suffixer une shared-ref si on n'a pas de mapping (elle reste partagée)
+            newSourceRef = parsed.id;
+            console.log(`⚪ Champ shared-ref conservé sans suffixe: ${newSourceRef}`);
           } else {
-            newSourceRef = `${parsed.id}-${suffix}`;
+            newSourceRef = appendSuffixOnce(parsed.id);
             console.log(`⚠️ Champ non mappé, suffixe appliqué: ${newSourceRef}`);
           }
         }
@@ -729,8 +767,11 @@ export async function copyVariableWithCapacities(
           }
 
           // Générer un ID unique pour le nœud d'affichage (ex: <oldVarNodeId>-<suffix>)
-          // Use dedicated "-display" suffix so we never override real node copies
-          const displayNodeId = `${originalVar.nodeId}-${suffix}-display`;
+          // Conserver uniquement le suffixe demandé (pas de "-display" additionnel)
+          const displayNodeBaseId = (originalVar.nodeId && nodeIdMap.get(originalVar.nodeId)) || originalVar.nodeId;
+          // Strip suffix then force a single suffixToken
+          const baseNormalized = stripTrailingNumeric(displayNodeBaseId);
+          const displayNodeId = appendSuffixOnce(baseNormalized);
           finalNodeId = displayNodeId;
 
           const now = new Date();
@@ -747,7 +788,7 @@ export async function copyVariableWithCapacities(
           const metadataForDisplay: Record<string, unknown> = {
             ...ownerMetadata,
             ...inheritedMetadata,
-            fromVariableId: `${originalVar.id}-${suffix}`,
+            fromVariableId: forceSingleSuffix(originalVar.id),
             autoCreatedDisplayNode: true,
             ...(isFromRepeaterDuplication && { duplicatedFromRepeater: true }),
           };
@@ -781,7 +822,7 @@ export async function copyVariableWithCapacities(
             metadataForDisplay.subTabs = ownerSubTabsArray;
           }
 
-          const appendSuffix = (value: string): string => /-\d+$/.test(value) ? value : `${value}-${suffix}`;
+          const appendSuffix = (value: string): string => appendSuffixOnce(value);
 
           const cloneAndSuffixInstances = (raw: unknown): unknown => {
             if (!raw) {
@@ -826,7 +867,7 @@ export async function copyVariableWithCapacities(
           };
 
           const tableSourceNode = originalDisplayNode ?? originalOwnerNode;
-          const displayLabel = originalVar.displayName || 'Donnée';
+          const displayLabel = forceSingleSuffix(originalVar.displayName || 'Donnée');
           const resolvedOrder = originalDisplayNode?.order ?? (originalOwnerNode.order ?? 0) + 1;
 
           const resolvedSubTabsJson = (() => {
@@ -842,7 +883,7 @@ export async function copyVariableWithCapacities(
             parentId: resolvedParentId,
             type: 'leaf_field' as const,
             subType: null as any,
-            label: `${displayLabel}-${suffix}`,
+            label: displayLabel,
             description: null as string | null,
             value: null as string | null,
             order: resolvedOrder,
@@ -898,7 +939,7 @@ export async function copyVariableWithCapacities(
             appearance_width: tableSourceNode.appearance_width ?? '100%',
             fieldType: (tableSourceNode.fieldType as any) ?? 'TEXT',
             fieldSubType: tableSourceNode.fieldSubType as any,
-            field_label: `${displayLabel}-${suffix}` as any,
+            field_label: displayLabel as any,
           };
 
           const maybeExisting = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
@@ -926,7 +967,7 @@ export async function copyVariableWithCapacities(
             console.log(`📋 Formules à copier depuis ${originalOwnerNode.id}: ${originalFormulas.length}`);
             
             for (const f of originalFormulas) {
-              const newFormulaId = `${f.id}-${suffix}`;
+              const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
               // Vérifier si la formule existe déjà (cas de ré-exécution)
               const existingFormula = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
               if (existingFormula) {
@@ -935,33 +976,26 @@ export async function copyVariableWithCapacities(
                 continue;
               }
               
-              // Remplacer les IDs dans les tokens
-              let newTokens = f.tokens;
-              if (newTokens && nodeIdMap && nodeIdMap.size > 0) {
-                const tokensStr = JSON.stringify(newTokens);
-                let updatedStr = tokensStr;
-                for (const [oldId, newId] of nodeIdMap.entries()) {
-                  updatedStr = updatedStr.split(oldId).join(newId);
+              // Utiliser copyFormulaCapacity pour avoir la réécriture centralisée avec suffixes
+              try {
+                const formulaResult = await copyFormulaCapacity(
+                  f.id,
+                  displayNodeId,
+                  suffix,
+                  prisma,
+                  { formulaIdMap, nodeIdMap }
+                );
+
+                if (formulaResult.success) {
+                  formulaIdMap.set(f.id, formulaResult.newFormulaId);
+                  copiedFormulaIds.push(formulaResult.newFormulaId);
+                  console.log(`   ✅ Formule copiée (centralisée): ${f.id} → ${formulaResult.newFormulaId}`);
+                } else {
+                  console.error(`   ❌ Erreur copie formule: ${f.id}`);
                 }
-                newTokens = JSON.parse(updatedStr);
+              } catch (error) {
+                console.error(`   ❌ Exception copie formule ${f.id}:`, error);
               }
-              
-              await prisma.treeBranchLeafNodeFormula.create({
-                data: {
-                  id: newFormulaId,
-                  nodeId: displayNodeId,
-                  organizationId: f.organizationId,
-                  name: f.name ? `${f.name} (${suffix})` : f.name,
-                  tokens: newTokens as any,
-                  description: f.description,
-                  isDefault: f.isDefault,
-                  order: f.order,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                }
-              });
-              copiedFormulaIds.push(newFormulaId);
-              console.log(`   ✅ Formule copiée: ${f.id} → ${newFormulaId}`);
             }
 
             // 🔀 COPIER LES CONDITIONS
@@ -971,7 +1005,7 @@ export async function copyVariableWithCapacities(
             console.log(`📋 Conditions à copier depuis ${originalOwnerNode.id}: ${originalConditions.length}`);
             
             for (const c of originalConditions) {
-              const newConditionId = `${c.id}-${suffix}`;
+              const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
               // Vérifier si la condition existe déjà
               const existingCondition = await prisma.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
               if (existingCondition) {
@@ -1098,6 +1132,7 @@ export async function copyVariableWithCapacities(
         
         // Harmoniser le nœud d'affichage avec les données de la variable existante
         try {
+          const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
           await prisma.treeBranchLeafNode.update({
             where: { id: finalNodeId },
             data: {
@@ -1108,8 +1143,8 @@ export async function copyVariableWithCapacities(
               data_precision: existingForNode.precision,
               data_unit: existingForNode.unit,
               data_visibleToUser: existingForNode.visibleToUser,
-              label: existingForNode.displayName || undefined,
-              field_label: (existingForNode.displayName as any) || undefined
+              label: normalizedExistingName || undefined,
+              field_label: (normalizedExistingName as any) || undefined
             }
           });
           await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
@@ -1140,7 +1175,8 @@ export async function copyVariableWithCapacities(
       console.log(`   ID: ${newVarId}`);
       console.log(`   nodeId: ${finalNodeId}`);
       console.log(`   exposedKey: ${newExposedKey}`);
-      console.log(`   displayName: ${originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName}`);
+      const normalizedDisplayName = forceSingleSuffix(originalVar.displayName);
+      console.log(`   displayName: ${normalizedDisplayName}`);
       console.log(`   sourceRef: ${newSourceRef}`);
       console.log(`   sourceType: ${originalVar.sourceType}`);
       
@@ -1154,12 +1190,111 @@ export async function copyVariableWithCapacities(
       }
 
       try {
+        // 🔧 COPIER ET SUFFIXER les capacités liées
+        
+        // ⭐ CRITIQUE : Ajouter le mapping du nœud ORIGINAL au nœud NOUVEAU
+        // Cela permet aux formules de réécrire correctement les @value.shared-ref-xxx
+        if (originalVar.nodeId && finalNodeId && !nodeIdMap.has(originalVar.nodeId)) {
+          nodeIdMap.set(originalVar.nodeId, finalNodeId);
+          console.log(`📍 Mapping nœud ajouté: ${originalVar.nodeId} → ${finalNodeId}`);
+        }
+        
+        // ⭐ FORMULES LIÉES : Copier récursivement
+        const newLinkedFormulaIds: string[] = [];
+        for (const formulaId of originalVar.linkedFormulaIds || []) {
+          const mappedId = formulaIdMap.get(formulaId);
+          if (mappedId) {
+            newLinkedFormulaIds.push(mappedId);
+          } else {
+            // 🔀 COPIER LA FORMULE RÉCURSIVEMENT
+            try {
+              const formulaResult = await copyFormulaCapacity(
+                formulaId,
+                finalNodeId,
+                suffix,
+                prisma,
+                { nodeIdMap, formulaIdMap, conditionIdMap }
+              );
+              if (formulaResult.success) {
+                formulaIdMap.set(formulaId, formulaResult.newFormulaId);
+                newLinkedFormulaIds.push(formulaResult.newFormulaId);
+                console.log(`✅ Formule copiée (récursive): ${formulaId} → ${formulaResult.newFormulaId}`);
+              } else {
+                newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
+              }
+            } catch (e) {
+              console.error(`❌ Erreur copie formule récursive:`, (e as Error).message);
+              newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
+            }
+          }
+        }
+        
+        // ⭐ CONDITIONS LIÉES : Copier récursivement
+        const newLinkedConditionIds: string[] = [];
+        for (const conditionId of originalVar.linkedConditionIds || []) {
+          const mappedId = conditionIdMap.get(conditionId);
+          if (mappedId) {
+            newLinkedConditionIds.push(mappedId);
+          } else {
+            // 🔀 COPIER LA CONDITION RÉCURSIVEMENT
+            try {
+              const conditionResult = await copyConditionCapacity(
+                conditionId,
+                finalNodeId,
+                suffix,
+                prisma,
+                { nodeIdMap, formulaIdMap, conditionIdMap }
+              );
+              if (conditionResult.success) {
+                conditionIdMap.set(conditionId, conditionResult.newConditionId);
+                newLinkedConditionIds.push(conditionResult.newConditionId);
+                console.log(`✅ Condition copiée (récursive): ${conditionId} → ${conditionResult.newConditionId}`);
+              } else {
+                newLinkedConditionIds.push(`${conditionId}-${suffix}`);
+              }
+            } catch (e) {
+              console.error(`❌ Erreur copie condition récursive:`, (e as Error).message);
+              newLinkedConditionIds.push(`${conditionId}-${suffix}`);
+            }
+          }
+        }
+        
+        // ⭐ TABLES LIÉES : Copier récursivement
+        const newLinkedTableIds: string[] = [];
+        for (const tableId of originalVar.linkedTableIds || []) {
+          const mappedId = tableIdMap.get(tableId);
+          if (mappedId) {
+            newLinkedTableIds.push(mappedId);
+          } else {
+            // 🔀 COPIER LA TABLE RÉCURSIVEMENT
+            try {
+              const tableResult = await copyTableCapacity(
+                tableId,
+                finalNodeId,
+                suffix,
+                prisma,
+                { nodeIdMap, formulaIdMap, conditionIdMap, tableIdMap }
+              );
+              if (tableResult.success) {
+                tableIdMap.set(tableId, tableResult.newTableId);
+                newLinkedTableIds.push(tableResult.newTableId);
+                console.log(`✅ Table copiée (récursive): ${tableId} → ${tableResult.newTableId}`);
+              } else {
+                newLinkedTableIds.push(`${tableId}-${suffix}`);
+              }
+            } catch (e) {
+              console.error(`❌ Erreur copie table récursive:`, (e as Error).message);
+              newLinkedTableIds.push(`${tableId}-${suffix}`);
+            }
+          }
+        }
+
         newVariable = await prisma.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: finalNodeId,
             exposedKey: newExposedKey,
-            displayName: originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName,
+            displayName: normalizedDisplayName,
             displayFormat: originalVar.displayFormat,
             unit: originalVar.unit,
             precision: originalVar.precision,
@@ -1211,6 +1346,14 @@ export async function copyVariableWithCapacities(
     console.log(`   exposedKey: ${newVariable.exposedKey}`);
     console.log(`   📍 DEBUG displayName créé: "${newVariable.displayName}"`);
     
+    // 🔗 ÉTAPE CRITIQUE : LIAISON AUTOMATIQUE OBLIGATOIRE
+    // Cette fonction lie la variable à TOUS les nœuds de sa capacité
+    try {
+      await linkVariableToAllCapacityNodes(prisma, newVariable.id, newVariable.sourceRef);
+    } catch (e) {
+      console.error(`❌ Erreur LIAISON AUTOMATIQUE VARIABLE:`, (e as Error).message);
+    }
+    
     // 🔍 VÉRIFICATION: Re-chercher la variable pour confirmer qu'elle existe bien
     const verification = await prisma.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
@@ -1219,12 +1362,14 @@ export async function copyVariableWithCapacities(
       console.log(`✅ VÉRIFICATION OK: Variable ${newVariable.id} existe bien en base`);
     } else {
       console.error(`❌❌❌ PROBLÈME GRAVE: Variable ${newVariable.id} N'EXISTE PAS après création !`);
+      console.error(`❌❌❌ PROBLÈME GRAVE: Variable ${newVariable.id} N'EXISTE PAS après création !`);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // 📝 ÉTAPE 5B : Mettre à jour le NŒUD D'AFFICHAGE (finalNodeId) avec les paramètres data
     // ═══════════════════════════════════════════════════════════════════════
     try {
+      const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
       await prisma.treeBranchLeafNode.update({
         where: { id: finalNodeId },
         data: {
@@ -1236,8 +1381,8 @@ export async function copyVariableWithCapacities(
           data_unit: newVariable.unit,
           data_visibleToUser: newVariable.visibleToUser,
           // Harmoniser le label du nœud d'affichage sur le displayName de la variable
-          label: newVariable.displayName || undefined,
-          field_label: (newVariable.displayName as any) || undefined
+          label: normalizedNodeLabel || undefined,
+          field_label: (normalizedNodeLabel as any) || undefined
         }
       });
       console.log(`✅ Paramètres capacité (data) mis à jour pour nœud d'affichage ${finalNodeId}`);
@@ -1301,6 +1446,43 @@ export async function copyVariableWithCapacities(
                 }
               });
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedConditionIds', [capId]);
+
+            // Keep the target node (template copy) linked to the NEW variable (suffixé) au lieu de l'original
+            // This prevents copies comme Orientation-Inclinaison-1 de rester sur la variable de base
+            try {
+              if (newNodeId) {
+                const suffixedVarId = `${originalVarId}-${suffix}`;
+                const targetNode = await prisma.treeBranchLeafNode.findUnique({
+                  where: { id: newNodeId },
+                  select: { linkedVariableIds: true }
+                });
+
+                if (targetNode) {
+                  const current = targetNode.linkedVariableIds || [];
+                  const withoutOriginal = current.filter(id => id !== originalVarId);
+                  // Forcer l'ID suffixé attendu, même si newVariable.id diffère (sécurité)
+                  const candidates = [newVariable.id, suffixedVarId].filter(Boolean) as string[];
+                  const next = Array.from(new Set([...withoutOriginal, ...candidates]));
+
+                  // Only write if something changes to avoid noisy updates
+                  const changed =
+                    current.length !== next.length ||
+                    current.some(id => !next.includes(id));
+
+                  if (changed) {
+                    await prisma.treeBranchLeafNode.update({
+                      where: { id: newNodeId },
+                      data: {
+                        linkedVariableIds: { set: next }
+                      }
+                    });
+                    console.log(`✅ linkedVariableIds updated on target node ${newNodeId}:`, next);
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn(`⚠️ Failed to sync linkedVariableIds on target node ${newNodeId}:`, (e as Error).message);
+            }
             } else if (parsedCap.type === 'table') {
               const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
               await prisma.treeBranchLeafNode.update({
@@ -1320,6 +1502,18 @@ export async function copyVariableWithCapacities(
       } catch (e) {
         console.warn(`⚠️ Synchronisation capacités condition/table sur le nœud d'affichage:`, (e as Error).message);
       }
+    }
+
+    // Fallback supplémentaire: remplacer explicitement l'ID original par l'ID suffixé
+    try {
+      if (newNodeId) {
+        await replaceLinkedVariableId(prisma, newNodeId, originalVarId, newVariable.id, suffix);
+      }
+      if (finalNodeId && finalNodeId !== newNodeId) {
+        await replaceLinkedVariableId(prisma, finalNodeId, originalVarId, newVariable.id, suffix);
+      }
+    } catch (e) {
+      console.warn(`⚠️ Failed to replace linkedVariableIds on nodes ${newNodeId} / ${finalNodeId}:`, (e as Error).message);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1390,7 +1584,11 @@ export async function copyVariableWithCapacities(
       capacityType,
       sourceRef: newSourceRef,
       success: true,
-      displayNodeId: autoCreateDisplayNode ? finalNodeId : undefined
+      displayNodeId: autoCreateDisplayNode ? finalNodeId : undefined,
+      // 🟢 RETOURNER LES MAPS pour que repeat-executor puisse les agréger
+      formulaIdMap,
+      conditionIdMap,
+      tableIdMap
     };
 
   } catch (error) {
@@ -1568,6 +1766,38 @@ async function addToNodeLinkedField(
   await prisma.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
+  });
+}
+
+// Remplace une variable liée par sa version suffixée sur un nœud donné
+async function replaceLinkedVariableId(
+  prisma: PrismaClient,
+  nodeId: string,
+  originalVarId: string,
+  newVarId: string,
+  suffix: string | number
+): Promise<void> {
+  const node = await prisma.treeBranchLeafNode.findUnique({
+    where: { id: nodeId },
+    select: { linkedVariableIds: true }
+  });
+
+  if (!node) return;
+
+  const suffixedId = `${originalVarId}-${suffix}`;
+  const current = node.linkedVariableIds || [];
+  const withoutOriginal = current.filter(id => id !== originalVarId);
+  const next = Array.from(new Set([...withoutOriginal, newVarId, suffixedId]));
+
+  const changed =
+    current.length !== next.length ||
+    current.some(id => !next.includes(id));
+
+  if (!changed) return;
+
+  await prisma.treeBranchLeafNode.update({
+    where: { id: nodeId },
+    data: { linkedVariableIds: { set: next } }
   });
 }
 

@@ -17,6 +17,7 @@ import {
 } from './formulaEngine.js';
 import { evaluateFormulaOrchestrated } from './evaluation/orchestrator.js';
 import { PrismaClient, Prisma } from '@prisma/client';
+import { linkVariableToAllCapacityNodes } from './universal-linking-system.js';
 // import { authenticateToken } from '../../../../middleware/auth'; // Temporairement dÃ©sactivÃ©
 import { 
   validateParentChildRelation, 
@@ -34,6 +35,7 @@ import { evaluateVariableOperation } from './operation-interpreter.js';
 // Use the repeat service implementation — central source of truth for variable copying
 import { copyVariableWithCapacities, copyLinkedVariablesFromNode, createDisplayNodeForExistingVariable } from './repeat/services/variable-copy-engine.js';
 import { copySelectorTablesAfterNodeCopy } from './copy-selector-tables.js';
+import { copyFormulaCapacity } from './copy-capacity-formula.js';
 import { getNodeIdForLookup } from '../../../../utils/node-helpers.js';
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -4941,6 +4943,15 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         }
       } catch (e) {
         console.warn('[TreeBranchLeaf API] Warning updating owner linkedVariableIds:', (e as Error).message);
+      }
+
+      // 🔗 Système universel: lier la variable à TOUS les nœuds référencés par sa capacité (table/formule/condition/champ)
+      if (variable.sourceRef) {
+        try {
+          await linkVariableToAllCapacityNodes(tx, variable.id, variable.sourceRef);
+        } catch (e) {
+          console.warn(`⚠️ [TreeBranchLeaf API] Échec liaison automatique linkedVariableIds pour ${variable.id}:`, (e as Error).message);
+        }
       }
 
       // ðŸ”— NOUVEAU: MAJ des rÃ©fÃ©rences inverses (linkedVariableIds sur les nÅ“uds rÃ©fÃ©rencÃ©s)

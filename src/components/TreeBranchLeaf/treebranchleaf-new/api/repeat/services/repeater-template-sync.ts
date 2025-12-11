@@ -61,9 +61,18 @@ export async function syncRepeaterTemplateIds(
 
   const columnIds = parseJsonArray(repeater.repeater_templateNodeIds);
   const metaIds = extractMetaTemplateIds(repeater.metadata);
-  const nextIds = Array.from(
-    new Set([...columnIds, ...metaIds, ...templateNodeIds].filter((id): id is string => typeof id === 'string' && !!id))
-  );
+  
+  // 🔴 CRITIQUE: Ne JAMAIS stocker d'IDs avec suffixes dans repeater_templateNodeIds
+  // Filtrer TOUS les IDs se terminant par -1, -2, -3, etc.
+  // Utilise une regex précise pour détecter UNIQUEMENT les suffixes de copie (après un UUID complet)
+  // Pattern: UUID complet (8-4-4-4-12) + un ou plusieurs suffixes -N
+  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
+  const allIds = [...columnIds, ...metaIds, ...templateNodeIds]
+    .filter((id): id is string => typeof id === 'string' && !!id)
+    .filter(id => !hasCopySuffix.test(id)); // ❌ Rejeter les IDs avec suffixes de copie
+  
+  const nextIds = Array.from(new Set(allIds));
+  console.log(`[syncRepeaterTemplateIds] 🔍 Filtered IDs: ${columnIds.length + metaIds.length + templateNodeIds.length} → ${nextIds.length} (removed suffixed IDs)`);
 
   const columnChanged = columnIds.length !== nextIds.length || columnIds.some((id, idx) => id !== nextIds[idx]);
   const metadataChanged = metaIds.length !== nextIds.length || metaIds.some((id, idx) => id !== nextIds[idx]);

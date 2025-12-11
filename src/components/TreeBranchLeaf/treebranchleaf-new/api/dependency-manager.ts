@@ -95,7 +95,10 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
     linkedFormulaIds: uniq(formulas.map(f => f.id)),
     linkedConditionIds: uniq(conditions.map(c => c.id)),
     linkedTableIds: uniq(tables.map(t => t.id)),
-    linkedVariableIds: uniq([variable?.id].filter(Boolean) as string[]),
+    linkedVariableIds: uniq([
+      variable?.id,
+      (node as any)?.data_activeId  // fallback: variable active même si linkedVariableIds est vide
+    ].filter(Boolean) as string[]),
   };
 
   // Ajouter les variables des nœuds référencés
@@ -121,7 +124,7 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
   // MAJ inverse minimale: pour chaque nœud référencé, s'assurer qu'il liste
   // - la formule/condition/table du nœud courant dans ses linked*Ids (trace des usages)
   // - la variable du nœud courant dans linkedVariableIds
-  const ownerVarId = variable?.id;
+  const ownerVarId = variable?.id || (node as any)?.data_activeId;
   await Promise.all(Array.from(refNodeIds).map(async refId => {
     if (formulas.length) {
       const current = await getNodeLinkedField(client, refId, 'linkedFormulaIds');

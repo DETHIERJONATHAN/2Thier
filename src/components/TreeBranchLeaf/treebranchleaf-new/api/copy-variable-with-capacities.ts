@@ -90,8 +90,14 @@ export interface CopyVariableOptions {
   displaySectionLabel?: string;
   /** Lier la variable copiée à la section d'affichage (sans créer de nœud/variable) */
   linkToDisplaySection?: boolean;
-  /** ⚠️ CRITIQUE: Est-ce que le nœud d'affichage EST DÉJÀ CRÉÉ par deepCopyNodeInternal ? */
+  /** Est-ce que le nœud d'affichage est déjà créé par deepCopyNodeInternal ? */
   displayNodeAlreadyCreated?: boolean;
+  /** Parent ID du nœud d'affichage (utilisé par deep-copy-service) */
+  displayParentId?: string | null;
+  /** Flag indiquant que la copie provient d'une duplication par repeater */
+  isFromRepeaterDuplication?: boolean;
+  /** Contexte répéteur si applicable (pour journalisation) */
+  repeatContext?: any;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -280,9 +286,10 @@ export async function copyVariableWithCapacities(
     // ═══════════════════════════════════════════════════════════════════════
     // 🔍 ÉTAPE 1 : Vérifier le cache
     // ═══════════════════════════════════════════════════════════════════════
-    if (variableCopyCache.has(originalVarId)) {
-      const cachedId = variableCopyCache.get(originalVarId)!;
-      console.log(`♻️ Variable déjà copiée (cache): ${originalVarId} → ${cachedId}`);
+    const cacheKey = `${originalVarId}|${newNodeId}`; // Scope le cache par nœud cible pour ne pas réutiliser une copie d'un autre nœud
+    if (variableCopyCache.has(cacheKey)) {
+      const cachedId = variableCopyCache.get(cacheKey)!;
+      console.log(`♻️ Variable déjà copiée (cache): ${cacheKey} → ${cachedId}`);
       
       // Récupérer les infos depuis la base pour retourner un résultat complet
       const cached = await prisma.treeBranchLeafNodeVariable.findUnique({
@@ -328,8 +335,20 @@ export async function copyVariableWithCapacities(
   // ═══════════════════════════════════════════════════════════════════════
   // 🆔 ÉTAPE 3 : Préparer les IDs cibles (peuvent être adaptés plus loin si collision)
   // ═══════════════════════════════════════════════════════════════════════
-  let newVarId = `${originalVarId}-${suffix}`;
-  let newExposedKey = `${originalVar.exposedKey}-${suffix}`;
+  const stripTrailingNumeric = (raw: string | null | undefined): string => {
+    if (!raw) return '';
+    const trimmed = (raw as string).trim();
+    // Remove all trailing -<number> sequences (eg: foo-1-1 -> foo)
+    return trimmed.replace(/(?:-\d+)+\s*$/, '');
+  };
+  const appendSuffixOnce = (value: string | null | undefined) => {
+    if (!value) return value ?? '';
+    const base = stripTrailingNumeric(value);
+    return `${base}-${suffix}`;
+  };
+
+  let newVarId = appendSuffixOnce(originalVarId);
+  let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
 
   console.log(`📝 Préparation des IDs:`);
   console.log(`   Variable (préliminaire): ${newVarId}`);
@@ -544,7 +563,10 @@ export async function copyVariableWithCapacities(
           }
 
           // Générer un ID unique pour le nœud d'affichage (ex: <oldVarNodeId>-<suffix>)
-          const displayNodeId = `${originalVar.nodeId}-${suffix}`;
+          // ⚠️ Important: si le nodeId original porte déjà un suffixe numérique, on le retire d'abord
+          // afin d'éviter des IDs en double-suffixe (ex: foo-1-1 → foo-1).
+          const baseDisplayNodeId = stripTrailingNumeric(originalVar.nodeId) || originalVar.nodeId;
+          const displayNodeId = `${baseDisplayNodeId}-${suffix}`;
           finalNodeId = displayNodeId;
 
           const now = new Date();
@@ -570,7 +592,7 @@ export async function copyVariableWithCapacities(
             linkConfig: null as any,
             defaultValue: null as any,
             calculatedValue: null as any,
-            metadata: { fromVariableId: `${originalVar.id}-${suffix}` } as any,
+            metadata: { fromVariableId: appendSuffixOnce(originalVar.id) } as any,
             // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
             subtab: originalOwnerNode.subtab,
             subtabs: originalOwnerNode.subtabs,
@@ -771,7 +793,7 @@ export async function copyVariableWithCapacities(
           defaultValue: originalVar.defaultValue,
           fixedValue: originalVar.fixedValue,
           selectedNodeId: originalVar.selectedNodeId 
-            ? (nodeIdMap.get(originalVar.selectedNodeId) || `${originalVar.selectedNodeId}-${suffix}`)
+            ? (nodeIdMap.get(originalVar.selectedNodeId) || appendSuffixOnce(originalVar.selectedNodeId))
             : null,
           sourceRef: newSourceRef,
           sourceType: originalVar.sourceType,
@@ -878,6 +900,18 @@ export async function copyVariableWithCapacities(
                 }
               });
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedConditionIds', [capId]);
+            } else if (parsedCap.type === 'formula') {
+              const frm = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              await prisma.treeBranchLeafNode.update({
+                where: { id: finalNodeId },
+                data: {
+                  hasFormula: true,
+                  formula_activeId: capId,
+                  formula_name: frm?.name || null,
+                  formula_description: frm?.description || null
+                }
+              });
+              await addToNodeLinkedField(prisma, finalNodeId, 'linkedFormulaIds', [capId]);
             } else if (parsedCap.type === 'table') {
               const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
               await prisma.treeBranchLeafNode.update({
@@ -902,7 +936,7 @@ export async function copyVariableWithCapacities(
     // ═══════════════════════════════════════════════════════════════════════
     // 🔗 ÉTAPE 6 : Mettre en cache
     // ═══════════════════════════════════════════════════════════════════════
-    variableCopyCache.set(originalVarId, newVariable.id);
+    variableCopyCache.set(cacheKey, newVariable.id);
 
     // ═══════════════════════════════════════════════════════════════════════
     // 🔄 ÉTAPE 7 : Mise à jour bidirectionnelle des linked...
@@ -916,9 +950,6 @@ export async function copyVariableWithCapacities(
       const parsed = parseSourceRef(newSourceRef);
       if (parsed && parsed.id) {
         try {
-          // Pour une formule/condition/table, on doit trouver le nodeId propriétaire
-          // de cette capacité pour mettre à jour son linkedXxxIds
-          
           if (capacityType === 'formula') {
             const formula = await prisma.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },

@@ -8,14 +8,17 @@
  * -----------
  * 1. Copier la formule avec suffixe
  * 2. Réécrire les tokens (@value.ID → @value.ID-suffix)
- * 3. Mettre à jour linkedFormulaIds du nœud propriétaire
- * 4. Synchroniser les paramètres de capacité (hasFormula, formula_activeId, etc.)
+ * 3. 🔗 LIAISON AUTOMATIQUE OBLIGATOIRE: linkedFormulaIds sur TOUS les nœuds référencés
+ * 4. Mettre à jour linkedFormulaIds du nœud propriétaire
+ * 5. Synchroniser les paramètres de capacité (hasFormula, formula_activeId, etc.)
  * 
  * @author System TBL
- * @version 1.0.0
+ * @version 2.0.0 - LIAISON AUTOMATIQUE OBLIGATOIRE
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
+import { linkFormulaToAllNodes } from './universal-linking-system';
+import { rewriteJsonReferences, forceSharedRefSuffixes, forceSharedRefSuffixesInJson, type RewriteMaps } from './repeat/utils/universal-reference-rewriter.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 📋 TYPES ET INTERFACES
@@ -96,12 +99,10 @@ function rewriteFormulaTokens(
       
       // 2. Si pas dans la map et qu'on a un suffixe, l'ajouter automatiquement
       if (suffix !== undefined) {
-        // Vérifier si l'ID a déjà un suffixe
-        const hasSuffix = /-\d+$/.test(nodeId);
-        if (!hasSuffix) {
-          console.log(`➕ [FORMULA-TOKENS] Suffixe ajouté: ${nodeId} → ${nodeId}-${suffix}`);
-          return `@value.${nodeId}-${suffix}`;
-        }
+        const suffixStr = `${suffix}`;
+        const suffixedId = `${nodeId}-${suffixStr}`;
+        console.log(`➕ [FORMULA-TOKENS] Suffixe ajouté: ${nodeId} → ${suffixedId}`);
+        return `@value.${suffixedId}`;
       }
       
       // 3. Sinon garder tel quel
@@ -266,9 +267,57 @@ export async function copyFormulaCapacity(
     console.log(`\n🔄 Réécriture des tokens...`);
     console.log(`   Nombre d'IDs dans la map: ${nodeIdMap.size}`);
     
-    const rewrittenTokens = rewriteFormulaTokens(originalFormula.tokens, nodeIdMap, suffix);
+    // 🔥 UTILISER LE SYSTÈME UNIVERSEL pour traiter TOUS les types de références
+    const rewriteMaps: RewriteMaps = {
+      nodeIdMap: nodeIdMap,
+      formulaIdMap: formulaCopyCache || new Map(),
+      conditionIdMap: new Map(), // Pas besoin ici mais requis par l'interface
+      tableIdMap: new Map() // Pas besoin ici mais requis par l'interface
+    };
+    let rewrittenTokens = rewriteJsonReferences(originalFormula.tokens, rewriteMaps, suffix);
     
-    console.log(`✅ Tokens réécrits:`, rewrittenTokens);
+    console.log(`✅ Tokens réécrits (1ère passe):`, rewrittenTokens);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔥 RÉÉCRITURE FORCÉE DES SHARED-REFS
+    // ═══════════════════════════════════════════════════════════════════════
+    // Utiliser la fonction helper pour forcer les suffixes sur TOUS les shared-refs
+    console.log(`\n🔥 AVANT forceSharedRefSuffixes: ${Array.isArray(rewrittenTokens) ? rewrittenTokens.length : '?'} tokens`);
+    const sharedRefsCountBefore = rewrittenTokens && Array.isArray(rewrittenTokens) 
+      ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
+      : 0;
+    console.log(`   Shared-refs avant: ${sharedRefsCountBefore}`);
+    
+    rewrittenTokens = forceSharedRefSuffixes(rewrittenTokens, suffix);
+    
+    console.log(`✅ APRÈS forceSharedRefSuffixes:`);
+    const sharedRefsCountAfter1 = rewrittenTokens && Array.isArray(rewrittenTokens) 
+      ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
+      : 0;
+    console.log(`   Shared-refs après: ${sharedRefsCountAfter1}`);
+    
+    // 🔥 RÉÉCRITURE RÉCURSIVE - Appel AUSSI la version JSON pour traiter les structures imbriquées
+    console.log(`\n🔥 AVANT forceSharedRefSuffixesInJson:`);
+    rewrittenTokens = forceSharedRefSuffixesInJson(rewrittenTokens, suffix);
+    
+    console.log(`✅ APRÈS forceSharedRefSuffixesInJson:`);
+    const sharedRefsCountAfter2 = rewrittenTokens && Array.isArray(rewrittenTokens) 
+      ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
+      : 0;
+    console.log(`   Shared-refs final: ${sharedRefsCountAfter2}`);
+    
+    console.log(`✅ Tokens réécrits (2ème passe - shared-refs forcés):`, rewrittenTokens);
+    console.log(`🔍 DEBUG: Cherchons shared-refs NON-suffixés dans les tokens...`);
+    if (Array.isArray(rewrittenTokens)) {
+      const unsuffixed = rewrittenTokens.filter((t: any) => 
+        typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
+      );
+      if (unsuffixed.length > 0) {
+        console.error(`❌ ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffixés:`, unsuffixed);
+      } else {
+        console.log(`✅ Tous les shared-refs sont suffixés !`);
+      }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // 💾 ÉTAPE 5 : Créer la nouvelle formule
@@ -288,15 +337,52 @@ export async function copyFormulaCapacity(
     });
 
     console.log(`✅ Formule créée: ${newFormula.id}`);
+    
+    // 🔍 VÉRIFICATION POST-CRÉATION: Lire immédiatement ce qui a été sauvegardé
+    console.log(`\n🔍 VÉRIFICATION POST-CRÉATION:`);
+    const savedFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
+      where: { id: newFormula.id }
+    });
+    
+    if (savedFormula && Array.isArray(savedFormula.tokens)) {
+      const savedSharedRefs = savedFormula.tokens.filter((t: any) => 
+        typeof t === 'string' && t.includes('shared-ref')
+      );
+      const suffixed = savedSharedRefs.filter((s: any) => /-\d+$/.test(s));
+      const nonSuffixed = savedSharedRefs.filter((s: any) => !/-\d+$/.test(s));
+      
+      console.log(`   Saved tokens: ${savedFormula.tokens.length}`);
+      console.log(`   Shared-refs en BD: ${savedSharedRefs.length}`);
+      console.log(`   ✅ Suffixés: ${suffixed.length}`);
+      console.log(`   ❌ Non-suffixés: ${nonSuffixed.length}`);
+      
+      if (nonSuffixed.length > 0) {
+        console.error(`🚨 ERREUR! Tokens non-suffixés en BD:`, nonSuffixed.slice(0, 2));
+      } else {
+        console.log(`✅ SUCCÈS! Tous les shared-refs sont suffixés en BD!`);
+      }
+    }
+    console.log();
 
     // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 6 : Mettre à jour linkedFormulaIds du nœud
+    // 🔗 ÉTAPE 5 : LIAISON AUTOMATIQUE OBLIGATOIRE
+    // ═══════════════════════════════════════════════════════════════════════
+    // ⚡ UTILISATION DU SYSTÈME UNIVERSEL DE LIAISON
+    // Cette fonction lie automatiquement la formule à TOUS les nœuds référencés
+    try {
+      await linkFormulaToAllNodes(prisma, newFormulaId, rewrittenTokens);
+    } catch (e) {
+      console.error(`❌ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔗 ÉTAPE 5B : Mettre à jour linkedFormulaIds du nœud propriétaire
     // ═══════════════════════════════════════════════════════════════════════
     try {
       await addToNodeLinkedField(prisma, newNodeId, 'linkedFormulaIds', [newFormulaId]);
-      console.log(`✅ linkedFormulaIds mis à jour pour nœud ${newNodeId}`);
+      console.log(`✅ linkedFormulaIds mis à jour pour nœud propriétaire ${newNodeId}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur MAJ linkedFormulaIds:`, (e as Error).message);
+      console.warn(`⚠️ Erreur MAJ linkedFormulaIds du propriétaire:`, (e as Error).message);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

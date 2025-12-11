@@ -1,0 +1,243 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                   🔥 SCRIPTS CRÉÉS - DIAGNOSTIC COMPLET 🔥                      ║
+║                                                                                  ║
+║                    Rampant toiture - Copie foireuse & Calculs                   ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+📝 RÉSUMÉ DES SCRIPTS CRÉÉS
+═════════════════════════════════════════════════════════════════════════════════
+
+🔧 SCRIPTS DE DIAGNOSTIC (à exécuter dans le projet)
+────────────────────────────────────────────────────────────────────────────────
+
+1️⃣  debug-rampant-copy-complete.cjs
+    📝 Description: Diagnostic complet - analyse la structure du nœud et des copies
+    🎯 Objectif: Identifier les éléments manquants (variables, formules, conditions)
+    ⏱️  Durée: 5-10 min
+    📊 Sortie: Comparaison original vs copies, liste détaillée
+    ⭐ COMMENCER ICI
+
+2️⃣  test-copy-quality.cjs
+    📝 Description: Teste la qualité de la copie - références cassées, données orphelines
+    🎯 Objectif: Identifier les problèmes de référence et incohérences
+    ⏱️  Durée: 5-10 min
+    📊 Sortie: Liste des problèmes détectés (opérations vides, variables cassées)
+    
+3️⃣  diagnose-calculations-failing.cjs
+    📝 Description: Teste pourquoi les formules ne calculent pas
+    🎯 Objectif: Évaluer les formules et identifier les erreurs syntaxiques
+    ⏱️  Durée: 5-10 min
+    📊 Sortie: Résultats d'évaluation, erreurs de calcul
+    
+4️⃣  analyze-copy-mappings.cjs
+    📝 Description: Analyse les Maps lors de la copie (formulaIdMap, conditionIdMap, etc.)
+    🎯 Objectif: Vérifier que les IDs sont correctement remappés
+    ⏱️  Durée: 5-10 min
+    📊 Sortie: Taux de mappage (%), comparaison original→copie
+    
+5️⃣  run-all-diagnostics.cjs
+    📝 Description: Lance tous les diagnostics dans l'ordre
+    🎯 Objectif: Rapport complet en un seul coup
+    ⏱️  Durée: 20-40 min (tous les scripts)
+    📊 Sortie: Résumé final avec tous les résultats
+    
+6️⃣  quickstart-diagnostics.cjs
+    📝 Description: Diagnostics interactifs guidés
+    🎯 Objectif: Choisir les étapes à exécuter interactivement
+    ⏱️  Durée: Variable (vous contrôlez)
+    📊 Sortie: Guidé pas à pas
+    ✨ RECOMMANDÉ POUR DÉBOGUER
+    
+7️⃣  trace-copy-function-calls.cjs
+    📝 Description: Trace les appels à copyVariableWithCapacities()
+    🎯 Objectif: Enregistrer tous les appels et paramètres
+    ⏱️  Durée: 5-10 min
+    📊 Sortie: Fichier de trace avec timestamps
+    
+📚 DOCUMENTATION (à lire)
+────────────────────────────────────────────────────────────────────────────────
+
+DIAGNOSTIC-RAMPANT-TOITURE.md
+    📋 Guide complet des problèmes
+    📖 Sections:
+       • Problèmes identifiés (#1-#4)
+       • Diagnostic détaillé (checklist)
+       • Causes racines probables
+       • Tests manuels
+
+SCRIPTS-DIAGNOSTIC-README.md
+    📋 Guide détaillé des scripts
+    📖 Sections:
+       • Résumé rapide (tableau)
+       • Démarrage rapide (3 options)
+       • Description détaillée de chaque script
+       • Interprétation des résultats
+       • Dépannage
+
+SCRIPTS-DIAGNOSTIC-INDEX.md
+    📋 Index et arborescence
+    📖 Sections:
+       • Arborescence des problèmes
+       • Plan d'action (4 étapes)
+       • Interprétation rapide (tableau)
+       • FAQ
+
+═════════════════════════════════════════════════════════════════════════════════
+
+🚀 DÉMARRAGE RAPIDE
+═════════════════════════════════════════════════════════════════════════════════
+
+Option 1️⃣  - Diagnostic complet (RECOMMANDÉ)
+────────────────────────────────────────────────────────────────────────────────
+cd c:\Users\dethi\OneDrive\Desktop\CRM\ SAVE\crm
+node scripts/debug-rampant-copy-complete.cjs
+
+Option 2️⃣  - Tous les diagnostics d'un coup
+────────────────────────────────────────────────────────────────────────────────
+node scripts/run-all-diagnostics.cjs
+
+Option 3️⃣  - Interactif (guidé, recommandé pour déboguer)
+────────────────────────────────────────────────────────────────────────────────
+node scripts/quickstart-diagnostics.cjs
+
+Option 4️⃣  - Choisir un diagnostic spécifique
+────────────────────────────────────────────────────────────────────────────────
+node scripts/test-copy-quality.cjs
+node scripts/diagnose-calculations-failing.cjs
+node scripts/analyze-copy-mappings.cjs
+
+═════════════════════════════════════════════════════════════════════════════════
+
+📊 TABLEAU DE DÉCISION - Quel script exécuter?
+═════════════════════════════════════════════════════════════════════════════════
+
+Si vous demandez...                       Alors exécutez...
+──────────────────────────────────────────────────────────────────────────────────
+"Les copies ne se font pas"               → debug-rampant-copy-complete.cjs
+"Les variables ne sont pas copiées"       → debug-rampant-copy-complete.cjs
+"Les formules sont vides"                 → diagnose-calculations-failing.cjs
+"Les références sont cassées"             → test-copy-quality.cjs
+"Les IDs ne correspondent pas"            → analyze-copy-mappings.cjs
+"Je veux le rapport complet"              → run-all-diagnostics.cjs
+"Je veux choisir les étapes"              → quickstart-diagnostics.cjs
+"Je veux tout savoir"                     → Tous les scripts + documentation
+
+═════════════════════════════════════════════════════════════════════════════════
+
+🔍 PLAN D'ANALYSE ÉTAPE PAR ÉTAPE
+═════════════════════════════════════════════════════════════════════════════════
+
+Étape 1: Structure globale
+────────────────────────────────────────────────────────────────────────────────
+$ node scripts/debug-rampant-copy-complete.cjs
+
+✅ Vérifier:
+   - Nœud original trouvé? OUI/NON
+   - Copies du nœud trouvées? OUI/NON (combien?)
+   - Nombre d'éléments matches? OUI/NON
+   - DÉCALAGE signalé? OUI/NON
+
+❌ Si problème: Les copies ne se font pas → Vérifier deep-copy-service.ts
+
+
+Étape 2: Qualité des données copiées
+────────────────────────────────────────────────────────────────────────────────
+$ node scripts/test-copy-quality.cjs
+
+✅ Vérifier:
+   - Aucun "DÉCALAGE" signalé? OUI/NON
+   - Aucun "CASSÉE" signalé? OUI/NON
+   - Aucun "VIDE" signalé? OUI/NON
+   - Métadonnées complètes? OUI/NON
+
+❌ Si problème: Les données ne sont pas copiées correctement
+   → Vérifier copy-variable-with-capacities.ts
+
+
+Étape 3: Calculs des formules
+────────────────────────────────────────────────────────────────────────────────
+$ node scripts/diagnose-calculations-failing.cjs
+
+✅ Vérifier:
+   - Formules ont une opération? OUI/NON
+   - Variables liées existent? OUI/NON
+   - Évaluation fonctionne? OUI/NON
+
+❌ Si problème: Les formules ne calculent pas
+   → Vérifier operation et linkedVariableIds
+
+
+Étape 4: Mappages lors de la copie
+────────────────────────────────────────────────────────────────────────────────
+$ node scripts/analyze-copy-mappings.cjs
+
+✅ Vérifier:
+   - Taux de mappage = 100%? OUI/NON
+   - Aucune "AUCUNE COPIE TROUVÉE"? OUI/NON
+
+❌ Si problème: Les Maps ne sont pas remplies
+   → Vérifier formulaIdMap, conditionIdMap, tableIdMap, nodeIdMap
+
+═════════════════════════════════════════════════════════════════════════════════
+
+🎯 PROCHAINES ÉTAPES APRÈS LE DIAGNOSTIC
+═════════════════════════════════════════════════════════════════════════════════
+
+1. Exécuter le diagnostic pertinent (voir tableau ci-dessus)
+2. Lire la sortie et identifier le problème
+3. Consulter DIAGNOSTIC-RAMPANT-TOITURE.md → Section "Causes racines probables"
+4. Localiser le fichier source indiqué
+5. Appliquer le fix
+6. Re-exécuter le diagnostic pour valider
+7. Tester manuellement dans l'application
+
+═════════════════════════════════════════════════════════════════════════════════
+
+🛠️  FICHIERS À MODIFIER (probablement)
+═════════════════════════════════════════════════════════════════════════════════
+
+src/components/TreeBranchLeaf/treebranchleaf-new/api/
+  ├── copy-variable-with-capacities.ts        ← Copie les variables
+  ├── copy-capacity-formula.ts                ← Copie les formules
+  ├── copy-capacity-condition.ts              ← Copie les conditions
+  └── copy-capacity-table.ts                  ← Copie les tables
+
+src/components/TreeBranchLeaf/treebranchleaf-new/services/
+  └── deep-copy-service.ts                    ← Orchestre la copie du nœud
+
+═════════════════════════════════════════════════════════════════════════════════
+
+💡 CONSEILS IMPORTANTS
+═════════════════════════════════════════════════════════════════════════════════
+
+✅ TOUJOURS:
+   • Commencer par debug-rampant-copy-complete.cjs
+   • Relancer le diagnostic après chaque fix
+   • Sauvegarder les logs pour comparaison avant/après
+   • Tester manuellement après les fixes
+
+❌ NE PAS:
+   • Ignorer les "DÉCALAGE" ou "CASSÉE" signalés
+   • Supposer que tout fonctionne sans vérifier
+   • Modifier plusieurs fichiers avant de tester
+   • Laisser les diagnostics en erreur ignorés
+
+═════════════════════════════════════════════════════════════════════════════════
+
+📞 BESOIN D'AIDE?
+═════════════════════════════════════════════════════════════════════════════════
+
+1. Lire SCRIPTS-DIAGNOSTIC-README.md (guide complet)
+2. Consulter DIAGNOSTIC-RAMPANT-TOITURE.md (causes racines)
+3. Vérifier SCRIPTS-DIAGNOSTIC-INDEX.md (arborescence)
+4. Exécuter quickstart-diagnostics.cjs (guidé interactif)
+
+═════════════════════════════════════════════════════════════════════════════════
+
+✨ Créé le: 11 décembre 2025
+✨ Pour: Diagnostiquer la copie foireuse et les calculs non-fonctionnels
+✨ Statut: Prêt à utiliser
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                            🚀 BON DIAGNOSTIC! 🚀                              ║
+╚════════════════════════════════════════════════════════════════════════════════╝

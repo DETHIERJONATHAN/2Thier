@@ -301,8 +301,18 @@ async function enrichTemplateIdsWithExistingCopies(
   repeaterNodeId: string,
   initialIds: string[]
 ): Promise<string[]> {
-  const normalized = initialIds.filter((id): id is string => typeof id === 'string' && !!id);
+  // 🔴 CRITIQUE: Filtrer TOUS les IDs avec suffixe dès le début
+  // Si repeater_templateNodeIds contient "uuid-1", on doit le rejeter immédiatement
+  // Utilise une regex précise pour détecter UNIQUEMENT les suffixes de copie (après un UUID complet)
+  // Pattern: UUID complet (8-4-4-4-12) + un ou plusieurs suffixes -N
+  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
+  const normalized = initialIds
+    .filter((id): id is string => typeof id === 'string' && !!id)
+    .filter(id => !hasCopySuffix.test(id)); // ❌ Rejeter les IDs avec suffixes de copie
+  
   const templateSet = new Set(normalized);
+  console.log(`[enrichTemplateIdsWithExistingCopies] 🔍 Initial IDs filtered: ${initialIds.length} → ${normalized.length} (removed suffixed IDs)`);
+  
   if (!repeaterNodeId) {
     return Array.from(templateSet);
   }

@@ -45,9 +45,40 @@ export async function runRepeatExecution(
     throw new RepeatOperationError('Access denied for this repeater tree.', 403);
   }
 
-  const templateNodeIds = plan.nodes.length
+  // 🔴 FILTRE CRITIQUE: Ne JAMAIS utiliser des IDs suffixés comme templates
+  // Les templates doivent être des UUIDs purs, sans suffixes de copie (-1, -2, etc.)
+  // Si on utilise uuid-1 comme template et qu'on lui applique un nouveau suffixe,
+  // on crée uuid-1-1 (double suffixe) au lieu de uuid-2
+  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
+  const rawIds = plan.nodes.length
     ? Array.from(new Set(plan.nodes.map(nodePlan => nodePlan.templateNodeId)))
     : blueprint.templateNodeIds;
+  
+  // Nettoyer les IDs: retirer TOUS les suffixes et vérifier qu'on a des UUIDs purs
+  const templateNodeIds = rawIds
+    .filter(id => typeof id === 'string' && !!id)
+    .map(id => id.replace(/(-\d+)+$/, '')) // Retirer suffixes: uuid-1 → uuid, uuid-1-2 → uuid
+    .filter(id => !hasCopySuffix.test(id)); // Double vérification
+
+  console.log(`🔍 [REPEAT-EXECUTOR] DEBUG templateNodeIds:`);
+  console.log(`   Source: ${plan.nodes.length ? 'PLAN' : 'BLUEPRINT'}`);
+  console.log(`   Raw IDs: ${rawIds.length}`);
+  console.log(`   Cleaned IDs: ${templateNodeIds.length}`);
+  
+  // Afficher les IDs nettoyés
+  if (rawIds.length !== templateNodeIds.length) {
+    console.log(`   ⚠️  NETTOYAGE: ${rawIds.length - templateNodeIds.length} ID(s) suffixé(s) ont été retiré(s)`);
+    rawIds.forEach((id, idx) => {
+      const cleaned = id.replace(/(-\d+)+$/, '');
+      if (id !== cleaned) {
+        console.log(`      ${idx + 1}. "${id}" → "${cleaned}"`);
+      }
+    });
+  }
+  
+  templateNodeIds.forEach((id, idx) => {
+    console.log(`   ${idx + 1}. ${id} ✅`);
+  });
 
   if (!templateNodeIds.length) {
     throw new RepeatOperationError(`Repeater ${repeaterNodeId} does not declare template nodes to duplicate.`, 422);
@@ -88,6 +119,15 @@ export async function runRepeatExecution(
   // Cela est nécessaire car repeat-instantiator.ts crée des targetNodeId supposés
   // mais deepCopyNodeInternal peut créer des IDs réels différents
   const plannedNodeIdToRealNodeId = new Map<string, string>();
+  
+  // 🔥 MAPS GLOBALES pour les capacités et les nœuds
+  // Ces maps sont partagées entre TOUTES les copies de variables pour que
+  // les capacités (formules/conditions/tables) utilisent les bons IDs de champs avec suffixes
+  const globalNodeIdMap = new Map<string, string>();
+  const globalFormulaIdMap = new Map<string, string>();
+  const globalConditionIdMap = new Map<string, string>();
+  const globalTableIdMap = new Map<string, string>();
+  const globalVariableCopyCache = new Map<string, string>();
 
   for (const nodePlan of plan.nodes) {
     let template: TreeBranchLeafNode | undefined;
@@ -203,7 +243,28 @@ export async function runRepeatExecution(
         // on doit mapper aussi ces enfants
         const plannedChildId = `${oldId}-${effectiveSuffix}`;
         plannedNodeIdToRealNodeId.set(plannedChildId, newId);
+        
+        // 🔥 AJOUT À LA MAP GLOBALE pour les capacités
+        // Cela permet aux formules/conditions de résoudre les IDs de champs
+        globalNodeIdMap.set(oldId, newId);
       });
+      
+      // 🔥 ENREGISTRER aussi les maps de capacités du deepCopyNodeInternal
+      if (copyResult.formulaIdMap) {
+        Object.entries(copyResult.formulaIdMap).forEach(([oldId, newId]) => {
+          if (oldId && newId) globalFormulaIdMap.set(oldId, newId);
+        });
+      }
+      if (copyResult.conditionIdMap) {
+        Object.entries(copyResult.conditionIdMap).forEach(([oldId, newId]) => {
+          if (oldId && newId) globalConditionIdMap.set(oldId, newId);
+        });
+      }
+      if (copyResult.tableIdMap) {
+        Object.entries(copyResult.tableIdMap).forEach(([oldId, newId]) => {
+          if (oldId && newId) globalTableIdMap.set(oldId, newId);
+        });
+      }
 
       // Ajouter les nœuds d'affichage créés par copyVariableWithCapacities
       if (copyResult.displayNodeIds && copyResult.displayNodeIds.length > 0) {
@@ -299,6 +360,12 @@ export async function runRepeatExecution(
       console.log(`   - repeaterNodeId: ${repeaterNodeId}`);
       
       console.log(`📊 [REPEAT-EXECUTOR] APPEL copyVariableWithCapacities...`);
+      console.log(`🔥 [REPEAT-EXECUTOR] Maps globales:`);
+      console.log(`   - globalNodeIdMap.size: ${globalNodeIdMap.size}`);
+      console.log(`   - globalFormulaIdMap.size: ${globalFormulaIdMap.size}`);
+      console.log(`   - globalConditionIdMap.size: ${globalConditionIdMap.size}`);
+      console.log(`   - globalTableIdMap.size: ${globalTableIdMap.size}`);
+      
       const variableResult = await copyVariableWithCapacities(
         templateVariableId,
         plannedSuffix,
@@ -307,6 +374,12 @@ export async function runRepeatExecution(
         {
           autoCreateDisplayNode: true,
           isFromRepeaterDuplication: true,
+          // 🔥 PASSER LES MAPS GLOBALES pour que les capacités utilisent les bons IDs
+          nodeIdMap: globalNodeIdMap,
+          formulaIdMap: globalFormulaIdMap,
+          conditionIdMap: globalConditionIdMap,
+          tableIdMap: globalTableIdMap,
+          variableCopyCache: globalVariableCopyCache,
           repeatContext: {
             repeaterNodeId,
             templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ''),
@@ -318,6 +391,41 @@ export async function runRepeatExecution(
       );
       
       console.log(`✅ [REPEAT-EXECUTOR] Variable copiée: ${plannedVariableId}`, variableResult);
+      
+      // � AGRÉGER LES MAPS retournées par copyVariableWithCapacities dans les maps globales
+      if (variableResult.success) {
+        // Ajouter les formules copiées
+        if (variableResult.formulaIdMap) {
+          for (const [oldId, newId] of variableResult.formulaIdMap.entries()) {
+            globalFormulaIdMap.set(oldId, newId);
+            console.log(`🔥 [REPEAT-EXECUTOR] Formule ajoutée à globalFormulaIdMap: ${oldId} → ${newId}`);
+          }
+        }
+        
+        // Ajouter les conditions copiées
+        if (variableResult.conditionIdMap) {
+          for (const [oldId, newId] of variableResult.conditionIdMap.entries()) {
+            globalConditionIdMap.set(oldId, newId);
+            console.log(`🔥 [REPEAT-EXECUTOR] Condition ajoutée à globalConditionIdMap: ${oldId} → ${newId}`);
+          }
+        }
+        
+        // Ajouter les tables copiées
+        if (variableResult.tableIdMap) {
+          for (const [oldId, newId] of variableResult.tableIdMap.entries()) {
+            globalTableIdMap.set(oldId, newId);
+            console.log(`🔥 [REPEAT-EXECUTOR] Table ajoutée à globalTableIdMap: ${oldId} → ${newId}`);
+          }
+        }
+      }
+      
+      // 🟢 ENREGISTRER le displayNode créé dans la map globale
+      if (variableResult.success && variableResult.displayNodeId) {
+        // Déterminer l'ID original du displayNode (sans suffixe)
+        const originalDisplayNodeId = variableResult.displayNodeId.replace(/-\d+$/, '');
+        globalNodeIdMap.set(originalDisplayNodeId, variableResult.displayNodeId);
+        console.log(`🔥 [REPEAT-EXECUTOR] DisplayNode ajouté à globalNodeIdMap: ${originalDisplayNodeId} → ${variableResult.displayNodeId}`);
+      }
     } catch (varErr) {
       console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
       // Ne pas bloquer - continuer avec les autres variables

@@ -2,6 +2,7 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import type { DuplicationContext } from '../../registry/repeat-id-registry.js';
 import { logCapacityEvent } from '../repeat-blueprint-writer.js';
 import { deriveRepeatContextFromMetadata } from './repeat-context-utils.js';
+import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
 
 /**
  * Service pour corriger la copie des capacités manquantes dans les nœuds dupliqués
@@ -42,7 +43,8 @@ export async function copyMissingCapacities(
   originalNodeId: string,
   copiedNodeId: string,
   suffix: string = '-1',
-  repeatContext?: DuplicationContext
+  repeatContext?: DuplicationContext,
+  nodeIdMap?: Map<string, string>
 ): Promise<CapacityCopyResult> {
   console.log(`🔄 [CAPACITY-COPY] Copie des capacités: ${originalNodeId} → ${copiedNodeId}`);
 
@@ -89,44 +91,71 @@ export async function copyMissingCapacities(
     }
   };
 
-  // 3. Copier les formules
-  for (const formula of originalNode.TreeBranchLeafNodeFormula) {
-    const newFormulaId = `${formula.id}${suffix}`;
-    const formulaName = formula.name ? `${formula.name}${suffix}` : formula.name;
-
-    // Vérifier si la formule existe déjà
-    const existingFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
-      where: { id: newFormulaId }
-    });
-
-    if (!existingFormula) {
-      // Adapter les tokens pour pointer vers les nœuds copiés
-      const adaptedTokens = adaptTokensForCopiedNode(formula.tokens, suffix);
-
-      await prisma.treeBranchLeafNodeFormula.create({
-        data: {
-          id: newFormulaId,
-          nodeId: copiedNodeId,
-          organizationId: formula.organizationId,
-          name: formulaName,
-          tokens: adaptedTokens as Prisma.InputJsonValue,
-          description: formula.description,
-          isDefault: formula.isDefault,
-          order: formula.order
-        }
+  // 3. Copier les formules via copyFormulaCapacity (centralisé)
+  const formulaIdMap = new Map<string, string>();
+  const suffixNum = parseInt(suffix.replace('-', '')) || 1;
+  
+  // 🔧 Construire le nodeIdMap si pas fourni
+  // Cela permet de remapper les références internes dans les formules
+  let workingNodeIdMap = nodeIdMap;
+  if (!workingNodeIdMap) {
+    workingNodeIdMap = new Map<string, string>();
+    
+    // Chercher tous les nodes du même arbre ET suffixés
+    const treeId = copiedNode.treeId;
+    if (treeId) {
+      const allNodesInTree = await prisma.treeBranchLeafNode.findMany({
+        where: { treeId },
+        select: { id: true }
       });
-
-      if (repeatContext) {
-        logCapacityEvent({
-          ownerNodeId: copiedNodeId,
-          capacityId: newFormulaId,
-          capacityType: 'formula',
-          context: repeatContext
-        });
+      
+      // Pour chaque node, vérifier si la version suffixée existe
+      const baseNodeId = originalNodeId.replace(/-\d+$/, ''); // Retirer suffixe éventuel
+      
+      for (const node of allNodesInTree) {
+        // Si c'est un node suffixé (finit par -1, -2, etc.)
+        if (node.id.match(/-\d+$/)) {
+          const baseId = node.id.replace(/-\d+$/, '');
+          if (!workingNodeIdMap.has(baseId)) {
+            workingNodeIdMap.set(baseId, node.id);
+          }
+        }
       }
+    }
+  }
+  
+  for (const formula of originalNode.TreeBranchLeafNodeFormula) {
+    try {
+      // Utiliser copyFormulaCapacity pour avoir la réécriture complète avec suffixes
+      const formulaResult = await copyFormulaCapacity(
+        formula.id,
+        copiedNodeId,
+        suffixNum,
+        prisma,
+        { 
+          formulaIdMap,
+          nodeIdMap: workingNodeIdMap
+        }
+      );
 
-      result.capacitiesFixed.formulas++;
-      console.log(`   ✅ Formule copiée: ${formulaName}`);
+      if (formulaResult.success) {
+        formulaIdMap.set(formula.id, formulaResult.newFormulaId);
+        result.capacitiesFixed.formulas++;
+        console.log(`   ✅ Formule copiée (centralisée): ${formulaResult.newFormulaId}`);
+
+        if (repeatContext) {
+          logCapacityEvent({
+            ownerNodeId: copiedNodeId,
+            capacityId: formulaResult.newFormulaId,
+            capacityType: 'formula',
+            context: repeatContext
+          });
+        }
+      } else {
+        console.error(`   ❌ Erreur copie formule: ${formula.id}`);
+      }
+    } catch (error) {
+      console.error(`   ❌ Exception copie formule ${formula.id}:`, error);
     }
   }
 
@@ -192,7 +221,34 @@ export async function copyMissingCapacities(
           type: table.type,
           rowCount: table.rowCount,
           columnCount: table.columnCount,
-          meta: table.meta as Prisma.InputJsonValue,
+          // 🔧 TRAITER LE meta: suffix les références aux nodes
+          meta: (() => {
+            if (!table.meta) {
+              return table.meta as Prisma.InputJsonValue;
+            }
+            try {
+              const str = JSON.stringify(table.meta);
+              const suffixNum = parseInt(suffix.replace('-', '')) || 1;
+              // Remplacer les UUIDs par leurs versions suffixés
+              let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
+                if (workingNodeIdMap && workingNodeIdMap.has(uuid)) {
+                  const mapped = workingNodeIdMap.get(uuid);
+                  console.log(`[table.meta] UUID remappé: ${uuid} → ${mapped}`);
+                  return mapped;
+                }
+                // Si pas dans la map et suffixe pas déjà appliqué, l'ajouter
+                if (!uuid.match(/-\d+$/)) {
+                  console.log(`[table.meta] UUID suffixé: ${uuid} → ${uuid}-${suffixNum}`);
+                  return `${uuid}-${suffixNum}`;
+                }
+                return uuid;
+              });
+              return JSON.parse(replaced) as Prisma.InputJsonValue;
+            } catch {
+              console.warn('[table.meta] Erreur traitement meta, copie tel quel');
+              return table.meta as Prisma.InputJsonValue;
+            }
+          })(),
           isDefault: table.isDefault,
           order: table.order,
           lookupDisplayColumns: table.lookupDisplayColumns,
@@ -202,7 +258,8 @@ export async function copyMissingCapacities(
             create: table.tableColumns.map(col => ({
               id: `${col.id}${suffix}`,
               columnIndex: col.columnIndex,
-              name: col.name ? `${col.name}${suffix}` : col.name,
+              // Suffixer le name SEULEMENT si c'est du texte, pas si c'est numérique
+              name: col.name && /^\d+$/.test(col.name) ? col.name : (col.name ? `${col.name}${suffix}` : col.name),
               type: col.type,
               width: col.width,
               format: col.format,
@@ -320,7 +377,52 @@ function adaptConditionSetForCopiedNode(conditionSet: unknown, suffix: string): 
       return `node-formula:${formulaId}${suffix}`;
     });
 
-    return JSON.parse(str);
+    const applySuffix = (value: unknown): unknown => {
+      if (typeof value !== 'string') return value;
+      return /-\d+$/.test(value) ? value : `${value}${suffix}`;
+    };
+
+    const suffixIds = (cs: any): any => {
+      if (!cs || typeof cs !== 'object') return cs;
+      const out: any = Array.isArray(cs) ? cs.map(suffixIds) : { ...cs };
+
+      if (!Array.isArray(cs) && out.id) {
+        out.id = applySuffix(out.id);
+      }
+
+      if (out.branches && Array.isArray(out.branches)) {
+        out.branches = out.branches.map((branch: any) => {
+          const b: any = { ...branch };
+          if (b.id) b.id = applySuffix(b.id);
+          if (b.actions && Array.isArray(b.actions)) {
+            b.actions = b.actions.map((action: any) => {
+              const a: any = { ...action };
+              if (a.id) a.id = applySuffix(a.id);
+              return a;
+            });
+          }
+          return b;
+        });
+      }
+
+      if (out.fallback && typeof out.fallback === 'object') {
+        const fb: any = { ...out.fallback };
+        if (fb.id) fb.id = applySuffix(fb.id);
+        if (fb.actions && Array.isArray(fb.actions)) {
+          fb.actions = fb.actions.map((action: any) => {
+            const a: any = { ...action };
+            if (a.id) a.id = applySuffix(a.id);
+            return a;
+          });
+        }
+        out.fallback = fb;
+      }
+
+      return out;
+    };
+
+    const parsed = JSON.parse(str);
+    return suffixIds(parsed);
   } catch {
     return conditionSet;
   }

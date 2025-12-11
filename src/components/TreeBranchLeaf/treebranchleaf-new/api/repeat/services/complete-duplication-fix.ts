@@ -1,4 +1,5 @@
 import { PrismaClient, type Prisma } from '@prisma/client';
+import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
 
 /**
  * Service pour corriger COMPLÈTEMENT la duplication des nœuds avec lookups
@@ -82,31 +83,48 @@ export async function fixCompleteDuplication(
 
   result.nodeLabel = copiedNode.label;
 
-  // 2. Copier les formules manquantes
-  for (const formula of originalNode.TreeBranchLeafNodeFormula) {
-    const newFormulaId = `${formula.id}${suffix}`;
-    
-    const existingFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
-      where: { id: newFormulaId }
+  // 2. Copier les formules manquantes via copyFormulaCapacity (centralisé)
+  const formulaIdMap = new Map<string, string>();
+  const suffixNum = parseInt(suffix.replace('-', '')) || 1;
+  
+  // 🔧 Construire le nodeIdMap pour les remappages internes
+  const nodeIdMap = new Map<string, string>();
+  const treeId = copiedNode.treeId;
+  if (treeId) {
+    const allNodesInTree = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true }
     });
-
-    if (!existingFormula) {
-      const adaptedTokens = adaptReferencesForCopiedNode(formula.tokens, suffix);
-
-      await prisma.treeBranchLeafNodeFormula.create({
-        data: {
-          id: newFormulaId,
-          nodeId: copiedNodeId,
-          organizationId: formula.organizationId,
-          name: formula.name ? `${formula.name}${suffix}` : formula.name,
-          tokens: adaptedTokens as Prisma.InputJsonValue,
-          description: formula.description,
-          isDefault: formula.isDefault,
-          order: formula.order
+    
+    // Pour chaque node suffixé, mapper son base vers la version suffixée
+    for (const node of allNodesInTree) {
+      if (node.id.match(/-\d+$/)) {
+        const baseId = node.id.replace(/-\d+$/, '');
+        if (!nodeIdMap.has(baseId)) {
+          nodeIdMap.set(baseId, node.id);
         }
-      });
+      }
+    }
+  }
+  
+  for (const formula of originalNode.TreeBranchLeafNodeFormula) {
+    try {
+      const formulaResult = await copyFormulaCapacity(
+        formula.id,
+        copiedNodeId,
+        suffixNum,
+        prisma,
+        { formulaIdMap, nodeIdMap }
+      );
 
-      result.capacitiesFixed.formulas++;
+      if (formulaResult.success) {
+        formulaIdMap.set(formula.id, formulaResult.newFormulaId);
+        result.capacitiesFixed.formulas++;
+      } else {
+        console.error(`❌ Erreur copie formule: ${formula.id}`);
+      }
+    } catch (error) {
+      console.error(`❌ Exception copie formule ${formula.id}:`, error);
     }
   }
 

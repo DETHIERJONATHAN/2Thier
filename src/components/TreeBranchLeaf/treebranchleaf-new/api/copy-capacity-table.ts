@@ -11,14 +11,17 @@
  * 3. Copier toutes les lignes (TreeBranchLeafNodeTableRow)
  * 4. Copier toutes les cellules (TreeBranchLeafNodeTableCell)
  * 5. Réécrire les IDs dans les configs JSON
- * 6. Mettre à jour linkedTableIds du nœud propriétaire
- * 7. Synchroniser les paramètres de capacité (hasTable, table_activeId, etc.)
+ * 6. 🔗 LIAISON AUTOMATIQUE OBLIGATOIRE: linkedTableIds sur TOUS les nœuds référencés
+ * 7. Mettre à jour linkedTableIds du nœud propriétaire
+ * 8. Synchroniser les paramètres de capacité (hasTable, table_activeId, etc.)
  * 
  * @author System TBL
- * @version 1.0.0
+ * @version 2.0.0 - LIAISON AUTOMATIQUE OBLIGATOIRE
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
+import { linkTableToAllNodes } from './universal-linking-system';
+import { rewriteJsonReferences, forceSharedRefSuffixes, forceSharedRefSuffixesInJson, type RewriteMaps } from './repeat/utils/universal-reference-rewriter.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 📋 TYPES ET INTERFACES
@@ -56,70 +59,25 @@ export interface CopyTableResult {
   error?: string;
 }
 
+function stripNumericSuffix(value: string | null | undefined): string | null | undefined {
+  if (!value) return value;
+  const numericWithAnySuffix = /^\d+(?:-\d+)+$/;
+  const numericOnly = /^\d+$/;
+  if (numericWithAnySuffix.test(value)) return value.split('-')[0];
+  if (numericOnly.test(value)) return value;
+  return value;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔧 FONCTIONS UTILITAIRES DE RÉÉCRITURE
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Réécrire les IDs dans un objet JSON (configs de colonnes/cellules)
- * Gère :
- * - UUIDs: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
- * - node_xxx : références générées
- * - @value.ID : références de champs
- * - node-formula:ID : références de formules
- * 
- * @param obj - Objet à réécrire
- * @param idMap - Map ancien ID → nouveau ID
- * @param suffix - Suffixe à appliquer si ID non mappé
- * @returns Objet réécrit
- */
-function rewriteIdsInJson(
-  obj: unknown,
-  idMap: Map<string, string>,
-  suffix?: number
-): Prisma.InputJsonValue {
-  if (!obj) return obj as Prisma.InputJsonValue;
 
-  try {
-    let str = JSON.stringify(obj);
-    
-    // 1️⃣ Réécrire les @value.<nodeId> (références de champs)
-    str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_match, nodeId: string) => {
-      const mapped = idMap.get(nodeId);
-      if (mapped) return `@value.${mapped}`;
-      if (suffix !== undefined && !/-\d+$/.test(nodeId)) return `@value.${nodeId}-${suffix}`;
-      return `@value.${nodeId}`;
-    });
-    
-    // 2️⃣ Réécrire les node-formula:<id> (références de formules)
-    str = str.replace(/node-formula:([A-Za-z0-9_-]+)/g, (_match, formulaId: string) => {
-      const mapped = idMap.get(formulaId);
-      if (mapped) return `node-formula:${mapped}`;
-      if (suffix !== undefined && !/-\d+$/.test(formulaId)) return `node-formula:${formulaId}-${suffix}`;
-      return `node-formula:${formulaId}`;
-    });
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔄 Réécriture utilise maintenant le système universel rewriteJsonReferences
+// La fonction ancienne rewriteIdsInJson est remplacée par rewriteJsonReferences
+// ═══════════════════════════════════════════════════════════════════════════
 
-    // 3️⃣ Réécrire les UUIDs (références de nœuds)
-    str = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
-      const mapped = idMap.get(uuid);
-      if (mapped) return mapped;
-      if (suffix !== undefined && !/-\d+$/.test(uuid)) return `${uuid}-${suffix}`;
-      return uuid;
-    });
-    
-    // 4️⃣ Réécrire les node_xxx (références générées)
-    str = str.replace(/(node_[a-z0-9_-]+)/gi, (id: string) => {
-      const mapped = idMap.get(id);
-      if (mapped) return mapped;
-      if (suffix !== undefined && !/-\d+$/.test(id)) return `${id}-${suffix}`;
-      return id;
-    });
-    
-    return JSON.parse(str) as Prisma.InputJsonValue;
-  } catch {
-    return obj as Prisma.InputJsonValue;
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔄 FONCTION PRINCIPALE DE COPIE
@@ -281,7 +239,10 @@ export async function copyTableCapacity(
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
-          meta: rewriteIdsInJson(originalTable.meta, nodeIdMap, suffix),
+          meta: (() => {
+            const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
+            return rewriteJsonReferences(originalTable.meta, rewriteMaps, suffix);
+          })(),
           updatedAt: new Date()
         }
       });
@@ -294,7 +255,10 @@ export async function copyTableCapacity(
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
-          meta: rewriteIdsInJson(originalTable.meta, nodeIdMap),
+          meta: (() => {
+            const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
+            return rewriteJsonReferences(originalTable.meta, rewriteMaps);
+          })(),
           createdAt: new Date(),
           updatedAt: new Date()
         }
@@ -324,13 +288,22 @@ export async function copyTableCapacity(
         const newColumnId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
         columnIdMap.set(col.id, newColumnId);
 
+        // Normaliser le nom de colonne : ne pas suffixer les valeurs purement numériques
+        // (ex: "5-1" → "5"), mais conserver les noms textuels (ex: "Orientation-1")
+        const normalizedName = (() => {
+          const raw = col.name as string | null;
+          if (!raw) return raw;
+          const stripped = stripNumericSuffix(raw);
+          return stripped ?? raw; // noms textuels conservés (Orientation-1, etc.)
+        })();
+
         // Créer directement - SANS réécrire le metadata/config (comme le script)
         await prisma.treeBranchLeafNodeTableColumn.create({
           data: {
             id: newColumnId,
             tableId: newTableId,
             columnIndex: col.columnIndex,
-            name: col.name,
+            name: normalizedName,
             type: col.type || 'text',
             width: col.width,
             format: col.format,
@@ -390,6 +363,28 @@ export async function copyTableCapacity(
     console.log(`✅ ${rowsCount} lignes copiées`);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // 🧹 ÉTAPE 6bis : Normaliser les noms de colonnes pour retirer les suffixes numériques
+    // ═══════════════════════════════════════════════════════════════════════
+    try {
+      const cols = await prisma.treeBranchLeafNodeTableColumn.findMany({
+        where: { tableId: newTableId },
+        select: { id: true, name: true }
+      });
+      for (const c of cols) {
+        const cleaned = stripNumericSuffix(c.name);
+        if (cleaned !== c.name) {
+          await prisma.treeBranchLeafNodeTableColumn.update({
+            where: { id: c.id },
+            data: { name: cleaned }
+          });
+        }
+      }
+      console.log(`✅ Noms de colonnes normalisés (suffixes numériques retirés)`);
+    } catch (e) {
+      console.warn(`⚠️ Normalisation des noms de colonnes échouée:`, (e as Error).message);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // 🔢 ÉTAPE 7 : Mettre à jour les métadonnées rowCount et columnCount
     // ═══════════════════════════════════════════════════════════════════════
     await prisma.treeBranchLeafNodeTable.update({
@@ -403,16 +398,37 @@ export async function copyTableCapacity(
 
     console.log(`✅ Métadonnées mises à jour:`);
     console.log(`   - rowCount: ${rowsCount}`);
-    console.log(`   - columnCount: ${columnsCount}`);
+    console.log(`✅ Table créée: ${newTable.id}`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 8 : Mettre à jour linkedTableIds du nœud
+    // 🔗 ÉTAPE 4 : LIAISON AUTOMATIQUE OBLIGATOIRE
+    // ═══════════════════════════════════════════════════════════════════════
+    // ⚡ UTILISATION DU SYSTÈME UNIVERSEL DE LIAISON
+    // On lie avec la version RÉÉCRITE (ids suffixés) pour couvrir tous les champs
+    const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
+    let rewrittenTableData = rewriteJsonReferences(originalTable.tableData, rewriteMaps, suffix);
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔥 RÉÉCRITURE FORCÉE DES SHARED-REFS DANS LA TABLE
+    // ═══════════════════════════════════════════════════════════════════════
+    // Forcer TOUS les @value.shared-ref-* même imbriqués dans les cellules/colonnes
+    console.log(`\n🔥 RÉÉCRITURE FORCÉE des shared-refs dans tableData...`);
+    rewrittenTableData = forceSharedRefSuffixesInJson(rewrittenTableData, suffix);
+    
+    try {
+      await linkTableToAllNodes(prisma, newTableId, rewrittenTableData);
+    } catch (e) {
+      console.error(`❌ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔗 ÉTAPE 4B : Mettre à jour linkedTableIds du nœud propriétaire
     // ═══════════════════════════════════════════════════════════════════════
     try {
       await addToNodeLinkedField(prisma, newNodeId, 'linkedTableIds', [newTableId]);
-      console.log(`✅ linkedTableIds mis à jour pour nœud ${newNodeId}`);
+      console.log(`✅ linkedTableIds mis à jour pour nœud propriétaire ${newNodeId}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur MAJ linkedTableIds:`, (e as Error).message);
+      console.warn(`⚠️ Erreur MAJ linkedTableIds du propriétaire:`, (e as Error).message);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -442,7 +458,7 @@ export async function copyTableCapacity(
           const mappedTableId = tableIdMap.has(tableId) ? tableIdMap.get(tableId)! : `${tableId}-${suffix}`;
           
           // Remapper les IDs dans la config (au cas où il y aurait des références)
-          const remappedConfig = rewriteIdsInJson(config, nodeIdMap, suffix);
+          const remappedConfig = rewriteJsonReferences(config, rewriteMaps, suffix);
           
           newTableInstances[mappedTableId] = remappedConfig;
           console.log(`   📋 Instance remappée: ${tableId} → ${mappedTableId}`);

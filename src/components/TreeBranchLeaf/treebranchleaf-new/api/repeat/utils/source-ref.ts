@@ -14,6 +14,10 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
     return { type: 'formula', id: cleaned.replace('node-formula:', ''), prefix: 'node-formula:' };
   }
 
+  if (cleaned.startsWith('formula:')) {
+    return { type: 'formula', id: cleaned.replace('formula:', ''), prefix: 'formula:' };
+  }
+
   if (cleaned.startsWith('condition:')) {
     return { type: 'condition', id: cleaned.replace('condition:', ''), prefix: 'condition:' };
   }
@@ -24,6 +28,18 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
 
   if (cleaned.startsWith('@table.')) {
     return { type: 'table', id: cleaned.replace('@table.', ''), prefix: '@table.' };
+  }
+
+  if (cleaned.startsWith('@table:')) {
+    return { type: 'table', id: cleaned.replace('@table:', ''), prefix: '@table:' };
+  }
+
+  if (cleaned.startsWith('table:')) {
+    return { type: 'table', id: cleaned.replace('table:', ''), prefix: 'table:' };
+  }
+
+  if (cleaned.startsWith('table.')) {
+    return { type: 'table', id: cleaned.replace('table.', ''), prefix: 'table.' };
   }
 
   if (cleaned.startsWith('node-table:')) {
@@ -37,7 +53,9 @@ export function applySuffixToSourceRef(sourceRef: string | null | undefined, suf
   if (!sourceRef) return null;
   const parsed = parseSourceRef(sourceRef);
   if (!parsed) return sourceRef;
-  const newId = `${parsed.id}-${suffix}`;
+  
+  const suffixStr = `${suffix}`;
+  const newId = `${parsed.id}-${suffixStr}`;
   return `${parsed.prefix}${newId}`;
 }
 
