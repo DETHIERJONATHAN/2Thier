@@ -876,6 +876,7 @@ interface TBLSectionRendererProps {
   parentConditions?: Record<string, unknown>; // Conditions héritées du parent
   isValidation?: boolean; // Mode validation (affichage des erreurs)
   submissionId?: string | null;
+  activeSubTab?: string; // 🔧 FIX: Sous-onglet actif pour filtrer les champs conditionnels
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -889,7 +890,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   level = 0,
   parentConditions = {},
   isValidation = false,
-  submissionId
+  submissionId,
+  activeSubTab
 }) => {
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
@@ -1060,8 +1062,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     const columnsMobile = section.config?.columnsMobile ?? 2;
     
     // Calculer les spans pour chaque breakpoint
-      const spanDesktop = Math.floor(24 / Math.max(columnsDesktop, 1));
-      const spanMobile = Math.floor(24 / Math.max(columnsMobile, 1));
+    // ⚠️ Utiliser Math.ceil pour garantir qu'on ne dépasse PAS le nombre de colonnes demandé
+    // Ex: 7 colonnes → span = ceil(24/7) = 4 → 6 colonnes max (mieux que 8 avec floor)
+    const spanDesktop = Math.ceil(24 / Math.max(columnsDesktop, 1));
+    const spanMobile = Math.ceil(24 / Math.max(columnsMobile, 1));
     
     return {
       xs: spanMobile,     // Mobile
@@ -1200,8 +1204,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     (targetSection: TBLSection, field: TBLField, options?: { forceFullWidth?: boolean }) => {
       const columnsDesktop = Math.max(1, targetSection.config?.columnsDesktop ?? 6);
       const columnsMobile = Math.max(1, targetSection.config?.columnsMobile ?? 2);
-      const spanDesktop = Math.max(1, Math.floor(24 / columnsDesktop));
-      const spanMobile = Math.max(1, Math.floor(24 / columnsMobile));
+      // ⚠️ Math.ceil garantit qu'on ne dépasse pas le nombre de colonnes demandé
+      const spanDesktop = Math.max(1, Math.ceil(24 / columnsDesktop));
+      const spanMobile = Math.max(1, Math.ceil(24 / columnsMobile));
       const baseSpans = getResponsiveColSpan(targetSection);
 
       const { rawWidth, hintDesktop, hintMobile } = extractWidthHints(field);
@@ -1256,8 +1261,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   const getUniformDisplayColProps = useCallback((section: TBLSection) => {
     const columnsDesktop = Math.max(1, section.config?.columnsDesktop ?? 4);
     const columnsMobile = Math.max(1, section.config?.columnsMobile ?? 1);
-    const spanDesktop = Math.floor(24 / columnsDesktop);
-    const spanMobile = Math.floor(24 / columnsMobile);
+    // ⚠️ Math.ceil garantit qu'on ne dépasse pas le nombre de colonnes demandé
+    const spanDesktop = Math.ceil(24 / columnsDesktop);
+    const spanMobile = Math.ceil(24 / columnsMobile);
     return {
       xs: spanMobile,
       sm: spanMobile,
@@ -3194,12 +3200,43 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       section: section.title,
       nbOrderedFields: orderedFields.length,
       orderedFieldsConditionnels: orderedFields.filter(f => (f as any).isConditional).length,
-      deletedFieldIds: [] // Plus utilisé
+      deletedFieldIds: [], // Plus utilisé
+      activeSubTab
     });
     
     // ❌ SUPPRESSION DU FILTRAGE LOCAL DES SUPPRESSIONS
     // Le refetch silencieux (forceRefresh) gère déjà correctement la mise à jour
     let fieldsAfterDeletion = orderedFields;
+    
+    // 🔧 FIX: Filtrer TOUS les champs par sous-onglet actif
+    // Les champs de répéteurs et références partagées sont créés dynamiquement après le filtrage initial de TBL.tsx
+    // On doit donc les filtrer ici aussi
+    if (activeSubTab) {
+      fieldsAfterDeletion = fieldsAfterDeletion.filter(field => {
+        // Vérifier le subTabKey du champ
+        const fieldSubTabs = extractSubTabAssignments(field);
+        
+        // Log pour debug
+        if ((field as any).isConditional || (field as any).parentRepeaterId || (field as any).isDeletableCopy) {
+          console.log('🔧 [SUBTAB FILTER] Champ dynamique:', {
+            id: field.id,
+            label: field.label,
+            fieldSubTabs,
+            activeSubTab,
+            isConditional: (field as any).isConditional,
+            isDeletableCopy: (field as any).isDeletableCopy,
+            willShow: fieldSubTabs.length === 0 ? activeSubTab === '__default__' : fieldSubTabs.includes(activeSubTab)
+          });
+        }
+        
+        if (fieldSubTabs.length === 0) {
+          // Pas de subTab assigné = va dans Général (__default__)
+          return activeSubTab === '__default__';
+        }
+        // Vérifier si le subTab actif correspond
+        return fieldSubTabs.includes(activeSubTab);
+      });
+    }
     
     // ✅ FILTRE SIMPLE: On affiche TOUS les champs, y compris les copies de répéteurs
     // Les copies d'originals de répéteurs doivent s'afficher là où elles sont placées
@@ -3235,7 +3272,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     });
     
     return result;
-  }, [orderedFields, section.title, allNodes]);
+  }, [orderedFields, section.title, allNodes, activeSubTab]);
 
   // 🎨 Déterminer le style selon le niveau
   const getSectionStyle = () => {

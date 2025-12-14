@@ -39,15 +39,28 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
     const recognizedExplicit = new Set(explicitTabs);
     const groupAlwaysVisible = ((groupNode as any).metadata?.displayAlways === true || String((groupNode as any).metadata?.displayAlways) === 'true') || /affich|aperç|display/i.test(groupNode.title || '');
 
+    // 🔧 FIX: Si des sous-onglets explicites sont définis, vérifier si des champs n'ont pas
+    // de sous-onglet reconnu (soit pas de sous-onglet, soit un sous-onglet "parasite" comme "Générales")
     let needsDefault = explicitTabs.length === 0; // si aucun onglet défini, afficher "Général"
     if (!needsDefault) {
       leaves.forEach(l => {
         const leafMeta = (l as any).metadata || {};
         const leafAlwaysVisible = (leafMeta.displayAlways === true || String(leafMeta.displayAlways) === 'true') || /affich|aperç|display/i.test(l.title || '');
         if (groupAlwaysVisible || leafAlwaysVisible) return;
-        const assignments = normalizeSubTabs(leafMeta.subTab);
-        const hasMatch = assignments.some(tab => recognizedExplicit.has(tab));
-        if (!hasMatch) needsDefault = true;
+        // 🔧 FIX: Vérifier aussi subTabKey/subTabKeys directement sur le nœud (pas seulement metadata.subTab)
+        // Les champs partagés et les champs TBL stockent leur affectation dans subTabKey/subTabKeys
+        const leafSubTabKeys = (l as any).subTabKeys || ((l as any).subTabKey ? [(l as any).subTabKey] : []);
+        const assignments = normalizeSubTabs([...leafSubTabKeys, ...(leafMeta.subTab ? [leafMeta.subTab] : [])]);
+        
+        // 🔧 FIX CRITIQUE: Vérifier si le champ a un sous-onglet RECONNU
+        // Si le champ a un sous-onglet qui n'est pas dans la liste explicite (ex: "Générales"),
+        // traiter comme s'il n'avait pas de sous-onglet → besoin de "Général"
+        if (assignments.length === 0) {
+          needsDefault = true;
+        } else {
+          const hasRecognizedSubTab = assignments.some(tab => recognizedExplicit.has(tab));
+          if (!hasRecognizedSubTab) needsDefault = true;
+        }
       });
     }
 
@@ -91,7 +104,10 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
 
       {leaves.filter(l => {
         const leafMeta = (l as any).metadata || {};
-        const assignedTabs = normalizeSubTabs(leafMeta?.subTab);
+        // 🔧 FIX: Vérifier aussi subTabKey/subTabKeys directement sur le nœud (pas seulement metadata.subTab)
+        // Les champs partagés et les champs TBL stockent leur affectation dans subTabKey/subTabKeys
+        const leafSubTabKeys = (l as any).subTabKeys || ((l as any).subTabKey ? [(l as any).subTabKey] : []);
+        const assignedTabs = normalizeSubTabs([...leafSubTabKeys, ...(leafMeta?.subTab ? [leafMeta.subTab] : [])]);
         const groupAlwaysVisible = !!(groupNode as any).metadata?.displayAlways || /affich|aperç|display/i.test(groupNode.title || '');
         const leafAlwaysVisible = !!leafMeta.displayAlways || /affich|aperç|display/i.test(l.title || '');
         const recognized = new Set(allSubTabs.map(t => t.key));

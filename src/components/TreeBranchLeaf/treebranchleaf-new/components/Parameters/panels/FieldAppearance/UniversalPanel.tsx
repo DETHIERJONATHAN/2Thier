@@ -180,10 +180,10 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
             <Input placeholder="auto / 320px / 100%" allowClear />
           </Form.Item>
           <Form.Item name="columnsDesktop" label="Colonnes desktop">
-            <InputNumber min={1} max={6} style={{ width: '100%' }} />
+            <InputNumber min={1} max={12} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="columnsMobile" label="Colonnes mobile">
-            <InputNumber min={1} max={3} style={{ width: '100%' }} />
+            <InputNumber min={1} max={6} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="gutter" label="Espacement (px)">
             <InputNumber min={0} max={64} style={{ width: '100%' }} />

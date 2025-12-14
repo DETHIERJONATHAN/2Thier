@@ -725,6 +725,24 @@ const resolveSubTabAssignments = (
     if (fromTemplate.length > 0) return fromTemplate;
   }
 
+  // 🔧 FIX: Remonter la chaîne des parents pour hériter le subtab
+  // Si le nœud n'a pas de subtab, chercher dans ses parents (branche, section, etc.)
+  let parentId = originalNode.parentId;
+  const visited = new Set<string>();
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parentNode = nodeLookup.get(parentId);
+    if (parentNode) {
+      const fromParent = normalizeSubTabValues(extractSubTabValue(parentNode));
+      if (fromParent.length > 0) {
+        return fromParent;
+      }
+      parentId = parentNode.parentId;
+    } else {
+      break;
+    }
+  }
+
   return [];
 };
 
@@ -1149,6 +1167,58 @@ const transformPrismaNodeToField = (
                 }
               });
             });
+          
+          // 🔗 NOUVEAU: Traiter les SOUS-OPTIONS récursivement pour leurs shared refs
+          // Ex: Triangle → Rampant, Plan, Inclinaison
+          const subOptions = optionChildren.filter(child => child.type === 'leaf_option' || child.type === 'leaf_option_field');
+          if (subOptions.length > 0 && verbose()) dlog(`  🔍 Sous-options de "${optionNode.label}": ${subOptions.length}`);
+          
+          subOptions.forEach(subOption => {
+            const subOptionSharedRefIds = activeSharedReferences.get(subOption.id);
+            if (subOptionSharedRefIds && subOptionSharedRefIds.length > 0) {
+              if (verbose()) dlog(`    🔗 Sous-option "${subOption.label}" a ${subOptionSharedRefIds.length} références partagées`);
+              
+              // Récupérer le subtab de la sous-option ou remonter la chaîne
+              const subOptionSubTabAssignments = resolveSubTabAssignments(subOption, subOption, nodeLookup);
+              
+              console.log(`🔍 [SUB-OPTION SHARED REF] Sous-option "${subOption.label}" (${subOption.id}):`, {
+                subOptionSubtab: subOption.subtab,
+                subOptionParentId: subOption.parentId,
+                resolvedSubTabs: subOptionSubTabAssignments
+              });
+              
+              subOptionSharedRefIds.forEach(refId => {
+                const refNode = nodeLookup.get(refId);
+                if (refNode) {
+                  const finalRefFieldType = refNode.subType || refNode.fieldType || refNode.type || 'TEXT';
+                  const refSubTabAssignments = resolveSubTabAssignments(refNode, refNode, nodeLookup);
+                  const effectiveSubTabs = refSubTabAssignments.length > 0 ? refSubTabAssignments : subOptionSubTabAssignments;
+                  
+                  conditionalFields.push({
+                    id: refNode.id,
+                    name: refNode.label,
+                    label: refNode.label,
+                    type: finalRefFieldType,
+                    required: refNode.isRequired,
+                    visible: refNode.isVisible,
+                    placeholder: refNode.text_placeholder,
+                    description: refNode.description,
+                    order: refNode.order || 9999,
+                    sharedReferenceName: refNode.label,
+                    subTabKey: effectiveSubTabs[0] ?? undefined,
+                    subTabKeys: effectiveSubTabs.length ? effectiveSubTabs : undefined,
+                    // Marquer comme provenant d'une sous-option pour le debug
+                    metadata: {
+                      ...(typeof refNode.metadata === 'object' ? refNode.metadata : {}),
+                      fromSubOption: subOption.label,
+                      fromSubOptionId: subOption.id,
+                    }
+                  });
+                  if (verbose()) dlog(`      ➕ Référence partagée depuis sous-option: "${refNode.label}" → subTab: ${effectiveSubTabs.join(', ') || 'aucun'}`);
+                }
+              });
+            }
+          });
         }
         
         // 🔗 NOUVEAU: Ajouter les RÉFÉRENCES PARTAGÉES comme champs conditionnels
@@ -1156,12 +1226,32 @@ const transformPrismaNodeToField = (
         if (sharedRefIds && sharedRefIds.length > 0) {
           if (verbose()) dlog(`  🔗 Toujours inclure les ${sharedRefIds.length} références partagées pour l'option "${optionNode.label}" pour un rendu dynamique.`);
 
+          // 🔧 FIX: Récupérer le subtab de l'option parente pour les champs partagés
+          // Les champs partagés ont subtab: null mais doivent hériter du contexte de l'option
+          const optionSubTabAssignments = resolveSubTabAssignments(optionNode, optionNode, nodeLookup);
+          
+          // 🔍 DEBUG: Vérifier la résolution du subtab
+          console.log(`🔍 [SHARED REF DEBUG] Option "${optionNode.label}" (${optionNode.id}):`, {
+            optionSubtab: optionNode.subtab,
+            optionParentId: optionNode.parentId,
+            parentInLookup: optionNode.parentId ? !!nodeLookup.get(optionNode.parentId) : false,
+            parentSubtab: optionNode.parentId ? nodeLookup.get(optionNode.parentId)?.subtab : null,
+            resolvedSubTabs: optionSubTabAssignments
+          });
+          
+          if (verbose()) dlog(`  🔧 SubTab de l'option parente "${optionNode.label}": ${optionSubTabAssignments.join(', ') || 'aucun'}`);
+
           sharedRefIds.forEach(refId => {
             const refNode = nodeLookup.get(refId);
             if (refNode) {
               if (verbose()) dlog(`    ➕ Ajout référence partagée: "${refNode.label}"`);
               
               const finalRefFieldType = refNode.subType || refNode.fieldType || refNode.type || 'TEXT';
+              
+              // 🔧 FIX: Résoudre les subTabKeys - PRIORITÉ: option parente > champ partagé
+              const refSubTabAssignments = resolveSubTabAssignments(refNode, refNode, nodeLookup);
+              // Utiliser le subtab de l'option parente si le champ partagé n'en a pas
+              const effectiveSubTabs = refSubTabAssignments.length > 0 ? refSubTabAssignments : optionSubTabAssignments;
               
               conditionalFields.push({
                 id: refNode.id,
@@ -1175,6 +1265,9 @@ const transformPrismaNodeToField = (
                 order: refNode.order || 9999, // Ordre élevé par défaut
                 // 🎯 AJOUT CRITIQUE: Nom de la référence partagée pour l'affichage dans TBLSectionRenderer
                 sharedReferenceName: refNode.label,
+                // 🔧 FIX: Propager les sous-onglets - hérité de l'option parente si nécessaire
+                subTabKey: effectiveSubTabs[0] ?? undefined,
+                subTabKeys: effectiveSubTabs.length ? effectiveSubTabs : undefined,
                 config: {
                 size: refNode.appearance_size,
                 width: refNode.appearance_width,
@@ -1781,6 +1874,12 @@ export const transformNodesToTBLComplete = (
     if (resolvedIds.length > 0) {
       const uniqueIds = Array.from(new Set(resolvedIds));
       activeSharedReferences.set(node.id, uniqueIds);
+      // 🔍 DEBUG: Log quand une option a des shared refs
+      console.log(`🔗 [SHARED REFS STORED] Option "${node.label}" (${node.id}):`, {
+        resolvedIds: uniqueIds,
+        nodeSubtab: node.subtab,
+        nodeParentId: node.parentId
+      });
       if (verbose()) {
         dlog(`🔗 [TBL-PRISMA] Option "${node.label}" stockée avec ${uniqueIds.length} références partagées (résolues)`);
       }
@@ -1894,6 +1993,13 @@ export const transformNodesToTBLComplete = (
           
         } else if (child.type.includes('leaf_field')) {
           // 🍃 C'EST UNE FEUILLE = CHAMP SIMPLE
+          // ⚠️ EXCLURE LES RÉFÉRENCES PARTAGÉES - Elles sont rendues via les options qui les utilisent
+          if (child.isSharedReference) {
+            if (verbose()) dlog(`      🚫 Référence partagée ignorée (rendue via options): "${child.label}"`);
+            processedNodeIds.add(child.id); // Marquer comme traité pour éviter les doublons
+            return;
+          }
+          
           const field = transformPrismaNodeToField(child, childrenMap, nodeMap, activeSharedReferences, formData);
           processedFields.push(field);
           processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
@@ -2103,32 +2209,30 @@ export const transformNodesToTBLComplete = (
       }
       
       // Construire l'onglet
-      const tabSubTabsMap = new Map<string, string>();
-      // Déduire les subTabs depuis les champs (subTabKey) ou depuis metadata du noeud onglet
-      (sortedFieldsFiltered || []).forEach(f => {
-        const keys = Array.isArray((f as any).subTabKeys) && (f as any).subTabKeys.length
-          ? (f as any).subTabKeys
-          : ((f as any).subTabKey ? [ (f as any).subTabKey ] : []);
-        keys.forEach(key => {
-          if (!key) return;
-          if (!tabSubTabsMap.has(key)) {
-            tabSubTabsMap.set(key, key);
+      // 🔧 FIX: Utiliser UNIQUEMENT les sous-onglets définis dans TreeBranchLeaf (colonne subtabs)
+      // et respecter leur ordre d'origine
+      let definedSubTabs: string[] = [];
+      
+      // 1. Priorité: colonne subtabs du nœud onglet
+      const columnSubTabs = tryParseJSON(ongletNode.subtabs ?? undefined);
+      if (Array.isArray(columnSubTabs)) {
+        definedSubTabs = columnSubTabs.map(s => String(s));
+      } else if (typeof columnSubTabs === 'string' && columnSubTabs.trim()) {
+        definedSubTabs = [columnSubTabs];
+      }
+      
+      // 2. Fallback: metadata.subTabs si subtabs n'est pas défini
+      if (definedSubTabs.length === 0) {
+        try {
+          const nodeTabs = (ongletNode.metadata && (ongletNode.metadata as any).subTabs) as string[] | undefined;
+          if (Array.isArray(nodeTabs)) {
+            definedSubTabs = nodeTabs.map(s => String(s));
           }
-        });
-      });
-
-      // Si le noeud onglet porte une metadata.subTabs[] on l'utilise comme priorité
-      try {
-        const nodeTabs = (ongletNode.metadata && (ongletNode.metadata as any).subTabs) as string[] | undefined;
-        if (Array.isArray(nodeTabs)) {
-          nodeTabs.forEach((label) => {
-            const key = String(label);
-            if (!tabSubTabsMap.has(key)) tabSubTabsMap.set(key, key);
-          });
-        }
-      } catch { /* ignore */ }
-
-      const inferredSubTabs = Array.from(tabSubTabsMap.entries()).map(([k, v]) => ({ key: k, label: v }));
+        } catch { /* ignore */ }
+      }
+      
+      // 🎯 Construire les sous-onglets UNIQUEMENT depuis la liste définie, dans l'ordre
+      const inferredSubTabs = definedSubTabs.map(label => ({ key: label, label }));
 
       // 🎯 DÉTERMINER le bon tab pour chaque champ AVANT de construire l'objet tab
       const fieldsForThisTab: TBLField[] = [];

@@ -2691,6 +2691,29 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (appearanceConfig.textSize) columnData.appearance_size = appearanceConfig.textSize;
     if (appearanceConfig.fieldWidth) columnData.appearance_width = appearanceConfig.fieldWidth;
     if (appearanceConfig.fieldVariant) columnData.appearance_variant = appearanceConfig.fieldVariant;
+    
+    // 💡 Configuration tooltip d'aide (pour TOUS les champs)
+    if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
+    if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
+    if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
+    
+    // 📂 Configuration sections/branches (COLONNES DESKTOP/MOBILE)
+    if (appearanceConfig.collapsible !== undefined) columnData.section_collapsible = appearanceConfig.collapsible;
+    if (appearanceConfig.defaultCollapsed !== undefined) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
+    if (appearanceConfig.showChildrenCount !== undefined) columnData.section_showChildrenCount = appearanceConfig.showChildrenCount;
+    if (appearanceConfig.columnsDesktop !== undefined) columnData.section_columnsDesktop = appearanceConfig.columnsDesktop;
+    if (appearanceConfig.columnsMobile !== undefined) columnData.section_columnsMobile = appearanceConfig.columnsMobile;
+    if (appearanceConfig.gutter !== undefined) columnData.section_gutter = appearanceConfig.gutter;
+    
+    // 📎 Configuration fichiers
+    if (appearanceConfig.maxFileSize !== undefined) columnData.file_maxSize = appearanceConfig.maxFileSize;
+    if (appearanceConfig.allowedTypes) columnData.file_allowedTypes = appearanceConfig.allowedTypes;
+    if (appearanceConfig.multiple !== undefined) columnData.file_multiple = appearanceConfig.multiple;
+    if (appearanceConfig.showPreview !== undefined) columnData.file_showPreview = appearanceConfig.showPreview;
+    
+    // 🔧 Propriétés avancées universelles
+    if (appearanceConfig.visibleToUser !== undefined) columnData.data_visibleToUser = appearanceConfig.visibleToUser;
+    if (appearanceConfig.isRequired !== undefined) columnData.isRequired = appearanceConfig.isRequired;
   }
   
   // âœ… Ã‰TAPE 1bis : Migration depuis metadata.appearance (fallback)

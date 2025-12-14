@@ -2612,9 +2612,12 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     const addedKeys = new Set<string>();
     let hasDefault = false;
     
+    // 🔧 FIX: Déterminer si on a des sous-onglets explicitement définis dans TreeBranchLeaf
+    const hasExplicitSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
+    
     // 1️⃣ PRIORITÉ: Ajouter les sous-onglets depuis metadata.subTabs dans l'ordre TreeBranchLeaf
     try {
-      if (Array.isArray(tabSubTabs)) {
+      if (hasExplicitSubTabs) {
         tabSubTabs.forEach((st) => {
           if (!st) return;
           const key = typeof st === 'string' ? st : (st.key || String(st));
@@ -2627,21 +2630,36 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       }
     } catch { /* ignore */ }
     
-    // 2️⃣ SECONDAIRE: Ajouter les sous-onglets trouvés dans les champs (qui ne sont pas déjà dans metadata)
-    const addFieldKey = (k?: string | null) => {
-      if (!k) return;
-      const key = String(k);
-      if (!addedKeys.has(key)) {
-        orderedTabs.push({ key, label: key });
-        addedKeys.add(key);
-      }
-    };
-    sections.forEach(s => s.fields.forEach(f => getFieldSubTabs(f).forEach(addFieldKey)));
-    fields.forEach(f => getFieldSubTabs(f).forEach(addFieldKey));
+    // 2️⃣ SECONDAIRE: Ajouter les sous-onglets trouvés dans les champs
+    // 🔧 FIX CRITIQUE: NE PAS ajouter de sous-onglets provenant des champs si une liste explicite
+    // est définie dans TreeBranchLeaf - cela évite que des sous-onglets "parasites" comme "Générales"
+    // apparaissent alors qu'ils ne sont pas dans la définition de la branche
+    if (!hasExplicitSubTabs) {
+      const addFieldKey = (k?: string | null) => {
+        if (!k) return;
+        const key = String(k);
+        if (!addedKeys.has(key)) {
+          orderedTabs.push({ key, label: key });
+          addedKeys.add(key);
+        }
+      };
+      sections.forEach(s => s.fields.forEach(f => getFieldSubTabs(f).forEach(addFieldKey)));
+      fields.forEach(f => getFieldSubTabs(f).forEach(addFieldKey));
+    }
     
-    // 3️⃣ Détecter si des champs n'ont pas de sous-onglet assigné
+    // 3️⃣ Détecter si des champs n'ont pas de sous-onglet assigné (ou ont un sous-onglet non reconnu)
+    const recognizedKeys = new Set(orderedTabs.map(t => t.key));
     const detectDefault = (field: any) => {
-      if (getFieldSubTabs(field).length === 0) hasDefault = true;
+      const fieldSubTabs = getFieldSubTabs(field);
+      // Champ sans sous-onglet = besoin de "Général"
+      if (fieldSubTabs.length === 0) {
+        hasDefault = true;
+        return;
+      }
+      // 🔧 FIX: Si le champ a un sous-onglet qui n'est PAS dans la liste explicite,
+      // on ne crée PAS de sous-onglet "Général" pour ça - le champ sera simplement ignoré
+      // car il a un sous-onglet invalide/non défini dans TreeBranchLeaf
+      // (le champ reste visible si on ne filtre pas par sous-onglet)
     };
     // When checking for a default (unassigned fields), ignore sections/fields marked as displayOnly (displayAlways)
     sections.forEach(s => {
@@ -2653,7 +2671,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     // For top-level fields (not in sections), always include in detection
     fields.forEach(f => detectDefault(f));
     
-    // 4️⃣ Ajouter 'Général' seulement s'il y a des champs non assignés
+    // 4️⃣ Ajouter 'Général' seulement s'il y a des champs sans sous-onglet assigné
     if (hasDefault && !addedKeys.has('__default__')) {
       orderedTabs.push({ key: '__default__', label: 'Général' });
     }
@@ -2677,6 +2695,9 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       // Si on a plusieurs sous-onglets, ou si l'onglet a explicitement des subTabs définis
       const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
       const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
+      
+      // 🔧 FIX: Créer un Set des sous-onglets reconnus pour vérification rapide
+      const recognizedSubTabKeys = new Set(allSubTabs.map(st => st.key));
 
       const filteredSections = sections.map(section => {
         const sectionMeta = (section as any).metadata || {};
@@ -2695,9 +2716,20 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               const fMeta = (f as any).metadata || {};
               const fieldAlwaysVisible = (fMeta.displayAlways === true || String(fMeta.displayAlways) === 'true');
               if (fieldAlwaysVisible) return true;
+              
+              // Champ sans sous-onglet assigné → afficher dans "Général" (__default__)
               if (assignedTabs.length === 0) {
                 return activeSubTab === '__default__';
               }
+              
+              // 🔧 FIX CRITIQUE: Si le champ a un sous-onglet qui n'est PAS reconnu dans la liste
+              // (ex: "Générales" alors que la branche définit ["Photo", "Électricité", "Chauffage", "Revenu"]),
+              // traiter ce champ comme s'il n'avait pas de sous-onglet = afficher dans "Général"
+              const hasRecognizedSubTab = assignedTabs.some(tab => recognizedSubTabKeys.has(tab));
+              if (!hasRecognizedSubTab) {
+                return activeSubTab === '__default__';
+              }
+              
               return assignedTabs.includes(activeSubTab);
             });
         
@@ -2735,6 +2767,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               allSections={sections}
               disabled={disabled}
               submissionId={submissionId}
+              activeSubTab={activeSubTab}
             />
           ))}
         </div>
@@ -2751,15 +2784,29 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       } as unknown as TBLSection;
       const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
       const showSubTabs = explicitTabSubTabs || allSubTabs.length > 1;
+      
+      // 🔧 FIX: Créer un Set des sous-onglets reconnus pour vérification rapide
+      const recognizedSubTabKeys = new Set(allSubTabs.map(st => st.key));
+      
       const filteredSyntheticFields = synthetic.fields.filter(f => {
         const meta = (f as any).metadata || {};
         const fieldAlwaysVisible = (meta.displayAlways === true || String(meta.displayAlways) === 'true');
         if (!activeSubTab) return true;
         if (fieldAlwaysVisible) return true;
         const assignedTabs = getFieldSubTabs(f);
+        
+        // Champ sans sous-onglet assigné → afficher dans "Général" (__default__)
         if (assignedTabs.length === 0) {
           return activeSubTab === '__default__';
         }
+        
+        // 🔧 FIX CRITIQUE: Si le champ a un sous-onglet qui n'est PAS reconnu,
+        // traiter ce champ comme s'il n'avait pas de sous-onglet = afficher dans "Général"
+        const hasRecognizedSubTab = assignedTabs.some(tab => recognizedSubTabKeys.has(tab));
+        if (!hasRecognizedSubTab) {
+          return activeSubTab === '__default__';
+        }
+        
         return assignedTabs.includes(activeSubTab);
       });
       const filteredSynthetic: TBLSection = { ...synthetic, fields: filteredSyntheticFields };
@@ -2788,6 +2835,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             allSections={sections}
             disabled={disabled}
             submissionId={submissionId}
+            activeSubTab={activeSubTab}
           />
         </div>
       );
