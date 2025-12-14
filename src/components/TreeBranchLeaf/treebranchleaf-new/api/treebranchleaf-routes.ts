@@ -37,6 +37,8 @@ import { copyVariableWithCapacities, copyLinkedVariablesFromNode, createDisplayN
 import { copySelectorTablesAfterNodeCopy } from './copy-selector-tables.js';
 import { copyFormulaCapacity } from './copy-capacity-formula.js';
 import { getNodeIdForLookup } from '../../../../utils/node-helpers.js';
+// 🔄 Import de la fonction de copie profonde centralisée
+import { deepCopyNodeInternal as deepCopyNodeInternalService } from './repeat/services/deep-copy-service.js';
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ðŸ—‚ï¸ ROUTES NORMALISÃ‰ES POUR LES TABLES (ARCHITECTURE OPTION B)
@@ -1601,10 +1603,13 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       return res.status(403).json({ error: 'AccÃ¨s non autorisÃ© Ã  cet arbre' });
     }
 
-    // RÃ©cupÃ©rer les enfants existants pour Ã©viter les doublons
-    const existingChildren = await prisma.treeBranchLeafNode.findMany({
+    // RÃ©cupÃ©rer des candidats existants pour calculer un suffixe global fiable.
+    // ⚠️ Ne pas dÃ©pendre uniquement de parentId=nodeId, car certains flux peuvent
+    // modifier l'emplacement des racines copiÃ©es; on marque aussi les copies avec
+    // metadata.duplicatedFromRepeater = nodeId.
+    const existingChildrenByParent = await prisma.treeBranchLeafNode.findMany({
       where: { parentId: nodeId },
-      select: { id: true, metadata: true }
+      select: { id: true, metadata: true, parentId: true }
     });
 
     // ðŸ”„ NOUVELLE LOGIQUE: Pour les repeaters, on PEUT crÃ©er plusieurs copies du mÃªme template
@@ -1615,50 +1620,126 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
 
     console.log('ðŸ†• [DUPLICATE-TEMPLATES] Templates Ã  dupliquer:', newTemplateIds);
 
-    // RÃ©cupÃ©rer les nÅ“uds templates Ã  dupliquer (mÃªme arbre que le parent)
-    const templateNodes = await prisma.treeBranchLeafNode.findMany({
-      where: { 
-        id: { in: newTemplateIds }, 
-        treeId: parentNode.treeId 
-      }
+    // RÃ©cupÃ©rer les nÅ“uds demandÃ©s, puis rÃ©soudre vers le TEMPLATE D'ORIGINE.
+    // IMPORTANT: le client peut envoyer accidentellement des IDs suffixÃ©s (-1, -2, ...) ;
+    // dans ce cas, on duplique le template d'origine (metadata.sourceTemplateId) et on calcule
+    // le prochain suffixe Ã  partir des copies existantes.
+    const requestedNodes = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        id: { in: newTemplateIds },
+        treeId: parentNode.treeId
+      },
+      select: { id: true, label: true, type: true, metadata: true }
     });
 
-    if (templateNodes.length === 0) {
+    if (requestedNodes.length === 0) {
       return res.status(404).json({ error: 'Aucun template trouvÃ©' });
     }
 
-    console.log(`ðŸ” [DUPLICATE-TEMPLATES] ${templateNodes.length} templates Ã  dupliquer`);
+    const resolveBaseTemplateId = (n: { id: string; metadata: unknown }): string => {
+      const md = (n.metadata ?? {}) as Record<string, unknown>;
+      const sourceTemplateId = md.sourceTemplateId;
+      return typeof sourceTemplateId === 'string' && sourceTemplateId.length > 0 ? sourceTemplateId : n.id;
+    };
+
+    // Conserver l'ordre de la requÃªte: chaque ID demandÃ© devient une duplication (mÃªme si plusieurs rÃ©solvent au mÃªme template)
+    const baseTemplateIdsInOrder = newTemplateIds.map((id) => {
+      const found = requestedNodes.find((n) => n.id === id);
+      return found ? resolveBaseTemplateId(found) : id;
+    });
+    const uniqueBaseTemplateIds = Array.from(new Set(baseTemplateIdsInOrder));
+
+    const baseTemplateNodes = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        id: { in: uniqueBaseTemplateIds },
+        treeId: parentNode.treeId
+      },
+      select: { id: true, label: true, type: true, metadata: true }
+    });
+
+    const baseById = new Map(baseTemplateNodes.map((n) => [n.id, n] as const));
+    const templatesToDuplicateInOrder = baseTemplateIdsInOrder
+      .map((baseId) => baseById.get(baseId))
+      .filter((n): n is NonNullable<typeof n> => Boolean(n));
+
+    if (templatesToDuplicateInOrder.length === 0) {
+      return res.status(404).json({ error: 'Aucun template de base trouvÃ©' });
+    }
+
+    console.log(`ðŸ” [DUPLICATE-TEMPLATES] ${templatesToDuplicateInOrder.length} duplication(s) demandÃ©e(s) (base templates: ${uniqueBaseTemplateIds.length})`);
 
     // Dupliquer chaque template en COPIE PROFONDE (utilise deepCopyNodeInternal)
     const duplicatedSummaries: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }> = [];
-    for (const template of templateNodes) {
-      // 🚨 FIX: Compter SEULEMENT les copies valides (avec sourceTemplateId correct)
-      // Ignorer les copies orphelines sans metadata correcte
-      const validExistingCopies = existingChildren.filter(child => {
-        const meta = child.metadata as any;
-        return meta?.sourceTemplateId === template.id && meta?.copySuffix != null;
-      });
-      const createdSoFar = duplicatedSummaries.filter(d => d.sourceTemplateId === template.id).length;
-      const copyNumber = validExistingCopies.length + createdSoFar + 1;
-      
-      console.log(`🔍 [DEBUG-ROUTE] Template: "${template.label}" (${template.id})`);
-      console.log(`🔍 [DEBUG-ROUTE] validExistingCopies: ${validExistingCopies.length}`, validExistingCopies.map(c => ({ id: c.id, copySuffix: (c.metadata as any)?.copySuffix })));
-      console.log(`🔍 [DEBUG-ROUTE] createdSoFar: ${createdSoFar}`);
-      console.log(`🔍 [DEBUG-ROUTE] copyNumber calculé: ${copyNumber}`);
-      
-      const labelSuffix = ` (Copie ${copyNumber})`;
+    
+    // 🔥 LOGIQUE DÉFINITIVE (conforme à la règle métier demandée):
+    // Un clic = un suffixe global unique.
+    // Exemple: si n'importe quel champ a déjà -1, le prochain clic crée -2 pour TOUS.
+    const extractNumericSuffix = (candidate: unknown): number | null => {
+      if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate;
+      if (typeof candidate === 'string' && /^\d+$/.test(candidate)) return Number(candidate);
+      return null;
+    };
+    const extractSuffixFromId = (id: string): number | null => {
+      if (!id) return null;
+      const match = /-(\d+)$/.exec(id);
+      if (!match) return null;
+      const parsed = Number(match[1]);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
 
-      const result = await deepCopyNodeInternal(req as unknown as MinimalReq, template.id, {
+    // Calculer le max Ã  partir des RACINES de copies existantes (IDs `${templateId}-N`).
+    // ✅ Ne dÃ©pend pas des metadata (qui peuvent Ãªtre rÃ©Ã©crites/normalisÃ©es ailleurs).
+    // HypothÃ¨se mÃ©tier: pour un repeater donnÃ©, les templates racines sont uniques dans l'arbre.
+    const copyRootCandidates = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        treeId: parentNode.treeId,
+        OR: uniqueBaseTemplateIds.map((t) => ({ id: { startsWith: `${t}-` } }))
+      },
+      select: { id: true, parentId: true }
+    });
+
+    console.log(
+      `🔎 [DUPLICATE-TEMPLATES] Racines de copies détectées (repeater=${nodeId}) parentChildren=${existingChildrenByParent.length} rootCandidates=${copyRootCandidates.length}`
+    );
+
+    let globalMax = 0;
+    for (const root of copyRootCandidates) {
+      const fromId = extractSuffixFromId(root.id);
+      const resolved = fromId ?? 0;
+      if (resolved > globalMax) globalMax = resolved;
+    }
+    const nextSuffix = globalMax + 1;
+
+    // Debug: afficher un Ã©chantillon des racines candidates
+    try {
+      const sample = copyRootCandidates.slice(0, 10).map((c) => {
+        const fromId = extractSuffixFromId(c.id);
+        return { id: c.id, parentId: c.parentId, fromId };
+      });
+      console.log('🔎 [DUPLICATE-TEMPLATES] Sample racines candidates (id/suffix):', sample);
+    } catch {
+      // noop
+    }
+
+    console.log('🔢 [DUPLICATE-TEMPLATES] Suffixe global calculé (depuis enfants existants):');
+    console.log(`   max global existant: ${globalMax} → prochain suffixe: ${nextSuffix}`);
+    
+    for (const template of templatesToDuplicateInOrder) {
+      const baseTemplateId = template.id;
+      const copyNumber = nextSuffix;
+      const labelSuffix = `-${copyNumber}`;
+
+      const result = await deepCopyNodeInternalService(prisma, req as unknown as MinimalReq, template.id, {
         targetParentId: nodeId,
-        labelSuffix,
         suffixNum: copyNumber,
-        preserveSharedReferences: true  // ðŸ”— PRÃ‰SERVER les rÃ©fÃ©rences partagÃ©es pour les copies de templates
+        preserveSharedReferences: true,
+        isFromRepeaterDuplication: true
       });
       const newRootId = result.root.newId;
-      console.log(`🎯 [DUPLICATE-TEMPLATES] deepCopyNodeInternal newRootId:`, newRootId, `(type: ${typeof newRootId})`);
+      console.log(`🎯 [DUPLICATE-TEMPLATES] deepCopyNodeInternalService newRootId:`, newRootId, `(type: ${typeof newRootId})`);
 
       // Normaliser le label de la copie sur la base du label du gabarit + suffixe numérique
-      const normalizedCopyLabel = `${template.label || template.id}-${copyNumber}`;
+      const normalizedCopyLabel = `${template.label || baseTemplateId}-${copyNumber}`;
 
       // Ajouter/mettre à jour les métadonnées de traçabilité sur la racine copiée
       await prisma.treeBranchLeafNode.update({
@@ -1667,10 +1748,10 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
           label: normalizedCopyLabel,
           metadata: {
             ...(typeof template.metadata === 'object' ? template.metadata : {}),
-            sourceTemplateId: template.id,
+            sourceTemplateId: baseTemplateId,
             duplicatedAt: new Date().toISOString(),
             duplicatedFromRepeater: nodeId,
-            copiedFromNodeId: template.id,
+            copiedFromNodeId: baseTemplateId,
             copySuffix: copyNumber
           }
         }
@@ -1688,7 +1769,7 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
           label: created.label,
           type: created.type,
           parentId: created.parentId,
-          sourceTemplateId: template.id
+          sourceTemplateId: baseTemplateId
         });
         console.log(`âœ… [DUPLICATE-TEMPLATES] Template "${template.label}" dupliquÃ© en profondeur â†’ "${created.label}" (${created.id})`);
 
@@ -2401,7 +2482,7 @@ async function deepCopyNodeInternal(
         try {
           const { nodeId } = req.params;
           const { targetParentId, labelSuffix } = (req.body || {}) as { targetParentId?: string | null; labelSuffix?: string };
-          const result = await deepCopyNodeInternal(req as unknown as MinimalReq, nodeId, { targetParentId, labelSuffix });
+          const result = await deepCopyNodeInternalService(prisma, req as unknown as MinimalReq, nodeId, { targetParentId });
           res.json(result);
         } catch (error) {
           console.error('âŒ [/nodes/:nodeId/deep-copy] Erreur:', error);
@@ -3917,6 +3998,54 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
 
     const allDeletedSet = new Set<string>([...deletedSubtreeIds, ...deletedOrphansIds, ...deletedExtraIds]);
     const allDeletedIds = Array.from(allDeletedSet);
+
+    // 🧹 **CRITICAL FIX**: Nettoyage des variables orphelines après suppression
+    // Quand on supprime une copie de repeater, les variables SUFFIXÉES doivent être supprimées
+    // MAIS les variables ORIGINALES (sans suffixe) doivent être PRÉSERVÉES!
+    // Sinon, à la 2ème création, les templates ne retrouvent pas leurs variables originales!
+    try {
+      // 🔍 Étape 1: Trouver les variables attachées aux nœuds supprimés
+      const variablesToCheck = await prisma.treeBranchLeafNodeVariable.findMany({
+        where: {
+          OR: [
+            { nodeId: { in: allDeletedIds } }, // Variables attachées aux nodes supprimés
+            { sourceNodeId: { in: allDeletedIds } } // Variables pointant depuis les nodes supprimés
+          ]
+        },
+        select: { id: true, name: true, nodeId: true }
+      });
+
+      console.log(`[DELETE] Trouvé ${variablesToCheck.length} variable(s) potentiellement orpheline(s)`);
+
+      // 🎯 Étape 2: Filtrer - Ne supprimer QUE les variables SUFFIXÉES
+      // Les variables originales (sans suffixe) doivent rester intactes
+      const varIdsToDelete: string[] = [];
+      const suffixPattern = /-\d+$/; // Détecte un suffixe numérique à la fin
+
+      for (const variable of variablesToCheck) {
+        // ✅ Ne supprimer que si c'est une variable SUFFIXÉE (copie)
+        if (suffixPattern.test(variable.id)) {
+          console.log(`[DELETE] 🗑️ Variable suffixée sera supprimée: ${variable.name} (${variable.id})`);
+          varIdsToDelete.push(variable.id);
+        } else {
+          console.log(`[DELETE] 🛡️ Variable ORIGINALE sera PRÉSERVÉE: ${variable.name} (${variable.id})`);
+        }
+      }
+
+      // 🗑️ Étape 3: Supprimer SEULEMENT les variables suffixées
+      if (varIdsToDelete.length > 0) {
+        const deletedVarCount = await prisma.treeBranchLeafNodeVariable.deleteMany({
+          where: { id: { in: varIdsToDelete } }
+        });
+        console.log(`[DELETE] ✅ ${deletedVarCount.count} variable(s) suffixée(s) supprimée(s)`);
+      } else {
+        console.log(`[DELETE] ℹ️ Aucune variable suffixée à supprimer (variables originales préservées)`);
+      }
+    } catch (varCleanError) {
+      console.warn('[DELETE] Impossible de nettoyer les variables orphelines:', (varCleanError as Error).message);
+      // Ne pas bloquer la suppression sur cette erreur
+    }
+
     res.json({
       success: true,
       message: `Sous-arbre supprimé (${deletedSubtreeIds.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`,
@@ -12828,5 +12957,6 @@ router.get('/variables/search', async (req, res) => {
 
 
 export default router;
+
 
 

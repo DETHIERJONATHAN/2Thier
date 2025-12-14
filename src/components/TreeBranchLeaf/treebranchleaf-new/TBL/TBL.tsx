@@ -390,29 +390,53 @@ const TBL: React.FC<TBLProps> = ({
     const handleForceRetransform = (event: Event) => {
           const detail = (event as CustomEvent<{ source?: string; skipFormReload?: boolean; forceRemote?: boolean }>).detail;
           const forceRemote = !!detail?.forceRemote;
-          // 🔥 CRITICAL: If forceRemote is true, ALWAYS process even if autosave is ignoring
-          // This ensures duplicated nodes with variables are properly reloaded
-          if (!forceRemote && (detail?.skipFormReload || detail?.source === 'autosave')) {
+          const debugId = (detail as any)?.eventDebugId || null;
+          
+          // 🔥 CRITICAL: If forceRemote is true, ALWAYS process - NO EXCEPTIONS
+          if (forceRemote) {
+            console.error(`🔄 [TBL] Received tbl-force-retransform event (forceRemote=TRUE - bypassing all checks)`, { debugId });
+            
+            // Increment counter for local retransform
+            setRetransformCounter(prev => {
+              const newVal = prev + 1;
+              console.error(`🚀 [TBL] Incrementing retransformCounter to ${newVal} from forceRemote event`);
+              return newVal;
+            });
+            
+            // IMMEDIATELY call refetch to sync server state
+            console.error(`🔄 [TBL] Calling refetch() immediately to update data from server (forceRemote=TRUE)`);
+            try {
+              const refetchResult = refetchRef.current?.();
+              console.error(`🔄 [TBL] Refetch result:`, refetchResult);
+              if (refetchResult instanceof Promise) {
+                refetchResult.then((result) => {
+                  console.error(`✅ [TBL] Refetch RESOLVED with data:`, result);
+                }).catch((err) => {
+                  console.error(`❌ [TBL] Refetch REJECTED:`, err);
+                });
+              }
+            } catch (err) {
+              console.error(`❌ [TBL] Refetch threw error:`, err);
+            }
+            return;
+          }
+          
+          // For non-forceRemote events, check if we should skip
+          if (detail?.skipFormReload || detail?.source === 'autosave') {
             console.error('⏭️ [TBL] Ignoring tbl-force-retransform (auto-save/no-reload hint)');
             return;
           }
-          const debugId = (detail as any)?.eventDebugId || null;
-          console.error(`🔄 [TBL] Received tbl-force-retransform event (forceRemote=${forceRemote})`, { debugId });
+          
+          console.error(`🔄 [TBL] Received tbl-force-retransform event (forceRemote=false)`, { debugId });
 
-        // ✅ Increment retransform counter to trigger hook retransform
-        setRetransformCounter(prev => {
-          const newVal = prev + 1;
-          console.error(`🚀 [TBL] Incrementing retransformCounter to ${newVal} from event`);
-          return newVal;
-        });
+          // ✅ Increment retransform counter to trigger hook retransform
+          setRetransformCounter(prev => {
+            const newVal = prev + 1;
+            console.error(`🚀 [TBL] Incrementing retransformCounter to ${newVal} from event`);
+            return newVal;
+          });
 
-        // Only call the server-side refetch if explicitly requested (prevent global flicker)
-        if (forceRemote) {
-          console.error(`🔄 [TBL] Calling refetch() to update data from server (forceRemote)`);
-          refetchRef.current?.();
-        } else {
           console.error(`🔄 [TBL] Skipping server refetch (local retransform only)`);
-        }
       };
     
     window.addEventListener('tbl-force-retransform', handleForceRetransform);

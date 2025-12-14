@@ -46,13 +46,6 @@ const makeScopeId = (repeaterNodeId: string, suffix: string | number): string =>
   return `${repeaterNodeId}:${trimmedSuffix}`;
 };
 
-const ensureSuffix = (maybeSuffix?: string | number): string | number => {
-  if (maybeSuffix !== undefined && maybeSuffix !== null && `${maybeSuffix}`.trim()) {
-    return maybeSuffix;
-  }
-  return Date.now();
-};
-
 /**
  * Builds the blueprint and prepares an instantiation plan without touching the
  * legacy repeater routes. Execution of the plan will be handled by a dedicated
@@ -86,66 +79,77 @@ export async function planRepeatDuplication(
     throw new RepeatOperationError(`Repeater ${repeaterNodeId} was not found.`, 404);
   }
 
-  let forcedNumericSuffix: number | null = null;
-  if (options.suffix !== undefined && options.suffix !== null && `${options.suffix}`.trim()) {
-    const parsed = Number(options.suffix);
-    if (!Number.isFinite(parsed)) {
+  // 🔴 FILTRE CRITIQUE: Nettoyer les IDs suffixés avant de calculer les suffixes
+  // Les templateNodeIds ne doivent contenir que des UUIDs purs
+  const cleanedTemplateIds = blueprint.templateNodeIds
+    .filter(id => typeof id === 'string' && !!id)
+    .map(id => id.replace(/(-\d+)+$/, '')) // Retirer les suffixes
+    .filter((id, idx, arr) => arr.indexOf(id) === idx); // Dédupliquer
+  
+  const needsCleaning = blueprint.templateNodeIds.length !== cleanedTemplateIds.length;
+  
+  if (needsCleaning) {
+    console.log(`🧹 [repeat-service] NETTOYAGE DES IDs DÉTECTÉ:`);
+    console.log(`   Avant: ${blueprint.templateNodeIds.length} IDs`);
+    console.log(`   Après: ${cleanedTemplateIds.length} IDs`);
+    blueprint.templateNodeIds.forEach((id, idx) => {
+      const cleaned = id.replace(/(-\d+)+$/, '');
+      if (id !== cleaned) {
+        console.log(`      "${id}" → "${cleaned}"`);
+      }
+    });
+  }
+
+  // ⚠️ IMPORTANT : NE JAMAIS modifier metadata.repeater.templateNodeIds dans la base !
+  // Les IDs dans metadata doivent TOUJOURS rester les IDs originaux (sans suffixes)
+  // On utilise seulement cleanedTemplateIds en mémoire pour calculer les suffixes
+
+  let actualSuffix: number;
+  let perTemplateSuffixes: Record<string, number>;
+
+  if (options.suffix) {
+    const parsed = parseInt(String(options.suffix), 10);
+    if (Number.isNaN(parsed)) {
       throw new RepeatOperationError('Repeat suffix must be numeric when provided.', 422);
     }
-    forcedNumericSuffix = parsed;
-  }
-
-  const suffix = forcedNumericSuffix ?? ensureSuffix(undefined);
-  const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, suffix);
-
-  let perTemplateSuffixes: Record<string, number> | undefined;
-  if (blueprint.templateNodeIds.length) {
-    // 🔴 FILTRE CRITIQUE: Nettoyer les IDs suffixés avant de calculer les suffixes
-    // Les templateNodeIds ne doivent contenir que des UUIDs purs
-    const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-    const cleanedTemplateIds = blueprint.templateNodeIds
-      .filter(id => typeof id === 'string' && !!id)
-      .map(id => id.replace(/(-\d+)+$/, '')) // Retirer les suffixes
-      .filter((id, idx, arr) => arr.indexOf(id) === idx) // Dédupliquer
-      .filter(id => !hasCopySuffix.test(id)); // Vérification finale
+    actualSuffix = parsed;
+    perTemplateSuffixes = Object.fromEntries(
+      cleanedTemplateIds.map(id => [id, actualSuffix])
+    );
+  } else {
+    // Calculer automatiquement le prochain suffix séquentiel
+    const existingMax = await computeTemplateCopySuffixMax(
+      prisma,
+      repeaterNode.treeId,
+      cleanedTemplateIds
+    );
     
-    if (blueprint.templateNodeIds.length !== cleanedTemplateIds.length) {
-      console.log(`🧹 [repeat-service] NETTOYAGE des templateNodeIds:`);
-      console.log(`   Avant: ${blueprint.templateNodeIds.length} IDs`);
-      console.log(`   Après: ${cleanedTemplateIds.length} IDs`);
-      blueprint.templateNodeIds.forEach((id, idx) => {
-        const cleaned = id.replace(/(-\d+)+$/, '');
-        if (id !== cleaned) {
-          console.log(`      "${id}" → "${cleaned}"`);
-        }
-      });
-    }
+    const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
+    actualSuffix = globalMax + 1;
     
-    if (forcedNumericSuffix !== null) {
-      perTemplateSuffixes = Object.fromEntries(
-        cleanedTemplateIds.map(id => [id, forcedNumericSuffix!])
-      );
-    } else {
-      const existingMax = await computeTemplateCopySuffixMax(
-        prisma,
-        repeaterNode.treeId,
-        cleanedTemplateIds  // ← Utiliser les IDs nettoyés
-      );
-      
-      const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
-      const nextSuffix = globalMax + 1;
-      console.log(`📊 [repeat-service] Calcul du suffixe:`);
-      console.log(`   Max existant: ${globalMax}`);
-      console.log(`   ➡️  Prochain suffixe: ${nextSuffix}`);
-      perTemplateSuffixes = {};
-      for (const templateId of cleanedTemplateIds) {
-        perTemplateSuffixes[templateId] = nextSuffix;
-      }
+    console.log(`📊 [repeat-service] Calcul du suffixe (execute)`);
+    console.log(`   Templates évalués: ${cleanedTemplateIds.length}`);
+    cleanedTemplateIds.forEach(id => {
+      const mx = existingMax.get(id) ?? 0;
+      console.log(`   - ${id} => max ${mx}`);
+    });
+    console.log(`   Max global: ${globalMax}`);
+    console.log(`   ➡️  Prochain suffixe appliqué à tous: ${actualSuffix}`);
+    
+    perTemplateSuffixes = {};
+    for (const templateId of cleanedTemplateIds) {
+      perTemplateSuffixes[templateId] = actualSuffix;
     }
   }
+
+  const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, actualSuffix);
+
+  // 🔧 FIX CRITIQUE: Mettre à jour blueprint.templateNodeIds avec les IDs nettoyés
+  // avant de créer le plan, sinon le plan recevra des IDs vides/pollués
+  blueprint.templateNodeIds = cleanedTemplateIds;
 
   const plan = createInstantiationPlan(blueprint, {
-    suffix,
+    suffix: actualSuffix,
     includeTotals: options.includeTotals ?? true,
     targetParentId: options.targetParentId ?? null,
     perTemplateSuffixes
@@ -153,7 +157,7 @@ export async function planRepeatDuplication(
 
   return {
     repeaterNodeId,
-    suffix,
+    suffix: actualSuffix,
     scopeId,
     blueprint,
     plan
@@ -174,43 +178,6 @@ export async function executeRepeatDuplication(
   console.log(`[repeat-service] 🔄 executeRepeatDuplication called for ${repeaterNodeId}`, { options });
   try {
     const planned = await planRepeatDuplication(prisma, repeaterNodeId, options);
-
-  // 🔐 Guard: éviter duplication si une duplication récente (par le même repeater) a déjà été créée
-  try {
-    const now = new Date();
-    const recentWindowMs = 10000; // 10 secondes
-    const lookback = new Date(now.getTime() - recentWindowMs);
-    // Nettoyer les template IDs
-    const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-    const cleanedTemplateIds = planned.blueprint.templateNodeIds
-      .filter(id => typeof id === 'string' && !!id)
-      .map(id => id.replace(/(-\d+)+$/, ''))
-      .filter((id, idx, arr) => arr.indexOf(id) === idx)
-      .filter(id => !hasCopySuffix.test(id));
-
-    const recentCopies = await prisma.treeBranchLeafNode.findMany({
-      where: {
-        duplicatedFromRepeater: repeaterNodeId,
-        createdAt: { gt: lookback },
-        metadata: {
-          path: ['sourceTemplateId'],
-          in: cleanedTemplateIds
-        }
-      },
-      select: { id: true }
-    });
-
-    if (recentCopies.length > 0) {
-      console.warn(`[repeat-service] Duplicate protection: a recent duplication was detected for repeater ${repeaterNodeId}. Aborting duplicate run.`);
-      return {
-        ...planned,
-        status: 'pending-execution',
-        operations: []
-      } as any;
-    }
-  } catch (e) {
-    console.warn('[repeat-service] duplicate guard failed, proceeding with execution', (e as Error).message);
-  }
     console.log(`[repeat-service] ✅ Plan created successfully`);
 
     console.log(`\n🔥 [repeat-service] PLANNED VARIABLES:`, JSON.stringify(planned.plan.variables.slice(0, 2), null, 2));

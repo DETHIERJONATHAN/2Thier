@@ -4,6 +4,7 @@ import { applySharedReferencesFromOriginalInternal } from '../../shared/shared-r
 import { deepCopyNodeInternal, type DeepCopyOptions, type DeepCopyResult } from './services/deep-copy-service.js';
 import { buildResponseFromColumns, getAuthCtx, type MinimalReq } from './services/shared-helpers.js';
 import { RepeatOperationError, type RepeatExecutionResult } from './repeat-service.js';
+import { computeTemplateCopySuffixMax } from './utils/suffix-utils.js';
 import { resetCalculatedValuesAfterCopy } from './services/recalculate-values-service.js';
 import { diagnoseCopyProblems, fixCopyProblems } from './services/copy-diagnostic-service.js';
 import { enforceStrictIsolation, verifyIsolation } from './services/strict-isolation-service.js';
@@ -20,6 +21,14 @@ export interface RepeatExecutionSummary {
   duplicated: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }>;
   nodes: Record<string, unknown>[];
   count: number;
+  debug?: {
+    templateNodeIds: string[];
+    nodesToDuplicateIds: string[];
+    sectionIds: string[];
+    templateCount: number;
+    nodesToDuplicateCount: number;
+    sectionCount: number;
+  };
 }
 
 export async function runRepeatExecution(
@@ -50,9 +59,10 @@ export async function runRepeatExecution(
   // Si on utilise uuid-1 comme template et qu'on lui applique un nouveau suffixe,
   // on crée uuid-1-1 (double suffixe) au lieu de uuid-2
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-  const rawIds = plan.nodes.length
-    ? Array.from(new Set(plan.nodes.map(nodePlan => nodePlan.templateNodeId)))
-    : blueprint.templateNodeIds;
+  // ⚠️ IMPORTANT: Toujours utiliser les IDs déclarés dans le blueprint (metadata du répéteur)
+  // Le plan peut être partiel et omettre certains templates; l'utilisateur demande
+  // la duplication EXACTE des 6 IDs listés dans le metadata.repeater.templateNodeIds
+  const rawIds = blueprint.templateNodeIds;
   
   // Nettoyer les IDs: retirer TOUS les suffixes et vérifier qu'on a des UUIDs purs
   const templateNodeIds = rawIds
@@ -103,12 +113,30 @@ export async function runRepeatExecution(
   sectionNodes.forEach(s => console.log(`   - ⏭️ Skipping section: "${s.label}" (${s.id})`));
 
   const templateById = new Map(nodesToDuplicate.map(node => [node.id, node] as const));
+  // 🔒 Sécurité ultime : recalculer les suffixes max juste avant de copier
+  // pour éviter de retomber à 1 si le plan a été calculé avant la création de -1.
+  const templateIdsForSuffix = Array.from(templateById.keys());
+  const existingMax = await computeTemplateCopySuffixMax(
+    prisma,
+    repeaterNode.treeId,
+    templateIdsForSuffix
+  );
+  console.log('📊 [REPEAT-EXECUTOR] Recalcul suffixes juste avant copie');
+  templateIdsForSuffix.forEach(id => {
+    console.log(`   - ${id}: max vu=${existingMax.get(id) ?? 0}`);
+  });
   const plannedSuffixByTemplate = new Map<string, number>();
+  // Pré-remplir tous les templates avec suffix par défaut: (max vu + 1)
+  for (const templateId of templateIdsForSuffix) {
+    const maxSeen = existingMax.get(templateId) ?? 0;
+    plannedSuffixByTemplate.set(templateId, maxSeen + 1);
+  }
+  // Si le plan propose des suffixes spécifiques pour certains templates, les appliquer
   for (const nodePlan of plan.nodes) {
-    const numericSuffix = coerceSuffix(nodePlan.plannedSuffix);
-    if (numericSuffix !== null) {
-      plannedSuffixByTemplate.set(nodePlan.templateNodeId, numericSuffix);
-    }
+    const planned = coerceSuffix(nodePlan.plannedSuffix);
+    const maxSeen = existingMax.get(nodePlan.templateNodeId) ?? 0;
+    const enforcedNext = Math.max(planned ?? 0, maxSeen + 1);
+    plannedSuffixByTemplate.set(nodePlan.templateNodeId, enforcedNext);
   }
 
   const duplicatedSummaries: RepeatExecutionSummary['duplicated'] = [];
@@ -129,10 +157,9 @@ export async function runRepeatExecution(
   const globalTableIdMap = new Map<string, string>();
   const globalVariableCopyCache = new Map<string, string>();
 
-  for (const nodePlan of plan.nodes) {
-    let template: TreeBranchLeafNode | undefined;
+  // 🚀🚀🚀 DUPLICATION DES TEMPLATES: parcourir TOUS les templates à dupliquer (metadata)
+  for (const template of nodesToDuplicate) {
     try {
-      template = templateById.get(nodePlan.templateNodeId);
       if (!template) continue;
 
       const plannedSuffix = plannedSuffixByTemplate.get(template.id);
@@ -196,6 +223,9 @@ export async function runRepeatExecution(
         null;
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
 
+      console.log(`🔢 [REPEAT-EXECUTOR] Suffix appliqué pour template ${template.id}:`);
+      console.log(`   plannedSuffix=${plannedSuffix}, appliedSuffix=${appliedSuffix}, copySuffix(meta)=${createdMetadata.copySuffix}, idSuffix=${extractSuffixFromId(created.id)}, effective=${effectiveSuffix}`);
+
       const updatedMetadata = {
         ...createdMetadata,
         sourceTemplateId: template.id,
@@ -220,6 +250,11 @@ export async function runRepeatExecution(
         parentId: created.parentId,
         sourceTemplateId: template.id
       });
+
+      console.log(`✅ [REPEAT-EXECUTOR] Nœud copié créé dans la base :`);
+      console.log(`   ID: ${created.id}`);
+      console.log(`   Label: ${created.label}`);
+      console.log(`   Template source: ${template.id}`);
 
       duplicatedNodeIds.add(created.id);
       originalNodeIdByCopyId.set(created.id, template.id);
@@ -546,7 +581,15 @@ export async function runRepeatExecution(
   return {
     duplicated: duplicatedSummaries,
     nodes: nodesPayload,
-    count: duplicatedSummaries.length
+    count: duplicatedSummaries.length,
+    debug: {
+      templateNodeIds,
+      nodesToDuplicateIds: nodesToDuplicate.map(n => n.id),
+      sectionIds: sectionNodes.map(n => n.id),
+      templateCount: templateNodeIds.length,
+      nodesToDuplicateCount: nodesToDuplicate.length,
+      sectionCount: sectionNodes.length
+    }
   };
 }
 
@@ -561,39 +604,56 @@ async function loadTemplateNodesWithFallback(
     throw new RepeatOperationError('Repeater does not declare template nodes to duplicate.', 422);
   }
 
+  // 1) Charger les templates présents dans l'arbre du répéteur
   const scoped = await prisma.treeBranchLeafNode.findMany({
     where: {
       id: { in: templateNodeIds },
       treeId: repeaterTreeId
     }
   });
-  if (scoped.length) {
-    return scoped;
-  }
 
-  const crossTree = await prisma.treeBranchLeafNode.findMany({
-    where: {
-      id: { in: templateNodeIds }
-    },
-    include: {
-      TreeBranchLeafTree: {
-        select: { organizationId: true }
+  // 2) Déterminer les IDs manquants et tenter un fallback dans la librairie
+  const foundIds = new Set(scoped.map(n => n.id));
+  const missingIds = templateNodeIds.filter(id => !foundIds.has(id));
+
+  let crossTree: Array<{ id: string; TreeBranchLeafTree?: { organizationId: string | null } } & Record<string, unknown>> = [];
+  if (missingIds.length) {
+    crossTree = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: missingIds } },
+      include: {
+        TreeBranchLeafTree: { select: { organizationId: true } }
+      }
+    });
+
+    if (!crossTree.length) {
+      // Aucun des IDs manquants n'a pu être chargé
+      if (!scoped.length) {
+        throw new RepeatOperationError('No template nodes could be loaded for this repeater.', 404);
       }
     }
-  });
 
-  if (!crossTree.length) {
+    // Vérifier l'accès organisationnel pour les templates hors-arbre
+    if (!isSuperAdmin && organizationId) {
+      const unauthorized = crossTree.find(
+        node => node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId
+      );
+      if (unauthorized) {
+        throw new RepeatOperationError('Access denied to template library for this repeater.', 403);
+      }
+    }
+  }
+
+  // 3) Fusionner les résultats (scoped + crossTree) et normaliser la forme
+  const merged = [
+    ...scoped,
+    ...crossTree.map(({ TreeBranchLeafTree, ...rest }) => rest)
+  ];
+
+  if (!merged.length) {
     throw new RepeatOperationError('No template nodes could be loaded for this repeater.', 404);
   }
 
-  if (!isSuperAdmin && organizationId) {
-    const unauthorized = crossTree.find(node => node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId);
-    if (unauthorized) {
-      throw new RepeatOperationError('Access denied to template library for this repeater.', 403);
-    }
-  }
-
-  return crossTree.map(({ TreeBranchLeafTree, ...rest }) => rest);
+  return merged;
 }
 
 function coerceSuffix(value: unknown): number | null {

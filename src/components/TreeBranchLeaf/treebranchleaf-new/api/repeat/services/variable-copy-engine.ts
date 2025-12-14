@@ -209,6 +209,36 @@ export async function copyVariableWithCapacities(
 
     if (!originalVar) {
       console.error(`❌ Variable introuvable: ${originalVarId}`);
+      console.warn(`⚠️ Cette variable est ORPHELINE - elle ne peut pas être copiée`);
+      
+      // 🔧 FIX: Nettoyer les linkedVariableIds orphelins du nœud parent
+      // pour que la prochaine création fonctionne sans référence invalide
+      if (newNodeId) {
+        try {
+          const orphanLinkedVarIds = await prisma.treeBranchLeafNode.findMany({
+            where: {
+              linkedVariableIds: {
+                hasSome: [originalVarId]
+              }
+            },
+            select: { id: true, linkedVariableIds: true }
+          });
+          
+          for (const node of orphanLinkedVarIds) {
+            const cleaned = (node.linkedVariableIds || []).filter(id => id !== originalVarId);
+            if (cleaned.length !== node.linkedVariableIds?.length) {
+              await prisma.treeBranchLeafNode.update({
+                where: { id: node.id },
+                data: { linkedVariableIds: cleaned }
+              });
+              console.log(`🧹 Nettoyé linkedVariableIds orphelin de ${node.id}`);
+            }
+          }
+        } catch (cleanErr) {
+          console.warn(`⚠️ Impossible de nettoyer linkedVariableIds orphelins:`, (cleanErr as Error).message);
+        }
+      }
+      
       return {
         variableId: '',
         exposedKey: '',
@@ -1118,47 +1148,74 @@ export async function copyVariableWithCapacities(
     // ═══════════════════════════════════════════════════════════════════════
     // 🔁 ÉTAPE 5A-bis : Réutiliser une variable existante pour ce nœud si présente
     // ═══════════════════════════════════════════════════════════════════════
-    // Évite la violation d'unicité sur nodeId (1 variable par nœud) quand
-    // plusieurs duplications pointent vers le même nœud d'affichage dédié.
+    // ⚠️ CRITICAL: Ne réutiliser QUE si la variable a le BON suffixe !
+    // Sinon, créer une nouvelle variable avec le suffixe correct.
     let _reusingExistingVariable = false;
     let _existingVariableForReuse: any = null;
     
     try {
       const existingForNode = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
       if (existingForNode) {
-        console.log(`♻️ Variable déjà existante pour display node ${finalNodeId}, réutilisation: ${existingForNode.id}`);
-        _reusingExistingVariable = true;
-        _existingVariableForReuse = existingForNode;
+        // 🔍 Vérifier que la variable existante a le BON suffixe
+        const expectedVarId = `${originalVarId}-${suffix}`;
+        const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
         
-        // Harmoniser le nœud d'affichage avec les données de la variable existante
-        try {
-          const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
-          await prisma.treeBranchLeafNode.update({
-            where: { id: finalNodeId },
-            data: {
-              hasData: true,
-              data_activeId: existingForNode.id,
-              data_exposedKey: existingForNode.exposedKey,
-              data_displayFormat: existingForNode.displayFormat,
-              data_precision: existingForNode.precision,
-              data_unit: existingForNode.unit,
-              data_visibleToUser: existingForNode.visibleToUser,
-              label: normalizedExistingName || undefined,
-              field_label: (normalizedExistingName as any) || undefined
+        if (hasSuffixMatch) {
+          console.log(`♻️ Variable existante AVEC BON SUFFIXE pour ${finalNodeId}, réutilisation: ${existingForNode.id}`);
+          _reusingExistingVariable = true;
+          _existingVariableForReuse = existingForNode;
+          
+          // Harmoniser le nœud d'affichage avec les données de la variable existante
+          try {
+            const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
+            await prisma.treeBranchLeafNode.update({
+              where: { id: finalNodeId },
+              data: {
+                hasData: true,
+                data_activeId: existingForNode.id,
+                data_exposedKey: existingForNode.exposedKey,
+                data_displayFormat: existingForNode.displayFormat,
+                data_precision: existingForNode.precision,
+                data_unit: existingForNode.unit,
+                data_visibleToUser: existingForNode.visibleToUser,
+                label: normalizedExistingName || undefined,
+                field_label: (normalizedExistingName as any) || undefined
+              }
+            });
+            // 🔴 CRITIQUE: NE PAS ajouter la variable existante aux linkedVariableIds des nœuds ORIGINAUX (templates)
+            const isCopiedNode = finalNodeId.includes('-') && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId);
+            if (!isCopiedNode) {
+              console.warn(`⚠️ SKIP addToNodeLinkedField (réutilisation): ${finalNodeId} est un nœud ORIGINAL, pas une copie`);
+            } else {
+              await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
             }
-          });
-          await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
-        } catch (e) {
-          console.warn(`⚠️ Erreur MAJ display node (réutilisation):`, (e as Error).message);
-        }
+          } catch (e) {
+            console.warn(`⚠️ Erreur MAJ display node (réutilisation):`, (e as Error).message);
+          }
 
-        // Mettre en cache l'ID réutilisé pour éviter d'autres créations
-        // 🚨 BUG FIX: Utiliser cacheKey (originalVarId|newNodeId) au lieu de originalVarId seul
-        const cacheKey = `${originalVarId}|${finalNodeId}`;
-        variableCopyCache.set(cacheKey, existingForNode.id);
-        
-        // ⚠️ NE PAS RETOURNER ICI - Continuer pour copier les capacités de cette variable
-        // pour ce nouveau nœud/contexte !
+          // Mettre en cache l'ID réutilisé pour éviter d'autres créations
+          const cacheKey = `${originalVarId}|${finalNodeId}`;
+          variableCopyCache.set(cacheKey, existingForNode.id);
+          
+          // ⚠️ NE PAS RETOURNER ICI - Continuer pour copier les capacités de cette variable
+          // pour ce nouveau nœud/contexte !
+        } else {
+          console.warn(`⚠️ Variable existante MAIS MAUVAIS SUFFIXE: ${existingForNode.id}, attendu: ${expectedVarId}`);
+          console.warn(`   → Suppression de l'ancienne ET création nouvelle variable obligatoire`);
+          
+          // 🔧 CRITIQUE: Supprimer l'ancienne variable car contrainte UNIQUE sur nodeId
+          // On NE PEUT PAS avoir 2 variables pour le même nodeId
+          try {
+            await prisma.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
+            console.log(`🗑️ Ancienne variable supprimée: ${existingForNode.id}`);
+          } catch (delError) {
+            console.warn(`⚠️ Erreur suppression ancienne variable:`, (delError as Error).message);
+          }
+          
+          // 🎯 FORCER la création d'une nouvelle variable
+          _reusingExistingVariable = false;
+          _existingVariableForReuse = null;
+        }
       }
     } catch (e) {
       console.warn(`⚠️ Vérification variable existante par nodeId échouée:`, (e as Error).message);
@@ -1347,11 +1404,21 @@ export async function copyVariableWithCapacities(
     console.log(`   📍 DEBUG displayName créé: "${newVariable.displayName}"`);
     
     // 🔗 ÉTAPE CRITIQUE : LIAISON AUTOMATIQUE OBLIGATOIRE
-    // Cette fonction lie la variable à TOUS les nœuds de sa capacité
-    try {
-      await linkVariableToAllCapacityNodes(prisma, newVariable.id, newVariable.sourceRef);
-    } catch (e) {
-      console.error(`❌ Erreur LIAISON AUTOMATIQUE VARIABLE:`, (e as Error).message);
+    // 🔴 DÉSACTIVÉ lors de duplication de répéteur car:
+    // - Les linkedVariableIds sont déjà copiés depuis les templates (ligne 598 deep-copy-service.ts)
+    // - Appeler cette fonction ajouterait les variables COPIÉES aux linkedVariableIds des nœuds ORIGINAUX
+    // - Cela pollue les templates originaux avec des IDs de copies (-1, -2, etc.)
+    // 
+    // Cette fonction ne doit être appelée QUE lors de création manuelle de variables,
+    // PAS lors de duplication de répéteur.
+    if (!isFromRepeaterDuplication) {
+      try {
+        await linkVariableToAllCapacityNodes(prisma, newVariable.id, newVariable.sourceRef);
+      } catch (e) {
+        console.error(`❌ Erreur LIAISON AUTOMATIQUE VARIABLE:`, (e as Error).message);
+      }
+    } else {
+      console.log(`⏭️ SKIP linkVariableToAllCapacityNodes (duplication répéteur - linkedVariableIds déjà copiés)`);
     }
     
     // 🔍 VÉRIFICATION: Re-chercher la variable pour confirmer qu'elle existe bien
@@ -1424,7 +1491,16 @@ export async function copyVariableWithCapacities(
       // Déjà géré ci-dessus: finalNodeId pointe vers le nœud d'affichage (copié ou créé)
       // On s'assure simplement que le lien variable → nœud est en place
       try {
-        await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [newVariable.id]);
+        // 🔴 CRITIQUE: NE PAS ajouter la variable copiée aux linkedVariableIds des nœuds ORIGINAUX (templates)
+        // Seulement ajouter aux nœuds COPIÉS (qui ont un suffixe)
+        // Vérifier que finalNodeId est bien un nœud copié (avec suffixe) et NON un template original
+        const isCopiedNode = finalNodeId.includes('-') && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId);
+        if (!isCopiedNode) {
+          console.warn(`⚠️ SKIP addToNodeLinkedField: ${finalNodeId} est un nœud ORIGINAL (template), pas une copie. On ne doit PAS ajouter ${newVariable.id} à ses linkedVariableIds.`);
+        } else {
+          await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [newVariable.id]);
+          console.log(`✅ Variable ${newVariable.id} ajoutée au linkedVariableIds du nœud copié ${finalNodeId}`);
+        }
       } catch (e) {
         console.warn(`⚠️ Erreur linkage variable→display node:`, (e as Error).message);
       }
@@ -1777,6 +1853,7 @@ async function replaceLinkedVariableId(
   newVarId: string,
   suffix: string | number
 ): Promise<void> {
+  const stripNumericSuffix = (raw: string): string => raw.replace(/-\d+(?:-\d+)*$/, '');
   const node = await prisma.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { linkedVariableIds: true }
@@ -1786,8 +1863,13 @@ async function replaceLinkedVariableId(
 
   const suffixedId = `${originalVarId}-${suffix}`;
   const current = node.linkedVariableIds || [];
-  const withoutOriginal = current.filter(id => id !== originalVarId);
-  const next = Array.from(new Set([...withoutOriginal, newVarId, suffixedId]));
+
+  // 🔧 Nettoyer: retirer toutes les variantes (base ou suffixées) de la même variable
+  const base = stripNumericSuffix(originalVarId);
+  const filtered = current.filter(id => stripNumericSuffix(id) !== base);
+
+  // Garder uniquement la nouvelle version
+  const next = Array.from(new Set([...filtered, newVarId, suffixedId]));
 
   const changed =
     current.length !== next.length ||

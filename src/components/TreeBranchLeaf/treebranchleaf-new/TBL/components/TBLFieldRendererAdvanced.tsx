@@ -1544,7 +1544,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     if (!tableLookup.options || tableLookup.options.length === 0) {
       if (currentValue !== null && currentValue !== undefined && currentValue !== '') {
         console.log(`🧹 [Auto-Clear] Champ "${field.label}": Aucune option disponible, vidage de la sélection`);
-        handleChange(null);
+        onChange?.(null);
+        setLocalValue(null);
       }
       return;
     }
@@ -1558,9 +1559,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     if (!isCurrentValueValid && tableLookup.options.length > 0) {
       const firstOption = tableLookup.options[0];
       console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
-      handleChange(firstOption.value);
+      onChange?.(firstOption.value);
+      setLocalValue(firstOption.value);
     }
-  }, [tableLookup.options, tableLookup.loading, fieldConfig.fieldType, fieldConfig.hasTable, field.label]);
+  }, [tableLookup.options, tableLookup.loading, fieldConfig.fieldType, fieldConfig.hasTable, field.label, localValue, onChange]);
 
   // Gestionnaire de changement unifié
   const handleChange = (newValue: unknown) => {

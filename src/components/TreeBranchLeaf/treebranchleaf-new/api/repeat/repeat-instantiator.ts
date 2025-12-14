@@ -73,12 +73,17 @@ export function createInstantiationPlan(
     // - primaryTargetNodeId tells us which template this copy is for
     const targetTemplateNodeId = (variable as any).primaryTargetNodeId || variable.nodeId;
     const variableSuffix = resolveSuffix(targetTemplateNodeId);
+    // Make planned variable IDs unique per (variable, target node) to avoid collisions when
+    // a single variable is linked to multiple templates. This keeps the execution plan stable
+    // and prevents clashes such as var-1 being reused for two different target nodes.
+    const plannedVariableId = `${variable.variableId}-${targetTemplateNodeId}-${variableSuffix}`;
+    const plannedTargetNodeId = `${targetTemplateNodeId}-${variableSuffix}`;
     
     return {
       templateVariableId: variable.variableId,
       plannedSuffix: variableSuffix,
-      targetNodeId: `${targetTemplateNodeId}-${variableSuffix}`,  // ← NOW uses the template node that REFERENCES the variable
-      plannedVariableId: `${variable.variableId}-${variableSuffix}`
+      targetNodeId: plannedTargetNodeId,  // ← NOW uses the template node that REFERENCES the variable
+      plannedVariableId
     };
   });
 

@@ -15,6 +15,11 @@ interface RepeatRequestBody {
 export default function createRepeatRouter(prisma: PrismaClient) {
   const router = Router();
 
+  // Guard serveur (in-memory) : empêche deux exécutions concurrentes pour le même repeater.
+  // Objectif: éviter les doubles exécutions "1 clic => 2 requêtes" qui créent -1 puis -2.
+  // Ce guard ne bloque pas les clics suivants une fois la requête terminée.
+  const inFlightExecuteByRepeater = new Set<string>();
+
   router.use(authenticateToken);
 
   router.post('/:repeaterNodeId/instances', async (req, res) => {
@@ -56,8 +61,27 @@ export default function createRepeatRouter(prisma: PrismaClient) {
     const { repeaterNodeId } = req.params;
     const body = (req.body || {}) as RepeatRequestBody;
 
-    console.log(`[repeat-route] 🚀 POST execute called for repeater: ${repeaterNodeId}`);
+    console.log(`\n\n🔥🔥🔥 [repeat-route] BOUTON AJOUTER CLIQUÉ !`);
+    console.log(`[repeat-route] RepeaterNodeId: ${repeaterNodeId}`);
     console.log(`[repeat-route] Body:`, JSON.stringify(body));
+    
+    // Écrire dans un fichier pour preuve
+    try {
+      const fs = require('fs');
+      const timestamp = new Date().toISOString();
+      fs.appendFileSync('repeat-execute-calls.log', `${timestamp} - Repeater: ${repeaterNodeId}\n`);
+    } catch (e) {
+      console.error('[repeat-route] Failed to write log file:', e);
+    }
+
+    if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
+      return res.status(409).json({
+        error: 'Repeat execution already in progress for this repeater.',
+        details: 'Another request is currently duplicating this repeater. Please retry in a moment.'
+      });
+    }
+
+    inFlightExecuteByRepeater.add(repeaterNodeId);
 
     try {
       console.log(`[repeat-route] Calling executeRepeatDuplication...`);
@@ -84,7 +108,8 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         blueprint: executionPlan.blueprint,
         duplicated: executionSummary.duplicated,
         nodes: executionSummary.nodes,
-        count: executionSummary.count
+        count: executionSummary.count,
+        debug: executionSummary.debug
       });
     } catch (error) {
       if (error instanceof RepeatOperationError) {
@@ -100,6 +125,8 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         error: 'Failed to execute repeat duplication.',
         details: error instanceof Error ? error.message : String(error)
       });
+    } finally {
+      inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
 

@@ -50,12 +50,25 @@ export async function buildBlueprintForRepeater(
   const cached = captureRepeatTemplate(repeaterNodeId);
   if (cached) {
     console.log(`[repeat-blueprint-builder] Found cached blueprint`);
-    const candidateTemplateIds = deriveTemplateIdsFromBlueprint(cached);
+    
+    // ⚠️ FIX: Ne PAS dériver les IDs depuis le cache (peut contenir des display nodes)
+    // Au lieu de ça, lire les IDs depuis metadata.repeater.templateNodeIds de la DB
+    const repeaterNodeForCache = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: repeaterNodeId },
+      select: { metadata: true, repeater_templateNodeIds: true }
+    });
+    
+    const candidateTemplateIds = repeaterNodeForCache 
+      ? extractTemplateIds(repeaterNodeForCache)
+      : [];
+    
+    console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] Candidate IDs from metadata (NOT cache derivation): ${JSON.stringify(candidateTemplateIds)}`);
     const { validIds: cachedTemplateIds } = await filterExistingTemplateNodeIds(
       prisma,
       repeaterNodeId,
       candidateTemplateIds
     );
+    console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] Valid IDs after filter: ${JSON.stringify(cachedTemplateIds)}`);
 
     if (cachedTemplateIds.length) {
       console.log(`[repeat-blueprint-builder] ✅ Using cached blueprint with ${cachedTemplateIds.length} templates`);
@@ -98,12 +111,17 @@ export async function buildBlueprintForRepeater(
     treeId: repeaterNode.treeId,
     hasMetadata: !!repeaterNode.metadata
   });
-
-  const candidateTemplateNodeIds = await enrichTemplateIdsWithExistingCopies(
-    prisma,
-    repeaterNodeId,
-    extractTemplateIds(repeaterNode)
-  );
+  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] repeater_templateNodeIds RAW: ${JSON.stringify(repeaterNode.repeater_templateNodeIds)}`);
+  
+  const extractedIds = extractTemplateIds(repeaterNode);
+  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] extractTemplateIds result: ${JSON.stringify(extractedIds)}`);
+  
+  // ⚠️ FIX CRITIQUE: Ne PAS enrichir avec les copies existantes!
+  // enrichTemplateIdsWithExistingCopies ajoutait des display nodes auto-générés
+  // dans la liste des templates, ce qui causait des duplications partielles.
+  // Les templates doivent TOUJOURS être exactement ceux déclarés dans metadata.
+  const candidateTemplateNodeIds = extractedIds;
+  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] Candidate IDs (SANS enrichissement): ${JSON.stringify(candidateTemplateNodeIds)}`);
   console.log(`[repeat-blueprint-builder] Candidate templates: ${candidateTemplateNodeIds.length}`);
   
   const { validIds: templateNodeIds } = await filterExistingTemplateNodeIds(
@@ -111,6 +129,7 @@ export async function buildBlueprintForRepeater(
     repeaterNodeId,
     candidateTemplateNodeIds
   );
+  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] After filterExistingTemplateNodeIds: ${JSON.stringify(templateNodeIds)}`);
   console.log(`[repeat-blueprint-builder] Valid templates after filtering: ${templateNodeIds.length}`);
 
   if (!templateNodeIds.length) {
@@ -257,18 +276,27 @@ export async function buildBlueprintForRepeater(
 }
 
 function extractTemplateIds(node: { repeater_templateNodeIds: Nullable<string>; metadata: Nullable<Record<string, unknown>> }): string[] {
-  const fromColumn = parseJsonArray<string>(node.repeater_templateNodeIds);
-  if (fromColumn.length) return fromColumn;
-
+  // 🎯 PRIORITÉ 1: Lire depuis metadata.repeater.templateNodeIds (SOURCE DE VÉRITÉ)
   const metaRepeater = typeof node.metadata === 'object' && node.metadata !== null
     ? (node.metadata as Record<string, unknown>).repeater
     : undefined;
   if (metaRepeater && typeof metaRepeater === 'object') {
-    const legacy = (metaRepeater as Record<string, unknown>).templateNodeIds;
-    if (Array.isArray(legacy)) {
-      return legacy.filter((id): id is string => typeof id === 'string');
+    const fromMetadata = (metaRepeater as Record<string, unknown>).templateNodeIds;
+    if (Array.isArray(fromMetadata) && fromMetadata.length > 0) {
+      const filtered = fromMetadata.filter((id): id is string => typeof id === 'string');
+      console.log(`✅ [extractTemplateIds] Lecture depuis metadata: ${filtered.length} IDs`);
+      return filtered;
     }
   }
+
+  // 🔄 FALLBACK: Si metadata est vide, lire depuis repeater_templateNodeIds
+  const fromColumn = parseJsonArray<string>(node.repeater_templateNodeIds);
+  if (fromColumn.length) {
+    console.log(`⚠️ [extractTemplateIds] Fallback vers colonne: ${fromColumn.length} IDs`);
+    return fromColumn;
+  }
+
+  console.warn(`❌ [extractTemplateIds] Aucun template trouvé !`);
   return [];
 }
 

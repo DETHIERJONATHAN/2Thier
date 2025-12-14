@@ -68,8 +68,12 @@ export class TableLookupDuplicationService {
     
     try {
       // 1. Vérifier si la table originale existe
-      const originalTable = await prisma.tBLMatrix.findUnique({
-        where: { id: originalTableId }
+      const originalTable = await prisma.treeBranchLeafNodeTable.findUnique({
+        where: { id: originalTableId },
+        include: {
+          tableColumns: true,
+          tableRows: true
+        }
       });
       
       if (!originalTable) {
@@ -78,25 +82,46 @@ export class TableLookupDuplicationService {
       }
       
       // 2. Dupliquer la table TBL (si elle n'existe pas déjà)
-      const existingCopiedTable = await prisma.tBLMatrix.findUnique({
+      const existingCopiedTable = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: copiedTableId }
       });
       
       if (!existingCopiedTable) {
         console.log(`   📋 Duplication table: ${originalTable.name} -> ${originalTable.name}${suffix}`);
         
-        await prisma.tBLMatrix.create({
+        await prisma.treeBranchLeafNodeTable.create({
           data: {
             id: copiedTableId,
+            nodeId: copiedNodeId,
             name: originalTable.name + suffix,
             type: originalTable.type,
-            data: originalTable.data, // Copie des données JSON
-            metadata: originalTable.metadata,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            description: originalTable.description,
+            meta: originalTable.meta,
             organizationId: originalTable.organizationId,
-            sourceFile: originalTable.sourceFile,
-            description: originalTable.description
+            rowCount: originalTable.rowCount,
+            columnCount: originalTable.columnCount,
+            lookupDisplayColumns: originalTable.lookupDisplayColumns,
+            lookupSelectColumn: originalTable.lookupSelectColumn,
+            
+            // Duplication des colonnes
+            tableColumns: {
+              create: originalTable.tableColumns.map(col => ({
+                columnIndex: col.columnIndex,
+                name: col.name,
+                type: col.type,
+                width: col.width,
+                format: col.format,
+                metadata: col.metadata
+              }))
+            },
+            
+            // Duplication des lignes
+            tableRows: {
+              create: originalTable.tableRows.map(row => ({
+                rowIndex: row.rowIndex,
+                cells: row.cells
+              }))
+            }
           }
         });
         

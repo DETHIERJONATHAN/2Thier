@@ -758,6 +758,53 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
     if (!Array.isArray(merged.templateNodeIds)) {
       delete merged.templateNodeIds;
+    } else if (merged.templateNodeIds.length > 0) {
+      // 🔥 FILTRE CRITIQUE: Vérifier que chaque templateNodeId correspond à un nœud SANS repeater imbriqué
+      // Chercher les nœuds réels pour valider
+      const hasNestedRepeater = (nodeId: string): boolean => {
+        const findNode = (list: TreeBranchLeafNode[] | undefined): TreeBranchLeafNode | null => {
+          if (!list) return null;
+          for (const n of list) {
+            if (n.id === nodeId) return n;
+            if (n.children && n.children.length > 0) {
+              const found = findNode(n.children);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        
+        const node = findNode(nodes);
+        if (!node) return false;
+        
+        // Vérifier si le nœud contient un repeater descendant
+        const checkHasRepeater = (n: TreeBranchLeafNode): boolean => {
+          if (n.type === 'leaf_repeater') return true;
+          if (!n.children || n.children.length === 0) return false;
+          return n.children.some(child => checkHasRepeater(child));
+        };
+        
+        return checkHasRepeater(node);
+      };
+      
+      // Filtrer les IDs
+      const beforeCount = merged.templateNodeIds.length;
+      merged.templateNodeIds = merged.templateNodeIds.filter(id => {
+        const hasNested = hasNestedRepeater(id);
+        if (hasNested) {
+          const node = nodes?.find(n => n.id === id);
+          console.error(`🚨 [commitRepeaterMetadata] REJET: Tentative de sauvegarder un champ imbriqué: ${node?.label} (${id})`);
+        }
+        return !hasNested;
+      });
+      
+      if (merged.templateNodeIds.length < beforeCount) {
+        console.error(`🚨 [commitRepeaterMetadata] REJET TOTAL: ${beforeCount - merged.templateNodeIds.length} champ(s) imbriqué(s) ont été rejeté(s)!`);
+      }
+      
+      if (merged.templateNodeIds.length === 0) {
+        delete merged.templateNodeIds;
+      }
     }
 
     if (merged.minItems === undefined) {
@@ -792,6 +839,15 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     console.log('📝 [commitRepeaterMetadata] METADATA FINALE:', nextMetadata);
 
     // 🔥 IMPORTANT : Enregistrer AUSSI dans les colonnes dédiées de la base
+    // 🔥 FILTRE: Ne sauvegarder les templateNodeLabels que pour les IDs qui sont restés après le filtre
+    const validatedLabels = partial.templateNodeLabels 
+      ? Object.fromEntries(
+          Object.entries(partial.templateNodeLabels).filter(([id]) => 
+            merged.templateNodeIds && merged.templateNodeIds.includes(id)
+          )
+        )
+      : {};
+
     const payload: Record<string, unknown> = {
       metadata: nextMetadata,
       // ✅ Colonnes dédiées pour performances et requêtes SQL
@@ -805,8 +861,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       repeater_templateNodeIds: merged.templateNodeIds && merged.templateNodeIds.length > 0 
         ? JSON.stringify(merged.templateNodeIds) 
         : null,
-      repeater_templateNodeLabels: partial.templateNodeLabels && Object.keys(partial.templateNodeLabels).length > 0
-        ? JSON.stringify(partial.templateNodeLabels)
+      repeater_templateNodeLabels: Object.keys(validatedLabels).length > 0
+        ? JSON.stringify(validatedLabels)
         : null
     };
 
@@ -1145,15 +1201,67 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       const repeaterMeta = (selectedNode.metadata?.repeater as RepeaterMetadata) || {};
       console.log('🔍 [Parameters] repeaterMeta après cast:', JSON.stringify(repeaterMeta, null, 2));
 
+      // 🔥 FONCTION DE NETTOYAGE STRICTE: Rejeter TOUS les champs avec repeaters imbriqués
+      const filterOutNestedRepeaters = (ids: string[] | undefined): string[] => {
+        if (!ids || ids.length === 0) return [];
+        
+        // Fonction pour vérifier si un nœud contient un repeater descendant
+        const hasNestedRepeater = (nodeId: string): boolean => {
+          const findNode = (list: TreeBranchLeafNode[] | undefined): TreeBranchLeafNode | null => {
+            if (!list) return null;
+            for (const n of list) {
+              if (n.id === nodeId) return n;
+              if (n.children && n.children.length > 0) {
+                const found = findNode(n.children);
+                if (found) return found;
+              }
+            }
+            return null;
+          };
+          
+          const node = findNode(nodes);
+          if (!node) return false;
+          
+          // Vérifier si le nœud contient un repeater descendant
+          const checkHasRepeater = (n: TreeBranchLeafNode): boolean => {
+            if (n.type === 'leaf_repeater') return true;
+            if (!n.children || n.children.length === 0) return false;
+            return n.children.some(child => checkHasRepeater(child));
+          };
+          
+          return checkHasRepeater(node);
+        };
+        
+        // Filtrer et afficher les suppressions
+        const filtered = ids.filter(id => !hasNestedRepeater(id));
+        if (filtered.length < ids.length) {
+          const removed = ids.filter(id => !filtered.includes(id));
+          console.error(`🚨 [Parameters] NETTOYAGE CRITIQUE: ${removed.length} champ(s) imbriqué(s) rejeté(s) de templateNodeIds!`);
+          removed.forEach(id => {
+            const node = nodes?.find(n => n.id === id);
+            console.error(`   ❌ REJETÉ: ${node?.label} (${id})`);
+          });
+        }
+        
+        return filtered;
+      };
+
       const parseTemplateIdsFromColumn = (): string[] | undefined => {
         const raw = (selectedNode as any)?.repeater_templateNodeIds;
         if (!raw) return undefined;
         try {
-          if (Array.isArray(raw)) return raw.filter((id): id is string => typeof id === 'string');
-          if (typeof raw === 'string') {
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : undefined;
+          let parsed: any;
+          if (Array.isArray(raw)) parsed = raw;
+          else if (typeof raw === 'string') {
+            parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return undefined;
+          } else {
+            return undefined;
           }
+          
+          const ids = parsed.filter((id): id is string => typeof id === 'string');
+          // 🔥 NETTOYAGE À LA SOURCE: Rejeter immédiatement les champs imbriqués
+          return filterOutNestedRepeaters(ids);
         } catch (err) {
           console.warn('⚠️ [Parameters] Impossible de parser repeater_templateNodeIds:', err);
         }
@@ -1161,34 +1269,20 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       };
 
       const deriveTemplateIdsFromCopies = (): string[] => {
-        if (!selectedNodeFromTree?.id) return [];
-        const deriveChildrenByParentId = (all: TreeBranchLeafNode[], parentId?: string | null) => {
-          if (!parentId) return [] as TreeBranchLeafNode[];
-          const stack: TreeBranchLeafNode[] = [...all];
-          const out: TreeBranchLeafNode[] = [];
-          while (stack.length) {
-            const n = stack.pop()!;
-            if (n.parentId === parentId) out.push(n);
-            if (n.children && n.children.length) stack.push(...n.children);
-          }
-          return out;
-        };
-
-        const directChildren = deriveChildrenByParentId(nodes, selectedNodeFromTree.id);
-        const uniqueIds = new Set<string>();
-        directChildren.forEach(child => {
-          const sourceId = (child.metadata as any)?.sourceTemplateId;
-          if (typeof sourceId === 'string') uniqueIds.add(sourceId);
-        });
-        return Array.from(uniqueIds);
+        // ⚠️ DEPRECATED: Cette fonction causait la pollution du repeater avec des champs de sous-repeaters
+        // On retourne un tableau vide pour forcer l'utilisation de columnTemplateIds ou metadata
+        return [];
       };
       
       const columnTemplateIds = parseTemplateIdsFromColumn();
       const fallbackTemplateIds = deriveTemplateIdsFromCopies();
-      const templateIds = Array.isArray(repeaterMeta.templateNodeIds)
+      let templateIds = Array.isArray(repeaterMeta.templateNodeIds)
         ? repeaterMeta.templateNodeIds
         : columnTemplateIds
           ?? (fallbackTemplateIds.length > 0 ? fallbackTemplateIds : []);
+      
+      // 🔥 NETTOYAGE SUPPLÉMENTAIRE: Même si templateIds vient de repeaterMeta, nettoyer
+      templateIds = filterOutNestedRepeaters(templateIds);
 
       console.log('🔍 [Parameters] Template IDs extraits:', {
         templateIds,
@@ -1896,6 +1990,69 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             <h5 style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, margin: 0 }}>
               🔁 Champs à répéter
             </h5>
+            
+            {/* 🔥 FONCTION DE NETTOYAGE ULTRA-STRICTE */}
+            {(() => {
+              // Vérifier si un nœud a un repeater imbriqué
+              const hasNestedRepeater = (nodeId: string): boolean => {
+                const findNode = (list: TreeBranchLeafNode[] | undefined): TreeBranchLeafNode | null => {
+                  if (!list) return null;
+                  for (const n of list) {
+                    if (n.id === nodeId) return n;
+                    if (n.children && n.children.length > 0) {
+                      const found = findNode(n.children);
+                      if (found) return found;
+                    }
+                  }
+                  return null;
+                };
+                
+                const node = findNode(nodes);
+                if (!node) return false;
+                
+                const checkHasRepeater = (n: TreeBranchLeafNode): boolean => {
+                  if (n.type === 'leaf_repeater') return true;
+                  if (!n.children || n.children.length === 0) return false;
+                  return n.children.some(child => checkHasRepeater(child));
+                };
+                
+                return checkHasRepeater(node);
+              };
+
+              // Nettoyer l'état si des pollutions sont détectées
+              const cleanedIds = repeaterTemplateIds.filter(id => !hasNestedRepeater(id));
+              const polluted = repeaterTemplateIds.filter(id => hasNestedRepeater(id));
+              
+              if (polluted.length > 0) {
+                console.error(`🚨🚨🚨 [REPEATER SECTION] POLLUTION AU RENDU: ${polluted.length} champ(s) imbriqué(s)!`, polluted);
+                polluted.forEach(id => {
+                  const node = (function findNode(list?: TreeBranchLeafNode[]): TreeBranchLeafNode | undefined {
+                    if (!list) return undefined;
+                    for (const n of list) {
+                      if (n.id === id) return n;
+                      const found = findNode(n.children);
+                      if (found) return found;
+                    }
+                    return undefined;
+                  })(nodes);
+                  console.error(`   🚫 REJET DÉFINITIF: "${node?.label}" (${id})`);
+                });
+                
+                // AUTO-CORRECTION: Nettoyer l'état si pollution détectée
+                if (cleanedIds.length !== repeaterTemplateIds.length) {
+                  console.warn(`[AUTO-CORRECT] Nettoyage de l'état: ${repeaterTemplateIds.length} -> ${cleanedIds.length}`);
+                  setRepeaterTemplateIds(cleanedIds);
+                  // Aussi nettoyer en base
+                  commitRepeaterMetadata({ 
+                    templateNodeIds: cleanedIds,
+                    templateNodeLabels: {}  // Vider les labels polluées
+                  });
+                }
+              }
+              
+              return null;
+            })()}
+            
             <Space direction="vertical" size={10} style={{ width: '100%' }}>
               <Alert
                 type={repeaterTemplateIds.length === 0 ? 'warning' : 'info'}
@@ -1909,10 +2066,39 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
               <div>
                 <strong style={{ fontSize: 12 }}>Champs à répéter</strong>
+                
                 <Select
                   mode="multiple"
                   size="small"
-                  value={repeaterTemplateIds}
+                  value={repeaterTemplateIds.filter(id => {
+                    // 🔥 FILTRE ANTI-POLLUTION: Ne JAMAIS afficher les champs imbriqués
+                    const findNode = (list: TreeBranchLeafNode[] | undefined): TreeBranchLeafNode | null => {
+                      if (!list) return null;
+                      for (const n of list) {
+                        if (n.id === id) return n;
+                        if (n.children && n.children.length > 0) {
+                          const found = findNode(n.children);
+                          if (found) return found;
+                        }
+                      }
+                      return null;
+                    };
+                    
+                    const node = findNode(nodes);
+                    if (!node) return false;
+                    
+                    const checkHasRepeater = (n: TreeBranchLeafNode): boolean => {
+                      if (n.type === 'leaf_repeater') return true;
+                      if (!n.children || n.children.length === 0) return false;
+                      return n.children.some(child => checkHasRepeater(child));
+                    };
+                    
+                    const isNested = checkHasRepeater(node);
+                    if (isNested) {
+                      console.error(`[Select Render] 🚫 Filtre anti-pollution: ${node.label} (${id}) est un champ imbriqué - REJET`);
+                    }
+                    return !isNested;
+                  })}
                   style={{ width: '100%', marginTop: 4 }}
                   placeholder="Sélectionnez les champs gabarit"
                   disabled={props.readOnly}
@@ -1979,8 +2165,16 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 >
                   {(() => {
                     // Autoriser la sélection de branches/sections entières comme gabarits
+                    // ✅ IMPORTANT : Exclure les nœuds avec des repeaters imbriqués pour éviter la pollution
                     const allowedTypes: NodeTypeKey[] = ['branch', 'section', 'leaf_field', 'leaf_option', 'leaf_option_field'];
                     const options: { node: TreeBranchLeafNode; path: string[] }[] = [];
+
+                    // Fonction pour vérifier si un nœud contient un repeater descendant
+                    const hasNestedRepeater = (node: TreeBranchLeafNode): boolean => {
+                      if (node.type === 'leaf_repeater') return true;
+                      if (!node.children || node.children.length === 0) return false;
+                      return node.children.some(child => hasNestedRepeater(child));
+                    };
 
                     const visit = (list: TreeBranchLeafNode[] | undefined, trail: string[]) => {
                       if (!list) return;
@@ -1998,7 +2192,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     visit(nodes, []);
 
                     return options
-                      .filter(opt => allowedTypes.includes(opt.node.type as NodeTypeKey))
+                      .filter(opt => {
+                        // 🔥 Filtrer : nœud doit être du bon type ET ne pas avoir de repeater imbriqué
+                        return allowedTypes.includes(opt.node.type as NodeTypeKey) && !hasNestedRepeater(opt.node);
+                      })
                       .map(opt => {
                         const nodeType = TreeBranchLeafRegistry.getNodeType(opt.node.type);
                         const emoji = nodeType?.emoji || '•';

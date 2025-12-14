@@ -4202,7 +4202,30 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             }}
                             onClick={async () => {
                             if (isAddButton) {
-                              // 🚫 PROTECTION: Empêcher les double-clics (via Ref pour immédiateté)
+                              // � PREUVE: Écrire dans fichier log frontend
+                              try {
+                                const timestamp = new Date().toISOString();
+                                await fetch('/api/debug/log-click', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ 
+                                    timestamp, 
+                                    repeaterParentId,
+                                    message: '🚨 BOUTON AJOUTER CLIQUÉ DANS FRONTEND'
+                                  })
+                                }).catch(() => {
+                                  // Fallback: utiliser console storage
+                                  if (typeof localStorage !== 'undefined') {
+                                    const logs = JSON.parse(localStorage.getItem('frontend-clicks') || '[]');
+                                    logs.push({ timestamp, repeaterParentId });
+                                    localStorage.setItem('frontend-clicks', JSON.stringify(logs.slice(-20)));
+                                  }
+                                });
+                              } catch (e) {
+                                console.error('Failed to log click', e);
+                              }
+                              
+                              // �🚫 PROTECTION: Empêcher les double-clics (via Ref pour immédiateté)
                               if (isRepeatingRef.current[repeaterParentId]) {
                                 console.warn('⚠️ [REPEATER] Clic ignoré: opération déjà en cours (ref check)');
                                 return;
@@ -4276,6 +4299,27 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 
                                 console.log(`✅ [COPY-API] Repeat execute terminé:`, response);
                                 
+                                // 🚨 DIAGNOSTIC: Afficher les infos debug du backend
+                                if (response?.debug) {
+                                  console.error(`\n${'🚨'.repeat(40)}`);
+                                  console.error(`🚨🚨🚨 [DIAGNOSTIC BACKEND] REPEAT EXECUTION DEBUG 🚨🚨🚨`);
+                                  console.error(`🔍 Templates déclarés (metadata): ${response.debug.templateCount} IDs`);
+                                  console.error(`   → ${JSON.stringify(response.debug.templateNodeIds)}`);
+                                  console.error(`\n🔧 Templates à dupliquer (après filtre sections): ${response.debug.nodesToDuplicateCount} IDs`);
+                                  console.error(`   → ${JSON.stringify(response.debug.nodesToDuplicateIds)}`);
+                                  console.error(`\n⏭️  Sections ignorées: ${response.debug.sectionCount} IDs`);
+                                  console.error(`   → ${JSON.stringify(response.debug.sectionIds)}`);
+                                  console.error(`\n✅ Champs RÉELLEMENT copiés: ${response.count} nœuds`);
+                                  console.error(`   → ${JSON.stringify(response.duplicated?.map((d: any) => ({ id: d.id, label: d.label, sourceTemplateId: d.sourceTemplateId })))}`);
+                                  console.error(`\n❌ MANQUANTS: ${response.debug.templateCount - response.count} templates non copiés`);
+                                  if (response.debug.templateCount !== response.count) {
+                                    const copiedSourceIds = new Set(response.duplicated?.map((d: any) => d.sourceTemplateId));
+                                    const missing = response.debug.templateNodeIds.filter((id: string) => !copiedSourceIds.has(id));
+                                    console.error(`   Templates manquants: ${JSON.stringify(missing)}`);
+                                  }
+                                  console.error(`${'🚨'.repeat(40)}\n`);
+                                }
+                                
                                 // ✅ Réponse reçue. On n'appelle PAS TBL_FORCE_REFRESH pour éviter le rechargement
                                 // du formulaire complet et l'affichage d'un loader. On émet un événement local
                                 // pour indiquer qu'une duplication a été effectuée, mais en demandant aux
@@ -4326,27 +4370,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   }
                                   const eventTreeId = resolveEventTreeId();
                                   console.log('[COPY-API] 📡 About to dispatch tbl-repeater-updated', { eventDebugId, duplicatedCount: normalizedDuplicated.length, duplicatedIds: normalizedDuplicated.map(d => d.id), treeId: eventTreeId, nodeId: repeaterParentId });
-                                  const hasInlineNodes = Array.isArray(finalNodesPayload) && finalNodesPayload.length > 0;
-                                  let forceRemoteOverride = false;
-                                  try {
-                                    forceRemoteOverride = typeof window !== 'undefined' && localStorage.getItem('TBL_FORCE_REMOTE_DUPLICATE') === '1';
-                                  } catch {
-                                    forceRemoteOverride = false;
-                                  }
-                                  const resolveUsingFixedHierarchy = () => {
-                                    if (typeof window === 'undefined') return false;
-                                    const globalFlag = (window as any).__TBL_USING_FIXED_HIERARCHY;
-                                    if (typeof globalFlag === 'boolean') {
-                                      return globalFlag;
-                                    }
-                                    try {
-                                      return localStorage.getItem('USE_FIXED_HIERARCHY') === '1';
-                                    } catch {
-                                      return false;
-                                    }
-                                  };
-                                  const usingFixedHierarchy = resolveUsingFixedHierarchy();
-                                  const shouldForceRemoteRetransform = forceRemoteOverride || !usingFixedHierarchy || (!hasInlineNodes && normalizedDuplicated.length > 0);
                                   window.dispatchEvent(new CustomEvent('tbl-repeater-updated', {
                                     detail: {
                                       treeId: eventTreeId,
@@ -4367,24 +4390,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   } else {
                                     console.log('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId });
                                   }
-                                  // After the event, request a local retransform to ensure UI picks up merged nodes
+                                  // Always force remote to ensure subsequent clicks fetch the updated state from DB
+                                  // This guarantees -2, -3, etc. are created correctly without page reload
                                   try {
+                                    console.error('🚨🚨🚨 [COPY-API] ABOUT TO DISPATCH tbl-force-retransform with forceRemote=TRUE');
                                     window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
                                       detail: {
                                         source: 'duplicate-templates',
                                         treeId: eventTreeId,
-                                        forceRemote: true, // 🔥 TOUJOURS forcer le rechargement depuis le serveur
+                                        forceRemote: true,
                                         eventDebugId,
                                       }
                                     }));
-                                    console.log('🔄 [COPY-API] Dispatched tbl-force-retransform with forceRemote=true');
-                                    
-                                    // 🔥 FORCE COMPLETE PAGE RELOAD after short delay to ensure display nodes are visible
-                                    setTimeout(() => {
-                                      console.log('🔄 [COPY-API] FORCING COMPLETE PAGE RELOAD to display created variables');
-                                      window.location.reload();
-                                    }, 1500);
-                                  } catch { /* ignore */ }
+                                    console.error('🔄 [COPY-API] 🎯🎯🎯 DISPATCHED tbl-force-retransform with forceRemote=TRUE 🎯🎯🎯');
+                                  } catch (e) { 
+                                    console.error('❌ [COPY-API] ERROR dispatching tbl-force-retransform:', e);
+                                  }
                                 } catch (e) {
                                   console.warn('⚠️ [COPY-API] Impossible de dispatch tbl-repeater-updated (silent)', e);
                                   console.warn('⚠️ [COPY-API] Error details:', { error: e, response });

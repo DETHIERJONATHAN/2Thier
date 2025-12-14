@@ -68,6 +68,8 @@ export interface CopyVariableResult {
   success: boolean;
   /** Message d'erreur éventuel */
   error?: string;
+  /** ID du nœud d'affichage créé (si applicable) */
+  displayNodeId?: string;
 }
 
 /**
@@ -287,24 +289,39 @@ export async function copyVariableWithCapacities(
     // 🔍 ÉTAPE 1 : Vérifier le cache
     // ═══════════════════════════════════════════════════════════════════════
     const cacheKey = `${originalVarId}|${newNodeId}`; // Scope le cache par nœud cible pour ne pas réutiliser une copie d'un autre nœud
+    
+    // Si trouvé en cache et autoCreateDisplayNode, on va réutiliser la variable du cache
+    let cachedVariable: any = null;
+    
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey)!;
       console.log(`♻️ Variable déjà copiée (cache): ${cacheKey} → ${cachedId}`);
       
-      // Récupérer les infos depuis la base pour retourner un résultat complet
+      // Récupérer la variable en cache
       const cached = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       
       if (cached) {
         const parsed = parseSourceRef(cached.sourceRef);
-        return {
-          variableId: cached.id,
-          exposedKey: cached.exposedKey,
-          capacityType: parsed?.type || null,
-          sourceRef: cached.sourceRef,
-          success: true
-        };
+        // ✅ IMPORTANT: Si autoCreateDisplayNode=true, on doit créer un display node même si la variable est en cache!
+        // Cela permet à plusieurs templates de partager la même variable mais avoir chacun leur display node
+        if (autoCreateDisplayNode) {
+          console.log(`✅ [CACHE] Variable trouvée. Création du display node même si variable en cache...`);
+          // STOCKER la variable du cache pour la réutiliser
+          cachedVariable = cached;
+          // Continuer le flow pour créer le display node!
+          // Ne pas retourner ici
+        } else {
+          // Pas besoin de display node, retourner les infos de la variable
+          return {
+            variableId: cached.id,
+            exposedKey: cached.exposedKey,
+            capacityType: parsed?.type || null,
+            sourceRef: cached.sourceRef,
+            success: true
+          };
+        }
       }
     }
 
@@ -513,6 +530,7 @@ export async function copyVariableWithCapacities(
       finalNodeId = nodeIdMap.get(originalVar.nodeId)!;
       console.log(`📍 nodeId mappé: ${originalVar.nodeId} → ${finalNodeId}`);
     } else if (autoCreateDisplayNode) {
+      console.log(`🔷 [DISPLAY_NODE_CREATE] ENTRANT dans création display node. originalVar.nodeId="${originalVar.nodeId}", autoCreateDisplayNode=${autoCreateDisplayNode}, cachedVariable=${cachedVariable ? 'YES' : 'NO'}`);
       // Créer un nœud d'affichage DÉDIÉ avec un ID unique dérivé de l'ancien nodeId + suffixe
       try {
         const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
@@ -764,10 +782,13 @@ export async function copyVariableWithCapacities(
       console.warn(`⚠️ Vérification variable existante par nodeId échouée:`, (e as Error).message);
     }
 
-    // Utiliser la variable réutilisée ou en créer une nouvelle
+    // Utiliser la variable réutilisée, la variable en cache, ou en créer une nouvelle
     let newVariable: any;
     
-    if (_reusingExistingVariable && _existingVariableForReuse) {
+    if (cachedVariable) {
+      console.log(`♻️ [COPY-VAR] Réutilisation de variable du cache: ${cachedVariable.id} pour créer display node`);
+      newVariable = cachedVariable;
+    } else if (_reusingExistingVariable && _existingVariableForReuse) {
       console.log(`♻️ [COPY-VAR] Utilisation de variable existante: ${_existingVariableForReuse.id}`);
       newVariable = _existingVariableForReuse;
     } else {
@@ -995,7 +1016,8 @@ export async function copyVariableWithCapacities(
       exposedKey: newExposedKey,
       capacityType,
       sourceRef: newSourceRef,
-      success: true
+      success: true,
+      displayNodeId: finalNodeId  // 🔑 IMPORTANT: Retourner l'ID du display node créé!
     };
 
   } catch (error) {
@@ -1006,7 +1028,8 @@ export async function copyVariableWithCapacities(
       capacityType: null,
       sourceRef: null,
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      displayNodeId: undefined  // Pas de display node en cas d'erreur
     };
   }
 }

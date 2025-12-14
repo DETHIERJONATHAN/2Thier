@@ -1053,7 +1053,10 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
 
   
 
-  const refetch = useCallback(() => fetchData(), [fetchData]);
+  const refetch = useCallback(() => {
+    console.error('🔄 [useTBLData] refetch() called, returning Promise from fetchData()');
+    return fetchData();
+  }, [fetchData]);
 
   const updateNodeValue = useCallback(async (nodeId: string, value: string | number | boolean) => {
     try {

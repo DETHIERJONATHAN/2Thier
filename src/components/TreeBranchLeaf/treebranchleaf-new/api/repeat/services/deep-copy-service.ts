@@ -21,6 +21,8 @@ export interface DeepCopyOptions {
   forcedSuffix?: string | number;
   repeatContext?: DuplicationContext;
   cloneExternalParents?: boolean;
+  /** Flag indiquant que la copie provient d'une duplication par repeater */
+  isFromRepeaterDuplication?: boolean;
 }
 
 export interface DeepCopyResult {
@@ -44,7 +46,8 @@ export async function deepCopyNodeInternal(
     preserveSharedReferences = false,
     forcedSuffix,
     repeatContext,
-    cloneExternalParents = false
+    cloneExternalParents = false,
+    isFromRepeaterDuplication = false
   } = opts || {};
 
   const replaceIdsInTokens = (tokens: unknown, idMap: Map<string, string>): unknown => {
@@ -211,12 +214,14 @@ export async function deepCopyNodeInternal(
   const suffixPattern = new RegExp(`-${suffixToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
   const numericSuffixPattern = /-\d+$/;
   const hasCurrentSuffix = (value: string) => suffixPattern.test(value);
+  const stripNumericSuffix = (value: string): string => value.replace(/-\d+(?:-\d+)*$/, '');
   const hasAnySuffix = (value: string) => hasCurrentSuffix(value) || numericSuffixPattern.test(value);
   const ensureSuffix = (value: string | null | undefined): string | null | undefined => {
     if (!value) return value;
     if (hasCurrentSuffix(value)) return value;
-    if (hasAnySuffix(value)) return value;
-    return `${value}-${suffixToken}`;
+    // ⚠️ Toujours recalculer le suffixe lorsqu'il est différent (ex: passer de -1 à -2)
+    const base = stripNumericSuffix(value);
+    return `${base}-${suffixToken}`;
   };
   const buildParentSuffix = (value: string | null | undefined): string | null => {
     if (!value) return value ?? null;
@@ -276,7 +281,9 @@ export async function deepCopyNodeInternal(
   const tableIdMap = new Map<string, string>();
   const displayNodeIds: string[] = []; // IDs des nœuds d'affichage créés par copyVariableWithCapacities
 
-  const directVariableIdByNodeId = new Map<string, string>();
+  // 🔴 FIX: Un nœud peut avoir PLUSIEURS variables (affichage multiples)
+  // Utiliser une Map<nodeId, Set<variableIds>> au lieu de Map<nodeId, variableId>
+  const directVariableIdByNodeId = new Map<string, Set<string>>();
   if (toCopy.size > 0) {
     const nodeVariables = await prisma.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: Array.from(toCopy) } },
@@ -284,7 +291,10 @@ export async function deepCopyNodeInternal(
     });
     for (const variable of nodeVariables) {
       if (variable.nodeId && variable.id) {
-        directVariableIdByNodeId.set(variable.nodeId, variable.id);
+        if (!directVariableIdByNodeId.has(variable.nodeId)) {
+          directVariableIdByNodeId.set(variable.nodeId, new Set());
+        }
+        directVariableIdByNodeId.get(variable.nodeId)!.add(variable.id);
       }
     }
   }
@@ -525,24 +535,21 @@ export async function deepCopyNodeInternal(
       return updatedInstances as Prisma.InputJsonValue;
     })(),
     table_name: oldNode.table_name,
-    // ✅ FIX: Mapper les IDs du template repeater vers leurs copies suffixées
+    // 🔴 CRITIQUE: Garder TOUJOURS les repeater_templateNodeIds ORIGINAUX (pas de suffixe!)
+    // Les templateNodeIds doivent être les UUIDs purs des templates originaux,
+    // JAMAIS les IDs suffixés des copies (-1, -2, etc.)
+    // Si on mappe vers les suffixés, la 2e duplication trouvera uuid-A-1 au lieu de uuid-A!
     repeater_templateNodeIds: (() => {
       // 🔴 CRITIQUE: Ne PAS copier la configuration de repeater lors d'une duplication via repeater
       // Si on copie un template en tant que partie d'un repeater, la copie ne doit PAS
       // conserver `repeater_templateNodeIds` (la copie ne doit pas devenir un repeater).
       if (normalizedRepeatContext) return null;
+      
+      // ✅ FIX: JAMAIS mapper les IDs! Garder les IDs originaux sans suffixes
       if (!oldNode.repeater_templateNodeIds) return oldNode.repeater_templateNodeIds;
-      try {
-        const parsed = typeof oldNode.repeater_templateNodeIds === 'string'
-          ? JSON.parse(oldNode.repeater_templateNodeIds)
-          : oldNode.repeater_templateNodeIds;
-        if (Array.isArray(parsed)) {
-          const mapped = parsed.map((tid: string) => idMap.get(tid) || tid);
-          return JSON.stringify(mapped);
-        }
-      } catch {
-        // Si le parse échoue, retourner tel quel
-      }
+      
+      // Retourner tel quel - les templateNodeIds doivent rester inchangés
+      // (ils contiennent déjà les IDs originaux purs sans suffixes)
       return oldNode.repeater_templateNodeIds;
     })(),
     repeater_templateNodeLabels: oldNode.repeater_templateNodeLabels,
@@ -598,7 +605,10 @@ export async function deepCopyNodeInternal(
     linkedTableIds: Array.isArray(oldNode.linkedTableIds)
       ? oldNode.linkedTableIds.map(id => ensureSuffix(id) || id)
       : [],
-    linkedVariableIds: Array.isArray(oldNode.linkedVariableIds) ? oldNode.linkedVariableIds : [],
+    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiées
+    linkedVariableIds: Array.isArray(oldNode.linkedVariableIds)
+      ? oldNode.linkedVariableIds.map(id => ensureSuffix(id) || id)
+      : [],
     updatedAt: new Date()
   });
 
@@ -805,6 +815,7 @@ export async function deepCopyNodeInternal(
 
     const conditions = await prisma.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
+    const copiedNodeIds = new Set(idMap.values());
     
     // Trier les conditions selon linkedConditionIdOrder, MAIS SEULEMENT les IDs valides
     // D'abord, créer une map condition id -> condition
@@ -868,7 +879,13 @@ export async function deepCopyNodeInternal(
       try {
         const refs = Array.from(extractNodeIdsFromConditionSet(newSet));
         for (const refId of refs) {
-          await addToNodeLinkedField(prisma, normalizeRefId(refId), 'linkedConditionIds', [newConditionId]);
+          const normalizedRefId = normalizeRefId(refId);
+          // Ne pas polluer les templates originaux : lors d'une duplication, on ne met à jour
+          // que les nœuds copiés (suffixés) présents dans idMap.values().
+          if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) {
+            continue;
+          }
+          await addToNodeLinkedField(prisma, normalizedRefId, 'linkedConditionIds', [newConditionId]);
         }
       } catch (e) {
         console.warn('[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:', (e as Error).message);
@@ -1154,32 +1171,47 @@ export async function deepCopyNodeInternal(
       .filter(Boolean);
 
     const sourceLinkedVariableIds = new Set<string>();
+    console.log(`\n🔷🔷🔷 [LINKED_VARS] Traitement nœud ${oldNodeId} -> ${newNodeId}`);
+    console.log(`🔷 [LINKED_VARS] oldNode.linkedVariableIds = ${JSON.stringify(oldNode.linkedVariableIds)}`);
     if (Array.isArray(oldNode.linkedVariableIds)) {
       for (const rawId of oldNode.linkedVariableIds) {
         if (typeof rawId === 'string') {
           const normalized = rawId.trim();
           if (normalized) {
-            sourceLinkedVariableIds.add(normalized);
+            // ⚠️ Normaliser en retirant d'éventuels anciens suffixes (-1, -2, ...)
+            // pour toujours repartir de l'ID base lors d'une nouvelle duplication
+            const baseId = stripNumericSuffix(normalized);
+            sourceLinkedVariableIds.add(baseId || normalized);
+            console.log(`🔷 [LINKED_VARS] Ajouté: ${baseId || normalized} (depuis: ${rawId})`);
           }
         }
       }
     }
-    const directVarIdForNode = directVariableIdByNodeId.get(oldNodeId);
-    if (directVarIdForNode) {
-      sourceLinkedVariableIds.add(directVarIdForNode);
+    
+    // 🔴 FIX: Ajouter TOUTES les variables directes du nœud (pas seulement 1)
+    const directVarIds = directVariableIdByNodeId.get(oldNodeId);
+    if (directVarIds && directVarIds.size > 0) {
+      for (const directVarIdForNode of directVarIds) {
+        const baseId = stripNumericSuffix(directVarIdForNode);
+        sourceLinkedVariableIds.add(baseId || directVarIdForNode);
+      }
     }
 
-    const newLinkedVariableIds: string[] = [];
-    // 🔗 Tracker: Map de ownerNodeId -> liste des variables copiées pour ce owner
-    const copiedVarsByOwner = new Map<string, string[]>();
+    // ⚠️ CRITIQUE: On copie les variables pour créer les display nodes
+    // MAIS on ne met PAS à jour linkedVariableIds après !
+    // Le linkedVariableIds reste celui du template original (copié automatiquement)
+    
+    console.log(`🔷 [LINKED_VARS] sourceLinkedVariableIds.size = ${sourceLinkedVariableIds.size}`);
+    console.log(`🔷 [LINKED_VARS] Contenu: ${JSON.stringify([...sourceLinkedVariableIds])}`);
     
     if (sourceLinkedVariableIds.size > 0) {
+      console.log(`🔷 [LINKED_VARS] ✅ Entrée dans la boucle de copie de variables!`);
       for (const linkedVarId of sourceLinkedVariableIds) {
+        console.log(`🔷 [LINKED_VARS] Traitement variable: ${linkedVarId}`);
         const isSharedRef = linkedVarId.startsWith('shared-ref-');
-        if (isSharedRef) {
-          newLinkedVariableIds.push(linkedVarId);
-        } else {
+        if (!isSharedRef) {
           try {
+            console.log(`🔷 [LINKED_VARS] 📞 Appel copyVariableWithCapacities(${linkedVarId}, ${suffixToken}, ${newNodeId})`);
             const copyResult = await copyVariableWithCapacities(
               linkedVarId,
               suffixToken,
@@ -1193,34 +1225,23 @@ export async function deepCopyNodeInternal(
                 variableCopyCache,
                 autoCreateDisplayNode: true,
                 displayNodeAlreadyCreated: false,
-                displayParentId: newParentId,
-                isFromRepeaterDuplication: true,
+                displayParentId: newNodeId, // 🔧 FIX: Le parent doit être le nœud copié (pas son parent)
+                isFromRepeaterDuplication: isFromRepeaterDuplication,
                 repeatContext: normalizedRepeatContext
               }
             );
-            if (copyResult.success) {
-              newLinkedVariableIds.push(copyResult.variableId);
-              if (copyResult.displayNodeId) {
-                displayNodeIds.push(copyResult.displayNodeId);
-              }
-              
-              // 🔗 Track: Retrouver le nœud propriétaire de la variable originale
-              const originalVar = await prisma.treeBranchLeafNodeVariable.findUnique({
-                where: { id: linkedVarId },
-                select: { nodeId: true }
-              });
-              if (originalVar?.nodeId) {
-                if (!copiedVarsByOwner.has(originalVar.nodeId)) {
-                  copiedVarsByOwner.set(originalVar.nodeId, []);
-                }
-                copiedVarsByOwner.get(originalVar.nodeId)!.push(copyResult.variableId);
-              }
+            console.log(`🔷 [LINKED_VARS] 📤 Résultat copyVariableWithCapacities: success=${copyResult.success}, displayNodeId=${copyResult.displayNodeId}`);
+            if (copyResult.success && copyResult.displayNodeId) {
+              displayNodeIds.push(copyResult.displayNodeId);
+              console.log(`🔷 [LINKED_VARS] ✅ Display node ajouté: ${copyResult.displayNodeId}`);
             } else {
-              newLinkedVariableIds.push(linkedVarId);
+              console.log(`🔷 [LINKED_VARS] ⚠️ Pas de display node créé! error=${copyResult.error}`);
             }
           } catch (e) {
-            newLinkedVariableIds.push(linkedVarId);
+            console.warn(`[DEEP-COPY] Erreur copie variable ${linkedVarId}:`, (e as Error).message);
           }
+        } else {
+          console.log(`🔷 [LINKED_VARS] ⏭️ Variable ignorée (shared-ref): ${linkedVarId}`);
         }
       }
     }
@@ -1228,51 +1249,24 @@ export async function deepCopyNodeInternal(
     if (
       newLinkedFormulaIds.length > 0 ||
       newLinkedConditionIds.length > 0 ||
-      newLinkedTableIds.length > 0 ||
-      newLinkedVariableIds.length > 0
+      newLinkedTableIds.length > 0
     ) {
       try {
+        // ⚠️ CRITIQUE: Ne PAS mettre à jour linkedVariableIds !
+        // Il est copié automatiquement et doit rester intact
         await prisma.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
             linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
-            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] },
-            linkedVariableIds: newLinkedVariableIds.length > 0 ? { set: newLinkedVariableIds } : { set: [] }
+            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] }
+            // linkedVariableIds: SUPPRIMÉ - ne doit PAS être mis à jour !
           }
         });
         
-        // 🔗 ÉTAPE CRÍTICA: Mettre à jour aussi les nœuds PROPRIÉTAIRES des variables
-        // Chaque nœud propriétaire doit avoir les variables copiées dans son linkedVariableIds
-        if (copiedVarsByOwner.size > 0) {
-          for (const [ownerNodeId, copiedVarIds] of copiedVarsByOwner) {
-            try {
-              // 1. Récupérer linkedVariableIds actuel du propriétaire
-              const ownerNode = await prisma.treeBranchLeafNode.findUnique({
-                where: { id: ownerNodeId },
-                select: { linkedVariableIds: true }
-              });
-              
-              if (ownerNode) {
-                // 2. Fusionner avec les variables copiées
-                const currentVarIds = ownerNode.linkedVariableIds || [];
-                const updatedVarIds = Array.from(new Set([...currentVarIds, ...copiedVarIds]));
-                
-                // 3. Mettre à jour le propriétaire
-                await prisma.treeBranchLeafNode.update({
-                  where: { id: ownerNodeId },
-                  data: {
-                    linkedVariableIds: { set: updatedVarIds }
-                  }
-                });
-                
-                console.log(`[DEEP-COPY] 🔗 Nœud propriétaire ${ownerNodeId} mis à jour avec ${copiedVarIds.length} variable(s) copiée(s)`);
-              }
-            } catch (e) {
-              console.warn(`[DEEP-COPY] ⚠️ Erreur lors de la mise à jour du nœud propriétaire ${ownerNodeId}:`, (e as Error).message);
-            }
-          }
-        }
+        // ⚠️ SUPPRIMÉ: Ne PAS mettre à jour linkedVariableIds après la copie !
+        // Le linkedVariableIds est copié automatiquement depuis le template original
+        // et doit rester INTACT (contenir seulement l'ID original, pas les IDs copiés)
       } catch (e) {
         console.warn('[DEEP-COPY] Erreur lors du UPDATE des linked***', (e as Error).message);
       }
@@ -1316,8 +1310,9 @@ export async function deepCopyNodeInternal(
         console.log(`[DEEP-COPY] ✅ Variable originale trouvée: ${originalVar.id} (${originalVar.exposedKey})`);
 
         // Créer la variable copiée avec nodeId = noeud copié
-        const newVarId = `${originalVar.id}${suffixToken}`;
-        const newExposedKey = `${originalVar.exposedKey}${suffixToken}`;
+        // 🛠️ Utiliser appendSuffix pour garantir le format "-suffix" et éviter les collisions
+        const newVarId = appendSuffix(originalVar.id);
+        const newExposedKey = appendSuffix(originalVar.exposedKey);
 
         console.log(`[DEEP-COPY] 🔧 Création variable ${newVarId} avec nodeId=${nodeId}`);
 
@@ -1342,7 +1337,7 @@ export async function deepCopyNodeInternal(
           }
         });
 
-        // Synchroniser data_activeId sur le noeud
+        // Synchroniser data_activeId + linkedVariableIds sur le noeud copié
         await prisma.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
@@ -1352,7 +1347,9 @@ export async function deepCopyNodeInternal(
             data_displayFormat: originalVar.displayFormat,
             data_precision: originalVar.precision,
             data_unit: originalVar.unit,
-            data_visibleToUser: originalVar.visibleToUser
+            data_visibleToUser: originalVar.visibleToUser,
+            // linkedVariableIds doit contenir la variable copiée (suffixée)
+            linkedVariableIds: { set: [newVarId] }
           }
         });
 
