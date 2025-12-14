@@ -412,6 +412,17 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
             return type.includes('field') || type.includes('leaf');
           });
           const needsFallbackReload = duplicated.length > 0 && (!inlineNodeCount || !hasRenderableInlineNodes);
+          
+          // 🔄 BACKGROUND SYNC: Si c'est une synchronisation silencieuse en arrière-plan,
+          // faire un fetch silencieux immédiatement pour garantir la cohérence des données
+          if ((detail as any)?.source === 'background-sync' || (detail as any)?.silentRefresh) {
+            ddiag('[useTBLDataHierarchicalFixed] Background sync event → silent fetch');
+            window.setTimeout(() => {
+              try { fetchData({ silent: true }); } catch { /* ignore */ }
+            }, 50);
+            return; // Ne pas continuer le traitement normal
+          }
+          
           // If the event indicates a duplicate-templates action but contains no duplicated ids
           // nor inline nodes, schedule a silent fetch to re-sync with the server if it materializes nodes later.
           if ((detail as any)?.source === 'duplicate-templates' && (!duplicated || duplicated.length === 0) && inlineNodeCount === 0) {

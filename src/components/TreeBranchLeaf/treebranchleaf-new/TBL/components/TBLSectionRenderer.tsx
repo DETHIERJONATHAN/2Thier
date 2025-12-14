@@ -4262,7 +4262,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 console.error('Failed to log click', e);
                               }
                               
-                              // �🚫 PROTECTION: Empêcher les double-clics (via Ref pour immédiateté)
+                              // 🎯 SCROLL LOCK: Sauvegarder la position du scroll pour la restaurer après
+                              const scrollContainer = document.querySelector('.ant-layout-content') || document.documentElement;
+                              const savedScrollTop = scrollContainer.scrollTop;
+                              const savedWindowScrollY = window.scrollY;
+                              
+                              // Fonction pour restaurer le scroll
+                              const restoreScroll = () => {
+                                requestAnimationFrame(() => {
+                                  if (scrollContainer && scrollContainer !== document.documentElement) {
+                                    scrollContainer.scrollTop = savedScrollTop;
+                                  }
+                                  window.scrollTo(0, savedWindowScrollY);
+                                });
+                              };
+                              
+                              // 🚫 PROTECTION: Empêcher les double-clics (via Ref pour immédiateté)
                               if (isRepeatingRef.current[repeaterParentId]) {
                                 console.warn('⚠️ [REPEATER] Clic ignoré: opération déjà en cours (ref check)');
                                 return;
@@ -4427,21 +4442,48 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   } else {
                                     console.log('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId });
                                   }
-                                  // Always force remote to ensure subsequent clicks fetch the updated state from DB
-                                  // This guarantees -2, -3, etc. are created correctly without page reload
+                                  // 🎯 OPTIMISTIC UI: On ne force plus le rechargement complet !
+                                  // L'événement tbl-repeater-updated avec suppressReload=true et newNodes suffit
+                                  // pour une mise à jour instantanée sans freeze.
+                                  // Un sync silencieux en arrière-plan garantit la cohérence pour les clics suivants.
                                   try {
-                                    console.error('🚨🚨🚨 [COPY-API] ABOUT TO DISPATCH tbl-force-retransform with forceRemote=TRUE');
+                                    console.log('✅ [COPY-API] Mise à jour optimiste appliquée (pas de forceRemote)');
+                                    // Dispatch un retransform LOCAL UNIQUEMENT (pas de refetch serveur)
                                     window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
                                       detail: {
                                         source: 'duplicate-templates',
                                         treeId: eventTreeId,
-                                        forceRemote: true,
+                                        forceRemote: false, // 🎯 IMPORTANT: false = pas de refresh complet
+                                        skipFormReload: true,
                                         eventDebugId,
                                       }
                                     }));
-                                    console.error('🔄 [COPY-API] 🎯🎯🎯 DISPATCHED tbl-force-retransform with forceRemote=TRUE 🎯🎯🎯');
+                                    console.log('✅ [COPY-API] Local retransform dispatched (no server refetch)');
+                                    
+                                    // 🔄 BACKGROUND SYNC: Synchronisation silencieuse pour les clics suivants
+                                    // Cela garantit que les suffixes -2, -3, etc. seront corrects
+                                    window.setTimeout(() => {
+                                      try {
+                                        console.log('🔄 [COPY-API] Background silent sync starting...');
+                                        window.dispatchEvent(new CustomEvent('tbl-repeater-updated', {
+                                          detail: {
+                                            treeId: eventTreeId,
+                                            nodeId: repeaterParentId,
+                                            source: 'background-sync',
+                                            duplicated: [],
+                                            newNodes: [],
+                                            suppressReload: true,
+                                            silentRefresh: true,
+                                            timestamp: Date.now(),
+                                            eventDebugId: eventDebugId + '-bg'
+                                          }
+                                        }));
+                                      } catch (bgErr) {
+                                        console.warn('⚠️ [COPY-API] Background sync failed (silent):', bgErr);
+                                      }
+                                    }, 800); // Délai suffisant pour que l'UI soit stable
                                   } catch (e) { 
-                                    console.error('❌ [COPY-API] ERROR dispatching tbl-force-retransform:', e);
+                                    console.warn('⚠️ [COPY-API] Local retransform dispatch failed:', e);
                                   }
                                 } catch (e) {
                                   console.warn('⚠️ [COPY-API] Impossible de dispatch tbl-repeater-updated (silent)', e);
@@ -4454,6 +4496,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 // 🔓 Réactiver le bouton après l'opération (succès ou échec)
                                 isRepeatingRef.current[repeaterParentId] = false;
                                 setIsRepeating(prev => ({ ...prev, [repeaterParentId]: false }));
+                                
+                                // 🎯 SCROLL LOCK: Restaurer la position du scroll
+                                restoreScroll();
+                                // Double restauration avec délai pour les re-renders React
+                                setTimeout(restoreScroll, 50);
+                                setTimeout(restoreScroll, 150);
                               }
 
                               // Si la duplication a échoué côté serveur, annuler l'optimistic UI
