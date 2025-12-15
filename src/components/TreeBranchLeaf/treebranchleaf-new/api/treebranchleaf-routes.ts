@@ -2768,6 +2768,16 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     // 🔧 Propriétés avancées universelles
     if (appearanceConfig.visibleToUser !== undefined) columnData.data_visibleToUser = appearanceConfig.visibleToUser;
     if (appearanceConfig.isRequired !== undefined) columnData.isRequired = appearanceConfig.isRequired;
+    
+    // 🔥 NOUVEAU: Mapping direct prefix/suffix/unit/decimals depuis appearanceConfig
+    // Ces valeurs viennent directement du UniversalPanel
+    if (appearanceConfig.prefix !== undefined) columnData.number_prefix = appearanceConfig.prefix || null;
+    if (appearanceConfig.suffix !== undefined) columnData.number_suffix = appearanceConfig.suffix || null;
+    if (appearanceConfig.unit !== undefined) columnData.number_unit = appearanceConfig.unit || null;
+    if (appearanceConfig.decimals !== undefined) columnData.number_decimals = appearanceConfig.decimals;
+    if (appearanceConfig.min !== undefined) columnData.number_min = appearanceConfig.min;
+    if (appearanceConfig.max !== undefined) columnData.number_max = appearanceConfig.max;
+    if (appearanceConfig.step !== undefined) columnData.number_step = appearanceConfig.step;
   }
   
   // âœ… Ã‰TAPE 1bis : Migration depuis metadata.appearance (fallback)
@@ -2852,16 +2862,17 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (textConfig.rows) columnData.text_rows = textConfig.rows;
   }
   
-  // âœ… Ã‰TAPE 3 : Migration configuration champs nombre
+  // ✅ ÉTAPE 3 : Migration configuration champs nombre
   const numberConfig = metadata.numberConfig || fieldConfig.number || fieldConfig.numberConfig || {};
   if (Object.keys(numberConfig).length > 0) {
     if (numberConfig.min !== undefined) columnData.number_min = numberConfig.min;
     if (numberConfig.max !== undefined) columnData.number_max = numberConfig.max;
     if (numberConfig.step !== undefined) columnData.number_step = numberConfig.step;
     if (numberConfig.decimals !== undefined) columnData.number_decimals = numberConfig.decimals;
-    if (numberConfig.prefix) columnData.number_prefix = numberConfig.prefix;
-    if (numberConfig.suffix) columnData.number_suffix = numberConfig.suffix;
-    if (numberConfig.unit) columnData.number_unit = numberConfig.unit;
+    // 🔥 FIX: Permettre de supprimer prefix/suffix/unit en les mettant à vide
+    if (numberConfig.prefix !== undefined) columnData.number_prefix = numberConfig.prefix || null;
+    if (numberConfig.suffix !== undefined) columnData.number_suffix = numberConfig.suffix || null;
+    if (numberConfig.unit !== undefined) columnData.number_unit = numberConfig.unit || null;
     if (numberConfig.defaultValue !== undefined) columnData.number_defaultValue = numberConfig.defaultValue;
   }
   

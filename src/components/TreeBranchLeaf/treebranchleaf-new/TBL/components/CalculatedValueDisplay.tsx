@@ -23,6 +23,10 @@ interface CalculatedValueDisplayProps {
   precision?: number;
   /** Unité à afficher après la valeur (ex: "m²", "€", "%") */
   unit?: string;
+  /** Préfixe à afficher avant la valeur (ex: "$", "€") */
+  prefix?: string;
+  /** Suffixe à afficher après la valeur (ex: "%", "€") */
+  suffix?: string;
   /** Mode d'affichage: "simple" | "card" | "badge" */
   displayMode?: 'simple' | 'card' | 'badge';
   /** Afficher les métadonnées (calculatedAt, calculatedBy) */
@@ -50,6 +54,8 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
   placeholder = '---',
   precision = 2,
   unit,
+  prefix = '',
+  suffix = '',
   displayMode = 'simple',
   showMetadata = false,
   className = '',
@@ -141,13 +147,24 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
       displayValue = String(raw);
     }
 
-    // Ajouter l'unité
-    if (unit && displayValue !== placeholder) {
-      displayValue = `${displayValue} ${unit}`;
+    // Ajouter prefix, suffix et unité
+    if (displayValue !== placeholder) {
+      // Préfixe en premier
+      if (prefix) {
+        displayValue = `${prefix}${displayValue}`;
+      }
+      // Suffixe ensuite (sans espace)
+      if (suffix) {
+        displayValue = `${displayValue}${suffix}`;
+      }
+      // Unité à la fin (avec espace)
+      if (unit) {
+        displayValue = `${displayValue} ${unit}`;
+      }
     }
 
     return displayValue;
-  }, [value, precision, unit, placeholder, fallbackValue, fallbackValueFound]);
+  }, [value, precision, unit, prefix, suffix, placeholder, fallbackValue, fallbackValueFound]);
 
   // 🔴 Cas erreur
   if (error) {

@@ -3562,13 +3562,51 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         return undefined;
       };
 
+      // 🎨 Helper: Extraire TOUTES les configs d'apparence d'un champ
+      // Priorise: numberConfig > config racine > metadata > defaults
+      const getFieldDisplayConfig = (f: TBLField) => {
+        const cfg = (f.config || {}) as Record<string, unknown>;
+        const numCfg = (cfg.numberConfig || cfg.number || {}) as Record<string, unknown>;
+        const meta = ((f as any).metadata || {}) as Record<string, unknown>;
+        
+        // Priorité: numberConfig > config racine > metadata > capacités data > defaults
+        const dataInstance = effectiveCapabilities?.data?.instances?.[effectiveCapabilities?.data?.activeId || ''] as Record<string, unknown> | undefined;
+        const dataMeta = (dataInstance?.metadata || {}) as Record<string, unknown>;
+        
+        return {
+          precision: (numCfg.decimals as number | undefined) ?? 
+                     (cfg.decimals as number | undefined) ?? 
+                     (dataMeta.precision as number | undefined) ??
+                     (meta.precision as number | undefined) ?? 2,
+          prefix: (numCfg.prefix as string | undefined) ?? 
+                  (cfg.prefix as string | undefined) ?? 
+                  (meta.prefix as string | undefined) ?? '',
+          suffix: (numCfg.suffix as string | undefined) ?? 
+                  (cfg.suffix as string | undefined) ?? 
+                  (meta.suffix as string | undefined) ?? '',
+          unit: (numCfg.unit as string | undefined) ?? 
+                (cfg.unit as string | undefined) ?? 
+                (dataMeta.unit as string | undefined) ??
+                (meta.unit as string | undefined) ?? ''
+        };
+      };
+
       const renderStoredCalculatedValue = (
         nodeIdToUse?: string,
-        options?: { unit?: string; precision?: number; fallbackValue?: unknown }
+        options?: { unit?: string; prefix?: string; suffix?: string; precision?: number; fallbackValue?: unknown }
       ) => {
         if (!nodeIdToUse || !treeId) {
           return <span style={{ color: '#888' }}>---</span>;
         }
+
+        // Extraire les configs d'apparence du champ
+        const displayCfg = getFieldDisplayConfig(field);
+        
+        // Les options passées en paramètre ont la priorité sur les configs du champ
+        const finalPrecision = options?.precision ?? displayCfg.precision;
+        const finalPrefix = options?.prefix ?? displayCfg.prefix;
+        const finalSuffix = options?.suffix ?? displayCfg.suffix;
+        const finalUnit = options?.unit ?? displayCfg.unit;
 
         return (
           <CalculatedValueDisplay
@@ -3576,8 +3614,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             treeId={treeId}
             submissionId={submissionId ?? undefined}
             placeholder="---"
-            precision={options?.precision ?? 2}
-            unit={options?.unit}
+            precision={finalPrecision}
+            prefix={finalPrefix}
+            suffix={finalSuffix}
+            unit={finalUnit}
             fallbackValue={options?.fallbackValue}
           />
         );
@@ -3586,9 +3626,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // 🔥 FIX PRIORITAIRE: Forcer l'affichage via CalculatedValueDisplay pour TOUTES les copies
       if (treeId && isCopyWithSuffix) {
         console.log(`🚀 [COPY FIX CHAMPS DONNÉES] Forçage CalculatedValueDisplay pour copie de données: ${field.id} (${field.label})`);
+        // Les configs d'apparence sont maintenant automatiquement extraites par renderStoredCalculatedValue
         return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
-          unit: (field.config as { unit?: string } | undefined)?.unit,
-          precision: (field.config as { decimals?: number } | undefined)?.decimals ?? 2,
           fallbackValue: rawValue
         });
       }
@@ -3675,8 +3714,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       if (hasEmptyInstances && hasDataCapability && treeId && field.id) {
         console.log(`🚀🚀🚀 [MEGA FIX BACKEND] Champ "${field.label}" (${field.id}) - Affichage valeur stockée`);
         return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
-          unit: (field.config as any)?.unit,
-          precision: (field.config as any)?.decimals ?? 2,
           fallbackValue: effectiveMirrorValue
         });
       }
@@ -3753,8 +3790,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             }
 
             return renderStoredCalculatedValue(nodeIdToUse, {
-              unit: dMeta.unit,
-              precision: typeof dMeta.precision === 'number' ? dMeta.precision : (field.config?.decimals || 2),
               fallbackValue: effectiveMirrorValue
             });
           }
@@ -3820,8 +3855,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               }
               
               return renderStoredCalculatedValue(variableNodeId, {
-                unit: dataInstance?.unit as string | undefined,
-                precision: (dataInstance?.precision as number | undefined) ?? field.config?.decimals,
                 fallbackValue: effectiveMirrorValue
               });
             }
@@ -3849,8 +3882,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 });
               }
               return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
-                unit: dataInstance?.unit as string | undefined,
-                precision: (dataInstance?.precision as number | undefined) ?? field.config?.decimals,
                 fallbackValue: effectiveMirrorValue ?? rawValue
               });
             }
@@ -3893,8 +3924,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         // Le backend stocke les résultats avec le nodeId du CHAMP D'AFFICHAGE, mais pour les copies
         // il peut être nécessaire d'utiliser l'ID d'origine (copiedFromNodeId)
         return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
-          unit: field.config?.unit,
-          precision: field.config?.decimals || 4,
           fallbackValue: effectiveMirrorValue
         });
       }
@@ -3913,8 +3942,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           });
         }
         return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
-          unit: (field.config as { unit?: string } | undefined)?.unit,
-          precision: (field.config as { decimals?: number } | undefined)?.decimals ?? 2,
           fallbackValue: effectiveMirrorValue ?? rawValue
         });
       }
@@ -3979,10 +4006,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             return <span style={{ color: '#888' }}>---</span>;
           }
           
-          const cfg = field.config as { displayFormat?: 'number'|'currency'|'percentage'; unit?: string; decimals?: number } | undefined;
           return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
-            unit: cfg?.unit,
-            precision: cfg?.decimals || 2,
             fallbackValue: effectiveMirrorValue ?? rawValue
           });
         }
@@ -4046,11 +4070,44 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // 🎨 Style de la carte selon le type de champ
     const displayColProps = getUniformDisplayColProps(section);
     const displayAppearance = resolveDisplayAppearance(field);
-    const cardStyle = buildDisplayCardStyle(displayAppearance.tokens, displayAppearance.styleOverrides);
-    const labelStyle = buildDisplayLabelStyle(displayAppearance.tokens);
-    const valueStyle = buildDisplayValueStyle(displayAppearance.tokens);
+    
+    // 🎯 Détection des champs "Total" pour style distinctif (teal foncé + texte blanc)
+    const isTotalField = (field.label || '').toLowerCase().includes('total');
+    
+    // Style de base
+    let cardStyle = buildDisplayCardStyle(displayAppearance.tokens, displayAppearance.styleOverrides);
+    let labelStyle = buildDisplayLabelStyle(displayAppearance.tokens);
+    let valueStyle = buildDisplayValueStyle(displayAppearance.tokens);
+    
+    // 🎨 Surcharge pour les champs Total : fond teal foncé (#0b5c6b) + texte blanc
+    if (isTotalField) {
+      cardStyle = {
+        ...cardStyle,
+        background: 'linear-gradient(135deg, #0b5c6b 0%, #0d4f59 100%)',
+        backgroundColor: '#0b5c6b',
+        borderColor: '#094d56'
+      };
+      labelStyle = {
+        ...labelStyle,
+        color: 'rgba(255, 255, 255, 0.85)'
+      };
+      valueStyle = {
+        ...valueStyle,
+        color: '#ffffff',
+        fontWeight: 600
+      };
+    }
+    
     const cardSize = displayAppearance.tokens.size === 'lg' ? 'default' : 'small';
     const bodyPadding = `${displayAppearance.tokens.paddingY}px ${displayAppearance.tokens.paddingX}px`;
+    
+    // 🎨 Style du conteneur - force le texte blanc pour les champs Total
+    const containerStyle: React.CSSProperties = {
+      width: '100%',
+      textAlign: displayAppearance.tokens.align,
+      ...(isTotalField ? { color: '#ffffff', fontWeight: 700 } : {})
+    };
+    
     return (
       <Col key={field.id} {...displayColProps}>
         <Card
@@ -4058,7 +4115,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           style={cardStyle}
           styles={{ body: { padding: bodyPadding } }}
         >
-          <div style={{ width: '100%', textAlign: displayAppearance.tokens.align }}>
+          <div style={containerStyle}>
             <Text style={labelStyle}>
               {field.label}
             </Text>
@@ -4068,7 +4125,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
               if (React.isValidElement(displayValue)) {
                 return (
-                  <div style={{ width: '100%' }}>
+                  <div style={{ width: '100%', ...(isTotalField ? { color: '#ffffff', fontWeight: 700 } : {}) }}>
                     {displayValue}
                   </div>
                 );
