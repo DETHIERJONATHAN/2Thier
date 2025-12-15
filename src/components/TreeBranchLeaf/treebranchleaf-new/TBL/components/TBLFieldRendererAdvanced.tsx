@@ -1316,7 +1316,13 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         size: appearance.size ?? 'middle',
         width: appearance.width,
         style: appearance.style || {},
-        className: appearance.className || ''
+        className: appearance.className || '',
+        // 🎨 COULEUR DU LABEL: Héritage depuis l'apparence du parent/template
+        labelColor: pickDefined(
+          normalizedAppearanceConfig.labelColor as string | undefined,
+          metadataAppearance.labelColor as string | undefined,
+          (metadata.field as Record<string, unknown> | undefined)?.labelColor as string | undefined
+        )
       },
       
       // 🔥 AJOUT: Accès direct aux paramètres d'apparence pour compatibilité code existant
@@ -2816,8 +2822,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       label={
         <div style={LABEL_CONTAINER_STYLE}>
           <span
-            className="font-medium text-gray-700 whitespace-normal break-words"
-            style={DEFAULT_LABEL_TEXT_STYLE}
+            className={`font-medium whitespace-normal break-words ${!fieldConfig.appearance?.labelColor ? 'text-gray-700' : ''}`}
+            style={{
+              ...DEFAULT_LABEL_TEXT_STYLE,
+              // 🎨 Couleur du label héritée du parent/template si définie
+              ...(fieldConfig.appearance?.labelColor ? { color: fieldConfig.appearance.labelColor } : {})
+            }}
           >
             {fieldConfig.label}
             <span

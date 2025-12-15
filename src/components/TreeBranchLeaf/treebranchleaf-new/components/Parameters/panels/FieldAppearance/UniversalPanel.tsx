@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { Card, Divider, Form, Input, InputNumber, Select, Switch, Typography, Upload, Button, Tooltip, message } from 'antd';
+import { Card, ColorPicker, Divider, Form, Input, InputNumber, Select, Switch, Typography, Upload, Button, Tooltip, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../../../hooks/useDebouncedCallback';
 
@@ -21,6 +21,7 @@ const DEFAULT_CONFIG: Record<string, unknown> = {
   size: 'md',
   variant: 'default',
   width: '',
+  labelColor: '', // 🎨 Couleur du label (héritée par les enfants/copies)
   columnsDesktop: 2,
   columnsMobile: 1,
   gutter: 16,
@@ -178,6 +179,13 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
           </Form.Item>
           <Form.Item name="width" label={<Tooltip title="Valeur CSS personnalisée (ex: 100%, 320px)">Largeur personnalisée</Tooltip>}>
             <Input placeholder="auto / 320px / 100%" allowClear />
+          </Form.Item>
+          <Form.Item 
+            name="labelColor" 
+            label={<Tooltip title="Couleur héritée par les champs enfants et copies du repeater">Couleur du label</Tooltip>}
+            getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : ''}
+          >
+            <ColorPicker showText allowClear />
           </Form.Item>
           <Form.Item name="columnsDesktop" label="Colonnes desktop">
             <InputNumber min={1} max={12} style={{ width: '100%' }} />

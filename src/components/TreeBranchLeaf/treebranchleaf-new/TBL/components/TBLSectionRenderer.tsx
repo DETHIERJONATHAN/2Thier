@@ -1597,7 +1597,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1')) is declared earlier
 
-  const buildConditionalFieldFromNode = useCallback((node: RawTreeNode): TBLField => {
+  // 🎨 HÉRITAGE APPARENCE: parentAppearance permet aux shared references d'hériter l'apparence du champ parent
+  const buildConditionalFieldFromNode = useCallback((
+    node: RawTreeNode,
+    parentAppearance?: { size?: string; variant?: string; width?: string; labelColor?: string; [key: string]: unknown }
+  ): TBLField => {
     const finalFieldType = (node.subType || node.fieldType || node.type || 'TEXT') as string;
 
     const buildBaseCapability = (
@@ -1682,18 +1686,23 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       sharedReferenceIds, // 🔗 LIAISON: Inclure les références partagées multiples
       options, // 🔥 AJOUT CRITIQUE: Inclure les options construites !
       // 🎨 APPARENCE: Inclure les configurations d'apparence complètes du nœud source
+      // 🎨 HÉRITAGE: parentAppearance prend priorité pour les shared references (Rampant, etc.)
       metadata: nodeMetadata,
       appearanceConfig: {
         ...metadataAppearance,
         ...metadataFieldAppearance,
-        size: metadataAppearance.size ?? metadataFieldAppearance.size ?? node.appearance_size,
-        variant: metadataAppearance.variant ?? metadataFieldAppearance.variant ?? node.appearance_variant,
-        width: metadataAppearance.width ?? metadataFieldAppearance.width ?? node.appearance_width,
+        // 🎨 HÉRITAGE: parentAppearance PREND PRIORITÉ pour les shared references
+        size: parentAppearance?.size ?? metadataAppearance.size ?? metadataFieldAppearance.size ?? node.appearance_size,
+        variant: parentAppearance?.variant ?? metadataAppearance.variant ?? metadataFieldAppearance.variant ?? node.appearance_variant,
+        width: parentAppearance?.width ?? metadataAppearance.width ?? metadataFieldAppearance.width ?? node.appearance_width,
+        labelColor: parentAppearance?.labelColor ?? metadataAppearance.labelColor ?? metadataFieldAppearance.labelColor,
       },
       config: {
-        size: node.appearance_size ?? metadataAppearance.size as string ?? undefined,
-        width: node.appearance_width ?? metadataAppearance.width as string ?? undefined,
-        variant: node.appearance_variant ?? metadataAppearance.variant as string ?? undefined,
+        // 🎨 HÉRITAGE: parentAppearance PREND PRIORITÉ pour les shared references
+        size: parentAppearance?.size ?? node.appearance_size ?? metadataAppearance.size as string ?? undefined,
+        width: parentAppearance?.width ?? node.appearance_width ?? metadataAppearance.width as string ?? undefined,
+        variant: parentAppearance?.variant ?? node.appearance_variant ?? metadataAppearance.variant as string ?? undefined,
+        labelColor: parentAppearance?.labelColor ?? metadataAppearance.labelColor as string ?? undefined,
         minLength: node.text_minLength ?? undefined,
         maxLength: node.text_maxLength ?? undefined,
         rows: node.text_rows ?? undefined,
@@ -2109,14 +2118,23 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 }
 
                 if (matchingNodeCopy) {
+                  // 🎨 HÉRITAGE APPARENCE: Extraire l'apparence du champ parent (f) pour la transmettre aux shared refs
+                  const parentFieldAppearance = {
+                    size: f.appearanceConfig?.size ?? f.config?.size,
+                    variant: f.appearanceConfig?.variant ?? f.config?.variant,
+                    width: f.appearanceConfig?.width ?? f.config?.width,
+                    labelColor: f.appearanceConfig?.labelColor ?? f.config?.labelColor,
+                  };
                   const childFields = allNodes.filter(childNode => childNode.parentId === matchingNodeCopy.id && childNode.type === 'leaf_option_field');
                   for (const child of childFields) {
-                    conditionalFieldsToRender.push(buildConditionalFieldFromNode(child));
+                    // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
+                    conditionalFieldsToRender.push(buildConditionalFieldFromNode(child, parentFieldAppearance));
                   }
                   const sharedReferenceIds = findAllSharedReferencesRecursive(matchingNodeCopy.id, allNodes);
                   for (const refId of sharedReferenceIds) {
                     const refNode = allNodes.find(n => n.id === refId);
-                    if (refNode) conditionalFieldsToRender.push(buildConditionalFieldFromNode(refNode));
+                    // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
+                    if (refNode) conditionalFieldsToRender.push(buildConditionalFieldFromNode(refNode, parentFieldAppearance));
                   }
                   // Fallback: si selectedValue est vide, utiliser le label du node
                   if (selectedValue === undefined || selectedValue === null) selectedValue = matchingNodeCopy.label;
@@ -2675,6 +2693,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               const conditionalFields: TBLField[] = [];
               const existingIds = new Set<string>();
 
+              // 🎨 HÉRITAGE APPARENCE: Extraire l'apparence du champ parent (field) pour la transmettre aux enfants
+              const parentFieldAppearanceForChildren = {
+                size: field.appearanceConfig?.size ?? field.config?.size,
+                variant: field.appearanceConfig?.variant ?? field.config?.variant,
+                width: field.appearanceConfig?.width ?? field.config?.width,
+                labelColor: field.appearanceConfig?.labelColor ?? field.config?.labelColor,
+              };
+
               const childFields = allNodes.filter(childNode =>
                 childNode.parentId === matchingNode.id &&
                 childNode.type === 'leaf_option_field'
@@ -2689,7 +2715,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               if (childFields.length > 0) {
                 console.log(`🎯🎯🎯 [SECTION RENDERER] Trouvé ${childFields.length} champs enfants (références partagées)`);
                 childFields.forEach(childNode => {
-                  const fieldFromChild = buildConditionalFieldFromNode(childNode);
+                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
+                  const fieldFromChild = buildConditionalFieldFromNode(childNode, parentFieldAppearanceForChildren);
                   conditionalFields.push(fieldFromChild);
                   existingIds.add(fieldFromChild.id);
                 });
@@ -2735,6 +2762,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   fieldLabel: field.label
                 });
 
+                // 🎨 HÉRITAGE APPARENCE: Réutiliser parentFieldAppearanceForChildren déclaré plus haut
+
                 sharedReferenceIds.forEach(refId => {
                   const refNode = allNodes.find(node => node.id === refId);
                   if (!refNode) {
@@ -2750,10 +2779,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     refId: refNode.id,
                     refLabel: refNode.label,
                     refFieldType: refNode.fieldType,
-                    matchingNodeId: matchingNode.id
+                    matchingNodeId: matchingNode.id,
+                    parentAppearanceInherited: parentFieldAppearanceForChildren
                   });
                   
-                  const refField = buildConditionalFieldFromNode(refNode);
+                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent pour que le champ Rampant hérite
+                  const refField = buildConditionalFieldFromNode(refNode, parentFieldAppearanceForChildren);
                   conditionalFields.push(refField);
                   existingIds.add(refField.id);
                   
@@ -2811,13 +2842,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 const rebuiltConditional: TBLField[] = [];
                 const existingIds = new Set<string>();
 
+                // 🎨 HÉRITAGE APPARENCE: Extraire l'apparence du champ parent (field) pour la transmettre aux shared refs
+                const parentFieldAppearance = {
+                  size: field.appearanceConfig?.size ?? field.config?.size,
+                  variant: field.appearanceConfig?.variant ?? field.config?.variant,
+                  width: field.appearanceConfig?.width ?? field.config?.width,
+                  labelColor: field.appearanceConfig?.labelColor ?? field.config?.labelColor,
+                };
+
                 // 1) Ajouter les enfants directs de type leaf_option_field
                 const childFields = allNodes.filter(childNode =>
                   childNode.parentId === srcNode!.id &&
                   childNode.type === 'leaf_option_field'
                 );
                 childFields.forEach(childNode => {
-                  const fieldFromChild = buildConditionalFieldFromNode(childNode);
+                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
+                  const fieldFromChild = buildConditionalFieldFromNode(childNode, parentFieldAppearance);
                   rebuiltConditional.push(fieldFromChild);
                   existingIds.add(fieldFromChild.id);
                 });
@@ -2827,7 +2867,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 sharedReferenceIds.forEach(refId => {
                   const refNode = allNodes.find(node => node.id === refId);
                   if (!refNode || existingIds.has(refNode.id)) return;
-                  const refField = buildConditionalFieldFromNode(refNode);
+                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
+                  const refField = buildConditionalFieldFromNode(refNode, parentFieldAppearance);
                   rebuiltConditional.push(refField);
                   existingIds.add(refField.id);
                 });
