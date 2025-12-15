@@ -40,6 +40,9 @@ import { getNodeIdForLookup } from '../../../../utils/node-helpers.js';
 // 🔄 Import de la fonction de copie profonde centralisée
 import { deepCopyNodeInternal as deepCopyNodeInternalService } from './repeat/services/deep-copy-service.js';
 
+// 📊 Import des routes pour les champs Total (somme des copies)
+import { registerSumDisplayFieldRoutes, updateSumDisplayFieldAfterCopyChange } from './sum-display-field-routes.js';
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ðŸ—‚ï¸ ROUTES NORMALISÃ‰ES POUR LES TABLES (ARCHITECTURE OPTION B)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -49,6 +52,10 @@ const router = Router();
 
 // Monter les nouvelles routes de tables en premier pour qu'elles aient la prioritÃ©
 router.use('/', tableRoutesNew);
+
+// 📊 Enregistrer les routes pour les champs Total (somme des copies)
+registerSumDisplayFieldRoutes(router);
+
 const prisma = new PrismaClient();
 
 type InlineRolesInput = Record<string, unknown> | undefined;

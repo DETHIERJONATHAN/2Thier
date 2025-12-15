@@ -1098,10 +1098,19 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     }
 
     // 4) Récupérer les capacités de l'arbre
-    const capacities = await prisma.treeBranchLeafNodeVariable.findMany({
+    const capacitiesRaw = await prisma.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
       include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
     });
+    
+    // 🔑 TRIER les capacités: formules simples d'abord, formules composées (sum-total) ensuite
+    // Cela garantit que les valeurs des formules simples sont dans le valueMap avant d'évaluer les sommes
+    const capacities = capacitiesRaw.sort((a, b) => {
+      const aIsSumFormula = a.sourceRef?.includes('sum-formula') || a.sourceRef?.includes('sum-total') ? 1 : 0;
+      const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
+      return aIsSumFormula - bIsSumFormula; // Les sum-formulas sont évaluées en dernier
+    });
+    console.log(`[UNIVERSAL] 🔄 Ordre d'évaluation:`, capacities.map(c => `${c.TreeBranchLeafNode?.label || c.nodeId} (${c.sourceRef?.includes('sum-formula') ? 'SUM' : 'SIMPLE'})`));
 
     // 5) Contexte d'évaluation (submissionId fictif)
     const submissionId = baseSubmissionId || `preview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -1137,6 +1146,13 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         );
         
         console.log(`[UNIVERSAL] ✅ Résultat: value="${evaluation.value}", operationResult="${evaluation.operationResult}"`);
+        
+        // 🔑 CRITIQUE: Ajouter la valeur calculée au valueMap pour que les formules suivantes puissent l'utiliser
+        // Cela permet aux formules composées (ex: sum-total) de récupérer les valeurs des formules simples (ex: Mur)
+        if (evaluation.value !== null && evaluation.value !== undefined && evaluation.value !== '∅') {
+          context.valueMap.set(cap.nodeId, evaluation.value);
+          console.log(`[UNIVERSAL] 📥 Valeur ajoutée au valueMap: ${cap.nodeId} = ${evaluation.value}`);
+        }
         
         results.push({
           nodeId: cap.nodeId,
@@ -1297,7 +1313,14 @@ router.post('/submissions/stage/preview', async (req, res) => {
     const stageEntries = Object.entries(stage.formData) as Array<[string, unknown]>;
     await applySharedReferenceValues(valueMap, stageEntries, stage.treeId);
 
-    const capacities = await prisma.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
+    // 🔑 TRIER les capacités: formules simples d'abord, formules composées (sum-total) ensuite
+    const capacitiesRaw = await prisma.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
+    const capacities = capacitiesRaw.sort((a, b) => {
+      const aIsSumFormula = a.sourceRef?.includes('sum-formula') || a.sourceRef?.includes('sum-total') ? 1 : 0;
+      const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
+      return aIsSumFormula - bIsSumFormula;
+    });
+    
     const context = { submissionId: stage.submissionId || `preview-${Date.now()}`, organizationId: stage.organizationId, userId: stage.userId, treeId: stage.treeId, labelMap, valueMap } as const;
     const results = [] as Array<{ nodeId: string; nodeLabel: string | null; sourceRef: string; operationSource: string; operationResult: unknown; operationDetail: unknown }>;
     for (const c of capacities) {
@@ -1309,6 +1332,12 @@ router.post('/submissions/stage/preview', async (req, res) => {
           prisma,
           context.valueMap
         );
+        
+        // 🔑 CRITIQUE: Ajouter la valeur calculée au valueMap pour les formules suivantes
+        if (r.value !== null && r.value !== undefined && r.value !== '∅') {
+          context.valueMap.set(c.nodeId, r.value);
+        }
+        
         results.push({ 
           nodeId: c.nodeId, 
           nodeLabel: c.TreeBranchLeafNode?.label || null, 

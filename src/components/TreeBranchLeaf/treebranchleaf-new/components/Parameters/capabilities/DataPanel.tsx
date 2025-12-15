@@ -85,6 +85,10 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
     apiValue?: unknown;
   } | null>(null);
 
+  // 📊 NOUVEAU : État pour le champ Total (somme des copies)
+  const [createSumDisplayField, setCreateSumDisplayField] = useState<boolean>(false);
+  const [sumFieldLoading, setSumFieldLoading] = useState<boolean>(false);
+
   // 🧪 Bac à sable de test
   type TestRow = { key: string; type: 'text' | 'number' | 'boolean'; value: string | number | boolean };
   const [sandboxOpen, setSandboxOpen] = useState<boolean>(false);
@@ -129,6 +133,11 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
         // lire instances depuis metadata
         const node = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { metadata?: Record<string, unknown> };
         const list: DataInstance[] = ((node?.metadata as { capabilities?: { datas?: DataInstance[] } } | undefined)?.capabilities?.datas) || [];
+        
+        // 📊 Charger l'état createSumDisplayField depuis la metadata du nœud
+        const sumFieldEnabled = (node?.metadata as { createSumDisplayField?: boolean } | undefined)?.createSumDisplayField || false;
+        setCreateSumDisplayField(sumFieldEnabled);
+        
         if (list.length > 0) {
           const first = list[0];
           setInstances(list);
@@ -1183,6 +1192,55 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           <Checkbox>Visible pour l'utilisateur</Checkbox>
         </Form.Item>
       </Form>
+      
+      {/* 📊 Option pour créer un champ Total (somme des copies) */}
+      <Divider style={{ margin: '12px 0' }} />
+      <div style={{ marginBottom: 12 }}>
+        <Checkbox
+          checked={createSumDisplayField}
+          disabled={readOnly || sumFieldLoading}
+          onChange={async (e) => {
+            const newValue = e.target.checked;
+            setCreateSumDisplayField(newValue);
+            setSumFieldLoading(true);
+            
+            try {
+              // Sauvegarder dans la metadata du nœud
+              const node = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { metadata?: Record<string, unknown> };
+              const md = (node?.metadata || {}) as Record<string, unknown>;
+              const nextMd = { ...md, createSumDisplayField: newValue };
+              await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
+              
+              // Appeler l'API pour créer/supprimer le champ Total
+              if (newValue) {
+                // Créer le champ Total
+                await api.post(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/sum-display-field`);
+                messageApi.success('Champ Total créé avec succès');
+              } else {
+                // Supprimer le champ Total
+                await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/sum-display-field`);
+                messageApi.success('Champ Total supprimé');
+              }
+            } catch (err) {
+              console.error('❌ Erreur gestion champ Total:', err);
+              messageApi.error('Erreur lors de la gestion du champ Total');
+              // Rollback
+              setCreateSumDisplayField(!newValue);
+            } finally {
+              setSumFieldLoading(false);
+            }
+          }}
+        >
+          📊 Créer un champ Total (somme des copies)
+        </Checkbox>
+        <div style={{ marginLeft: 24, marginTop: 4 }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            Active cette option pour créer automatiquement un champ qui affiche la somme de toutes les copies de cette variable (ex: toit + toit-1 + toit-2 = Total).
+            Le champ Total sera mis à jour automatiquement à chaque ajout ou suppression de copie.
+          </Text>
+        </div>
+      </div>
+      
       {helper}
       
       {/* 🌲 Sélecteur d'arborescence modal */}

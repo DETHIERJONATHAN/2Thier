@@ -280,19 +280,28 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       (node.metadata as any)?.lookup?.enabled === true && 
       (node.metadata as any)?.lookup?.tableReference;
 
+    // 🆕 Vérifier si le node a une variable avec formule (pour les sum-total, etc.)
+    const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
+      where: { nodeId },
+      select: { sourceType: true, sourceRef: true }
+    });
+    const hasFormulaVariable = variableMeta2?.sourceType === 'formula' && variableMeta2?.sourceRef?.startsWith('node-formula:');
+
     // Invoquer operation-interpreter si:
-    // 1. C'est un champ TBL avec table lookup ET
+    // 1. C'est un champ TBL avec table lookup OU a une variable formule ET
     // 2. (Pas de valeur calculée OU valeur trop ancienne > 10s)
-    if (hasTableLookup && node.treeId) {
+    if ((hasTableLookup || hasFormulaVariable) && node.treeId) {
       const now = new Date();
       const calculatedAt = node.calculatedAt ? new Date(node.calculatedAt) : null;
       const isStale = !calculatedAt || (now.getTime() - calculatedAt.getTime()) > 10000; // 10s
-      const hasNoValue = !node.calculatedValue || node.calculatedValue === '' || node.calculatedValue === '[]';
+      const hasNoValue = !node.calculatedValue || node.calculatedValue === '' || node.calculatedValue === '[]' || node.calculatedValue === '0';
       
-      if (isStale || hasNoValue) {
-        console.log(`🔥 [CalculatedValueController] Champ TBL "${node.label}" nécessite recalcul:`, {
+      if (isStale || hasNoValue || hasFormulaVariable) {
+        console.log(`🔥 [CalculatedValueController] Node "${node.label}" nécessite recalcul:`, {
           nodeId, 
-          hasTableLookup, 
+          hasTableLookup,
+          hasFormulaVariable,
+          sourceRef: variableMeta2?.sourceRef,
           isStale, 
           hasNoValue,
           calculatedAt,
@@ -312,8 +321,9 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           console.log('🎯 [CalculatedValueController] Résultat operation-interpreter:', result);
           
           // Si on a un résultat, le stocker ET le retourner
-          if (result && result.operationResult !== undefined) {
-            const stringValue = String(result.operationResult);
+          // 🔥 Utiliser result.value (le nombre) et non result.operationResult (le humanText)
+          if (result && (result.value !== undefined || result.operationResult !== undefined)) {
+            const stringValue = String(result.value ?? result.operationResult);
             
             // Stocker dans la base
             await prisma.treeBranchLeafNode.update({

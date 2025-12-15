@@ -37,6 +37,8 @@ import {
   type ParsedSourceRef
 } from '../utils/source-ref.js';
 import { linkVariableToAllCapacityNodes } from '../../universal-linking-system.js';
+// 📊 Import pour la mise à jour des champs Total après copie
+import { updateSumDisplayFieldAfterCopyChange } from '../../sum-display-field-routes.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔗 IMPORTS DES MODULES DE COPIE DE CAPACITÉS
@@ -1653,6 +1655,23 @@ export async function copyVariableWithCapacities(
     console.log(`\n${'═'.repeat(80)}`);
     console.log(`✅ COPIE VARIABLE TERMINÉE`);
     console.log(`${'═'.repeat(80)}\n`);
+
+    // 📊 Mettre à jour le champ Total si activé sur le nœud source
+    try {
+      // Récupérer le nodeId de la variable originale pour trouver le nœud source
+      const originalVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
+        where: { id: originalVarId },
+        select: { nodeId: true }
+      });
+      if (originalVariable?.nodeId) {
+        // Appel asynchrone non-bloquant pour mettre à jour le Total
+        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma).catch(err => {
+          console.warn(`⚠️ Erreur mise à jour champ Total:`, err);
+        });
+      }
+    } catch (sumErr) {
+      console.warn(`⚠️ Erreur récupération variable originale pour Total:`, sumErr);
+    }
 
     return {
       variableId: newVariable.id,

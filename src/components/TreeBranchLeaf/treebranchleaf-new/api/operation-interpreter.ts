@@ -381,7 +381,7 @@ async function getNodeValue(
 
   console.log(`[INTERPRETER][getNodeValue] DB fallback ${nodeId}`);
   
-  // 🎯 PRIORITÉ 2: Requête Prisma pour récupérer depuis la base (fallback rare)
+  // 🎯 PRIORITÉ 2: Requête Prisma pour récupérer depuis TreeBranchLeafSubmissionData
   const data = await prisma.treeBranchLeafSubmissionData.findFirst({
     where: {
       nodeId,
@@ -392,14 +392,28 @@ async function getNodeValue(
     }
   });
 
-  console.log(`[INTERPRETER][getNodeValue] DB result ${nodeId} → ${formatDebugValue(data?.value ?? null)}`);
+  if (data?.value !== null && data?.value !== undefined) {
+    console.log(`[INTERPRETER][getNodeValue] SubmissionData hit ${nodeId} → ${formatDebugValue(data.value)}`);
+    return String(data.value);
+  }
   
-  // Retourner la valeur ou "0" par défaut
-  if (data?.value === null || data?.value === undefined) {
-    return options?.preserveEmpty ? null : "0";
+  // 🎯 PRIORITÉ 3 (NOUVEAU): Récupérer depuis TreeBranchLeafNode.calculatedValue
+  // Ceci permet de récupérer les valeurs calculées d'autres formules (ex: Mur, Mur-1)
+  // même si elles ne sont pas dans le valueMap ou SubmissionData
+  const node = await prisma.treeBranchLeafNode.findUnique({
+    where: { id: nodeId },
+    select: { calculatedValue: true, label: true }
+  });
+
+  if (node?.calculatedValue !== null && node?.calculatedValue !== undefined && node?.calculatedValue !== '') {
+    console.log(`[INTERPRETER][getNodeValue] 🆕 TreeBranchLeafNode.calculatedValue hit ${nodeId} (${node.label}) → ${formatDebugValue(node.calculatedValue)}`);
+    return String(node.calculatedValue);
   }
 
-  return String(data.value);
+  console.log(`[INTERPRETER][getNodeValue] No value found for ${nodeId}, returning "0"`);
+  
+  // Retourner "0" par défaut si aucune valeur trouvée
+  return options?.preserveEmpty ? null : "0";
 }
 
 /**
@@ -2865,6 +2879,37 @@ export async function evaluateVariableOperation(
       operationDetail: result.details,
       operationResult: result.humanText,
       operationSource,
+      sourceRef: variable.sourceRef
+    };
+  }
+  
+  // CAS 2b : 🆕 Source formule directe (sourceType === 'formula')
+  if (variable.sourceType === 'formula' && variable.sourceRef) {
+    console.log(`🧮 Source FORMULA directe, interprétation de: ${variable.sourceRef}`);
+    
+    // 🔄 INTERPRÉTATION DE LA FORMULE
+    const valuesCache = new Map<string, InterpretResult>();
+    const result = await interpretReference(
+      variable.sourceRef,
+      submissionId,
+      prisma,
+      valuesCache,
+      0,  // Profondeur initiale = 0
+      localValueMap,
+      labelMap
+    );
+    
+    console.log(`\n${'─'.repeat(80)}`);
+    console.log(`✅ RÉSULTAT FORMULE:`);
+    console.log(`   Value: ${result.result}`);
+    console.log(`   HumanText: ${result.humanText}`);
+    console.log(`${'─'.repeat(80)}\n`);
+    
+    return {
+      value: result.result,
+      operationDetail: result.details,
+      operationResult: result.humanText,
+      operationSource: 'formula',
       sourceRef: variable.sourceRef
     };
   }
