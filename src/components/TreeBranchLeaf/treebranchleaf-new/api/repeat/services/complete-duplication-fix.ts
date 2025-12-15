@@ -175,7 +175,46 @@ export async function fixCompleteDuplication(
           type: table.type,
           rowCount: table.rowCount,
           columnCount: table.columnCount,
-          meta: table.meta as Prisma.InputJsonValue,
+          // 🔢 COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
+          meta: (() => {
+            if (!table.meta) return table.meta as Prisma.InputJsonValue;
+            try {
+              const metaObj = typeof table.meta === 'string' ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
+              const suffixNum = parseInt(suffix.replace('-', '')) || 1;
+              // Suffixer les UUIDs dans selectors
+              if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+                metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+              }
+              if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+                metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+              }
+              // Suffixer sourceField dans rowSourceOption
+              if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+              }
+              // Suffixer sourceField dans columnSourceOption
+              if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+              }
+              // Suffixer comparisonColumn dans rowSourceOption si c'est du texte
+              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              // Suffixer comparisonColumn dans columnSourceOption si c'est du texte
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              return metaObj as Prisma.InputJsonValue;
+            } catch {
+              return table.meta as Prisma.InputJsonValue;
+            }
+          })(),
           isDefault: table.isDefault,
           order: table.order,
           lookupDisplayColumns: table.lookupDisplayColumns,
@@ -191,7 +230,10 @@ export async function fixCompleteDuplication(
               id: `${col.id}${suffix}`,
               tableId: newTableId,
               columnIndex: col.columnIndex,
-              name: col.name ? `${col.name}${suffix}` : col.name,
+              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              name: col.name 
+                ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}`)
+                : col.name,
               type: col.type,
               width: col.width,
               format: col.format,

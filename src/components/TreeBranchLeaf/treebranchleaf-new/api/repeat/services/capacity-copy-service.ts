@@ -221,16 +221,32 @@ export async function copyMissingCapacities(
           type: table.type,
           rowCount: table.rowCount,
           columnCount: table.columnCount,
-          // 🔧 TRAITER LE meta: suffix les références aux nodes
+          // 🔧 TRAITER LE meta: suffix les références aux nodes ET comparisonColumn
           meta: (() => {
             if (!table.meta) {
               return table.meta as Prisma.InputJsonValue;
             }
             try {
-              const str = JSON.stringify(table.meta);
+              const metaObj = typeof table.meta === 'string' ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
               const suffixNum = parseInt(suffix.replace('-', '')) || 1;
+              
+              // 🔢 COPIE TABLE META: suffixer comparisonColumn si c'est du texte
+              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim())) {
+                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim())) {
+                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              
               // Remplacer les UUIDs par leurs versions suffixés
-              let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
+              let str = JSON.stringify(metaObj);
+              str = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
                 if (workingNodeIdMap && workingNodeIdMap.has(uuid)) {
                   const mapped = workingNodeIdMap.get(uuid);
                   console.log(`[table.meta] UUID remappé: ${uuid} → ${mapped}`);
@@ -243,7 +259,7 @@ export async function copyMissingCapacities(
                 }
                 return uuid;
               });
-              return JSON.parse(replaced) as Prisma.InputJsonValue;
+              return JSON.parse(str) as Prisma.InputJsonValue;
             } catch {
               console.warn('[table.meta] Erreur traitement meta, copie tel quel');
               return table.meta as Prisma.InputJsonValue;
@@ -258,8 +274,10 @@ export async function copyMissingCapacities(
             create: table.tableColumns.map(col => ({
               id: `${col.id}${suffix}`,
               columnIndex: col.columnIndex,
-              // Suffixer le name SEULEMENT si c'est du texte, pas si c'est numérique
-              name: col.name && /^\d+$/.test(col.name) ? col.name : (col.name ? `${col.name}${suffix}` : col.name),
+              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              name: col.name 
+                ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}`)
+                : col.name,
               type: col.type,
               width: col.width,
               format: col.format,

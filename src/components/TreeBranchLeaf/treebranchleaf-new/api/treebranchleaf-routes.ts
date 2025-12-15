@@ -2316,7 +2316,45 @@ async function deepCopyNodeInternal(
             type: t.type,
             rowCount: t.rowCount,
             columnCount: t.columnCount,
-            meta: t.meta as Prisma.InputJsonValue,
+            // 🔢 COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
+            meta: (() => {
+              if (!t.meta) return t.meta as Prisma.InputJsonValue;
+              try {
+                const metaObj = typeof t.meta === 'string' ? JSON.parse(t.meta) : JSON.parse(JSON.stringify(t.meta));
+                // Suffixer les UUIDs dans selectors
+                if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${__copySuffixNum}`)) {
+                  metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${__copySuffixNum}`;
+                }
+                if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${__copySuffixNum}`)) {
+                  metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${__copySuffixNum}`;
+                }
+                // Suffixer sourceField dans rowSourceOption
+                if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${__copySuffixNum}`)) {
+                  metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${__copySuffixNum}`;
+                }
+                // Suffixer sourceField dans columnSourceOption
+                if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${__copySuffixNum}`)) {
+                  metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${__copySuffixNum}`;
+                }
+                // Suffixer comparisonColumn dans rowSourceOption si c'est du texte
+                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(__computedLabelSuffix)) {
+                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${__computedLabelSuffix}`;
+                  }
+                }
+                // Suffixer comparisonColumn dans columnSourceOption si c'est du texte
+                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(__computedLabelSuffix)) {
+                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${__computedLabelSuffix}`;
+                  }
+                }
+                return metaObj as Prisma.InputJsonValue;
+              } catch {
+                return t.meta as Prisma.InputJsonValue;
+              }
+            })(),
             isDefault: t.isDefault,
             order: t.order,
             createdAt: new Date(),
@@ -2327,7 +2365,10 @@ async function deepCopyNodeInternal(
               create: t.tableColumns.map(col => ({
                 id: `${col.id}-${__copySuffixNum}`,
                 columnIndex: col.columnIndex,
-                name: col.name ? `${col.name}${__computedLabelSuffix}` : col.name,
+                // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+                name: col.name 
+                  ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${__computedLabelSuffix}`)
+                  : col.name,
                 type: col.type,
                 width: col.width,
                 format: col.format,

@@ -239,9 +239,39 @@ export async function copyTableCapacity(
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
+          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
-            return rewriteJsonReferences(originalTable.meta, rewriteMaps, suffix);
+            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps, suffix) as any;
+            const suffixNum = parseInt(suffix) || 1;
+            // Suffixer les UUIDs dans selectors
+            if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
+            }
+            // Suffixer sourceField
+            if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+            }
+            // Suffixer comparisonColumn si c'est du texte
+            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            return rewritten;
           })(),
           updatedAt: new Date()
         }
@@ -255,9 +285,39 @@ export async function copyTableCapacity(
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
+          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
-            return rewriteJsonReferences(originalTable.meta, rewriteMaps);
+            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps) as any;
+            const suffixNum = parseInt(suffix) || 1;
+            // Suffixer les UUIDs dans selectors
+            if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
+            }
+            // Suffixer sourceField
+            if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+            }
+            // Suffixer comparisonColumn si c'est du texte
+            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            return rewritten;
           })(),
           createdAt: new Date(),
           updatedAt: new Date()
@@ -288,13 +348,17 @@ export async function copyTableCapacity(
         const newColumnId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
         columnIdMap.set(col.id, newColumnId);
 
-        // Normaliser le nom de colonne : ne pas suffixer les valeurs purement numériques
-        // (ex: "5-1" → "5"), mais conserver les noms textuels (ex: "Orientation-1")
+        // Normaliser le nom de colonne : 
+        // - Nombres purs ("35", "45", "90") → garder sans suffixe
+        // - Texte ("Orientation") → ajouter le suffixe (-1, -2, etc.)
+        // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
         const normalizedName = (() => {
           const raw = col.name as string | null;
           if (!raw) return raw;
-          const stripped = stripNumericSuffix(raw);
-          return stripped ?? raw; // noms textuels conservés (Orientation-1, etc.)
+          // Si c'est un nombre pur (ex: "35", "90", "0.5"), pas de suffixe
+          if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
+          // Sinon c'est du texte → ajouter le suffixe
+          return `${raw}-${suffix}`;
         })();
 
         // Créer directement - SANS réécrire le metadata/config (comme le script)

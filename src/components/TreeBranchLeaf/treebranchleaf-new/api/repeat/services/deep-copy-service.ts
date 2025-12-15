@@ -938,9 +938,14 @@ export async function deepCopyNodeInternal(
     
     const newLinkedTableIds: string[] = [];
     
+    console.log(`\n\n🔴🔴🔴 [DEEP-COPY-SERVICE] DÉBUT COPIE TABLES - ${allTablesToCopy.length} tables à copier 🔴🔴🔴\n`);
+    
     for (const t of allTablesToCopy) {
       const newTableId = appendSuffix(t.id);
       tableIdMap.set(t.id, newTableId);
+      
+      console.log(`🔴 [DEEP-COPY-SERVICE] Traitement table: ${t.id} -> ${newTableId}`);
+      console.log(`🔴 [DEEP-COPY-SERVICE] META ORIGINAL:`, JSON.stringify(t.meta)?.substring(0, 200));
       
       // Vérifier si la table copiée existe déjà
       const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -969,30 +974,51 @@ export async function deepCopyNodeInternal(
           type: t.type,
           rowCount: t.rowCount,
           columnCount: t.columnCount,
-          // 🔧 TRAITER LE meta: suffix les références aux nodes
+          // 🔧 TRAITER LE meta: suffix les références aux nodes ET comparisonColumn
           meta: (() => {
             if (!t.meta) {
               return t.meta as Prisma.InputJsonValue;
             }
             try {
-              const str = JSON.stringify(t.meta);
-              // Remplacer les UUIDs par leurs versions suffixées
-              let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
-                const mapped = idMap.get(uuid);
-                if (mapped) {
-                  console.log(`[table.meta] UUID remappé: ${uuid} → ${mapped}`);
-                  return mapped;
+              const metaObj = typeof t.meta === 'string' ? JSON.parse(t.meta) : JSON.parse(JSON.stringify(t.meta));
+              
+              console.log(`[table.meta] 🔍 AVANT traitement:`, JSON.stringify(metaObj).substring(0, 300));
+              
+              // 🔢 COPIE TABLE META: suffixer TOUS les champs dans lookup
+              // Suffixer les UUIDs dans selectors
+              if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${copySuffixNum}`)) {
+                console.log(`[table.meta] columnFieldId: ${metaObj.lookup.selectors.columnFieldId} → ${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`);
+                metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`;
+              }
+              if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${copySuffixNum}`;
+              }
+              // Suffixer sourceField
+              if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${copySuffixNum}`;
+              }
+              if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
+              }
+              // Suffixer comparisonColumn si c'est du texte
+              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
                 }
-                // Si pas dans la map et suffixe pas déjà appliqué, l'ajouter
-                if (!uuid.match(/-\d+$/)) {
-                  console.log(`[table.meta] UUID suffixé: ${uuid} → ${uuid}-${suffixNum}`);
-                  return `${uuid}-${suffixNum}`;
+              }
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
                 }
-                return uuid;
-              });
-              return JSON.parse(replaced) as Prisma.InputJsonValue;
-            } catch {
-              console.warn('[table.meta] Erreur traitement meta, copie tel quel');
+              }
+              
+              console.log(`[table.meta] ✅ APRÈS traitement:`, JSON.stringify(metaObj).substring(0, 300));
+              
+              return metaObj as Prisma.InputJsonValue;
+            } catch (err) {
+              console.warn('[table.meta] Erreur traitement meta, copie tel quel:', err);
               return t.meta as Prisma.InputJsonValue;
             }
           })(),
@@ -1006,8 +1032,10 @@ export async function deepCopyNodeInternal(
             create: t.tableColumns.map(col => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // Suffixer le name SEULEMENT si c'est du texte, pas si c'est numérique
-              name: col.name && /^\d+$/.test(col.name) ? col.name : (col.name ? `${col.name}${computedLabelSuffix}` : col.name),
+              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              name: col.name 
+                ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${computedLabelSuffix}`)
+                : col.name,
               type: col.type,
               width: col.width,
               format: col.format,
