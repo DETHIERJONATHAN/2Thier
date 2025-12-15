@@ -3017,10 +3017,11 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
       min: node.number_min || null,
       max: node.number_max || null,
       step: node.number_step || 1,
-      decimals: node.number_decimals || 0,
+      // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      decimals: node.data_precision ?? node.number_decimals ?? 0,
       prefix: node.number_prefix || null,
       suffix: node.number_suffix || null,
-      unit: node.number_unit || null,
+      unit: node.number_unit ?? node.data_unit ?? null,
       defaultValue: node.number_defaultValue || null
     },
     select: {
@@ -3200,8 +3201,9 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
         min: node.number_min ?? null,
         max: node.number_max ?? null,
         step: node.number_step ?? 1,
-        decimals: node.number_decimals ?? 0,
-        unit: node.number_unit || null,
+        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage
+        decimals: node.data_precision ?? node.number_decimals ?? 0,
+        unit: node.number_unit ?? node.data_unit ?? null,
         prefix: node.number_prefix || null,
         suffix: node.number_suffix || null,
         defaultValue: node.number_defaultValue || null

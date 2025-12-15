@@ -1562,6 +1562,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       });
     }
 
+    // 🎨 HÉRITAGE APPARENCE: Extraire les configurations d'apparence du nœud et de ses métadonnées
+    const nodeMetadata = (node.metadata && typeof node.metadata === 'object') ? node.metadata as Record<string, unknown> : {};
+    const metadataAppearance = (nodeMetadata.appearance && typeof nodeMetadata.appearance === 'object') ? nodeMetadata.appearance as Record<string, unknown> : {};
+    const metadataFieldAppearance = (nodeMetadata.field && typeof nodeMetadata.field === 'object' && (nodeMetadata.field as Record<string, unknown>).appearance) 
+      ? (nodeMetadata.field as Record<string, unknown>).appearance as Record<string, unknown> 
+      : {};
+    
+    // 🔗 LIAISON: Récupérer les sharedReferenceIds depuis le nœud ET les métadonnées
+    const sharedReferenceIds = Array.isArray(node.sharedReferenceIds) 
+      ? node.sharedReferenceIds 
+      : (Array.isArray(nodeMetadata.sharedReferenceIds) ? nodeMetadata.sharedReferenceIds as string[] : undefined);
+    const sharedReferenceId = node.sharedReferenceId || (nodeMetadata.sharedReferenceId as string | undefined);
+
     return {
       id: node.id,
       name: (node.field_label as string) || (node.name as string) || node.label,
@@ -1573,11 +1586,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       description: node.description ?? undefined,
       order: typeof node.order === 'number' ? node.order : 9999,
       sharedReferenceName: node.sharedReferenceName || node.label,
+      sharedReferenceId, // 🔗 LIAISON: Inclure la référence partagée unique
+      sharedReferenceIds, // 🔗 LIAISON: Inclure les références partagées multiples
       options, // 🔥 AJOUT CRITIQUE: Inclure les options construites !
+      // 🎨 APPARENCE: Inclure les configurations d'apparence complètes du nœud source
+      metadata: nodeMetadata,
+      appearanceConfig: {
+        ...metadataAppearance,
+        ...metadataFieldAppearance,
+        size: metadataAppearance.size ?? metadataFieldAppearance.size ?? node.appearance_size,
+        variant: metadataAppearance.variant ?? metadataFieldAppearance.variant ?? node.appearance_variant,
+        width: metadataAppearance.width ?? metadataFieldAppearance.width ?? node.appearance_width,
+      },
       config: {
-        size: node.appearance_size ?? undefined,
-        width: node.appearance_width ?? undefined,
-        variant: node.appearance_variant ?? undefined,
+        size: node.appearance_size ?? metadataAppearance.size as string ?? undefined,
+        width: node.appearance_width ?? metadataAppearance.width as string ?? undefined,
+        variant: node.appearance_variant ?? metadataAppearance.variant as string ?? undefined,
         minLength: node.text_minLength ?? undefined,
         maxLength: node.text_maxLength ?? undefined,
         rows: node.text_rows ?? undefined,
@@ -1587,10 +1611,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         min: node.number_min ?? undefined,
         max: node.number_max ?? undefined,
         step: node.number_step ?? undefined,
-        decimals: node.number_decimals ?? undefined,
+        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+        decimals: node.data_precision ?? node.number_decimals ?? undefined,
         prefix: node.number_prefix ?? undefined,
         suffix: node.number_suffix ?? undefined,
-        unit: node.number_unit ?? undefined,
+        unit: node.number_unit ?? node.data_unit ?? undefined,
         numberDefaultValue: node.number_defaultValue ?? undefined,
         format: node.date_format ?? undefined,
         showTime: node.date_showTime ?? undefined,

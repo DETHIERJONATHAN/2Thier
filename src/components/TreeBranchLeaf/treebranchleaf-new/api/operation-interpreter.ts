@@ -288,21 +288,26 @@ async function enrichDataFromSubmission(
     }
     
     if (treeId) {
-      // 3. Récupérer TOUS les labels de l'arbre
+      // 3. Récupérer TOUS les labels de l'arbre avec les champs supplémentaires pour cohérence
+      // 🔥 COHÉRENCE: Récupérer sharedReferenceName et field_label pour utiliser le même libellé que l'original
       const allNodes = await prisma.treeBranchLeafNode.findMany({
         where: { treeId },
         select: { 
           id: true, 
-          label: true 
+          label: true,
+          sharedReferenceName: true,
+          field_label: true
         }
       });
       
       console.log(`[ENRICHMENT] 🏷️ ${allNodes.length} labels récupérés depuis l'arbre`);
       
-      // 4. ENRICHIR LABELMAP
+      // 4. ENRICHIR LABELMAP avec priorité pour cohérence
+      // 🔥 ORDRE DE PRIORITÉ: sharedReferenceName > field_label > label (même logique que getNodeLabel)
       for (const node of allNodes) {
         if (!labelMap.has(node.id)) {
-          labelMap.set(node.id, node.label);
+          const canonicalLabel = node.sharedReferenceName || node.field_label || node.label;
+          labelMap.set(node.id, canonicalLabel);
         }
       }
     } else {
@@ -422,6 +427,9 @@ async function getNodeValue(
  * Cette fonction récupère d'abord le label depuis labelMap (cache enrichi),
  * puis fait un fallback vers TreeBranchLeafNode si nécessaire.
  * 
+ * 🔥 COHÉRENCE: Utilise sharedReferenceName > label > field_label pour 
+ * garantir que les variables utilisent exactement le même libellé que l'original.
+ * 
  * @param nodeId - ID du nœud
  * @param prisma - Instance Prisma Client
  * @param labelMap - Map des labels (déjà enrichie par enrichDataFromSubmission)
@@ -441,13 +449,22 @@ async function getNodeLabel(
     return label || 'Inconnu';
   }
   
-  // 🎯 PRIORITÉ 2: Requête Prisma (fallback rare)
+  // 🎯 PRIORITÉ 2: Requête Prisma (fallback) avec plus de champs pour cohérence
+  // 🔥 COHÉRENCE: Récupérer sharedReferenceName et field_label pour utiliser le même libellé que l'original
   const node = await prisma.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
-    select: { label: true }
+    select: { 
+      label: true,
+      sharedReferenceName: true,
+      field_label: true
+    }
   });
   
-  return node?.label || 'Inconnu';
+  // 🔥 ORDRE DE PRIORITÉ pour cohérence avec les champs originaux:
+  // 1. sharedReferenceName (si défini, c'est le nom canonique de la référence)
+  // 2. field_label (libellé personnalisé du champ)
+  // 3. label (libellé standard)
+  return node?.sharedReferenceName || node?.field_label || node?.label || 'Inconnu';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
