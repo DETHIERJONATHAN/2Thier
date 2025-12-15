@@ -1378,7 +1378,23 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // 🔥 MÉTHODE PRINCIPALE: Chercher par suffixe d'ID (plus fiable car l'ID est immuable)
       const suffixToMatch = String(effectiveIndex);
       
+      // 🔒 NOUVEAU: Fonction pour détecter les champs "Total" - à NE JAMAIS supprimer
+      const isTotalFieldCheck = (field: any): boolean => {
+        const label = String(field?.label || '').toLowerCase();
+        const meta: any = field?.metadata || {};
+        // Vérifier le label
+        if (label.includes('total') || label.includes('- total')) return true;
+        // Vérifier les métadonnées (champ Total du repeater)
+        if (meta.repeater?.totalField || meta.isTotalField) return true;
+        // Vérifier si c'est un nœud Total du repeater (metadata.totalField)
+        if (meta.totalField?.aggregationType) return true;
+        return false;
+      };
+      
       const fieldsInSameCopy = section.fields.filter(sf => {
+        // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
+        if (isTotalFieldCheck(sf)) return false;
+        
         const metaIndex = (sf as any).repeaterInstanceIndex;
         const suffix = getSuffixFromId(sf.id);
         const sameRepeater = (sf as any).parentRepeaterId === repeaterId;
@@ -1391,6 +1407,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // ✅ Recherche dans allNodes: par suffixe d'ID ET/OU métadonnées
       const fieldsInNewSection = (allNodes || []).filter(n => {
+        // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
+        if (isTotalFieldCheck(n)) return false;
+        
         const meta: any = n.metadata || {};
         const sameRepeater = meta.repeaterParentId === repeaterId;
         const metaIndex = meta.repeaterInstanceIndex;
@@ -1406,6 +1425,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       
       // 🔥 FALLBACK AGRESSIF: Rechercher tous les nœuds avec le même suffixe dans tout l'arbre
       const allNodesWithSameSuffix = (allNodes || []).filter(n => {
+        // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
+        if (isTotalFieldCheck(n)) return false;
+        
         const suffix = getSuffixFromId(n.id);
         if (suffix !== suffixToMatch) return false;
         // Vérifier que c'est bien une copie (a sourceTemplateId ou copiedFromNodeId)
@@ -1424,7 +1446,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // ✅ Fallback supplémentaire: pattern d'ID namespacé "${repeaterId}_${effectiveIndex}_<originalFieldId>"
       if (fieldsInNewSection.length === 0) {
         const prefix = `${repeaterId}_${effectiveIndex}_`;
-        const patternMatches = (allNodes || []).filter(n => n.id?.startsWith(prefix) && !section.fields.some((sf: any) => sf.id === n.id));
+        const patternMatches = (allNodes || []).filter(n => {
+          // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
+          if (isTotalFieldCheck(n)) return false;
+          return n.id?.startsWith(prefix) && !section.fields.some((sf: any) => sf.id === n.id);
+        });
         if (patternMatches.length > 0) {
           dlog('[DELETE COPY GROUP] Ajout des nœuds via prefix fallback:', patternMatches.map(p => p.id));
           fieldsInNewSection.push(...patternMatches as any);
@@ -1436,7 +1462,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         ...fieldsInSameCopy, 
         ...fieldsInNewSection,
         ...allNodesWithSameSuffix  // ✅ Inclure les nœuds trouvés par suffixe
-      ].map(x => [x.id, x])).values());
+      ].map(x => [x.id, x])).values())
+        // 🔒 FILTRE FINAL DE SÉCURITÉ: Exclure les champs Total même s'ils ont passé les filtres précédents
+        .filter(x => !isTotalFieldCheck(x));
+        
       // DEBUG: Inspect optimistic ids and suffixes
       try {
         const debugList = allFieldsToDelete.map(x => ({ id: x.id, suffix: getSuffixFromId(x.id), label: x.label }));

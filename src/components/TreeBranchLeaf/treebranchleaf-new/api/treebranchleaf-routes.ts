@@ -3888,6 +3888,11 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
   const debugDelete = typeof process !== 'undefined' && process.env && process.env.DEBUG_TBL_DELETE === '1';
   const extraCandidates = nodesToScan.filter(n => {
         const meta: any = n.metadata || {};
+        // 🛡️ PROTECTION: Ne JAMAIS supprimer les nœuds Total (sum-display-field)
+        if (meta?.isSumDisplayField === true || n.id.endsWith('-sum-total')) {
+          if (debugDelete) console.log('[DELETE DEBUG] 🛡️ Nœud Total PROTÉGÉ (extraCandidates):', n.id);
+          return false;
+        }
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
         if (!looksLikeDisplay) return false;
         if (removedSet.has(n.id)) return false;
@@ -4136,6 +4141,29 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       // Ne pas bloquer la suppression sur cette erreur
     }
 
+    // 📊 Mise à jour des champs Total après suppression de copies
+    // Les nœuds Total doivent mettre à jour leur formule pour exclure les copies supprimées
+    try {
+      // Chercher tous les nœuds Total (sum-display-field) qui référencent les nœuds supprimés
+      const remainingNodes = await prisma.treeBranchLeafNode.findMany({
+        where: { treeId },
+        select: { id: true, metadata: true }
+      });
+      
+      for (const node of remainingNodes) {
+        const meta = node.metadata as Record<string, unknown> | null;
+        if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
+          // Ce nœud Total doit mettre à jour sa formule
+          console.log(`[DELETE] 📊 Mise à jour du champ Total: ${node.id}`);
+          updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma).catch(err => {
+            console.warn(`[DELETE] ⚠️ Erreur mise à jour champ Total ${node.id}:`, err);
+          });
+        }
+      }
+    } catch (sumUpdateError) {
+      console.warn('[DELETE] Erreur lors de la mise à jour des champs Total:', (sumUpdateError as Error).message);
+    }
+
     res.json({
       success: true,
       message: `Sous-arbre supprimé (${deletedSubtreeIds.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`,
@@ -4174,6 +4202,18 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       };
       const extraToDelete = remainingAfterFirstPass.filter(n => {
         if (!n.metadata) return false;
+        // 🛡️ PROTECTION: Ne JAMAIS supprimer les nœuds Total (sum-display-field)
+        // Ces nœuds contiennent des références aux copies dans sumTokens mais doivent persister
+        const meta = n.metadata as Record<string, unknown>;
+        if (meta?.isSumDisplayField === true) {
+          console.log(`[AGGRESSIVE CLEANUP] 🛡️ Nœud Total PROTÉGÉ: ${n.id} (${n.label})`);
+          return false;
+        }
+        // 🛡️ PROTECTION: Ne JAMAIS supprimer les nœuds avec ID finissant par -sum-total
+        if (n.id.endsWith('-sum-total')) {
+          console.log(`[AGGRESSIVE CLEANUP] 🛡️ Nœud Total PROTÉGÉ (par ID): ${n.id}`);
+          return false;
+        }
         try { return containsRemovedId(n.metadata); } catch { return false; }
       }).map(x => x.id);
       if (extraToDelete.length > 0) {
