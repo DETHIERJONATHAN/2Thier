@@ -38,6 +38,24 @@ main h1, main h2, main h3, main h4, main h5, main h6 {
   flex: 0 0 auto !important;
 }
 
+/* 🔧 FIX: Les champs conditionnels (Option+Champ) doivent avoir la même apparence que les champs normaux */
+.tbl-form-col.conditional-field-injected {
+  /* S'assurer que le champ conditionnel respecte le span de la grille Ant Design */
+  flex: none !important;
+}
+
+/* Style uniforme pour les champs conditionnels - même taille que les autres champs */
+.tbl-form-col.conditional-field-injected .ant-form-item {
+  margin-bottom: 0 !important;
+}
+
+.tbl-form-col.conditional-field-injected .ant-input,
+.tbl-form-col.conditional-field-injected .ant-input-number,
+.tbl-form-col.conditional-field-injected .ant-select,
+.tbl-form-col.conditional-field-injected .ant-picker {
+  width: 100% !important;
+}
+
 /* EMOJIS DANS LES SECTIONS - FINALISÉS */
 .flex-shrink-0 {
   display: flex !important;

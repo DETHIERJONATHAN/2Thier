@@ -1246,8 +1246,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     ) {
       return columnsDesktop;
     }
+    // 🔧 FIX: Les champs conditionnels (Option+Champ) doivent avoir la même taille que les autres champs
+    // On retourne 1 pour qu'ils prennent 1 colonne comme les champs normaux
     if ((field as any).isConditional && (field as any).parentFieldId) {
-      return Math.max(1, Math.round(columnsDesktop / 2));
+      return 1;
     }
     return 1;
   }, []);
