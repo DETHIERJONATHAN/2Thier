@@ -85,6 +85,18 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
     nodeLabel?: string; 
     nodeId?: string 
   }>>([]);
+  
+  // 🆕 États pour les valeurs calculées (calculatedValue)
+  const [calculatedValuesLoading, setCalculatedValuesLoading] = useState(false);
+  const [calculatedValueSearch, setCalculatedValueSearch] = useState('');
+  const [calculatedValues, setCalculatedValues] = useState<Array<{ 
+    id: string; 
+    label: string; 
+    calculatedValue: string | number | null;
+    calculatedBy?: string;
+    type: string;
+    parentLabel?: string;
+  }>>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -247,6 +259,28 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
       } finally {
         if (mounted) setSharedReferencesLoading(false);
       }
+
+      // 🆕 Charger les valeurs calculées (champs avec calculatedValue)
+      try {
+        setCalculatedValuesLoading(true);
+        const info = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as { treeId: string };
+        const calculatedRes = await api.get(`/api/treebranchleaf/trees/${info.treeId}/calculated-values`) as Array<{
+          id: string;
+          label: string;
+          calculatedValue: string | number | null;
+          calculatedBy?: string;
+          type: string;
+          parentLabel?: string;
+        }>;
+        
+        if (!mounted) return;
+        setCalculatedValues(calculatedRes || []);
+      } catch {
+        // ignore, onglet non bloquant - l'API peut ne pas exister encore
+        console.warn('[NodeTreeSelector] Impossible de charger les valeurs calculées');
+      } finally {
+        if (mounted) setCalculatedValuesLoading(false);
+      }
     })();
     return () => { mounted = false; };
   }, [api, nodeId, open]);
@@ -347,6 +381,12 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
       if (String(v).startsWith('table:') || String(v).startsWith('node-table:')) {
         const tableId = String(v).replace(/^(node-)?table:/, '');
         onSelect({ kind: 'node', ref: `@table.${tableId}` });
+        continue;
+      }
+      // 🆕 Cas valeurs calculées
+      if (String(v).startsWith('calculated:')) {
+        const calcNodeId = String(v).replace('calculated:', '');
+        onSelect({ kind: 'node', ref: `@calculated.${calcNodeId}` });
         continue;
       }
       const isVirtual = String(v).includes('::');
@@ -841,6 +881,108 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                               >
                                 Repeater: {item.repeaterLabel} {item.nodeLabel ? `(${item.nodeLabel})` : ''}
                               </Typography.Text>
+                            </Space>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  </>
+                )}
+              </Space>
+            )},
+            { key: 'calculatedValues', label: '📊 Valeurs calculées', children: (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {/* Recherche dans les valeurs calculées */}
+                <Input.Search
+                  placeholder="Rechercher une valeur calculée..."
+                  value={calculatedValueSearch}
+                  onChange={(e) => setCalculatedValueSearch(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+
+                {calculatedValuesLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Spin size="small" />
+                    <Typography.Text>Chargement des valeurs calculées...</Typography.Text>
+                  </div>
+                ) : calculatedValues.length === 0 ? (
+                  <Typography.Text type="secondary">Aucune valeur calculée disponible dans cet arbre.</Typography.Text>
+                ) : (
+                  <>
+                    <Alert
+                      type="info"
+                      message="Valeurs calculées (calculatedValue)"
+                      description="Ces champs ont une valeur calculée par une formule, condition ou table. Utilisez-les comme contraintes dynamiques (min/max) ou comme variables."
+                      showIcon
+                      style={{ marginBottom: 8 }}
+                    />
+                    <List
+                      size="small"
+                      bordered
+                      dataSource={calculatedValues.filter(cv => 
+                        !calculatedValueSearch || 
+                        cv.label.toLowerCase().includes(calculatedValueSearch.toLowerCase()) ||
+                        (cv.calculatedBy && cv.calculatedBy.toLowerCase().includes(calculatedValueSearch.toLowerCase()))
+                      )}
+                      renderItem={(item) => {
+                        const isSelected = value === `calculated:${item.id}`;
+                        const sourceIcon = item.calculatedBy?.startsWith('formula') ? '🧮' : 
+                                          item.calculatedBy?.startsWith('condition') ? '⚡' : 
+                                          item.calculatedBy?.startsWith('table') ? '📊' : '📈';
+                        return (
+                          <List.Item
+                            onClick={() => setValue(`calculated:${item.id}`)}
+                            style={{ 
+                              cursor: 'pointer', 
+                              backgroundColor: isSelected ? '#1890ff' : '#f0fff4',
+                              color: isSelected ? 'white' : 'inherit',
+                              transition: 'all 0.2s',
+                              borderLeft: '3px solid #52c41a'
+                            }}
+                          >
+                            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                              <Space>
+                                <span>{sourceIcon}</span>
+                                <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>
+                                  {item.label}
+                                </Typography.Text>
+                                {item.calculatedValue !== null && (
+                                  <Typography.Text 
+                                    style={{ 
+                                      color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    = {item.calculatedValue}
+                                  </Typography.Text>
+                                )}
+                                {isSelected && <span>✓</span>}
+                              </Space>
+                              <Space size={16} style={{ paddingLeft: '24px' }}>
+                                {item.parentLabel && (
+                                  <Typography.Text 
+                                    type="secondary" 
+                                    style={{ 
+                                      fontSize: '11px',
+                                      color: isSelected ? 'rgba(255,255,255,0.8)' : '#666'
+                                    }}
+                                  >
+                                    📁 {item.parentLabel}
+                                  </Typography.Text>
+                                )}
+                                {item.calculatedBy && (
+                                  <Typography.Text 
+                                    type="secondary" 
+                                    style={{ 
+                                      fontSize: '10px',
+                                      color: isSelected ? 'rgba(255,255,255,0.7)' : '#999',
+                                      fontStyle: 'italic'
+                                    }}
+                                  >
+                                    Source: {item.calculatedBy}
+                                  </Typography.Text>
+                                )}
+                              </Space>
                             </Space>
                           </List.Item>
                         );

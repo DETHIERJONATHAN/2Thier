@@ -2578,6 +2578,20 @@ async function interpretCondition(conditionId, submissionId, prisma69, valuesCac
     if (!ref) {
       return { value: null, label: "Inconnu" };
     }
+    if (ref.startsWith("@select.")) {
+      const optionNodeId = ref.slice("@select.".length).split(".")[0];
+      console.log(`[CONDITION] \u{1F539} R\xE9solution @select: ${optionNodeId}`);
+      const optionNode = await prisma69.treeBranchLeafNode.findUnique({
+        where: { id: optionNodeId },
+        select: { id: true, label: true, parentId: true }
+      });
+      if (optionNode) {
+        console.log(`[CONDITION] \u{1F539} Option trouv\xE9e: ${optionNode.label}`);
+        return { value: optionNode.id, label: optionNode.label };
+      }
+      console.warn(`[CONDITION] \u26A0\uFE0F Option non trouv\xE9e: ${optionNodeId}`);
+      return { value: optionNodeId, label: "Option inconnue" };
+    }
     const operandType = identifyReferenceType(ref);
     if (operandType === "field" || operandType === "value") {
       const operandId = normalizeRef(ref);
@@ -2704,6 +2718,17 @@ function evaluateOperator(op, left, right) {
     case "ne":
     case "!=":
       return left !== right;
+    // 🔥 NOUVEAU: Opérateur 'contains' pour vérifier si une chaîne contient une autre
+    case "contains":
+      if (left === null || left === void 0) return false;
+      if (right === null || right === void 0) return false;
+      return String(left).toLowerCase().includes(String(right).toLowerCase());
+    // 🔥 NOUVEAU: Opérateur 'startsWith' pour vérifier si une chaîne commence par une autre
+    case "startsWith":
+    case "commence par":
+      if (left === null || left === void 0) return false;
+      if (right === null || right === void 0) return false;
+      return String(left).toLowerCase().startsWith(String(right).toLowerCase());
     case "gt":
     case ">":
       return Number(left) > Number(right);
@@ -2822,6 +2847,10 @@ function tryParseTokenReference(token) {
     normalizedToken = wrapperMatch[1];
   }
   const createMeta = (refType, refId) => ({ refType, refId, rawToken });
+  if (normalizedToken.startsWith("@calculated.")) {
+    const nodeId = normalizedToken.slice("@calculated.".length);
+    return createMeta("value", nodeId);
+  }
   if (normalizedToken.startsWith("@value.condition:")) {
     return createMeta("condition", normalizedToken.slice("@value.condition:".length));
   }
@@ -41473,6 +41502,61 @@ router56.get("/variables/search", async (req2, res) => {
     res.status(500).json({ error: msg });
   }
 });
+router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
+  try {
+    console.log("\u{1F4CA} [TBL-ROUTES] GET /trees/:treeId/calculated-values - D\xC9BUT");
+    const { treeId } = req2.params;
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
+      where: treeWhereFilter
+    });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
+    const nodesWithCalculatedValue = await prisma47.treeBranchLeafNode.findMany({
+      where: {
+        treeId,
+        calculatedValue: {
+          not: null
+        }
+      },
+      select: {
+        id: true,
+        label: true,
+        type: true,
+        calculatedValue: true,
+        calculatedBy: true,
+        parentId: true
+      }
+    });
+    console.log(`\u{1F4CA} [TBL-ROUTES] ${nodesWithCalculatedValue.length} champs avec calculatedValue trouv\xE9s`);
+    const parentIds = nodesWithCalculatedValue.map((n) => n.parentId).filter((id) => !!id);
+    const parentNodes = await prisma47.treeBranchLeafNode.findMany({
+      where: { id: { in: parentIds } },
+      select: { id: true, label: true }
+    });
+    const parentLabelsMap = new Map(parentNodes.map((p) => [p.id, p.label]));
+    const calculatedValues = nodesWithCalculatedValue.map((node) => ({
+      id: node.id,
+      label: node.label || "Champ sans nom",
+      calculatedValue: node.calculatedValue,
+      calculatedBy: node.calculatedBy || void 0,
+      type: node.type,
+      parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : void 0
+    }));
+    console.log(`\u{1F4CA} [TBL-ROUTES] Valeurs calcul\xE9es format\xE9es:`, calculatedValues.map((cv) => ({
+      id: cv.id,
+      label: cv.label,
+      value: cv.calculatedValue,
+      source: cv.calculatedBy
+    })));
+    res.json(calculatedValues);
+  } catch (error) {
+    console.error("[TreeBranchLeaf API] Error fetching calculated values:", error);
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les valeurs calcul\xE9es" });
+  }
+});
 var treebranchleaf_routes_default = router56;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes.ts
@@ -43262,10 +43346,51 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
+      const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+        where: { id: elementId },
+        select: { id: true, nodeId: true, name: true, tokens: true }
+      });
       if (formula) {
         resolvedNodeId = formula.nodeId;
-        trace.push({ step: "formula_id", info: "Formule trouv\xE9e via id", success: true });
+        trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
+        try {
+          const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+          const prismaInstance = new PrismaClient72();
+          const submissionId = contextData.submissionId || "temp-evaluation";
+          const valueMap = /* @__PURE__ */ new Map();
+          for (const [key2, value] of Object.entries(contextData)) {
+            valueMap.set(key2, value);
+            if (!key2.startsWith("@")) {
+              valueMap.set(`@value.${key2}`, value);
+            }
+          }
+          console.log(`\u{1F9EE} [TBL EVALUATE] \xC9valuation directe formule: ${formula.name} (${formula.id})`);
+          const valuesCache = /* @__PURE__ */ new Map();
+          const labelMap = /* @__PURE__ */ new Map();
+          const result = await interpretFormula(
+            formula.id,
+            submissionId,
+            prismaInstance,
+            valuesCache,
+            0,
+            valueMap,
+            labelMap
+          );
+          await prismaInstance.$disconnect();
+          trace.push({ step: "formula_direct_eval", info: `R\xE9sultat: ${result.result}`, success: true });
+          return res.json({
+            success: true,
+            type: "formula",
+            capacity: "2",
+            value: result.result,
+            humanText: result.humanText,
+            details: result.details,
+            trace
+          });
+        } catch (evalError) {
+          console.error(`\u274C [TBL EVALUATE] Erreur \xE9valuation directe formule:`, evalError);
+          trace.push({ step: "formula_direct_eval", info: `Erreur: ${evalError instanceof Error ? evalError.message : "unknown"}`, success: false });
+        }
       } else {
         trace.push({ step: "formula_id", info: "Aucune formule avec cet id", success: false });
       }
@@ -43364,10 +43489,53 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
+    const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+      where: { id: elementId },
+      select: { id: true, nodeId: true, name: true, tokens: true }
+    });
     if (formula) {
       resolvedNodeId = formula.nodeId;
-      trace.push({ step: "formula_id", info: "Formule trouv\xE9e via id", success: true });
+      trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
+      try {
+        const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+        const prismaInstance = new PrismaClient71();
+        const submissionId = contextData.submissionId || "temp-evaluation";
+        const valueMap = /* @__PURE__ */ new Map();
+        for (const [key2, value] of Object.entries(contextData)) {
+          valueMap.set(key2, value);
+          if (!key2.startsWith("@")) {
+            valueMap.set(`@value.${key2}`, value);
+          }
+        }
+        console.log(`\u{1F9EE} [TBL EVALUATE BATCH] \xC9valuation directe formule: ${formula.name} (${formula.id})`);
+        const valuesCache = /* @__PURE__ */ new Map();
+        const labelMap = /* @__PURE__ */ new Map();
+        const result = await interpretFormula(
+          formula.id,
+          submissionId,
+          prismaInstance,
+          valuesCache,
+          0,
+          valueMap,
+          labelMap
+        );
+        await prismaInstance.$disconnect();
+        trace.push({ step: "formula_direct_eval", info: `R\xE9sultat: ${result.result}`, success: true });
+        return {
+          payload: {
+            success: true,
+            type: "formula",
+            capacity: "2",
+            value: result.result,
+            humanText: result.humanText,
+            details: result.details
+          },
+          trace
+        };
+      } catch (evalError) {
+        console.error(`\u274C [TBL EVALUATE BATCH] Erreur \xE9valuation directe formule:`, evalError);
+        trace.push({ step: "formula_direct_eval", info: `Erreur: ${evalError instanceof Error ? evalError.message : "unknown"}`, success: false });
+      }
     } else {
       trace.push({ step: "formula_id", info: "Aucune formule avec cet id", success: false });
     }
@@ -43412,19 +43580,132 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
   else if (sr.startsWith("table:")) capacity = "4";
   trace.push({ step: "capacity_detect", info: `Capacit\xE9 d\xE9tect\xE9e=${capacity}`, success: true });
   if (capacity === "2") {
-    const result = await evaluationEngine2.evaluate({
-      element_code: variable.exposedKey,
-      context_values: contextData,
-      evaluation_mode: "auto",
-      deep_resolution: true
-    });
-    if (result.success) {
-      return { payload: { success: true, type: "formula", capacity, value: result.final_value, dependencies: result.dependencies_used, performance: result.performance }, trace };
+    try {
+      const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+      const prismaInstance = new PrismaClient71();
+      const formulaId = sr.replace(/^(formula:|node-formula:)/, "");
+      const submissionId = contextData.submissionId || "temp-evaluation";
+      const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
+        select: { id: true, label: true }
+      });
+      const labelToNodeId = /* @__PURE__ */ new Map();
+      for (const node of allNodes) {
+        labelToNodeId.set(node.label.toLowerCase(), node.id);
+      }
+      const valueMap = /* @__PURE__ */ new Map();
+      for (const [key2, value] of Object.entries(contextData)) {
+        valueMap.set(key2, value);
+        if (!key2.startsWith("@")) {
+          valueMap.set(`@value.${key2}`, value);
+        }
+        const nodeId = labelToNodeId.get(key2.toLowerCase());
+        if (nodeId) {
+          valueMap.set(nodeId, value);
+          valueMap.set(`@value.${nodeId}`, value);
+        }
+      }
+      console.log(`\u{1F9EE} [TBL EVALUATE] Utilisation de operation-interpreter pour formule: ${formulaId}`);
+      console.log(`   \u{1F4CA} ValueMap: ${valueMap.size} entr\xE9es`);
+      const valuesCache = /* @__PURE__ */ new Map();
+      const labelMap = /* @__PURE__ */ new Map();
+      const result = await interpretFormula(
+        formulaId,
+        submissionId,
+        prismaInstance,
+        valuesCache,
+        0,
+        // depth
+        valueMap,
+        labelMap
+      );
+      await prismaInstance.$disconnect();
+      trace.push({ step: "formula_interpret", info: `R\xE9sultat: ${result.result}`, success: true });
+      return {
+        payload: {
+          success: true,
+          type: "formula",
+          capacity,
+          value: result.result,
+          humanText: result.humanText,
+          details: result.details
+        },
+        trace
+      };
+    } catch (error) {
+      console.error(`\u274C [TBL EVALUATE] Erreur interpretFormula:`, error);
+      trace.push({ step: "formula_interpret", info: `Erreur: ${error instanceof Error ? error.message : "unknown"}`, success: false });
+      const result = await evaluationEngine2.evaluate({
+        element_code: variable.exposedKey,
+        context_values: contextData,
+        evaluation_mode: "auto",
+        deep_resolution: true
+      });
+      if (result.success) {
+        return { payload: { success: true, type: "formula", capacity, value: result.final_value, dependencies: result.dependencies_used, performance: result.performance }, trace };
+      }
+      return { payload: { success: false, type: "formula", capacity, error: "\xC9chec moteur", details: result.errors }, trace };
     }
-    return { payload: { success: false, type: "formula", capacity, error: "\xC9chec moteur", details: result.errors }, trace };
   }
   if (capacity === "3") {
-    return { payload: { success: true, type: "condition", capacity, status: "not_implemented", value: null }, trace };
+    try {
+      const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+      const prismaInstance = new PrismaClient71();
+      const conditionId = sr.replace(/^condition:/, "");
+      const submissionId = contextData.submissionId || "temp-evaluation";
+      const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
+        select: { id: true, label: true }
+      });
+      const labelToNodeId = /* @__PURE__ */ new Map();
+      const nodeIdToLabel = /* @__PURE__ */ new Map();
+      for (const node of allNodes) {
+        labelToNodeId.set(node.label.toLowerCase(), node.id);
+        nodeIdToLabel.set(node.id, node.label);
+      }
+      const valueMap = /* @__PURE__ */ new Map();
+      for (const [key2, value] of Object.entries(contextData)) {
+        valueMap.set(key2, value);
+        if (!key2.startsWith("@")) {
+          valueMap.set(`@value.${key2}`, value);
+        }
+        const nodeId = labelToNodeId.get(key2.toLowerCase());
+        if (nodeId) {
+          valueMap.set(nodeId, value);
+          valueMap.set(`@value.${nodeId}`, value);
+          console.log(`   \u{1F517} Mapping label "${key2}" \u2192 nodeId "${nodeId}" = ${value}`);
+        }
+      }
+      console.log(`\u2696\uFE0F [TBL EVALUATE] Utilisation de operation-interpreter pour condition: ${conditionId}`);
+      console.log(`   \u{1F4CA} ValueMap: ${valueMap.size} entr\xE9es`);
+      const valuesCache = /* @__PURE__ */ new Map();
+      const labelMap = /* @__PURE__ */ new Map();
+      const result = await interpretCondition(
+        conditionId,
+        submissionId,
+        prismaInstance,
+        valuesCache,
+        0,
+        // depth
+        valueMap,
+        labelMap
+      );
+      await prismaInstance.$disconnect();
+      trace.push({ step: "condition_interpret", info: `R\xE9sultat: ${result.result}`, success: true });
+      return {
+        payload: {
+          success: true,
+          type: "condition",
+          capacity,
+          value: result.result,
+          humanText: result.humanText,
+          details: result.details
+        },
+        trace
+      };
+    } catch (error) {
+      console.error(`\u274C [TBL EVALUATE] Erreur interpretCondition:`, error);
+      trace.push({ step: "condition_interpret", info: `Erreur: ${error instanceof Error ? error.message : "unknown"}`, success: false });
+      return { payload: { success: false, type: "condition", capacity, error: "\xC9chec \xE9valuation condition", details: error instanceof Error ? error.message : "unknown" }, trace };
+    }
   }
   if (capacity === "4") {
     return { payload: { success: true, type: "table", capacity, status: "not_implemented", value: null }, trace };
@@ -54433,6 +54714,13 @@ function parseSourceRef3(sourceRef) {
       type: "table",
       id: cleaned.replace("node-table:", ""),
       prefix: "node-table:"
+    };
+  }
+  if (cleaned.startsWith("@calculated.")) {
+    return {
+      type: "calculated",
+      id: cleaned.replace("@calculated.", ""),
+      prefix: "@calculated."
     };
   }
   return {

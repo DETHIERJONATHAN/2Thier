@@ -29,6 +29,11 @@ export class FormulaEvaluator {
           const value = this.resolveReference(token, formData, debug);
           return value;
         }
+        // 🆕 Support pour @calculated.{nodeId} - récupère la calculatedValue d'un champ
+        if (typeof token === 'string' && token.startsWith('@calculated.')) {
+          const value = this.resolveCalculatedReference(token, formData, debug);
+          return value;
+        }
         return token;
       });
       
@@ -86,6 +91,45 @@ export class FormulaEvaluator {
     
     if (debug) {
       console.log(`🧮 [FORMULA] Référence ${ref} non trouvée, utilisation de 0`);
+    }
+    
+    return 0; // Valeur par défaut
+  }
+  
+  /**
+   * 🆕 Résout une référence @calculated.xxx vers la calculatedValue stockée
+   * NOTE: Cette méthode recherche dans formData la valeur pré-calculée
+   * La clé attendue est `__calculated__{nodeId}` ou directement via l'API
+   */
+  private static resolveCalculatedReference(
+    ref: string, 
+    formData: Record<string, unknown>,
+    debug = false
+  ): number {
+    
+    const nodeId = ref.replace('@calculated.', '');
+    
+    // Chercher la valeur calculée dans formData avec le préfixe spécial
+    const calculatedKey = `__calculated__${nodeId}`;
+    if (formData[calculatedKey] !== undefined) {
+      const value = parseFloat(String(formData[calculatedKey]));
+      if (debug) {
+        console.log(`📊 [FORMULA] Calculated ${ref} -> ${value}`);
+      }
+      return isNaN(value) ? 0 : value;
+    }
+    
+    // Fallback: chercher directement par nodeId (la calculatedValue peut être dans formData)
+    if (formData[nodeId] !== undefined) {
+      const value = parseFloat(String(formData[nodeId]));
+      if (debug) {
+        console.log(`📊 [FORMULA] Calculated ${ref} (fallback) -> ${value}`);
+      }
+      return isNaN(value) ? 0 : value;
+    }
+    
+    if (debug) {
+      console.log(`📊 [FORMULA] Calculated ${ref} non trouvé, utilisation de 0`);
     }
     
     return 0; // Valeur par défaut

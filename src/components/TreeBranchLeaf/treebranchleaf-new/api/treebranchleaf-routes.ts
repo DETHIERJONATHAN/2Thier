@@ -13096,6 +13096,88 @@ router.get('/variables/search', async (req, res) => {
   }
 });
 
+// =============================================================================
+// 📊 RÉCUPÉRATION DES VALEURS CALCULÉES (calculatedValue)
+// =============================================================================
+/**
+ * GET /trees/:treeId/calculated-values
+ * Récupère tous les champs ayant une calculatedValue non nulle
+ * Utile pour référencer les résultats de formules/conditions comme contraintes dynamiques
+ */
+router.get('/trees/:treeId/calculated-values', async (req, res) => {
+  try {
+    console.log('📊 [TBL-ROUTES] GET /trees/:treeId/calculated-values - DÉBUT');
+    const { treeId } = req.params;
+    
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
+
+    // Vérifier que l'arbre appartient à l'organisation (sauf SuperAdmin)
+    const treeWhereFilter = isSuperAdmin || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    
+    const tree = await prisma.treeBranchLeafTree.findFirst({
+      where: treeWhereFilter
+    });
+
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    // Récupérer tous les nœuds ayant une calculatedValue non nulle
+    const nodesWithCalculatedValue = await prisma.treeBranchLeafNode.findMany({
+      where: { 
+        treeId,
+        calculatedValue: {
+          not: null
+        }
+      },
+      select: {
+        id: true,
+        label: true,
+        type: true,
+        calculatedValue: true,
+        calculatedBy: true,
+        parentId: true
+      }
+    });
+
+    console.log(`📊 [TBL-ROUTES] ${nodesWithCalculatedValue.length} champs avec calculatedValue trouvés`);
+
+    // Récupérer les labels des parents pour context
+    const parentIds = nodesWithCalculatedValue
+      .map(n => n.parentId)
+      .filter((id): id is string => !!id);
+    
+    const parentNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { id: { in: parentIds } },
+      select: { id: true, label: true }
+    });
+    
+    const parentLabelsMap = new Map(parentNodes.map(p => [p.id, p.label]));
+
+    // Formater les valeurs calculées pour le frontend
+    const calculatedValues = nodesWithCalculatedValue.map(node => ({
+      id: node.id,
+      label: node.label || 'Champ sans nom',
+      calculatedValue: node.calculatedValue,
+      calculatedBy: node.calculatedBy || undefined,
+      type: node.type,
+      parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : undefined
+    }));
+
+    console.log(`📊 [TBL-ROUTES] Valeurs calculées formatées:`, calculatedValues.map(cv => ({ 
+      id: cv.id, 
+      label: cv.label, 
+      value: cv.calculatedValue,
+      source: cv.calculatedBy 
+    })));
+    
+    res.json(calculatedValues);
+  } catch (error) {
+    console.error('[TreeBranchLeaf API] Error fetching calculated values:', error);
+    res.status(500).json({ error: 'Impossible de récupérer les valeurs calculées' });
+  }
+});
+
 
 export default router;
 

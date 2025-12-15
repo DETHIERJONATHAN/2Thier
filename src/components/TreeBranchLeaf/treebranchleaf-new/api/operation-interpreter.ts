@@ -787,6 +787,30 @@ async function interpretCondition(
       return { value: null, label: 'Inconnu' };
     }
 
+    // 🆕 GESTION SPÉCIALE pour @select.xxx
+    // Pour les options de select, on veut récupérer le LABEL de l'option (ex: "Portrait")
+    // pas sa valeur (qui est souvent null ou l'ID)
+    if (ref.startsWith('@select.')) {
+      const optionNodeId = ref.slice('@select.'.length).split('.')[0];
+      console.log(`[CONDITION] 🔹 Résolution @select: ${optionNodeId}`);
+      
+      // Récupérer le noeud d'option pour obtenir son label
+      const optionNode = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: optionNodeId },
+        select: { id: true, label: true, parentId: true }
+      });
+      
+      if (optionNode) {
+        console.log(`[CONDITION] 🔹 Option trouvée: ${optionNode.label}`);
+        // Pour une option, la "valeur" à comparer est son ID (car c'est ce qui est stocké dans la soumission)
+        // et le label est le texte affiché
+        return { value: optionNode.id, label: optionNode.label };
+      }
+      
+      console.warn(`[CONDITION] ⚠️ Option non trouvée: ${optionNodeId}`);
+      return { value: optionNodeId, label: 'Option inconnue' };
+    }
+
     const operandType = identifyReferenceType(ref);
     if (operandType === 'field' || operandType === 'value') {
       const operandId = normalizeRef(ref);
@@ -995,6 +1019,19 @@ function evaluateOperator(op: string, left: any, right: any): boolean {
     case '!=':
       return left !== right;
     
+    // 🔥 NOUVEAU: Opérateur 'contains' pour vérifier si une chaîne contient une autre
+    case 'contains':
+      if (left === null || left === undefined) return false;
+      if (right === null || right === undefined) return false;
+      return String(left).toLowerCase().includes(String(right).toLowerCase());
+    
+    // 🔥 NOUVEAU: Opérateur 'startsWith' pour vérifier si une chaîne commence par une autre
+    case 'startsWith':
+    case 'commence par':
+      if (left === null || left === undefined) return false;
+      if (right === null || right === undefined) return false;
+      return String(left).toLowerCase().startsWith(String(right).toLowerCase());
+    
     case 'gt':
     case '>':
       return Number(left) > Number(right);
@@ -1182,6 +1219,15 @@ function tryParseTokenReference(token?: string | null): FormulaReferenceMeta | n
   }
 
   const createMeta = (refType: ReferenceType, refId: string): FormulaReferenceMeta => ({ refType, refId, rawToken });
+
+  // 🔥 NOUVEAU: Support des tokens @calculated.xxx (champs avec valeur calculée)
+  // Ces tokens référencent un nodeId qui a une formule associée
+  if (normalizedToken.startsWith('@calculated.')) {
+    const nodeId = normalizedToken.slice('@calculated.'.length);
+    // Un @calculated.xxx est essentiellement une référence à un champ (value) 
+    // dont la valeur sera récupérée ou calculée
+    return createMeta('value', nodeId);
+  }
 
   if (normalizedToken.startsWith('@value.condition:')) {
     return createMeta('condition', normalizedToken.slice('@value.condition:'.length));

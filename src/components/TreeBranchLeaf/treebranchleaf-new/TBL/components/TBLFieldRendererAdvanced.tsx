@@ -1871,6 +1871,31 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       );
     }
     
+    // 🔍 NOUVELLE LOGIQUE: Distinguer les formules de VALEUR des formules de CONTRAINTE
+    // Une formule de contrainte (ex: number_max dynamique) ne rend PAS le champ read-only
+    const isConstraintFormula = (formulaInstances: Record<string, unknown> | null | undefined): boolean => {
+      if (!formulaInstances) return false;
+      
+      // Parcourir toutes les instances de formule
+      for (const [_instanceId, instance] of Object.entries(formulaInstances)) {
+        const inst = instance as Record<string, unknown> | null;
+        if (!inst) continue;
+        
+        // Vérifier le targetProperty - si c'est une propriété de contrainte, ce n'est PAS une formule de valeur
+        const targetProperty = inst.targetProperty as string | undefined;
+        if (targetProperty && ['number_max', 'number_min', 'max', 'min', 'step', 'visible', 'disabled', 'required'].includes(targetProperty)) {
+          return true;
+        }
+        
+        // Vérifier aussi le nom de la formule pour des indices
+        const name = (inst.name as string) || '';
+        if (/\b(max|min|limit|constraint|validation)\b/i.test(name)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    
     const hasFormulaCapability = Boolean(
       (capabilities.formula && (
         capabilities.formula.enabled !== false ||
@@ -1881,10 +1906,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       fieldConfig.hasFormula ||
       field.hasFormula
     );
+    
+    // 🎯 NOUVEAU: Vérifier si c'est une formule de contrainte (pas une formule de valeur)
+    const formulaIsConstraint = isConstraintFormula(capabilities.formula?.instances as Record<string, unknown> | null | undefined);
+    
     const manualOverrideAllowed = fieldConfig.formulaConfig?.allowManualOverride === true;
 
-    // ✨ PRIORITÉ 2: Capacité Formula (formules directes)
-    if (hasFormulaCapability && !manualOverrideAllowed) {
+    // ✨ PRIORITÉ 2: Capacité Formula (formules directes) - SEULEMENT pour les formules de VALEUR
+    // Si c'est une formule de CONTRAINTE (ex: number_max), le champ reste éditable
+    if (hasFormulaCapability && !manualOverrideAllowed && !formulaIsConstraint) {
       if (!treeId) {
         return <span style={{ color: '#888' }}>---</span>;
       }

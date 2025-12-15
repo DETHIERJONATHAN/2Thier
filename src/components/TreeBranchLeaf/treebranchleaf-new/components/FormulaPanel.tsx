@@ -398,9 +398,27 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
   // Aide rendu: extraire id depuis token
   const extractNodeIdFromRef = useCallback((ref?: string): string | undefined => {
     if (!ref || typeof ref !== 'string') return undefined;
-    if (ref.startsWith('@value.')) return ref.slice('@value.'.length);
-    if (ref.startsWith('@select.')) return ref.slice('@select.'.length).split('.')[0];
-    const formulaAlias = extractFormulaAlias(ref);
+    // Nettoyer les accolades si présentes
+    let cleanRef = ref;
+    if (cleanRef.startsWith('{{') && cleanRef.endsWith('}}')) {
+      cleanRef = cleanRef.slice(2, -2);
+    }
+    if (cleanRef.startsWith('@value.')) return cleanRef.slice('@value.'.length);
+    if (cleanRef.startsWith('@select.')) return cleanRef.slice('@select.'.length).split('.')[0];
+    // 🆕 Support pour @calculated.{nodeId}[-suffix]
+    if (cleanRef.startsWith('@calculated.')) {
+      const afterPrefix = cleanRef.slice('@calculated.'.length);
+      const match = afterPrefix.match(/^([a-f0-9-]{36})/i);
+      return match ? match[1] : afterPrefix.split('-')[0];
+    }
+    // 🚫 Les tokens @table.{tableId} NE SONT PAS des nœuds TBL
+    // Ils sont des références à des TreeBranchLeafNodeTable (tables matricielles)
+    // On retourne undefined pour qu'ils ne soient pas inclus dans referencedNodeIds
+    // Le TokenChip les gère via 'tableRef' → /api/treebranchleaf/reusables/tables
+    if (cleanRef.startsWith('@table.')) {
+      return undefined;
+    }
+    const formulaAlias = extractFormulaAlias(cleanRef);
     if (formulaAlias) return formulaAlias;
     return undefined;
   }, []);
@@ -408,6 +426,17 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
   const referencedNodeIds = useMemo(() => {
     return Array.from(new Set(localTokens.map(extractNodeIdFromRef).filter(Boolean))) as string[];
   }, [localTokens, extractNodeIdFromRef]);
+
+  // 🆕 Extraire les IDs des tables matricielles séparément
+  // Ces IDs ne sont pas des nœuds TBL mais des TreeBranchLeafNodeTable
+  const referencedTableIds = useMemo(() => {
+    return Array.from(new Set(
+      localTokens
+        .filter(t => typeof t === 'string' && t.startsWith('@table.'))
+        .map(t => (t as string).slice('@table.'.length))
+        .filter(Boolean)
+    )) as string[];
+  }, [localTokens]);
 
   const buildEvaluationExpression = useCallback(() => {
     const rolesMap: Record<string, string> = {};
@@ -455,6 +484,29 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
         continue;
       }
 
+      // 🆕 Traiter les références @calculated.{nodeId}[-suffix]
+      if (rawToken.startsWith('@calculated.')) {
+        const afterPrefix = rawToken.slice('@calculated.'.length);
+        const match = afterPrefix.match(/^([a-f0-9-]{36})/i);
+        const roleKey = match ? `calculated_${match[1]}` : `calculated_${afterPrefix.replace(/[^A-Za-z0-9]/g, '_')}`;
+        rolesMap[roleKey] = rawToken;
+        parts.push(`{{${roleKey}}}`);
+        console.log(`🔧 [CALCULATED] Token: "${rawToken}" → roleKey: "${roleKey}"`);
+        continue;
+      }
+
+      // 🆕 Traiter les références @table.{nodeId} (valeurs de tables matricielles)
+      if (rawToken.startsWith('@table.')) {
+        const nodeId = rawToken.slice('@table.'.length);
+        if (nodeId) {
+          const roleKey = `table_${nodeId.replace(/[^A-Za-z0-9]/g, '_')}`;
+          rolesMap[roleKey] = rawToken;
+          parts.push(`{{${roleKey}}}`);
+          console.log(`🔧 [TABLE] Token: "${rawToken}" → roleKey: "${roleKey}"`);
+        }
+        continue;
+      }
+
       parts.push(rawToken);
     }
 
@@ -464,6 +516,10 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
 
   const buildTestValuesPayload = useCallback(() => {
     const payload: Record<string, number | string> = {};
+    
+    // D'abord, construire le rolesMap pour savoir quelles clés @xxx sont utilisées
+    const { rolesMap } = buildEvaluationExpression();
+    
     referencedNodeIds.forEach((nodeId) => {
       const raw = testValues[nodeId];
       if (raw === undefined || raw === null || raw === '') {
@@ -471,10 +527,47 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
       }
       const normalized = raw.replace(',', '.');
       const numeric = Number(normalized);
-      payload[nodeId] = Number.isFinite(numeric) ? numeric : raw;
+      const value = Number.isFinite(numeric) ? numeric : raw;
+      
+      // Ajouter avec la clé nodeId standard
+      payload[nodeId] = value;
+      
+      // 🆕 Ajouter aussi avec les clés calculated_xxx et table_xxx
+      payload[`calculated_${nodeId}`] = value;
+      payload[`table_${nodeId.replace(/[^A-Za-z0-9]/g, '_')}`] = value;
+      
+      // 🆕 CRITIQUE: Ajouter aussi avec le token @calculated.xxx complet
+      // Car resolveVariable reçoit la VALEUR du rolesMap, pas la clé
+      const calculatedKey = `calculated_${nodeId}`;
+      if (rolesMap[calculatedKey]) {
+        payload[rolesMap[calculatedKey]] = value;
+      }
     });
+    
+    // 🆕 Inclure aussi les valeurs des tables matricielles
+    referencedTableIds.forEach((tableId) => {
+      const raw = testValues[tableId];
+      if (raw === undefined || raw === null || raw === '') {
+        return;
+      }
+      const normalized = raw.replace(',', '.');
+      const numeric = Number(normalized);
+      const value = Number.isFinite(numeric) ? numeric : raw;
+      
+      // Ajouter avec la clé table_xxx (format utilisé par buildEvaluationExpression)
+      const tableKey = `table_${tableId.replace(/[^A-Za-z0-9]/g, '_')}`;
+      payload[tableKey] = value;
+      
+      // 🆕 CRITIQUE: Ajouter aussi avec le token @table.xxx complet
+      // Car resolveVariable reçoit la VALEUR du rolesMap, pas la clé
+      payload[`@table.${tableId}`] = value;
+      if (rolesMap[tableKey]) {
+        payload[rolesMap[tableKey]] = value;
+      }
+    });
+    
     return payload;
-  }, [referencedNodeIds, testValues]);
+  }, [referencedNodeIds, referencedTableIds, testValues, buildEvaluationExpression]);
 
   const handleEvaluate = useCallback(async () => {
     if (!localTokens.length) {
@@ -628,6 +721,19 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
                     style={{ width: 180 }}
                     value={testValues[id] || ''}
                     onChange={(e) => setTestValues(prev => ({ ...prev, [id]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              {/* 🆕 Champs de test pour les tables matricielles */}
+              {referencedTableIds.map(tableId => (
+                <div key={`table-${tableId}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <TokenChip token={`@table.${tableId}`} />
+                  <Input
+                    size="small"
+                    placeholder="Valeur de test"
+                    style={{ width: 180 }}
+                    value={testValues[tableId] || ''}
+                    onChange={(e) => setTestValues(prev => ({ ...prev, [tableId]: e.target.value }))}
                   />
                 </div>
               ))}

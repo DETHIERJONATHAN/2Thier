@@ -174,7 +174,16 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
     };
   }
 
-  // 📝 Champ (UUID ou node_xxx)
+  // � Valeur calculée (calculatedValue d'un autre champ)
+  if (cleaned.startsWith('@calculated.')) {
+    return {
+      type: 'calculated',
+      id: cleaned.replace('@calculated.', ''),
+      prefix: '@calculated.'
+    };
+  }
+
+  // �📝 Champ (UUID ou node_xxx)
   return {
     type: 'field',
     id: cleaned,

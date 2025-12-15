@@ -940,17 +940,30 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         console.log('👀 [commitRepeaterMetadata] Détection des copies à supprimer:', {
           'merged.templateNodeIds': merged.templateNodeIds,
           'selectedSet': Array.from(selectedSet),
-          'childrenOfRepeater.length': childrenOfRepeater.length
+          'childrenOfRepeater.length': childrenOfRepeater.length,
+          'repeaterId': repeaterId
         });
         
         const nodesToDelete: TreeBranchLeafNode[] = [];
         
         childrenOfRepeater.forEach(n => {
           // Ignorer les nœuds déjà marqués comme supprimés
-          if (recentlyDeleted.has(n.id)) return;
+          if (recentlyDeleted.has(n.id)) {
+            console.log(`⏭️ [commitRepeaterMetadata] Ignoré (déjà supprimé): ${n.label} (${n.id})`);
+            return;
+          }
           
           const meta = (n.metadata || {}) as any;
           const sourceTemplateId = meta?.sourceTemplateId;
+          
+          // Log détaillé pour chaque enfant
+          console.log(`🔍 [commitRepeaterMetadata] Analyse enfant: ${n.label}`, {
+            id: n.id,
+            parentId: n.parentId,
+            sourceTemplateId: sourceTemplateId || '(aucun)',
+            isChild: n.parentId === repeaterId,
+            templateStillSelected: sourceTemplateId ? selectedSet.has(sourceTemplateId) : 'N/A'
+          });
           
           // Si c'est une copie (a un sourceTemplateId) ET que son template n'est plus sélectionné
           if (n.parentId === repeaterId && sourceTemplateId && !selectedSet.has(sourceTemplateId)) {
@@ -1025,15 +1038,12 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             await new Promise(resolve => setTimeout(resolve, 100));
           }
 
-          // Étape B : Créer les nouvelles copies (SEULEMENT après suppressions)
+          // Étape B : NE PAS créer automatiquement les copies
+          // Les copies seront créées UNIQUEMENT quand l'utilisateur clique sur le bouton "Ajouter"
           if (toCreate.length > 0) {
-            console.log('➕ [commitRepeaterMetadata] Création des nouvelles copies:', toCreate);
-            // Marquer comme en cours pour éviter re-duplication avant hydratation
-            const map = inFlightDupByRepeaterRef.current;
-            const set = map.get(repeaterId) || new Set<string>();
-            toCreate.forEach(id => set.add(id));
-            map.set(repeaterId, set);
-            duplicateTemplatesPhysically(toCreate);
+            console.log('📋 [commitRepeaterMetadata] Templates à dupliquer (attente clic "Ajouter"):', toCreate);
+            // NOTE: On ne duplique plus automatiquement ici
+            // duplicateTemplatesPhysically sera appelé par le bouton "Ajouter" dans TBLSectionRenderer
           } else if (nodesToDelete.length === 0) {
             console.log('✅ [commitRepeaterMetadata] Aucune modification nécessaire (idempotent)');
           }
@@ -1044,12 +1054,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           console.error('❌ [commitRepeaterMetadata] Erreur durant la séquence suppression/création:', err);
         });
       } catch (e) {
-        console.warn('⚠️ [commitRepeaterMetadata] Échec contrôle idempotence, fallback duplication complète:', e);
-        // Fallback ultra conservateur si une erreur survient
-        duplicateTemplatesPhysically(merged.templateNodeIds);
+        console.warn('⚠️ [commitRepeaterMetadata] Échec contrôle idempotence:', e);
+        // Plus de fallback de duplication automatique - on laisse le bouton "Ajouter" gérer
       }
     }
-  }, [patchNode, selectedNode, selectedNodeFromTree, nodes, repeaterTemplateIds, repeaterMinItems, repeaterMaxItems, repeaterAddLabel, REPEATER_DEFAULT_LABEL, duplicateTemplatesPhysically, emitMetadataUpdate]);
+  }, [patchNode, selectedNode, selectedNodeFromTree, nodes, repeaterTemplateIds, repeaterMinItems, repeaterMaxItems, repeaterAddLabel, REPEATER_DEFAULT_LABEL, emitMetadataUpdate]);
 
   // 🧹 Anti-redoublons: Nettoyer in-flight une fois que les copies sont détectées dans `nodes`
   // Raison: On ne doit retirer de l'in-flight que APRÈS que `nodes` soit hydraté avec les vraies copies.

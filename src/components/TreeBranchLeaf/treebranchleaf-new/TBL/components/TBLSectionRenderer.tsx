@@ -44,6 +44,31 @@ const { Text } = Typography;
 const { Panel } = Collapse;
 const { useBreakpoint } = Grid;
 
+// 🔍 HELPER: Distinguer les formules de VALEUR des formules de CONTRAINTE
+// Une formule de contrainte (ex: number_max dynamique) ne rend PAS le champ read-only
+const isConstraintFormula = (formulaInstances: Record<string, unknown> | null | undefined): boolean => {
+  if (!formulaInstances) return false;
+  
+  // Parcourir toutes les instances de formule
+  for (const [_instanceId, instance] of Object.entries(formulaInstances)) {
+    const inst = instance as Record<string, unknown> | null;
+    if (!inst) continue;
+    
+    // Vérifier le targetProperty - si c'est une propriété de contrainte, ce n'est PAS une formule de valeur
+    const targetProperty = inst.targetProperty as string | undefined;
+    if (targetProperty && ['number_max', 'number_min', 'max', 'min', 'step', 'visible', 'disabled', 'required'].includes(targetProperty)) {
+      return true;
+    }
+    
+    // Vérifier aussi le nom de la formule pour des indices
+    const name = (inst.name as string) || '';
+    if (/\b(max|min|limit|constraint|validation)\b/i.test(name)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 // 🎯 INTERFACE POUR NAMESPACING DES REPEATERS
 interface RepeaterNamespaceMeta {
   prefix: string; // Format: "${parentId}_${instanceIndex}_"
@@ -135,27 +160,12 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
 
   const entries = Array.from(groups.entries()).sort((a, b) => compareSuffix(a[0], b[0]));
   
-  // 🔧 FIX: Construire un map d'ordre basé sur les originaux (groupe BASE)
-  const baseOrderMap = new Map<string, number>();
-  const baseGroup = groups.get(BASE_SUFFIX_KEY);
-  if (baseGroup) {
-    // Trier les originaux par leur `order` pour établir l'ordre de référence
-    const sortedBase = [...baseGroup].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-    sortedBase.forEach((field, index) => {
-      const baseName = getBaseName(field.label);
-      baseOrderMap.set(baseName.toLowerCase(), index);
-    });
-  }
-  
   // Recalculer isLastInCopyGroup pour chaque groupe APRÈS le tri
   const result = entries.map(([suffix, groupedFields]) => {
-    // 🔧 FIX: Trier les champs selon l'ordre de leur original (via le nom de base)
+    // 🔧 FIX: Trier les champs STRICTEMENT par leur `order` TBL pour respecter l'ordre de l'arbre
     const sortedFields = [...groupedFields].sort((a, b) => {
-      const baseNameA = getBaseName(a.label).toLowerCase();
-      const baseNameB = getBaseName(b.label).toLowerCase();
-      const orderA = baseOrderMap.get(baseNameA) ?? (a.order ?? 9999);
-      const orderB = baseOrderMap.get(baseNameB) ?? (b.order ?? 9999);
-      return orderA - orderB;
+      // 🎯 PRIORITÉ ABSOLUE: Utiliser l'order défini dans TreeBranchLeaf
+      return (a.order ?? 9999) - (b.order ?? 9999);
     });
     
     const fieldsWithUpdatedFlag = sortedFields.map((field, idx, arr) => {
@@ -170,14 +180,11 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
     return { suffix, fields: fieldsWithUpdatedFlag };
   });
   
-  // 🔧 FIX: Ajouter les champs "Total" à la fin, triés par le nom de base
+  // 🔧 FIX: Ajouter les champs "Total" à la fin, triés par leur order TBL
   if (totalFields.length > 0) {
     const sortedTotals = [...totalFields].sort((a, b) => {
-      const baseNameA = getBaseName(a.label).toLowerCase();
-      const baseNameB = getBaseName(b.label).toLowerCase();
-      const orderA = baseOrderMap.get(baseNameA) ?? (a.order ?? 9999);
-      const orderB = baseOrderMap.get(baseNameB) ?? (b.order ?? 9999);
-      return orderA - orderB;
+      // 🎯 Utiliser l'order TBL pour les champs Total aussi
+      return (a.order ?? 9999) - (b.order ?? 9999);
     });
     result.push({ 
       suffix: '__TOTAL__', 
@@ -1638,7 +1645,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         return {
           id: optionNode.id,
           label: optionNode.option_label || optionNode.label,
-          value: optionNode.value || optionNode.option_label || optionNode.label,
+          // 🔥 FIX: Utiliser l'ID du nœud comme valeur si value est null/undefined
+          // Cela permet aux conditions @select.xxx de fonctionner correctement
+          value: optionNode.value || optionNode.id,
           metadata: optionNode.metadata, // 🔥 CRITIQUE: Inclure metadata avec sharedReferenceIds !
           conditionalFields: undefined // TODO: construire si nécessaire
         };
@@ -1767,7 +1776,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
   // 🔄 Réorganiser l'ordre des champs selon les conditions + injection des champs conditionnels + DÉPLOIEMENT DES REPEATERS
   const orderedFields = useMemo(() => {
-    const fields = [...section.fields];
+    // 🎯 CRITICAL FIX: Trier les champs par leur order TBL dès le départ pour respecter l'arbre
+    const fields = [...section.fields].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
     
     // Créer le tableau final en "compactant" l'ordre selon les conditions
   const finalFields: TBLField[] = [];
@@ -1775,9 +1785,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   const consumedFieldIds = new Set<string>();
     let nextOrder = 0;
     
-    // 🎯 CORRECTION: Ne pas trier les champs pour préserver l'ordre des repeaters
-    // Traiter les champs dans l'ordre où ils ont été ajoutés à finalFields
-    console.log('🔍 [ALL FIELDS DEBUG] Fields récupérés de la base (SANS TRI):', {
+    // 🎯 Les champs sont maintenant triés par order TBL
+    console.log('🔍 [ALL FIELDS DEBUG] Fields récupérés de la base (TRIÉS PAR ORDER TBL):', {
       totalFields: fields.length,
       fieldIds: fields.map(f => f.id),
       versantFields: fields.filter(f => f.id?.includes('3f0f') || f.id?.includes('e207d8bf') || f.label?.includes('Versant')),
@@ -3936,9 +3945,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       }
       
       // ✨ PRIORITÉ 2: Capacité Formula (formules directes) - COPIE DU COMPORTEMENT "Prix Kw/h test"
+      // 🎯 NOUVEAU: Ignorer les formules de CONTRAINTE (number_max, etc.) - le champ reste éditable
+      const formulaIsConstraint = isConstraintFormula(capabilities?.formula?.instances as Record<string, unknown> | null | undefined);
+      
       const formulaId = capabilities?.formula?.activeId 
         || (capabilities?.formula?.instances && Object.keys(capabilities.formula.instances).length > 0 ? Object.keys(capabilities.formula.instances)[0] : undefined);
-      if ((formulaId && String(formulaId).trim().length > 0) || capabilities?.formula?.currentFormula) {
+      
+      // Seulement traiter comme champ calculé si ce n'est PAS une formule de contrainte
+      if (!formulaIsConstraint && ((formulaId && String(formulaId).trim().length > 0) || capabilities?.formula?.currentFormula)) {
         const currentFormula = capabilities?.formula?.currentFormula;
         const rawExpression = currentFormula?.expression;
         const variablesDef = currentFormula?.variables ? Object.fromEntries(Object.entries(currentFormula.variables).map(([k,v]) => [k, { sourceField: (v as { sourceField?: string; type?: string }).sourceField, type: (v as { sourceField?: string; type?: string }).type }])) : undefined;

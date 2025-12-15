@@ -1357,8 +1357,10 @@ const transformPrismaNodeToField = (
         return {
           id: optionNode.id,
           label: optionNode.option_label || optionNode.label,
-          // Stocker la valeur MÉTIER par défaut (label) plutôt que l'id du nœud
-          value: optionNode.value || optionNode.option_label || optionNode.label,
+          // 🔥 FIX: Utiliser l'ID du nœud comme valeur si value est null/undefined
+          // Cela permet aux conditions @select.xxx de fonctionner correctement
+          // car elles comparent avec l'ID de l'option, pas son label
+          value: optionNode.value || optionNode.id,
           conditionalFields: conditionalFields.length > 0 ? conditionalFields : undefined,
           // ✨ AJOUT: Capacités TreeBranchLeaf pour la détection automatique
           hasData: optionNode.hasData,
@@ -2141,8 +2143,8 @@ export const transformNodesToTBLComplete = (
           // Le rendu des repeaters dans TBLSectionRenderer s'appuie sur ces champs
           // (parentRepeaterId, sourceTemplateId) pour injecter les instances dynamiques.
           
-          // Garder les champs exactement tels qu'ils ont été récupérés dans la section
-          const sectionFieldsFiltered = sectionData.fields;
+          // 🎯 CRITICAL FIX: Trier les champs par leur order TBL pour respecter l'ordre dans l'arbre
+          const sectionFieldsFiltered = [...sectionData.fields].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
           
           // 🔍🔍🔍 DIAGNOSTIC FORCE - Sections Devis/PV
           if (sectionData.node.label?.includes('Devis') || sectionData.node.label?.includes('PV')) {

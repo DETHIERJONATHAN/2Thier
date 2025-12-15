@@ -14,7 +14,7 @@
 
 import express from 'express';
 import TBLEvaluationEngine from '../intelligence/TBLEvaluationEngine';
-import { evaluateVariableOperation } from '../../treebranchleaf-new/api/operation-interpreter';
+import { evaluateVariableOperation, interpretFormula, interpretCondition } from '../../treebranchleaf-new/api/operation-interpreter';
 
 const router = express.Router();
 console.log('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)');
@@ -97,12 +97,65 @@ router.post('/evaluate', async (req, res) => {
       }
     }
 
-    // 3. Formule par id
+    // 3. Formule par id - 🔥 NOUVEAU: Évaluer directement si c'est une formule
     if (!resolvedNodeId) {
-      const formula = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
+      const formula = await prisma.treeBranchLeafNodeFormula.findUnique({ 
+        where: { id: elementId }, 
+        select: { id: true, nodeId: true, name: true, tokens: true } 
+      });
       if (formula) {
         resolvedNodeId = formula.nodeId;
-        trace.push({ step: 'formula_id', info: 'Formule trouvée via id', success: true });
+        trace.push({ step: 'formula_id', info: `Formule trouvée: ${formula.name}`, success: true });
+        
+        // 🔥 ÉVALUATION DIRECTE DE LA FORMULE via operation-interpreter
+        try {
+          const { PrismaClient } = await import('@prisma/client');
+          const prismaInstance = new PrismaClient();
+          
+          const submissionId = (contextData.submissionId as string) || 'temp-evaluation';
+          
+          // Convertir contextData en Map<string, unknown> pour valueMap
+          const valueMap = new Map<string, unknown>();
+          for (const [key, value] of Object.entries(contextData)) {
+            valueMap.set(key, value);
+            if (!key.startsWith('@')) {
+              valueMap.set(`@value.${key}`, value);
+            }
+          }
+          
+          console.log(`🧮 [TBL EVALUATE] Évaluation directe formule: ${formula.name} (${formula.id})`);
+          
+          const valuesCache = new Map();
+          const labelMap = new Map<string, string>();
+          
+          const result = await interpretFormula(
+            formula.id,
+            submissionId,
+            prismaInstance,
+            valuesCache,
+            0,
+            valueMap,
+            labelMap
+          );
+          
+          await prismaInstance.$disconnect();
+          
+          trace.push({ step: 'formula_direct_eval', info: `Résultat: ${result.result}`, success: true });
+          
+          return res.json({ 
+            success: true, 
+            type: 'formula', 
+            capacity: '2',
+            value: result.result,
+            humanText: result.humanText,
+            details: result.details,
+            trace 
+          });
+        } catch (evalError) {
+          console.error(`❌ [TBL EVALUATE] Erreur évaluation directe formule:`, evalError);
+          trace.push({ step: 'formula_direct_eval', info: `Erreur: ${evalError instanceof Error ? evalError.message : 'unknown'}`, success: false });
+          // Continue vers le flux normal en cas d'échec
+        }
       } else {
         trace.push({ step: 'formula_id', info: 'Aucune formule avec cet id', success: false });
       }
@@ -234,12 +287,67 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
     }
   }
 
-  // 3. Formule par id
+  // 3. Formule par id - 🔥 NOUVEAU: Évaluer directement si c'est une formule
   if (!resolvedNodeId) {
-    const formula = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
+    const formula = await prisma.treeBranchLeafNodeFormula.findUnique({ 
+      where: { id: elementId }, 
+      select: { id: true, nodeId: true, name: true, tokens: true } 
+    }) as { id: string; nodeId: string; name: string; tokens: unknown[] } | null;
     if (formula) {
       resolvedNodeId = formula.nodeId;
-      trace.push({ step: 'formula_id', info: 'Formule trouvée via id', success: true });
+      trace.push({ step: 'formula_id', info: `Formule trouvée: ${formula.name}`, success: true });
+      
+      // 🔥 ÉVALUATION DIRECTE DE LA FORMULE via operation-interpreter
+      try {
+        const { PrismaClient } = await import('@prisma/client');
+        const prismaInstance = new PrismaClient();
+        
+        const submissionId = (contextData.submissionId as string) || 'temp-evaluation';
+        
+        // Convertir contextData en Map<string, unknown> pour valueMap
+        const valueMap = new Map<string, unknown>();
+        for (const [key, value] of Object.entries(contextData)) {
+          valueMap.set(key, value);
+          if (!key.startsWith('@')) {
+            valueMap.set(`@value.${key}`, value);
+          }
+        }
+        
+        console.log(`🧮 [TBL EVALUATE BATCH] Évaluation directe formule: ${formula.name} (${formula.id})`);
+        
+        const valuesCache = new Map();
+        const labelMap = new Map<string, string>();
+        
+        const result = await interpretFormula(
+          formula.id,
+          submissionId,
+          prismaInstance,
+          valuesCache,
+          0,
+          valueMap,
+          labelMap
+        );
+        
+        await prismaInstance.$disconnect();
+        
+        trace.push({ step: 'formula_direct_eval', info: `Résultat: ${result.result}`, success: true });
+        
+        return { 
+          payload: { 
+            success: true, 
+            type: 'formula', 
+            capacity: '2',
+            value: result.result,
+            humanText: result.humanText,
+            details: result.details
+          }, 
+          trace 
+        };
+      } catch (evalError) {
+        console.error(`❌ [TBL EVALUATE BATCH] Erreur évaluation directe formule:`, evalError);
+        trace.push({ step: 'formula_direct_eval', info: `Erreur: ${evalError instanceof Error ? evalError.message : 'unknown'}`, success: false });
+        // Continue vers le flux normal en cas d'échec
+      }
     } else {
       trace.push({ step: 'formula_id', info: 'Aucune formule avec cet id', success: false });
     }
@@ -293,20 +401,173 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
   trace.push({ step: 'capacity_detect', info: `Capacité détectée=${capacity}`, success: true });
 
   if (capacity === '2') {
-    const result = await evaluationEngine.evaluate({
-      element_code: variable.exposedKey,
-      context_values: contextData,
-      evaluation_mode: 'auto',
-      deep_resolution: true
-    });
-    if (result.success) {
-      return { payload: { success: true, type: 'formula', capacity, value: result.final_value, dependencies: result.dependencies_used, performance: result.performance }, trace };
+    // 🔥 NOUVEAU: Utiliser operation-interpreter.ts au lieu de TBLEvaluationEngine
+    // pour supporter les tokens @table.xxx dans les formules
+    try {
+      const { PrismaClient } = await import('@prisma/client');
+      const prismaInstance = new PrismaClient();
+      
+      // Extraire l'ID de la formule depuis sourceRef (format: "formula:xxx" ou "node-formula:xxx")
+      const formulaId = sr.replace(/^(formula:|node-formula:)/, '');
+      
+      // Créer un submissionId temporaire ou utiliser celui du contexte
+      const submissionId = (contextData.submissionId as string) || 'temp-evaluation';
+      
+      // 🔥 ENRICHISSEMENT: Créer une correspondance label → nodeId depuis la base
+      const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
+        select: { id: true, label: true }
+      });
+      const labelToNodeId = new Map<string, string>();
+      for (const node of allNodes) {
+        labelToNodeId.set(node.label.toLowerCase(), node.id);
+      }
+      
+      // Convertir contextData en Map<string, unknown> pour valueMap
+      const valueMap = new Map<string, unknown>();
+      for (const [key, value] of Object.entries(contextData)) {
+        valueMap.set(key, value);
+        // Aussi ajouter avec préfixe @value. pour compatibilité
+        if (!key.startsWith('@')) {
+          valueMap.set(`@value.${key}`, value);
+        }
+        
+        // 🔥 NOUVEAU: Si la clé est un label, aussi ajouter par nodeId
+        const nodeId = labelToNodeId.get(key.toLowerCase());
+        if (nodeId) {
+          valueMap.set(nodeId, value);
+          valueMap.set(`@value.${nodeId}`, value);
+        }
+      }
+      
+      console.log(`🧮 [TBL EVALUATE] Utilisation de operation-interpreter pour formule: ${formulaId}`);
+      console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
+      
+      // Utiliser interpretFormula d'operation-interpreter.ts
+      const valuesCache = new Map();
+      const labelMap = new Map<string, string>();
+      
+      const result = await interpretFormula(
+        formulaId,
+        submissionId,
+        prismaInstance,
+        valuesCache,
+        0, // depth
+        valueMap,
+        labelMap
+      );
+      
+      await prismaInstance.$disconnect();
+      
+      trace.push({ step: 'formula_interpret', info: `Résultat: ${result.result}`, success: true });
+      
+      return { 
+        payload: { 
+          success: true, 
+          type: 'formula', 
+          capacity, 
+          value: result.result,
+          humanText: result.humanText,
+          details: result.details
+        }, 
+        trace 
+      };
+    } catch (error) {
+      console.error(`❌ [TBL EVALUATE] Erreur interpretFormula:`, error);
+      trace.push({ step: 'formula_interpret', info: `Erreur: ${error instanceof Error ? error.message : 'unknown'}`, success: false });
+      
+      // Fallback vers TBLEvaluationEngine si interpretFormula échoue
+      const result = await evaluationEngine.evaluate({
+        element_code: variable.exposedKey,
+        context_values: contextData,
+        evaluation_mode: 'auto',
+        deep_resolution: true
+      });
+      if (result.success) {
+        return { payload: { success: true, type: 'formula', capacity, value: result.final_value, dependencies: result.dependencies_used, performance: result.performance }, trace };
+      }
+      return { payload: { success: false, type: 'formula', capacity, error: 'Échec moteur', details: result.errors }, trace };
     }
-    return { payload: { success: false, type: 'formula', capacity, error: 'Échec moteur', details: result.errors }, trace };
   }
 
   if (capacity === '3') {
-    return { payload: { success: true, type: 'condition', capacity, status: 'not_implemented', value: null }, trace };
+    // 🔥 NOUVEAU: Utiliser operation-interpreter.ts pour les conditions
+    try {
+      const { PrismaClient } = await import('@prisma/client');
+      const prismaInstance = new PrismaClient();
+      
+      // Extraire l'ID de la condition depuis sourceRef (format: "condition:xxx")
+      const conditionId = sr.replace(/^condition:/, '');
+      
+      // Créer un submissionId temporaire ou utiliser celui du contexte
+      const submissionId = (contextData.submissionId as string) || 'temp-evaluation';
+      
+      // 🔥 ENRICHISSEMENT: Créer une correspondance label → nodeId depuis la base
+      // pour que les valeurs passées par label soient accessibles par nodeId
+      const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
+        select: { id: true, label: true }
+      });
+      const labelToNodeId = new Map<string, string>();
+      const nodeIdToLabel = new Map<string, string>();
+      for (const node of allNodes) {
+        labelToNodeId.set(node.label.toLowerCase(), node.id);
+        nodeIdToLabel.set(node.id, node.label);
+      }
+      
+      // Convertir contextData en Map<string, unknown> pour valueMap
+      const valueMap = new Map<string, unknown>();
+      for (const [key, value] of Object.entries(contextData)) {
+        valueMap.set(key, value);
+        // Aussi ajouter avec préfixe @value. pour compatibilité
+        if (!key.startsWith('@')) {
+          valueMap.set(`@value.${key}`, value);
+        }
+        
+        // 🔥 NOUVEAU: Si la clé est un label, aussi ajouter par nodeId
+        const nodeId = labelToNodeId.get(key.toLowerCase());
+        if (nodeId) {
+          valueMap.set(nodeId, value);
+          valueMap.set(`@value.${nodeId}`, value);
+          console.log(`   🔗 Mapping label "${key}" → nodeId "${nodeId}" = ${value}`);
+        }
+      }
+      
+      console.log(`⚖️ [TBL EVALUATE] Utilisation de operation-interpreter pour condition: ${conditionId}`);
+      console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
+      
+      // Utiliser interpretCondition d'operation-interpreter.ts
+      const valuesCache = new Map();
+      const labelMap = new Map<string, string>();
+      
+      const result = await interpretCondition(
+        conditionId,
+        submissionId,
+        prismaInstance,
+        valuesCache,
+        0, // depth
+        valueMap,
+        labelMap
+      );
+      
+      await prismaInstance.$disconnect();
+      
+      trace.push({ step: 'condition_interpret', info: `Résultat: ${result.result}`, success: true });
+      
+      return { 
+        payload: { 
+          success: true, 
+          type: 'condition', 
+          capacity, 
+          value: result.result,
+          humanText: result.humanText,
+          details: result.details
+        }, 
+        trace 
+      };
+    } catch (error) {
+      console.error(`❌ [TBL EVALUATE] Erreur interpretCondition:`, error);
+      trace.push({ step: 'condition_interpret', info: `Erreur: ${error instanceof Error ? error.message : 'unknown'}`, success: false });
+      return { payload: { success: false, type: 'condition', capacity, error: 'Échec évaluation condition', details: error instanceof Error ? error.message : 'unknown' }, trace };
+    }
   }
   if (capacity === '4') {
     return { payload: { success: true, type: 'table', capacity, status: 'not_implemented', value: null }, trace };
