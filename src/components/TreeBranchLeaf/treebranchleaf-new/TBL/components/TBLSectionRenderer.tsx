@@ -93,8 +93,17 @@ const extractFieldSuffix = (field: TBLField): string => {
 };
 
 const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string; fields: TBLField[] }> => {
+  // 🔧 FIX: Séparer les champs "Total" des autres pour les placer à la fin
+  const isTotal = (field: TBLField): boolean => {
+    const label = (field.label || '').toLowerCase();
+    return label.includes('total') || label.includes('- total');
+  };
+  
+  const normalFields = fields.filter(f => !isTotal(f));
+  const totalFields = fields.filter(f => isTotal(f));
+  
   const groups = new Map<string, TBLField[]>();
-  for (const field of fields) {
+  for (const field of normalFields) {
     const suffix = extractFieldSuffix(field);
     if (!groups.has(suffix)) {
       groups.set(suffix, []);
@@ -122,8 +131,11 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
   const entries = Array.from(groups.entries()).sort((a, b) => compareSuffix(a[0], b[0]));
   
   // Recalculer isLastInCopyGroup pour chaque groupe APRÈS le tri
-  return entries.map(([suffix, groupedFields]) => {
-    const fieldsWithUpdatedFlag = groupedFields.map((field, idx, arr) => {
+  const result = entries.map(([suffix, groupedFields]) => {
+    // 🔧 FIX: Trier les champs dans chaque groupe par leur `order` pour maintenir l'ordre cohérent
+    const sortedFields = [...groupedFields].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+    
+    const fieldsWithUpdatedFlag = sortedFields.map((field, idx, arr) => {
       // Seules les copies (suffix !== BASE_SUFFIX_KEY) doivent avoir le bouton de suppression
       const isCopy = suffix !== BASE_SUFFIX_KEY;
       const isLast = idx === arr.length - 1;
@@ -134,6 +146,17 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
     });
     return { suffix, fields: fieldsWithUpdatedFlag };
   });
+  
+  // 🔧 FIX: Ajouter les champs "Total" à la fin, triés par ordre
+  if (totalFields.length > 0) {
+    const sortedTotals = [...totalFields].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+    result.push({ 
+      suffix: '__TOTAL__', 
+      fields: sortedTotals.map(f => ({ ...f, isLastInCopyGroup: false }))
+    });
+  }
+  
+  return result;
 };
 
 interface DisplayAppearanceTokens {
