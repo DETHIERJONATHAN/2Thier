@@ -66,6 +66,21 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       return res.status(403).json({ error: 'Accès non autorisé à ce nœud' });
     }
 
+    // 🔄 Générer un nom unique si une table avec ce nom existe déjà pour ce nœud
+    let finalName = name;
+    const existingTable = await prisma.treeBranchLeafNodeTable.findFirst({
+      where: { nodeId, name: finalName },
+    });
+    
+    if (existingTable) {
+      // Compter les tables existantes pour ce nœud et générer un nouveau nom
+      const existingCount = await prisma.treeBranchLeafNodeTable.count({
+        where: { nodeId },
+      });
+      finalName = `${name} (${existingCount + 1})`;
+      console.log(`[NEW POST /tables] ⚠️ Nom déjà utilisé, nouveau nom: ${finalName}`);
+    }
+
     const tableId = randomUUID();
     console.log(`[NEW POST /tables] 🆔 Nouvel ID de table généré: ${tableId}`);
 
@@ -74,7 +89,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       id: tableId,
       nodeId,
       organizationId: node.TreeBranchLeafTree.organizationId,
-      name,
+      name: finalName,
       description: description || null,
       type,
       rowCount: rows.length,
@@ -110,19 +125,27 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     }));
 
     console.log(`[NEW POST /tables] 📦 Transaction préparée: 1 table + ${tableColumnsData.length} colonnes + ${tableRowsData.length} lignes`);
-    console.log(`[NEW POST /tables] 🔍 ANALYSE DÉTAILLÉE DES ROWS:`);
-    console.log(`[NEW POST /tables]    - Type de rows reçu: ${Array.isArray(rows) ? 'array' : typeof rows}`);
-    console.log(`[NEW POST /tables]    - rows.length: ${rows.length}`);
-    console.log(`[NEW POST /tables]    - rows[0] (première ligne):`, rows[0]);
-    console.log(`[NEW POST /tables]    - rows[0][0] (A1):`, rows[0]?.[0]);
-    console.log(`[NEW POST /tables]    - rows[0][1-3] (premières données):`, rows[0]?.slice(1, 4));
-    console.log(`[NEW POST /tables]    - rows[1] (deuxième ligne):`, rows[1]);
-    console.log(`[NEW POST /tables]    - rows[1][0] (label ligne 2):`, rows[1]?.[0]);
-    console.log(`[NEW POST /tables]    - rows[dernière]:`, rows[rows.length - 1]);
-    console.log(`[NEW POST /tables] 🔍 ANALYSE TABLEROWSDATA (après map):`);
-    console.log(`[NEW POST /tables]    - tableRowsData[0].cells:`, tableRowsData[0].cells);
-    console.log(`[NEW POST /tables]    - tableRowsData[1].cells:`, tableRowsData[1].cells);
-    console.log(`[NEW POST /tables]    - tableRowsData[dernière].cells:`, tableRowsData[tableRowsData.length - 1].cells);
+    if (rows.length > 0) {
+      console.log(`[NEW POST /tables] 🔍 ANALYSE DÉTAILLÉE DES ROWS:`);
+      console.log(`[NEW POST /tables]    - Type de rows reçu: ${Array.isArray(rows) ? 'array' : typeof rows}`);
+      console.log(`[NEW POST /tables]    - rows.length: ${rows.length}`);
+      console.log(`[NEW POST /tables]    - rows[0] (première ligne):`, rows[0]);
+      console.log(`[NEW POST /tables]    - rows[0][0] (A1):`, rows[0]?.[0]);
+      console.log(`[NEW POST /tables]    - rows[0][1-3] (premières données):`, rows[0]?.slice(1, 4));
+      if (rows.length > 1) {
+        console.log(`[NEW POST /tables]    - rows[1] (deuxième ligne):`, rows[1]);
+        console.log(`[NEW POST /tables]    - rows[1][0] (label ligne 2):`, rows[1]?.[0]);
+      }
+      console.log(`[NEW POST /tables]    - rows[dernière]:`, rows[rows.length - 1]);
+      console.log(`[NEW POST /tables] 🔍 ANALYSE TABLEROWSDATA (après map):`);
+      console.log(`[NEW POST /tables]    - tableRowsData[0].cells:`, tableRowsData[0]?.cells);
+      if (tableRowsData.length > 1) {
+        console.log(`[NEW POST /tables]    - tableRowsData[1].cells:`, tableRowsData[1]?.cells);
+      }
+      console.log(`[NEW POST /tables]    - tableRowsData[dernière].cells:`, tableRowsData[tableRowsData.length - 1]?.cells);
+    } else {
+      console.log(`[NEW POST /tables] ℹ️ Table vide créée (aucune ligne)`);
+    }
 
     // Exécuter la création dans une transaction atomique
     // ⚠️ TIMEOUT AUGMENTÉ pour les gros fichiers (43k+ lignes)
@@ -313,6 +336,13 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
   } catch (error) {
     console.error(`❌ [NEW POST /tables] Erreur lors de la création de la table:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2002 = Violation de contrainte unique
+      if (error.code === 'P2002') {
+        return res.status(409).json({ 
+          error: 'Une table avec ce nom existe déjà pour ce champ. Veuillez choisir un autre nom.',
+          code: error.code,
+        });
+      }
       return res.status(500).json({ 
         error: 'Erreur de base de données lors de la création de la table.',
         code: error.code,

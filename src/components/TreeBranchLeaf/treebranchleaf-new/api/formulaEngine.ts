@@ -101,14 +101,17 @@ function tokensFingerprint(tokens: FormulaToken[]): string {
 function validateExpression(expr: string, opts?: EvaluateOptions) {
   const maxLen = opts?.maxExpressionLength ?? 500;
   if (expr.length > maxLen) throw new Error('Expression trop longue');
-  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=&"\\]+$/;
+  // Ajout de @ pour supporter @table.xxx et @value.xxx
+  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=&"\\@]+$/;
   if (!allowed.test(expr)) throw new Error('Caractères non autorisés dans l\'expression');
 }
 
 export function parseExpression(expr: string, roleToNodeId: Record<string,string>, opts?: EvaluateOptions): FormulaToken[] {
   validateExpression(expr, opts);
   // Remplacer {{role}} par un marqueur unique pour scanning
-  const working = expr.replace(/\{\{\s*(.+?)\s*\}\}/g, (_, v) => `__VAR__${v.trim()}__`);
+  let working = expr.replace(/\{\{\s*(.+?)\s*\}\}/g, (_, v) => `__VAR__${v.trim()}__`);
+  // Également remplacer @table.xxx et @value.xxx par des marqueurs variables
+  working = working.replace(/@(table|value)\.([a-zA-Z0-9_-]+)/g, (_, type, id) => `__VAR__${type}.${id}__`);
   const tokens: FormulaToken[] = [];
   let i = 0;
   let parenBalance = 0;
@@ -123,8 +126,8 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
       const end = working.indexOf('__', i + 7);
       if (end === -1) throw new Error('Marqueur variable mal formé');
       const role = working.substring(i + 7, end);
-      const nodeId = roleToNodeId[role];
-      if (!nodeId) throw new Error('Variable inconnue dans expression: ' + role);
+      // Essayer d'abord roleToNodeId, sinon utiliser le role directement (pour @table.xxx)
+      const nodeId = roleToNodeId[role] || role;
       tokens.push({ type: 'variable', name: nodeId });
       i = end + 2;
       lastToken = tokens[tokens.length - 1];
@@ -795,6 +798,179 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           const usedFallback = !primary || primary.hadError || valueHasNumericError(primaryValue ?? 0 as StackValue);
           r = usedFallback ? fallbackValue ?? 0 : primaryValue ?? 0;
           break; }
+
+        // 🔄 ARRONDIS
+        case 'arrondi':
+        case 'round': {
+          const val = toNumber(args[0] ?? 0);
+          const decimals = Math.floor(toNumber(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.round(val * factor) / factor;
+          break; }
+        case 'arrondi.sup':
+        case 'roundup': {
+          const val = toNumber(args[0] ?? 0);
+          const decimals = Math.floor(toNumber(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.ceil(val * factor) / factor;
+          break; }
+        case 'arrondi.inf':
+        case 'rounddown': {
+          const val = toNumber(args[0] ?? 0);
+          const decimals = Math.floor(toNumber(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.floor(val * factor) / factor;
+          break; }
+        case 'ent':
+        case 'int':
+          r = mapNumericValue(args[0] ?? 0, Math.floor);
+          break;
+        case 'tronque':
+        case 'trunc': {
+          const val = toNumber(args[0] ?? 0);
+          const decimals = Math.floor(toNumber(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.trunc(val * factor) / factor;
+          break; }
+        case 'plafond':
+        case 'ceiling': {
+          const val = toNumber(args[0] ?? 0);
+          const multiple = toNumber(args[1] ?? 1);
+          r = multiple === 0 ? val : Math.ceil(val / multiple) * multiple;
+          break; }
+        case 'plancher':
+        case 'floor': {
+          const val = toNumber(args[0] ?? 0);
+          const multiple = toNumber(args[1] ?? 1);
+          r = multiple === 0 ? val : Math.floor(val / multiple) * multiple;
+          break; }
+
+        // 📐 TRIGONOMÉTRIE (compléments)
+        case 'degres':
+        case 'degrees':
+          r = mapNumericValue(args[0] ?? 0, rad => rad * (180 / Math.PI));
+          break;
+        case 'sin':
+        case 'sinus':
+          r = mapNumericValue(args[0] ?? 0, Math.sin);
+          break;
+        case 'tan':
+        case 'tangente':
+          r = mapNumericValue(args[0] ?? 0, Math.tan);
+          break;
+        case 'asin':
+        case 'arcsin':
+          r = mapNumericValue(args[0] ?? 0, Math.asin);
+          break;
+        case 'acos':
+        case 'arccos':
+          r = mapNumericValue(args[0] ?? 0, Math.acos);
+          break;
+        case 'atan2': {
+          const x = toNumber(args[0] ?? 0);
+          const y = toNumber(args[1] ?? 0);
+          r = Math.atan2(y, x);
+          break; }
+
+        // 🔢 MATHÉMATIQUES (compléments)
+        case 'puissance':
+        case 'power': {
+          const base = toNumber(args[0] ?? 0);
+          const exp = toNumber(args[1] ?? 1);
+          r = Math.pow(base, exp);
+          break; }
+        case 'exp':
+          r = mapNumericValue(args[0] ?? 0, Math.exp);
+          break;
+        case 'ln':
+          r = mapNumericValue(args[0] ?? 0, val => val <= 0 ? 0 : Math.log(val));
+          break;
+        case 'log': {
+          const val = toNumber(args[0] ?? 0);
+          const base = toNumber(args[1] ?? 10);
+          r = val <= 0 ? 0 : Math.log(val) / Math.log(base);
+          break; }
+        case 'log10':
+          r = mapNumericValue(args[0] ?? 0, val => val <= 0 ? 0 : Math.log10(val));
+          break;
+        case 'abs':
+          r = mapNumericValue(args[0] ?? 0, Math.abs);
+          break;
+        case 'signe':
+        case 'sign':
+          r = mapNumericValue(args[0] ?? 0, Math.sign);
+          break;
+        case 'mod': {
+          const val = toNumber(args[0] ?? 0);
+          const divisor = toNumber(args[1] ?? 1);
+          r = divisor === 0 ? 0 : val % divisor;
+          break; }
+
+        // 📊 STATISTIQUES (compléments)
+        case 'min': {
+          const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
+          r = vals.length ? Math.min(...vals) : 0;
+          break; }
+        case 'max': {
+          const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
+          r = vals.length ? Math.max(...vals) : 0;
+          break; }
+        case 'moyenne':
+        case 'average': {
+          const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
+          r = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+          break; }
+        case 'somme':
+        case 'sum': {
+          const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
+          r = vals.reduce((s, v) => s + v, 0);
+          break; }
+        case 'sommeprod': {
+          // Alias français pour sumproduct
+          if (!args.length) { r = 0; break; }
+          const arraysF = args.map(valueToArray);
+          const maxLenF = Math.max(...arraysF.map(arr => arr.length));
+          if (maxLenF === 0) { r = 0; break; }
+          if (arraysF.length === 1) {
+            r = arraysF[0].reduce((acc, val) => acc + val, 0);
+            break;
+          }
+          let totalF = 0;
+          for (let i = 0; i < maxLenF; i++) {
+            let product = 1;
+            for (const arr of arraysF) {
+              const val = arr.length === 1 ? arr[0] : arr[i] ?? 0;
+              product *= val;
+            }
+            totalF += product;
+          }
+          r = totalF;
+          break; }
+        case 'nb':
+        case 'count': {
+          const vals = args.flatMap(a => Array.isArray(a) ? a : [a]);
+          r = vals.filter(v => typeof v === 'number' && !isNaN(v)).length;
+          break; }
+
+        // 🔀 LOGIQUE & CONDITIONS
+        case 'si':
+        case 'if': {
+          const cond = toNumber(args[0] ?? 0) !== 0;
+          r = cond ? (args[1] ?? 0) : (args[2] ?? 0);
+          break; }
+        case 'et':
+        case 'and': {
+          r = args.every(a => toNumber(a ?? 0) !== 0) ? 1 : 0;
+          break; }
+        case 'ou':
+        case 'or': {
+          r = args.some(a => toNumber(a ?? 0) !== 0) ? 1 : 0;
+          break; }
+        case 'non':
+        case 'not':
+          r = toNumber(args[0] ?? 0) === 0 ? 1 : 0;
+          break;
+
         default:
           pushError('unknown_function', { func: tk.name });
           r = 0;

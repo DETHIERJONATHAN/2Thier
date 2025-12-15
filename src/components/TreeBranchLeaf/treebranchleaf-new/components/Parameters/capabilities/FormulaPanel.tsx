@@ -218,16 +218,51 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
   }, [localTokens, handleTokensChange]);
 
   const mathFunctionButtons = useMemo(() => ([
-    { key: 'radians', label: 'Radians (→ rad)', token: 'RADIANS(', tooltip: 'Convertit un angle en degrés vers des radians' },
-    { key: 'sqrt', label: 'Racine √', token: 'RACINE(', tooltip: 'Calcule la racine carrée (alias SQRT)' },
-    { key: 'cos', label: 'Cosinus', token: 'COS(', tooltip: 'Renvoie le cosinus (argument en radians)' },
-    { key: 'atan', label: 'Atan', token: 'ATAN(', tooltip: 'Renvoie l’arc tangente (résultat en radians)' },
-    { key: 'sierreur', label: 'SIERREUR', token: 'SIERREUR(', tooltip: 'SIERREUR(valeur; secours) — nécessite une valeur de repli' },
-    { key: 'pi', label: 'PI()', token: 'PI()', tooltip: 'Constante π (utilisez pi(*facteur) pour multiplier)' },
-    { key: 'int', label: 'INT', token: 'INT(', tooltip: 'Arrondit vers l’entier inférieur (alias FINT)' },
-    { key: 'row', label: 'ROW', token: 'ROW(', tooltip: 'Génère une séquence d’index numériques' },
-    { key: 'indirect', label: 'INDIRECT', token: 'INDIRECT(', tooltip: 'Crée une plage à partir d’un texte (ex: "1:10")' },
-    { key: 'sumproduct', label: 'SUMPRODUCT', token: 'SUMPRODUCT(', tooltip: 'Somme des produits de plusieurs plages (alias SOMMEPROD)' }
+    // ARRONDIS
+    { key: 'round', label: 'ARRONDI', token: 'ARRONDI(', tooltip: 'ARRONDI(nombre; decimales) - Arrondit au nombre de decimales specifie' },
+    { key: 'roundup', label: 'ARRONDI.SUP', token: 'ARRONDI.SUP(', tooltip: 'ARRONDI.SUP(nombre; decimales) - Arrondit vers le haut' },
+    { key: 'rounddown', label: 'ARRONDI.INF', token: 'ARRONDI.INF(', tooltip: 'ARRONDI.INF(nombre; decimales) - Arrondit vers le bas' },
+    { key: 'int', label: 'ENT', token: 'ENT(', tooltip: 'ENT(nombre) - Partie entiere (arrondi vers le bas)' },
+    { key: 'trunc', label: 'TRONQUE', token: 'TRONQUE(', tooltip: 'TRONQUE(nombre; decimales) - Tronque les decimales' },
+    { key: 'ceiling', label: 'PLAFOND', token: 'PLAFOND(', tooltip: 'PLAFOND(nombre; multiple) - Arrondit au multiple superieur' },
+    { key: 'floor', label: 'PLANCHER', token: 'PLANCHER(', tooltip: 'PLANCHER(nombre; multiple) - Arrondit au multiple inferieur' },
+    // TRIGONOMETRIE
+    { key: 'radians', label: 'RADIANS', token: 'RADIANS(', tooltip: 'RADIANS(degres) - Convertit des degres en radians' },
+    { key: 'degrees', label: 'DEGRES', token: 'DEGRES(', tooltip: 'DEGRES(radians) - Convertit des radians en degres' },
+    { key: 'sin', label: 'SIN', token: 'SIN(', tooltip: 'SIN(angle) - Sinus (angle en radians)' },
+    { key: 'cos', label: 'COS', token: 'COS(', tooltip: 'COS(angle) - Cosinus (angle en radians)' },
+    { key: 'tan', label: 'TAN', token: 'TAN(', tooltip: 'TAN(angle) - Tangente (angle en radians)' },
+    { key: 'asin', label: 'ASIN', token: 'ASIN(', tooltip: 'ASIN(valeur) - Arc sinus (resultat en radians)' },
+    { key: 'acos', label: 'ACOS', token: 'ACOS(', tooltip: 'ACOS(valeur) - Arc cosinus (resultat en radians)' },
+    { key: 'atan', label: 'ATAN', token: 'ATAN(', tooltip: 'ATAN(valeur) - Arc tangente (resultat en radians)' },
+    { key: 'atan2', label: 'ATAN2', token: 'ATAN2(', tooltip: 'ATAN2(x; y) - Arc tangente de y/x' },
+    // MATHEMATIQUES
+    { key: 'sqrt', label: 'RACINE', token: 'RACINE(', tooltip: 'RACINE(nombre) - Racine carree' },
+    { key: 'power', label: 'PUISSANCE', token: 'PUISSANCE(', tooltip: 'PUISSANCE(base; exposant) - Eleve a la puissance' },
+    { key: 'exp', label: 'EXP', token: 'EXP(', tooltip: 'EXP(nombre) - Exponentielle (e^n)' },
+    { key: 'ln', label: 'LN', token: 'LN(', tooltip: 'LN(nombre) - Logarithme naturel' },
+    { key: 'log', label: 'LOG', token: 'LOG(', tooltip: 'LOG(nombre; base) - Logarithme en base specifiee' },
+    { key: 'log10', label: 'LOG10', token: 'LOG10(', tooltip: 'LOG10(nombre) - Logarithme en base 10' },
+    { key: 'abs', label: 'ABS', token: 'ABS(', tooltip: 'ABS(nombre) - Valeur absolue' },
+    { key: 'sign', label: 'SIGNE', token: 'SIGNE(', tooltip: 'SIGNE(nombre) - Renvoie 1, 0 ou -1 selon le signe' },
+    { key: 'mod', label: 'MOD', token: 'MOD(', tooltip: 'MOD(nombre; diviseur) - Reste de la division (modulo)' },
+    { key: 'pi', label: 'PI()', token: 'PI()', tooltip: 'PI() - Constante pi (3.14159...)' },
+    // STATISTIQUES
+    { key: 'min', label: 'MIN', token: 'MIN(', tooltip: 'MIN(val1; val2; ...) - Plus petite valeur' },
+    { key: 'max', label: 'MAX', token: 'MAX(', tooltip: 'MAX(val1; val2; ...) - Plus grande valeur' },
+    { key: 'moyenne', label: 'MOYENNE', token: 'MOYENNE(', tooltip: 'MOYENNE(val1; val2; ...) - Moyenne arithmetique' },
+    { key: 'somme', label: 'SOMME', token: 'SOMME(', tooltip: 'SOMME(val1; val2; ...) - Somme des valeurs' },
+    { key: 'sumproduct', label: 'SOMMEPROD', token: 'SOMMEPROD(', tooltip: 'SOMMEPROD(plage1; plage2) - Somme des produits' },
+    { key: 'count', label: 'NB', token: 'NB(', tooltip: 'NB(val1; val2; ...) - Compte les nombres' },
+    // LOGIQUE & CONDITIONS
+    { key: 'sierreur', label: 'SIERREUR', token: 'SIERREUR(', tooltip: 'SIERREUR(valeur; secours) - Retourne secours si erreur' },
+    { key: 'si', label: 'SI', token: 'SI(', tooltip: 'SI(condition; si_vrai; si_faux) - Condition' },
+    { key: 'et', label: 'ET', token: 'ET(', tooltip: 'ET(cond1; cond2; ...) - VRAI si toutes conditions vraies' },
+    { key: 'ou', label: 'OU', token: 'OU(', tooltip: 'OU(cond1; cond2; ...) - VRAI si au moins une condition vraie' },
+    { key: 'non', label: 'NON', token: 'NON(', tooltip: 'NON(valeur) - Inverse la valeur logique' },
+    // UTILITAIRES
+    { key: 'row', label: 'ROW', token: 'ROW(', tooltip: 'ROW(plage) - Numero de ligne' },
+    { key: 'indirect', label: 'INDIRECT', token: 'INDIRECT(', tooltip: 'INDIRECT(texte) - Reference a partir d un texte' },
   ]), []);
 
   const removeLast = useCallback(() => {

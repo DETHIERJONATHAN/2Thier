@@ -1297,12 +1297,13 @@ function tokensFingerprint(tokens2) {
 function validateExpression(expr, opts) {
   const maxLen = opts?.maxExpressionLength ?? 500;
   if (expr.length > maxLen) throw new Error("Expression trop longue");
-  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=&"\\]+$/;
+  const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=&"\\@]+$/;
   if (!allowed.test(expr)) throw new Error("Caract\xE8res non autoris\xE9s dans l'expression");
 }
 function parseExpression(expr, roleToNodeId, opts) {
   validateExpression(expr, opts);
-  const working = expr.replace(/\{\{\s*(.+?)\s*\}\}/g, (_, v) => `__VAR__${v.trim()}__`);
+  let working = expr.replace(/\{\{\s*(.+?)\s*\}\}/g, (_, v) => `__VAR__${v.trim()}__`);
+  working = working.replace(/@(table|value)\.([a-zA-Z0-9_-]+)/g, (_, type, id) => `__VAR__${type}.${id}__`);
   const tokens2 = [];
   let i = 0;
   let parenBalance = 0;
@@ -1318,8 +1319,7 @@ function parseExpression(expr, roleToNodeId, opts) {
       const end = working.indexOf("__", i + 7);
       if (end === -1) throw new Error("Marqueur variable mal form\xE9");
       const role = working.substring(i + 7, end);
-      const nodeId = roleToNodeId[role];
-      if (!nodeId) throw new Error("Variable inconnue dans expression: " + role);
+      const nodeId = roleToNodeId[role] || role;
       tokens2.push({ type: "variable", name: nodeId });
       i = end + 2;
       lastToken = tokens2[tokens2.length - 1];
@@ -1987,6 +1987,197 @@ async function evaluateTokens(tokens2, opts) {
           r = usedFallback ? fallbackValue ?? 0 : primaryValue ?? 0;
           break;
         }
+        // 🔄 ARRONDIS
+        case "arrondi":
+        case "round": {
+          const val = toNumber2(args[0] ?? 0);
+          const decimals = Math.floor(toNumber2(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.round(val * factor) / factor;
+          break;
+        }
+        case "arrondi.sup":
+        case "roundup": {
+          const val = toNumber2(args[0] ?? 0);
+          const decimals = Math.floor(toNumber2(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.ceil(val * factor) / factor;
+          break;
+        }
+        case "arrondi.inf":
+        case "rounddown": {
+          const val = toNumber2(args[0] ?? 0);
+          const decimals = Math.floor(toNumber2(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.floor(val * factor) / factor;
+          break;
+        }
+        case "ent":
+        case "int":
+          r = mapNumericValue(args[0] ?? 0, Math.floor);
+          break;
+        case "tronque":
+        case "trunc": {
+          const val = toNumber2(args[0] ?? 0);
+          const decimals = Math.floor(toNumber2(args[1] ?? 0));
+          const factor = Math.pow(10, decimals);
+          r = Math.trunc(val * factor) / factor;
+          break;
+        }
+        case "plafond":
+        case "ceiling": {
+          const val = toNumber2(args[0] ?? 0);
+          const multiple = toNumber2(args[1] ?? 1);
+          r = multiple === 0 ? val : Math.ceil(val / multiple) * multiple;
+          break;
+        }
+        case "plancher":
+        case "floor": {
+          const val = toNumber2(args[0] ?? 0);
+          const multiple = toNumber2(args[1] ?? 1);
+          r = multiple === 0 ? val : Math.floor(val / multiple) * multiple;
+          break;
+        }
+        // 📐 TRIGONOMÉTRIE (compléments)
+        case "degres":
+        case "degrees":
+          r = mapNumericValue(args[0] ?? 0, (rad) => rad * (180 / Math.PI));
+          break;
+        case "sin":
+        case "sinus":
+          r = mapNumericValue(args[0] ?? 0, Math.sin);
+          break;
+        case "tan":
+        case "tangente":
+          r = mapNumericValue(args[0] ?? 0, Math.tan);
+          break;
+        case "asin":
+        case "arcsin":
+          r = mapNumericValue(args[0] ?? 0, Math.asin);
+          break;
+        case "acos":
+        case "arccos":
+          r = mapNumericValue(args[0] ?? 0, Math.acos);
+          break;
+        case "atan2": {
+          const x = toNumber2(args[0] ?? 0);
+          const y = toNumber2(args[1] ?? 0);
+          r = Math.atan2(y, x);
+          break;
+        }
+        // 🔢 MATHÉMATIQUES (compléments)
+        case "puissance":
+        case "power": {
+          const base = toNumber2(args[0] ?? 0);
+          const exp = toNumber2(args[1] ?? 1);
+          r = Math.pow(base, exp);
+          break;
+        }
+        case "exp":
+          r = mapNumericValue(args[0] ?? 0, Math.exp);
+          break;
+        case "ln":
+          r = mapNumericValue(args[0] ?? 0, (val) => val <= 0 ? 0 : Math.log(val));
+          break;
+        case "log": {
+          const val = toNumber2(args[0] ?? 0);
+          const base = toNumber2(args[1] ?? 10);
+          r = val <= 0 ? 0 : Math.log(val) / Math.log(base);
+          break;
+        }
+        case "log10":
+          r = mapNumericValue(args[0] ?? 0, (val) => val <= 0 ? 0 : Math.log10(val));
+          break;
+        case "abs":
+          r = mapNumericValue(args[0] ?? 0, Math.abs);
+          break;
+        case "signe":
+        case "sign":
+          r = mapNumericValue(args[0] ?? 0, Math.sign);
+          break;
+        case "mod": {
+          const val = toNumber2(args[0] ?? 0);
+          const divisor = toNumber2(args[1] ?? 1);
+          r = divisor === 0 ? 0 : val % divisor;
+          break;
+        }
+        // 📊 STATISTIQUES (compléments)
+        case "min": {
+          const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
+          r = vals.length ? Math.min(...vals) : 0;
+          break;
+        }
+        case "max": {
+          const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
+          r = vals.length ? Math.max(...vals) : 0;
+          break;
+        }
+        case "moyenne":
+        case "average": {
+          const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
+          r = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+          break;
+        }
+        case "somme":
+        case "sum": {
+          const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
+          r = vals.reduce((s, v) => s + v, 0);
+          break;
+        }
+        case "sommeprod": {
+          if (!args.length) {
+            r = 0;
+            break;
+          }
+          const arraysF = args.map(valueToArray);
+          const maxLenF = Math.max(...arraysF.map((arr) => arr.length));
+          if (maxLenF === 0) {
+            r = 0;
+            break;
+          }
+          if (arraysF.length === 1) {
+            r = arraysF[0].reduce((acc, val) => acc + val, 0);
+            break;
+          }
+          let totalF = 0;
+          for (let i = 0; i < maxLenF; i++) {
+            let product = 1;
+            for (const arr of arraysF) {
+              const val = arr.length === 1 ? arr[0] : arr[i] ?? 0;
+              product *= val;
+            }
+            totalF += product;
+          }
+          r = totalF;
+          break;
+        }
+        case "nb":
+        case "count": {
+          const vals = args.flatMap((a) => Array.isArray(a) ? a : [a]);
+          r = vals.filter((v) => typeof v === "number" && !isNaN(v)).length;
+          break;
+        }
+        // 🔀 LOGIQUE & CONDITIONS
+        case "si":
+        case "if": {
+          const cond = toNumber2(args[0] ?? 0) !== 0;
+          r = cond ? args[1] ?? 0 : args[2] ?? 0;
+          break;
+        }
+        case "et":
+        case "and": {
+          r = args.every((a) => toNumber2(a ?? 0) !== 0) ? 1 : 0;
+          break;
+        }
+        case "ou":
+        case "or": {
+          r = args.some((a) => toNumber2(a ?? 0) !== 0) ? 1 : 0;
+          break;
+        }
+        case "non":
+        case "not":
+          r = toNumber2(args[0] ?? 0) === 0 ? 1 : 0;
+          break;
         default:
           pushError("unknown_function", { func: tk.name });
           r = 0;
@@ -2145,9 +2336,9 @@ function identifyReferenceType(ref) {
   }
   return "field";
 }
-async function identifyReferenceTypeFromDB(id, prisma68) {
+async function identifyReferenceTypeFromDB(id, prisma69) {
   try {
-    const conditionNode = await prisma68.treeBranchLeafNode.findUnique({
+    const conditionNode = await prisma69.treeBranchLeafNode.findUnique({
       where: { id },
       select: { type: true }
     });
@@ -2177,10 +2368,10 @@ async function identifyReferenceTypeFromDB(id, prisma68) {
 function normalizeRef(ref) {
   return ref.replace("@value.", "").replace("@table.", "").replace("node-formula:", "").replace("node-table:", "").replace("node-condition:", "").replace("condition:", "").trim();
 }
-async function enrichDataFromSubmission(submissionId, prisma68, valueMap, labelMap, treeId) {
+async function enrichDataFromSubmission(submissionId, prisma69, valueMap, labelMap, treeId) {
   console.log(`[ENRICHMENT] \u{1F4CA} Enrichissement donn\xE9es: ${submissionId}`);
   try {
-    const submissionData = await prisma68.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma69.treeBranchLeafSubmissionData.findMany({
       where: { submissionId },
       select: {
         nodeId: true,
@@ -2189,24 +2380,27 @@ async function enrichDataFromSubmission(submissionId, prisma68, valueMap, labelM
     });
     console.log(`[ENRICHMENT] \u{1F4CA} ${submissionData.length} valeurs r\xE9cup\xE9r\xE9es depuis SubmissionData`);
     if (!treeId) {
-      const firstSubmissionNode = await prisma68.treeBranchLeafSubmissionData.findFirst({
+      const firstSubmissionNode = await prisma69.treeBranchLeafSubmissionData.findFirst({
         where: { submissionId },
         include: { TreeBranchLeafNode: { select: { treeId: true } } }
       });
       treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
     }
     if (treeId) {
-      const allNodes = await prisma68.treeBranchLeafNode.findMany({
+      const allNodes = await prisma69.treeBranchLeafNode.findMany({
         where: { treeId },
         select: {
           id: true,
-          label: true
+          label: true,
+          sharedReferenceName: true,
+          field_label: true
         }
       });
       console.log(`[ENRICHMENT] \u{1F3F7}\uFE0F ${allNodes.length} labels r\xE9cup\xE9r\xE9s depuis l'arbre`);
       for (const node of allNodes) {
         if (!labelMap.has(node.id)) {
-          labelMap.set(node.id, node.label);
+          const canonicalLabel = node.sharedReferenceName || node.field_label || node.label;
+          labelMap.set(node.id, canonicalLabel);
         }
       }
     } else {
@@ -2230,7 +2424,7 @@ async function enrichDataFromSubmission(submissionId, prisma68, valueMap, labelM
     console.error(`[ENRICHMENT] \u274C Erreur enrichissement:`, error);
   }
 }
-async function getNodeValue(nodeId, submissionId, prisma68, valueMap, options) {
+async function getNodeValue(nodeId, submissionId, prisma69, valueMap, options) {
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     console.log(`[INTERPRETER][getNodeValue] valueMap hit ${nodeId} \u2192 ${formatDebugValue(val)}`);
@@ -2240,7 +2434,7 @@ async function getNodeValue(nodeId, submissionId, prisma68, valueMap, options) {
     return String(val);
   }
   console.log(`[INTERPRETER][getNodeValue] DB fallback ${nodeId}`);
-  const data = await prisma68.treeBranchLeafSubmissionData.findFirst({
+  const data = await prisma69.treeBranchLeafSubmissionData.findFirst({
     where: {
       nodeId,
       submissionId
@@ -2249,24 +2443,37 @@ async function getNodeValue(nodeId, submissionId, prisma68, valueMap, options) {
       value: true
     }
   });
-  console.log(`[INTERPRETER][getNodeValue] DB result ${nodeId} \u2192 ${formatDebugValue(data?.value ?? null)}`);
-  if (data?.value === null || data?.value === void 0) {
-    return options?.preserveEmpty ? null : "0";
+  if (data?.value !== null && data?.value !== void 0) {
+    console.log(`[INTERPRETER][getNodeValue] SubmissionData hit ${nodeId} \u2192 ${formatDebugValue(data.value)}`);
+    return String(data.value);
   }
-  return String(data.value);
+  const node = await prisma69.treeBranchLeafNode.findUnique({
+    where: { id: nodeId },
+    select: { calculatedValue: true, label: true }
+  });
+  if (node?.calculatedValue !== null && node?.calculatedValue !== void 0 && node?.calculatedValue !== "") {
+    console.log(`[INTERPRETER][getNodeValue] \u{1F195} TreeBranchLeafNode.calculatedValue hit ${nodeId} (${node.label}) \u2192 ${formatDebugValue(node.calculatedValue)}`);
+    return String(node.calculatedValue);
+  }
+  console.log(`[INTERPRETER][getNodeValue] No value found for ${nodeId}, returning "0"`);
+  return options?.preserveEmpty ? null : "0";
 }
-async function getNodeLabel(nodeId, prisma68, labelMap) {
+async function getNodeLabel(nodeId, prisma69, labelMap) {
   if (labelMap && labelMap.has(nodeId)) {
     const label = labelMap.get(nodeId);
     return label || "Inconnu";
   }
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
-    select: { label: true }
+    select: {
+      label: true,
+      sharedReferenceName: true,
+      field_label: true
+    }
   });
-  return node?.label || "Inconnu";
+  return node?.sharedReferenceName || node?.field_label || node?.label || "Inconnu";
 }
-async function interpretReference(ref, submissionId, prisma68, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
+async function interpretReference(ref, submissionId, prisma69, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
   if (depth > 10) {
     console.error(`[INTERPR\xC9TATION] \u274C R\xE9cursion trop profonde (depth=${depth}) pour ref:`, ref);
     return {
@@ -2288,7 +2495,7 @@ async function interpretReference(ref, submissionId, prisma68, valuesCache = /* 
   const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   if (type === "field" && uuidRegex.test(cleanRef)) {
     console.log(`[INTERPR\xC9TATION] \u{1F50D} UUID ambigu d\xE9tect\xE9: ${cleanRef}, v\xE9rification en BD...`);
-    type = await identifyReferenceTypeFromDB(cleanRef, prisma68);
+    type = await identifyReferenceTypeFromDB(cleanRef, prisma69);
   }
   console.log(`[INTERPR\xC9TATION] \u{1F50D} Type identifi\xE9: ${type} pour ref: ${ref} (depth=${depth}${knownType ? `, contexte: ${knownType}` : ""})`);
   let result;
@@ -2296,20 +2503,20 @@ async function interpretReference(ref, submissionId, prisma68, valuesCache = /* 
     switch (type) {
       case "condition":
         console.log(`[INTERPR\xC9TATION] \u{1F500} D\xE9l\xE9gation vers interpretCondition`);
-        result = await interpretCondition(cleanRef, submissionId, prisma68, valuesCache, depth, valueMap, labelMap);
+        result = await interpretCondition(cleanRef, submissionId, prisma69, valuesCache, depth, valueMap, labelMap);
         break;
       case "formula":
         console.log(`[INTERPR\xC9TATION] \u{1F9EE} D\xE9l\xE9gation vers interpretFormula`);
-        result = await interpretFormula(cleanRef, submissionId, prisma68, valuesCache, depth, valueMap, labelMap);
+        result = await interpretFormula(cleanRef, submissionId, prisma69, valuesCache, depth, valueMap, labelMap);
         break;
       case "table":
         console.log(`[INTERPR\xC9TATION] \u{1F4CA} D\xE9l\xE9gation vers interpretTable`);
-        result = await interpretTable(cleanRef, submissionId, prisma68, valuesCache, depth, valueMap, labelMap);
+        result = await interpretTable(cleanRef, submissionId, prisma69, valuesCache, depth, valueMap, labelMap);
         break;
       case "value":
       case "field":
         console.log(`[INTERPR\xC9TATION] \u{1F4DD} D\xE9l\xE9gation vers interpretField (type: ${type})`);
-        result = await interpretField(cleanRef, submissionId, prisma68, valueMap, labelMap);
+        result = await interpretField(cleanRef, submissionId, prisma69, valueMap, labelMap);
         break;
       default:
         console.error(`[INTERPR\xC9TATION] \u274C Type inconnu: ${type}`);
@@ -2334,10 +2541,10 @@ async function interpretReference(ref, submissionId, prisma68, valuesCache = /* 
   console.log(`[INTERPR\xC9TATION] \u2705 R\xE9sultat mis en cache pour: ${cleanRef} = ${result.result}`);
   return result;
 }
-async function interpretCondition(conditionId, submissionId, prisma68, valuesCache, depth, valueMap, labelMap) {
+async function interpretCondition(conditionId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
   console.log(`[CONDITION] \u{1F500} D\xE9but interpr\xE9tation condition: ${conditionId}`);
   const cleanId = conditionId.replace("condition:", "");
-  const condition = await prisma68.treeBranchLeafNodeCondition.findUnique({
+  const condition = await prisma69.treeBranchLeafNodeCondition.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2374,14 +2581,14 @@ async function interpretCondition(conditionId, submissionId, prisma68, valuesCac
     const operandType = identifyReferenceType(ref);
     if (operandType === "field" || operandType === "value") {
       const operandId = normalizeRef(ref);
-      const value = await getNodeValue(operandId, submissionId, prisma68, valueMap, { preserveEmpty: true });
-      const label = await getNodeLabel(operandId, prisma68, labelMap);
+      const value = await getNodeValue(operandId, submissionId, prisma69, valueMap, { preserveEmpty: true });
+      const label = await getNodeLabel(operandId, prisma69, labelMap);
       return { value, label };
     }
     const interpreted = await interpretReference(
       ref,
       submissionId,
-      prisma68,
+      prisma69,
       valuesCache,
       depth + 1,
       valueMap,
@@ -2431,7 +2638,7 @@ async function interpretCondition(conditionId, submissionId, prisma68, valuesCac
       alorsResult = await interpretReference(
         alorsNodeId,
         submissionId,
-        prisma68,
+        prisma69,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2449,7 +2656,7 @@ async function interpretCondition(conditionId, submissionId, prisma68, valuesCac
       sinonResult = await interpretReference(
         sinonNodeId,
         submissionId,
-        prisma68,
+        prisma69,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2642,11 +2849,20 @@ function tryParseTokenReference(token) {
   if (normalizedToken.startsWith("node-formula:")) {
     return createMeta("formula", normalizedToken.slice("node-formula:".length));
   }
+  if (normalizedToken.startsWith("formula:") && !normalizedToken.startsWith("formula:node-")) {
+    return createMeta("formula", normalizedToken.slice("formula:".length));
+  }
   if (normalizedToken.startsWith("node-table:")) {
     return createMeta("table", normalizedToken.slice("node-table:".length));
   }
+  if (normalizedToken.startsWith("table:") && !normalizedToken.startsWith("table:node-")) {
+    return createMeta("table", normalizedToken.slice("table:".length));
+  }
   if (normalizedToken.startsWith("node-condition:")) {
     return createMeta("condition", normalizedToken.slice("node-condition:".length));
+  }
+  if (normalizedToken.startsWith("condition:") && !normalizedToken.startsWith("condition:node-")) {
+    return createMeta("condition", normalizedToken.slice("condition:".length));
   }
   if (normalizedToken.startsWith("shared-ref-") || normalizedToken.startsWith("node_") || UUID_REGEX.test(normalizedToken)) {
     return createMeta("field", normalizedToken);
@@ -2695,10 +2911,10 @@ function buildFormulaExpression(tokens2) {
   const expression = exprSegments.join(" ");
   return { expression, parts, roleToEncoded, encodedMeta };
 }
-async function interpretFormula(formulaId, submissionId, prisma68, valuesCache, depth, valueMap, labelMap) {
+async function interpretFormula(formulaId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
   console.log(`[FORMULE] \u{1F9EE} D\xE9but interpr\xE9tation formule: ${formulaId}`);
   const cleanId = formulaId.replace("node-formula:", "");
-  let formula = await prisma68.treeBranchLeafNodeFormula.findUnique({
+  let formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2710,7 +2926,7 @@ async function interpretFormula(formulaId, submissionId, prisma68, valuesCache, 
   if (!formula) {
     console.log(`[FORMULE] \u{1F50D} Formule introuvable par ID, tentative r\xE9solution par nodeId: ${cleanId}`);
     try {
-      const byNode = await prisma68.treeBranchLeafNodeFormula.findFirst({
+      const byNode = await prisma69.treeBranchLeafNodeFormula.findFirst({
         where: { nodeId: cleanId },
         select: { id: true, name: true, tokens: true, nodeId: true },
         orderBy: { isDefault: "desc" }
@@ -2768,7 +2984,7 @@ async function interpretFormula(formulaId, submissionId, prisma68, valuesCache, 
       const refResult = await interpretReference(
         meta.refId,
         submissionId,
-        prisma68,
+        prisma69,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2783,7 +2999,7 @@ async function interpretFormula(formulaId, submissionId, prisma68, valuesCache, 
         const label = refResult.details?.formulaName || refResult.details?.label || `Formule ${meta.refId}`;
         labelCacheByEncoded.set(encoded, label);
       } else {
-        const label = await getNodeLabel(meta.refId, prisma68, labelMap).catch(() => meta.refId);
+        const label = await getNodeLabel(meta.refId, prisma69, labelMap).catch(() => meta.refId);
         labelCacheByEncoded.set(encoded, label || meta.refId);
       }
       return safeValue;
@@ -2855,15 +3071,15 @@ async function interpretFormula(formulaId, submissionId, prisma68, valuesCache, 
     }
   };
 }
-async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma68, valuesCache, depth, valueMap, labelMap) {
+async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeValue(fieldId, submissionId, prisma68, valueMap) : null;
+    return fieldId ? await getNodeValue(fieldId, submissionId, prisma69, valueMap) : null;
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
     console.log(`[TABLE] \u{1F50D} DEBUG CHAMP: sourceOption=`, JSON.stringify(sourceOption, null, 2));
     console.log(`[TABLE] \u{1F50D} DEBUG CHAMP: submissionId=${submissionId}, sourceField=${sourceOption.sourceField}`);
     console.log(`[TABLE] \u{1F50D} DEBUG CHAMP: valueMap has ${valueMap?.size || 0} entries:`, valueMap ? Array.from(valueMap.keys()).slice(0, 5) : "NO_VALUE_MAP");
-    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma68, valueMap);
+    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma69, valueMap);
     console.log(`[TABLE] \u{1F525} Option 2 CHAMP: sourceField=${sourceOption.sourceField} \u2192 ${result}`);
     return result;
   }
@@ -2872,7 +3088,7 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
       const capacityResult = await interpretReference(
         sourceOption.capacityRef,
         submissionId,
-        prisma68,
+        prisma69,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2887,12 +3103,12 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
   }
   return null;
 }
-async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma68, labelMap) {
+async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma69, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeLabel(fieldId, prisma68, labelMap) : "Source";
+    return fieldId ? await getNodeLabel(fieldId, prisma69, labelMap) : "Source";
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
-    return await getNodeLabel(sourceOption.sourceField, prisma68, labelMap);
+    return await getNodeLabel(sourceOption.sourceField, prisma69, labelMap);
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
     const capacityId = sourceOption.capacityRef.replace("@value.", "").replace("formula:", "").replace("condition:", "").replace("table:", "");
@@ -2903,10 +3119,10 @@ async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma68, lab
   }
   return "Source";
 }
-async function interpretTable(tableId, submissionId, prisma68, valuesCache, depth, valueMap, labelMap) {
+async function interpretTable(tableId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
   console.log(`[TABLE] \u{1F4CA} D\xE9but interpr\xE9tation table: ${tableId}`);
   const cleanId = tableId.replace("@table.", "").replace("node-table:", "");
-  let table = await prisma68.treeBranchLeafNodeTable.findUnique({
+  let table = await prisma69.treeBranchLeafNodeTable.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2941,7 +3157,7 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
   if (!table) {
     console.log(`[TABLE] \u{1F50D} Table introuvable par ID, tentative r\xE9solution par nodeId: ${cleanId}`);
     try {
-      const byNode = await prisma68.treeBranchLeafNodeTable.findFirst({
+      const byNode = await prisma69.treeBranchLeafNodeTable.findFirst({
         where: { nodeId: cleanId },
         select: {
           id: true,
@@ -3044,13 +3260,13 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
       lookup,
       colFieldId,
       submissionId,
-      prisma68,
+      prisma69,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma68, labelMap);
+    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma69, labelMap);
     const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
     if (!colSelectorValue2) {
       return {
@@ -3065,7 +3281,7 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
       const filterRefResult = await interpretReference(
         colSourceOption.filterValueRef,
         submissionId,
-        prisma68,
+        prisma69,
         valuesCache,
         depth + 1,
         valueMap,
@@ -3099,7 +3315,7 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
     const results = [];
     if (lookup.extractValueRef) {
       console.log(`[TABLE] \u{1F50E} MODE 1 - extractValueRef d\xE9tect\xE9: ${lookup.extractValueRef}, op=${lookup.extractOperator}`);
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma68, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma69, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedColSelector2 = String(colSelectorValue2 || "").trim().toLowerCase();
       const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedColSelector2);
@@ -3285,13 +3501,13 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
       lookup,
       rowFieldId,
       submissionId,
-      prisma68,
+      prisma69,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma68, labelMap);
+    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma69, labelMap);
     const displayRows = Array.isArray(lookup.displayRow) ? lookup.displayRow : [lookup.displayRow];
     console.log(`[TABLE] \u{1F4CA} MODE 2 - Croisement: ligne=${rowLabel2}(${rowSelectorValue2}) \xD7 colonnes=${displayRows.join(", ")} (fixes)`);
     if (!rowSelectorValue2) {
@@ -3304,7 +3520,7 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
     const results = [];
     if (lookup.extractValueRef) {
       console.log(`[TABLE] \u{1F50E} MODE 2 - extractValueRef detected: ${lookup.extractValueRef}, op=${lookup.extractOperator}`);
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma68, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma69, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedRowSelector2 = String(rowSelectorValue2 || "").trim().toLowerCase();
       const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedRowSelector2);
@@ -3509,7 +3725,7 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
     lookup,
     rowFieldId,
     submissionId,
-    prisma68,
+    prisma69,
     valuesCache,
     depth,
     valueMap,
@@ -3520,14 +3736,14 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
     lookup,
     colFieldId,
     submissionId,
-    prisma68,
+    prisma69,
     valuesCache,
     depth,
     valueMap,
     labelMap
   );
-  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma68, labelMap);
-  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma68, labelMap);
+  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma69, labelMap);
+  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma69, labelMap);
   const rowSourceType = rowSourceOption?.type || (rowFieldId ? "select" : void 0);
   const colSourceType = colSourceOption?.type || (colFieldId ? "select" : void 0);
   console.log(`[TABLE] \u{1F4CA} Valeurs s\xE9lectionn\xE9es: row=${rowLabel}(${rowSelectorValue}), col=${colLabel}(${colSelectorValue})`);
@@ -3669,9 +3885,9 @@ async function interpretTable(tableId, submissionId, prisma68, valuesCache, dept
     }
   };
 }
-async function interpretField(fieldId, submissionId, prisma68, valueMap, labelMap) {
+async function interpretField(fieldId, submissionId, prisma69, valueMap, labelMap) {
   console.log(`[CHAMP] \u{1F4DD} D\xE9but interpr\xE9tation champ: ${fieldId}`);
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: fieldId },
     select: { type: true, label: true }
   });
@@ -3679,15 +3895,15 @@ async function interpretField(fieldId, submissionId, prisma68, valueMap, labelMa
   if (node && node.type) {
     if (node.type.startsWith("leaf_table_")) {
       console.log(`[CHAMP] \u2705 REDIRECTION - Le n\u0153ud est une TABLE (type: ${node.type})`);
-      return await interpretTable(fieldId, submissionId, prisma68, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma69, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
     if (node.type.includes("table")) {
       console.log(`[CHAMP] \u2705 REDIRECTION - Le n\u0153ud contient 'table' dans son type (type: ${node.type})`);
-      return await interpretTable(fieldId, submissionId, prisma68, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma69, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
   }
-  const value = await getNodeValue(fieldId, submissionId, prisma68, valueMap);
-  const label = await getNodeLabel(fieldId, prisma68, labelMap);
+  const value = await getNodeValue(fieldId, submissionId, prisma69, valueMap);
+  const label = await getNodeLabel(fieldId, prisma69, labelMap);
   console.log(`[CHAMP] \u{1F4CA} ${label} = ${value}`);
   const humanText = `${label}(${value})`;
   return {
@@ -3701,7 +3917,7 @@ async function interpretField(fieldId, submissionId, prisma68, valueMap, labelMa
     }
   };
 }
-async function evaluateVariableOperation(variableNodeId, submissionId, prisma68, valueMap) {
+async function evaluateVariableOperation(variableNodeId, submissionId, prisma69, valueMap) {
   console.log(`
 ${"\u2550".repeat(80)}`);
   console.log(`\u{1F3AF} \xC9VALUATION VARIABLE: ${variableNodeId}`);
@@ -3710,9 +3926,9 @@ ${"\u2550".repeat(80)}`);
 `);
   const localValueMap = valueMap || /* @__PURE__ */ new Map();
   const labelMap = /* @__PURE__ */ new Map();
-  await enrichDataFromSubmission(submissionId, prisma68, localValueMap, labelMap);
+  await enrichDataFromSubmission(submissionId, prisma69, localValueMap, labelMap);
   console.log(`\u2705 Maps enrichies: ${localValueMap.size} valeurs, ${labelMap.size} labels`);
-  const variable = await prisma68.treeBranchLeafNodeVariable.findUnique({
+  const variable = await prisma69.treeBranchLeafNodeVariable.findUnique({
     where: { nodeId: variableNodeId },
     select: {
       id: true,
@@ -3748,7 +3964,7 @@ ${"\u2550".repeat(80)}`);
     const result = await interpretReference(
       variable.sourceRef,
       submissionId,
-      prisma68,
+      prisma69,
       valuesCache,
       0,
       // Profondeur initiale = 0
@@ -3771,6 +3987,34 @@ ${"\u2500".repeat(80)}`);
       operationDetail: result.details,
       operationResult: result.humanText,
       operationSource,
+      sourceRef: variable.sourceRef
+    };
+  }
+  if (variable.sourceType === "formula" && variable.sourceRef) {
+    console.log(`\u{1F9EE} Source FORMULA directe, interpr\xE9tation de: ${variable.sourceRef}`);
+    const valuesCache = /* @__PURE__ */ new Map();
+    const result = await interpretReference(
+      variable.sourceRef,
+      submissionId,
+      prisma69,
+      valuesCache,
+      0,
+      // Profondeur initiale = 0
+      localValueMap,
+      labelMap
+    );
+    console.log(`
+${"\u2500".repeat(80)}`);
+    console.log(`\u2705 R\xC9SULTAT FORMULE:`);
+    console.log(`   Value: ${result.result}`);
+    console.log(`   HumanText: ${result.humanText}`);
+    console.log(`${"\u2500".repeat(80)}
+`);
+    return {
+      value: result.result,
+      operationDetail: result.details,
+      operationResult: result.humanText,
+      operationSource: "formula",
       sourceRef: variable.sourceRef
     };
   }
@@ -4859,9 +5103,9 @@ var GoogleGmailService = class _GoogleGmailService {
    */
   async loadOrganizationInfo() {
     try {
-      const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-      const prisma68 = new PrismaClient70();
-      const organization = await prisma68.organization.findUnique({
+      const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+      const prisma69 = new PrismaClient71();
+      const organization = await prisma69.organization.findUnique({
         where: { id: this.organizationId },
         include: {
           GoogleWorkspaceConfig: true
@@ -4873,7 +5117,7 @@ var GoogleGmailService = class _GoogleGmailService {
       } else {
         console.warn(`[GoogleGmailService] \u26A0\uFE0F Email admin non trouv\xE9 pour l'organisation ${this.organizationId}`);
       }
-      await prisma68.$disconnect();
+      await prisma69.$disconnect();
     } catch (error) {
       console.error("[GoogleGmailService] Erreur lors du chargement des infos organisation:", error);
     }
@@ -26219,7 +26463,7 @@ function evaluateFormulaOrchestrated(opts) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_client47 = require("@prisma/client");
+var import_client48 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/universal-linking-system.ts
 function normalizeCapacityRef(raw) {
@@ -27072,6 +27316,411 @@ function applySuffixToSourceRef(sourceRef, suffix) {
   return `${parsed.prefix}${newId}`;
 }
 
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/sum-display-field-routes.ts
+var import_client46 = require("@prisma/client");
+var prisma45 = new import_client46.PrismaClient();
+function getOrgId(req2) {
+  const user = req2.user || {};
+  const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
+  return user.organizationId || headerOrg || null;
+}
+function registerSumDisplayFieldRoutes(router83) {
+  router83.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+    try {
+      const { treeId, nodeId } = req2.params;
+      const organizationId = getOrgId(req2);
+      console.log(`\u{1F4CA} [SUM DISPLAY] Cr\xE9ation champ Total pour nodeId=${nodeId}, treeId=${treeId}, orgId=${organizationId}`);
+      const tree = await prisma45.treeBranchLeafTree.findFirst({
+        where: organizationId ? { id: treeId, organizationId } : { id: treeId }
+      });
+      if (!tree) {
+        return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      }
+      const node = await prisma45.treeBranchLeafNode.findFirst({
+        where: { id: nodeId, treeId },
+        select: {
+          id: true,
+          parentId: true,
+          label: true,
+          order: true,
+          subtab: true,
+          linkedVariableIds: true,
+          metadata: true
+        }
+      });
+      if (!node) {
+        return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      }
+      const mainVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
+        where: { nodeId },
+        select: {
+          id: true,
+          displayName: true,
+          exposedKey: true,
+          displayFormat: true,
+          unit: true,
+          precision: true
+        }
+      });
+      if (!mainVariable) {
+        return res.status(404).json({ error: "Variable non trouv\xE9e pour ce n\u0153ud" });
+      }
+      const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
+      const allCopies = await prisma45.treeBranchLeafNodeVariable.findMany({
+        where: {
+          OR: [
+            { exposedKey: baseExposedKey },
+            { exposedKey: { startsWith: `${baseExposedKey}-` } }
+          ]
+        },
+        select: { id: true, exposedKey: true, nodeId: true }
+      });
+      console.log(`\u{1F4CA} [SUM DISPLAY] ${allCopies.length} copie(s) trouv\xE9e(s) pour ${baseExposedKey}`);
+      const copyNodeIds = allCopies.map((c) => c.nodeId);
+      const copyNodes = await prisma45.treeBranchLeafNode.findMany({
+        where: { id: { in: copyNodeIds } },
+        select: { id: true, order: true }
+      });
+      const maxCopyOrder = copyNodes.reduce((max, n) => Math.max(max, n.order ?? 0), 0);
+      console.log(`\u{1F4CA} [SUM DISPLAY] Max order des copies: ${maxCopyOrder}, Total sera \xE0 order: ${maxCopyOrder + 1}`);
+      const sumFieldNodeId = `${nodeId}-sum-total`;
+      const sumFieldVariableId = `${mainVariable.id}-sum-total`;
+      const sumDisplayName = `${mainVariable.displayName} - Total`;
+      const sumExposedKey = `${baseExposedKey}_TOTAL`;
+      const existingSumNode = await prisma45.treeBranchLeafNode.findUnique({
+        where: { id: sumFieldNodeId },
+        select: { id: true, metadata: true }
+      });
+      const sumTokens = [];
+      allCopies.forEach((copy, index) => {
+        if (index > 0) {
+          sumTokens.push("+");
+        }
+        sumTokens.push(`@value.${copy.nodeId}`);
+      });
+      if (sumTokens.length === 0) {
+        sumTokens.push("0");
+      }
+      const now = /* @__PURE__ */ new Date();
+      const sumFormulaId = `${mainVariable.id}-sum-formula`;
+      const formulaInstance = {
+        id: sumFormulaId,
+        name: `Somme ${mainVariable.displayName}`,
+        tokens: sumTokens,
+        description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
+      };
+      if (existingSumNode) {
+        await prisma45.treeBranchLeafNode.update({
+          where: { id: sumFieldNodeId },
+          data: {
+            label: sumDisplayName,
+            field_label: sumDisplayName,
+            formula_activeId: sumFormulaId,
+            formula_instances: { [sumFormulaId]: formulaInstance },
+            formula_tokens: sumTokens,
+            linkedFormulaIds: [sumFormulaId],
+            updatedAt: now,
+            metadata: {
+              ...existingSumNode.metadata || {},
+              isSumDisplayField: true,
+              sourceVariableId: mainVariable.id,
+              sourceNodeId: nodeId,
+              sumTokens,
+              copiesCount: allCopies.length,
+              updatedAt: now.toISOString()
+            }
+          }
+        });
+        console.log(`\u{1F4CA} [SUM DISPLAY] N\u0153ud Total mis \xE0 jour: ${sumFieldNodeId}`);
+      } else {
+        await prisma45.treeBranchLeafNode.create({
+          data: {
+            id: sumFieldNodeId,
+            treeId,
+            parentId: node.parentId,
+            // Même section que le nœud original
+            type: "leaf_field",
+            label: sumDisplayName,
+            field_label: sumDisplayName,
+            order: maxCopyOrder + 1,
+            // 🔥 APRÈS le dernier nœud copié (Mur-1, Mur-2, etc.)
+            isVisible: true,
+            isActive: true,
+            subtab: node.subtab,
+            hasData: true,
+            hasFormula: true,
+            formula_activeId: sumFormulaId,
+            formula_instances: { [sumFormulaId]: formulaInstance },
+            formula_tokens: sumTokens,
+            linkedFormulaIds: [sumFormulaId],
+            data_activeId: sumFieldVariableId,
+            data_displayFormat: mainVariable.displayFormat,
+            data_unit: mainVariable.unit,
+            data_precision: mainVariable.precision,
+            metadata: {
+              isSumDisplayField: true,
+              sourceVariableId: mainVariable.id,
+              sourceNodeId: nodeId,
+              sumTokens,
+              copiesCount: allCopies.length,
+              createdAt: now.toISOString()
+            },
+            createdAt: now,
+            updatedAt: now
+          }
+        });
+        console.log(`\u{1F4CA} [SUM DISPLAY] N\u0153ud Total cr\xE9\xE9: ${sumFieldNodeId}`);
+      }
+      const existingSumVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
+        where: { nodeId: sumFieldNodeId }
+      });
+      if (existingSumVariable) {
+        await prisma45.treeBranchLeafNodeVariable.update({
+          where: { nodeId: sumFieldNodeId },
+          data: {
+            displayName: sumDisplayName,
+            sourceType: "formula",
+            sourceRef: `node-formula:${sumFormulaId}`,
+            // 🔑 CRITIQUE pour preview-evaluate
+            updatedAt: now,
+            metadata: {
+              isSumVariable: true,
+              sumTokens,
+              copiesCount: allCopies.length,
+              sourceVariableId: mainVariable.id
+            }
+          }
+        });
+      } else {
+        const existingKey = await prisma45.treeBranchLeafNodeVariable.findUnique({
+          where: { exposedKey: sumExposedKey }
+        });
+        const finalExposedKey = existingKey ? `${sumExposedKey}_${Date.now()}` : sumExposedKey;
+        await prisma45.treeBranchLeafNodeVariable.create({
+          data: {
+            id: sumFieldVariableId,
+            nodeId: sumFieldNodeId,
+            exposedKey: finalExposedKey,
+            displayName: sumDisplayName,
+            displayFormat: mainVariable.displayFormat,
+            unit: mainVariable.unit,
+            precision: mainVariable.precision,
+            visibleToUser: true,
+            sourceType: "formula",
+            sourceRef: `node-formula:${sumFormulaId}`,
+            // 🔑 CRITIQUE pour preview-evaluate
+            metadata: {
+              isSumVariable: true,
+              sumTokens,
+              copiesCount: allCopies.length,
+              sourceVariableId: mainVariable.id
+            },
+            createdAt: now,
+            updatedAt: now
+          }
+        });
+      }
+      const existingSumFormula = await prisma45.treeBranchLeafNodeFormula.findUnique({
+        where: { id: sumFormulaId }
+      });
+      const formulaOrgId = tree.organizationId || organizationId;
+      if (existingSumFormula) {
+        await prisma45.treeBranchLeafNodeFormula.update({
+          where: { id: sumFormulaId },
+          data: {
+            tokens: sumTokens,
+            organizationId: formulaOrgId,
+            // 🔥 Mise à jour de l'organizationId
+            updatedAt: now
+          }
+        });
+      } else {
+        await prisma45.treeBranchLeafNodeFormula.create({
+          data: {
+            id: sumFormulaId,
+            nodeId: sumFieldNodeId,
+            organizationId: formulaOrgId,
+            // 🔥 AJOUT de l'organizationId
+            name: `Somme ${mainVariable.displayName}`,
+            description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`,
+            tokens: sumTokens,
+            createdAt: now,
+            updatedAt: now
+          }
+        });
+      }
+      const existingMeta = node.metadata || {};
+      await prisma45.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: {
+          metadata: {
+            ...existingMeta,
+            createSumDisplayField: true,
+            sumDisplayFieldNodeId: sumFieldNodeId
+          }
+        }
+      });
+      console.log(`\u2705 [SUM DISPLAY] Champ Total cr\xE9\xE9 avec succ\xE8s`);
+      return res.json({
+        success: true,
+        sumFieldNodeId,
+        sumFieldVariableId,
+        sumFormulaId,
+        copiesCount: allCopies.length,
+        sumTokens
+      });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errStack = error instanceof Error ? error.stack : "";
+      console.error("\u274C [SUM DISPLAY] Erreur:", errMsg);
+      console.error("\u274C [SUM DISPLAY] Stack:", errStack);
+      res.status(500).json({ error: "Erreur lors de la cr\xE9ation du champ Total", details: errMsg });
+    }
+  });
+  router83.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+    try {
+      const { treeId, nodeId } = req2.params;
+      const organizationId = getOrgId(req2);
+      console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] Suppression champ Total pour nodeId=${nodeId}`);
+      const tree = await prisma45.treeBranchLeafTree.findFirst({
+        where: organizationId ? { id: treeId, organizationId } : { id: treeId }
+      });
+      if (!tree) {
+        return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      }
+      const node = await prisma45.treeBranchLeafNode.findFirst({
+        where: { id: nodeId, treeId },
+        select: { id: true, metadata: true }
+      });
+      if (!node) {
+        return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      }
+      const sumFieldNodeId = `${nodeId}-sum-total`;
+      const mainVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
+        where: { nodeId },
+        select: { id: true }
+      });
+      const sumFormulaId = mainVariable ? `${mainVariable.id}-sum-formula` : null;
+      if (sumFormulaId) {
+        try {
+          await prisma45.treeBranchLeafNodeFormula.delete({
+            where: { id: sumFormulaId }
+          });
+          console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] Formule supprim\xE9e: ${sumFormulaId}`);
+        } catch {
+        }
+      }
+      try {
+        await prisma45.treeBranchLeafNodeVariable.delete({
+          where: { nodeId: sumFieldNodeId }
+        });
+        console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] Variable supprim\xE9e`);
+      } catch {
+      }
+      try {
+        await prisma45.treeBranchLeafNode.delete({
+          where: { id: sumFieldNodeId }
+        });
+        console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] N\u0153ud supprim\xE9: ${sumFieldNodeId}`);
+      } catch {
+      }
+      const existingMeta = node.metadata || {};
+      await prisma45.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: {
+          metadata: {
+            ...existingMeta,
+            createSumDisplayField: false,
+            sumDisplayFieldNodeId: null
+          }
+        }
+      });
+      console.log(`\u2705 [SUM DISPLAY] Champ Total supprim\xE9 avec succ\xE8s`);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("\u274C [SUM DISPLAY] Erreur suppression:", error);
+      res.status(500).json({ error: "Erreur lors de la suppression du champ Total" });
+    }
+  });
+}
+async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2) {
+  const db = prismaClient2 || prisma45;
+  try {
+    const sourceNode = await db.treeBranchLeafNode.findUnique({
+      where: { id: sourceNodeId },
+      select: {
+        id: true,
+        treeId: true,
+        metadata: true
+      }
+    });
+    if (!sourceNode) return;
+    const metadata = sourceNode.metadata;
+    const hasSum = metadata?.createSumDisplayField === true;
+    const sumFieldNodeId = metadata?.sumDisplayFieldNodeId;
+    if (!hasSum || !sumFieldNodeId) {
+      console.log(`\u{1F4CA} [SUM UPDATE] N\u0153ud ${sourceNodeId} n'a pas de champ Total activ\xE9`);
+      return;
+    }
+    const mainVariable = await db.treeBranchLeafNodeVariable.findUnique({
+      where: { nodeId: sourceNodeId },
+      select: { id: true, exposedKey: true, displayName: true }
+    });
+    if (!mainVariable) return;
+    const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
+    const allCopies = await db.treeBranchLeafNodeVariable.findMany({
+      where: {
+        OR: [
+          { exposedKey: baseExposedKey },
+          { exposedKey: { startsWith: `${baseExposedKey}-` } }
+        ]
+      },
+      select: { nodeId: true }
+    });
+    const sumTokens = [];
+    allCopies.forEach((copy, index) => {
+      if (index > 0) sumTokens.push("+");
+      sumTokens.push(`@value.${copy.nodeId}`);
+    });
+    if (sumTokens.length === 0) sumTokens.push("0");
+    const now = /* @__PURE__ */ new Date();
+    const sumFormulaId = `${mainVariable.id}-sum-formula`;
+    const formulaInstance = {
+      id: sumFormulaId,
+      name: `Somme ${mainVariable.displayName}`,
+      tokens: sumTokens,
+      description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
+    };
+    await db.treeBranchLeafNodeFormula.update({
+      where: { id: sumFormulaId },
+      data: { tokens: sumTokens, updatedAt: now }
+    });
+    const sumNode = await db.treeBranchLeafNode.findUnique({
+      where: { id: sumFieldNodeId },
+      select: { metadata: true }
+    });
+    if (sumNode) {
+      await db.treeBranchLeafNode.update({
+        where: { id: sumFieldNodeId },
+        data: {
+          updatedAt: now,
+          formula_instances: { [sumFormulaId]: formulaInstance },
+          formula_tokens: sumTokens,
+          metadata: {
+            ...sumNode.metadata || {},
+            sumTokens,
+            copiesCount: allCopies.length,
+            updatedAt: now.toISOString()
+          }
+        }
+      });
+    }
+    console.log(`\u2705 [SUM UPDATE] Champ Total mis \xE0 jour: ${allCopies.length} copies, formule: ${sumTokens.join(" ")}`);
+  } catch (error) {
+    console.error("\u274C [SUM UPDATE] Erreur mise \xE0 jour champ Total:", error);
+  }
+}
+
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/universal-reference-rewriter.ts
 function rewriteReferences(text, maps, suffix) {
   if (!text) return text;
@@ -27315,7 +27964,7 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
-async function copyFormulaCapacity2(originalFormulaId, newNodeId, suffix, prisma68, options = {}) {
+async function copyFormulaCapacity2(originalFormulaId, newNodeId, suffix, prisma69, options = {}) {
   console.log(`
 ${"\u2550".repeat(80)}`);
   console.log(`\u{1F9EE} COPIE FORMULE: ${originalFormulaId}`);
@@ -27331,7 +27980,7 @@ ${"\u2550".repeat(80)}`);
     if (formulaCopyCache.has(originalFormulaId)) {
       const cachedId = formulaCopyCache.get(originalFormulaId);
       console.log(`\u267B\uFE0F Formule d\xE9j\xE0 copi\xE9e (cache): ${originalFormulaId} \u2192 ${cachedId}`);
-      const cached = await prisma68.treeBranchLeafNodeFormula.findUnique({
+      const cached = await prisma69.treeBranchLeafNodeFormula.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -27345,7 +27994,7 @@ ${"\u2550".repeat(80)}`);
     }
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, "");
     console.log(`\u{1F50D} Recherche formule avec id: ${cleanFormulaId} (original: ${originalFormulaId})`);
-    const originalFormula = await prisma68.treeBranchLeafNodeFormula.findUnique({
+    const originalFormula = await prisma69.treeBranchLeafNodeFormula.findUnique({
       where: { id: cleanFormulaId }
     });
     if (!originalFormula) {
@@ -27402,7 +28051,7 @@ ${"\u2550".repeat(80)}`);
         console.log(`\u2705 Tous les shared-refs sont suffix\xE9s !`);
       }
     }
-    const newFormula = await prisma68.treeBranchLeafNodeFormula.create({
+    const newFormula = await prisma69.treeBranchLeafNodeFormula.create({
       data: {
         id: newFormulaId,
         nodeId: newNodeId,
@@ -27418,7 +28067,7 @@ ${"\u2550".repeat(80)}`);
     console.log(`\u2705 Formule cr\xE9\xE9e: ${newFormula.id}`);
     console.log(`
 \u{1F50D} V\xC9RIFICATION POST-CR\xC9ATION:`);
-    const savedFormula = await prisma68.treeBranchLeafNodeFormula.findUnique({
+    const savedFormula = await prisma69.treeBranchLeafNodeFormula.findUnique({
       where: { id: newFormula.id }
     });
     if (savedFormula && Array.isArray(savedFormula.tokens)) {
@@ -27439,18 +28088,18 @@ ${"\u2550".repeat(80)}`);
     }
     console.log();
     try {
-      await linkFormulaToAllNodes(prisma68, newFormulaId, rewrittenTokens);
+      await linkFormulaToAllNodes(prisma69, newFormulaId, rewrittenTokens);
     } catch (e) {
       console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField2(prisma68, newNodeId, "linkedFormulaIds", [newFormulaId]);
+      await addToNodeLinkedField2(prisma69, newNodeId, "linkedFormulaIds", [newFormulaId]);
       console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${newNodeId}`);
     } catch (e) {
       console.warn(`\u26A0\uFE0F Erreur MAJ linkedFormulaIds du propri\xE9taire:`, e.message);
     }
     try {
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: newNodeId },
         data: {
           hasFormula: true,
@@ -27488,9 +28137,9 @@ ${"\u2550".repeat(80)}`);
     };
   }
 }
-async function addToNodeLinkedField2(prisma68, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField2(prisma69, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -27500,7 +28149,7 @@ async function addToNodeLinkedField2(prisma68, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -27596,7 +28245,7 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet) {
   }
   return ids;
 }
-async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma68, options = {}) {
+async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma69, options = {}) {
   console.log(`
 ${"\u2550".repeat(80)}`);
   console.log(`\u{1F500} COPIE CONDITION: ${originalConditionId}`);
@@ -27613,7 +28262,7 @@ ${"\u2550".repeat(80)}`);
     if (conditionCopyCache.has(originalConditionId)) {
       const cachedId = conditionCopyCache.get(originalConditionId);
       console.log(`\u267B\uFE0F Condition d\xE9j\xE0 copi\xE9e (cache): ${originalConditionId} \u2192 ${cachedId}`);
-      const cached = await prisma68.treeBranchLeafNodeCondition.findUnique({
+      const cached = await prisma69.treeBranchLeafNodeCondition.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -27627,7 +28276,7 @@ ${"\u2550".repeat(80)}`);
     }
     const cleanConditionId = originalConditionId.replace(/-\d+$/, "");
     console.log(`\u{1F50D} Recherche condition avec id: ${cleanConditionId} (original: ${originalConditionId})`);
-    const originalCondition = await prisma68.treeBranchLeafNodeCondition.findUnique({
+    const originalCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({
       where: { id: cleanConditionId }
     });
     if (!originalCondition) {
@@ -27659,7 +28308,7 @@ ${"\u2550".repeat(80)}`);
       console.log(`
 \u{1F50D} V\xC9RIFICATION DES FORMULES DANS LA BD:`);
       for (const formId of linkedFormulaIdsFromSet) {
-        const existingForm = await prisma68.treeBranchLeafNodeFormula.findUnique({
+        const existingForm = await prisma69.treeBranchLeafNodeFormula.findUnique({
           where: { id: formId }
         });
         if (existingForm) {
@@ -27693,12 +28342,12 @@ ${"\u2550".repeat(80)}`);
               newNodeId,
               // Même nœud propriétaire
               suffix,
-              prisma68,
+              prisma69,
               { nodeIdMap: enrichedNodeIdMap, formulaIdMap }
             );
             if (linkedFormResult.success) {
               console.log(`   \u2705 Formule li\xE9e copi\xE9e: ${linkedFormId} \u2192 ${linkedFormResult.newFormulaId}`);
-              const copiedForm = await prisma68.treeBranchLeafNodeFormula.findUnique({
+              const copiedForm = await prisma69.treeBranchLeafNodeFormula.findUnique({
                 where: { id: linkedFormResult.newFormulaId }
               });
               if (copiedForm) {
@@ -27788,7 +28437,7 @@ ${"\u2550".repeat(80)}`);
               newNodeId,
               // Même nœud propriétaire
               suffix,
-              prisma68,
+              prisma69,
               { nodeIdMap, formulaIdMap, conditionCopyCache }
             );
             if (linkedCondResult.success) {
@@ -27835,7 +28484,7 @@ ${"\u2550".repeat(80)}`);
               newNodeId,
               // Même nœud propriétaire
               suffix,
-              prisma68,
+              prisma69,
               { nodeIdMap, tableIdMap }
             );
             if (linkedTableResult.success) {
@@ -27859,9 +28508,9 @@ ${"\u2550".repeat(80)}`);
     } else {
       console.log(`   (Aucune table li\xE9e trouv\xE9e dans le conditionSet)`);
     }
-    let newCondition = await prisma68.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+    let newCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
     if (newCondition) {
-      newCondition = await prisma68.treeBranchLeafNodeCondition.update({
+      newCondition = await prisma69.treeBranchLeafNodeCondition.update({
         where: { id: newConditionId },
         data: {
           nodeId: newNodeId,
@@ -27873,7 +28522,7 @@ ${"\u2550".repeat(80)}`);
         }
       });
     } else {
-      newCondition = await prisma68.treeBranchLeafNodeCondition.create({
+      newCondition = await prisma69.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: newNodeId,
@@ -27889,18 +28538,18 @@ ${"\u2550".repeat(80)}`);
     }
     console.log(`\u2705 Condition cr\xE9\xE9e: ${newCondition.id}`);
     try {
-      await linkConditionToAllNodes(prisma68, newConditionId, rewrittenConditionSet);
+      await linkConditionToAllNodes(prisma69, newConditionId, rewrittenConditionSet);
     } catch (e) {
       console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField3(prisma68, newNodeId, "linkedConditionIds", [newConditionId]);
+      await addToNodeLinkedField3(prisma69, newNodeId, "linkedConditionIds", [newConditionId]);
       console.log(`\u2705 linkedConditionIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${newNodeId}`);
     } catch (e) {
       console.warn(`\u26A0\uFE0F Erreur MAJ linkedConditionIds du propri\xE9taire:`, e.message);
     }
     try {
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: newNodeId },
         data: {
           hasCondition: true,
@@ -27938,9 +28587,9 @@ ${"\u2550".repeat(80)}`);
     };
   }
 }
-async function addToNodeLinkedField3(prisma68, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField3(prisma69, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -27950,7 +28599,7 @@ async function addToNodeLinkedField3(prisma68, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -27965,7 +28614,7 @@ function stripNumericSuffix(value) {
   if (numericOnly.test(value)) return value;
   return value;
 }
-async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma68, options = {}) {
+async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma69, options = {}) {
   console.log(`
 ${"\u2550".repeat(80)}`);
   console.log(`\u{1F4CA} COPIE TABLE: ${originalTableId}`);
@@ -27982,7 +28631,7 @@ ${"\u2550".repeat(80)}`);
     if (tableCopyCache.has(originalTableId)) {
       const cachedId = tableCopyCache.get(originalTableId);
       console.log(`\u267B\uFE0F Table d\xE9j\xE0 copi\xE9e (cache): ${originalTableId} \u2192 ${cachedId}`);
-      const cached = await prisma68.treeBranchLeafNodeTable.findUnique({
+      const cached = await prisma69.treeBranchLeafNodeTable.findUnique({
         where: { id: cachedId },
         include: {
           tableColumns: true,
@@ -28007,7 +28656,7 @@ ${"\u2550".repeat(80)}`);
     }
     const cleanTableId = originalTableId.replace(/-\d+$/, "");
     console.log(`\u{1F50D} Recherche table avec id: ${cleanTableId} (original: ${originalTableId})`);
-    const originalTable = await prisma68.treeBranchLeafNodeTable.findUnique({
+    const originalTable = await prisma69.treeBranchLeafNodeTable.findUnique({
       where: { id: cleanTableId },
       include: {
         tableColumns: { orderBy: { columnIndex: "asc" } },
@@ -28040,24 +28689,51 @@ ${"\u2550".repeat(80)}`);
     console.log(`\u{1F4DD} Nouvel ID table: ${newTableId}`);
     const columnIdMap = /* @__PURE__ */ new Map();
     const rowIdMap = /* @__PURE__ */ new Map();
-    let newTable = await prisma68.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+    let newTable = await prisma69.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
     if (newTable) {
-      newTable = await prisma68.treeBranchLeafNodeTable.update({
+      newTable = await prisma69.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
           nodeId: newNodeId,
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
+          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps2 = { nodeIdMap, formulaIdMap: /* @__PURE__ */ new Map(), conditionIdMap: /* @__PURE__ */ new Map(), tableIdMap: tableIdMap2 };
-            return rewriteJsonReferences(originalTable.meta, rewriteMaps2, suffix);
+            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps2, suffix);
+            const suffixNum = parseInt(suffix) || 1;
+            if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            return rewritten;
           })(),
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
     } else {
-      newTable = await prisma68.treeBranchLeafNodeTable.create({
+      newTable = await prisma69.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: newNodeId,
@@ -28065,9 +28741,36 @@ ${"\u2550".repeat(80)}`);
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
+          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps2 = { nodeIdMap, formulaIdMap: /* @__PURE__ */ new Map(), conditionIdMap: /* @__PURE__ */ new Map(), tableIdMap: tableIdMap2 };
-            return rewriteJsonReferences(originalTable.meta, rewriteMaps2);
+            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps2);
+            const suffixNum = parseInt(suffix) || 1;
+            if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.columnFieldId = `${rewritten.lookup.selectors.columnFieldId}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.selectors?.rowFieldId && !rewritten.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.selectors.rowFieldId = `${rewritten.lookup.selectors.rowFieldId}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.rowSourceOption?.sourceField && !rewritten.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.rowSourceOption.sourceField = `${rewritten.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.columnSourceOption?.sourceField && !rewritten.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+              rewritten.lookup.columnSourceOption.sourceField = `${rewritten.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+            }
+            if (rewritten?.lookup?.rowSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.rowSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.rowSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            if (rewritten?.lookup?.columnSourceOption?.comparisonColumn) {
+              const val = rewritten.lookup.columnSourceOption.comparisonColumn;
+              if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            return rewritten;
           })(),
           createdAt: /* @__PURE__ */ new Date(),
           updatedAt: /* @__PURE__ */ new Date()
@@ -28077,7 +28780,7 @@ ${"\u2550".repeat(80)}`);
     console.log(`\u2705 Table cr\xE9\xE9e: ${newTable.id}`);
     console.log(`
 \u{1F4CB} Copie de ${originalTable.tableColumns.length} colonnes...`);
-    const originalColumnsRaw = await prisma68.$queryRaw`
+    const originalColumnsRaw = await prisma69.$queryRaw`
       SELECT "id", "tableId", "columnIndex", "name", "type", "width", "format", "metadata"
       FROM "TreeBranchLeafNodeTableColumn"
       WHERE "tableId" = ${originalTable.id}
@@ -28091,10 +28794,10 @@ ${"\u2550".repeat(80)}`);
         const normalizedName = (() => {
           const raw = col.name;
           if (!raw) return raw;
-          const stripped = stripNumericSuffix(raw);
-          return stripped ?? raw;
+          if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
+          return `${raw}-${suffix}`;
         })();
-        await prisma68.treeBranchLeafNodeTableColumn.create({
+        await prisma69.treeBranchLeafNodeTableColumn.create({
           data: {
             id: newColumnId,
             tableId: newTableId,
@@ -28116,7 +28819,7 @@ ${"\u2550".repeat(80)}`);
     console.log(`\u2705 ${columnsCount} colonnes copi\xE9es`);
     console.log(`
 \u{1F4C4} Copie de ${originalTable.tableRows.length} lignes...`);
-    const originalRowsRaw = await prisma68.$queryRaw`
+    const originalRowsRaw = await prisma69.$queryRaw`
       SELECT "id", "tableId", "rowIndex", "cells"
       FROM "TreeBranchLeafNodeTableRow"
       WHERE "tableId" = ${originalTable.id}
@@ -28127,7 +28830,7 @@ ${"\u2550".repeat(80)}`);
       try {
         const newRowId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
         rowIdMap.set(row.id, newRowId);
-        await prisma68.treeBranchLeafNodeTableRow.create({
+        await prisma69.treeBranchLeafNodeTableRow.create({
           data: {
             id: newRowId,
             tableId: newTableId,
@@ -28146,14 +28849,14 @@ ${"\u2550".repeat(80)}`);
     }
     console.log(`\u2705 ${rowsCount} lignes copi\xE9es`);
     try {
-      const cols = await prisma68.treeBranchLeafNodeTableColumn.findMany({
+      const cols = await prisma69.treeBranchLeafNodeTableColumn.findMany({
         where: { tableId: newTableId },
         select: { id: true, name: true }
       });
       for (const c of cols) {
         const cleaned = stripNumericSuffix(c.name);
         if (cleaned !== c.name) {
-          await prisma68.treeBranchLeafNodeTableColumn.update({
+          await prisma69.treeBranchLeafNodeTableColumn.update({
             where: { id: c.id },
             data: { name: cleaned }
           });
@@ -28163,7 +28866,7 @@ ${"\u2550".repeat(80)}`);
     } catch (e) {
       console.warn(`\u26A0\uFE0F Normalisation des noms de colonnes \xE9chou\xE9e:`, e.message);
     }
-    await prisma68.treeBranchLeafNodeTable.update({
+    await prisma69.treeBranchLeafNodeTable.update({
       where: { id: newTableId },
       data: {
         rowCount: rowsCount,
@@ -28180,18 +28883,18 @@ ${"\u2550".repeat(80)}`);
 \u{1F525} R\xC9\xC9CRITURE FORC\xC9E des shared-refs dans tableData...`);
     rewrittenTableData = forceSharedRefSuffixesInJson(rewrittenTableData, suffix);
     try {
-      await linkTableToAllNodes(prisma68, newTableId, rewrittenTableData);
+      await linkTableToAllNodes(prisma69, newTableId, rewrittenTableData);
     } catch (e) {
       console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField4(prisma68, newNodeId, "linkedTableIds", [newTableId]);
+      await addToNodeLinkedField4(prisma69, newNodeId, "linkedTableIds", [newTableId]);
       console.log(`\u2705 linkedTableIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${newNodeId}`);
     } catch (e) {
       console.warn(`\u26A0\uFE0F Erreur MAJ linkedTableIds du propri\xE9taire:`, e.message);
     }
     try {
-      const originalNode = await prisma68.treeBranchLeafNode.findUnique({
+      const originalNode = await prisma69.treeBranchLeafNode.findUnique({
         where: { id: originalTable.nodeId },
         select: {
           table_activeId: true,
@@ -28223,7 +28926,7 @@ ${"\u2550".repeat(80)}`);
         newTableInstances[newTableId] = {};
         console.log(`   \u2705 Instance ajout\xE9e pour nouvelle table: ${newTableId}`);
       }
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: newNodeId },
         data: {
           hasTable: true,
@@ -28280,9 +28983,9 @@ ${"\u2550".repeat(80)}`);
     };
   }
 }
-async function addToNodeLinkedField4(prisma68, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField4(prisma69, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -28292,14 +28995,14 @@ async function addToNodeLinkedField4(prisma68, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/variable-copy-engine.ts
-async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma68, options = {}) {
+async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma69, options = {}) {
   console.log(`
 ${"\u2550".repeat(80)}`);
   console.log(`\uFFFD\u{1F680}\u{1F680} [ENTRY] copyVariableWithCapacities APPEL\xC9E !`);
@@ -28335,7 +29038,7 @@ ${"\u2550".repeat(80)}`);
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
       console.log(`\u267B\uFE0F Variable d\xE9j\xE0 copi\xE9e pour ce n\u0153ud (cache): ${originalVarId} \u2192 ${cachedId}`);
-      const cached = await prisma68.treeBranchLeafNodeVariable.findUnique({
+      const cached = await prisma69.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -28350,11 +29053,36 @@ ${"\u2550".repeat(80)}`);
         };
       }
     }
-    const originalVar = await prisma68.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = await prisma69.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
       console.error(`\u274C Variable introuvable: ${originalVarId}`);
+      console.warn(`\u26A0\uFE0F Cette variable est ORPHELINE - elle ne peut pas \xEAtre copi\xE9e`);
+      if (newNodeId) {
+        try {
+          const orphanLinkedVarIds = await prisma69.treeBranchLeafNode.findMany({
+            where: {
+              linkedVariableIds: {
+                hasSome: [originalVarId]
+              }
+            },
+            select: { id: true, linkedVariableIds: true }
+          });
+          for (const node of orphanLinkedVarIds) {
+            const cleaned = (node.linkedVariableIds || []).filter((id) => id !== originalVarId);
+            if (cleaned.length !== node.linkedVariableIds?.length) {
+              await prisma69.treeBranchLeafNode.update({
+                where: { id: node.id },
+                data: { linkedVariableIds: cleaned }
+              });
+              console.log(`\u{1F9F9} Nettoy\xE9 linkedVariableIds orphelin de ${node.id}`);
+            }
+          }
+        } catch (cleanErr) {
+          console.warn(`\u26A0\uFE0F Impossible de nettoyer linkedVariableIds orphelins:`, cleanErr.message);
+        }
+      }
       return {
         variableId: "",
         exposedKey: "",
@@ -28438,7 +29166,7 @@ ${"\u2550".repeat(80)}`);
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, formulaCopyCache: formulaIdMap }
               );
               if (formulaResult.success) {
@@ -28469,7 +29197,7 @@ ${"\u2550".repeat(80)}`);
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
               );
               if (conditionResult.success) {
@@ -28500,7 +29228,7 @@ ${"\u2550".repeat(80)}`);
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -28563,7 +29291,7 @@ ${"\u2550".repeat(80)}`);
               return value;
             }
           };
-          const originalOwnerNode = await prisma68.treeBranchLeafNode.findUnique({
+          const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
             where: { id: originalVar.nodeId },
             select: {
               id: true,
@@ -28659,7 +29387,7 @@ ${"\u2550".repeat(80)}`);
             const withoutRepeater = nodes.find((node) => !hasRepeaterMetadata(node.metadata));
             return withoutRepeater ?? nodes[0];
           };
-          let originalDisplayNode = await prisma68.treeBranchLeafNode.findFirst({
+          let originalDisplayNode = await prisma69.treeBranchLeafNode.findFirst({
             where: {
               metadata: {
                 path: ["fromVariableId"],
@@ -28669,7 +29397,7 @@ ${"\u2550".repeat(80)}`);
             select: displayNodeSelect
           });
           if (!originalDisplayNode) {
-            const templateNodeIds = await prisma68.treeBranchLeafNode.findMany({
+            const templateNodeIds = await prisma69.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
@@ -28679,7 +29407,7 @@ ${"\u2550".repeat(80)}`);
             });
             const templateIds = new Set(templateNodeIds.map((t) => t.id));
             console.log(`\u{1F50D} [DISPLAY_SEARCH] Template nodes to EXCLUDE: ${templateIds.size}`);
-            const candidates = await prisma68.treeBranchLeafNode.findMany({
+            const candidates = await prisma69.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
@@ -28721,7 +29449,7 @@ ${"\u2550".repeat(80)}`);
               );
             }
           }
-          const duplicatedOwnerNode = await prisma68.treeBranchLeafNode.findUnique({
+          const duplicatedOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
             where: { id: newNodeId },
             select: {
               id: true,
@@ -28735,9 +29463,9 @@ ${"\u2550".repeat(80)}`);
             console.log(`   - inheritedDisplayParentId: ${inheritedDisplayParentId}`);
             console.log(`   - originalOwnerNode.parentId: ${originalOwnerNode.parentId}`);
             console.log(`   - resolvedParentId final: ${resolvedParentId}`);
-            if (resolvedParentId && prisma68) {
+            if (resolvedParentId && prisma69) {
               try {
-                const parentExists = await prisma68.treeBranchLeafNode.findUnique({
+                const parentExists = await prisma69.treeBranchLeafNode.findUnique({
                   where: { id: resolvedParentId },
                   select: { id: true }
                 });
@@ -28899,24 +29627,24 @@ ${"\u2550".repeat(80)}`);
               fieldSubType: tableSourceNode.fieldSubType,
               field_label: displayLabel
             };
-            const maybeExisting = await prisma68.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+            const maybeExisting = await prisma69.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
             if (maybeExisting) {
-              await prisma68.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
+              await prisma69.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
               console.log(`\u2705\u2705\u2705 [AUTO-CREATE-DISPLAY] N\u0153ud d'affichage existant mis \xE0 jour: ${displayNodeId2} (label: ${originalVar.displayName}-${suffix})`);
             } else {
-              await prisma68.treeBranchLeafNode.create({ data: displayNodeData });
+              await prisma69.treeBranchLeafNode.create({ data: displayNodeData });
               console.log(`\u2705\u2705\u2705 [AUTO-CREATE-DISPLAY] N\u0153ud d'affichage CR\xC9\xC9 AVEC SUCC\xC8S: ${displayNodeId2} (label: ${originalVar.displayName}-${suffix})`);
             }
             const copiedFormulaIds = [];
             const copiedConditionIds = [];
             try {
-              const originalFormulas = await prisma68.treeBranchLeafNodeFormula.findMany({
+              const originalFormulas = await prisma69.treeBranchLeafNodeFormula.findMany({
                 where: { nodeId: originalOwnerNode.id }
               });
               console.log(`\u{1F4CB} Formules \xE0 copier depuis ${originalOwnerNode.id}: ${originalFormulas.length}`);
               for (const f of originalFormulas) {
                 const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
-                const existingFormula = await prisma68.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
+                const existingFormula = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
                 if (existingFormula) {
                   console.log(`   \u267B\uFE0F Formule ${newFormulaId} d\xE9j\xE0 existante, skip`);
                   copiedFormulaIds.push(newFormulaId);
@@ -28927,7 +29655,7 @@ ${"\u2550".repeat(80)}`);
                     f.id,
                     displayNodeId2,
                     suffix,
-                    prisma68,
+                    prisma69,
                     { formulaIdMap, nodeIdMap }
                   );
                   if (formulaResult.success) {
@@ -28941,13 +29669,13 @@ ${"\u2550".repeat(80)}`);
                   console.error(`   \u274C Exception copie formule ${f.id}:`, error);
                 }
               }
-              const originalConditions = await prisma68.treeBranchLeafNodeCondition.findMany({
+              const originalConditions = await prisma69.treeBranchLeafNodeCondition.findMany({
                 where: { nodeId: originalOwnerNode.id }
               });
               console.log(`\u{1F4CB} Conditions \xE0 copier depuis ${originalOwnerNode.id}: ${originalConditions.length}`);
               for (const c of originalConditions) {
                 const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
-                const existingCondition = await prisma68.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+                const existingCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
                 if (existingCondition) {
                   console.log(`   \u267B\uFE0F Condition ${newConditionId} d\xE9j\xE0 existante, skip`);
                   copiedConditionIds.push(newConditionId);
@@ -28966,7 +29694,7 @@ ${"\u2550".repeat(80)}`);
                   }
                   newConditionSet = JSON.parse(updatedStr);
                 }
-                await prisma68.treeBranchLeafNodeCondition.create({
+                await prisma69.treeBranchLeafNodeCondition.create({
                   data: {
                     id: newConditionId,
                     nodeId: displayNodeId2,
@@ -28995,7 +29723,7 @@ ${"\u2550".repeat(80)}`);
                 console.log(`   \u{1F4CA} hasCondition=true, linkedConditionIds=${copiedConditionIds.join(", ")}`);
               }
               if (Object.keys(updateData).length > 0) {
-                await prisma68.treeBranchLeafNode.update({
+                await prisma69.treeBranchLeafNode.update({
                   where: { id: displayNodeId2 },
                   data: updateData
                 });
@@ -29016,7 +29744,7 @@ ${"\u2550".repeat(80)}`);
       console.log(`\u{1F4CD} nodeId utilis\xE9 (fallback): ${finalNodeId2}`);
     }
     try {
-      const existingById = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      const existingById = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
@@ -29027,7 +29755,7 @@ ${"\u2550".repeat(80)}`);
       console.warn(`\u26A0\uFE0F V\xE9rification collision id variable \xE9chou\xE9e:`, e.message);
     }
     try {
-      const existingByKey = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      const existingByKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
@@ -29040,33 +29768,53 @@ ${"\u2550".repeat(80)}`);
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
       if (existingForNode) {
-        console.log(`\u267B\uFE0F Variable d\xE9j\xE0 existante pour display node ${finalNodeId2}, r\xE9utilisation: ${existingForNode.id}`);
-        _reusingExistingVariable = true;
-        _existingVariableForReuse = existingForNode;
-        try {
-          const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
-          await prisma68.treeBranchLeafNode.update({
-            where: { id: finalNodeId2 },
-            data: {
-              hasData: true,
-              data_activeId: existingForNode.id,
-              data_exposedKey: existingForNode.exposedKey,
-              data_displayFormat: existingForNode.displayFormat,
-              data_precision: existingForNode.precision,
-              data_unit: existingForNode.unit,
-              data_visibleToUser: existingForNode.visibleToUser,
-              label: normalizedExistingName || void 0,
-              field_label: normalizedExistingName || void 0
+        const expectedVarId = `${originalVarId}-${suffix}`;
+        const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
+        if (hasSuffixMatch) {
+          console.log(`\u267B\uFE0F Variable existante AVEC BON SUFFIXE pour ${finalNodeId2}, r\xE9utilisation: ${existingForNode.id}`);
+          _reusingExistingVariable = true;
+          _existingVariableForReuse = existingForNode;
+          try {
+            const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
+            await prisma69.treeBranchLeafNode.update({
+              where: { id: finalNodeId2 },
+              data: {
+                hasData: true,
+                data_activeId: existingForNode.id,
+                data_exposedKey: existingForNode.exposedKey,
+                data_displayFormat: existingForNode.displayFormat,
+                data_precision: existingForNode.precision,
+                data_unit: existingForNode.unit,
+                data_visibleToUser: existingForNode.visibleToUser,
+                label: normalizedExistingName || void 0,
+                field_label: normalizedExistingName || void 0
+              }
+            });
+            const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
+            if (!isCopiedNode) {
+              console.warn(`\u26A0\uFE0F SKIP addToNodeLinkedField (r\xE9utilisation): ${finalNodeId2} est un n\u0153ud ORIGINAL, pas une copie`);
+            } else {
+              await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
             }
-          });
-          await addToNodeLinkedField5(prisma68, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
-        } catch (e) {
-          console.warn(`\u26A0\uFE0F Erreur MAJ display node (r\xE9utilisation):`, e.message);
+          } catch (e) {
+            console.warn(`\u26A0\uFE0F Erreur MAJ display node (r\xE9utilisation):`, e.message);
+          }
+          const cacheKey2 = `${originalVarId}|${finalNodeId2}`;
+          variableCopyCache.set(cacheKey2, existingForNode.id);
+        } else {
+          console.warn(`\u26A0\uFE0F Variable existante MAIS MAUVAIS SUFFIXE: ${existingForNode.id}, attendu: ${expectedVarId}`);
+          console.warn(`   \u2192 Suppression de l'ancienne ET cr\xE9ation nouvelle variable obligatoire`);
+          try {
+            await prisma69.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
+            console.log(`\u{1F5D1}\uFE0F Ancienne variable supprim\xE9e: ${existingForNode.id}`);
+          } catch (delError) {
+            console.warn(`\u26A0\uFE0F Erreur suppression ancienne variable:`, delError.message);
+          }
+          _reusingExistingVariable = false;
+          _existingVariableForReuse = null;
         }
-        const cacheKey2 = `${originalVarId}|${finalNodeId2}`;
-        variableCopyCache.set(cacheKey2, existingForNode.id);
       }
     } catch (e) {
       console.warn(`\u26A0\uFE0F V\xE9rification variable existante par nodeId \xE9chou\xE9e:`, e.message);
@@ -29108,7 +29856,7 @@ ${"\u2550".repeat(80)}`);
                 formulaId,
                 finalNodeId2,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (formulaResult.success) {
@@ -29135,7 +29883,7 @@ ${"\u2550".repeat(80)}`);
                 conditionId,
                 finalNodeId2,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (conditionResult.success) {
@@ -29162,7 +29910,7 @@ ${"\u2550".repeat(80)}`);
                 tableId,
                 finalNodeId2,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, formulaIdMap, conditionIdMap, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -29178,7 +29926,7 @@ ${"\u2550".repeat(80)}`);
             }
           }
         }
-        newVariable = await prisma68.treeBranchLeafNodeVariable.create({
+        newVariable = await prisma69.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: finalNodeId2,
@@ -29195,9 +29943,6 @@ ${"\u2550".repeat(80)}`);
             sourceRef: newSourceRef,
             sourceType: originalVar.sourceType,
             metadata: originalVar.metadata,
-            linkedFormulaIds: newLinkedFormulaIds.length > 0 ? newLinkedFormulaIds : [],
-            linkedConditionIds: newLinkedConditionIds.length > 0 ? newLinkedConditionIds : [],
-            linkedTableIds: newLinkedTableIds.length > 0 ? newLinkedTableIds : [],
             createdAt: /* @__PURE__ */ new Date(),
             updatedAt: /* @__PURE__ */ new Date()
           }
@@ -29229,12 +29974,16 @@ ${"\u2550".repeat(80)}`);
     console.log(`   nodeId: ${newVariable.nodeId}`);
     console.log(`   exposedKey: ${newVariable.exposedKey}`);
     console.log(`   \u{1F4CD} DEBUG displayName cr\xE9\xE9: "${newVariable.displayName}"`);
-    try {
-      await linkVariableToAllCapacityNodes(prisma68, newVariable.id, newVariable.sourceRef);
-    } catch (e) {
-      console.error(`\u274C Erreur LIAISON AUTOMATIQUE VARIABLE:`, e.message);
+    if (!isFromRepeaterDuplication) {
+      try {
+        await linkVariableToAllCapacityNodes(prisma69, newVariable.id, newVariable.sourceRef);
+      } catch (e) {
+        console.error(`\u274C Erreur LIAISON AUTOMATIQUE VARIABLE:`, e.message);
+      }
+    } else {
+      console.log(`\u23ED\uFE0F SKIP linkVariableToAllCapacityNodes (duplication r\xE9p\xE9teur - linkedVariableIds d\xE9j\xE0 copi\xE9s)`);
     }
-    const verification = await prisma68.treeBranchLeafNodeVariable.findUnique({
+    const verification = await prisma69.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (verification) {
@@ -29245,7 +29994,7 @@ ${"\u2550".repeat(80)}`);
     }
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: finalNodeId2 },
         data: {
           hasData: true,
@@ -29266,12 +30015,12 @@ ${"\u2550".repeat(80)}`);
     }
     if (linkToDisplaySection) {
       try {
-        const originalOwnerNode = await prisma68.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: { parentId: true, treeId: true }
         });
         if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma68.treeBranchLeafNode.findFirst({
+          const displaySection = await prisma69.treeBranchLeafNode.findFirst({
             where: {
               treeId: originalOwnerNode.treeId,
               parentId: originalOwnerNode.parentId,
@@ -29281,7 +30030,7 @@ ${"\u2550".repeat(80)}`);
             select: { id: true }
           });
           if (displaySection) {
-            await addToNodeLinkedField5(prisma68, displaySection.id, "linkedVariableIds", [newVariable.id]);
+            await addToNodeLinkedField5(prisma69, displaySection.id, "linkedVariableIds", [newVariable.id]);
             console.log(`\u2705 Variable li\xE9e \xE0 la section d'affichage ${displaySectionLabel}: ${displaySection.id}`);
           } else {
             console.log(`\u2139\uFE0F Section d'affichage "${displaySectionLabel}" introuvable sous le parent.`);
@@ -29292,7 +30041,13 @@ ${"\u2550".repeat(80)}`);
       }
     } else if (autoCreateDisplayNode) {
       try {
-        await addToNodeLinkedField5(prisma68, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+        const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
+        if (!isCopiedNode) {
+          console.warn(`\u26A0\uFE0F SKIP addToNodeLinkedField: ${finalNodeId2} est un n\u0153ud ORIGINAL (template), pas une copie. On ne doit PAS ajouter ${newVariable.id} \xE0 ses linkedVariableIds.`);
+        } else {
+          await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+          console.log(`\u2705 Variable ${newVariable.id} ajout\xE9e au linkedVariableIds du n\u0153ud copi\xE9 ${finalNodeId2}`);
+        }
       } catch (e) {
         console.warn(`\u26A0\uFE0F Erreur linkage variable\u2192display node:`, e.message);
       }
@@ -29302,8 +30057,8 @@ ${"\u2550".repeat(80)}`);
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              const cond = await prisma68.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
-              await prisma68.treeBranchLeafNode.update({
+              const cond = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              await prisma69.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
@@ -29312,11 +30067,11 @@ ${"\u2550".repeat(80)}`);
                   condition_description: cond?.description || null
                 }
               });
-              await addToNodeLinkedField5(prisma68, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedConditionIds", [capId]);
               try {
                 if (newNodeId) {
                   const suffixedVarId = `${originalVarId}-${suffix}`;
-                  const targetNode = await prisma68.treeBranchLeafNode.findUnique({
+                  const targetNode = await prisma69.treeBranchLeafNode.findUnique({
                     where: { id: newNodeId },
                     select: { linkedVariableIds: true }
                   });
@@ -29327,7 +30082,7 @@ ${"\u2550".repeat(80)}`);
                     const next = Array.from(/* @__PURE__ */ new Set([...withoutOriginal, ...candidates]));
                     const changed = current.length !== next.length || current.some((id) => !next.includes(id));
                     if (changed) {
-                      await prisma68.treeBranchLeafNode.update({
+                      await prisma69.treeBranchLeafNode.update({
                         where: { id: newNodeId },
                         data: {
                           linkedVariableIds: { set: next }
@@ -29341,8 +30096,8 @@ ${"\u2550".repeat(80)}`);
                 console.warn(`\u26A0\uFE0F Failed to sync linkedVariableIds on target node ${newNodeId}:`, e.message);
               }
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma68.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
-              await prisma68.treeBranchLeafNode.update({
+              const tbl = await prisma69.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
+              await prisma69.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
@@ -29352,7 +30107,7 @@ ${"\u2550".repeat(80)}`);
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField5(prisma68, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedTableIds", [capId]);
             }
           }
         }
@@ -29362,10 +30117,10 @@ ${"\u2550".repeat(80)}`);
     }
     try {
       if (newNodeId) {
-        await replaceLinkedVariableId(prisma68, newNodeId, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma69, newNodeId, originalVarId, newVariable.id, suffix);
       }
       if (finalNodeId2 && finalNodeId2 !== newNodeId) {
-        await replaceLinkedVariableId(prisma68, finalNodeId2, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma69, finalNodeId2, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
       console.warn(`\u26A0\uFE0F Failed to replace linkedVariableIds on nodes ${newNodeId} / ${finalNodeId2}:`, e.message);
@@ -29377,30 +30132,30 @@ ${"\u2550".repeat(80)}`);
       if (parsed && parsed.id) {
         try {
           if (capacityType === "formula") {
-            const formula = await prisma68.treeBranchLeafNodeFormula.findUnique({
+            const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (formula) {
-              await addToNodeLinkedField5(prisma68, formula.nodeId, "linkedFormulaIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma69, formula.nodeId, "linkedFormulaIds", [parsed.id]);
               console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour formule ${parsed.id}`);
             }
           } else if (capacityType === "condition") {
-            const condition = await prisma68.treeBranchLeafNodeCondition.findUnique({
+            const condition = await prisma69.treeBranchLeafNodeCondition.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (condition) {
-              await addToNodeLinkedField5(prisma68, condition.nodeId, "linkedConditionIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma69, condition.nodeId, "linkedConditionIds", [parsed.id]);
               console.log(`\u2705 linkedConditionIds mis \xE0 jour pour condition ${parsed.id}`);
             }
           } else if (capacityType === "table") {
-            const table = await prisma68.treeBranchLeafNodeTable.findUnique({
+            const table = await prisma69.treeBranchLeafNodeTable.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (table) {
-              await addToNodeLinkedField5(prisma68, table.nodeId, "linkedTableIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma69, table.nodeId, "linkedTableIds", [parsed.id]);
               console.log(`\u2705 linkedTableIds mis \xE0 jour pour table ${parsed.id}`);
             }
           }
@@ -29414,6 +30169,19 @@ ${"\u2550".repeat(80)}`);
     console.log(`\u2705 COPIE VARIABLE TERMIN\xC9E`);
     console.log(`${"\u2550".repeat(80)}
 `);
+    try {
+      const originalVariable = await prisma69.treeBranchLeafNodeVariable.findUnique({
+        where: { id: originalVarId },
+        select: { nodeId: true }
+      });
+      if (originalVariable?.nodeId) {
+        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma69).catch((err) => {
+          console.warn(`\u26A0\uFE0F Erreur mise \xE0 jour champ Total:`, err);
+        });
+      }
+    } catch (sumErr) {
+      console.warn(`\u26A0\uFE0F Erreur r\xE9cup\xE9ration variable originale pour Total:`, sumErr);
+    }
     return {
       variableId: newVariable.id,
       exposedKey: newExposedKey,
@@ -29440,10 +30208,10 @@ ${"\u2550".repeat(80)}`);
     throw error;
   }
 }
-async function createDisplayNodeForExistingVariable(variableId, prisma68, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
-  const v = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+async function createDisplayNodeForExistingVariable(variableId, prisma69, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
+  const v = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
   if (!v) throw new Error(`Variable introuvable: ${variableId}`);
-  const owner = await prisma68.treeBranchLeafNode.findUnique({
+  const owner = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: v.nodeId },
     select: {
       id: true,
@@ -29514,13 +30282,13 @@ async function createDisplayNodeForExistingVariable(variableId, prisma68, displa
     fieldSubType: null,
     field_label: v.displayName
   };
-  const existing = await prisma68.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
+  const existing = await prisma69.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
   if (existing) {
-    await prisma68.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
+    await prisma69.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
   } else {
-    await prisma68.treeBranchLeafNode.create({ data: baseData });
+    await prisma69.treeBranchLeafNode.create({ data: baseData });
   }
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: displayNodeId },
     data: {
       hasData: true,
@@ -29534,9 +30302,9 @@ async function createDisplayNodeForExistingVariable(variableId, prisma68, displa
   });
   return { displayNodeId, created: !existing };
 }
-async function addToNodeLinkedField5(prisma68, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField5(prisma69, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -29546,31 +30314,33 @@ async function addToNodeLinkedField5(prisma68, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
-async function replaceLinkedVariableId(prisma68, nodeId, originalVarId, newVarId, suffix) {
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+async function replaceLinkedVariableId(prisma69, nodeId, originalVarId, newVarId, suffix) {
+  const stripNumericSuffix2 = (raw) => raw.replace(/-\d+(?:-\d+)*$/, "");
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { linkedVariableIds: true }
   });
   if (!node) return;
   const suffixedId = `${originalVarId}-${suffix}`;
   const current = node.linkedVariableIds || [];
-  const withoutOriginal = current.filter((id) => id !== originalVarId);
-  const next = Array.from(/* @__PURE__ */ new Set([...withoutOriginal, newVarId, suffixedId]));
+  const base = stripNumericSuffix2(originalVarId);
+  const filtered = current.filter((id) => stripNumericSuffix2(id) !== base);
+  const next = Array.from(/* @__PURE__ */ new Set([...filtered, newVarId, suffixedId]));
   const changed = current.length !== next.length || current.some((id) => !next.includes(id));
   if (!changed) return;
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { linkedVariableIds: { set: next } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-selector-tables.ts
-async function copySelectorTablesAfterNodeCopy(prisma68, copiedRootNodeId, originalRootNodeId, options, suffix) {
+async function copySelectorTablesAfterNodeCopy(prisma69, copiedRootNodeId, originalRootNodeId, options, suffix) {
   console.log(`
 ${"\u2550".repeat(80)}`);
   console.log(`\u{1F3AF} COPIE DES TABLES DES SELECTORS`);
@@ -29584,7 +30354,7 @@ ${"\u2550".repeat(80)}`);
       while (queue.length > 0) {
         const currentId = queue.shift();
         results.push(currentId);
-        const children = await prisma68.treeBranchLeafNode.findMany({
+        const children = await prisma69.treeBranchLeafNode.findMany({
           where: { parentId: currentId },
           select: { id: true }
         });
@@ -29596,7 +30366,7 @@ ${"\u2550".repeat(80)}`);
     const copiedNodeIds = await getAllDescendants(copiedRootNodeId);
     console.log(`\u{1F4CB} ${copiedNodeIds.length} n\u0153uds trouv\xE9s dans l'arborescence copi\xE9e`);
     console.log(`\u{1F4CB} ${originalNodeIds.length} n\u0153uds trouv\xE9s dans l'arborescence originale`);
-    const selectorsInOriginal = await prisma68.treeBranchLeafNode.findMany({
+    const selectorsInOriginal = await prisma69.treeBranchLeafNode.findMany({
       where: {
         id: { in: originalNodeIds },
         table_activeId: { not: null }
@@ -29618,7 +30388,7 @@ ${"\u2550".repeat(80)}`);
         console.log(`   \u26A0\uFE0F Selector ${originalSelector.label}: pas trouv\xE9 dans nodeIdMap`);
         continue;
       }
-      const hasSelectConfig = await prisma68.treeBranchLeafSelectConfig.findUnique({
+      const hasSelectConfig = await prisma69.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: originalSelector.id }
       });
       if (hasSelectConfig) {
@@ -29630,7 +30400,7 @@ ${"\u2550".repeat(80)}`);
       console.log(`      - Original ID: ${originalSelector.id.substring(0, 12)}...`);
       console.log(`      - Copi\xE9 ID: ${copiedSelectorId.substring(0, 12)}...`);
       console.log(`      - Table originale: ${originalTableId}`);
-      const originalTable = await prisma68.treeBranchLeafNodeTable.findUnique({
+      const originalTable = await prisma69.treeBranchLeafNodeTable.findUnique({
         where: { id: originalTableId },
         select: {
           id: true,
@@ -29660,7 +30430,7 @@ ${"\u2550".repeat(80)}`);
           copiedSelectorId,
           // 👈 Le nœud selector copié sera propriétaire de la table copiée
           suffix,
-          prisma68,
+          prisma69,
           {
             nodeIdMap: options.nodeIdMap,
             tableCopyCache: options.tableCopyCache,
@@ -29690,12 +30460,7 @@ ${"\u2550".repeat(80)}`);
   }
 }
 
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/table-routes-new.ts
-var import_express56 = require("express");
-var import_client46 = require("@prisma/client");
-var import_crypto9 = require("crypto");
-var router55 = (0, import_express56.Router)();
-var prisma45 = new import_client46.PrismaClient();
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/shared-helpers.ts
 function getAuthCtx(req2) {
   const user = req2 && req2.user || {};
   const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
@@ -29704,821 +30469,11 @@ function getAuthCtx(req2) {
   const organizationId = user.organizationId || headerOrg || null;
   return { organizationId, isSuperAdmin: isSuperAdmin2 };
 }
-router55.post("/nodes/:nodeId/tables", async (req2, res) => {
-  const { nodeId } = req2.params;
-  const { name, description, columns, rows, type = "static" } = req2.body;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
-  console.log(`[NEW POST /tables] \u{1F680} D\xE9but cr\xE9ation table pour node ${nodeId}`);
-  console.log(`[NEW POST /tables] \u{1F4CA} Donn\xE9es re\xE7ues: ${Array.isArray(columns) ? columns.length : 0} colonnes, ${Array.isArray(rows) ? rows.length : 0} lignes`);
-  if (!name) {
-    return res.status(400).json({ error: "Le nom de la table est requis" });
-  }
-  if (!Array.isArray(columns)) {
-    return res.status(400).json({ error: "La d\xE9finition des colonnes est requise (array)" });
-  }
-  if (!Array.isArray(rows)) {
-    return res.status(400).json({ error: "Les donn\xE9es (rows) sont requises (array)" });
-  }
-  try {
-    const node = await prisma45.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      include: { TreeBranchLeafTree: true }
-    });
-    if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
-    }
-    if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 ce n\u0153ud" });
-    }
-    const tableId = (0, import_crypto9.randomUUID)();
-    console.log(`[NEW POST /tables] \u{1F194} Nouvel ID de table g\xE9n\xE9r\xE9: ${tableId}`);
-    const tableData = {
-      id: tableId,
-      nodeId,
-      organizationId: node.TreeBranchLeafTree.organizationId,
-      name,
-      description: description || null,
-      type,
-      rowCount: rows.length,
-      columnCount: columns.length,
-      createdAt: /* @__PURE__ */ new Date(),
-      updatedAt: /* @__PURE__ */ new Date()
-    };
-    const tableColumnsData = columns.map((col, index) => {
-      const colName = typeof col === "string" ? col : col.name || `Colonne ${index + 1}`;
-      const colType = typeof col === "object" && col.type ? col.type : "text";
-      const colWidth = typeof col === "object" && col.width ? col.width : null;
-      const colFormat = typeof col === "object" && col.format ? col.format : null;
-      const colMetadata = typeof col === "object" && col.metadata ? col.metadata : {};
-      return {
-        tableId,
-        columnIndex: index,
-        name: colName,
-        type: colType,
-        width: colWidth,
-        format: colFormat,
-        metadata: colMetadata
-      };
-    });
-    const tableRowsData = rows.map((row, index) => ({
-      tableId,
-      rowIndex: index,
-      cells: row
-    }));
-    console.log(`[NEW POST /tables] \u{1F4E6} Transaction pr\xE9par\xE9e: 1 table + ${tableColumnsData.length} colonnes + ${tableRowsData.length} lignes`);
-    console.log(`[NEW POST /tables] \u{1F50D} ANALYSE D\xC9TAILL\xC9E DES ROWS:`);
-    console.log(`[NEW POST /tables]    - Type de rows re\xE7u: ${Array.isArray(rows) ? "array" : typeof rows}`);
-    console.log(`[NEW POST /tables]    - rows.length: ${rows.length}`);
-    console.log(`[NEW POST /tables]    - rows[0] (premi\xE8re ligne):`, rows[0]);
-    console.log(`[NEW POST /tables]    - rows[0][0] (A1):`, rows[0]?.[0]);
-    console.log(`[NEW POST /tables]    - rows[0][1-3] (premi\xE8res donn\xE9es):`, rows[0]?.slice(1, 4));
-    console.log(`[NEW POST /tables]    - rows[1] (deuxi\xE8me ligne):`, rows[1]);
-    console.log(`[NEW POST /tables]    - rows[1][0] (label ligne 2):`, rows[1]?.[0]);
-    console.log(`[NEW POST /tables]    - rows[derni\xE8re]:`, rows[rows.length - 1]);
-    console.log(`[NEW POST /tables] \u{1F50D} ANALYSE TABLEROWSDATA (apr\xE8s map):`);
-    console.log(`[NEW POST /tables]    - tableRowsData[0].cells:`, tableRowsData[0].cells);
-    console.log(`[NEW POST /tables]    - tableRowsData[1].cells:`, tableRowsData[1].cells);
-    console.log(`[NEW POST /tables]    - tableRowsData[derni\xE8re].cells:`, tableRowsData[tableRowsData.length - 1].cells);
-    const result = await prisma45.$transaction(async (tx) => {
-      console.log(`[NEW POST /tables] \u{1F504} \xC9tape 1/3: Cr\xE9ation de la table principale...`);
-      const newTable = await tx.treeBranchLeafNodeTable.create({
-        data: tableData
-      });
-      if (tableColumnsData.length > 0) {
-        console.log(`[NEW POST /tables] \u{1F504} \xC9tape 2/3: Insertion de ${tableColumnsData.length} colonnes...`);
-        await tx.treeBranchLeafNodeTableColumn.createMany({
-          data: tableColumnsData
-        });
-      }
-      if (tableRowsData.length > 0) {
-        console.log(`[NEW POST /tables] \u{1F504} \xC9tape 3/3: Insertion de ${tableRowsData.length} lignes...`);
-        for (const rowData of tableRowsData) {
-          await tx.treeBranchLeafNodeTableRow.create({
-            data: rowData
-          });
-        }
-        console.log(`[NEW POST /tables] \u2705 Lignes ins\xE9r\xE9es ! V\xE9rification...`);
-        const verif = await tx.treeBranchLeafNodeTableRow.findMany({
-          where: { tableId },
-          orderBy: { rowIndex: "asc" },
-          take: 3
-        });
-        console.log(`[NEW POST /tables] \u{1F50D} V\xC9RIFICATION POST-INSERTION:`);
-        verif.forEach((row, idx) => {
-          console.log(`[NEW POST /tables]    - Ligne ${idx} (rowIndex=${row.rowIndex}):`);
-          console.log(`[NEW POST /tables]      cells type:`, typeof row.cells);
-          console.log(`[NEW POST /tables]      cells value:`, row.cells);
-          if (typeof row.cells === "string") {
-            try {
-              const parsed = JSON.parse(row.cells);
-              console.log(`[NEW POST /tables]      cells[0] apr\xE8s parse:`, parsed[0]);
-            } catch (e) {
-              console.log(`[NEW POST /tables]      \u274C Erreur parse:`, e.message);
-            }
-          } else if (Array.isArray(row.cells)) {
-            console.log(`[NEW POST /tables]      cells[0]:`, row.cells[0]);
-            console.log(`[NEW POST /tables]      cells.length:`, row.cells.length);
-          }
-        });
-      }
-      return newTable;
-    }, {
-      timeout: 6e4
-      // 60 secondes pour les gros fichiers (43k+ lignes)
-    });
-    console.log(`[NEW POST /tables] \u2705 Transaction termin\xE9e avec succ\xE8s ! Table ${result.id} cr\xE9\xE9e.`);
-    await prisma45.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { hasTable: true }
-    });
-    console.log(`[NEW POST /tables] \u2705 hasTable mis \xE0 jour pour node ${nodeId}`);
-    try {
-      const node2 = await prisma45.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
-      const current = node2?.linkedTableIds ?? [];
-      const next = Array.from(/* @__PURE__ */ new Set([...current || [], result.id]));
-      await prisma45.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
-    } catch (e) {
-      console.warn("[NEW POST /tables] Warning updating linkedTableIds:", e.message);
-    }
-    try {
-      console.log(`[NEW POST /tables] \u{1F50D} Recherche des SelectConfigs \xE0 mettre \xE0 jour pour nodeId: ${nodeId}`);
-      const selectConfig = await prisma45.treeBranchLeafSelectConfig.findFirst({
-        where: { nodeId }
-      });
-      if (selectConfig) {
-        const oldTableRef = selectConfig.tableReference;
-        await prisma45.treeBranchLeafSelectConfig.update({
-          where: { id: selectConfig.id },
-          data: { tableReference: result.id }
-        });
-        console.log(`[NEW POST /tables] \u2705 SelectConfig mis \xE0 jour: ${selectConfig.id}`);
-        console.log(`[NEW POST /tables]    - Ancien tableau: ${oldTableRef}`);
-        console.log(`[NEW POST /tables]    - Nouveau tableau: ${result.id}`);
-        if (oldTableRef) {
-          const otherConfigs = await prisma45.treeBranchLeafSelectConfig.findMany({
-            where: {
-              tableReference: oldTableRef,
-              nodeId: { not: nodeId }
-              // Exclure celui qu'on vient de mettre à jour
-            }
-          });
-          if (otherConfigs.length > 0) {
-            console.log(`[NEW POST /tables] \u{1F50D} ${otherConfigs.length} autres SelectConfigs r\xE9f\xE9rencent l'ancien tableau`);
-            const updateResult = await prisma45.treeBranchLeafSelectConfig.updateMany({
-              where: {
-                tableReference: oldTableRef,
-                nodeId: { not: nodeId }
-              },
-              data: { tableReference: result.id }
-            });
-            console.log(`[NEW POST /tables] \u2705 ${updateResult.count} SelectConfigs suppl\xE9mentaires mis \xE0 jour`);
-            otherConfigs.forEach((cfg) => {
-              console.log(`[NEW POST /tables]    - NodeId: ${cfg.nodeId} (keyColumn: ${cfg.keyColumn}, keyRow: ${cfg.keyRow})`);
-            });
-          }
-        }
-      } else {
-        console.log(`[NEW POST /tables] \u2139\uFE0F Pas de SelectConfig trouv\xE9e pour ce n\u0153ud`);
-      }
-    } catch (updateError) {
-      console.error(`[NEW POST /tables] \u26A0\uFE0F Erreur lors de la mise \xE0 jour des SelectConfigs:`, updateError);
-    }
-    const createdTable = await prisma45.treeBranchLeafNodeTable.findUnique({
-      where: { id: result.id },
-      include: {
-        tableColumns: {
-          orderBy: { columnIndex: "asc" }
-        },
-        tableRows: {
-          orderBy: { rowIndex: "asc" }
-        }
-      }
-    });
-    if (!createdTable) {
-      throw new Error("Table cr\xE9\xE9e mais introuvable lors de la relecture");
-    }
-    res.status(201).json({
-      id: createdTable.id,
-      nodeId: createdTable.nodeId,
-      name: createdTable.name,
-      description: createdTable.description,
-      type: createdTable.type,
-      columns: createdTable.tableColumns.map((c) => c.name),
-      rows: createdTable.tableRows.map((r) => {
-        const cells = r.cells;
-        if (Array.isArray(cells)) {
-          return cells;
-        }
-        if (typeof cells === "string") {
-          try {
-            const parsed = JSON.parse(cells);
-            return Array.isArray(parsed) ? parsed : [String(parsed)];
-          } catch {
-            return [String(cells)];
-          }
-        }
-        if (cells && typeof cells === "object") {
-          return Object.values(cells);
-        }
-        return [String(cells || "")];
-      }),
-      meta: createdTable.meta || {},
-      rowCount: createdTable.rowCount,
-      columnCount: createdTable.columnCount,
-      createdAt: createdTable.createdAt,
-      updatedAt: createdTable.updatedAt
-    });
-  } catch (error) {
-    console.error(`\u274C [NEW POST /tables] Erreur lors de la cr\xE9ation de la table:`, error);
-    if (error instanceof import_client46.Prisma.PrismaClientKnownRequestError) {
-      return res.status(500).json({
-        error: "Erreur de base de donn\xE9es lors de la cr\xE9ation de la table.",
-        code: error.code,
-        meta: error.meta
-      });
-    }
-    res.status(500).json({ error: "Impossible de cr\xE9er la table" });
-  }
-});
-router55.get("/tables/:id", async (req2, res) => {
-  const { id } = req2.params;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
-  const page = parseInt(req2.query.page) || 1;
-  const limit = parseInt(req2.query.limit) || 100;
-  const offset = (page - 1) * limit;
-  console.log(`[NEW GET /tables/:id] \u{1F4D6} R\xE9cup\xE9ration table ${id} (page ${page}, limit ${limit})`);
-  try {
-    const table = await prisma45.treeBranchLeafNodeTable.findUnique({
-      where: { id },
-      include: {
-        TreeBranchLeafNode: {
-          select: {
-            treeId: true,
-            TreeBranchLeafTree: {
-              select: { organizationId: true }
-            }
-          }
-        }
-      }
-    });
-    if (!table) {
-      return res.status(404).json({ error: "Table non trouv\xE9e" });
-    }
-    const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
-    if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 cette table" });
-    }
-    const columns = await prisma45.treeBranchLeafNodeTableColumn.findMany({
-      where: { tableId: id },
-      orderBy: { columnIndex: "asc" }
-    });
-    const rows = await prisma45.treeBranchLeafNodeTableRow.findMany({
-      where: { tableId: id },
-      orderBy: { rowIndex: "asc" },
-      take: limit,
-      skip: offset
-    });
-    console.log(`[NEW GET /tables/:id] \u2705 R\xE9cup\xE9r\xE9: ${columns.length} colonnes et ${rows.length} lignes (sur ${table.rowCount} total)`);
-    res.json({
-      id: table.id,
-      nodeId: table.nodeId,
-      name: table.name,
-      description: table.description,
-      type: table.type,
-      columns: columns.map((c) => ({
-        name: c.name,
-        type: c.type,
-        width: c.width,
-        format: c.format,
-        metadata: c.metadata
-      })),
-      rows: rows.map((r) => r.cells),
-      page,
-      limit,
-      totalRows: table.rowCount,
-      totalPages: Math.ceil(table.rowCount / limit),
-      createdAt: table.createdAt,
-      updatedAt: table.updatedAt
-    });
-  } catch (error) {
-    console.error(`\u274C [NEW GET /tables/:id] Erreur lors de la r\xE9cup\xE9ration de la table:`, error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer la table" });
-  }
-});
-router55.put("/tables/:id", async (req2, res) => {
-  const { id } = req2.params;
-  const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req2.body;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
-  console.log(`[NEW PUT /tables/:id] \u{1F504} Mise \xE0 jour table ${id}`);
-  console.log(`[NEW PUT /tables/:id] Nouvelles donn\xE9es: ${Array.isArray(columns) ? columns.length : "N/A"} colonnes, ${Array.isArray(rows) ? rows.length : "N/A"} lignes`);
-  console.log(`[NEW PUT /tables/:id] Lookup config: selectColumn=${lookupSelectColumn}, displayColumns=${JSON.stringify(lookupDisplayColumns)}`);
-  try {
-    const updatedTable = await prisma45.$transaction(async (tx) => {
-      const table = await tx.treeBranchLeafNodeTable.findUnique({
-        where: { id },
-        include: {
-          TreeBranchLeafNode: {
-            include: { TreeBranchLeafTree: true }
-          }
-        }
-      });
-      if (!table) {
-        throw new Error("Table non trouv\xE9e");
-      }
-      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
-      if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-        throw new Error("Acc\xE8s non autoris\xE9");
-      }
-      const updateData = {
-        updatedAt: /* @__PURE__ */ new Date()
-      };
-      if (name) updateData.name = name;
-      if (description !== void 0) updateData.description = description;
-      if (type) updateData.type = type;
-      if (Array.isArray(columns)) updateData.columnCount = columns.length;
-      if (Array.isArray(rows)) updateData.rowCount = rows.length;
-      if (lookupSelectColumn !== void 0) updateData.lookupSelectColumn = lookupSelectColumn;
-      if (Array.isArray(lookupDisplayColumns)) updateData.lookupDisplayColumns = lookupDisplayColumns;
-      const tableUpdated = await tx.treeBranchLeafNodeTable.update({
-        where: { id },
-        data: updateData
-      });
-      console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 1: Table principale mise \xE0 jour`);
-      if (Array.isArray(columns)) {
-        console.log(`[NEW PUT /tables/:id] \u{1F504} Remplacement des colonnes...`);
-        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
-        if (columns.length > 0) {
-          const newColumnsData = columns.map((col, index) => ({
-            tableId: id,
-            columnIndex: index,
-            name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
-            type: typeof col === "object" ? col.type : "text",
-            width: typeof col === "object" ? col.width : null,
-            format: typeof col === "object" ? col.format : null,
-            metadata: typeof col === "object" && col.metadata ? col.metadata : {}
-          }));
-          await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
-        }
-        console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 2: ${columns.length} colonnes remplac\xE9es`);
-      }
-      if (Array.isArray(rows)) {
-        console.log(`[NEW PUT /tables/:id] \u{1F504} Remplacement des lignes...`);
-        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: id } });
-        if (rows.length > 0) {
-          console.log(`[NEW PUT /tables/:id] \u{1F504} Cr\xE9ation de ${rows.length} lignes (boucle create)...`);
-          for (let index = 0; index < rows.length; index++) {
-            const row = rows[index];
-            await tx.treeBranchLeafNodeTableRow.create({
-              data: {
-                tableId: id,
-                rowIndex: index,
-                cells: row
-              }
-            });
-            console.log(`[PUT /tables/:id] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : "N/A");
-          }
-        }
-        console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 3: ${rows.length} lignes remplac\xE9es`);
-      }
-      return tableUpdated;
-    });
-    console.log(`[NEW PUT /tables/:id] \u{1F389} Transaction de mise \xE0 jour termin\xE9e avec succ\xE8s`);
-    const finalTableData = await prisma45.treeBranchLeafNodeTable.findUnique({ where: { id } });
-    res.json(finalTableData);
-  } catch (error) {
-    console.error(`\u274C [NEW PUT /tables/:id] Erreur lors de la mise \xE0 jour:`, error);
-    if (error instanceof Error && (error.message === "Table non trouv\xE9e" || error.message === "Acc\xE8s non autoris\xE9")) {
-      const status = error.message === "Table non trouv\xE9e" ? 404 : 403;
-      return res.status(status).json({ error: error.message });
-    }
-    res.status(500).json({ error: "Impossible de mettre \xE0 jour la table" });
-  }
-});
-router55.delete("/tables/:id", async (req2, res) => {
-  const { id } = req2.params;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
-  console.log(`[NEW DELETE /tables/:id] \u{1F5D1}\uFE0F Suppression table ${id}`);
-  try {
-    const table = await prisma45.treeBranchLeafNodeTable.findUnique({
-      where: { id },
-      include: {
-        TreeBranchLeafNode: {
-          include: { TreeBranchLeafTree: true }
-        }
-      }
-    });
-    if (!table) {
-      return res.status(404).json({ error: "Table non trouv\xE9e" });
-    }
-    const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
-    if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
-    }
-    await prisma45.treeBranchLeafNodeTable.delete({ where: { id } });
-    console.log(`[NEW DELETE /tables/:id] \u2705 Table ${id} supprim\xE9e (+ colonnes/lignes en cascade)`);
-    try {
-      const selectConfigsUsingTable = await prisma45.treeBranchLeafSelectConfig.findMany({
-        where: { tableReference: id },
-        select: { nodeId: true }
-      });
-      if (selectConfigsUsingTable.length > 0) {
-        console.log(`[NEW DELETE /tables/:id] \u{1F9F9} ${selectConfigsUsingTable.length} champ(s) Select/Cascader r\xE9f\xE9rencent cette table - D\xC9SACTIVATION LOOKUP`);
-        for (const config of selectConfigsUsingTable) {
-          const selectNode = await prisma45.treeBranchLeafNode.findUnique({
-            where: { id: config.nodeId },
-            select: {
-              label: true,
-              metadata: true
-            }
-          });
-          if (selectNode) {
-            console.log(`[NEW DELETE /tables/:id] \u{1F527} D\xE9sactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
-            const oldMetadata = selectNode.metadata || {};
-            const oldCapabilities = oldMetadata.capabilities || {};
-            const newCapabilities = {
-              ...oldCapabilities,
-              table: {
-                enabled: false,
-                activeId: null,
-                instances: null,
-                currentTable: null
-              }
-            };
-            const newMetadata = {
-              ...oldMetadata,
-              capabilities: newCapabilities
-            };
-            await prisma45.treeBranchLeafNode.update({
-              where: { id: config.nodeId },
-              data: {
-                hasTable: false,
-                table_activeId: null,
-                table_instances: null,
-                table_name: null,
-                table_type: null,
-                table_meta: null,
-                table_columns: null,
-                table_rows: null,
-                table_data: null,
-                metadata: JSON.parse(JSON.stringify(newMetadata)),
-                select_options: [],
-                updatedAt: /* @__PURE__ */ new Date()
-              }
-            });
-            await prisma45.treeBranchLeafSelectConfig.deleteMany({
-              where: { nodeId: config.nodeId }
-            });
-            console.log(`[NEW DELETE /tables/:id] \u2705 Lookup d\xE9sactiv\xE9 pour "${selectNode.label}" - champ d\xE9bloqu\xE9`);
-          }
-        }
-        console.log(`[NEW DELETE /tables/:id] \u2705 ${selectConfigsUsingTable.length} champ(s) Select D\xC9BLOQU\xC9S (lookup d\xE9sactiv\xE9)`);
-      }
-    } catch (selectConfigError) {
-      console.error(`[NEW DELETE /tables/:id] \u26A0\uFE0F Erreur d\xE9sactivation lookups:`, selectConfigError);
-    }
-    if (table.nodeId) {
-      const node = await prisma45.treeBranchLeafNode.findUnique({
-        where: { id: table.nodeId },
-        select: {
-          linkedTableIds: true,
-          table_activeId: true,
-          table_instances: true
-        }
-      });
-      const currentLinkedIds = node?.linkedTableIds ?? [];
-      const nextLinkedIds = currentLinkedIds.filter((x) => x !== id);
-      const wasActiveTable = node?.table_activeId === id;
-      let cleanedInstances = node?.table_instances ?? {};
-      if (typeof cleanedInstances === "object" && cleanedInstances !== null) {
-        const instances = cleanedInstances;
-        if (instances[id]) {
-          delete instances[id];
-          cleanedInstances = instances;
-        }
-      }
-      const remainingTables = await prisma45.treeBranchLeafNodeTable.count({
-        where: { nodeId: table.nodeId }
-      });
-      await prisma45.treeBranchLeafNode.update({
-        where: { id: table.nodeId },
-        data: {
-          hasTable: remainingTables > 0,
-          linkedTableIds: { set: nextLinkedIds },
-          table_activeId: wasActiveTable ? null : void 0,
-          // Réinitialiser si c'était la table active
-          table_instances: cleanedInstances,
-          // Réinitialiser les autres champs si plus de tables
-          ...remainingTables === 0 && {
-            table_name: null,
-            table_type: null,
-            table_meta: null,
-            table_columns: null,
-            table_rows: null,
-            table_data: null,
-            table_importSource: null,
-            table_isImported: false
-          }
-        }
-      });
-      console.log(`[NEW DELETE /tables/:id] \u2705 N\u0153ud ${table.nodeId} nettoy\xE9:`, {
-        hasTable: remainingTables > 0,
-        linkedTableIds: nextLinkedIds.length,
-        table_activeId_reset: wasActiveTable,
-        table_instances_cleaned: true,
-        all_fields_reset: remainingTables === 0
-      });
-    }
-    console.log(`[NEW DELETE /tables/:id] \u2705 Table ${id} supprim\xE9e avec succ\xE8s (+ colonnes et lignes en cascade)`);
-    res.json({ success: true, message: "Table supprim\xE9e avec succ\xE8s" });
-  } catch (error) {
-    console.error(`\u274C [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
-    res.status(500).json({ error: "Impossible de supprimer la table" });
-  }
-});
-router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
-  const { tableId } = req2.params;
-  const { name, description, columns, rows, type, meta } = req2.body;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
-  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Alias route - redirection vers PUT /tables/${tableId}`);
-  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F4CA} Donn\xE9es re\xE7ues:`, {
-    hasColumns: !!columns,
-    hasRows: !!rows,
-    hasMeta: !!meta,
-    type
-  });
-  try {
-    if (meta && !columns && !rows) {
-      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2699\uFE0F Mise \xE0 jour m\xE9tadonn\xE9es uniquement (lookup config)`);
-      const table = await prisma45.treeBranchLeafNodeTable.findUnique({
-        where: { id: tableId },
-        include: {
-          TreeBranchLeafNode: {
-            include: { TreeBranchLeafTree: true }
-          }
-        }
-      });
-      if (!table) {
-        return res.status(404).json({ error: "Table non trouv\xE9e" });
-      }
-      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
-      if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-        return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
-      }
-      const updatedTable2 = await prisma45.treeBranchLeafNodeTable.update({
-        where: { id: tableId },
-        data: {
-          meta,
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 M\xE9tadonn\xE9es mises \xE0 jour - repeater cr\xE9era les champs d'affichage`);
-      return res.json(updatedTable2);
-    }
-    const updatedTable = await prisma45.$transaction(async (tx) => {
-      const table = await tx.treeBranchLeafNodeTable.findUnique({
-        where: { id: tableId },
-        include: {
-          TreeBranchLeafNode: {
-            include: { TreeBranchLeafTree: true }
-          }
-        }
-      });
-      if (!table) {
-        throw new Error("Table non trouv\xE9e");
-      }
-      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
-      if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-        throw new Error("Acc\xE8s non autoris\xE9");
-      }
-      const updateData = {
-        updatedAt: /* @__PURE__ */ new Date()
-      };
-      if (name) updateData.name = name;
-      if (description !== void 0) updateData.description = description;
-      if (type) updateData.type = type;
-      if (meta) updateData.meta = meta;
-      if (Array.isArray(columns) && columns.length > 0) updateData.columnCount = columns.length;
-      if (Array.isArray(rows) && rows.length > 0) updateData.rowCount = rows.length;
-      const tableUpdated = await tx.treeBranchLeafNodeTable.update({
-        where: { id: tableId },
-        data: updateData
-      });
-      if (Array.isArray(columns) && columns.length > 0) {
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Remplacement des colonnes...`);
-        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
-        const newColumnsData = columns.map((col, index) => ({
-          tableId,
-          columnIndex: index,
-          name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
-          type: typeof col === "object" ? col.type : "text",
-          width: typeof col === "object" ? col.width : null,
-          format: typeof col === "object" ? col.format : null,
-          metadata: typeof col === "object" && col.metadata ? col.metadata : {}
-        }));
-        await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 ${columns.length} colonnes remplac\xE9es`);
-      }
-      if (Array.isArray(rows) && rows.length > 0) {
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Remplacement des lignes...`);
-        console.log(`[PUT ALIAS] \u{1F50D} ANALYSE ROWS RE\xC7UES DU FRONTEND:`);
-        console.log(`[PUT ALIAS]    - rows.length:`, rows.length);
-        console.log(`[PUT ALIAS]    - rows[0] type:`, typeof rows[0]);
-        console.log(`[PUT ALIAS]    - rows[0] isArray:`, Array.isArray(rows[0]));
-        console.log(`[PUT ALIAS]    - rows[0] value:`, rows[0]);
-        if (rows.length > 1) {
-          console.log(`[PUT ALIAS]    - rows[1] type:`, typeof rows[1]);
-          console.log(`[PUT ALIAS]    - rows[1] isArray:`, Array.isArray(rows[1]));
-          console.log(`[PUT ALIAS]    - rows[1] value:`, rows[1]);
-        }
-        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId } });
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Cr\xE9ation de ${rows.length} lignes (boucle create)...`);
-        for (let index = 0; index < rows.length; index++) {
-          const row = rows[index];
-          console.log(`[PUT ALIAS] Row ${index} AVANT create - type:`, typeof row, "isArray:", Array.isArray(row), "value:", row);
-          await tx.treeBranchLeafNodeTableRow.create({
-            data: {
-              tableId,
-              rowIndex: index,
-              cells: row
-            }
-          });
-          console.log(`[PUT ALIAS] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : "N/A");
-        }
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 ${rows.length} lignes remplac\xE9es`);
-      }
-      return tableUpdated;
-    });
-    console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F389} Mise \xE0 jour termin\xE9e avec succ\xE8s`);
-    res.json(updatedTable);
-  } catch (error) {
-    console.error(`\u274C [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
-    if (error instanceof Error && (error.message === "Table non trouv\xE9e" || error.message === "Acc\xE8s non autoris\xE9")) {
-      const status = error.message === "Table non trouv\xE9e" ? 404 : 403;
-      return res.status(status).json({ error: error.message });
-    }
-    res.status(500).json({ error: "Impossible de mettre \xE0 jour la table" });
-  }
-});
-router55.get("/nodes/:nodeId/tables", async (req2, res) => {
-  const { nodeId } = req2.params;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
-  console.log(`[NEW GET /nodes/:nodeId/tables] \u{1F4CB} R\xE9cup\xE9ration des tables pour node ${nodeId}`);
-  try {
-    const node = await prisma45.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      include: { TreeBranchLeafTree: true }
-    });
-    if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
-    }
-    if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 ce n\u0153ud" });
-    }
-    const tables = await prisma45.treeBranchLeafNodeTable.findMany({
-      where: { nodeId },
-      include: {
-        tableColumns: {
-          orderBy: { columnIndex: "asc" }
-        },
-        tableRows: {
-          orderBy: { rowIndex: "asc" }
-        }
-      },
-      orderBy: { createdAt: "asc" }
-    });
-    console.log(`[NEW GET /nodes/:nodeId/tables] \u2705 ${tables.length} table(s) trouv\xE9e(s)`);
-    const formattedTables = tables.map((table) => ({
-      id: table.id,
-      name: table.name,
-      description: table.description,
-      type: table.type,
-      columns: table.tableColumns.map((c) => c.name),
-      rows: table.tableRows.map((r) => {
-        const cells = r.cells;
-        if (Array.isArray(cells)) {
-          return cells;
-        }
-        if (typeof cells === "string") {
-          try {
-            const parsed = JSON.parse(cells);
-            return Array.isArray(parsed) ? parsed : [String(parsed)];
-          } catch {
-            return [String(cells)];
-          }
-        }
-        if (cells && typeof cells === "object") {
-          return Object.values(cells);
-        }
-        return [String(cells || "")];
-      }),
-      meta: table.meta || {},
-      order: table.createdAt ? new Date(table.createdAt).getTime() : 0,
-      createdAt: table.createdAt,
-      updatedAt: table.updatedAt
-    }));
-    res.json(formattedTables);
-  } catch (error) {
-    console.error(`\u274C [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les tables" });
-  }
-});
-var table_routes_new_default = router55;
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var router56 = (0, import_express57.Router)();
-router56.use("/", table_routes_new_default);
-var prisma46 = new import_client47.PrismaClient();
-var normalizeRolesMap = (rolesMap) => {
-  if (!rolesMap || typeof rolesMap !== "object") {
-    return {};
-  }
-  const normalized = {};
-  for (const [rawKey, rawValue] of Object.entries(rolesMap)) {
-    if (typeof rawKey !== "string") continue;
-    const trimmedKey = rawKey.trim();
-    if (!trimmedKey) continue;
-    if (typeof rawValue === "string" && rawValue.trim()) {
-      normalized[trimmedKey] = rawValue.trim();
-    } else if (rawValue != null) {
-      normalized[trimmedKey] = String(rawValue).trim() || trimmedKey;
-    } else {
-      normalized[trimmedKey] = trimmedKey;
-    }
-  }
-  return normalized;
-};
-var createRolesProxy = (rolesMap) => {
-  const normalized = normalizeRolesMap(rolesMap);
-  return new Proxy(normalized, {
-    get(target, prop) {
-      if (typeof prop !== "string") {
-        return void 0;
-      }
-      if (prop in target) {
-        return target[prop];
-      }
-      const fallback = prop.trim();
-      if (fallback) {
-        target[fallback] = fallback;
-        return fallback;
-      }
-      return fallback;
-    }
-  });
-};
-var coerceToNumber = (value) => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "boolean") return value ? 1 : 0;
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
-var computeLogicVersion = () => {
-  const metrics = getLogicMetrics();
-  const stats = getRpnCacheStats();
-  const seed = JSON.stringify({
-    evaluations: metrics.evaluations,
-    parseErrors: metrics.parseErrors,
-    divisionByZero: metrics.divisionByZero,
-    unknownVariables: metrics.unknownVariables,
-    entries: stats.entries,
-    parseCount: stats.parseCount
-  });
-  const version = (0, import_crypto10.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
-  return { version, metrics, stats };
-};
-function getAuthCtx2(req2) {
-  const user = req2 && req2.user || {};
-  const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
-  const role = user.role || user.userRole;
-  const isSuperAdmin2 = Boolean(user.isSuperAdmin || role === "super_admin" || role === "superadmin");
-  const organizationId = user.organizationId || headerOrg || null;
-  return { organizationId, isSuperAdmin: isSuperAdmin2 };
-}
-var resolveNodeVariable = async (nodeId, linkedVariableIds) => {
-  const directVariable = await prisma46.treeBranchLeafNodeVariable.findUnique({ where: { nodeId } });
-  if (directVariable) {
-    return { variable: directVariable, ownerNodeId: nodeId, proxiedFromNodeId: null };
-  }
-  const candidateIds = (linkedVariableIds || []).filter((value) => typeof value === "string" && Boolean(value.trim()));
-  if (candidateIds.length === 0) {
-    return { variable: null, ownerNodeId: null, proxiedFromNodeId: null };
-  }
-  const linkedVariable = await prisma46.treeBranchLeafNodeVariable.findFirst({
-    where: { id: { in: candidateIds } }
-  });
-  if (!linkedVariable) {
-    return { variable: null, ownerNodeId: null, proxiedFromNodeId: null };
-  }
-  return {
-    variable: linkedVariable,
-    ownerNodeId: linkedVariable.nodeId,
-    proxiedFromNodeId: nodeId
-  };
+var uniq = (arr) => Array.from(new Set(arr));
+var uuidLikeRef = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var isRealNodeRef = (ref) => {
+  if (!ref) return false;
+  return uuidLikeRef.test(ref) || ref.startsWith("node_") || ref.startsWith("shared-ref-");
 };
 function normalizeRefId(ref) {
   if (!ref) return ref;
@@ -30607,26 +30562,6 @@ function extractNodeIdsFromTokens(tokens2) {
   }
   return ids;
 }
-function buildResolvedRefs(nodeIds, labels, values) {
-  return Array.from(nodeIds).map((nodeId) => ({
-    nodeId,
-    label: labels.get(nodeId) ?? null,
-    value: values.get(nodeId) ?? null
-  }));
-}
-function resolveActionsLabels(actions, labels) {
-  if (!Array.isArray(actions)) return [];
-  return actions.map((a) => {
-    const aa = a;
-    const nodeIds = Array.isArray(aa.nodeIds) ? aa.nodeIds.map(normalizeRefId) : [];
-    return {
-      type: aa.type || null,
-      nodeIds,
-      labels: nodeIds.map((nid) => ({ nodeId: nid, label: labels.get(nid) ?? null }))
-    };
-  });
-}
-var uniq = (arr) => Array.from(new Set(arr));
 async function getNodeLinkedField2(client, nodeId, field) {
   const node = await client.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
@@ -30645,17 +30580,2504 @@ async function setNodeLinkedField2(client, nodeId, field, values) {
   }
 }
 async function addToNodeLinkedField6(client, nodeId, field, idsToAdd) {
-  if (!idsToAdd?.length) return;
+  const sanitized2 = idsToAdd?.filter((id) => id && isRealNodeRef(id)) ?? [];
+  if (!sanitized2.length) return;
   const current = await getNodeLinkedField2(client, nodeId, field);
-  const next = uniq([...current, ...idsToAdd.filter(Boolean)]);
+  const next = uniq([...current, ...sanitized2]);
   await setNodeLinkedField2(client, nodeId, field, next);
+}
+function buildResponseFromColumns(node) {
+  const appearance = {
+    size: node.appearance_size || "md",
+    width: node.appearance_width || null,
+    variant: node.appearance_variant || null,
+    helpTooltipType: node.text_helpTooltipType || "none",
+    helpTooltipText: node.text_helpTooltipText || null,
+    helpTooltipImage: node.text_helpTooltipImage || null
+  };
+  const legacyRepeater = (() => {
+    if (node.metadata && typeof node.metadata === "object" && node.metadata.repeater) {
+      const legacy = node.metadata.repeater;
+      return typeof legacy === "object" && legacy !== null ? legacy : null;
+    }
+    return null;
+  })();
+  const repeater = {
+    templateNodeIds: (() => {
+      if (node.repeater_templateNodeIds) {
+        try {
+          const parsed = JSON.parse(node.repeater_templateNodeIds);
+          console.log("\u2705 [buildResponseFromColumns] repeater_templateNodeIds reconstruit:", parsed);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
+          return [];
+        }
+      }
+      const legacyIds = legacyRepeater?.templateNodeIds;
+      if (Array.isArray(legacyIds)) {
+        return legacyIds;
+      }
+      return [];
+    })(),
+    templateNodeLabels: (() => {
+      if (node.repeater_templateNodeLabels) {
+        try {
+          const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
+          return parsedLabels && typeof parsedLabels === "object" ? parsedLabels : null;
+        } catch (e) {
+          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
+        }
+      }
+      const legacyLabels = legacyRepeater?.templateNodeLabels;
+      if (legacyLabels && typeof legacyLabels === "object") {
+        return legacyLabels;
+      }
+      return null;
+    })(),
+    minItems: node.repeater_minItems ?? legacyRepeater?.minItems ?? 0,
+    maxItems: node.repeater_maxItems ?? legacyRepeater?.maxItems ?? null,
+    addButtonLabel: node.repeater_addButtonLabel || legacyRepeater?.addButtonLabel || null,
+    buttonSize: node.repeater_buttonSize || legacyRepeater?.buttonSize || "middle",
+    buttonWidth: node.repeater_buttonWidth || legacyRepeater?.buttonWidth || "auto",
+    iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false
+  };
+  const appearanceConfig = {
+    size: node.appearance_size || "md",
+    variant: node.appearance_variant || "singleline",
+    placeholder: node.text_placeholder || "",
+    maxLength: node.text_maxLength || 255,
+    mask: node.text_mask || "",
+    regex: node.text_regex || "",
+    helpTooltipType: node.text_helpTooltipType || "none",
+    helpTooltipText: node.text_helpTooltipText || null,
+    helpTooltipImage: node.text_helpTooltipImage || null
+  };
+  const fieldConfig = {
+    text: {
+      placeholder: node.text_placeholder || null,
+      maxLength: node.text_maxLength || null,
+      minLength: node.text_minLength || null,
+      mask: node.text_mask || null,
+      regex: node.text_regex || null,
+      rows: node.text_rows || 3
+    },
+    number: {
+      min: node.number_min || null,
+      max: node.number_max || null,
+      step: node.number_step || 1,
+      // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      decimals: node.data_precision ?? node.number_decimals ?? 0,
+      prefix: node.number_prefix || null,
+      suffix: node.number_suffix || null,
+      unit: node.number_unit ?? node.data_unit ?? null,
+      defaultValue: node.number_defaultValue || null
+    },
+    select: {
+      multiple: node.select_multiple || false,
+      searchable: node.select_searchable !== false,
+      allowClear: node.select_allowClear !== false,
+      defaultValue: node.select_defaultValue || null,
+      options: node.select_options || []
+    },
+    bool: {
+      trueLabel: node.bool_trueLabel || null,
+      falseLabel: node.bool_falseLabel || null,
+      defaultValue: node.bool_defaultValue || null
+    },
+    date: {
+      format: node.date_format || "DD/MM/YYYY",
+      showTime: node.date_showTime || false,
+      minDate: node.date_minDate || null,
+      maxDate: node.date_maxDate || null
+    },
+    image: {
+      maxSize: node.image_maxSize || null,
+      ratio: node.image_ratio || null,
+      crop: node.image_crop || false,
+      thumbnails: node.image_thumbnails || null
+    }
+  };
+  Object.keys(fieldConfig).forEach((key2) => {
+    const config = fieldConfig[key2];
+    const hasValues = Object.values(config).some((val) => val !== null && val !== void 0 && val !== false && val !== 0 && val !== "");
+    if (!hasValues) delete fieldConfig[key2];
+  });
+  const cleanedMetadata = {
+    ...node.metadata || {},
+    appearance
+  };
+  if (node.subtabs) {
+    try {
+      const parsed = JSON.parse(node.subtabs);
+      if (Array.isArray(parsed)) {
+        cleanedMetadata.subTabs = parsed;
+        console.log("\u{1F4DD} [buildResponseFromColumns] Reconstruit subTabs depuis colonne subtabs:", parsed);
+      }
+    } catch {
+    }
+  }
+  if (node.subtab !== void 0 && node.subtab !== null) {
+    const rawSubTab = node.subtab;
+    let parsedSubTab = rawSubTab;
+    if (typeof rawSubTab === "string") {
+      const trimmed = rawSubTab.trim();
+      if (trimmed.startsWith("[")) {
+        try {
+          const candidate = JSON.parse(trimmed);
+          if (Array.isArray(candidate)) {
+            parsedSubTab = candidate;
+          }
+        } catch {
+          parsedSubTab = rawSubTab;
+        }
+      } else if (trimmed.includes(",")) {
+        parsedSubTab = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+      } else {
+        parsedSubTab = trimmed;
+      }
+    }
+    try {
+      cleanedMetadata.subTab = parsedSubTab;
+      console.log("\u{1F4DD} [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:", cleanedMetadata.subTab);
+    } catch {
+    }
+  }
+  if (node.id === "131a7b51-97d5-4f40-8a5a-9359f38939e8") {
+    console.log("\u{1F4DD} [buildResponseFromColumns][Test - liste] node.metadata BRUT:", node.metadata);
+    console.log("\u{1F4DD} [buildResponseFromColumns][Test - liste] cleanedMetadata:", cleanedMetadata);
+    console.log(
+      "\u{1F4DD} [buildResponseFromColumns][Test - liste] metadata.capabilities:",
+      node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : "N/A"
+    );
+  }
+  if (cleanedMetadata && cleanedMetadata.subTabs) {
+    try {
+      console.log("\u{1F4DD} [buildResponseFromColumns] metadata.subTabs present for node", node.id, JSON.stringify(cleanedMetadata.subTabs));
+    } catch {
+    }
+  }
+  const metadataWithRepeater = {
+    ...cleanedMetadata,
+    repeater
+  };
+  if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
+    console.log("\u{1F6A8}\u{1F6A8}\u{1F6A8} [REPEATER NODE FOUND]", {
+      nodeId: node.id,
+      nodeName: node.name,
+      nodeLabel: node.label,
+      nodeType: node.type,
+      parentId: node.parentId,
+      repeaterConfig: repeater
+    });
+  }
+  console.log("\u{1F3AF} [buildResponseFromColumns] metadata.repeater final:", metadataWithRepeater.repeater);
+  const result = {
+    ...node,
+    metadata: metadataWithRepeater,
+    fieldConfig,
+    appearance,
+    appearanceConfig,
+    fieldType: node.fieldType || node.type,
+    fieldSubType: node.fieldSubType || node.subType,
+    text_helpTooltipType: node.text_helpTooltipType,
+    text_helpTooltipText: node.text_helpTooltipText,
+    text_helpTooltipImage: node.text_helpTooltipImage,
+    tables: node.TreeBranchLeafNodeTable || [],
+    sharedReferenceIds: node.sharedReferenceIds || void 0
+  };
+  try {
+    const legacyMetaCaps = node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : void 0;
+    const buildInstances = (raw) => {
+      if (!raw) return void 0;
+      if (typeof raw === "object" && raw !== null) return raw;
+      return void 0;
+    };
+    const capabilities = {
+      data: node.hasData || node.data_activeId || node.data_instances ? {
+        enabled: !!node.hasData,
+        activeId: node.data_activeId || null,
+        instances: buildInstances(node.data_instances) || {},
+        unit: node.data_unit || null,
+        precision: typeof node.data_precision === "number" ? node.data_precision : 2,
+        exposedKey: node.data_exposedKey || null,
+        displayFormat: node.data_displayFormat || null,
+        visibleToUser: node.data_visibleToUser === true
+      } : void 0,
+      formula: node.hasFormula || node.formula_activeId || node.formula_instances ? {
+        enabled: !!node.hasFormula,
+        activeId: node.formula_activeId || null,
+        instances: buildInstances(node.formula_instances) || {},
+        tokens: buildInstances(node.formula_tokens) || void 0,
+        name: node.formula_name || null
+      } : void 0,
+      table: node.hasTable || node.table_activeId || node.table_instances ? {
+        enabled: !!node.hasTable,
+        activeId: node.table_activeId || null,
+        instances: buildInstances(node.table_instances) || {},
+        name: node.table_name || null,
+        meta: buildInstances(node.table_meta) || {},
+        type: node.table_type || "columns",
+        isImported: node.table_isImported === true,
+        importSource: node.table_importSource || null,
+        columns: Array.isArray(node.table_columns) ? node.table_columns : null,
+        rows: Array.isArray(node.table_rows) ? node.table_rows : null
+      } : void 0,
+      select: node.select_options || node.select_defaultValue ? {
+        options: Array.isArray(node.select_options) ? node.select_options : [],
+        allowClear: node.select_allowClear !== false,
+        multiple: node.select_multiple === true,
+        searchable: node.select_searchable !== false,
+        defaultValue: node.select_defaultValue || null
+      } : void 0,
+      number: node.number_min !== void 0 || node.number_max !== void 0 || node.number_defaultValue !== void 0 ? {
+        min: node.number_min ?? null,
+        max: node.number_max ?? null,
+        step: node.number_step ?? 1,
+        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage
+        decimals: node.data_precision ?? node.number_decimals ?? 0,
+        unit: node.number_unit ?? node.data_unit ?? null,
+        prefix: node.number_prefix || null,
+        suffix: node.number_suffix || null,
+        defaultValue: node.number_defaultValue || null
+      } : void 0,
+      bool: node.bool_trueLabel || node.bool_falseLabel || node.bool_defaultValue !== void 0 ? {
+        trueLabel: node.bool_trueLabel || null,
+        falseLabel: node.bool_falseLabel || null,
+        defaultValue: node.bool_defaultValue ?? null
+      } : void 0,
+      date: node.date_format || node.date_showTime || node.date_minDate || node.date_maxDate ? {
+        format: node.date_format || "DD/MM/YYYY",
+        showTime: node.date_showTime === true,
+        minDate: node.date_minDate || null,
+        maxDate: node.date_maxDate || null
+      } : void 0,
+      image: node.image_maxSize || node.image_ratio || node.image_crop || node.image_thumbnails ? {
+        maxSize: node.image_maxSize || null,
+        ratio: node.image_ratio || null,
+        crop: node.image_crop === true,
+        thumbnails: node.image_thumbnails || null
+      } : void 0,
+      link: node.link_activeId || node.link_instances ? {
+        enabled: !!node.hasLink,
+        activeId: node.link_activeId || null,
+        instances: buildInstances(node.link_instances) || {},
+        mode: node.link_mode || "JUMP",
+        name: node.link_name || null,
+        carryContext: node.link_carryContext === true,
+        params: buildInstances(node.link_params) || {},
+        targetNodeId: node.link_targetNodeId || null,
+        targetTreeId: node.link_targetTreeId || null
+      } : void 0,
+      markers: node.markers_activeId || node.markers_instances || node.markers_selectedIds ? {
+        enabled: !!node.hasMarkers,
+        activeId: node.markers_activeId || null,
+        instances: buildInstances(node.markers_instances) || {},
+        available: buildInstances(node.markers_available) || {},
+        selectedIds: buildInstances(node.markers_selectedIds) || {}
+      } : void 0,
+      api: node.api_activeId || node.api_instances ? {
+        enabled: !!node.hasAPI,
+        activeId: node.api_activeId || null,
+        instances: buildInstances(node.api_instances) || {},
+        bodyVars: buildInstances(node.api_bodyVars) || {},
+        name: node.api_name || null
+      } : void 0
+    };
+    Object.keys(capabilities).forEach((key2) => {
+      if (capabilities[key2] === void 0) delete capabilities[key2];
+    });
+    let mergedCaps = capabilities;
+    if (legacyMetaCaps && typeof legacyMetaCaps === "object") {
+      mergedCaps = { ...legacyMetaCaps, ...capabilities };
+    }
+    result.capabilities = mergedCaps;
+  } catch (e) {
+    console.error("\u274C [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
+  }
+  if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
+    console.log("\u{1F4CC} [buildResponseFromColumns] OPTION AVEC SHARED REFS:", {
+      nodeId: node.id,
+      label: node.label || node.option_label,
+      type: node.type,
+      sharedReferenceIds: node.sharedReferenceIds
+    });
+  }
+  if (node.text_helpTooltipType && node.text_helpTooltipType !== "none") {
+    console.log("\u{1F525} [buildResponseFromColumns] TOOLTIP TROUV\xC9:", {
+      id: node.id,
+      name: node.name,
+      tooltipType: node.text_helpTooltipType,
+      hasTooltipText: !!node.text_helpTooltipText,
+      hasTooltipImage: !!node.text_helpTooltipImage,
+      textLength: node.text_helpTooltipText?.length || 0,
+      imageLength: node.text_helpTooltipImage?.length || 0
+    });
+  }
+  return result;
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/repeat-context-utils.ts
+var toRecord = (metadata) => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+  return metadata;
+};
+var pickString = (value) => {
+  return typeof value === "string" && value.trim().length ? value : void 0;
+};
+var pickNumericLike = (value) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length) {
+    return value;
+  }
+  return void 0;
+};
+function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
+  const meta = toRecord(carrier.metadata);
+  const repeaterNodeId = pickString(meta.duplicatedFromRepeater) ?? fallback.repeaterNodeId;
+  const templateNodeId = pickString(meta.sourceTemplateId) ?? fallback.templateNodeId;
+  const duplicatedFromNodeId = pickString(meta.copiedFromNodeId) ?? templateNodeId ?? fallback.templateNodeId ?? carrier.id;
+  const scopeId = pickString(meta.repeatScopeId) ?? pickString(meta.repeaterScopeId) ?? fallback.scopeId ?? repeaterNodeId;
+  const suffix = pickNumericLike(meta.copySuffix) ?? pickNumericLike(meta.suffixNum) ?? pickNumericLike(meta.suffix) ?? fallback.suffix;
+  if (!repeaterNodeId && !scopeId) {
+    return void 0;
+  }
+  return {
+    repeaterNodeId,
+    templateNodeId: templateNodeId ?? carrier.id,
+    duplicatedFromNodeId,
+    scopeId,
+    suffix,
+    mode: "repeater"
+  };
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
+async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
+  const {
+    targetParentId,
+    suffixNum,
+    preserveSharedReferences = false,
+    forcedSuffix,
+    repeatContext,
+    cloneExternalParents = false,
+    isFromRepeaterDuplication = false
+  } = opts || {};
+  const replaceIdsInTokens = (tokens2, idMap2) => {
+    console.log(`
+[\u{1F525} REPLACE-TOKENS] Called with ${Array.isArray(tokens2) ? tokens2.length : typeof tokens2} tokens`);
+    if (!tokens2) return tokens2;
+    const mapOne = (s) => s.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => {
+      if (idMap2.has(p1)) {
+        const newId = idMap2.get(p1);
+        console.log(`[DEBUG-REPLACE] \u2705 Trouv\xE9 dans idMap: @value.${p1} \u2192 @value.${newId}`);
+        return `@value.${newId}`;
+      }
+      const suffixedId = appendSuffix(p1);
+      console.log(`[DEBUG-REPLACE] \u2705 R\xE9f\xE9rence externe suffix\xE9e: @value.${p1} \u2192 @value.${suffixedId}`);
+      return `@value.${suffixedId}`;
+    });
+    if (Array.isArray(tokens2)) return tokens2.map((t) => typeof t === "string" ? mapOne(t) : t);
+    if (typeof tokens2 === "string") return mapOne(tokens2);
+    try {
+      const asStr = JSON.stringify(tokens2);
+      const replaced = mapOne(asStr);
+      return JSON.parse(replaced);
+    } catch {
+      return tokens2;
+    }
+  };
+  const replaceIdsInConditionSet = (conditionSet, idMap2, formulaIdMap2) => {
+    if (!conditionSet) return conditionSet;
+    try {
+      let str = JSON.stringify(conditionSet);
+      str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => {
+        if (idMap2.has(p1)) {
+          const newId = idMap2.get(p1);
+          console.log(`[DEBUG-CONDITION] \u2705 @value.${p1} \u2192 @value.${newId}`);
+          return `@value.${newId}`;
+        }
+        const suffixedId = appendSuffix(p1);
+        console.log(`[DEBUG-CONDITION] \u2705 @value.${p1} \u2192 @value.${suffixedId} (auto-suffix externe)`);
+        return `@value.${suffixedId}`;
+      });
+      str = str.replace(/node-formula:([a-f0-9-]{36})/gi, (_m, p1) => {
+        const newId = formulaIdMap2.get(p1) || p1;
+        console.log(`[DEBUG-CONDITION] Formula: node-formula:${p1} \u2192 node-formula:${newId}`);
+        return `node-formula:${newId}`;
+      });
+      str = str.replace(/("nodeIds":\s*\["?)([a-zA-Z0-9_:-]+)/g, (_m, prefix, nodeId2) => {
+        if (nodeId2.includes(":")) {
+          return _m;
+        }
+        if (nodeId2.startsWith("shared-ref-") || !nodeId2.includes("-")) {
+          if (idMap2.has(nodeId2)) {
+            const newId = idMap2.get(nodeId2);
+            console.log(`[DEBUG-CONDITION] NodeId in actions: ${nodeId2} \u2192 ${newId}`);
+            return prefix + newId;
+          }
+          const suffixedId = appendSuffix(nodeId2);
+          console.log(`[DEBUG-CONDITION] NodeId in actions (auto-suffix): ${nodeId2} \u2192 ${suffixedId}`);
+          return prefix + suffixedId;
+        }
+        return _m;
+      });
+      return JSON.parse(str);
+    } catch {
+      return conditionSet;
+    }
+  };
+  const source = await prisma69.treeBranchLeafNode.findUnique({
+    where: { id: nodeId },
+    include: { TreeBranchLeafTree: { select: { organizationId: true } } }
+  });
+  if (!source) {
+    throw new Error("N\u0153ud source introuvable");
+  }
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
+  if (!isSuperAdmin2 && organizationId && source.TreeBranchLeafTree?.organizationId !== organizationId) {
+    throw new Error("Acc\xE8s non autoris\xE9 \xE0 cet arbre");
+  }
+  const sanitizedForcedSuffix = (() => {
+    if (forcedSuffix === void 0 || forcedSuffix === null) return "";
+    const token = `${forcedSuffix}`.trim();
+    return token;
+  })();
+  console.log(`\u{1F50D} [DEBUG-DEEP-COPY] nodeId: ${nodeId}, forcedSuffix: ${forcedSuffix}, suffixNum: ${suffixNum}`);
+  let copySuffixNum = typeof forcedSuffix === "number" && Number.isFinite(forcedSuffix) ? forcedSuffix : suffixNum ?? null;
+  console.log(`\u{1F50D} [DEBUG-DEEP-COPY] copySuffixNum initial: ${copySuffixNum}`);
+  if (!sanitizedForcedSuffix) {
+    if (suffixNum != null && Number.isFinite(suffixNum)) {
+      console.log(`\u2705 [DEBUG-DEEP-COPY] SuffixNum fourni explicitement: ${suffixNum} - UTILISATION DIRECTE`);
+      copySuffixNum = suffixNum;
+    } else if (copySuffixNum != null && Number.isFinite(copySuffixNum)) {
+      console.log(`\u2705 [DEBUG-DEEP-COPY] CopySuffixNum valide: ${copySuffixNum} - UTILISATION DIRECTE`);
+    } else {
+      console.log(`\u{1F504} [DEBUG-DEEP-COPY] Aucun suffix fourni - calcul automatique n\xE9cessaire`);
+      const baseSourceId = source.id.replace(/-\d+(?:-\d+)*$/, "");
+      const existingIdsWithSuffix = await prisma69.treeBranchLeafNode.findMany({
+        where: {
+          treeId: source.treeId,
+          id: {
+            startsWith: `${baseSourceId}-`
+            // Exclure les suffixes composés (on cherche juste -1, -2, -3, pas -1-1)
+          }
+        },
+        select: { id: true }
+      });
+      let maxSuffix = 0;
+      for (const rec of existingIdsWithSuffix) {
+        const rest = rec.id.slice(baseSourceId.length + 1);
+        if (/^\d+$/.test(rest)) {
+          const num = Number(rest);
+          if (Number.isFinite(num) && num > maxSuffix) maxSuffix = num;
+        }
+      }
+      copySuffixNum = maxSuffix + 1;
+    }
+    console.log(`\u{1F3AF} [DEBUG-DEEP-COPY] copySuffixNum final: ${copySuffixNum}`);
+  }
+  const suffixToken = sanitizedForcedSuffix || `${copySuffixNum}`;
+  const computedLabelSuffix = `-${suffixToken}`;
+  const suffixPattern = new RegExp(`-${suffixToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  const numericSuffixPattern = /-\d+$/;
+  const hasCurrentSuffix = (value) => suffixPattern.test(value);
+  const stripNumericSuffix2 = (value) => value.replace(/-\d+(?:-\d+)*$/, "");
+  const hasAnySuffix = (value) => hasCurrentSuffix(value) || numericSuffixPattern.test(value);
+  const ensureSuffix = (value) => {
+    if (!value) return value;
+    if (hasCurrentSuffix(value)) return value;
+    const base = stripNumericSuffix2(value);
+    return `${base}-${suffixToken}`;
+  };
+  const buildParentSuffix = (value) => {
+    if (!value) return value ?? null;
+    const base = value.replace(/-\d+$/, "");
+    return `${base}-${suffixToken}`;
+  };
+  const appendSuffix = (value) => `${value}-${suffixToken}`;
+  const normalizeLabelWithSuffix = (value) => {
+    if (!value) return value;
+    const base = value.replace(/-\d+(?:-\d+)*$/, "");
+    if (hasCurrentSuffix(value)) return `${base}-${suffixToken}`;
+    return `${base}-${suffixToken}`;
+  };
+  const metadataCopySuffix = Number.isFinite(Number(suffixToken)) ? Number(suffixToken) : suffixToken;
+  const derivedRepeatContext = repeatContext ?? deriveRepeatContextFromMetadata(source, { suffix: suffixToken });
+  const normalizedRepeatContext = derivedRepeatContext ? {
+    ...derivedRepeatContext,
+    suffix: derivedRepeatContext.suffix ?? suffixToken
+  } : void 0;
+  const allNodes = await prisma69.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
+  const byId = new Map(allNodes.map((n) => [n.id, n]));
+  const existingNodeIds = new Set(byId.keys());
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const n of allNodes) {
+    if (!n.parentId) continue;
+    const arr = childrenByParent.get(n.parentId) || [];
+    arr.push(n.id);
+    childrenByParent.set(n.parentId, arr);
+  }
+  const toCopy = /* @__PURE__ */ new Set();
+  const queue = [source.id];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (toCopy.has(cur)) continue;
+    toCopy.add(cur);
+    const children = childrenByParent.get(cur) || [];
+    for (const c of children) queue.push(c);
+  }
+  const idMap = /* @__PURE__ */ new Map();
+  for (const oldId of toCopy) {
+    const candidateId = appendSuffix(oldId);
+    idMap.set(oldId, candidateId);
+  }
+  const formulaIdMap = /* @__PURE__ */ new Map();
+  const conditionIdMap = /* @__PURE__ */ new Map();
+  const tableIdMap2 = /* @__PURE__ */ new Map();
+  const displayNodeIds = [];
+  const directVariableIdByNodeId = /* @__PURE__ */ new Map();
+  if (toCopy.size > 0) {
+    const nodeVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
+      where: { nodeId: { in: Array.from(toCopy) } },
+      select: { nodeId: true, id: true }
+    });
+    for (const variable of nodeVariables) {
+      if (variable.nodeId && variable.id) {
+        if (!directVariableIdByNodeId.has(variable.nodeId)) {
+          directVariableIdByNodeId.set(variable.nodeId, /* @__PURE__ */ new Set());
+        }
+        directVariableIdByNodeId.get(variable.nodeId).add(variable.id);
+      }
+    }
+  }
+  const buildCreationOrder = () => {
+    const edges = /* @__PURE__ */ new Map();
+    const indegree = /* @__PURE__ */ new Map();
+    const ensureNode = (id) => {
+      if (!edges.has(id)) edges.set(id, /* @__PURE__ */ new Set());
+      if (!indegree.has(id)) indegree.set(id, 0);
+    };
+    for (const id of toCopy) ensureNode(id);
+    for (const id of toCopy) {
+      const n = byId.get(id);
+      if (n?.parentId && toCopy.has(n.parentId)) {
+        const from = n.parentId;
+        const to = id;
+        const set = edges.get(from);
+        if (!set.has(to)) {
+          set.add(to);
+          indegree.set(to, (indegree.get(to) || 0) + 1);
+        }
+      }
+    }
+    const localQueue = [];
+    const zeroIndegreeNodes = [];
+    for (const [id, deg] of indegree.entries()) if (deg === 0) zeroIndegreeNodes.push(id);
+    zeroIndegreeNodes.sort((a, b) => {
+      const nodeA = byId.get(a);
+      const nodeB = byId.get(b);
+      const orderA = nodeA?.order ?? 0;
+      const orderB = nodeB?.order ?? 0;
+      return orderA - orderB;
+    });
+    localQueue.push(...zeroIndegreeNodes);
+    const ordered = [];
+    while (localQueue.length) {
+      const id = localQueue.shift();
+      ordered.push(id);
+      const nextNodes = [];
+      for (const next of edges.get(id) || []) {
+        const d = (indegree.get(next) || 0) - 1;
+        indegree.set(next, d);
+        if (d === 0) nextNodes.push(next);
+      }
+      nextNodes.sort((a, b) => {
+        const nodeA = byId.get(a);
+        const nodeB = byId.get(b);
+        const orderA = nodeA?.order ?? 0;
+        const orderB = nodeB?.order ?? 0;
+        return orderA - orderB;
+      });
+      localQueue.push(...nextNodes);
+    }
+    if (ordered.length !== toCopy.size) {
+      const remaining = new Set(Array.from(toCopy).filter((id) => !ordered.includes(id)));
+      const depth = /* @__PURE__ */ new Map();
+      const getDepth = (id) => {
+        if (depth.has(id)) return depth.get(id);
+        const n = byId.get(id);
+        if (!n || !n.parentId || !toCopy.has(n.parentId)) {
+          depth.set(id, 0);
+          return 0;
+        }
+        const d = getDepth(n.parentId) + 1;
+        depth.set(id, d);
+        return d;
+      };
+      const rest = Array.from(remaining).sort((a, b) => getDepth(a) - getDepth(b));
+      return [...ordered, ...rest];
+    }
+    return ordered;
+  };
+  const nodesToCreate = buildCreationOrder();
+  const createdNodes = [];
+  const shouldCloneExternalParents = cloneExternalParents === true;
+  const resolvedExternalParents = /* @__PURE__ */ new Map();
+  const buildCloneData = (oldNode, newId, newParentId) => ({
+    id: newId,
+    treeId: oldNode.treeId,
+    type: oldNode.type,
+    subType: oldNode.subType,
+    fieldType: oldNode.fieldType,
+    label: normalizeLabelWithSuffix(oldNode.label) ?? oldNode.label,
+    description: oldNode.description,
+    parentId: newParentId,
+    order: oldNode.order,
+    isVisible: oldNode.isVisible,
+    isActive: oldNode.isActive,
+    isRequired: oldNode.isRequired,
+    isMultiple: oldNode.isMultiple,
+    hasData: oldNode.hasData,
+    hasFormula: oldNode.hasFormula,
+    hasCondition: oldNode.hasCondition,
+    hasTable: oldNode.hasTable,
+    hasAPI: oldNode.hasAPI,
+    hasLink: oldNode.hasLink,
+    hasMarkers: oldNode.hasMarkers,
+    // 🔧 FIX: Copier les propriétés data_* pour hériter de l'unité et de la précision
+    data_unit: oldNode.data_unit,
+    data_precision: oldNode.data_precision,
+    data_displayFormat: oldNode.data_displayFormat,
+    data_exposedKey: oldNode.data_exposedKey,
+    data_visibleToUser: oldNode.data_visibleToUser,
+    defaultValue: oldNode.defaultValue,
+    calculatedValue: oldNode.hasFormula || oldNode.hasCondition || oldNode.hasTable ? null : oldNode.calculatedValue,
+    appearance_size: oldNode.appearance_size,
+    appearance_variant: oldNode.appearance_variant,
+    appearance_width: oldNode.appearance_width,
+    text_placeholder: oldNode.text_placeholder,
+    text_maxLength: oldNode.text_maxLength,
+    text_minLength: oldNode.text_minLength,
+    text_mask: oldNode.text_mask,
+    text_regex: oldNode.text_regex,
+    text_rows: oldNode.text_rows,
+    text_helpTooltipType: oldNode.text_helpTooltipType,
+    text_helpTooltipText: oldNode.text_helpTooltipText,
+    text_helpTooltipImage: oldNode.text_helpTooltipImage,
+    number_min: oldNode.number_min,
+    number_max: oldNode.number_max,
+    number_step: oldNode.number_step,
+    number_decimals: oldNode.number_decimals,
+    number_prefix: oldNode.number_prefix,
+    number_suffix: oldNode.number_suffix,
+    number_unit: oldNode.number_unit,
+    number_defaultValue: oldNode.number_defaultValue,
+    select_multiple: oldNode.select_multiple,
+    select_searchable: oldNode.select_searchable,
+    select_allowClear: oldNode.select_allowClear,
+    select_source: oldNode.select_source ? (() => {
+      const sourceValue = oldNode.select_source;
+      if (sourceValue.startsWith("@table.")) {
+        const tableId = sourceValue.substring(7);
+        const newTableId = idMap.get(tableId);
+        if (newTableId) {
+          return `@table.${newTableId}`;
+        }
+      }
+      return sourceValue;
+    })() : oldNode.select_source,
+    select_defaultValue: oldNode.select_defaultValue,
+    select_options: oldNode.select_options ? (() => {
+      try {
+        const str = JSON.stringify(oldNode.select_options);
+        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
+        replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
+        return JSON.parse(replaced);
+      } catch {
+        return oldNode.select_options;
+      }
+    })() : oldNode.select_options,
+    bool_trueLabel: oldNode.bool_trueLabel,
+    bool_falseLabel: oldNode.bool_falseLabel,
+    bool_defaultValue: oldNode.bool_defaultValue,
+    date_format: oldNode.date_format,
+    date_minDate: oldNode.date_minDate,
+    date_maxDate: oldNode.date_maxDate,
+    date_showTime: oldNode.date_showTime,
+    image_maxSize: oldNode.image_maxSize,
+    image_ratio: oldNode.image_ratio,
+    image_crop: oldNode.image_crop,
+    image_thumbnails: oldNode.image_thumbnails ? (() => {
+      try {
+        const str = JSON.stringify(oldNode.image_thumbnails);
+        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
+        replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
+        return JSON.parse(replaced);
+      } catch {
+        return oldNode.image_thumbnails;
+      }
+    })() : oldNode.image_thumbnails,
+    link_activeId: oldNode.link_activeId,
+    link_carryContext: oldNode.link_carryContext,
+    link_mode: oldNode.link_mode,
+    link_name: oldNode.link_name,
+    link_params: oldNode.link_params ? (() => {
+      try {
+        const str = JSON.stringify(oldNode.link_params);
+        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
+        replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
+        return JSON.parse(replaced);
+      } catch {
+        return oldNode.link_params;
+      }
+    })() : oldNode.link_params,
+    link_targetNodeId: oldNode.link_targetNodeId && idMap.has(oldNode.link_targetNodeId) ? idMap.get(oldNode.link_targetNodeId) : oldNode.link_targetNodeId,
+    link_targetTreeId: oldNode.link_targetTreeId,
+    table_activeId: oldNode.table_activeId ? ensureSuffix(oldNode.table_activeId) : null,
+    table_instances: (() => {
+      if (!oldNode.table_instances) {
+        return oldNode.table_instances;
+      }
+      let rawInstances;
+      try {
+        if (typeof oldNode.table_instances === "string") {
+          rawInstances = JSON.parse(oldNode.table_instances);
+        } else if (typeof oldNode.table_instances === "object") {
+          rawInstances = JSON.parse(JSON.stringify(oldNode.table_instances));
+        } else {
+          return oldNode.table_instances;
+        }
+      } catch {
+        return oldNode.table_instances;
+      }
+      const updatedInstances = {};
+      for (const [key2, value] of Object.entries(rawInstances)) {
+        const hasSuffixRegex = /-\d+$/;
+        const newKey = hasSuffixRegex.test(key2) ? key2 : appendSuffix(key2);
+        if (value && typeof value === "object") {
+          const tableInstanceObj = value;
+          const updatedObj = { ...tableInstanceObj };
+          if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === "string") {
+            const oldTableId = tableInstanceObj.tableId;
+            updatedObj.tableId = hasSuffixRegex.test(oldTableId) ? oldTableId : appendSuffix(oldTableId);
+          }
+          updatedInstances[newKey] = updatedObj;
+        } else {
+          updatedInstances[newKey] = value;
+        }
+      }
+      return updatedInstances;
+    })(),
+    table_name: oldNode.table_name,
+    // 🔴 CRITIQUE: Garder TOUJOURS les repeater_templateNodeIds ORIGINAUX (pas de suffixe!)
+    // Les templateNodeIds doivent être les UUIDs purs des templates originaux,
+    // JAMAIS les IDs suffixés des copies (-1, -2, etc.)
+    // Si on mappe vers les suffixés, la 2e duplication trouvera uuid-A-1 au lieu de uuid-A!
+    repeater_templateNodeIds: (() => {
+      if (normalizedRepeatContext) return null;
+      if (!oldNode.repeater_templateNodeIds) return oldNode.repeater_templateNodeIds;
+      return oldNode.repeater_templateNodeIds;
+    })(),
+    repeater_templateNodeLabels: oldNode.repeater_templateNodeLabels,
+    repeater_minItems: oldNode.repeater_minItems,
+    repeater_maxItems: oldNode.repeater_maxItems,
+    repeater_addButtonLabel: oldNode.repeater_addButtonLabel,
+    repeater_buttonSize: oldNode.repeater_buttonSize,
+    repeater_buttonWidth: oldNode.repeater_buttonWidth,
+    repeater_iconOnly: oldNode.repeater_iconOnly,
+    metadata: (() => {
+      const origMeta = typeof oldNode.metadata === "object" ? oldNode.metadata : {};
+      const newMeta = { ...origMeta, copiedFromNodeId: oldNode.id, copySuffix: metadataCopySuffix };
+      if (normalizedRepeatContext && newMeta.repeater) {
+        delete newMeta.repeater;
+      }
+      return newMeta;
+    })(),
+    // 🔧 TRAITER LE fieldConfig: suffix les références aux nodes
+    fieldConfig: (() => {
+      if (!oldNode.fieldConfig) {
+        return oldNode.fieldConfig;
+      }
+      try {
+        const str = JSON.stringify(oldNode.fieldConfig);
+        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => {
+          const mapped = idMap.get(uuid);
+          if (mapped) {
+            console.log(`[fieldConfig] UUID remapp\xE9: ${uuid} \u2192 ${mapped}`);
+            return mapped;
+          }
+          if (!uuid.match(/-\d+$/)) {
+            console.log(`[fieldConfig] UUID suffix\xE9: ${uuid} \u2192 ${uuid}-${suffixNum}`);
+            return `${uuid}-${suffixNum}`;
+          }
+          return uuid;
+        });
+        return JSON.parse(replaced);
+      } catch {
+        console.warn("[fieldConfig] Erreur traitement fieldConfig, copie tel quel");
+        return oldNode.fieldConfig;
+      }
+    })(),
+    isSharedReference: preserveSharedReferences ? oldNode.isSharedReference : false,
+    sharedReferenceId: preserveSharedReferences ? oldNode.sharedReferenceId : null,
+    sharedReferenceIds: preserveSharedReferences ? oldNode.sharedReferenceIds : [],
+    sharedReferenceName: preserveSharedReferences ? oldNode.sharedReferenceName : null,
+    sharedReferenceDescription: preserveSharedReferences ? oldNode.sharedReferenceDescription : null,
+    linkedFormulaIds: Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [],
+    linkedConditionIds: Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [],
+    linkedTableIds: Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds.map((id) => ensureSuffix(id) || id) : [],
+    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiées
+    linkedVariableIds: Array.isArray(oldNode.linkedVariableIds) ? oldNode.linkedVariableIds.map((id) => ensureSuffix(id) || id) : [],
+    updatedAt: /* @__PURE__ */ new Date()
+  });
+  const ensureExternalParentChain = async (parentId) => {
+    if (!parentId) {
+      return parentId ?? null;
+    }
+    const cloneParentNodeChain = async (originalParentId, clonedParentId) => {
+      const parentNode = byId.get(originalParentId);
+      if (!parentNode) {
+        resolvedExternalParents.set(originalParentId, originalParentId ?? null);
+        return originalParentId ?? null;
+      }
+      if (!shouldCloneExternalParents && parentNode.type === "section") {
+        console.log(`\u23ED\uFE0F [deep-copy] Skipping section clone: "${parentNode.label}" (shouldCloneExternalParents=false)`);
+        resolvedExternalParents.set(originalParentId, originalParentId ?? null);
+        return originalParentId ?? null;
+      }
+      const parentOfParentId = await ensureExternalParentChain(parentNode.parentId ?? null);
+      const parentCloneData = buildCloneData(parentNode, clonedParentId, parentOfParentId);
+      await prisma69.treeBranchLeafNode.create({ data: parentCloneData });
+      createdNodes.push({ oldId: originalParentId, newId: clonedParentId });
+      existingNodeIds.add(clonedParentId);
+      resolvedExternalParents.set(originalParentId, clonedParentId);
+      idMap.set(originalParentId, clonedParentId);
+      return clonedParentId;
+    };
+    if (!shouldCloneExternalParents) {
+      const suffixedParentId2 = buildParentSuffix(parentId);
+      if (suffixedParentId2 && existingNodeIds.has(suffixedParentId2)) {
+        resolvedExternalParents.set(parentId, suffixedParentId2);
+        idMap.set(parentId, suffixedParentId2);
+        return suffixedParentId2;
+      }
+      const resolvedId = parentId ?? null;
+      resolvedExternalParents.set(parentId, resolvedId);
+      return resolvedId;
+    }
+    if (resolvedExternalParents.has(parentId)) {
+      const resolvedId = resolvedExternalParents.get(parentId);
+      if (resolvedId) {
+        idMap.set(parentId, resolvedId);
+      }
+      return resolvedId;
+    }
+    if (toCopy.has(parentId)) {
+      const mappedId = idMap.get(parentId);
+      resolvedExternalParents.set(parentId, mappedId);
+      idMap.set(parentId, mappedId);
+      return mappedId;
+    }
+    const suffixedParentId = buildParentSuffix(parentId);
+    if (!suffixedParentId) {
+      resolvedExternalParents.set(parentId, parentId ?? null);
+      return parentId ?? null;
+    }
+    if (existingNodeIds.has(suffixedParentId)) {
+      resolvedExternalParents.set(parentId, suffixedParentId);
+      idMap.set(parentId, suffixedParentId);
+      return suffixedParentId;
+    }
+    return cloneParentNodeChain(parentId, suffixedParentId);
+  };
+  const resolveParentId = async (oldNode, isRoot) => {
+    if (oldNode.parentId && toCopy.has(oldNode.parentId)) {
+      return idMap.get(oldNode.parentId);
+    }
+    if (isRoot && targetParentId !== void 0) {
+      return targetParentId ?? null;
+    }
+    return ensureExternalParentChain(oldNode.parentId);
+  };
+  for (const oldId of nodesToCreate) {
+    const oldNode = byId.get(oldId);
+    const newId = idMap.get(oldId);
+    const isRoot = oldId === source.id;
+    const newParentId = await resolveParentId(oldNode, isRoot);
+    const cloneData = buildCloneData(oldNode, newId, newParentId);
+    await prisma69.treeBranchLeafNode.create({ data: cloneData });
+    createdNodes.push({ oldId, newId, newParentId });
+    existingNodeIds.add(newId);
+    if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
+      displayNodeIds.push(newId);
+      console.log(`[DEEP-COPY] \u{1F4CA} Node ${newId} ajout\xE9 \xE0 displayNodeIds (linkedTableIds: ${cloneData.linkedTableIds.length})`);
+    }
+  }
+  for (const { oldId, newId, newParentId } of createdNodes) {
+    const oldNode = byId.get(oldId);
+    const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
+    console.log(`[DEBUG] Processing node ${oldId}, linkedFormulaIds order: ${JSON.stringify(linkedFormulaIdOrder)}`);
+    const formulas = await prisma69.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
+    console.log(`[DEBUG] Found ${formulas.length} formulas for node ${oldId}`);
+    const formulaMap = new Map(formulas.map((f) => [f.id, f]));
+    const sortedFormulas = [];
+    const validLinkedIds = [];
+    for (const formulaId of linkedFormulaIdOrder) {
+      const formula = formulaMap.get(formulaId);
+      if (formula) {
+        sortedFormulas.push(formula);
+        validLinkedIds.push(formulaId);
+        formulaMap.delete(formulaId);
+        console.log(`[DEBUG] Added formula ${formula.id} (${formula.name}) at position ${sortedFormulas.length - 1}`);
+      } else {
+        console.warn(`[DEBUG] \u26A0\uFE0F  Formula ID ${formulaId} in linkedFormulaIds not found - skipping`);
+      }
+    }
+    const unlinkedFormulas = Array.from(formulaMap.values());
+    const allFormulas = [...sortedFormulas, ...unlinkedFormulas];
+    console.log(`[DEBUG] Final formula order: ${allFormulas.map((f) => f.id).join(", ")}`);
+    const newLinkedFormulaIds = [];
+    for (const f of allFormulas) {
+      try {
+        const formulaResult = await copyFormulaCapacity2(
+          f.id,
+          newId,
+          suffixNum,
+          prisma69,
+          {
+            formulaIdMap,
+            nodeIdMap: idMap
+          }
+        );
+        if (formulaResult.success) {
+          const newFormulaId = formulaResult.newFormulaId;
+          formulaIdMap.set(f.id, newFormulaId);
+          if (validLinkedIds.includes(f.id)) {
+            newLinkedFormulaIds.push(newFormulaId);
+            console.log(`[DEBUG] Linked formula (centralis\xE9): ${newFormulaId} added at position ${newLinkedFormulaIds.length - 1}`);
+          }
+          if (normalizedRepeatContext) {
+            const referencedNodeIds = Array.from(extractNodeIdsFromTokens(formulaResult.tokens || f.tokens));
+            logCapacityEvent({
+              ownerNodeId: newId,
+              capacityId: newFormulaId,
+              capacityType: "formula",
+              referencedNodeIds,
+              context: normalizedRepeatContext
+            });
+          }
+        } else {
+          console.error(`\u274C Erreur copie formule centralis\xE9e: ${f.id}`);
+        }
+      } catch (error) {
+        console.error(`\u274C Exception copie formule ${f.id}:`, error);
+      }
+    }
+    console.log(`[DEBUG] Final newLinkedFormulaIds: ${JSON.stringify(newLinkedFormulaIds)}`);
+    if (newLinkedFormulaIds.length > 0) {
+      try {
+        await addToNodeLinkedField6(prisma69, newId, "linkedFormulaIds", newLinkedFormulaIds);
+        console.log(`[DEBUG] Successfully added linkedFormulaIds to node ${newId}`);
+      } catch (e) {
+        console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:", e.message);
+      }
+    }
+    const conditions = await prisma69.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
+    const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
+    const copiedNodeIds = new Set(idMap.values());
+    const conditionMap = new Map(conditions.map((c) => [c.id, c]));
+    const sortedConditions = [];
+    const validLinkedConditionIds = [];
+    for (const conditionId of linkedConditionIdOrder) {
+      const condition = conditionMap.get(conditionId);
+      if (condition) {
+        sortedConditions.push(condition);
+        validLinkedConditionIds.push(conditionId);
+        conditionMap.delete(conditionId);
+        console.log(`[DEBUG] Added condition ${condition.id} (${condition.name}) at position ${sortedConditions.length - 1}`);
+      } else {
+        console.warn(`[DEBUG] \u26A0\uFE0F  Condition ID ${conditionId} in linkedConditionIds not found - skipping`);
+      }
+    }
+    const unlinkedConditions = Array.from(conditionMap.values());
+    const allConditions = [...sortedConditions, ...unlinkedConditions];
+    const newLinkedConditionIds = [];
+    for (const c of allConditions) {
+      const newConditionId = appendSuffix(c.id);
+      conditionIdMap.set(c.id, newConditionId);
+      const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap);
+      await prisma69.treeBranchLeafNodeCondition.create({
+        data: {
+          id: newConditionId,
+          nodeId: newId,
+          organizationId: c.organizationId,
+          name: c.name ? `${c.name}${computedLabelSuffix}` : c.name,
+          conditionSet: newSet,
+          description: c.description,
+          isDefault: c.isDefault,
+          order: c.order,
+          createdAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      if (validLinkedConditionIds.includes(c.id)) {
+        newLinkedConditionIds.push(newConditionId);
+      }
+      if (normalizedRepeatContext) {
+        const referencedNodeIds = Array.from(extractNodeIdsFromConditionSet(newSet));
+        logCapacityEvent({
+          ownerNodeId: newId,
+          capacityId: newConditionId,
+          capacityType: "condition",
+          referencedNodeIds,
+          context: normalizedRepeatContext
+        });
+      }
+      try {
+        const refs = Array.from(extractNodeIdsFromConditionSet(newSet));
+        for (const refId of refs) {
+          const normalizedRefId = normalizeRefId(refId);
+          if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) {
+            continue;
+          }
+          await addToNodeLinkedField6(prisma69, normalizedRefId, "linkedConditionIds", [newConditionId]);
+        }
+      } catch (e) {
+        console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
+      }
+    }
+    if (newLinkedConditionIds.length > 0) {
+      try {
+        await addToNodeLinkedField6(prisma69, newId, "linkedConditionIds", newLinkedConditionIds);
+      } catch (e) {
+        console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds for node:", e.message);
+      }
+    }
+    const tables = await prisma69.treeBranchLeafNodeTable.findMany({
+      where: { nodeId: oldId },
+      include: { tableColumns: true, tableRows: true }
+    });
+    const additionalTableIds = [];
+    if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
+      additionalTableIds.push(source.table_activeId);
+    }
+    const additionalTables = additionalTableIds.length > 0 ? await prisma69.treeBranchLeafNodeTable.findMany({
+      where: { id: { in: additionalTableIds } },
+      include: { tableColumns: true, tableRows: true }
+    }) : [];
+    const linkedTableIdOrder = Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : [];
+    const sortedTables = linkedTableIdOrder.map((id) => [...tables, ...additionalTables].find((t) => t.id === id)).filter((t) => t !== void 0);
+    const unlinkedTables = [...tables, ...additionalTables].filter((t) => !linkedTableIdOrder.includes(t.id));
+    const allTablesToCopy = [...sortedTables, ...unlinkedTables];
+    if (additionalTables.length > 0) {
+      console.log(`[DEEP-COPY] \u{1F4CA} Tables additionnelles trouv\xE9es via table_activeId: ${additionalTables.map((t) => t.id).join(", ")}`);
+    }
+    const newLinkedTableIds = [];
+    console.log(`
+
+\u{1F534}\u{1F534}\u{1F534} [DEEP-COPY-SERVICE] D\xC9BUT COPIE TABLES - ${allTablesToCopy.length} tables \xE0 copier \u{1F534}\u{1F534}\u{1F534}
+`);
+    for (const t of allTablesToCopy) {
+      const newTableId = appendSuffix(t.id);
+      tableIdMap2.set(t.id, newTableId);
+      console.log(`\u{1F534} [DEEP-COPY-SERVICE] Traitement table: ${t.id} -> ${newTableId}`);
+      console.log(`\u{1F534} [DEEP-COPY-SERVICE] META ORIGINAL:`, JSON.stringify(t.meta)?.substring(0, 200));
+      const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+        where: { id: newTableId }
+      });
+      if (existingTable) {
+        console.log(`[DEEP-COPY] \u23E9 Table ${newTableId} existe d\xE9j\xE0, skip`);
+        continue;
+      }
+      console.log(`[DEEP-COPY] \u{1F4CA} Copie table: ${t.id} -> ${newTableId} (source nodeId: ${t.nodeId}, target nodeId: ${newId})`);
+      if (linkedTableIdOrder.includes(t.id)) {
+        newLinkedTableIds.push(newTableId);
+      }
+      await prisma69.treeBranchLeafNodeTable.create({
+        data: {
+          id: newTableId,
+          nodeId: newId,
+          organizationId: t.organizationId,
+          name: t.name ? `${t.name}${computedLabelSuffix}` : t.name,
+          description: t.description,
+          type: t.type,
+          rowCount: t.rowCount,
+          columnCount: t.columnCount,
+          // 🔧 TRAITER LE meta: suffix les références aux nodes ET comparisonColumn
+          meta: (() => {
+            if (!t.meta) {
+              return t.meta;
+            }
+            try {
+              const metaObj = typeof t.meta === "string" ? JSON.parse(t.meta) : JSON.parse(JSON.stringify(t.meta));
+              console.log(`[table.meta] \u{1F50D} AVANT traitement:`, JSON.stringify(metaObj).substring(0, 300));
+              if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${copySuffixNum}`)) {
+                console.log(`[table.meta] columnFieldId: ${metaObj.lookup.selectors.columnFieldId} \u2192 ${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`);
+                metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`;
+              }
+              if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${copySuffixNum}`;
+              }
+              if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${copySuffixNum}`;
+              }
+              if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${copySuffixNum}`)) {
+                metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${copySuffixNum}`;
+              }
+              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
+                }
+              }
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
+                }
+              }
+              console.log(`[table.meta] \u2705 APR\xC8S traitement:`, JSON.stringify(metaObj).substring(0, 300));
+              return metaObj;
+            } catch (err) {
+              console.warn("[table.meta] Erreur traitement meta, copie tel quel:", err);
+              return t.meta;
+            }
+          })(),
+          isDefault: t.isDefault,
+          order: t.order,
+          createdAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date(),
+          lookupDisplayColumns: t.lookupDisplayColumns,
+          lookupSelectColumn: t.lookupSelectColumn,
+          tableColumns: {
+            create: t.tableColumns.map((col) => ({
+              id: appendSuffix(col.id),
+              columnIndex: col.columnIndex,
+              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${computedLabelSuffix}` : col.name,
+              type: col.type,
+              width: col.width,
+              format: col.format,
+              metadata: col.metadata
+            }))
+          },
+          tableRows: {
+            create: t.tableRows.map((row) => ({
+              id: appendSuffix(row.id),
+              rowIndex: row.rowIndex,
+              cells: row.cells
+            }))
+          }
+        }
+      });
+      if (normalizedRepeatContext) {
+        logCapacityEvent({
+          ownerNodeId: newId,
+          capacityId: newTableId,
+          capacityType: "table",
+          referencedNodeIds: void 0,
+          context: normalizedRepeatContext
+        });
+      }
+    }
+    if (newLinkedTableIds.length > 0) {
+      try {
+        await addToNodeLinkedField6(prisma69, newId, "linkedTableIds", newLinkedTableIds);
+      } catch (e) {
+        console.warn("[TreeBranchLeaf API] Warning updating linkedTableIds for node:", e.message);
+      }
+    }
+    const originalSelectConfig = await prisma69.treeBranchLeafSelectConfig.findUnique({
+      where: { nodeId: oldId }
+    });
+    if (originalSelectConfig) {
+      const existingCopyConfig = await prisma69.treeBranchLeafSelectConfig.findUnique({
+        where: { nodeId: newId }
+      });
+      if (!existingCopyConfig) {
+        const newTableReference = originalSelectConfig.tableReference ? appendSuffix(originalSelectConfig.tableReference) : null;
+        console.log(`[DEEP-COPY] \u{1F4CA} Duplication SELECT config: ${oldId} -> ${newId} (tableRef: ${newTableReference})`);
+        try {
+          await prisma69.treeBranchLeafSelectConfig.create({
+            data: {
+              id: appendSuffix(originalSelectConfig.id),
+              nodeId: newId,
+              options: originalSelectConfig.options,
+              multiple: originalSelectConfig.multiple,
+              searchable: originalSelectConfig.searchable,
+              allowCustom: originalSelectConfig.allowCustom,
+              maxSelections: originalSelectConfig.maxSelections,
+              optionsSource: originalSelectConfig.optionsSource,
+              apiEndpoint: originalSelectConfig.apiEndpoint,
+              tableReference: newTableReference,
+              dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? idMap.get(originalSelectConfig.dependsOnNodeId) || appendSuffix(originalSelectConfig.dependsOnNodeId) : null,
+              keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}` : null,
+              valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : null,
+              displayColumn: originalSelectConfig.displayColumn ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : null,
+              displayRow: originalSelectConfig.displayRow,
+              keyRow: originalSelectConfig.keyRow,
+              valueRow: originalSelectConfig.valueRow,
+              createdAt: /* @__PURE__ */ new Date(),
+              updatedAt: /* @__PURE__ */ new Date()
+            }
+          });
+          console.log(`[DEEP-COPY] \u2705 SELECT config cr\xE9\xE9e pour ${newId}`);
+        } catch (selectConfigErr) {
+          console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur cr\xE9ation SELECT config pour ${newId}:`, selectConfigErr.message);
+        }
+      } else {
+        console.log(`[DEEP-COPY] \u267B\uFE0F SELECT config existe d\xE9j\xE0 pour ${newId}`);
+      }
+    }
+    const originalNumberConfig = await prisma69.treeBranchLeafNumberConfig.findUnique({
+      where: { nodeId: oldId }
+    });
+    if (originalNumberConfig) {
+      const existingCopyNumberConfig = await prisma69.treeBranchLeafNumberConfig.findUnique({
+        where: { nodeId: newId }
+      });
+      if (!existingCopyNumberConfig) {
+        console.log(`[DEEP-COPY] \u{1F522} Duplication NUMBER config: ${oldId} -> ${newId}`);
+        try {
+          await prisma69.treeBranchLeafNumberConfig.create({
+            data: {
+              id: appendSuffix(originalNumberConfig.id),
+              nodeId: newId,
+              min: originalNumberConfig.min,
+              max: originalNumberConfig.max,
+              decimals: originalNumberConfig.decimals,
+              step: originalNumberConfig.step,
+              unit: originalNumberConfig.unit,
+              prefix: originalNumberConfig.prefix
+            }
+          });
+          console.log(`[DEEP-COPY] \u2705 NUMBER config cr\xE9\xE9e pour ${newId}`);
+        } catch (numberConfigErr) {
+          console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur cr\xE9ation NUMBER config pour ${newId}:`, numberConfigErr.message);
+        }
+      }
+    }
+  }
+  const variableCopyCache = /* @__PURE__ */ new Map();
+  for (const oldNodeId of toCopy) {
+    const newNodeId = idMap.get(oldNodeId);
+    const oldNode = byId.get(oldNodeId);
+    const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : []).map((id) => {
+      const mappedId = formulaIdMap.get(id);
+      if (mappedId) return mappedId;
+      const ensured = ensureSuffix(id);
+      return ensured || appendSuffix(id);
+    }).filter(Boolean);
+    const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : []).map((id) => {
+      const mappedId = conditionIdMap.get(id);
+      if (mappedId) return mappedId;
+      const ensured = ensureSuffix(id);
+      return ensured || appendSuffix(id);
+    }).filter(Boolean);
+    const newLinkedTableIds = (Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : []).map((id) => {
+      const mappedId = tableIdMap2.get(id);
+      if (mappedId) return mappedId;
+      const ensured = ensureSuffix(id);
+      return ensured || appendSuffix(id);
+    }).filter(Boolean);
+    const sourceLinkedVariableIds = /* @__PURE__ */ new Set();
+    console.log(`
+\u{1F537}\u{1F537}\u{1F537} [LINKED_VARS] Traitement n\u0153ud ${oldNodeId} -> ${newNodeId}`);
+    console.log(`\u{1F537} [LINKED_VARS] oldNode.linkedVariableIds = ${JSON.stringify(oldNode.linkedVariableIds)}`);
+    if (Array.isArray(oldNode.linkedVariableIds)) {
+      for (const rawId of oldNode.linkedVariableIds) {
+        if (typeof rawId === "string") {
+          const normalized = rawId.trim();
+          if (normalized) {
+            const baseId = stripNumericSuffix2(normalized);
+            sourceLinkedVariableIds.add(baseId || normalized);
+            console.log(`\u{1F537} [LINKED_VARS] Ajout\xE9: ${baseId || normalized} (depuis: ${rawId})`);
+          }
+        }
+      }
+    }
+    const directVarIds = directVariableIdByNodeId.get(oldNodeId);
+    if (directVarIds && directVarIds.size > 0) {
+      for (const directVarIdForNode of directVarIds) {
+        const baseId = stripNumericSuffix2(directVarIdForNode);
+        sourceLinkedVariableIds.add(baseId || directVarIdForNode);
+      }
+    }
+    console.log(`\u{1F537} [LINKED_VARS] sourceLinkedVariableIds.size = ${sourceLinkedVariableIds.size}`);
+    console.log(`\u{1F537} [LINKED_VARS] Contenu: ${JSON.stringify([...sourceLinkedVariableIds])}`);
+    if (sourceLinkedVariableIds.size > 0) {
+      console.log(`\u{1F537} [LINKED_VARS] \u2705 Entr\xE9e dans la boucle de copie de variables!`);
+      for (const linkedVarId of sourceLinkedVariableIds) {
+        console.log(`\u{1F537} [LINKED_VARS] Traitement variable: ${linkedVarId}`);
+        const isSharedRef = linkedVarId.startsWith("shared-ref-");
+        if (!isSharedRef) {
+          try {
+            console.log(`\u{1F537} [LINKED_VARS] \u{1F4DE} Appel copyVariableWithCapacities(${linkedVarId}, ${suffixToken}, ${newNodeId})`);
+            const copyResult = await copyVariableWithCapacities(
+              linkedVarId,
+              suffixToken,
+              newNodeId,
+              prisma69,
+              {
+                formulaIdMap,
+                conditionIdMap,
+                tableIdMap: tableIdMap2,
+                nodeIdMap: idMap,
+                variableCopyCache,
+                autoCreateDisplayNode: true,
+                displayNodeAlreadyCreated: false,
+                displayParentId: newNodeId,
+                // 🔧 FIX: Le parent doit être le nœud copié (pas son parent)
+                isFromRepeaterDuplication,
+                repeatContext: normalizedRepeatContext
+              }
+            );
+            console.log(`\u{1F537} [LINKED_VARS] \u{1F4E4} R\xE9sultat copyVariableWithCapacities: success=${copyResult.success}, displayNodeId=${copyResult.displayNodeId}`);
+            if (copyResult.success && copyResult.displayNodeId) {
+              displayNodeIds.push(copyResult.displayNodeId);
+              console.log(`\u{1F537} [LINKED_VARS] \u2705 Display node ajout\xE9: ${copyResult.displayNodeId}`);
+            } else {
+              console.log(`\u{1F537} [LINKED_VARS] \u26A0\uFE0F Pas de display node cr\xE9\xE9! error=${copyResult.error}`);
+            }
+          } catch (e) {
+            console.warn(`[DEEP-COPY] Erreur copie variable ${linkedVarId}:`, e.message);
+          }
+        } else {
+          console.log(`\u{1F537} [LINKED_VARS] \u23ED\uFE0F Variable ignor\xE9e (shared-ref): ${linkedVarId}`);
+        }
+      }
+    }
+    if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0) {
+      try {
+        await prisma69.treeBranchLeafNode.update({
+          where: { id: newNodeId },
+          data: {
+            linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
+            linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
+            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] }
+            // linkedVariableIds: SUPPRIMÉ - ne doit PAS être mis à jour !
+          }
+        });
+      } catch (e) {
+        console.warn("[DEEP-COPY] Erreur lors du UPDATE des linked***", e.message);
+      }
+    }
+  }
+  const rootNewId = idMap.get(source.id);
+  if (displayNodeIds.length > 0) {
+    console.log(`[DEEP-COPY] \u{1F527} Cr\xE9ation variables pour ${displayNodeIds.length} noeuds avec linkedTableIds`);
+    for (const nodeId2 of displayNodeIds) {
+      try {
+        const copiedNode = await prisma69.treeBranchLeafNode.findUnique({
+          where: { id: nodeId2 },
+          select: { id: true, label: true, field_label: true, linkedTableIds: true }
+        });
+        if (!copiedNode || !copiedNode.linkedTableIds || copiedNode.linkedTableIds.length === 0) {
+          continue;
+        }
+        const originalNodeId = nodeId2.replace(/-\d+$/, "");
+        console.log(`[DEEP-COPY] \u{1F50D} Recherche variable pour noeud original ${originalNodeId}`);
+        const originalVar = await prisma69.treeBranchLeafNodeVariable.findFirst({
+          where: { nodeId: originalNodeId }
+        });
+        if (!originalVar) {
+          console.warn(`[DEEP-COPY] \u26A0\uFE0F Variable originale non trouv\xE9e pour noeud ${originalNodeId}`);
+          continue;
+        }
+        console.log(`[DEEP-COPY] \u2705 Variable originale trouv\xE9e: ${originalVar.id} (${originalVar.exposedKey})`);
+        const newVarId = appendSuffix(originalVar.id);
+        const newExposedKey = appendSuffix(originalVar.exposedKey);
+        console.log(`[DEEP-COPY] \u{1F527} Cr\xE9ation variable ${newVarId} avec nodeId=${nodeId2}`);
+        await prisma69.treeBranchLeafNodeVariable.create({
+          data: {
+            id: newVarId,
+            nodeId: nodeId2,
+            exposedKey: newExposedKey,
+            displayName: copiedNode.label || copiedNode.field_label || originalVar.displayName,
+            displayFormat: originalVar.displayFormat,
+            precision: originalVar.precision,
+            unit: originalVar.unit,
+            visibleToUser: originalVar.visibleToUser,
+            isReadonly: originalVar.isReadonly,
+            defaultValue: originalVar.defaultValue,
+            metadata: originalVar.metadata || {},
+            fixedValue: originalVar.fixedValue,
+            selectedNodeId: originalVar.selectedNodeId,
+            sourceRef: originalVar.sourceRef,
+            sourceType: originalVar.sourceType,
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+        await prisma69.treeBranchLeafNode.update({
+          where: { id: nodeId2 },
+          data: {
+            hasData: true,
+            data_activeId: newVarId,
+            data_exposedKey: newExposedKey,
+            data_displayFormat: originalVar.displayFormat,
+            data_precision: originalVar.precision,
+            data_unit: originalVar.unit,
+            data_visibleToUser: originalVar.visibleToUser,
+            // linkedVariableIds doit contenir la variable copiée (suffixée)
+            linkedVariableIds: { set: [newVarId] }
+          }
+        });
+        console.log(`[DEEP-COPY] \u2705 Variable ${newVarId} cr\xE9\xE9e et ${nodeId2} synchronis\xE9`);
+      } catch (varError) {
+        console.error(`[DEEP-COPY] \u274C Erreur cr\xE9ation variable pour ${nodeId2}:`, varError);
+      }
+    }
+  }
+  try {
+    const newNodeIds = Array.from(idMap.values());
+    if (newNodeIds.length > 0) {
+      const copiedVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
+        where: { nodeId: { in: newNodeIds } },
+        select: {
+          nodeId: true,
+          id: true,
+          exposedKey: true,
+          displayFormat: true,
+          precision: true,
+          unit: true,
+          visibleToUser: true,
+          displayName: true
+        }
+      });
+      for (const variable of copiedVariables) {
+        try {
+          await prisma69.treeBranchLeafNode.updateMany({
+            where: {
+              id: variable.nodeId,
+              OR: [{ data_activeId: null }, { hasData: false }]
+            },
+            data: {
+              hasData: true,
+              data_activeId: variable.id,
+              data_exposedKey: variable.exposedKey,
+              data_displayFormat: variable.displayFormat,
+              data_precision: variable.precision,
+              data_unit: variable.unit,
+              data_visibleToUser: variable.visibleToUser,
+              label: variable.displayName || void 0,
+              field_label: variable.displayName || void 0
+            }
+          });
+        } catch (syncError) {
+          console.warn("[DEEP-COPY] Post-copy data sync failed for node", variable.nodeId, syncError.message);
+        }
+      }
+    }
+  } catch (syncPassThroughError) {
+    console.warn("[DEEP-COPY] Post-copy data sync skipped:", syncPassThroughError.message);
+  }
+  return {
+    root: { oldId: source.id, newId: rootNewId },
+    idMap: Object.fromEntries(idMap),
+    formulaIdMap: Object.fromEntries(formulaIdMap),
+    conditionIdMap: Object.fromEntries(conditionIdMap),
+    tableIdMap: Object.fromEntries(tableIdMap2),
+    displayNodeIds
+  };
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/table-routes-new.ts
+var import_express56 = require("express");
+var import_client47 = require("@prisma/client");
+var import_crypto9 = require("crypto");
+var router55 = (0, import_express56.Router)();
+var prisma46 = new import_client47.PrismaClient();
+function getAuthCtx2(req2) {
+  const user = req2 && req2.user || {};
+  const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
+  const role = user.role || user.userRole;
+  const isSuperAdmin2 = Boolean(user.isSuperAdmin || role === "super_admin" || role === "superadmin");
+  const organizationId = user.organizationId || headerOrg || null;
+  return { organizationId, isSuperAdmin: isSuperAdmin2 };
+}
+router55.post("/nodes/:nodeId/tables", async (req2, res) => {
+  const { nodeId } = req2.params;
+  const { name, description, columns, rows, type = "static" } = req2.body;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  console.log(`[NEW POST /tables] \u{1F680} D\xE9but cr\xE9ation table pour node ${nodeId}`);
+  console.log(`[NEW POST /tables] \u{1F4CA} Donn\xE9es re\xE7ues: ${Array.isArray(columns) ? columns.length : 0} colonnes, ${Array.isArray(rows) ? rows.length : 0} lignes`);
+  if (!name) {
+    return res.status(400).json({ error: "Le nom de la table est requis" });
+  }
+  if (!Array.isArray(columns)) {
+    return res.status(400).json({ error: "La d\xE9finition des colonnes est requise (array)" });
+  }
+  if (!Array.isArray(rows)) {
+    return res.status(400).json({ error: "Les donn\xE9es (rows) sont requises (array)" });
+  }
+  try {
+    const node = await prisma46.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      include: { TreeBranchLeafTree: true }
+    });
+    if (!node) {
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+    }
+    if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 ce n\u0153ud" });
+    }
+    let finalName = name;
+    const existingTable = await prisma46.treeBranchLeafNodeTable.findFirst({
+      where: { nodeId, name: finalName }
+    });
+    if (existingTable) {
+      const existingCount = await prisma46.treeBranchLeafNodeTable.count({
+        where: { nodeId }
+      });
+      finalName = `${name} (${existingCount + 1})`;
+      console.log(`[NEW POST /tables] \u26A0\uFE0F Nom d\xE9j\xE0 utilis\xE9, nouveau nom: ${finalName}`);
+    }
+    const tableId = (0, import_crypto9.randomUUID)();
+    console.log(`[NEW POST /tables] \u{1F194} Nouvel ID de table g\xE9n\xE9r\xE9: ${tableId}`);
+    const tableData = {
+      id: tableId,
+      nodeId,
+      organizationId: node.TreeBranchLeafTree.organizationId,
+      name: finalName,
+      description: description || null,
+      type,
+      rowCount: rows.length,
+      columnCount: columns.length,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    const tableColumnsData = columns.map((col, index) => {
+      const colName = typeof col === "string" ? col : col.name || `Colonne ${index + 1}`;
+      const colType = typeof col === "object" && col.type ? col.type : "text";
+      const colWidth = typeof col === "object" && col.width ? col.width : null;
+      const colFormat = typeof col === "object" && col.format ? col.format : null;
+      const colMetadata = typeof col === "object" && col.metadata ? col.metadata : {};
+      return {
+        tableId,
+        columnIndex: index,
+        name: colName,
+        type: colType,
+        width: colWidth,
+        format: colFormat,
+        metadata: colMetadata
+      };
+    });
+    const tableRowsData = rows.map((row, index) => ({
+      tableId,
+      rowIndex: index,
+      cells: row
+    }));
+    console.log(`[NEW POST /tables] \u{1F4E6} Transaction pr\xE9par\xE9e: 1 table + ${tableColumnsData.length} colonnes + ${tableRowsData.length} lignes`);
+    if (rows.length > 0) {
+      console.log(`[NEW POST /tables] \u{1F50D} ANALYSE D\xC9TAILL\xC9E DES ROWS:`);
+      console.log(`[NEW POST /tables]    - Type de rows re\xE7u: ${Array.isArray(rows) ? "array" : typeof rows}`);
+      console.log(`[NEW POST /tables]    - rows.length: ${rows.length}`);
+      console.log(`[NEW POST /tables]    - rows[0] (premi\xE8re ligne):`, rows[0]);
+      console.log(`[NEW POST /tables]    - rows[0][0] (A1):`, rows[0]?.[0]);
+      console.log(`[NEW POST /tables]    - rows[0][1-3] (premi\xE8res donn\xE9es):`, rows[0]?.slice(1, 4));
+      if (rows.length > 1) {
+        console.log(`[NEW POST /tables]    - rows[1] (deuxi\xE8me ligne):`, rows[1]);
+        console.log(`[NEW POST /tables]    - rows[1][0] (label ligne 2):`, rows[1]?.[0]);
+      }
+      console.log(`[NEW POST /tables]    - rows[derni\xE8re]:`, rows[rows.length - 1]);
+      console.log(`[NEW POST /tables] \u{1F50D} ANALYSE TABLEROWSDATA (apr\xE8s map):`);
+      console.log(`[NEW POST /tables]    - tableRowsData[0].cells:`, tableRowsData[0]?.cells);
+      if (tableRowsData.length > 1) {
+        console.log(`[NEW POST /tables]    - tableRowsData[1].cells:`, tableRowsData[1]?.cells);
+      }
+      console.log(`[NEW POST /tables]    - tableRowsData[derni\xE8re].cells:`, tableRowsData[tableRowsData.length - 1]?.cells);
+    } else {
+      console.log(`[NEW POST /tables] \u2139\uFE0F Table vide cr\xE9\xE9e (aucune ligne)`);
+    }
+    const result = await prisma46.$transaction(async (tx) => {
+      console.log(`[NEW POST /tables] \u{1F504} \xC9tape 1/3: Cr\xE9ation de la table principale...`);
+      const newTable = await tx.treeBranchLeafNodeTable.create({
+        data: tableData
+      });
+      if (tableColumnsData.length > 0) {
+        console.log(`[NEW POST /tables] \u{1F504} \xC9tape 2/3: Insertion de ${tableColumnsData.length} colonnes...`);
+        await tx.treeBranchLeafNodeTableColumn.createMany({
+          data: tableColumnsData
+        });
+      }
+      if (tableRowsData.length > 0) {
+        console.log(`[NEW POST /tables] \u{1F504} \xC9tape 3/3: Insertion de ${tableRowsData.length} lignes...`);
+        for (const rowData of tableRowsData) {
+          await tx.treeBranchLeafNodeTableRow.create({
+            data: rowData
+          });
+        }
+        console.log(`[NEW POST /tables] \u2705 Lignes ins\xE9r\xE9es ! V\xE9rification...`);
+        const verif = await tx.treeBranchLeafNodeTableRow.findMany({
+          where: { tableId },
+          orderBy: { rowIndex: "asc" },
+          take: 3
+        });
+        console.log(`[NEW POST /tables] \u{1F50D} V\xC9RIFICATION POST-INSERTION:`);
+        verif.forEach((row, idx) => {
+          console.log(`[NEW POST /tables]    - Ligne ${idx} (rowIndex=${row.rowIndex}):`);
+          console.log(`[NEW POST /tables]      cells type:`, typeof row.cells);
+          console.log(`[NEW POST /tables]      cells value:`, row.cells);
+          if (typeof row.cells === "string") {
+            try {
+              const parsed = JSON.parse(row.cells);
+              console.log(`[NEW POST /tables]      cells[0] apr\xE8s parse:`, parsed[0]);
+            } catch (e) {
+              console.log(`[NEW POST /tables]      \u274C Erreur parse:`, e.message);
+            }
+          } else if (Array.isArray(row.cells)) {
+            console.log(`[NEW POST /tables]      cells[0]:`, row.cells[0]);
+            console.log(`[NEW POST /tables]      cells.length:`, row.cells.length);
+          }
+        });
+      }
+      return newTable;
+    }, {
+      timeout: 6e4
+      // 60 secondes pour les gros fichiers (43k+ lignes)
+    });
+    console.log(`[NEW POST /tables] \u2705 Transaction termin\xE9e avec succ\xE8s ! Table ${result.id} cr\xE9\xE9e.`);
+    await prisma46.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { hasTable: true }
+    });
+    console.log(`[NEW POST /tables] \u2705 hasTable mis \xE0 jour pour node ${nodeId}`);
+    try {
+      const node2 = await prisma46.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
+      const current = node2?.linkedTableIds ?? [];
+      const next = Array.from(/* @__PURE__ */ new Set([...current || [], result.id]));
+      await prisma46.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
+    } catch (e) {
+      console.warn("[NEW POST /tables] Warning updating linkedTableIds:", e.message);
+    }
+    try {
+      console.log(`[NEW POST /tables] \u{1F50D} Recherche des SelectConfigs \xE0 mettre \xE0 jour pour nodeId: ${nodeId}`);
+      const selectConfig = await prisma46.treeBranchLeafSelectConfig.findFirst({
+        where: { nodeId }
+      });
+      if (selectConfig) {
+        const oldTableRef = selectConfig.tableReference;
+        await prisma46.treeBranchLeafSelectConfig.update({
+          where: { id: selectConfig.id },
+          data: { tableReference: result.id }
+        });
+        console.log(`[NEW POST /tables] \u2705 SelectConfig mis \xE0 jour: ${selectConfig.id}`);
+        console.log(`[NEW POST /tables]    - Ancien tableau: ${oldTableRef}`);
+        console.log(`[NEW POST /tables]    - Nouveau tableau: ${result.id}`);
+        if (oldTableRef) {
+          const otherConfigs = await prisma46.treeBranchLeafSelectConfig.findMany({
+            where: {
+              tableReference: oldTableRef,
+              nodeId: { not: nodeId }
+              // Exclure celui qu'on vient de mettre à jour
+            }
+          });
+          if (otherConfigs.length > 0) {
+            console.log(`[NEW POST /tables] \u{1F50D} ${otherConfigs.length} autres SelectConfigs r\xE9f\xE9rencent l'ancien tableau`);
+            const updateResult = await prisma46.treeBranchLeafSelectConfig.updateMany({
+              where: {
+                tableReference: oldTableRef,
+                nodeId: { not: nodeId }
+              },
+              data: { tableReference: result.id }
+            });
+            console.log(`[NEW POST /tables] \u2705 ${updateResult.count} SelectConfigs suppl\xE9mentaires mis \xE0 jour`);
+            otherConfigs.forEach((cfg) => {
+              console.log(`[NEW POST /tables]    - NodeId: ${cfg.nodeId} (keyColumn: ${cfg.keyColumn}, keyRow: ${cfg.keyRow})`);
+            });
+          }
+        }
+      } else {
+        console.log(`[NEW POST /tables] \u2139\uFE0F Pas de SelectConfig trouv\xE9e pour ce n\u0153ud`);
+      }
+    } catch (updateError) {
+      console.error(`[NEW POST /tables] \u26A0\uFE0F Erreur lors de la mise \xE0 jour des SelectConfigs:`, updateError);
+    }
+    const createdTable = await prisma46.treeBranchLeafNodeTable.findUnique({
+      where: { id: result.id },
+      include: {
+        tableColumns: {
+          orderBy: { columnIndex: "asc" }
+        },
+        tableRows: {
+          orderBy: { rowIndex: "asc" }
+        }
+      }
+    });
+    if (!createdTable) {
+      throw new Error("Table cr\xE9\xE9e mais introuvable lors de la relecture");
+    }
+    res.status(201).json({
+      id: createdTable.id,
+      nodeId: createdTable.nodeId,
+      name: createdTable.name,
+      description: createdTable.description,
+      type: createdTable.type,
+      columns: createdTable.tableColumns.map((c) => c.name),
+      rows: createdTable.tableRows.map((r) => {
+        const cells = r.cells;
+        if (Array.isArray(cells)) {
+          return cells;
+        }
+        if (typeof cells === "string") {
+          try {
+            const parsed = JSON.parse(cells);
+            return Array.isArray(parsed) ? parsed : [String(parsed)];
+          } catch {
+            return [String(cells)];
+          }
+        }
+        if (cells && typeof cells === "object") {
+          return Object.values(cells);
+        }
+        return [String(cells || "")];
+      }),
+      meta: createdTable.meta || {},
+      rowCount: createdTable.rowCount,
+      columnCount: createdTable.columnCount,
+      createdAt: createdTable.createdAt,
+      updatedAt: createdTable.updatedAt
+    });
+  } catch (error) {
+    console.error(`\u274C [NEW POST /tables] Erreur lors de la cr\xE9ation de la table:`, error);
+    if (error instanceof import_client47.Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        return res.status(409).json({
+          error: "Une table avec ce nom existe d\xE9j\xE0 pour ce champ. Veuillez choisir un autre nom.",
+          code: error.code
+        });
+      }
+      return res.status(500).json({
+        error: "Erreur de base de donn\xE9es lors de la cr\xE9ation de la table.",
+        code: error.code,
+        meta: error.meta
+      });
+    }
+    res.status(500).json({ error: "Impossible de cr\xE9er la table" });
+  }
+});
+router55.get("/tables/:id", async (req2, res) => {
+  const { id } = req2.params;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  const page = parseInt(req2.query.page) || 1;
+  const limit = parseInt(req2.query.limit) || 100;
+  const offset = (page - 1) * limit;
+  console.log(`[NEW GET /tables/:id] \u{1F4D6} R\xE9cup\xE9ration table ${id} (page ${page}, limit ${limit})`);
+  try {
+    const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+      where: { id },
+      include: {
+        TreeBranchLeafNode: {
+          select: {
+            treeId: true,
+            TreeBranchLeafTree: {
+              select: { organizationId: true }
+            }
+          }
+        }
+      }
+    });
+    if (!table) {
+      return res.status(404).json({ error: "Table non trouv\xE9e" });
+    }
+    const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+    if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 cette table" });
+    }
+    const columns = await prisma46.treeBranchLeafNodeTableColumn.findMany({
+      where: { tableId: id },
+      orderBy: { columnIndex: "asc" }
+    });
+    const rows = await prisma46.treeBranchLeafNodeTableRow.findMany({
+      where: { tableId: id },
+      orderBy: { rowIndex: "asc" },
+      take: limit,
+      skip: offset
+    });
+    console.log(`[NEW GET /tables/:id] \u2705 R\xE9cup\xE9r\xE9: ${columns.length} colonnes et ${rows.length} lignes (sur ${table.rowCount} total)`);
+    res.json({
+      id: table.id,
+      nodeId: table.nodeId,
+      name: table.name,
+      description: table.description,
+      type: table.type,
+      columns: columns.map((c) => ({
+        name: c.name,
+        type: c.type,
+        width: c.width,
+        format: c.format,
+        metadata: c.metadata
+      })),
+      rows: rows.map((r) => r.cells),
+      page,
+      limit,
+      totalRows: table.rowCount,
+      totalPages: Math.ceil(table.rowCount / limit),
+      createdAt: table.createdAt,
+      updatedAt: table.updatedAt
+    });
+  } catch (error) {
+    console.error(`\u274C [NEW GET /tables/:id] Erreur lors de la r\xE9cup\xE9ration de la table:`, error);
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer la table" });
+  }
+});
+router55.put("/tables/:id", async (req2, res) => {
+  const { id } = req2.params;
+  const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req2.body;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  console.log(`[NEW PUT /tables/:id] \u{1F504} Mise \xE0 jour table ${id}`);
+  console.log(`[NEW PUT /tables/:id] Nouvelles donn\xE9es: ${Array.isArray(columns) ? columns.length : "N/A"} colonnes, ${Array.isArray(rows) ? rows.length : "N/A"} lignes`);
+  console.log(`[NEW PUT /tables/:id] Lookup config: selectColumn=${lookupSelectColumn}, displayColumns=${JSON.stringify(lookupDisplayColumns)}`);
+  try {
+    const updatedTable = await prisma46.$transaction(async (tx) => {
+      const table = await tx.treeBranchLeafNodeTable.findUnique({
+        where: { id },
+        include: {
+          TreeBranchLeafNode: {
+            include: { TreeBranchLeafTree: true }
+          }
+        }
+      });
+      if (!table) {
+        throw new Error("Table non trouv\xE9e");
+      }
+      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+      if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
+        throw new Error("Acc\xE8s non autoris\xE9");
+      }
+      const updateData = {
+        updatedAt: /* @__PURE__ */ new Date()
+      };
+      if (name) updateData.name = name;
+      if (description !== void 0) updateData.description = description;
+      if (type) updateData.type = type;
+      if (Array.isArray(columns)) updateData.columnCount = columns.length;
+      if (Array.isArray(rows)) updateData.rowCount = rows.length;
+      if (lookupSelectColumn !== void 0) updateData.lookupSelectColumn = lookupSelectColumn;
+      if (Array.isArray(lookupDisplayColumns)) updateData.lookupDisplayColumns = lookupDisplayColumns;
+      const tableUpdated = await tx.treeBranchLeafNodeTable.update({
+        where: { id },
+        data: updateData
+      });
+      console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 1: Table principale mise \xE0 jour`);
+      if (Array.isArray(columns)) {
+        console.log(`[NEW PUT /tables/:id] \u{1F504} Remplacement des colonnes...`);
+        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
+        if (columns.length > 0) {
+          const newColumnsData = columns.map((col, index) => ({
+            tableId: id,
+            columnIndex: index,
+            name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
+            type: typeof col === "object" ? col.type : "text",
+            width: typeof col === "object" ? col.width : null,
+            format: typeof col === "object" ? col.format : null,
+            metadata: typeof col === "object" && col.metadata ? col.metadata : {}
+          }));
+          await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
+        }
+        console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 2: ${columns.length} colonnes remplac\xE9es`);
+      }
+      if (Array.isArray(rows)) {
+        console.log(`[NEW PUT /tables/:id] \u{1F504} Remplacement des lignes...`);
+        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: id } });
+        if (rows.length > 0) {
+          console.log(`[NEW PUT /tables/:id] \u{1F504} Cr\xE9ation de ${rows.length} lignes (boucle create)...`);
+          for (let index = 0; index < rows.length; index++) {
+            const row = rows[index];
+            await tx.treeBranchLeafNodeTableRow.create({
+              data: {
+                tableId: id,
+                rowIndex: index,
+                cells: row
+              }
+            });
+            console.log(`[PUT /tables/:id] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : "N/A");
+          }
+        }
+        console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 3: ${rows.length} lignes remplac\xE9es`);
+      }
+      return tableUpdated;
+    });
+    console.log(`[NEW PUT /tables/:id] \u{1F389} Transaction de mise \xE0 jour termin\xE9e avec succ\xE8s`);
+    const finalTableData = await prisma46.treeBranchLeafNodeTable.findUnique({ where: { id } });
+    res.json(finalTableData);
+  } catch (error) {
+    console.error(`\u274C [NEW PUT /tables/:id] Erreur lors de la mise \xE0 jour:`, error);
+    if (error instanceof Error && (error.message === "Table non trouv\xE9e" || error.message === "Acc\xE8s non autoris\xE9")) {
+      const status = error.message === "Table non trouv\xE9e" ? 404 : 403;
+      return res.status(status).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Impossible de mettre \xE0 jour la table" });
+  }
+});
+router55.delete("/tables/:id", async (req2, res) => {
+  const { id } = req2.params;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  console.log(`[NEW DELETE /tables/:id] \u{1F5D1}\uFE0F Suppression table ${id}`);
+  try {
+    const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+      where: { id },
+      include: {
+        TreeBranchLeafNode: {
+          include: { TreeBranchLeafTree: true }
+        }
+      }
+    });
+    if (!table) {
+      return res.status(404).json({ error: "Table non trouv\xE9e" });
+    }
+    const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+    if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+    }
+    await prisma46.treeBranchLeafNodeTable.delete({ where: { id } });
+    console.log(`[NEW DELETE /tables/:id] \u2705 Table ${id} supprim\xE9e (+ colonnes/lignes en cascade)`);
+    try {
+      const selectConfigsUsingTable = await prisma46.treeBranchLeafSelectConfig.findMany({
+        where: { tableReference: id },
+        select: { nodeId: true }
+      });
+      if (selectConfigsUsingTable.length > 0) {
+        console.log(`[NEW DELETE /tables/:id] \u{1F9F9} ${selectConfigsUsingTable.length} champ(s) Select/Cascader r\xE9f\xE9rencent cette table - D\xC9SACTIVATION LOOKUP`);
+        for (const config of selectConfigsUsingTable) {
+          const selectNode = await prisma46.treeBranchLeafNode.findUnique({
+            where: { id: config.nodeId },
+            select: {
+              label: true,
+              metadata: true
+            }
+          });
+          if (selectNode) {
+            console.log(`[NEW DELETE /tables/:id] \u{1F527} D\xE9sactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
+            const oldMetadata = selectNode.metadata || {};
+            const oldCapabilities = oldMetadata.capabilities || {};
+            const newCapabilities = {
+              ...oldCapabilities,
+              table: {
+                enabled: false,
+                activeId: null,
+                instances: null,
+                currentTable: null
+              }
+            };
+            const newMetadata = {
+              ...oldMetadata,
+              capabilities: newCapabilities
+            };
+            await prisma46.treeBranchLeafNode.update({
+              where: { id: config.nodeId },
+              data: {
+                hasTable: false,
+                table_activeId: null,
+                table_instances: null,
+                table_name: null,
+                table_type: null,
+                table_meta: null,
+                table_columns: null,
+                table_rows: null,
+                table_data: null,
+                metadata: JSON.parse(JSON.stringify(newMetadata)),
+                select_options: [],
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            });
+            await prisma46.treeBranchLeafSelectConfig.deleteMany({
+              where: { nodeId: config.nodeId }
+            });
+            console.log(`[NEW DELETE /tables/:id] \u2705 Lookup d\xE9sactiv\xE9 pour "${selectNode.label}" - champ d\xE9bloqu\xE9`);
+          }
+        }
+        console.log(`[NEW DELETE /tables/:id] \u2705 ${selectConfigsUsingTable.length} champ(s) Select D\xC9BLOQU\xC9S (lookup d\xE9sactiv\xE9)`);
+      }
+    } catch (selectConfigError) {
+      console.error(`[NEW DELETE /tables/:id] \u26A0\uFE0F Erreur d\xE9sactivation lookups:`, selectConfigError);
+    }
+    if (table.nodeId) {
+      const node = await prisma46.treeBranchLeafNode.findUnique({
+        where: { id: table.nodeId },
+        select: {
+          linkedTableIds: true,
+          table_activeId: true,
+          table_instances: true
+        }
+      });
+      const currentLinkedIds = node?.linkedTableIds ?? [];
+      const nextLinkedIds = currentLinkedIds.filter((x) => x !== id);
+      const wasActiveTable = node?.table_activeId === id;
+      let cleanedInstances = node?.table_instances ?? {};
+      if (typeof cleanedInstances === "object" && cleanedInstances !== null) {
+        const instances = cleanedInstances;
+        if (instances[id]) {
+          delete instances[id];
+          cleanedInstances = instances;
+        }
+      }
+      const remainingTables = await prisma46.treeBranchLeafNodeTable.count({
+        where: { nodeId: table.nodeId }
+      });
+      await prisma46.treeBranchLeafNode.update({
+        where: { id: table.nodeId },
+        data: {
+          hasTable: remainingTables > 0,
+          linkedTableIds: { set: nextLinkedIds },
+          table_activeId: wasActiveTable ? null : void 0,
+          // Réinitialiser si c'était la table active
+          table_instances: cleanedInstances,
+          // Réinitialiser les autres champs si plus de tables
+          ...remainingTables === 0 && {
+            table_name: null,
+            table_type: null,
+            table_meta: null,
+            table_columns: null,
+            table_rows: null,
+            table_data: null,
+            table_importSource: null,
+            table_isImported: false
+          }
+        }
+      });
+      console.log(`[NEW DELETE /tables/:id] \u2705 N\u0153ud ${table.nodeId} nettoy\xE9:`, {
+        hasTable: remainingTables > 0,
+        linkedTableIds: nextLinkedIds.length,
+        table_activeId_reset: wasActiveTable,
+        table_instances_cleaned: true,
+        all_fields_reset: remainingTables === 0
+      });
+    }
+    console.log(`[NEW DELETE /tables/:id] \u2705 Table ${id} supprim\xE9e avec succ\xE8s (+ colonnes et lignes en cascade)`);
+    res.json({ success: true, message: "Table supprim\xE9e avec succ\xE8s" });
+  } catch (error) {
+    console.error(`\u274C [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
+    res.status(500).json({ error: "Impossible de supprimer la table" });
+  }
+});
+router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
+  const { tableId } = req2.params;
+  const { name, description, columns, rows, type, meta } = req2.body;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Alias route - redirection vers PUT /tables/${tableId}`);
+  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F4CA} Donn\xE9es re\xE7ues:`, {
+    hasColumns: !!columns,
+    hasRows: !!rows,
+    hasMeta: !!meta,
+    type
+  });
+  try {
+    if (meta && !columns && !rows) {
+      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2699\uFE0F Mise \xE0 jour m\xE9tadonn\xE9es uniquement (lookup config)`);
+      const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+        where: { id: tableId },
+        include: {
+          TreeBranchLeafNode: {
+            include: { TreeBranchLeafTree: true }
+          }
+        }
+      });
+      if (!table) {
+        return res.status(404).json({ error: "Table non trouv\xE9e" });
+      }
+      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+      if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
+        return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+      }
+      const updatedTable2 = await prisma46.treeBranchLeafNodeTable.update({
+        where: { id: tableId },
+        data: {
+          meta,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 M\xE9tadonn\xE9es mises \xE0 jour - repeater cr\xE9era les champs d'affichage`);
+      return res.json(updatedTable2);
+    }
+    const updatedTable = await prisma46.$transaction(async (tx) => {
+      const table = await tx.treeBranchLeafNodeTable.findUnique({
+        where: { id: tableId },
+        include: {
+          TreeBranchLeafNode: {
+            include: { TreeBranchLeafTree: true }
+          }
+        }
+      });
+      if (!table) {
+        throw new Error("Table non trouv\xE9e");
+      }
+      const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
+      if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
+        throw new Error("Acc\xE8s non autoris\xE9");
+      }
+      const updateData = {
+        updatedAt: /* @__PURE__ */ new Date()
+      };
+      if (name) updateData.name = name;
+      if (description !== void 0) updateData.description = description;
+      if (type) updateData.type = type;
+      if (meta) updateData.meta = meta;
+      if (Array.isArray(columns) && columns.length > 0) updateData.columnCount = columns.length;
+      if (Array.isArray(rows) && rows.length > 0) updateData.rowCount = rows.length;
+      const tableUpdated = await tx.treeBranchLeafNodeTable.update({
+        where: { id: tableId },
+        data: updateData
+      });
+      if (Array.isArray(columns) && columns.length > 0) {
+        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Remplacement des colonnes...`);
+        await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
+        const newColumnsData = columns.map((col, index) => ({
+          tableId,
+          columnIndex: index,
+          name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
+          type: typeof col === "object" ? col.type : "text",
+          width: typeof col === "object" ? col.width : null,
+          format: typeof col === "object" ? col.format : null,
+          metadata: typeof col === "object" && col.metadata ? col.metadata : {}
+        }));
+        await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
+        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 ${columns.length} colonnes remplac\xE9es`);
+      }
+      if (Array.isArray(rows) && rows.length > 0) {
+        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Remplacement des lignes...`);
+        console.log(`[PUT ALIAS] \u{1F50D} ANALYSE ROWS RE\xC7UES DU FRONTEND:`);
+        console.log(`[PUT ALIAS]    - rows.length:`, rows.length);
+        console.log(`[PUT ALIAS]    - rows[0] type:`, typeof rows[0]);
+        console.log(`[PUT ALIAS]    - rows[0] isArray:`, Array.isArray(rows[0]));
+        console.log(`[PUT ALIAS]    - rows[0] value:`, rows[0]);
+        if (rows.length > 1) {
+          console.log(`[PUT ALIAS]    - rows[1] type:`, typeof rows[1]);
+          console.log(`[PUT ALIAS]    - rows[1] isArray:`, Array.isArray(rows[1]));
+          console.log(`[PUT ALIAS]    - rows[1] value:`, rows[1]);
+        }
+        await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId } });
+        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Cr\xE9ation de ${rows.length} lignes (boucle create)...`);
+        for (let index = 0; index < rows.length; index++) {
+          const row = rows[index];
+          console.log(`[PUT ALIAS] Row ${index} AVANT create - type:`, typeof row, "isArray:", Array.isArray(row), "value:", row);
+          await tx.treeBranchLeafNodeTableRow.create({
+            data: {
+              tableId,
+              rowIndex: index,
+              cells: row
+            }
+          });
+          console.log(`[PUT ALIAS] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : "N/A");
+        }
+        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 ${rows.length} lignes remplac\xE9es`);
+      }
+      return tableUpdated;
+    });
+    console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F389} Mise \xE0 jour termin\xE9e avec succ\xE8s`);
+    res.json(updatedTable);
+  } catch (error) {
+    console.error(`\u274C [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
+    if (error instanceof Error && (error.message === "Table non trouv\xE9e" || error.message === "Acc\xE8s non autoris\xE9")) {
+      const status = error.message === "Table non trouv\xE9e" ? 404 : 403;
+      return res.status(status).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Impossible de mettre \xE0 jour la table" });
+  }
+});
+router55.get("/nodes/:nodeId/tables", async (req2, res) => {
+  const { nodeId } = req2.params;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  console.log(`[NEW GET /nodes/:nodeId/tables] \u{1F4CB} R\xE9cup\xE9ration des tables pour node ${nodeId}`);
+  try {
+    const node = await prisma46.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      include: { TreeBranchLeafTree: true }
+    });
+    if (!node) {
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+    }
+    if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 ce n\u0153ud" });
+    }
+    const tables = await prisma46.treeBranchLeafNodeTable.findMany({
+      where: { nodeId },
+      include: {
+        tableColumns: {
+          orderBy: { columnIndex: "asc" }
+        },
+        tableRows: {
+          orderBy: { rowIndex: "asc" }
+        }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    console.log(`[NEW GET /nodes/:nodeId/tables] \u2705 ${tables.length} table(s) trouv\xE9e(s)`);
+    const formattedTables = tables.map((table) => ({
+      id: table.id,
+      name: table.name,
+      description: table.description,
+      type: table.type,
+      columns: table.tableColumns.map((c) => c.name),
+      rows: table.tableRows.map((r) => {
+        const cells = r.cells;
+        if (Array.isArray(cells)) {
+          return cells;
+        }
+        if (typeof cells === "string") {
+          try {
+            const parsed = JSON.parse(cells);
+            return Array.isArray(parsed) ? parsed : [String(parsed)];
+          } catch {
+            return [String(cells)];
+          }
+        }
+        if (cells && typeof cells === "object") {
+          return Object.values(cells);
+        }
+        return [String(cells || "")];
+      }),
+      meta: table.meta || {},
+      order: table.createdAt ? new Date(table.createdAt).getTime() : 0,
+      createdAt: table.createdAt,
+      updatedAt: table.updatedAt
+    }));
+    res.json(formattedTables);
+  } catch (error) {
+    console.error(`\u274C [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les tables" });
+  }
+});
+var table_routes_new_default = router55;
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
+var router56 = (0, import_express57.Router)();
+router56.use("/", table_routes_new_default);
+registerSumDisplayFieldRoutes(router56);
+var prisma47 = new import_client48.PrismaClient();
+var normalizeRolesMap = (rolesMap) => {
+  if (!rolesMap || typeof rolesMap !== "object") {
+    return {};
+  }
+  const normalized = {};
+  for (const [rawKey, rawValue] of Object.entries(rolesMap)) {
+    if (typeof rawKey !== "string") continue;
+    const trimmedKey = rawKey.trim();
+    if (!trimmedKey) continue;
+    if (typeof rawValue === "string" && rawValue.trim()) {
+      normalized[trimmedKey] = rawValue.trim();
+    } else if (rawValue != null) {
+      normalized[trimmedKey] = String(rawValue).trim() || trimmedKey;
+    } else {
+      normalized[trimmedKey] = trimmedKey;
+    }
+  }
+  return normalized;
+};
+var createRolesProxy = (rolesMap) => {
+  const normalized = normalizeRolesMap(rolesMap);
+  return new Proxy(normalized, {
+    get(target, prop) {
+      if (typeof prop !== "string") {
+        return void 0;
+      }
+      if (prop in target) {
+        return target[prop];
+      }
+      const fallback = prop.trim();
+      if (fallback) {
+        target[fallback] = fallback;
+        return fallback;
+      }
+      return fallback;
+    }
+  });
+};
+var coerceToNumber = (value) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+var computeLogicVersion = () => {
+  const metrics = getLogicMetrics();
+  const stats = getRpnCacheStats();
+  const seed = JSON.stringify({
+    evaluations: metrics.evaluations,
+    parseErrors: metrics.parseErrors,
+    divisionByZero: metrics.divisionByZero,
+    unknownVariables: metrics.unknownVariables,
+    entries: stats.entries,
+    parseCount: stats.parseCount
+  });
+  const version = (0, import_crypto10.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  return { version, metrics, stats };
+};
+function getAuthCtx3(req2) {
+  const user = req2 && req2.user || {};
+  const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
+  const role = user.role || user.userRole;
+  const isSuperAdmin2 = Boolean(user.isSuperAdmin || role === "super_admin" || role === "superadmin");
+  const organizationId = user.organizationId || headerOrg || null;
+  return { organizationId, isSuperAdmin: isSuperAdmin2 };
+}
+var resolveNodeVariable = async (nodeId, linkedVariableIds) => {
+  const directVariable = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { nodeId } });
+  if (directVariable) {
+    return { variable: directVariable, ownerNodeId: nodeId, proxiedFromNodeId: null };
+  }
+  const candidateIds = (linkedVariableIds || []).filter((value) => typeof value === "string" && Boolean(value.trim()));
+  if (candidateIds.length === 0) {
+    return { variable: null, ownerNodeId: null, proxiedFromNodeId: null };
+  }
+  const linkedVariable = await prisma47.treeBranchLeafNodeVariable.findFirst({
+    where: { id: { in: candidateIds } }
+  });
+  if (!linkedVariable) {
+    return { variable: null, ownerNodeId: null, proxiedFromNodeId: null };
+  }
+  return {
+    variable: linkedVariable,
+    ownerNodeId: linkedVariable.nodeId,
+    proxiedFromNodeId: nodeId
+  };
+};
+function normalizeRefId2(ref) {
+  if (!ref) return ref;
+  if (ref.startsWith("node-formula:")) return ref.replace(/^node-formula:/, "");
+  return ref;
+}
+function extractNodeIdsFromConditionSet2(conditionSet) {
+  const ids = /* @__PURE__ */ new Set();
+  if (!conditionSet || typeof conditionSet !== "object") return ids;
+  const obj = conditionSet;
+  if (Array.isArray(obj.tokens)) {
+    for (const t of obj.tokens) {
+      const asStr = typeof t === "string" ? t : JSON.stringify(t);
+      const re = /@value\.([a-f0-9-]{36})/gi;
+      let m;
+      while ((m = re.exec(asStr)) !== null) {
+        ids.add(m[1]);
+      }
+    }
+  }
+  if (Array.isArray(obj.branches)) {
+    for (const br of obj.branches) {
+      const b = br;
+      const when = b.when;
+      const scanWhen = (node) => {
+        if (!node) return;
+        const ref = node.ref;
+        if (typeof ref === "string") {
+          const m = /@value\.([a-f0-9-]{36})/i.exec(ref);
+          if (m && m[1]) ids.add(m[1]);
+        }
+        if (node.left && typeof node.left === "object") scanWhen(node.left);
+        if (node.right && typeof node.right === "object") scanWhen(node.right);
+      };
+      scanWhen(when);
+      const actions = b.actions;
+      if (Array.isArray(actions)) {
+        for (const a of actions) {
+          const aa = a;
+          const nodeIds = aa.nodeIds;
+          if (Array.isArray(nodeIds)) {
+            for (const nid of nodeIds) ids.add(normalizeRefId2(nid));
+          }
+        }
+      }
+    }
+  }
+  if (obj.fallback && typeof obj.fallback === "object") {
+    const fb = obj.fallback;
+    const actions = fb.actions;
+    if (Array.isArray(actions)) {
+      for (const a of actions) {
+        const aa = a;
+        const nodeIds = aa.nodeIds;
+        if (Array.isArray(nodeIds)) {
+          for (const nid of nodeIds) ids.add(normalizeRefId2(nid));
+        }
+      }
+    }
+  }
+  const str = JSON.stringify(obj);
+  if (str) {
+    const re = /@value\.([a-f0-9-]{36})/gi;
+    let m;
+    while ((m = re.exec(str)) !== null) ids.add(m[1]);
+  }
+  return ids;
+}
+function extractNodeIdsFromTokens2(tokens2) {
+  const ids = /* @__PURE__ */ new Set();
+  if (!tokens2) return ids;
+  const addFromString = (s) => {
+    let m;
+    const re = /@value\.([A-Za-z0-9_:-]+)/gi;
+    while ((m = re.exec(s)) !== null) ids.add(m[1]);
+  };
+  if (Array.isArray(tokens2)) {
+    for (const t of tokens2) {
+      if (typeof t === "string") addFromString(t);
+      else addFromString(JSON.stringify(t));
+    }
+  } else if (typeof tokens2 === "string") {
+    addFromString(tokens2);
+  } else {
+    addFromString(JSON.stringify(tokens2));
+  }
+  return ids;
+}
+function buildResolvedRefs(nodeIds, labels, values) {
+  return Array.from(nodeIds).map((nodeId) => ({
+    nodeId,
+    label: labels.get(nodeId) ?? null,
+    value: values.get(nodeId) ?? null
+  }));
+}
+function resolveActionsLabels(actions, labels) {
+  if (!Array.isArray(actions)) return [];
+  return actions.map((a) => {
+    const aa = a;
+    const nodeIds = Array.isArray(aa.nodeIds) ? aa.nodeIds.map(normalizeRefId2) : [];
+    return {
+      type: aa.type || null,
+      nodeIds,
+      labels: nodeIds.map((nid) => ({ nodeId: nid, label: labels.get(nid) ?? null }))
+    };
+  });
+}
+var uniq2 = (arr) => Array.from(new Set(arr));
+async function getNodeLinkedField3(client, nodeId, field) {
+  const node = await client.treeBranchLeafNode.findUnique({
+    where: { id: nodeId },
+    select: { [field]: true }
+  });
+  return node?.[field] ?? [];
+}
+async function setNodeLinkedField3(client, nodeId, field, values) {
+  try {
+    await client.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: { [field]: { set: uniq2(values) } }
+    });
+  } catch (e) {
+    console.warn("[TreeBranchLeaf API] setNodeLinkedField skipped:", { nodeId, field, error: e.message });
+  }
+}
+async function addToNodeLinkedField7(client, nodeId, field, idsToAdd) {
+  if (!idsToAdd?.length) return;
+  const current = await getNodeLinkedField3(client, nodeId, field);
+  const next = uniq2([...current, ...idsToAdd.filter(Boolean)]);
+  await setNodeLinkedField3(client, nodeId, field, next);
 }
 async function removeFromNodeLinkedField(client, nodeId, field, idsToRemove) {
   if (!idsToRemove?.length) return;
-  const current = await getNodeLinkedField2(client, nodeId, field);
+  const current = await getNodeLinkedField3(client, nodeId, field);
   const toRemove = new Set(idsToRemove.filter(Boolean));
   const next = current.filter((id) => !toRemove.has(id));
-  await setNodeLinkedField2(client, nodeId, field, next);
+  await setNodeLinkedField3(client, nodeId, field, next);
 }
 function fmtLV(label, value) {
   return `${label ?? "\xE2\u20AC\u201D"}(${value ?? "\xE2\u02C6\u2026"})`;
@@ -30732,7 +33154,7 @@ function buildResultText(prefixExpr, resultValue, unit) {
   if (prefixExpr) return prefixExpr;
   return right ? `${right}${u}` : "";
 }
-async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma68, submissionId, organizationId, userId) {
+async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma69, submissionId, organizationId, userId) {
   console.log("\xF0\u0178\u0161\xAB [LEGACY DISABLED] buildDetailAndResultForOperation est d\xC3\xA9sactiv\xC3\xA9e - utilisez TBL Prisma !");
   console.log("\xF0\u0178\u201D\u201E Redirection vers endpoints TBL Prisma: /api/tbl/submissions/create-and-evaluate");
   return {
@@ -30782,13 +33204,13 @@ router56.use((req2, res, next) => {
 router56.get("/trees", async (req2, res) => {
   try {
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] GET /trees - D\xC3\u2030BUT de la route");
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Organization ID:", organizationId);
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
     const whereFilter = isSuperAdmin2 || !organizationId ? {} : { organizationId };
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Where filter:", whereFilter);
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Recherche des arbres TreeBranchLeaf...");
-    const trees = await prisma46.treeBranchLeafTree.findMany({
+    const trees = await prisma47.treeBranchLeafTree.findMany({
       where: whereFilter,
       include: {
         _count: {
@@ -30819,8 +33241,8 @@ router56.get("/trees", async (req2, res) => {
 router56.get("/trees/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: isSuperAdmin2 || !organizationId ? { id } : { id, organizationId },
       include: {
         _count: {
@@ -30858,12 +33280,12 @@ router56.post("/trees", async (req2, res) => {
     if (!name || typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "Le nom de l'arbre est requis" });
     }
-    const targetOrgId = getAuthCtx2(req2).organizationId || (typeof bodyOrgId === "string" ? bodyOrgId : null);
+    const targetOrgId = getAuthCtx3(req2).organizationId || (typeof bodyOrgId === "string" ? bodyOrgId : null);
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\xAAte x-organization-id ou dans le corps)" });
     }
     const id = (0, import_crypto10.randomUUID)();
-    const tree = await prisma46.treeBranchLeafTree.create({
+    const tree = await prisma47.treeBranchLeafTree.create({
       data: {
         id,
         organizationId: targetOrgId,
@@ -30894,7 +33316,7 @@ router56.put("/trees/:id", async (req2, res) => {
     delete updateData.id;
     delete updateData.organizationId;
     delete updateData.createdAt;
-    const tree = await prisma46.treeBranchLeafTree.updateMany({
+    const tree = await prisma47.treeBranchLeafTree.updateMany({
       where: {
         id,
         organizationId
@@ -30907,7 +33329,7 @@ router56.put("/trees/:id", async (req2, res) => {
     if (tree.count === 0) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
     }
-    const updatedTree = await prisma46.treeBranchLeafTree.findFirst({
+    const updatedTree = await prisma47.treeBranchLeafTree.findFirst({
       where: { id, organizationId }
     });
     res.json(updatedTree);
@@ -30920,10 +33342,10 @@ router56.delete("/trees/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId } = req2.user;
-    await prisma46.treeBranchLeafNode.deleteMany({
+    await prisma47.treeBranchLeafNode.deleteMany({
       where: { treeId: id }
     });
-    const result = await prisma46.treeBranchLeafTree.deleteMany({
+    const result = await prisma47.treeBranchLeafTree.deleteMany({
       where: {
         id,
         organizationId
@@ -30943,19 +33365,19 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] GET /trees/:treeId/nodes - D\xC3\u2030BUT");
     const { treeId } = req2.params;
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] TreeId:", treeId);
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Organization ID:", organizationId);
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Tree where filter:", treeWhereFilter);
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Arbre trouv\xC3\xA9:", tree ? `${tree.id} - ${tree.name}` : "null");
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
     }
-    const nodes = await prisma46.treeBranchLeafNode.findMany({
+    const nodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId },
       include: {
         _count: {
@@ -30981,7 +33403,7 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
     });
     console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] N\xC5\u201Cuds trouv\xC3\xA9s:", nodes.length);
     console.log("\xF0\u0178\u201D\u201E [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour", nodes.length, "n\xC5\u201Cuds");
-    const reconstructedNodes = nodes.map((node) => buildResponseFromColumns(node));
+    const reconstructedNodes = nodes.map((node) => buildResponseFromColumns2(node));
     const nodesWithTooltips = reconstructedNodes.filter(
       (node) => node.text_helpTooltipType && node.text_helpTooltipType !== "none"
     );
@@ -31007,19 +33429,19 @@ router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
   try {
     console.log("\xF0\u0178\u201D\x81 [TBL-ROUTES] GET /trees/:treeId/repeater-fields - D\xC3\u2030BUT");
     const { treeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
     }
-    const allNodesRaw = await prisma46.treeBranchLeafNode.findMany({
+    const allNodesRaw = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId }
     });
     console.log(`\xF0\u0178\u201D\x81 [TBL-ROUTES] ${allNodesRaw.length} n\xC5\u201Cuds bruts r\xC3\xA9cup\xC3\xA9r\xC3\xA9s depuis la base`);
-    const allNodes = allNodesRaw.map((node) => buildResponseFromColumns(node));
+    const allNodes = allNodesRaw.map((node) => buildResponseFromColumns2(node));
     const _nodesById = new Map(allNodes.map((n) => [n.id, n]));
     const repeaterFields = [];
     for (const node of allNodes) {
@@ -31068,15 +33490,15 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
   try {
     console.log("\xF0\u0178\u201D\u2014 [TBL-ROUTES] GET /trees/:treeId/shared-references - D\xC3\u2030BUT");
     const { treeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
     }
-    const sharedReferencesRaw = await prisma46.treeBranchLeafNode.findMany({
+    const sharedReferencesRaw = await prisma47.treeBranchLeafNode.findMany({
       where: {
         treeId,
         isSharedReference: true
@@ -31084,7 +33506,7 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
     });
     console.log(`\xF0\u0178\u201D\u2014 [TBL-ROUTES] ${sharedReferencesRaw.length} r\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es trouv\xC3\xA9es`);
     const sharedReferences = sharedReferencesRaw.map((node) => {
-      const response = buildResponseFromColumns(node);
+      const response = buildResponseFromColumns2(node);
       return {
         id: response.id,
         label: response.label || response.sharedReferenceName || "R\xC3\xA9f\xC3\xA9rence sans nom",
@@ -31107,11 +33529,11 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     const { nodeId } = req2.params;
     const { templateNodeIds } = req2.body;
     console.log("\xF0\u0178\u201D\x81 [DUPLICATE-TEMPLATES] Duplication des templates:", { nodeId, templateNodeIds });
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     if (!Array.isArray(templateNodeIds) || templateNodeIds.length === 0) {
       return res.status(400).json({ error: "templateNodeIds doit \xC3\xAAtre un tableau non vide" });
     }
-    const parentNode = await prisma46.treeBranchLeafNode.findUnique({
+    const parentNode = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
@@ -31121,61 +33543,114 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && parentNode.TreeBranchLeafTree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9 \xC3\xA0 cet arbre" });
     }
-    const existingChildren = await prisma46.treeBranchLeafNode.findMany({
+    const existingChildrenByParent = await prisma47.treeBranchLeafNode.findMany({
       where: { parentId: nodeId },
-      select: { id: true, metadata: true }
+      select: { id: true, metadata: true, parentId: true }
     });
     console.log("\xEF\xBF\xBD [DUPLICATE-TEMPLATES] Cr\xC3\xA9ation de nouvelles copies autoris\xC3\xA9e pour repeater");
     const newTemplateIds = templateNodeIds;
     console.log("\xF0\u0178\u2020\u2022 [DUPLICATE-TEMPLATES] Templates \xC3\xA0 dupliquer:", newTemplateIds);
-    const templateNodes = await prisma46.treeBranchLeafNode.findMany({
+    const requestedNodes = await prisma47.treeBranchLeafNode.findMany({
       where: {
         id: { in: newTemplateIds },
         treeId: parentNode.treeId
-      }
+      },
+      select: { id: true, label: true, type: true, metadata: true }
     });
-    if (templateNodes.length === 0) {
+    if (requestedNodes.length === 0) {
       return res.status(404).json({ error: "Aucun template trouv\xC3\xA9" });
     }
-    console.log(`\xF0\u0178\u201D\x81 [DUPLICATE-TEMPLATES] ${templateNodes.length} templates \xC3\xA0 dupliquer`);
+    const resolveBaseTemplateId = (n) => {
+      const md = n.metadata ?? {};
+      const sourceTemplateId = md.sourceTemplateId;
+      return typeof sourceTemplateId === "string" && sourceTemplateId.length > 0 ? sourceTemplateId : n.id;
+    };
+    const baseTemplateIdsInOrder = newTemplateIds.map((id) => {
+      const found = requestedNodes.find((n) => n.id === id);
+      return found ? resolveBaseTemplateId(found) : id;
+    });
+    const uniqueBaseTemplateIds = Array.from(new Set(baseTemplateIdsInOrder));
+    const baseTemplateNodes = await prisma47.treeBranchLeafNode.findMany({
+      where: {
+        id: { in: uniqueBaseTemplateIds },
+        treeId: parentNode.treeId
+      },
+      select: { id: true, label: true, type: true, metadata: true }
+    });
+    const baseById = new Map(baseTemplateNodes.map((n) => [n.id, n]));
+    const templatesToDuplicateInOrder = baseTemplateIdsInOrder.map((baseId) => baseById.get(baseId)).filter((n) => Boolean(n));
+    if (templatesToDuplicateInOrder.length === 0) {
+      return res.status(404).json({ error: "Aucun template de base trouv\xC3\xA9" });
+    }
+    console.log(`\xF0\u0178\u201D\x81 [DUPLICATE-TEMPLATES] ${templatesToDuplicateInOrder.length} duplication(s) demand\xC3\xA9e(s) (base templates: ${uniqueBaseTemplateIds.length})`);
     const duplicatedSummaries = [];
-    for (const template of templateNodes) {
-      const validExistingCopies = existingChildren.filter((child) => {
-        const meta = child.metadata;
-        return meta?.sourceTemplateId === template.id && meta?.copySuffix != null;
+    const extractNumericSuffix2 = (candidate) => {
+      if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate;
+      if (typeof candidate === "string" && /^\d+$/.test(candidate)) return Number(candidate);
+      return null;
+    };
+    const extractSuffixFromId3 = (id) => {
+      if (!id) return null;
+      const match = /-(\d+)$/.exec(id);
+      if (!match) return null;
+      const parsed = Number(match[1]);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const copyRootCandidates = await prisma47.treeBranchLeafNode.findMany({
+      where: {
+        treeId: parentNode.treeId,
+        OR: uniqueBaseTemplateIds.map((t) => ({ id: { startsWith: `${t}-` } }))
+      },
+      select: { id: true, parentId: true }
+    });
+    console.log(
+      `\u{1F50E} [DUPLICATE-TEMPLATES] Racines de copies d\xE9tect\xE9es (repeater=${nodeId}) parentChildren=${existingChildrenByParent.length} rootCandidates=${copyRootCandidates.length}`
+    );
+    let globalMax = 0;
+    for (const root of copyRootCandidates) {
+      const fromId = extractSuffixFromId3(root.id);
+      const resolved = fromId ?? 0;
+      if (resolved > globalMax) globalMax = resolved;
+    }
+    const nextSuffix = globalMax + 1;
+    try {
+      const sample = copyRootCandidates.slice(0, 10).map((c) => {
+        const fromId = extractSuffixFromId3(c.id);
+        return { id: c.id, parentId: c.parentId, fromId };
       });
-      const createdSoFar = duplicatedSummaries.filter((d) => d.sourceTemplateId === template.id).length;
-      const copyNumber = validExistingCopies.length + createdSoFar + 1;
-      console.log(`\u{1F50D} [DEBUG-ROUTE] Template: "${template.label}" (${template.id})`);
-      console.log(`\u{1F50D} [DEBUG-ROUTE] validExistingCopies: ${validExistingCopies.length}`, validExistingCopies.map((c) => ({ id: c.id, copySuffix: c.metadata?.copySuffix })));
-      console.log(`\u{1F50D} [DEBUG-ROUTE] createdSoFar: ${createdSoFar}`);
-      console.log(`\u{1F50D} [DEBUG-ROUTE] copyNumber calcul\xE9: ${copyNumber}`);
-      const labelSuffix = ` (Copie ${copyNumber})`;
-      const result = await deepCopyNodeInternal(req2, template.id, {
+      console.log("\u{1F50E} [DUPLICATE-TEMPLATES] Sample racines candidates (id/suffix):", sample);
+    } catch {
+    }
+    console.log("\u{1F522} [DUPLICATE-TEMPLATES] Suffixe global calcul\xE9 (depuis enfants existants):");
+    console.log(`   max global existant: ${globalMax} \u2192 prochain suffixe: ${nextSuffix}`);
+    for (const template of templatesToDuplicateInOrder) {
+      const baseTemplateId = template.id;
+      const copyNumber = nextSuffix;
+      const labelSuffix = `-${copyNumber}`;
+      const result = await deepCopyNodeInternal(prisma47, req2, template.id, {
         targetParentId: nodeId,
-        labelSuffix,
         suffixNum: copyNumber,
-        preserveSharedReferences: true
-        // ðŸ”— PRÃ‰SERVER les rÃ©fÃ©rences partagÃ©es pour les copies de templates
+        preserveSharedReferences: true,
+        isFromRepeaterDuplication: true
       });
       const newRootId = result.root.newId;
-      console.log(`\u{1F3AF} [DUPLICATE-TEMPLATES] deepCopyNodeInternal newRootId:`, newRootId, `(type: ${typeof newRootId})`);
-      const normalizedCopyLabel = `${template.label || template.id}-${copyNumber}`;
-      await prisma46.treeBranchLeafNode.update({
+      console.log(`\u{1F3AF} [DUPLICATE-TEMPLATES] deepCopyNodeInternalService newRootId:`, newRootId, `(type: ${typeof newRootId})`);
+      const normalizedCopyLabel = `${template.label || baseTemplateId}-${copyNumber}`;
+      await prisma47.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
           label: normalizedCopyLabel,
           metadata: {
             ...typeof template.metadata === "object" ? template.metadata : {},
-            sourceTemplateId: template.id,
+            sourceTemplateId: baseTemplateId,
             duplicatedAt: (/* @__PURE__ */ new Date()).toISOString(),
             duplicatedFromRepeater: nodeId,
-            copiedFromNodeId: template.id,
+            copiedFromNodeId: baseTemplateId,
             copySuffix: copyNumber
           }
         }
       });
-      const created = await prisma46.treeBranchLeafNode.findUnique({
+      const created = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: newRootId },
         select: { id: true, label: true, type: true, parentId: true }
       });
@@ -31186,7 +33661,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
           label: created.label,
           type: created.type,
           parentId: created.parentId,
-          sourceTemplateId: template.id
+          sourceTemplateId: baseTemplateId
         });
         console.log(`\xE2\u0153\u2026 [DUPLICATE-TEMPLATES] Template "${template.label}" dupliqu\xC3\xA9 en profondeur \xE2\u2020\u2019 "${created.label}" (${created.id})`);
         try {
@@ -31203,7 +33678,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
             // ✅ Utiliser le tableIdMap peuplé
           };
           await copySelectorTablesAfterNodeCopy(
-            prisma46,
+            prisma47,
             newRootId,
             template.id,
             selectorCopyOptions,
@@ -31227,555 +33702,11 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la duplication des templates", details: msg });
   }
 });
-async function deepCopyNodeInternal(req2, nodeId, opts) {
-  const { targetParentId, suffixNum, preserveSharedReferences = false } = opts || {};
-  const replaceIdsInTokens = (tokens2, idMap2) => {
-    if (!tokens2) return tokens2;
-    const mapOne = (s) => s.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => {
-      const newId = idMap2.get(p1);
-      return newId ? `@value.${newId}` : `@value.${p1}`;
-    });
-    if (Array.isArray(tokens2)) return tokens2.map((t) => typeof t === "string" ? mapOne(t) : t);
-    if (typeof tokens2 === "string") return mapOne(tokens2);
-    try {
-      const asStr = JSON.stringify(tokens2);
-      const replaced = mapOne(asStr);
-      return JSON.parse(replaced);
-    } catch {
-      return tokens2;
-    }
-  };
-  const replaceIdsInConditionSet = (conditionSet, idMap2, formulaIdMap2) => {
-    if (!conditionSet) return conditionSet;
-    try {
-      let str = JSON.stringify(conditionSet);
-      str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => `@value.${idMap2.get(p1) || p1}`);
-      str = str.replace(/node-formula:([a-f0-9-]{36})/gi, (_m, p1) => `node-formula:${formulaIdMap2.get(p1) || p1}`);
-      return JSON.parse(str);
-    } catch {
-      return conditionSet;
-    }
-  };
-  const source = await prisma46.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    include: { TreeBranchLeafTree: { select: { organizationId: true } } }
-  });
-  if (!source) {
-    throw new Error("N\xC5\u201Cud source introuvable");
-  }
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-  if (!isSuperAdmin2 && organizationId && source.TreeBranchLeafTree.organizationId !== organizationId) {
-    throw new Error("Acc\xC3\xA8s non autoris\xC3\xA9 \xC3\xA0 cet arbre");
-  }
-  let __copySuffixNum = suffixNum || 1;
-  if (!suffixNum) {
-    const existingIdsWithSuffix = await prisma46.treeBranchLeafNode.findMany({
-      where: { treeId: source.treeId, id: { startsWith: `${source.id}-` } },
-      select: { id: true }
-    });
-    let _maxSuffixNum = 0;
-    for (const rec of existingIdsWithSuffix) {
-      const rest = rec.id.slice(source.id.length + 1);
-      if (/^\d+$/.test(rest)) {
-        const num = Number(rest);
-        if (Number.isFinite(num) && num > _maxSuffixNum) _maxSuffixNum = num;
-      }
-    }
-    __copySuffixNum = _maxSuffixNum + 1;
-  }
-  const __computedLabelSuffix = `-${__copySuffixNum}`;
-  const allNodes = await prisma46.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
-  const byId = new Map(allNodes.map((n) => [n.id, n]));
-  const childrenByParent = /* @__PURE__ */ new Map();
-  for (const n of allNodes) {
-    if (!n.parentId) continue;
-    const arr = childrenByParent.get(n.parentId) || [];
-    arr.push(n.id);
-    childrenByParent.set(n.parentId, arr);
-  }
-  const toCopy = /* @__PURE__ */ new Set();
-  const queue = [source.id];
-  while (queue.length) {
-    const cur = queue.shift();
-    if (toCopy.has(cur)) continue;
-    toCopy.add(cur);
-    const children = childrenByParent.get(cur) || [];
-    for (const c of children) queue.push(c);
-  }
-  const idMap = /* @__PURE__ */ new Map();
-  for (const oldId of toCopy) idMap.set(oldId, `${oldId}-${__copySuffixNum}`);
-  const formulaIdMap = /* @__PURE__ */ new Map();
-  const conditionIdMap = /* @__PURE__ */ new Map();
-  const tableIdMap2 = /* @__PURE__ */ new Map();
-  const buildCreationOrder = () => {
-    const edges = /* @__PURE__ */ new Map();
-    const indegree = /* @__PURE__ */ new Map();
-    const ensureNode = (id) => {
-      if (!edges.has(id)) edges.set(id, /* @__PURE__ */ new Set());
-      if (!indegree.has(id)) indegree.set(id, 0);
-    };
-    for (const id of toCopy) ensureNode(id);
-    for (const id of toCopy) {
-      const n = byId.get(id);
-      if (n?.parentId && toCopy.has(n.parentId)) {
-        const from = n.parentId;
-        const to = id;
-        const set = edges.get(from);
-        if (!set.has(to)) {
-          set.add(to);
-          indegree.set(to, (indegree.get(to) || 0) + 1);
-        }
-      }
-    }
-    const queue2 = [];
-    for (const [id, deg] of indegree.entries()) if (deg === 0) queue2.push(id);
-    const ordered = [];
-    while (queue2.length) {
-      const id = queue2.shift();
-      ordered.push(id);
-      for (const next of edges.get(id) || []) {
-        const d = (indegree.get(next) || 0) - 1;
-        indegree.set(next, d);
-        if (d === 0) queue2.push(next);
-      }
-    }
-    if (ordered.length !== toCopy.size) {
-      const remaining = new Set(Array.from(toCopy).filter((id) => !ordered.includes(id)));
-      const depth = /* @__PURE__ */ new Map();
-      const getDepth = (id) => {
-        if (depth.has(id)) return depth.get(id);
-        const n = byId.get(id);
-        if (!n || !n.parentId || !toCopy.has(n.parentId)) {
-          depth.set(id, 0);
-          return 0;
-        }
-        const d = getDepth(n.parentId) + 1;
-        depth.set(id, d);
-        return d;
-      };
-      const rest = Array.from(remaining).sort((a, b) => getDepth(a) - getDepth(b));
-      return [...ordered, ...rest];
-    }
-    return ordered;
-  };
-  const nodesToCreate = buildCreationOrder();
-  const createdNodes = [];
-  for (const oldId of nodesToCreate) {
-    const oldNode = byId.get(oldId);
-    const newId = idMap.get(oldId);
-    const isRoot = oldId === source.id;
-    const newParentId2 = (() => {
-      if (oldNode.parentId && toCopy.has(oldNode.parentId)) return idMap.get(oldNode.parentId);
-      if (isRoot) return targetParentId ?? oldNode.parentId ?? null;
-      return oldNode.parentId ?? null;
-    })();
-    const cloneData = {
-      id: newId,
-      treeId: oldNode.treeId,
-      type: oldNode.type,
-      subType: oldNode.subType,
-      fieldType: oldNode.fieldType,
-      label: oldNode.label ? `${oldNode.label}${__computedLabelSuffix}` : oldNode.label,
-      description: oldNode.description,
-      parentId: newParentId2,
-      order: oldNode.order,
-      isVisible: oldNode.isVisible,
-      isActive: oldNode.isActive,
-      isRequired: oldNode.isRequired,
-      isMultiple: oldNode.isMultiple,
-      // CapacitÃ©s
-      hasData: oldNode.hasData,
-      hasFormula: oldNode.hasFormula,
-      hasCondition: oldNode.hasCondition,
-      hasTable: oldNode.hasTable,
-      hasAPI: oldNode.hasAPI,
-      hasLink: oldNode.hasLink,
-      hasMarkers: oldNode.hasMarkers,
-      // Colonnes simples
-      defaultValue: oldNode.defaultValue,
-      calculatedValue: oldNode.calculatedValue,
-      // Apparence / text / number / select / date / image
-      appearance_size: oldNode.appearance_size,
-      appearance_variant: oldNode.appearance_variant,
-      appearance_width: oldNode.appearance_width,
-      text_placeholder: oldNode.text_placeholder,
-      text_maxLength: oldNode.text_maxLength,
-      text_minLength: oldNode.text_minLength,
-      text_mask: oldNode.text_mask,
-      text_regex: oldNode.text_regex,
-      text_rows: oldNode.text_rows,
-      text_helpTooltipType: oldNode.text_helpTooltipType,
-      text_helpTooltipText: oldNode.text_helpTooltipText,
-      text_helpTooltipImage: oldNode.text_helpTooltipImage,
-      number_min: oldNode.number_min,
-      number_max: oldNode.number_max,
-      number_step: oldNode.number_step,
-      number_decimals: oldNode.number_decimals,
-      number_prefix: oldNode.number_prefix,
-      number_suffix: oldNode.number_suffix,
-      number_unit: oldNode.number_unit,
-      number_defaultValue: oldNode.number_defaultValue,
-      select_multiple: oldNode.select_multiple,
-      select_searchable: oldNode.select_searchable,
-      select_allowClear: oldNode.select_allowClear,
-      select_source: oldNode.select_source ? (() => {
-        const source2 = oldNode.select_source;
-        if (source2.startsWith("@table.")) {
-          const tableId = source2.substring(7);
-          const newTableId = idMap.get(tableId);
-          if (newTableId) {
-            return `@table.${newTableId}`;
-          }
-        }
-        return source2;
-      })() : oldNode.select_source,
-      select_defaultValue: oldNode.select_defaultValue,
-      select_options: oldNode.select_options ? (() => {
-        try {
-          const str = JSON.stringify(oldNode.select_options);
-          let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
-          replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
-          return JSON.parse(replaced);
-        } catch {
-          return oldNode.select_options;
-        }
-      })() : oldNode.select_options,
-      bool_trueLabel: oldNode.bool_trueLabel,
-      bool_falseLabel: oldNode.bool_falseLabel,
-      bool_defaultValue: oldNode.bool_defaultValue,
-      date_format: oldNode.date_format,
-      date_minDate: oldNode.date_minDate,
-      date_maxDate: oldNode.date_maxDate,
-      date_showTime: oldNode.date_showTime,
-      image_maxSize: oldNode.image_maxSize,
-      image_ratio: oldNode.image_ratio,
-      image_crop: oldNode.image_crop,
-      image_thumbnails: oldNode.image_thumbnails ? (() => {
-        try {
-          const str = JSON.stringify(oldNode.image_thumbnails);
-          let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
-          replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
-          return JSON.parse(replaced);
-        } catch {
-          return oldNode.image_thumbnails;
-        }
-      })() : oldNode.image_thumbnails,
-      link_activeId: oldNode.link_activeId,
-      link_carryContext: oldNode.link_carryContext,
-      link_mode: oldNode.link_mode,
-      link_name: oldNode.link_name,
-      link_params: oldNode.link_params ? (() => {
-        try {
-          const str = JSON.stringify(oldNode.link_params);
-          let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
-          replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
-          return JSON.parse(replaced);
-        } catch {
-          return oldNode.link_params;
-        }
-      })() : oldNode.link_params,
-      link_targetNodeId: oldNode.link_targetNodeId && idMap.has(oldNode.link_targetNodeId) ? idMap.get(oldNode.link_targetNodeId) : oldNode.link_targetNodeId,
-      link_targetTreeId: oldNode.link_targetTreeId,
-      // 📊 TABLE: Copier table_activeId, table_instances et table_name du noeud original
-      // ✅ IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiées
-      table_activeId: oldNode.table_activeId ? `${oldNode.table_activeId}-${__copySuffixNum}` : null,
-      table_instances: (() => {
-        console.log("\n[DEEP-COPY-TABLE] D\xC9BUT table_instances");
-        console.log("[DEEP-COPY-TABLE] oldNode.table_instances existe?", !!oldNode.table_instances);
-        console.log("[DEEP-COPY-TABLE] typeof:", typeof oldNode.table_instances);
-        console.log("[DEEP-COPY-TABLE] Constructor:", oldNode.table_instances?.constructor?.name);
-        console.log("[DEEP-COPY-TABLE] value:", JSON.stringify(oldNode.table_instances).substring(0, 200));
-        if (!oldNode.table_instances) {
-          console.log("[DEEP-COPY-TABLE] RETURN: falsy");
-          return oldNode.table_instances;
-        }
-        let rawInstances;
-        try {
-          if (typeof oldNode.table_instances === "string") {
-            console.log("[DEEP-COPY-TABLE] Parsing string JSON");
-            rawInstances = JSON.parse(oldNode.table_instances);
-          } else if (typeof oldNode.table_instances === "object") {
-            console.log("[DEEP-COPY-TABLE] Objet, stringify + parse");
-            rawInstances = JSON.parse(JSON.stringify(oldNode.table_instances));
-          } else {
-            console.log("[DEEP-COPY-TABLE] Type inconnu, return as-is");
-            return oldNode.table_instances;
-          }
-        } catch (e) {
-          console.error("[DEEP-COPY-TABLE] Parse failed:", e);
-          return oldNode.table_instances;
-        }
-        console.log("[DEEP-COPY-TABLE] Keys:", Object.keys(rawInstances));
-        const updatedInstances = {};
-        for (const [key2, value] of Object.entries(rawInstances)) {
-          const hasSuffixRegex = /-\d+$/;
-          const newKey = hasSuffixRegex.test(key2) ? key2 : `${key2}-${__copySuffixNum}`;
-          console.log(`[DEEP-COPY-TABLE] Key: "${key2}" => "${newKey}"`);
-          if (value && typeof value === "object") {
-            const tableInstanceObj = value;
-            const updatedObj = { ...tableInstanceObj };
-            if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === "string") {
-              const oldTableId = tableInstanceObj.tableId;
-              const hasSuffixRegex2 = /-\d+$/;
-              updatedObj.tableId = hasSuffixRegex2.test(oldTableId) ? oldTableId : `${oldTableId}-${__copySuffixNum}`;
-              console.log(`[DEEP-COPY-TABLE]   tableId: "${oldTableId}" => "${updatedObj.tableId}"`);
-            }
-            updatedInstances[newKey] = updatedObj;
-          } else {
-            updatedInstances[newKey] = value;
-          }
-        }
-        console.log("[DEEP-COPY-TABLE] FINAL result:", JSON.stringify(updatedInstances).substring(0, 200));
-        console.log("[DEEP-COPY-TABLE] FIN table_instances\n");
-        return updatedInstances;
-      })(),
-      table_name: oldNode.table_name,
-      // Répéter: recopier la config colonnes repeater telle quelle
-      repeater_templateNodeIds: oldNode.repeater_templateNodeIds,
-      repeater_templateNodeLabels: oldNode.repeater_templateNodeLabels,
-      repeater_minItems: oldNode.repeater_minItems,
-      repeater_maxItems: oldNode.repeater_maxItems,
-      repeater_addButtonLabel: oldNode.repeater_addButtonLabel,
-      repeater_buttonSize: oldNode.repeater_buttonSize,
-      repeater_buttonWidth: oldNode.repeater_buttonWidth,
-      repeater_iconOnly: oldNode.repeater_iconOnly,
-      // METADATA: noter la provenance et supprimer les shared refs (copie indÃ©pendante)
-      metadata: {
-        ...typeof oldNode.metadata === "object" ? oldNode.metadata : {},
-        copiedFromNodeId: oldNode.id,
-        copySuffix: __copySuffixNum
-      },
-      // SHARED REFS â†’ conditionnellement prÃ©servÃ©es ou supprimÃ©es
-      isSharedReference: preserveSharedReferences ? oldNode.isSharedReference : false,
-      sharedReferenceId: preserveSharedReferences ? oldNode.sharedReferenceId : null,
-      sharedReferenceIds: preserveSharedReferences ? oldNode.sharedReferenceIds : [],
-      sharedReferenceName: preserveSharedReferences ? oldNode.sharedReferenceName : null,
-      sharedReferenceDescription: preserveSharedReferences ? oldNode.sharedReferenceDescription : null,
-      // 🔗 COLONNES LINKED*** : Copier les références existantes, créer les nouvelles après
-      linkedFormulaIds: Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [],
-      linkedConditionIds: Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [],
-      linkedTableIds: Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds.map((id) => `${id}-${__copySuffixNum}`) : [],
-      linkedVariableIds: Array.isArray(oldNode.linkedVariableIds) ? oldNode.linkedVariableIds : [],
-      updatedAt: /* @__PURE__ */ new Date()
-    };
-    console.log(`\u{1F680} [CREATE-NODE] Cr\xE9ation n\u0153ud ${newId} (${oldNode.label})`);
-    console.log(`   oldNode.linkedVariableIds:`, oldNode.linkedVariableIds);
-    console.log(`   cloneData.linkedVariableIds:`, cloneData.linkedVariableIds);
-    await prisma46.treeBranchLeafNode.create({ data: cloneData });
-    createdNodes.push({ oldId, newId });
-  }
-  for (const { oldId, newId } of createdNodes) {
-    const formulas = await prisma46.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
-    for (const f of formulas) {
-      const newFormulaId = `${f.id}-${__copySuffixNum}`;
-      formulaIdMap.set(f.id, newFormulaId);
-      const newTokens = replaceIdsInTokens(f.tokens, idMap);
-      await prisma46.treeBranchLeafNodeFormula.create({
-        data: {
-          id: newFormulaId,
-          nodeId: newId,
-          organizationId: f.organizationId,
-          name: f.name ? `${f.name}${__computedLabelSuffix}` : f.name,
-          tokens: newTokens,
-          description: f.description,
-          isDefault: f.isDefault,
-          order: f.order,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-      try {
-        await addToNodeLinkedField6(prisma46, newId, "linkedFormulaIds", [newFormulaId]);
-        const refs = Array.from(extractNodeIdsFromTokens(newTokens));
-        for (const refId of refs) {
-          await addToNodeLinkedField6(prisma46, normalizeRefId(refId), "linkedFormulaIds", [newFormulaId]);
-        }
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds during deep copy:", e.message);
-      }
-    }
-    const conditions = await prisma46.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
-    for (const c of conditions) {
-      const newConditionId = `${c.id}-${__copySuffixNum}`;
-      conditionIdMap.set(c.id, newConditionId);
-      const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap);
-      await prisma46.treeBranchLeafNodeCondition.create({
-        data: {
-          id: newConditionId,
-          nodeId: newId,
-          organizationId: c.organizationId,
-          name: c.name ? `${c.name}${__computedLabelSuffix}` : c.name,
-          conditionSet: newSet,
-          description: c.description,
-          isDefault: c.isDefault,
-          order: c.order,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-      try {
-        await addToNodeLinkedField6(prisma46, newId, "linkedConditionIds", [newConditionId]);
-        const refs = Array.from(extractNodeIdsFromConditionSet(newSet));
-        for (const refId of refs) {
-          await addToNodeLinkedField6(prisma46, normalizeRefId(refId), "linkedConditionIds", [newConditionId]);
-        }
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
-      }
-    }
-    const tables = await prisma46.treeBranchLeafNodeTable.findMany({
-      where: { nodeId: oldId },
-      include: { tableColumns: true, tableRows: true }
-    });
-    for (const t of tables) {
-      const newTableId = `${t.id}-${__copySuffixNum}`;
-      tableIdMap2.set(t.id, newTableId);
-      await prisma46.treeBranchLeafNodeTable.create({
-        data: {
-          id: newTableId,
-          nodeId: newId,
-          organizationId: t.organizationId,
-          name: t.name ? `${t.name}${__computedLabelSuffix}` : t.name,
-          description: t.description,
-          type: t.type,
-          rowCount: t.rowCount,
-          columnCount: t.columnCount,
-          meta: t.meta,
-          isDefault: t.isDefault,
-          order: t.order,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date(),
-          lookupDisplayColumns: t.lookupDisplayColumns,
-          lookupSelectColumn: t.lookupSelectColumn,
-          tableColumns: {
-            create: t.tableColumns.map((col) => ({
-              id: `${col.id}-${__copySuffixNum}`,
-              columnIndex: col.columnIndex,
-              name: col.name ? `${col.name}${__computedLabelSuffix}` : col.name,
-              type: col.type,
-              width: col.width,
-              format: col.format,
-              metadata: col.metadata
-            }))
-          },
-          tableRows: {
-            create: t.tableRows.map((row) => ({
-              id: `${row.id}-${__copySuffixNum}`,
-              rowIndex: row.rowIndex,
-              cells: row.cells
-            }))
-          }
-        }
-      });
-      try {
-        await addToNodeLinkedField6(prisma46, newId, "linkedTableIds", [newTableId]);
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedTableIds during deep copy:", e.message);
-      }
-    }
-  }
-  const variableCopyCache = /* @__PURE__ */ new Map();
-  for (const oldNodeId of toCopy) {
-    const newNodeId = idMap.get(oldNodeId);
-    const oldNode = byId.get(oldNodeId);
-    const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : []).map((id) => {
-      const mappedId = formulaIdMap.get(id);
-      return mappedId ?? `${id}-${__copySuffixNum}`;
-    }).filter(Boolean);
-    const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : []).map((id) => {
-      const mappedId = conditionIdMap.get(id);
-      return mappedId ?? `${id}-${__copySuffixNum}`;
-    }).filter(Boolean);
-    const newLinkedTableIds = (Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : []).map((id) => {
-      const mappedId = tableIdMap2.get(id);
-      return mappedId ?? `${id}-${__copySuffixNum}`;
-    }).filter(Boolean);
-    const newLinkedVariableIds = [];
-    console.log(`
-[DEEP-COPY] \u2B50 COPIE linkedVariableIds pour n\u0153ud ${newNodeId}`);
-    console.log(`[DEEP-COPY] Ancien n\u0153ud label: ${oldNode.label}`);
-    console.log(`[DEEP-COPY] Ancien n\u0153ud type: ${oldNode.type}, subType: ${oldNode.subType}`);
-    console.log(`[DEEP-COPY] linkedVariableIds RAW:`, oldNode.linkedVariableIds);
-    const shouldCreateDisplayNodes = true;
-    console.log(`[DEEP-COPY] shouldCreateDisplayNodes (forced): ${shouldCreateDisplayNodes}`);
-    if (Array.isArray(oldNode.linkedVariableIds) && oldNode.linkedVariableIds.length > 0) {
-      console.log(`[DEEP-COPY] \u2705 COPIE ${oldNode.linkedVariableIds.length} variable(s)`);
-      for (const linkedVarId of oldNode.linkedVariableIds) {
-        const isSharedRef = typeof linkedVarId === "string" && linkedVarId.startsWith("shared-ref-");
-        console.log(`[DEEP-COPY] Traitement linkedVarId="${linkedVarId}", isSharedRef=${isSharedRef}`);
-        if (isSharedRef) {
-          console.log(`[DEEP-COPY] PRESERVED SHARED: ${linkedVarId}`);
-          newLinkedVariableIds.push(linkedVarId);
-        } else {
-          const newVarId = `${linkedVarId}-${__copySuffixNum}`;
-          console.log(`[DEEP-COPY] COPYING NORMAL VAR: ${linkedVarId} \u2192 ${newVarId}`);
-          try {
-            if (shouldCreateDisplayNodes) {
-              console.log(`[DEEP-COPY] \u{1F3AF} Appel copyVariableWithCapacities avec autoCreateDisplayNode=true`);
-              const copyResult = await copyVariableWithCapacities(
-                linkedVarId,
-                __copySuffixNum,
-                newNodeId,
-                prisma46,
-                {
-                  formulaIdMap,
-                  conditionIdMap,
-                  tableIdMap: tableIdMap2,
-                  nodeIdMap: idMap,
-                  variableCopyCache,
-                  autoCreateDisplayNode: true,
-                  displayNodeAlreadyCreated: false
-                }
-              );
-              if (copyResult.success) {
-                console.log(`[DEEP-COPY] \u2705 Created with display node: ${copyResult.variableId}`);
-                newLinkedVariableIds.push(copyResult.variableId);
-              } else {
-                console.error(`[DEEP-COPY] \u274C Copy failed: ${copyResult.error}`);
-                newLinkedVariableIds.push(linkedVarId);
-              }
-            }
-          } catch (e) {
-            console.error(`[DEEP-COPY] \u274C Exception: ${e.message}`);
-            newLinkedVariableIds.push(linkedVarId);
-          }
-        }
-      }
-      console.log(`[DEEP-COPY] DONE - Total: ${newLinkedVariableIds.length}`);
-    } else {
-      console.log(`[DEEP-COPY] NO linked variables`);
-    }
-    if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0 || newLinkedVariableIds.length > 0) {
-      try {
-        await prisma46.treeBranchLeafNode.update({
-          where: { id: newNodeId },
-          data: {
-            linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
-            linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
-            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] },
-            linkedVariableIds: newLinkedVariableIds.length > 0 ? { set: newLinkedVariableIds } : { set: [] }
-          }
-        });
-        console.log(`\u2705 [DEEP-COPY] N\u0153ud ${newNodeId} mis \xE0 jour - linkedFormulaIds: ${newLinkedFormulaIds.length}, linkedConditionIds: ${newLinkedConditionIds.length}, linkedTableIds: ${newLinkedTableIds.length}, linkedVariableIds: ${newLinkedVariableIds.length}`);
-      } catch (e) {
-        console.warn(`\u26A0\uFE0F [DEEP-COPY] Erreur lors du UPDATE des linked*** pour ${newNodeId}:`, e.message);
-      }
-    }
-  }
-  const rootNewId = idMap.get(source.id);
-  return {
-    root: { oldId: source.id, newId: rootNewId },
-    idMap: Object.fromEntries(idMap),
-    formulaIdMap: Object.fromEntries(formulaIdMap),
-    conditionIdMap: Object.fromEntries(conditionIdMap),
-    tableIdMap: Object.fromEntries(tableIdMap2)
-  };
-}
 router56.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { targetParentId, labelSuffix } = req2.body || {};
-    const result = await deepCopyNodeInternal(req2, nodeId, { targetParentId, labelSuffix });
+    const result = await deepCopyNodeInternal(prisma47, req2, nodeId, { targetParentId });
     res.json(result);
   } catch (error) {
     console.error("\xE2\x9D\u0152 [/nodes/:nodeId/deep-copy] Erreur:", error);
@@ -31788,7 +33719,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
     const { organizationId } = req2.user;
     const nodeData = req2.body;
     console.log("[TreeBranchLeaf API] Creating node:", { treeId, nodeData });
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: { id: treeId, organizationId }
     });
     if (!tree) {
@@ -31833,7 +33764,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
       });
     }
     if (nodeData.parentId) {
-      const parentNode = await prisma46.treeBranchLeafNode.findFirst({
+      const parentNode = await prisma47.treeBranchLeafNode.findFirst({
         where: { id: nodeData.parentId, treeId }
       });
       if (!parentNode) {
@@ -31887,7 +33818,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
     }
     const { randomUUID: randomUUID9 } = await import("crypto");
     const nodeId = randomUUID9();
-    const node = await prisma46.treeBranchLeafNode.create({
+    const node = await prisma47.treeBranchLeafNode.create({
       data: {
         id: nodeId,
         treeId,
@@ -31943,6 +33874,28 @@ function mapJSONToColumns(updateData) {
     if (appearanceConfig.textSize) columnData.appearance_size = appearanceConfig.textSize;
     if (appearanceConfig.fieldWidth) columnData.appearance_width = appearanceConfig.fieldWidth;
     if (appearanceConfig.fieldVariant) columnData.appearance_variant = appearanceConfig.fieldVariant;
+    if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
+    if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
+    if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
+    if (appearanceConfig.collapsible !== void 0) columnData.section_collapsible = appearanceConfig.collapsible;
+    if (appearanceConfig.defaultCollapsed !== void 0) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
+    if (appearanceConfig.showChildrenCount !== void 0) columnData.section_showChildrenCount = appearanceConfig.showChildrenCount;
+    if (appearanceConfig.columnsDesktop !== void 0) columnData.section_columnsDesktop = appearanceConfig.columnsDesktop;
+    if (appearanceConfig.columnsMobile !== void 0) columnData.section_columnsMobile = appearanceConfig.columnsMobile;
+    if (appearanceConfig.gutter !== void 0) columnData.section_gutter = appearanceConfig.gutter;
+    if (appearanceConfig.maxFileSize !== void 0) columnData.file_maxSize = appearanceConfig.maxFileSize;
+    if (appearanceConfig.allowedTypes) columnData.file_allowedTypes = appearanceConfig.allowedTypes;
+    if (appearanceConfig.multiple !== void 0) columnData.file_multiple = appearanceConfig.multiple;
+    if (appearanceConfig.showPreview !== void 0) columnData.file_showPreview = appearanceConfig.showPreview;
+    if (appearanceConfig.visibleToUser !== void 0) columnData.data_visibleToUser = appearanceConfig.visibleToUser;
+    if (appearanceConfig.isRequired !== void 0) columnData.isRequired = appearanceConfig.isRequired;
+    if (appearanceConfig.prefix !== void 0) columnData.number_prefix = appearanceConfig.prefix || null;
+    if (appearanceConfig.suffix !== void 0) columnData.number_suffix = appearanceConfig.suffix || null;
+    if (appearanceConfig.unit !== void 0) columnData.number_unit = appearanceConfig.unit || null;
+    if (appearanceConfig.decimals !== void 0) columnData.number_decimals = appearanceConfig.decimals;
+    if (appearanceConfig.min !== void 0) columnData.number_min = appearanceConfig.min;
+    if (appearanceConfig.max !== void 0) columnData.number_max = appearanceConfig.max;
+    if (appearanceConfig.step !== void 0) columnData.number_step = appearanceConfig.step;
   }
   if (metadata.appearance && typeof metadata.appearance === "object") {
     const metaAppearance = metadata.appearance;
@@ -32013,9 +33966,9 @@ function mapJSONToColumns(updateData) {
     if (numberConfig.max !== void 0) columnData.number_max = numberConfig.max;
     if (numberConfig.step !== void 0) columnData.number_step = numberConfig.step;
     if (numberConfig.decimals !== void 0) columnData.number_decimals = numberConfig.decimals;
-    if (numberConfig.prefix) columnData.number_prefix = numberConfig.prefix;
-    if (numberConfig.suffix) columnData.number_suffix = numberConfig.suffix;
-    if (numberConfig.unit) columnData.number_unit = numberConfig.unit;
+    if (numberConfig.prefix !== void 0) columnData.number_prefix = numberConfig.prefix || null;
+    if (numberConfig.suffix !== void 0) columnData.number_suffix = numberConfig.suffix || null;
+    if (numberConfig.unit !== void 0) columnData.number_unit = numberConfig.unit || null;
     if (numberConfig.defaultValue !== void 0) columnData.number_defaultValue = numberConfig.defaultValue;
   }
   const selectConfig = metadata.selectConfig || fieldConfig.select || fieldConfig.selectConfig || {};
@@ -32062,7 +34015,7 @@ function mapJSONToColumns(updateData) {
   });
   return columnData;
 }
-function buildResponseFromColumns(node) {
+function buildResponseFromColumns2(node) {
   const appearance = {
     size: node.appearance_size || "md",
     width: node.appearance_width || null,
@@ -32143,10 +34096,11 @@ function buildResponseFromColumns(node) {
       min: node.number_min || null,
       max: node.number_max || null,
       step: node.number_step || 1,
-      decimals: node.number_decimals || 0,
+      // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      decimals: node.data_precision ?? node.number_decimals ?? 0,
       prefix: node.number_prefix || null,
       suffix: node.number_suffix || null,
-      unit: node.number_unit || null,
+      unit: node.number_unit ?? node.data_unit ?? null,
       defaultValue: node.number_defaultValue || null
     },
     select: {
@@ -32303,8 +34257,9 @@ function buildResponseFromColumns(node) {
         min: node.number_min ?? null,
         max: node.number_max ?? null,
         step: node.number_step ?? 1,
-        decimals: node.number_decimals ?? 0,
-        unit: node.number_unit || null,
+        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage
+        decimals: node.data_precision ?? node.number_decimals ?? 0,
+        unit: node.number_unit ?? node.data_unit ?? null,
         prefix: node.number_prefix || null,
         suffix: node.number_suffix || null,
         defaultValue: node.number_defaultValue || null
@@ -32470,7 +34425,7 @@ var updateOrMoveNode = async (req2, res) => {
     for (const k of ["markers", "hasMarkers"]) {
       if (k in updateObj) delete updateObj[k];
     }
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: { id: treeId, organizationId }
     });
     if (!tree) {
@@ -32480,11 +34435,11 @@ var updateOrMoveNode = async (req2, res) => {
     delete updateObj.treeId;
     delete updateObj.createdAt;
     console.log("\xF0\u0178\u201D\x8D [updateOrMoveNode] Recherche n\xC5\u201Cud:", { nodeId, treeId, organizationId });
-    const existingNode = await prisma46.treeBranchLeafNode.findFirst({
+    const existingNode = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId }
     });
     if (!existingNode) {
-      const nodeAnyTree = await prisma46.treeBranchLeafNode.findFirst({
+      const nodeAnyTree = await prisma47.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
       });
       console.error("\u274C [updateOrMoveNode] N\u0153ud non trouv\xE9 - DEBUG:", {
@@ -32493,7 +34448,7 @@ var updateOrMoveNode = async (req2, res) => {
         organizationId,
         nodeExistsElsewhere: !!nodeAnyTree,
         nodeActualTreeId: nodeAnyTree?.treeId,
-        allNodesInTree: await prisma46.treeBranchLeafNode.count({ where: { treeId } })
+        allNodesInTree: await prisma47.treeBranchLeafNode.count({ where: { treeId } })
       });
       return res.status(404).json({
         error: "N\u0153ud non trouv\xE9",
@@ -32507,25 +34462,25 @@ var updateOrMoveNode = async (req2, res) => {
     }
     const targetId = updateData.targetId;
     const position = updateData.position;
-    let newParentId2 = updateData.parentId;
+    let newParentId = updateData.parentId;
     let desiredIndex = void 0;
     if (targetId) {
-      const targetNode = await prisma46.treeBranchLeafNode.findFirst({ where: { id: targetId, treeId } });
+      const targetNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: targetId, treeId } });
       if (!targetNode) {
         return res.status(400).json({ error: "Cible de d\xC3\xA9placement non trouv\xC3\xA9e" });
       }
       if (position === "child") {
-        newParentId2 = targetNode.id;
+        newParentId = targetNode.id;
         desiredIndex = void 0;
       } else {
-        newParentId2 = targetNode.parentId || null;
+        newParentId = targetNode.parentId || null;
         desiredIndex = -1;
       }
     }
-    if (newParentId2 !== void 0) {
-      if (newParentId2) {
-        const newParentNode = await prisma46.treeBranchLeafNode.findFirst({
-          where: { id: newParentId2, treeId }
+    if (newParentId !== void 0) {
+      if (newParentId) {
+        const newParentNode = await prisma47.treeBranchLeafNode.findFirst({
+          where: { id: newParentId, treeId }
         });
         if (!newParentNode) {
           return res.status(400).json({ error: "Parent non trouv\xC3\xA9" });
@@ -32559,10 +34514,10 @@ var updateOrMoveNode = async (req2, res) => {
         }
       }
     }
-    const isMoveOperation = targetId && position || newParentId2 !== void 0 || typeof updateObj.order === "number";
+    const isMoveOperation = targetId && position || newParentId !== void 0 || typeof updateObj.order === "number";
     if (isMoveOperation) {
-      const destinationParentId = newParentId2 !== void 0 ? newParentId2 : existingNode.parentId;
-      const siblings = await prisma46.treeBranchLeafNode.findMany({
+      const destinationParentId = newParentId !== void 0 ? newParentId : existingNode.parentId;
+      const siblings = await prisma47.treeBranchLeafNode.findMany({
         where: { treeId, parentId: destinationParentId || null, NOT: { id: nodeId } },
         orderBy: [{ order: "asc" }, { createdAt: "asc" }]
       });
@@ -32585,7 +34540,7 @@ var updateOrMoveNode = async (req2, res) => {
       }
       const finalOrder = [...siblings.map((s) => s.id)];
       finalOrder.splice(insertIndex, 0, nodeId);
-      await prisma46.$transaction(async (tx) => {
+      await prisma47.$transaction(async (tx) => {
         if (destinationParentId !== existingNode.parentId) {
           await tx.treeBranchLeafNode.update({
             where: { id: nodeId },
@@ -32600,9 +34555,9 @@ var updateOrMoveNode = async (req2, res) => {
           });
         }
       });
-      const updatedNode2 = await prisma46.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+      const updatedNode2 = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
       console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S d\xC3\xA9placement - reconstruction depuis colonnes");
-      const responseData2 = updatedNode2 ? buildResponseFromColumns(updatedNode2) : updatedNode2;
+      const responseData2 = updatedNode2 ? buildResponseFromColumns2(updatedNode2) : updatedNode2;
       return res.json(responseData2);
     }
     if (updateObj.repeater_buttonSize || updateObj.repeater_maxItems !== void 0 || updateObj.repeater_minItems !== void 0) {
@@ -32630,17 +34585,17 @@ var updateOrMoveNode = async (req2, res) => {
         console.warn("[updateOrMoveNode] Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
       }
     }
-    await prisma46.treeBranchLeafNode.update({
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
     });
-    const updatedNode = await prisma46.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+    const updatedNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
     console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S mise \xC3\xA0 jour - n\xC5\u201Cud brut Prisma:", {
       "updatedNode.metadata": updatedNode?.metadata,
       "updatedNode.metadata typeof": typeof updatedNode?.metadata
     });
     console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S mise \xC3\xA0 jour - reconstruction depuis colonnes");
-    const responseData = updatedNode ? buildResponseFromColumns(updatedNode) : updatedNode;
+    const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
     console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S buildResponseFromColumns:", {
       "responseData.metadata": responseData?.metadata,
       "responseData.metadata.repeater": responseData?.metadata?.repeater
@@ -32665,7 +34620,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: { id: treeId }
     });
     if (!tree) {
@@ -32674,7 +34629,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tree.organizationId && tree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
     }
-    const allNodes = await prisma46.treeBranchLeafNode.findMany({ where: { treeId } });
+    const allNodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
     const childrenByParent = /* @__PURE__ */ new Map();
     for (const n of allNodes) {
       if (!n.parentId) continue;
@@ -32708,7 +34663,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     }
     toDelete.sort((a, b) => depth.get(b) - depth.get(a));
     const deletedSubtreeIds = [];
-    await prisma46.$transaction(async (tx) => {
+    await prisma47.$transaction(async (tx) => {
       for (const id of toDelete) {
         try {
           await tx.treeBranchLeafNode.delete({ where: { id } });
@@ -32723,7 +34678,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     let deletedExtra = 0;
     const deletedExtraIds = [];
     if (referencedIds.size > 0) {
-      const remaining = await prisma46.treeBranchLeafNode.findMany({ where: { treeId } });
+      const remaining = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
       const stillRef = /* @__PURE__ */ new Set();
       for (const n of remaining) {
         if (n.sharedReferenceId && referencedIds.has(n.sharedReferenceId)) stillRef.add(n.sharedReferenceId);
@@ -32758,7 +34713,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
           }
         }
         const ordered = Array.from(delSet).sort((a, b) => ddepth.get(b) - ddepth.get(a));
-        await prisma46.$transaction(async (tx) => {
+        await prisma47.$transaction(async (tx) => {
           for (const id of ordered) {
             await tx.treeBranchLeafNode.delete({ where: { id } });
             deletedOrphans++;
@@ -32768,7 +34723,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       }
     }
     try {
-      const remainingNodes = await prisma46.treeBranchLeafNode.findMany({ where: { treeId } });
+      const remainingNodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
       const nodesToScan = remainingNodes;
       const removedSet = new Set(toDelete);
       const removedRepeaterCopyPairs = /* @__PURE__ */ new Set();
@@ -32801,6 +34756,10 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       const debugDelete = typeof process !== "undefined" && process.env && process.env.DEBUG_TBL_DELETE === "1";
       const extraCandidates = nodesToScan.filter((n) => {
         const meta = n.metadata || {};
+        if (meta?.isSumDisplayField === true || n.id.endsWith("-sum-total")) {
+          if (debugDelete) console.log("[DELETE DEBUG] \u{1F6E1}\uFE0F N\u0153ud Total PROT\xC9G\xC9 (extraCandidates):", n.id);
+          return false;
+        }
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
         if (!looksLikeDisplay) return false;
         if (removedSet.has(n.id)) return false;
@@ -32979,7 +34938,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
           }
         }
         const ordered = Array.from(delSet).sort((a, b) => ddepth.get(b) - ddepth.get(a));
-        await prisma46.$transaction(async (tx) => {
+        await prisma47.$transaction(async (tx) => {
           for (const id of ordered) {
             const candidateNode = remainingNodes.find((x) => x.id === id);
             if (debugDelete && candidateNode) console.log("[DELETE DEBUG] Extra candidate to delete:", { id: candidateNode.id, label: candidateNode.label, metadata: candidateNode.metadata });
@@ -33000,6 +34959,57 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     }
     const allDeletedSet = /* @__PURE__ */ new Set([...deletedSubtreeIds, ...deletedOrphansIds, ...deletedExtraIds]);
     const allDeletedIds = Array.from(allDeletedSet);
+    try {
+      const variablesToCheck = await prisma47.treeBranchLeafNodeVariable.findMany({
+        where: {
+          OR: [
+            { nodeId: { in: allDeletedIds } },
+            // Variables attachées aux nodes supprimés
+            { sourceNodeId: { in: allDeletedIds } }
+            // Variables pointant depuis les nodes supprimés
+          ]
+        },
+        select: { id: true, name: true, nodeId: true }
+      });
+      console.log(`[DELETE] Trouv\xE9 ${variablesToCheck.length} variable(s) potentiellement orpheline(s)`);
+      const varIdsToDelete = [];
+      const suffixPattern = /-\d+$/;
+      for (const variable of variablesToCheck) {
+        if (suffixPattern.test(variable.id)) {
+          console.log(`[DELETE] \u{1F5D1}\uFE0F Variable suffix\xE9e sera supprim\xE9e: ${variable.name} (${variable.id})`);
+          varIdsToDelete.push(variable.id);
+        } else {
+          console.log(`[DELETE] \u{1F6E1}\uFE0F Variable ORIGINALE sera PR\xC9SERV\xC9E: ${variable.name} (${variable.id})`);
+        }
+      }
+      if (varIdsToDelete.length > 0) {
+        const deletedVarCount = await prisma47.treeBranchLeafNodeVariable.deleteMany({
+          where: { id: { in: varIdsToDelete } }
+        });
+        console.log(`[DELETE] \u2705 ${deletedVarCount.count} variable(s) suffix\xE9e(s) supprim\xE9e(s)`);
+      } else {
+        console.log(`[DELETE] \u2139\uFE0F Aucune variable suffix\xE9e \xE0 supprimer (variables originales pr\xE9serv\xE9es)`);
+      }
+    } catch (varCleanError) {
+      console.warn("[DELETE] Impossible de nettoyer les variables orphelines:", varCleanError.message);
+    }
+    try {
+      const remainingNodes = await prisma47.treeBranchLeafNode.findMany({
+        where: { treeId },
+        select: { id: true, metadata: true }
+      });
+      for (const node of remainingNodes) {
+        const meta = node.metadata;
+        if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
+          console.log(`[DELETE] \u{1F4CA} Mise \xE0 jour du champ Total: ${node.id}`);
+          updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma47).catch((err) => {
+            console.warn(`[DELETE] \u26A0\uFE0F Erreur mise \xE0 jour champ Total ${node.id}:`, err);
+          });
+        }
+      }
+    } catch (sumUpdateError) {
+      console.warn("[DELETE] Erreur lors de la mise \xE0 jour des champs Total:", sumUpdateError.message);
+    }
     res.json({
       success: true,
       message: `Sous-arbre supprim\xE9 (${deletedSubtreeIds.length} n\u0153ud(s)), orphelines supprim\xE9es: ${deletedOrphans}`,
@@ -33012,7 +35022,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       deletedExtraIds
     });
     try {
-      const remainingAfterFirstPass = await prisma46.treeBranchLeafNode.findMany({ where: { treeId } });
+      const remainingAfterFirstPass = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
       const deeperDeletedIds = [];
       const removedIdStrings = allDeletedIds.map((i) => String(i));
       const containsRemovedId = (val) => {
@@ -33035,6 +35045,15 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       };
       const extraToDelete = remainingAfterFirstPass.filter((n) => {
         if (!n.metadata) return false;
+        const meta = n.metadata;
+        if (meta?.isSumDisplayField === true) {
+          console.log(`[AGGRESSIVE CLEANUP] \u{1F6E1}\uFE0F N\u0153ud Total PROT\xC9G\xC9: ${n.id} (${n.label})`);
+          return false;
+        }
+        if (n.id.endsWith("-sum-total")) {
+          console.log(`[AGGRESSIVE CLEANUP] \u{1F6E1}\uFE0F N\u0153ud Total PROT\xC9G\xC9 (par ID): ${n.id}`);
+          return false;
+        }
         try {
           return containsRemovedId(n.metadata);
         } catch {
@@ -33043,7 +35062,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       }).map((x) => x.id);
       if (extraToDelete.length > 0) {
         const dd = [];
-        await prisma46.$transaction(async (tx) => {
+        await prisma47.$transaction(async (tx) => {
           for (const id of extraToDelete) {
             try {
               await tx.treeBranchLeafNode.delete({ where: { id } });
@@ -33069,7 +35088,7 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: {
         id: true,
@@ -33096,8 +35115,8 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
 router56.get("/nodes/:nodeId/full", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const root = await prisma46.treeBranchLeafNode.findFirst({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const root = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -33105,7 +35124,7 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9" });
     }
-    const all = await prisma46.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
+    const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
     const childrenByParent = /* @__PURE__ */ new Map();
     for (const n of all) {
@@ -33130,20 +35149,20 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
       if (n.sharedReferenceId) sharedIds.add(n.sharedReferenceId);
       if (Array.isArray(n.sharedReferenceIds)) for (const rid of n.sharedReferenceIds) sharedIds.add(rid);
     }
-    const sharedNodes = sharedIds.size > 0 ? await prisma46.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(sharedIds) } } }) : [];
+    const sharedNodes = sharedIds.size > 0 ? await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(sharedIds) } } }) : [];
     const sharedById = new Map(sharedNodes.map((n) => [n.id, n]));
     const nodes = Array.from(collected).map((id) => {
       const node = byId.get(id);
-      const response = buildResponseFromColumns(node);
+      const response = buildResponseFromColumns2(node);
       const childIds = childrenByParent.get(id) || [];
       const optionChildrenIds = childIds.filter((cid) => (byId.get(cid)?.type || "").toLowerCase() === "leaf_option".toLowerCase());
       const resolvedShared = [];
       if (node.sharedReferenceId && sharedById.has(node.sharedReferenceId)) {
-        resolvedShared.push(buildResponseFromColumns(sharedById.get(node.sharedReferenceId)));
+        resolvedShared.push(buildResponseFromColumns2(sharedById.get(node.sharedReferenceId)));
       }
       if (Array.isArray(node.sharedReferenceIds)) {
         for (const rid of node.sharedReferenceIds) {
-          if (sharedById.has(rid)) resolvedShared.push(buildResponseFromColumns(sharedById.get(rid)));
+          if (sharedById.has(rid)) resolvedShared.push(buildResponseFromColumns2(sharedById.get(rid)));
         }
       }
       return {
@@ -33167,8 +35186,8 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
 router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -33182,16 +35201,16 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
     if (ids.size === 0) {
       return res.json({ nodeId, count: 0, shared: { ids: { single: node.sharedReferenceId ?? null, multiple: [] }, resolved: [] } });
     }
-    const refs = await prisma46.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(ids) } } });
+    const refs = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(ids) } } });
     const refIds = refs.map((r) => r.id);
-    const conditionCounts = await prisma46.treeBranchLeafNodeCondition.groupBy({
+    const conditionCounts = await prisma47.treeBranchLeafNodeCondition.groupBy({
       by: ["nodeId"],
       _count: { nodeId: true },
       where: { nodeId: { in: refIds } }
     });
     const condCountByNode = new Map(conditionCounts.map((c) => [c.nodeId, c._count.nodeId]));
     const resolved = refs.map((ref) => {
-      const enriched = buildResponseFromColumns(ref);
+      const enriched = buildResponseFromColumns2(ref);
       const hasCondFlag = !!ref.hasCondition || (condCountByNode.get(ref.id) || 0) > 0;
       return { ...enriched, isConditional: hasCondFlag, conditionCount: condCountByNode.get(ref.id) || 0 };
     });
@@ -33212,8 +35231,8 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
   }
 });
 async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-  const copyRoot = await prisma46.treeBranchLeafNode.findFirst({
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+  const copyRoot = await prisma47.treeBranchLeafNode.findFirst({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
@@ -33221,7 +35240,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
   if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
     throw new Error("Acc\xC3\xA8s non autoris\xC3\xA9");
   }
-  const all = await prisma46.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
+  const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const byId = new Map(all.map((n) => [n.id, n]));
   const childrenByParent = /* @__PURE__ */ new Map();
   for (const n of all) {
@@ -33248,7 +35267,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
   }
   if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
   const originalIds = Array.from(originalToCopy.keys());
-  const originals = await prisma46.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
+  const originals = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
   const allRefIds = /* @__PURE__ */ new Set();
   for (const orig of originals) {
     if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
@@ -33267,11 +35286,11 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
       }
     }
     chosenSuffix = maxSuffix + 1 || 1;
-    await prisma46.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
+    await prisma47.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
   }
   const refCopyIdByOriginal = /* @__PURE__ */ new Map();
   const desiredIds = Array.from(allRefIds).map((id) => `${id}-${chosenSuffix}`);
-  const existingRefCopies = desiredIds.length > 0 ? await prisma46.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
+  const existingRefCopies = desiredIds.length > 0 ? await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
   const existingSet = new Set(existingRefCopies.map((n) => n.id));
   const ensureRefCopy = async (origRefId) => {
     const desiredRootId = `${origRefId}-${chosenSuffix}`;
@@ -33293,7 +35312,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     const origSubtree = subtreeIds.map((id) => byId.get(id)).filter(Boolean);
     const desired = new Set(subtreeIds.map((id) => `${id}-${chosenSuffix}`));
     if (desired.size > 0) {
-      const already = await prisma46.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
+      const already = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
       for (const n of already) desired.delete(n.id);
     }
     const idMap = /* @__PURE__ */ new Map();
@@ -33301,7 +35320,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     for (const orig of origSubtree) {
       const newId = idMap.get(orig.id);
       if (!desired.has(newId)) continue;
-      const newParentId2 = orig.parentId ? idMap.get(orig.parentId) ?? null : null;
+      const newParentId = orig.parentId ? idMap.get(orig.parentId) ?? null : null;
       const toCreate = {
         id: newId,
         treeId: copyRoot.treeId,
@@ -33310,7 +35329,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
         fieldType: orig.fieldType ?? "TEXT",
         label: orig.label,
         description: orig.description,
-        parentId: newParentId2,
+        parentId: newParentId,
         order: orig.order ?? 9999,
         isVisible: orig.isVisible ?? true,
         isActive: orig.isActive ?? true,
@@ -33336,7 +35355,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
         metadata: { ...orig.metadata || {}, copiedFromNodeId: orig.id },
         updatedAt: /* @__PURE__ */ new Date()
       };
-      await prisma46.treeBranchLeafNode.create({ data: toCreate });
+      await prisma47.treeBranchLeafNode.create({ data: toCreate });
       if (Array.isArray(orig.linkedVariableIds) && orig.linkedVariableIds.length > 0) {
         console.log(`\u{1F517} [SHARED-REF] Copie de ${orig.linkedVariableIds.length} variable(s) pour ${newId}`);
         const variableCopyCache = /* @__PURE__ */ new Map();
@@ -33351,7 +35370,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
               chosenSuffix,
               newId,
               // Le nouveau nœud qui possède cette variable
-              prisma46,
+              prisma47,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -33387,7 +35406,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     const mappedSingle = origSingle ? refCopyIdByOriginal.get(origSingle) || `${origSingle}-${chosenSuffix}` : null;
     const finalArray = mappedMultiple.length > 0 ? mappedMultiple : mappedSingle ? [mappedSingle] : [];
     const finalSingle = finalArray.length > 0 ? finalArray[0] : null;
-    updates.push(prisma46.treeBranchLeafNode.update({
+    updates.push(prisma47.treeBranchLeafNode.update({
       where: { id: copyId },
       data: {
         sharedReferenceId: finalSingle,
@@ -33401,7 +35420,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     }));
     applied++;
   }
-  await prisma46.$transaction(updates);
+  await prisma47.$transaction(updates);
   return { success: true, applied, suffix: chosenSuffix };
 }
 router56.post("/nodes/:nodeId/apply-shared-references-from-original", async (req2, res) => {
@@ -33418,8 +35437,8 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { deleteOrphans } = req2.body || {};
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const root = await prisma46.treeBranchLeafNode.findFirst({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const root = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -33427,7 +35446,7 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9" });
     }
-    const all = await prisma46.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
+    const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
     const childrenByParent = /* @__PURE__ */ new Map();
     for (const n of all) {
@@ -33453,9 +35472,9 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     }
     const updates = [];
     for (const id of collected) {
-      updates.push(prisma46.treeBranchLeafNode.update({ where: { id }, data: { sharedReferenceId: null, sharedReferenceIds: [] } }));
+      updates.push(prisma47.treeBranchLeafNode.update({ where: { id }, data: { sharedReferenceId: null, sharedReferenceIds: [] } }));
     }
-    await prisma46.$transaction(updates);
+    await prisma47.$transaction(updates);
     let deletedCount = 0;
     let orphanCandidates = [];
     if (deleteOrphans && referencedIds.size > 0) {
@@ -33488,7 +35507,7 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
         }
         const ordered = Array.from(delSet);
         ordered.sort((a, b) => depth.get(b) - depth.get(a));
-        await prisma46.$transaction(async (tx) => {
+        await prisma47.$transaction(async (tx) => {
           for (const id of ordered) {
             await tx.treeBranchLeafNode.delete({ where: { id } });
             deletedCount++;
@@ -33507,13 +35526,13 @@ router56.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
     console.log("\u{1F6E0}\uFE0F [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s", treeId, nodeId);
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
       select: { id: true, data_activeId: true, linkedVariableIds: true }
     });
@@ -33569,13 +35588,13 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       selectedNodeId
     } = req2.body || {};
     console.log("\xF0\u0178\u203A\xB0\xEF\xB8\x8F [TBL NEW ROUTE][PUT /data] nodeId=%s body=%o", nodeId, { exposedKey, sourceType, sourceRef, fixedValue, selectedNodeId });
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
     }
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         treeId
@@ -33596,7 +35615,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     if (proxiedTargetNodeId) {
       console.log("\u{1F4CE} [TBL NEW ROUTE][PUT /data] node %s proxied vers variable du noeud %s", nodeId, targetNodeId);
     }
-    const updated = await prisma46.$transaction(async (tx) => {
+    const updated = await prisma47.$transaction(async (tx) => {
       const variable = await tx.treeBranchLeafNodeVariable.upsert({
         where: { nodeId: targetNodeId },
         update: {
@@ -33652,7 +35671,17 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           selectedNodeId: true
         }
       });
-      const nodeUpdateData = { hasData: true, updatedAt: /* @__PURE__ */ new Date() };
+      const nodeUpdateData = {
+        hasData: true,
+        updatedAt: /* @__PURE__ */ new Date(),
+        // 🔧 FIX: Toujours synchroniser unit et precision de la variable vers le nœud
+        data_unit: variable.unit ?? null,
+        data_precision: variable.precision ?? null,
+        data_displayFormat: variable.displayFormat ?? null,
+        data_exposedKey: variable.exposedKey ?? null,
+        data_visibleToUser: variable.visibleToUser ?? true,
+        data_activeId: variable.id
+      };
       if (variable.sourceRef && variable.sourceRef.startsWith("@table.")) {
         const tableId = variable.sourceRef.replace("@table.", "");
         console.log(`[TBL] \u{1F527} Configuration lookup pour table ${tableId}`);
@@ -33690,9 +35719,9 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         });
       }
       try {
-        await addToNodeLinkedField6(tx, targetNodeId, "linkedVariableIds", [variable.id]);
+        await addToNodeLinkedField7(tx, targetNodeId, "linkedVariableIds", [variable.id]);
         if (nodeId !== targetNodeId) {
-          await addToNodeLinkedField6(tx, nodeId, "linkedVariableIds", [variable.id]);
+          await addToNodeLinkedField7(tx, nodeId, "linkedVariableIds", [variable.id]);
         }
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating owner linkedVariableIds:", e.message);
@@ -33710,25 +35739,25 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           if (!varData) return ids;
           const { sourceRef: sourceRef2, metadata: metadata2 } = varData;
           if (metadata2?.selectedNodeId) {
-            ids.add(normalizeRefId(metadata2.selectedNodeId));
+            ids.add(normalizeRefId2(metadata2.selectedNodeId));
           }
           const parsedRef = parseSourceRef(sourceRef2);
           if (parsedRef) {
             if (parsedRef.type === "formula") {
               const formula = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsedRef.id }, select: { tokens: true } });
               if (formula) {
-                extractNodeIdsFromTokens(formula.tokens).forEach((id) => ids.add(normalizeRefId(id)));
+                extractNodeIdsFromTokens2(formula.tokens).forEach((id) => ids.add(normalizeRefId2(id)));
               }
             } else if (parsedRef.type === "condition") {
               const condition = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsedRef.id }, select: { conditionSet: true } });
               if (condition) {
-                extractNodeIdsFromConditionSet(condition.conditionSet).forEach((id) => ids.add(normalizeRefId(id)));
+                extractNodeIdsFromConditionSet2(condition.conditionSet).forEach((id) => ids.add(normalizeRefId2(id)));
               }
             } else {
-              ids.add(normalizeRefId(parsedRef.id));
+              ids.add(normalizeRefId2(parsedRef.id));
             }
           } else if (sourceRef2) {
-            ids.add(normalizeRefId(sourceRef2));
+            ids.add(normalizeRefId2(sourceRef2));
           }
           return ids;
         };
@@ -33739,7 +35768,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         if (idsToAdd.length > 0) {
           console.log(`[TBL] Adding variable ref ${variable.id} to ${idsToAdd.length} nodes.`);
           for (const refId of idsToAdd) {
-            await addToNodeLinkedField6(tx, refId, "linkedVariableIds", [variable.id]);
+            await addToNodeLinkedField7(tx, refId, "linkedVariableIds", [variable.id]);
           }
         }
         if (idsToRemove.length > 0) {
@@ -33768,7 +35797,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         const variableIdsToRemove = [...oldVariableRefs].filter((id) => !newVariableRefs.has(id));
         if (variableIdsToAdd.length > 0) {
           console.log(`[TBL] Adding ${variableIdsToAdd.length} variable references to node ${targetNodeId}.`);
-          await addToNodeLinkedField6(tx, targetNodeId, "linkedVariableIds", variableIdsToAdd);
+          await addToNodeLinkedField7(tx, targetNodeId, "linkedVariableIds", variableIdsToAdd);
         }
         if (variableIdsToRemove.length > 0) {
           console.log(`[TBL] Removing ${variableIdsToRemove.length} variable references from node ${targetNodeId}.`);
@@ -33841,7 +35870,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const ownerIdForResponse = targetNodeId;
     const proxiedNodeIdForResponse = proxiedTargetNodeId;
     try {
-      const nodeAfter = await prisma46.treeBranchLeafNode.findUnique({
+      const nodeAfter = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { data_activeId: true }
       });
@@ -33864,13 +35893,13 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
     console.log(`\xF0\u0178\u2014\u2018\xEF\xB8\x8F [DELETE Variable] D\xC3\xA9but suppression pour nodeId=${nodeId}`);
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
     }
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
       select: { id: true, linkedVariableIds: true }
     });
@@ -33884,18 +35913,18 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     console.log(`\xF0\u0178\u201D\x8D [DELETE Variable] Variable trouv\xC3\xA9e avec sourceRef: ${variable.sourceRef}`);
     console.log(`\xF0\u0178\u201D\x8D [DELETE Variable] Variable trouv\xC3\xA9e avec sourceRef: ${variable.sourceRef}`);
     console.log(`\xF0\u0178\u201C\u0152 [DELETE Variable] La capacit\xC3\xA9 r\xC3\xA9f\xC3\xA9renc\xC3\xA9e sera conserv\xC3\xA9e`);
-    await prisma46.treeBranchLeafNodeVariable.delete({
+    await prisma47.treeBranchLeafNodeVariable.delete({
       where: { nodeId: ownerNodeId }
     });
     const nodesToDisable = Array.from(new Set([ownerNodeId, proxiedFromNodeId].filter(Boolean)));
     if (nodesToDisable.length > 0) {
-      await prisma46.treeBranchLeafNode.updateMany({
+      await prisma47.treeBranchLeafNode.updateMany({
         where: { id: { in: nodesToDisable } },
         data: { hasData: false, updatedAt: /* @__PURE__ */ new Date() }
       });
     }
     try {
-      const dependentNodes = await prisma46.treeBranchLeafNode.findMany({
+      const dependentNodes = await prisma47.treeBranchLeafNode.findMany({
         where: {
           treeId,
           linkedVariableIds: { has: variable.id }
@@ -33906,7 +35935,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       console.log(`\xF0\u0178\xA7\xB9 [DELETE Variable] ${dependentNodes.length} n\xC5\u201Cud(s) d\xC3\xA9pendant(s) trouv\xC3\xA9(s) \xC3\xA0 nettoyer.`);
       for (const nodeToClean of dependentNodes) {
         const updatedLinkedIds = nodeToClean.linkedVariableIds.filter((id) => id !== variable.id);
-        await prisma46.treeBranchLeafNode.update({
+        await prisma47.treeBranchLeafNode.update({
           where: { id: nodeToClean.id },
           data: { linkedVariableIds: updatedLinkedIds }
         });
@@ -33931,7 +35960,7 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
     if (!isObject) {
       return res.status(400).json({ error: "Payload de conditions invalide" });
     }
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
@@ -33943,7 +35972,7 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
     }
-    const updated = await prisma46.treeBranchLeafNode.update({
+    const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         conditionConfig: payload,
@@ -33962,7 +35991,7 @@ router56.get("/nodes/:nodeId/formula", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: {
         formulaConfig: true,
@@ -33992,7 +36021,7 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
     if (!isObject) {
       return res.status(400).json({ error: "Payload de formule invalide" });
     }
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
@@ -34004,7 +36033,7 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
     }
-    const updated = await prisma46.treeBranchLeafNode.update({
+    const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         formulaConfig: payload,
@@ -34022,10 +36051,10 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
 router56.get("/nodes/:nodeId/formulas", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const formulas = await prisma46.treeBranchLeafNodeFormula.findMany({
+    const formulas = await prisma47.treeBranchLeafNodeFormula.findMany({
       where: { nodeId },
       orderBy: { createdAt: "asc" }
     });
@@ -34039,7 +36068,7 @@ router56.get("/nodes/:nodeId/formulas", async (req2, res) => {
 router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, tokens: tokens2, description } = req2.body || {};
     console.log("\xF0\u0178\u201D\x8D Formula creation auth debug:", {
       nodeId,
@@ -34048,7 +36077,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
       reqUser: req2.user,
       headers: req2.headers["x-organization-id"]
     });
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     if (!name || !Array.isArray(tokens2)) {
       return res.status(400).json({ error: "Name et tokens requis" });
@@ -34057,7 +36086,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     let counter = 1;
     while (true) {
       try {
-        const existingFormula = await prisma46.treeBranchLeafNodeFormula.findFirst({
+        const existingFormula = await prisma47.treeBranchLeafNodeFormula.findFirst({
           where: {
             nodeId,
             name: uniqueName
@@ -34073,7 +36102,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
         break;
       }
     }
-    const formula = await prisma46.treeBranchLeafNodeFormula.create({
+    const formula = await prisma47.treeBranchLeafNodeFormula.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
         nodeId,
@@ -34085,7 +36114,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
       }
     });
     console.log(`[TreeBranchLeaf API] Activation automatique de la formule cr\xC3\xA9\xC3\xA9e pour le n\xC5\u201Cud ${nodeId}`);
-    await prisma46.treeBranchLeafNode.update({
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasFormula: true,
@@ -34094,10 +36123,10 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
       }
     });
     try {
-      await addToNodeLinkedField6(prisma46, nodeId, "linkedFormulaIds", [formula.id]);
-      const refIds = Array.from(extractNodeIdsFromTokens(tokens2));
+      await addToNodeLinkedField7(prisma47, nodeId, "linkedFormulaIds", [formula.id]);
+      const refIds = Array.from(extractNodeIdsFromTokens2(tokens2));
       for (const refId of refIds) {
-        await addToNodeLinkedField6(prisma46, normalizeRefId(refId), "linkedFormulaIds", [formula.id]);
+        await addToNodeLinkedField7(prisma47, normalizeRefId2(refId), "linkedFormulaIds", [formula.id]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds after create:", e.message);
@@ -34112,17 +36141,17 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
 router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
   try {
     const { nodeId, formulaId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, tokens: tokens2, description } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingFormula = await prisma46.treeBranchLeafNodeFormula.findFirst({
+    const existingFormula = await prisma47.treeBranchLeafNodeFormula.findFirst({
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
       return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
     }
-    const updated = await prisma46.treeBranchLeafNodeFormula.update({
+    const updated = await prisma47.treeBranchLeafNodeFormula.update({
       where: { id: formulaId },
       data: {
         name: name ? String(name) : void 0,
@@ -34133,19 +36162,19 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
     });
     console.log(`[TreeBranchLeaf API] Updated formula ${formulaId} for node ${nodeId}`);
     try {
-      const oldRefs = extractNodeIdsFromTokens(existingFormula.tokens);
-      const newRefs = extractNodeIdsFromTokens(Array.isArray(tokens2) ? tokens2 : existingFormula.tokens);
-      const oldSet = new Set(Array.from(oldRefs).map(normalizeRefId));
-      const newSet = new Set(Array.from(newRefs).map(normalizeRefId));
+      const oldRefs = extractNodeIdsFromTokens2(existingFormula.tokens);
+      const newRefs = extractNodeIdsFromTokens2(Array.isArray(tokens2) ? tokens2 : existingFormula.tokens);
+      const oldSet = new Set(Array.from(oldRefs).map(normalizeRefId2));
+      const newSet = new Set(Array.from(newRefs).map(normalizeRefId2));
       const toAdd = Array.from(newSet).filter((id) => !oldSet.has(id));
       const toRemove = Array.from(oldSet).filter((id) => !newSet.has(id));
       if (toAdd.length) {
-        for (const refId of toAdd) await addToNodeLinkedField6(prisma46, refId, "linkedFormulaIds", [formulaId]);
+        for (const refId of toAdd) await addToNodeLinkedField7(prisma47, refId, "linkedFormulaIds", [formulaId]);
       }
       if (toRemove.length) {
-        for (const refId of toRemove) await removeFromNodeLinkedField(prisma46, refId, "linkedFormulaIds", [formulaId]);
+        for (const refId of toRemove) await removeFromNodeLinkedField(prisma47, refId, "linkedFormulaIds", [formulaId]);
       }
-      await addToNodeLinkedField6(prisma46, nodeId, "linkedFormulaIds", [formulaId]);
+      await addToNodeLinkedField7(prisma47, nodeId, "linkedFormulaIds", [formulaId]);
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating inverse linkedFormulaIds after update:", e.message);
     }
@@ -34158,28 +36187,28 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
 router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
   try {
     const { nodeId, formulaId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingFormula = await prisma46.treeBranchLeafNodeFormula.findFirst({
+    const existingFormula = await prisma47.treeBranchLeafNodeFormula.findFirst({
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
       return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
     }
-    await prisma46.treeBranchLeafNodeFormula.delete({
+    await prisma47.treeBranchLeafNodeFormula.delete({
       where: { id: formulaId }
     });
     console.log(`[TreeBranchLeaf API] Deleted formula ${formulaId} for node ${nodeId}`);
     try {
-      const variableWithFormula = await prisma46.treeBranchLeafNodeVariable.findFirst({
+      const variableWithFormula = await prisma47.treeBranchLeafNodeVariable.findFirst({
         where: {
           nodeId,
           sourceRef: `node-formula:${formulaId}`
         }
       });
       if (variableWithFormula) {
-        await prisma46.treeBranchLeafNodeVariable.delete({
+        await prisma47.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
         console.log(`\xE2\u0153\u2026 [TreeBranchLeaf API] Variable associ\xC3\xA9e supprim\xC3\xA9e pour formule ${formulaId}`);
@@ -34188,16 +36217,16 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
     }
     try {
-      await removeFromNodeLinkedField(prisma46, nodeId, "linkedFormulaIds", [formulaId]);
-      const refIds = Array.from(extractNodeIdsFromTokens(existingFormula.tokens));
+      await removeFromNodeLinkedField(prisma47, nodeId, "linkedFormulaIds", [formulaId]);
+      const refIds = Array.from(extractNodeIdsFromTokens2(existingFormula.tokens));
       for (const refId of refIds) {
-        await removeFromNodeLinkedField(prisma46, normalizeRefId(refId), "linkedFormulaIds", [formulaId]);
+        await removeFromNodeLinkedField(prisma47, normalizeRefId2(refId), "linkedFormulaIds", [formulaId]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning cleaning linkedFormulaIds after delete:", e.message);
     }
-    const remainingFormulas = await prisma46.treeBranchLeafNodeFormula.count({ where: { nodeId } });
-    await prisma46.treeBranchLeafNode.update({
+    const remainingFormulas = await prisma47.treeBranchLeafNodeFormula.count({ where: { nodeId } });
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { hasFormula: remainingFormulas > 0 }
     });
@@ -34210,7 +36239,7 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
 });
 router56.get("/reusables/formulas", async (req2, res) => {
   try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const hasOrg = typeof organizationId === "string" && organizationId.length > 0;
     const whereFilter = isSuperAdmin2 ? {} : {
       OR: [
@@ -34218,7 +36247,7 @@ router56.get("/reusables/formulas", async (req2, res) => {
         ...hasOrg ? [{ organizationId }] : []
       ]
     };
-    const allFormulas = await prisma46.treeBranchLeafNodeFormula.findMany({
+    const allFormulas = await prisma47.treeBranchLeafNodeFormula.findMany({
       where: whereFilter,
       include: {
         TreeBranchLeafNode: {
@@ -34250,8 +36279,8 @@ router56.get("/reusables/formulas", async (req2, res) => {
 router56.get("/reusables/formulas/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const item = await prisma46.treeBranchLeafNodeFormula.findUnique({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const item = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id },
       include: {
         TreeBranchLeafNode: {
@@ -34281,7 +36310,7 @@ router56.get("/reusables/formulas/:id", async (req2, res) => {
 });
 router56.get("/reusables/conditions", async (req2, res) => {
   try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const hasOrg = typeof organizationId === "string" && organizationId.length > 0;
     const whereFilter = isSuperAdmin2 ? {} : {
       OR: [
@@ -34289,7 +36318,7 @@ router56.get("/reusables/conditions", async (req2, res) => {
         ...hasOrg ? [{ organizationId }] : []
       ]
     };
-    const allConditions = await prisma46.treeBranchLeafNodeCondition.findMany({
+    const allConditions = await prisma47.treeBranchLeafNodeCondition.findMany({
       where: whereFilter,
       include: {
         TreeBranchLeafNode: {
@@ -34322,8 +36351,8 @@ router56.get("/reusables/conditions", async (req2, res) => {
 router56.get("/reusables/conditions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const item = await prisma46.treeBranchLeafNodeCondition.findUnique({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const item = await prisma47.treeBranchLeafNodeCondition.findUnique({
       where: { id },
       include: {
         TreeBranchLeafNode: {
@@ -34353,7 +36382,7 @@ router56.get("/reusables/conditions/:id", async (req2, res) => {
 });
 router56.get("/reusables/tables", async (req2, res) => {
   try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const hasOrg = typeof organizationId === "string" && organizationId.length > 0;
     const whereFilter = isSuperAdmin2 ? {} : {
       OR: [
@@ -34361,7 +36390,7 @@ router56.get("/reusables/tables", async (req2, res) => {
         ...hasOrg ? [{ organizationId }] : []
       ]
     };
-    const allTables = await prisma46.treeBranchLeafNodeTable.findMany({
+    const allTables = await prisma47.treeBranchLeafNodeTable.findMany({
       where: whereFilter,
       include: {
         TreeBranchLeafNode: {
@@ -34398,18 +36427,18 @@ router56.get("/reusables/tables", async (req2, res) => {
 router56.get("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET conditions for node ${nodeId}:`);
     console.log(`[TreeBranchLeaf API] - organizationId: ${organizationId}`);
     console.log(`[TreeBranchLeaf API] - isSuperAdmin: ${isSuperAdmin2}`);
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const whereClause = { nodeId };
     if (!isSuperAdmin2 && organizationId) {
       whereClause.organizationId = organizationId;
     }
     console.log(`[TreeBranchLeaf API] - whereClause:`, whereClause);
-    const conditions = await prisma46.treeBranchLeafNodeCondition.findMany({
+    const conditions = await prisma47.treeBranchLeafNodeCondition.findMany({
       where: whereClause,
       orderBy: { createdAt: "asc" }
     });
@@ -34425,10 +36454,10 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
   try {
     const { conditionId } = req2.params;
     const { fieldValues = {}, values = {}, submissionId, testMode = true } = req2.body;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const allValues = { ...fieldValues, ...values };
     console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE \xC3\u2030valuation condition ${conditionId}:`, { allValues, submissionId, testMode });
-    const condition = await prisma46.treeBranchLeafNodeCondition.findUnique({
+    const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
         TreeBranchLeafNode: {
@@ -34455,7 +36484,7 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       const calculationResult = await evaluateVariableOperation2(
         condition.nodeId,
         submissionId || conditionId,
-        prisma46,
+        prisma47,
         valueMapLocal
       );
       console.log("[TBL-PRISMA] \xE2\u0153\u2026 R\xC3\xA9sultat \xC3\xA9valuation:", calculationResult);
@@ -34489,7 +36518,7 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
 router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, conditionSet, description } = req2.body || {};
     console.log("\xF0\u0178\u201D\x8D Condition creation auth debug:", {
       nodeId,
@@ -34498,7 +36527,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
       reqUser: req2.user,
       headers: req2.headers["x-organization-id"]
     });
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     if (!name || !conditionSet) {
       return res.status(400).json({ error: "Name et conditionSet requis" });
@@ -34506,7 +36535,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     let uniqueName = String(name);
     let counter = 1;
     while (true) {
-      const existingCondition = await prisma46.treeBranchLeafNodeCondition.findFirst({
+      const existingCondition = await prisma47.treeBranchLeafNodeCondition.findFirst({
         where: {
           nodeId,
           name: uniqueName,
@@ -34524,7 +36553,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
       }
     }
     console.log(`[TreeBranchLeaf API] Nom unique g\xC3\xA9n\xC3\xA9r\xC3\xA9: "${uniqueName}" (original: "${name}")`);
-    const condition = await prisma46.treeBranchLeafNodeCondition.create({
+    const condition = await prisma47.treeBranchLeafNodeCondition.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
         nodeId,
@@ -34536,7 +36565,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
       }
     });
     console.log(`[TreeBranchLeaf API] Activation automatique de la condition cr\xC3\xA9\xC3\xA9e pour le n\xC5\u201Cud ${nodeId}`);
-    await prisma46.treeBranchLeafNode.update({
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasCondition: true,
@@ -34546,10 +36575,10 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     });
     console.log(`[TreeBranchLeaf API] Created condition for node ${nodeId}:`, condition.name);
     try {
-      await addToNodeLinkedField6(prisma46, nodeId, "linkedConditionIds", [condition.id]);
-      const refIds = Array.from(extractNodeIdsFromConditionSet(conditionSet));
+      await addToNodeLinkedField7(prisma47, nodeId, "linkedConditionIds", [condition.id]);
+      const refIds = Array.from(extractNodeIdsFromConditionSet2(conditionSet));
       for (const refId of refIds) {
-        await addToNodeLinkedField6(prisma46, normalizeRefId(refId), "linkedConditionIds", [condition.id]);
+        await addToNodeLinkedField7(prisma47, normalizeRefId2(refId), "linkedConditionIds", [condition.id]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds after create:", e.message);
@@ -34563,17 +36592,17 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
 router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
   try {
     const { nodeId, conditionId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, conditionSet, description } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingCondition = await prisma46.treeBranchLeafNodeCondition.findFirst({
+    const existingCondition = await prisma47.treeBranchLeafNodeCondition.findFirst({
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
       return res.status(404).json({ error: "Condition non trouv\xC3\xA9e" });
     }
-    const updated = await prisma46.treeBranchLeafNodeCondition.update({
+    const updated = await prisma47.treeBranchLeafNodeCondition.update({
       where: { id: conditionId },
       data: {
         name: name ? String(name) : void 0,
@@ -34584,19 +36613,19 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
     });
     console.log(`[TreeBranchLeaf API] Updated condition ${conditionId} for node ${nodeId}`);
     try {
-      const oldRefs = extractNodeIdsFromConditionSet(existingCondition.conditionSet);
-      const newRefs = extractNodeIdsFromConditionSet(conditionSet ?? existingCondition.conditionSet);
-      const oldSet = new Set(Array.from(oldRefs).map(normalizeRefId));
-      const newSet = new Set(Array.from(newRefs).map(normalizeRefId));
+      const oldRefs = extractNodeIdsFromConditionSet2(existingCondition.conditionSet);
+      const newRefs = extractNodeIdsFromConditionSet2(conditionSet ?? existingCondition.conditionSet);
+      const oldSet = new Set(Array.from(oldRefs).map(normalizeRefId2));
+      const newSet = new Set(Array.from(newRefs).map(normalizeRefId2));
       const toAdd = Array.from(newSet).filter((id) => !oldSet.has(id));
       const toRemove = Array.from(oldSet).filter((id) => !newSet.has(id));
       if (toAdd.length) {
-        for (const refId of toAdd) await addToNodeLinkedField6(prisma46, refId, "linkedConditionIds", [conditionId]);
+        for (const refId of toAdd) await addToNodeLinkedField7(prisma47, refId, "linkedConditionIds", [conditionId]);
       }
       if (toRemove.length) {
-        for (const refId of toRemove) await removeFromNodeLinkedField(prisma46, refId, "linkedConditionIds", [conditionId]);
+        for (const refId of toRemove) await removeFromNodeLinkedField(prisma47, refId, "linkedConditionIds", [conditionId]);
       }
-      await addToNodeLinkedField6(prisma46, nodeId, "linkedConditionIds", [conditionId]);
+      await addToNodeLinkedField7(prisma47, nodeId, "linkedConditionIds", [conditionId]);
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating inverse linkedConditionIds after update:", e.message);
     }
@@ -34609,28 +36638,28 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
 router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
   try {
     const { nodeId, conditionId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingCondition = await prisma46.treeBranchLeafNodeCondition.findFirst({
+    const existingCondition = await prisma47.treeBranchLeafNodeCondition.findFirst({
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
       return res.status(404).json({ error: "Condition non trouv\xC3\xA9e" });
     }
-    await prisma46.treeBranchLeafNodeCondition.delete({
+    await prisma47.treeBranchLeafNodeCondition.delete({
       where: { id: conditionId }
     });
     console.log(`[TreeBranchLeaf API] Deleted condition ${conditionId} for node ${nodeId}`);
     try {
-      const variableWithCondition = await prisma46.treeBranchLeafNodeVariable.findFirst({
+      const variableWithCondition = await prisma47.treeBranchLeafNodeVariable.findFirst({
         where: {
           nodeId,
           sourceRef: `node-condition:${conditionId}`
         }
       });
       if (variableWithCondition) {
-        await prisma46.treeBranchLeafNodeVariable.delete({
+        await prisma47.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
         console.log(`\xE2\u0153\u2026 [TreeBranchLeaf API] Variable associ\xC3\xA9e supprim\xC3\xA9e pour condition ${conditionId}`);
@@ -34639,16 +36668,16 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
     }
     try {
-      await removeFromNodeLinkedField(prisma46, nodeId, "linkedConditionIds", [conditionId]);
-      const refIds = Array.from(extractNodeIdsFromConditionSet(existingCondition.conditionSet));
+      await removeFromNodeLinkedField(prisma47, nodeId, "linkedConditionIds", [conditionId]);
+      const refIds = Array.from(extractNodeIdsFromConditionSet2(existingCondition.conditionSet));
       for (const refId of refIds) {
-        await removeFromNodeLinkedField(prisma46, normalizeRefId(refId), "linkedConditionIds", [conditionId]);
+        await removeFromNodeLinkedField(prisma47, normalizeRefId2(refId), "linkedConditionIds", [conditionId]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning cleaning linkedConditionIds after delete:", e.message);
     }
-    const remainingConditions = await prisma46.treeBranchLeafNodeCondition.count({ where: { nodeId } });
-    await prisma46.treeBranchLeafNode.update({
+    const remainingConditions = await prisma47.treeBranchLeafNodeCondition.count({ where: { nodeId } });
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { hasCondition: remainingConditions > 0 }
     });
@@ -34661,13 +36690,13 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
 });
 router56.get("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const page = parseInt(req2.query.page) || 1;
   const limit = parseInt(req2.query.limit) || 100;
   const offset = (page - 1) * limit;
   console.log(`[GET /tables/:id] R\xC3\xA9cup\xC3\xA9ration de la table ${id} avec pagination (page: ${page}, limit: ${limit})`);
   try {
-    const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id },
       include: {
         node: {
@@ -34689,7 +36718,7 @@ router56.get("/tables/:id", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9 \xC3\xA0 cette table" });
     }
-    const rows = await prisma46.treeBranchLeafNodeTableRow.findMany({
+    const rows = await prisma47.treeBranchLeafNodeTableRow.findMany({
       where: { tableId: id },
       orderBy: { rowIndex: "asc" },
       take: limit,
@@ -34793,7 +36822,7 @@ var normalizeTableInstance = (table) => {
     throw error;
   }
 };
-var fetchNormalizedTable = async (nodeId, options = {}, client = prisma46) => {
+var fetchNormalizedTable = async (nodeId, options = {}, client = prisma47) => {
   const tablesRaw = await client.treeBranchLeafNodeTable.findMany({
     where: { nodeId },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }]
@@ -34818,10 +36847,10 @@ var fetchNormalizedTable = async (nodeId, options = {}, client = prisma46) => {
 router56.get("/nodes/:nodeId/tables", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const tables = await prisma46.treeBranchLeafNodeTable.findMany({
+    const tables = await prisma47.treeBranchLeafNodeTable.findMany({
       where: { nodeId },
       include: {
         tableColumns: {
@@ -34845,8 +36874,8 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { tableId } = req2.params;
   console.log(`[DELETE /nodes/:nodeId/tables/:tableId] \u{1F5D1}\uFE0F Suppression table ${tableId} avec nettoyage complet`);
   try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id: tableId },
       include: {
         TreeBranchLeafNode: {
@@ -34861,17 +36890,17 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
       return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
     }
-    await prisma46.treeBranchLeafNodeTable.delete({ where: { id: tableId } });
+    await prisma47.treeBranchLeafNodeTable.delete({ where: { id: tableId } });
     console.log(`[DELETE Table] \u2705 Table ${tableId} supprim\xE9e (+ colonnes/lignes en cascade)`);
     try {
-      const selectConfigsUsingTable = await prisma46.treeBranchLeafSelectConfig.findMany({
+      const selectConfigsUsingTable = await prisma47.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: tableId },
         select: { nodeId: true }
       });
       if (selectConfigsUsingTable.length > 0) {
         console.log(`[DELETE Table] \u{1F9F9} ${selectConfigsUsingTable.length} champ(s) Select/Cascader r\xE9f\xE9rencent cette table - D\xC9SACTIVATION LOOKUP`);
         for (const config of selectConfigsUsingTable) {
-          const selectNode = await prisma46.treeBranchLeafNode.findUnique({
+          const selectNode = await prisma47.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
             select: {
               label: true,
@@ -34895,7 +36924,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
               ...oldMetadata,
               capabilities: newCapabilities
             };
-            await prisma46.treeBranchLeafNode.update({
+            await prisma47.treeBranchLeafNode.update({
               where: { id: config.nodeId },
               data: {
                 hasTable: false,
@@ -34912,7 +36941,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
                 updatedAt: /* @__PURE__ */ new Date()
               }
             });
-            await prisma46.treeBranchLeafSelectConfig.deleteMany({
+            await prisma47.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
             console.log(`[DELETE Table] \u2705 Lookup d\xE9sactiv\xE9 pour "${selectNode.label}" - champ d\xE9bloqu\xE9`);
@@ -34924,7 +36953,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       console.error(`[DELETE Table] \u26A0\uFE0F Erreur d\xE9sactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
-      const node = await prisma46.treeBranchLeafNode.findUnique({
+      const node = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: table.nodeId },
         select: {
           linkedTableIds: true,
@@ -34943,10 +36972,10 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           cleanedInstances = instances;
         }
       }
-      const remainingTables = await prisma46.treeBranchLeafNodeTable.count({
+      const remainingTables = await prisma47.treeBranchLeafNodeTable.count({
         where: { nodeId: table.nodeId }
       });
-      await prisma46.treeBranchLeafNode.update({
+      await prisma47.treeBranchLeafNode.update({
         where: { id: table.nodeId },
         data: {
           hasTable: remainingTables > 0,
@@ -34982,9 +37011,9 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
 router56.get("/nodes/:nodeId/tables/options", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { tableId, dimension = "columns" } = req2.query;
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const normalized = await fetchNormalizedTable(nodeId, {
       tableId: typeof tableId === "string" && tableId ? tableId : void 0
@@ -35014,7 +37043,7 @@ router56.get("/nodes/:nodeId/tables/options", async (req2, res) => {
 router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const {
       tableId,
       column,
@@ -35024,7 +37053,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       keyValue,
       valueColumn
     } = req2.query;
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const normalized = await fetchNormalizedTable(nodeId, {
       tableId: tableId && tableId.length ? tableId : void 0
@@ -35112,13 +37141,13 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
 router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const {
       tableId: requestedTableId,
       labelColumns,
       labelRows
     } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const normalized = await fetchNormalizedTable(nodeId, {
       tableId: typeof requestedTableId === "string" && requestedTableId.trim().length ? requestedTableId.trim() : void 0
@@ -35130,7 +37159,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     if (!table.columns.length) {
       return res.status(400).json({ error: "Le tableau ne contient aucune colonne exploitable" });
     }
-    const baseNode = await prisma46.treeBranchLeafNode.findUnique({
+    const baseNode = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { id: true, treeId: true, parentId: true }
     });
@@ -35138,7 +37167,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       return res.status(404).json({ error: "N\xC5\u201Cud de base introuvable" });
     }
     const parentId = baseNode.parentId ?? null;
-    const siblingsCount = await prisma46.treeBranchLeafNode.count({
+    const siblingsCount = await prisma47.treeBranchLeafNode.count({
       where: { treeId: baseNode.treeId, parentId }
     });
     const tableMeta = table.meta || {};
@@ -35167,7 +37196,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
         tableId: table.id,
         tableDimension: item.dimension
       };
-      const newNode = await prisma46.treeBranchLeafNode.create({
+      const newNode = await prisma47.treeBranchLeafNode.create({
         data: {
           id: newNodeId,
           treeId: baseNode.treeId,
@@ -35197,7 +37226,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
           updatedAt: now
         }
       });
-      await prisma46.treeBranchLeafSelectConfig.create({
+      await prisma47.treeBranchLeafSelectConfig.create({
         data: {
           id: (0, import_crypto10.randomUUID)(),
           nodeId: newNode.id,
@@ -35230,7 +37259,7 @@ router56.get("/effective-values", async (req2, res) => {
     if (!idsParam) return res.json({ success: true, data: {} });
     const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean);
     if (!ids.length) return res.json({ success: true, data: {} });
-    const nodes = await prisma46.treeBranchLeafNode.findMany({
+    const nodes = await prisma47.treeBranchLeafNode.findMany({
       where: { id: { in: ids } },
       include: { TreeBranchLeafNodeVariable: true }
     });
@@ -35250,7 +37279,7 @@ router56.get("/effective-values", async (req2, res) => {
 });
 router56.get("/debug/formula-vars", async (req2, res) => {
   try {
-    const vars = await prisma46.treeBranchLeafNodeVariable.findMany({
+    const vars = await prisma47.treeBranchLeafNodeVariable.findMany({
       include: {
         node: {
           select: {
@@ -35277,13 +37306,13 @@ router56.get("/debug/formula-eval", async (req2, res) => {
     if (typeof formulaId !== "string" || typeof nodeId !== "string") {
       return res.status(400).json({ error: "formulaId et nodeId requis" });
     }
-    const formula = await prisma46.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId }
     });
     if (!formula) {
       return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
     }
-    const node = await prisma46.treeBranchLeafNode.findUnique({
+    const node = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafNodeVariable: true }
     });
@@ -35319,7 +37348,7 @@ router56.get("/formulas-version", async (req2, res) => {
     if (process.env.NODE_ENV !== "production") {
       console.warn("[TBL LEGACY] /api/treebranchleaf/formulas-version appel\xC3\xA9 (d\xC3\xA9pr\xC3\xA9ci\xC3\xA9). Utiliser /api/tbl/evaluate avec futur cache d\xC3\xA9pendances.");
     }
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const version = {
       version: Date.now(),
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -35408,9 +37437,9 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
     }
     const { formulaId } = req2.params;
     const { fieldValues = {}, testMode = true } = req2.body;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE \xC3\u2030valuation formule ${formulaId}:`, { fieldValues, testMode });
-    const formula = await prisma46.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
         TreeBranchLeafNode: {
@@ -35798,7 +37827,7 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
 router56.post("/evaluate/batch", async (req2, res) => {
   try {
     const { requests = [], nodeIds = [], fieldValues = {} } = req2.body;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE \xC3\u2030valuation batch - requests: ${requests.length}, nodeIds: ${nodeIds.length}`);
     let finalRequests = [];
     if (Array.isArray(requests) && requests.length > 0) {
@@ -35806,7 +37835,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
     } else if (Array.isArray(nodeIds) && nodeIds.length > 0) {
       console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D R\xC3\xA9cup\xC3\xA9ration formules pour nodeIds:`, nodeIds);
       for (const nodeId of nodeIds) {
-        const nodeFormulas = await prisma46.treeBranchLeafNodeFormula.findMany({
+        const nodeFormulas = await prisma47.treeBranchLeafNodeFormula.findMany({
           where: { nodeId },
           select: { id: true, name: true }
         });
@@ -35835,7 +37864,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         continue;
       }
       try {
-        const formula = await prisma46.treeBranchLeafNodeFormula.findUnique({
+        const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
           where: { id: formulaId },
           include: {
             TreeBranchLeafNode: {
@@ -35956,9 +37985,9 @@ router56.post("/evaluate/batch", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'\xC3\xA9valuation batch" });
   }
 });
-async function ensureNodeOrgAccess(prisma68, nodeId, auth) {
+async function ensureNodeOrgAccess(prisma69, nodeId, auth) {
   try {
-    const node = await prisma68.treeBranchLeafNode.findFirst({
+    const node = await prisma69.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { treeId: true }
     });
@@ -35968,7 +37997,7 @@ async function ensureNodeOrgAccess(prisma68, nodeId, auth) {
     if (auth.isSuperAdmin) {
       return { ok: true };
     }
-    const tree = await prisma68.treeBranchLeafTree.findFirst({
+    const tree = await prisma69.treeBranchLeafTree.findFirst({
       where: { id: node.treeId },
       select: { organizationId: true }
     });
@@ -35987,9 +38016,9 @@ async function ensureNodeOrgAccess(prisma68, nodeId, auth) {
 router56.get("/conditions/:conditionId", async (req2, res) => {
   try {
     const { conditionId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET condition par ID: ${conditionId}`);
-    const condition = await prisma46.treeBranchLeafNodeCondition.findUnique({
+    const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
         TreeBranchLeafNode: {
@@ -36022,9 +38051,9 @@ router56.get("/conditions/:conditionId", async (req2, res) => {
 router56.get("/formulas/:formulaId", async (req2, res) => {
   try {
     const { formulaId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET formule par ID: ${formulaId}`);
-    const formula = await prisma46.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
         TreeBranchLeafNode: {
@@ -36056,7 +38085,7 @@ router56.get("/formulas/:formulaId", async (req2, res) => {
 });
 router56.get("/submissions", async (req2, res) => {
   try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { treeId, leadId, userId } = req2.query;
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 GET submissions avec filtres:`, { treeId, leadId, userId });
     const whereClause = {};
@@ -36068,7 +38097,7 @@ router56.get("/submissions", async (req2, res) => {
         organizationId
       };
     }
-    const submissions = await prisma46.treeBranchLeafSubmission.findMany({
+    const submissions = await prisma47.treeBranchLeafSubmission.findMany({
       where: whereClause,
       include: {
         TreeBranchLeafTree: {
@@ -36118,8 +38147,8 @@ router56.get("/submissions", async (req2, res) => {
 });
 router56.get("/submissions/by-leads", async (req2, res) => {
   try {
-    const authCtx2 = getAuthCtx2(req2);
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx2;
+    const authCtx = getAuthCtx3(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
     const { treeId, search, leadId } = req2.query;
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 GET devis par leads - TreeId: ${treeId}, Search: ${search}, LeadId: ${leadId}`);
     const submissionWhere = {};
@@ -36148,7 +38177,7 @@ router56.get("/submissions/by-leads", async (req2, res) => {
         { email: { contains: search, mode: "insensitive" } }
       ];
     }
-    const leadsWithSubmissions = await prisma46.lead.findMany({
+    const leadsWithSubmissions = await prisma47.lead.findMany({
       where: {
         ...leadWhere,
         TreeBranchLeafSubmission: {
@@ -36200,10 +38229,10 @@ router56.get("/submissions/by-leads", async (req2, res) => {
 });
 router56.get("/submissions/:id", async (req2, res) => {
   try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 GET submission par ID: ${id}`);
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
         TreeBranchLeafTree: {
@@ -36261,10 +38290,10 @@ router56.get("/submissions/:id", async (req2, res) => {
 });
 router56.get("/submissions/:id/fields", async (req2, res) => {
   try {
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u2014\u201A\xEF\xB8\x8F GET /submissions/${id}/fields - R\xC3\xA9cup\xC3\xA9ration de tous les champs`);
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
         TreeBranchLeafTree: { select: { id: true, organizationId: true } },
@@ -36291,7 +38320,7 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
     }
-    const dataRows = await prisma46.treeBranchLeafSubmissionData.findMany({
+    const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
         TreeBranchLeafNode: {
@@ -36366,8 +38395,8 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
 router56.get("/submissions/:id/summary", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -36378,7 +38407,7 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
     }
-    const dataRows = await prisma46.treeBranchLeafSubmissionData.findMany({
+    const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
         TreeBranchLeafNode: { select: { id: true, type: true, label: true } }
@@ -36420,8 +38449,8 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
 router56.get("/submissions/:id/operations", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       select: {
         id: true,
@@ -36434,7 +38463,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
     }
-    const rows = await prisma46.treeBranchLeafSubmissionData.findMany({
+    const rows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
         TreeBranchLeafNode: { select: { id: true, label: true, type: true } }
@@ -36448,7 +38477,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     if (rows.length === 0) {
       console.log(`[TBL Operations] Aucune donn\xC3\xA9e de soumission trouv\xC3\xA9e pour ${id}, r\xC3\xA9cup\xC3\xA9ration des variables configur\xC3\xA9es...`);
       if (submission?.treeId) {
-        const treeVariables = await prisma46.treeBranchLeafNodeVariable.findMany({
+        const treeVariables = await prisma47.treeBranchLeafNodeVariable.findMany({
           where: { TreeBranchLeafNode: { treeId: submission.treeId } },
           select: {
             id: true,
@@ -36498,7 +38527,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     if (!treeId) {
       return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
     }
-    const allTreeNodes = await prisma46.treeBranchLeafNode.findMany({
+    const allTreeNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId },
       select: { id: true, label: true }
     });
@@ -36514,7 +38543,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       const list = Array.isArray(ids) ? ids : Array.from(ids);
       const missing = list.filter((id2) => !!id2 && !labelMap.has(id2));
       if (missing.length === 0) return;
-      const extra = await prisma46.treeBranchLeafNode.findMany({ where: { id: { in: missing } }, select: { id: true, label: true } });
+      const extra = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: missing } }, select: { id: true, label: true } });
       for (const n of extra) labelMap.set(n.id, n.label || null);
     };
     const resolveDetailForRow = async (r) => {
@@ -36522,15 +38551,15 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       if (det && det.type) {
         const parsed2 = parseSourceRef(r.sourceRef);
         if (parsed2?.type === "condition") {
-          const rec = await prisma46.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+          const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
           return buildOperationDetail("condition", rec);
         }
         if (parsed2?.type === "formula") {
-          const rec = await prisma46.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+          const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
           return buildOperationDetail("formula", rec);
         }
         if (parsed2?.type === "table") {
-          const rec = await prisma46.treeBranchLeafNodeTable.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+          const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
           return buildOperationDetail("table", rec);
         }
         return det;
@@ -36538,15 +38567,15 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       const parsed = parseSourceRef(r.sourceRef);
       if (!parsed) return det || null;
       if (parsed.type === "condition") {
-        const rec = await prisma46.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+        const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
         return buildOperationDetail("condition", rec);
       }
       if (parsed.type === "formula") {
-        const rec = await prisma46.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+        const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
         return buildOperationDetail("formula", rec);
       }
       if (parsed.type === "table") {
-        const rec = await prisma46.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+        const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
         return buildOperationDetail("table", rec);
       }
       return det || null;
@@ -36569,7 +38598,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       if (det && det.type) {
         if (det.type === "condition") {
           const set = det.conditionSet;
-          const refIds = extractNodeIdsFromConditionSet(set);
+          const refIds = extractNodeIdsFromConditionSet2(set);
           await ensureNodeLabels(refIds);
           const _resolvedRefs = buildResolvedRefs(refIds, labelMap, valuesMap);
           const extendLabelsWithFormulas = async (conditionSet, baseLabels) => {
@@ -36582,7 +38611,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
               while ((m = re.exec(str)) !== null) ids.add(m[1]);
               if (ids.size === 0) return extended;
               const list = Array.from(ids);
-              const formulas = await prisma46.treeBranchLeafNodeFormula.findMany({ where: { id: { in: list } }, select: { id: true, nodeId: true } });
+              const formulas = await prisma47.treeBranchLeafNodeFormula.findMany({ where: { id: { in: list } }, select: { id: true, nodeId: true } });
               for (const f of formulas) {
                 const nodeLbl = labelMap.get(f.nodeId) ?? null;
                 if (nodeLbl) extended.set(f.id, nodeLbl);
@@ -36608,7 +38637,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
           operationDetailResolved = detail;
           operationResultResolved = result;
         } else if (det.type === "formula") {
-          const refIds = extractNodeIdsFromTokens(det.tokens);
+          const refIds = extractNodeIdsFromTokens2(det.tokens);
           await ensureNodeLabels(refIds);
           const _resolvedRefs = buildResolvedRefs(refIds, labelMap, valuesMap);
           {
@@ -36665,8 +38694,8 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
 router56.post("/submissions/:id/repair-ops", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -36676,9 +38705,9 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
     }
-    const nodes = await prisma46.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
+    const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
-    const variables = await prisma46.treeBranchLeafNodeVariable.findMany({
+    const variables = await prisma47.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       include: { TreeBranchLeafNode: { select: { label: true } } }
     });
@@ -36699,11 +38728,11 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
       if (s.includes("table")) return "table";
       return "neutral";
     };
-    const rows = await prisma46.treeBranchLeafSubmissionData.findMany({
+    const rows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       select: { nodeId: true, isVariable: true, value: true, sourceRef: true }
     });
-    const submissionValues = await prisma46.treeBranchLeafSubmissionData.findMany({
+    const submissionValues = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       select: { nodeId: true, value: true }
     });
@@ -36721,23 +38750,23 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
       const parsed = parseSourceRef(row.sourceRef);
       if (isVar && parsed) {
         if (parsed.type === "condition") {
-          const rec = await prisma46.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
-          const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma46, id, organizationId || "", req2.user?.id || "");
+          const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+          const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma47, id, organizationId || "", req2.user?.id || "");
           opDetail = detail;
           opRes = result;
         } else if (parsed.type === "formula") {
-          const rec = await prisma46.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
-          const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma46, id, organizationId || "", req2.user?.id || "");
+          const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+          const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma47, id, organizationId || "", req2.user?.id || "");
           opDetail = detail;
           opRes = result;
         } else if (parsed.type === "table") {
-          const rec = await prisma46.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
-          const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma46, id, organizationId || "", req2.user?.id || "");
+          const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+          const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma47, id, organizationId || "", req2.user?.id || "");
           opDetail = detail;
           opRes = result;
         }
       }
-      await prisma46.treeBranchLeafSubmissionData.updateMany({
+      await prisma47.treeBranchLeafSubmissionData.updateMany({
         where: { submissionId: id, nodeId: row.nodeId },
         data: {
           operationSource: opSrc,
@@ -36755,7 +38784,7 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
   }
 });
 router56.post("/submissions", async (req2, res) => {
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const userId = req2.user?.id;
   const { treeId, leadId, name, data } = req2.body;
   const normalizedTreeId = treeId != null ? String(treeId) : "";
@@ -36787,7 +38816,7 @@ router56.post("/submissions", async (req2, res) => {
     if (!name || typeof name !== "string") {
       return res.status(400).json({ error: "name est requis et doit \xC3\xAAtre une cha\xC3\xAEne" });
     }
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: {
         id: normalizedTreeId,
         ...isSuperAdmin2 ? {} : { organizationId }
@@ -36799,7 +38828,7 @@ router56.post("/submissions", async (req2, res) => {
     }
     let lead = null;
     if (normalizedLeadId) {
-      lead = await prisma46.lead.findFirst({
+      lead = await prisma47.lead.findFirst({
         where: {
           id: normalizedLeadId,
           ...isSuperAdmin2 ? {} : { organizationId }
@@ -36812,7 +38841,7 @@ router56.post("/submissions", async (req2, res) => {
     } else {
       console.log(`[TreeBranchLeaf API] \xE2\u201E\xB9\xEF\xB8\x8F Cr\xC3\xA9ation de soumission sans lead associ\xC3\xA9`);
     }
-    const validNodes = await prisma46.treeBranchLeafNode.findMany({
+    const validNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId: normalizedTreeId },
       select: { id: true }
     });
@@ -36844,7 +38873,7 @@ router56.post("/submissions", async (req2, res) => {
       let safeUserId = null;
       if (userId) {
         try {
-          const existingUser = await prisma46.user.findUnique({ where: { id: userId } });
+          const existingUser = await prisma47.user.findUnique({ where: { id: userId } });
           if (existingUser) {
             safeUserId = userId;
           } else {
@@ -36855,7 +38884,7 @@ router56.post("/submissions", async (req2, res) => {
         }
       }
       const now = /* @__PURE__ */ new Date();
-      const created = await prisma46.treeBranchLeafSubmission.create({
+      const created = await prisma47.treeBranchLeafSubmission.create({
         data: {
           id: (0, import_crypto10.randomUUID)(),
           treeId: normalizedTreeId,
@@ -36868,19 +38897,19 @@ router56.post("/submissions", async (req2, res) => {
       console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Soumission cr\xC3\xA9\xC3\xA9e: ${created.id}`);
       if (filteredEntries.length > 0) {
         const keys = filteredEntries.map(({ nodeId }) => nodeId);
-        const nodesForLabels = await prisma46.treeBranchLeafNode.findMany({
+        const nodesForLabels = await prisma47.treeBranchLeafNode.findMany({
           where: { id: { in: keys } },
           select: { id: true, label: true }
         });
         const labelMap = new Map(nodesForLabels.map((n) => [n.id, n.label]));
-        const existing = await prisma46.treeBranchLeafSubmissionData.findMany({
+        const existing = await prisma47.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: created.id, nodeId: { in: keys } },
           select: { nodeId: true }
         });
         const existingSet = new Set(existing.map((e) => e.nodeId));
         const toCreate = filteredEntries.filter(({ nodeId }) => !existingSet.has(nodeId));
         const toUpdate = filteredEntries.filter(({ nodeId }) => existingSet.has(nodeId));
-        await prisma46.$transaction(async (tx) => {
+        await prisma47.$transaction(async (tx) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
@@ -36916,8 +38945,8 @@ router56.post("/submissions", async (req2, res) => {
       try {
         const treeIdForBackfill = created.treeId;
         const [nodesForBackfill, varsForBackfill] = await Promise.all([
-          prisma46.treeBranchLeafNode.findMany({ where: { treeId: treeIdForBackfill }, select: { id: true, label: true } }),
-          prisma46.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: treeIdForBackfill } }, include: { TreeBranchLeafNode: { select: { label: true } } } })
+          prisma47.treeBranchLeafNode.findMany({ where: { treeId: treeIdForBackfill }, select: { id: true, label: true } }),
+          prisma47.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: treeIdForBackfill } }, include: { TreeBranchLeafNode: { select: { label: true } } } })
         ]);
         const labelMapBF = new Map(nodesForBackfill.map((n) => [n.id, n.label]));
         const varMetaByNodeIdBF = new Map(
@@ -36930,7 +38959,7 @@ router56.post("/submissions", async (req2, res) => {
             }
           ])
         );
-        const rowsBF = await prisma46.treeBranchLeafSubmissionData.findMany({
+        const rowsBF = await prisma47.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: created.id },
           select: { nodeId: true, isVariable: true, value: true, sourceRef: true }
         });
@@ -36954,23 +38983,23 @@ router56.post("/submissions", async (req2, res) => {
           const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
           if (parsed) {
             if (parsed.type === "condition") {
-              const rec = await prisma46.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
-              const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma46, created.id, organizationId || "", userId || "");
+              const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+              const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma47, created.id, organizationId || "", userId || "");
               opDetail = detail;
               opRes = result;
             } else if (parsed.type === "formula") {
-              const rec = await prisma46.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
-              const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma46, created.id, organizationId || "", userId || "");
+              const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+              const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma47, created.id, organizationId || "", userId || "");
               opDetail = detail;
               opRes = result;
             } else if (parsed.type === "table") {
-              const rec = await prisma46.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
-              const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma46, created.id, organizationId || "", userId || "");
+              const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+              const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma47, created.id, organizationId || "", userId || "");
               opDetail = detail;
               opRes = result;
             }
           }
-          await prisma46.treeBranchLeafSubmissionData.updateMany({
+          await prisma47.treeBranchLeafSubmissionData.updateMany({
             where: { submissionId: created.id, nodeId: row.nodeId },
             data: {
               operationSource: opSrc,
@@ -36983,7 +39012,7 @@ router56.post("/submissions", async (req2, res) => {
       } catch (enrichErr) {
         console.warn("[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Backfill post-cr\xC3\xA9ation des op\xC3\xA9rations non critique a \xC3\xA9chou\xC3\xA9:", enrichErr?.message);
       }
-      const full = await prisma46.treeBranchLeafSubmission.findUnique({
+      const full = await prisma47.treeBranchLeafSubmission.findUnique({
         where: { id: created.id },
         include: {
           TreeBranchLeafTree: { select: { id: true, name: true } },
@@ -37040,9 +39069,9 @@ router56.post("/submissions", async (req2, res) => {
 router56.delete("/submissions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u2014\u2018\xEF\xB8\x8F DELETE submission ${id}`);
-    const submission = await prisma46.treeBranchLeafSubmission.findFirst({
+    const submission = await prisma47.treeBranchLeafSubmission.findFirst({
       where: {
         id,
         ...isSuperAdmin2 ? {} : { Lead: { organizationId } }
@@ -37057,10 +39086,10 @@ router56.delete("/submissions/:id", async (req2, res) => {
       console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Submission ${id} non trouv\xC3\xA9e ou acc\xC3\xA8s refus\xC3\xA9`);
       return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e ou acc\xC3\xA8s refus\xC3\xA9" });
     }
-    await prisma46.treeBranchLeafSubmissionData.deleteMany({
+    await prisma47.treeBranchLeafSubmissionData.deleteMany({
       where: { submissionId: id }
     });
-    await prisma46.treeBranchLeafSubmission.delete({
+    await prisma47.treeBranchLeafSubmission.delete({
       where: { id }
     });
     console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Submission ${id} supprim\xC3\xA9e avec succ\xC3\xA8s`);
@@ -37073,18 +39102,18 @@ router56.delete("/submissions/:id", async (req2, res) => {
 router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET select-config for field: ${fieldId}`);
-    const access = await ensureNodeOrgAccess(prisma46, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    let selectConfig = await prisma46.treeBranchLeafSelectConfig.findFirst({
+    let selectConfig = await prisma47.treeBranchLeafSelectConfig.findFirst({
       where: { nodeId: fieldId }
     });
     if (!selectConfig) {
       console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Pas de configuration SELECT pour le champ ${fieldId}`);
-      const node = await prisma46.treeBranchLeafNode.findUnique({
+      const node = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: fieldId },
         select: {
           id: true,
@@ -37100,7 +39129,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
         const isColumnBased = activeInstance?.columnBased === true;
         if (isRowBased || isColumnBased) {
           console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\xA7 Cr\xC3\xA9ation dynamique de la config SELECT pour lookup ${isRowBased ? "LIGNE" : "COLONNE"}`);
-          selectConfig = await prisma46.treeBranchLeafSelectConfig.create({
+          selectConfig = await prisma47.treeBranchLeafSelectConfig.create({
             data: {
               id: (0, import_crypto10.randomUUID)(),
               nodeId: fieldId,
@@ -37135,7 +39164,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
 router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const {
       optionsSource,
       tableReference,
@@ -37155,11 +39184,11 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
       displayColumn,
       displayRow
     });
-    const access = await ensureNodeOrgAccess(prisma46, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    const selectConfig = await prisma46.treeBranchLeafSelectConfig.upsert({
+    const selectConfig = await prisma47.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
         id: (0, import_crypto10.randomUUID)(),
@@ -37203,13 +39232,13 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
 router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET active table/lookup for node: ${nodeId}`);
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    let selectConfig = await prisma46.treeBranchLeafSelectConfig.findFirst({
+    let selectConfig = await prisma47.treeBranchLeafSelectConfig.findFirst({
       where: { nodeId },
       select: {
         tableReference: true,
@@ -37224,12 +39253,12 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 Configuration SELECT:`, selectConfig);
     if (!selectConfig?.tableReference) {
       console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Pas de tableReference dans la config SELECT \xE2\u2020\u2019 tentative de fallback via capabilities.table`);
-      const node = await prisma46.treeBranchLeafNode.findUnique({
+      const node = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { hasTable: true, table_activeId: true, table_instances: true }
       });
       if (node?.hasTable && node.table_activeId) {
-        await prisma46.treeBranchLeafSelectConfig.upsert({
+        await prisma47.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
             id: (0, import_crypto10.randomUUID)(),
@@ -37256,7 +39285,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        selectConfig = await prisma46.treeBranchLeafSelectConfig.findFirst({
+        selectConfig = await prisma47.treeBranchLeafSelectConfig.findFirst({
           where: { nodeId },
           select: {
             tableReference: true,
@@ -37275,7 +39304,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Pas de tableReference dans la config SELECT (apr\xC3\xA8s fallback)`);
       return res.status(404).json({ error: "Pas de tableau r\xC3\xA9f\xC3\xA9renc\xC3\xA9 pour ce lookup" });
     }
-    const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id: selectConfig.tableReference },
       select: {
         id: true,
@@ -37414,7 +39443,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
           sample: autoOptions.slice(0, 5)
         });
         try {
-          await prisma46.treeBranchLeafSelectConfig.upsert({
+          await prisma47.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
               id: (0, import_crypto10.randomUUID)(),
@@ -37464,13 +39493,13 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
 router56.patch("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\xA7 PATCH node: ${nodeId}`, req2.body);
-    const access = await ensureNodeOrgAccess(prisma46, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    const updatedNode = await prisma46.treeBranchLeafNode.update({
+    const updatedNode = await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         ...req2.body,
@@ -37489,7 +39518,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
     const { nodeId } = req2.params;
     const { enabled, activeId, currentTable } = req2.body;
     console.log(`\xF0\u0178\u017D\xAF [TablePanel API] PUT /nodes/${nodeId}/capabilities/table`, { enabled, activeId, currentTable });
-    const node = await prisma46.treeBranchLeafNode.findUnique({
+    const node = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -37519,7 +39548,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       capabilities: newCapabilities
     };
     console.log(`\xE2\u0153\u2026 [TablePanel API] Nouvelle metadata.capabilities.table:`, newCapabilities.table);
-    await prisma46.treeBranchLeafNode.update({
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasTable: enabled === true,
@@ -37549,7 +39578,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         displayRow
       });
       try {
-        await prisma46.treeBranchLeafSelectConfig.upsert({
+        await prisma47.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
             id: (0, import_crypto10.randomUUID)(),
@@ -37593,7 +39622,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
     } else if (!enabled) {
       console.log(`\xF0\u0178\u201D\xB4 [TablePanel API] Suppression configuration SELECT pour ${nodeId}`);
       try {
-        await prisma46.treeBranchLeafSelectConfig.deleteMany({
+        await prisma47.treeBranchLeafSelectConfig.deleteMany({
           where: { nodeId }
         });
         console.log(`\xE2\u0153\u2026 [TablePanel API] Configuration SELECT supprim\xC3\xA9e pour ${nodeId}`);
@@ -37601,7 +39630,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         console.error(`\xE2\u0161\xA0\xEF\xB8\x8F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
       }
     }
-    const verifyNode = await prisma46.treeBranchLeafNode.findUnique({
+    const verifyNode = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true, hasTable: true }
     });
@@ -37624,10 +39653,10 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
 });
 router56.put("/submissions/:id", async (req2, res) => {
   const { id } = req2.params;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const { data, status } = req2.body;
   try {
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -37639,10 +39668,10 @@ router56.put("/submissions/:id", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
     }
-    const nodes = await prisma46.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
+    const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const validNodeIds = new Set(nodes.map((n) => n.id));
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
-    const variablesMeta = await prisma46.treeBranchLeafNodeVariable.findMany({
+    const variablesMeta = await prisma47.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       include: { TreeBranchLeafNode: { select: { label: true } } }
     });
@@ -37690,7 +39719,7 @@ router56.put("/submissions/:id", async (req2, res) => {
       return e;
     });
     const entries = mappedEntries.filter(({ nodeId }) => validNodeIds.has(nodeId)).map((e) => ({ ...e, effectiveValue: e.calculatedValue !== void 0 ? e.calculatedValue : e.value }));
-    await prisma46.$transaction(async (tx) => {
+    await prisma47.$transaction(async (tx) => {
       const now = /* @__PURE__ */ new Date();
       const inferSource = (sourceRef) => {
         const s = (sourceRef || "").toLowerCase();
@@ -37741,7 +39770,7 @@ router56.put("/submissions/:id", async (req2, res) => {
               const parsed = parseSourceRef(meta.sourceRef);
               if (parsed?.type === "condition") {
                 const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
-                const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
+                const ids = extractNodeIdsFromConditionSet2(rec?.conditionSet);
                 valuesMapTx.set(nodeId, valueStr);
                 const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                 const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
@@ -37749,7 +39778,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                 opRes = { type: "condition", label: display, value: valueStr, unit: meta?.unit || null, refs, text: expr };
               } else if (parsed?.type === "formula") {
                 const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
-                const ids = extractNodeIdsFromTokens(rec?.tokens);
+                const ids = extractNodeIdsFromTokens2(rec?.tokens);
                 valuesMapTx.set(nodeId, valueStr);
                 const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                 const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
@@ -37822,7 +39851,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                   if (parsed?.type === "condition") {
                     return (async () => {
                       const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
-                      const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
+                      const ids = extractNodeIdsFromConditionSet2(rec?.conditionSet);
                       const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                       const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
                       const expr = "\xF0\u0178\u201D\u201E Condition \xC3\xA9valu\xC3\xA9e via TBL Prisma (ligne 5545)";
@@ -37832,7 +39861,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                   if (parsed?.type === "formula") {
                     return (async () => {
                       const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
-                      const ids = extractNodeIdsFromTokens(rec?.tokens);
+                      const ids = extractNodeIdsFromTokens2(rec?.tokens);
                       const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                       const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
                       let expr = buildTextFromTokens(rec?.tokens, labelMap, valuesMapTx);
@@ -37883,7 +39912,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                   if (parsed?.type === "condition") {
                     return (async () => {
                       const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
-                      const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
+                      const ids = extractNodeIdsFromConditionSet2(rec?.conditionSet);
                       const refs = buildResolvedRefs(ids, labelMap, valuesMapTx);
                       return { type: "condition", label: display, value: valueStr, unit: meta?.unit || null, refs };
                     })();
@@ -37891,7 +39920,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                   if (parsed?.type === "formula") {
                     return (async () => {
                       const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
-                      const ids = extractNodeIdsFromTokens(rec?.tokens);
+                      const ids = extractNodeIdsFromTokens2(rec?.tokens);
                       const refs = buildResolvedRefs(ids, labelMap, valuesMapTx);
                       return { type: "formula", label: display, value: valueStr, unit: meta?.unit || null, refs };
                     })();
@@ -37948,7 +39977,7 @@ router56.put("/submissions/:id", async (req2, res) => {
             if (parsed?.type === "condition") {
               return (async () => {
                 const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
-                const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
+                const ids = extractNodeIdsFromConditionSet2(rec?.conditionSet);
                 const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
                 const human = `${display}`;
                 return { type: "condition", label: display, value: null, unit: v.unit || null, refs, text: buildResultText(human, null, v.unit || null) };
@@ -37957,7 +39986,7 @@ router56.put("/submissions/:id", async (req2, res) => {
             if (parsed?.type === "formula") {
               return (async () => {
                 const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
-                const ids = extractNodeIdsFromTokens(rec?.tokens);
+                const ids = extractNodeIdsFromTokens2(rec?.tokens);
                 const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
                 const human = `${display}`;
                 return { type: "formula", label: display, value: null, unit: v.unit || null, refs, text: buildResultText(human, null, v.unit || null) };
@@ -38034,13 +40063,13 @@ router56.put("/submissions/:id", async (req2, res) => {
             const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
             if (parsed?.type === "condition") {
               const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
-              const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
+              const ids = extractNodeIdsFromConditionSet2(rec?.conditionSet);
               const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
               const human = `${display}`;
               opRes = { type: "condition", label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) };
             } else if (parsed?.type === "formula") {
               const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
-              const ids = extractNodeIdsFromTokens(rec?.tokens);
+              const ids = extractNodeIdsFromTokens2(rec?.tokens);
               const refs = buildResolvedRefs(ids, labelMap, valuesMapTxAll);
               const human = `${display}`;
               opRes = { type: "formula", label: display, value: valueStr, unit: meta?.unit || null, refs, text: buildResultText(human, valueStr, meta?.unit || null) };
@@ -38075,7 +40104,7 @@ router56.put("/submissions/:id", async (req2, res) => {
         await tx.treeBranchLeafSubmission.update({ where: { id }, data: { updatedAt: /* @__PURE__ */ new Date() } });
       }
     });
-    const full = await prisma46.treeBranchLeafSubmission.findUnique({
+    const full = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
         TreeBranchLeafTree: { select: { id: true, name: true } },
@@ -38093,7 +40122,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
   try {
     const { variableNodeId } = req2.params;
     const { submissionId } = req2.body;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log("\n" + "\xE2\u2022\x90".repeat(80));
     console.log("\xF0\u0178\u017D\xAF [V2 API] \xC3\u2030VALUATION VARIABLE UNIVERSELLE");
     console.log("\xE2\u2022\x90".repeat(80));
@@ -38117,7 +40146,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
         error: "submissionId requis dans le body"
       });
     }
-    const node = await prisma46.treeBranchLeafNode.findUnique({
+    const node = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: variableNodeId },
       include: {
         TreeBranchLeafTree: {
@@ -38168,7 +40197,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     console.log("\xE2\u0153\u2026 [V2 API] Variable trouv\xC3\xA9e:", variable.displayName);
     console.log("   - sourceType:", variable.sourceType);
     console.log("   - sourceRef:", variable.sourceRef);
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       select: {
         id: true,
@@ -38192,7 +40221,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     const evaluationResult = await evaluateVariableOperation(
       variableNodeId,
       submissionId,
-      prisma46
+      prisma47
     );
     const duration = Date.now() - startTime;
     console.log("\n" + "\xE2\u201D\u20AC".repeat(80));
@@ -38202,7 +40231,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     console.log("   - OperationSource:", evaluationResult.operationSource);
     console.log("\xE2\u201D\u20AC".repeat(80) + "\n");
     console.log("\xF0\u0178\u2019\xBE [V2 API] Sauvegarde dans SubmissionData...");
-    await prisma46.treeBranchLeafSubmissionData.upsert({
+    await prisma47.treeBranchLeafSubmissionData.upsert({
       where: {
         submissionId_nodeId: {
           submissionId,
@@ -38276,9 +40305,9 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
 router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
-    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
+    const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     console.log("\n\xF0\u0178\u201D\x8D [V2 API] R\xC3\u2030CUP\xC3\u2030RATION VARIABLES:", submissionId);
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: {
         TreeBranchLeafTree: {
@@ -38302,7 +40331,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
         error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission"
       });
     }
-    const variables = await prisma46.treeBranchLeafNodeVariable.findMany({
+    const variables = await prisma47.treeBranchLeafNodeVariable.findMany({
       where: {
         TreeBranchLeafNode: {
           treeId: submission.treeId
@@ -38319,7 +40348,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
       }
     });
     console.log("\xE2\u0153\u2026 [V2 API] Variables trouv\xC3\xA9es:", variables.length);
-    const submissionData = await prisma46.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         nodeId: {
@@ -38378,7 +40407,7 @@ router56.post("/submissions/stage", async (req2, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     let stage;
     if (stageId) {
-      stage = await prisma46.treeBranchLeafStage.update({
+      stage = await prisma47.treeBranchLeafStage.update({
         where: { id: stageId },
         data: {
           formData: formData || {},
@@ -38397,13 +40426,13 @@ router56.post("/submissions/stage", async (req2, res) => {
       }
       let currentBaseVersion = baseVersion || 1;
       if (submissionId && !baseVersion) {
-        const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+        const submission = await prisma47.treeBranchLeafSubmission.findUnique({
           where: { id: submissionId },
           select: { currentVersion: true }
         });
         currentBaseVersion = submission?.currentVersion || 1;
       }
-      stage = await prisma46.treeBranchLeafStage.create({
+      stage = await prisma47.treeBranchLeafStage.create({
         data: {
           id: (0, import_crypto10.randomUUID)(),
           treeId,
@@ -38444,7 +40473,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
       });
     }
     console.log("\xF0\u0178\u201D\x8D [STAGE PREVIEW] Pr\xC3\xA9visualisation pour:", stageId);
-    const stage = await prisma46.treeBranchLeafStage.findUnique({
+    const stage = await prisma47.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
@@ -38454,7 +40483,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
       });
     }
     const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-    const variableNodes = await prisma46.treeBranchLeafNode.findMany({
+    const variableNodes = await prisma47.treeBranchLeafNode.findMany({
       where: {
         treeId: stage.treeId,
         subType: "variable"
@@ -38471,7 +40500,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
           const evalResult = await evaluateVariableOperation2(
             node.id,
             stage.submissionId || stage.id,
-            prisma46,
+            prisma47,
             valueMapLocal
           );
           return {
@@ -38528,7 +40557,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       });
     }
     console.log("\xF0\u0178\u2019\xBE [STAGE COMMIT] Commit brouillon:", { stageId, asNew, userId });
-    const stage = await prisma46.treeBranchLeafStage.findUnique({
+    const stage = await prisma47.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
@@ -38549,7 +40578,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
     if (asNew || !stage.submissionId) {
       console.log("\xF0\u0178\u2020\u2022 [STAGE COMMIT] Cr\xC3\xA9ation nouvelle submission");
       const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-      const variableNodes = await prisma46.treeBranchLeafNode.findMany({
+      const variableNodes = await prisma47.treeBranchLeafNode.findMany({
         where: {
           treeId: stage.treeId,
           subType: "variable"
@@ -38566,7 +40595,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
             const evalResult = await evaluateVariableOperation2(
               node.id,
               stage.id,
-              prisma46,
+              prisma47,
               valueMapLocal
             );
             return {
@@ -38583,7 +40612,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           }
         })
       ).then((res2) => res2.filter((r) => r !== null));
-      const result = await prisma46.$transaction(async (tx) => {
+      const result = await prisma47.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
             id: (0, import_crypto10.randomUUID)(),
@@ -38633,7 +40662,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       console.log("\xE2\u0153\u2026 [STAGE COMMIT] Nouvelle submission cr\xC3\xA9\xC3\xA9e:", submissionId);
     } else {
       console.log("\xF0\u0178\u201D\u201E [STAGE COMMIT] Mise \xC3\xA0 jour submission existante:", stage.submissionId);
-      const currentSubmission = await prisma46.treeBranchLeafSubmission.findUnique({
+      const currentSubmission = await prisma47.treeBranchLeafSubmission.findUnique({
         where: { id: stage.submissionId },
         select: {
           id: true,
@@ -38655,7 +40684,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           baseVersion: stage.baseVersion,
           currentVersion: currentSubmission.currentVersion
         });
-        const currentData = await prisma46.treeBranchLeafSubmissionData.findMany({
+        const currentData = await prisma47.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: stage.submissionId },
           select: { nodeId: true, value: true }
         });
@@ -38696,7 +40725,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           });
         }
       }
-      const result = await prisma46.$transaction(async (tx) => {
+      const result = await prisma47.$transaction(async (tx) => {
         const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
         const variableNodes = await tx.treeBranchLeafNode.findMany({
           where: {
@@ -38818,7 +40847,7 @@ router56.post("/submissions/stage/discard", async (req2, res) => {
       });
     }
     console.log("\xF0\u0178\u2014\u2018\xEF\xB8\x8F [STAGE DISCARD] Suppression brouillon:", stageId);
-    await prisma46.treeBranchLeafStage.delete({
+    await prisma47.treeBranchLeafStage.delete({
       where: { id: stageId }
     });
     console.log("\xE2\u0153\u2026 [STAGE DISCARD] Brouillon supprim\xC3\xA9");
@@ -38847,7 +40876,7 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
     };
     if (leadId) where.leadId = leadId;
     if (treeId) where.treeId = treeId;
-    const drafts = await prisma46.treeBranchLeafStage.findMany({
+    const drafts = await prisma47.treeBranchLeafStage.findMany({
       where,
       orderBy: { lastActivity: "desc" },
       include: {
@@ -38888,7 +40917,7 @@ router56.get("/submissions/:id/versions", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\xF0\u0178\u201C\u0153 [VERSIONS] R\xC3\xA9cup\xC3\xA9ration historique:", id);
-    const versions = await prisma46.treeBranchLeafSubmissionVersion.findMany({
+    const versions = await prisma47.treeBranchLeafSubmissionVersion.findMany({
       where: { submissionId: id },
       orderBy: { version: "desc" },
       include: {
@@ -38931,7 +40960,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     const { id, version } = req2.params;
     const userId = req2.user?.id || "system";
     console.log("\xF0\u0178\u201D\u2122 [RESTORE] Restauration version:", { id, version, userId });
-    const versionToRestore = await prisma46.treeBranchLeafSubmissionVersion.findUnique({
+    const versionToRestore = await prisma47.treeBranchLeafSubmissionVersion.findUnique({
       where: {
         submissionId_version: {
           submissionId: id,
@@ -38945,7 +40974,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
         error: "Version non trouv\xC3\xA9e"
       });
     }
-    const submission = await prisma46.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       select: { treeId: true, leadId: true, currentVersion: true }
     });
@@ -38955,7 +40984,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
         error: "Submission non trouv\xC3\xA9e"
       });
     }
-    const stage = await prisma46.treeBranchLeafStage.create({
+    const stage = await prisma47.treeBranchLeafStage.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
         treeId: submission.treeId,
@@ -38984,8 +41013,8 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
 });
 router56.get("/shared-references", async (req2, res) => {
   try {
-    const { organizationId } = getAuthCtx2(req2);
-    const templates = await prisma46.treeBranchLeafNode.findMany({
+    const { organizationId } = getAuthCtx3(req2);
+    const templates = await prisma47.treeBranchLeafNode.findMany({
       where: {
         isSharedReference: true,
         sharedReferenceId: null,
@@ -39042,8 +41071,8 @@ router56.get("/shared-references", async (req2, res) => {
 router56.get("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
-    const { organizationId } = getAuthCtx2(req2);
-    const template = await prisma46.treeBranchLeafNode.findFirst({
+    const { organizationId } = getAuthCtx3(req2);
+    const template = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
         isSharedReference: true,
@@ -39094,8 +41123,8 @@ router56.put("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
     const { name, description } = req2.body;
-    const { organizationId } = getAuthCtx2(req2);
-    const template = await prisma46.treeBranchLeafNode.findFirst({
+    const { organizationId } = getAuthCtx3(req2);
+    const template = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
         isSharedReference: true,
@@ -39108,7 +41137,7 @@ router56.put("/shared-references/:refId", async (req2, res) => {
     if (!template) {
       return res.status(404).json({ error: "R\xC3\xA9f\xC3\xA9rence introuvable" });
     }
-    const updated = await prisma46.treeBranchLeafNode.update({
+    const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: refId },
       data: {
         sharedReferenceName: name || template.sharedReferenceName,
@@ -39133,8 +41162,8 @@ router56.put("/shared-references/:refId", async (req2, res) => {
 router56.delete("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
-    const { organizationId } = getAuthCtx2(req2);
-    const template = await prisma46.treeBranchLeafNode.findFirst({
+    const { organizationId } = getAuthCtx3(req2);
+    const template = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
         isSharedReference: true,
@@ -39152,7 +41181,7 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
     }
     if (template.referenceUsages.length > 0) {
       console.log(`\xE2\u0161\xA0\xEF\xB8\x8F [SHARED REF] D\xC3\xA9tachement de ${template.referenceUsages.length} usage(s) avant suppression`);
-      await prisma46.treeBranchLeafNode.updateMany({
+      await prisma47.treeBranchLeafNode.updateMany({
         where: {
           sharedReferenceId: refId
         },
@@ -39164,7 +41193,7 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
         }
       });
     }
-    await prisma46.treeBranchLeafNode.delete({
+    await prisma47.treeBranchLeafNode.delete({
       where: { id: refId }
     });
     console.log(`\xF0\u0178\u2014\u2018\xEF\xB8\x8F [SHARED REF] R\xC3\xA9f\xC3\xA9rence ${refId} supprim\xC3\xA9e`);
@@ -39178,9 +41207,9 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { name, description, fieldType, label } = req2.body;
-    const { organizationId } = getAuthCtx2(req2);
+    const { organizationId } = getAuthCtx3(req2);
     console.log("\xF0\u0178\u201C\x9D [SHARED REF] Cr\xC3\xA9ation nouveau n\xC5\u201Cud r\xC3\xA9f\xC3\xA9rence:", { treeId, name, description, fieldType, label });
-    const tree = await prisma46.treeBranchLeafTree.findFirst({
+    const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: {
         id: treeId,
         organizationId
@@ -39190,7 +41219,7 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
       return res.status(404).json({ error: "Arbre introuvable" });
     }
     const newNodeId = `shared-ref-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const newNode = await prisma46.treeBranchLeafNode.create({
+    const newNode = await prisma47.treeBranchLeafNode.create({
       data: {
         id: newNodeId,
         treeId,
@@ -39233,9 +41262,9 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { referenceIds } = req2.body;
-    const { organizationId } = getAuthCtx2(req2);
+    const { organizationId } = getAuthCtx3(req2);
     console.log("\xF0\u0178\u201D\u2014 [SHARED REF] Liaison r\xC3\xA9f\xC3\xA9rences:", { nodeId, referenceIds });
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         TreeBranchLeafTree: {
@@ -39246,7 +41275,7 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
     if (!node) {
       return res.status(404).json({ error: "N\xC5\u201Cud introuvable" });
     }
-    await prisma46.treeBranchLeafNode.update({
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         sharedReferenceIds: referenceIds
@@ -39266,9 +41295,9 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { name, description } = req2.body;
-    const { organizationId } = getAuthCtx2(req2);
+    const { organizationId } = getAuthCtx3(req2);
     console.log("\xF0\u0178\u201C\x9D [SHARED REF] Conversion n\xC5\u201Cud en r\xC3\xA9f\xC3\xA9rence:", { nodeId, name, description });
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         TreeBranchLeafTree: {
@@ -39279,7 +41308,7 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
     if (!node) {
       return res.status(404).json({ error: "N\xC5\u201Cud introuvable" });
     }
-    await prisma46.treeBranchLeafNode.update({
+    await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         isSharedReference: true,
@@ -39318,11 +41347,11 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
         error: "newSuffix doit \xC3\xAAtre un nombre entier positif"
       });
     }
-    const node = await prisma46.treeBranchLeafNode.findFirst({
+    const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         TreeBranchLeafTree: {
-          organizationId: getAuthCtx2(req2).organizationId
+          organizationId: getAuthCtx3(req2).organizationId
         }
       },
       include: { TreeBranchLeafTree: true }
@@ -39335,7 +41364,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     const shouldDuplicateNode = duplicateNode === void 0 ? true : Boolean(duplicateNode);
     let ownerNodeIdForMap = null;
     if (!shouldDuplicateNode && bodyTargetNodeId) {
-      const targetNode = await prisma46.treeBranchLeafNode.findUnique({ where: { id: bodyTargetNodeId } });
+      const targetNode = await prisma47.treeBranchLeafNode.findUnique({ where: { id: bodyTargetNodeId } });
       if (!targetNode) {
         return res.status(404).json({ error: "targetNodeId introuvable" });
       }
@@ -39345,23 +41374,23 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       targetNodeId = targetNode.id;
       console.log(`\u{1F3AF} [COPY-LINKED-VAR] Cible explicite fournie: ${targetNodeId}`);
       if (variableId) {
-        const originalVarForMap = await prisma46.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+        const originalVarForMap = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
         if (originalVarForMap) ownerNodeIdForMap = originalVarForMap.nodeId;
       }
     } else if (shouldDuplicateNode) {
-      const originalVar = await prisma46.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+      const originalVar = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
       if (!originalVar) {
         return res.status(404).json({ error: "Variable introuvable" });
       }
-      const ownerNode = await prisma46.treeBranchLeafNode.findUnique({ where: { id: originalVar.nodeId } });
+      const ownerNode = await prisma47.treeBranchLeafNode.findUnique({ where: { id: originalVar.nodeId } });
       if (!ownerNode) {
         return res.status(404).json({ error: "N\u0153ud propri\xE9taire introuvable" });
       }
       ownerNodeIdForMap = ownerNode.id;
       const candidateId = `${ownerNode.id}-${newSuffix}`;
-      const exists = await prisma46.treeBranchLeafNode.findUnique({ where: { id: candidateId } });
+      const exists = await prisma47.treeBranchLeafNode.findUnique({ where: { id: candidateId } });
       targetNodeId = exists ? `${candidateId}-${Date.now()}` : candidateId;
-      await prisma46.treeBranchLeafNode.create({
+      await prisma47.treeBranchLeafNode.create({
         data: {
           id: targetNodeId,
           treeId: ownerNode.treeId,
@@ -39393,7 +41422,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       variableId,
       newSuffix,
       targetNodeId,
-      prisma46,
+      prisma47,
       {
         autoCreateDisplayNode: true,
         nodeIdMap,
@@ -39406,7 +41435,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       return res.status(400).json({ error: result.error || "Erreur lors de la copie" });
     }
     try {
-      await addToNodeLinkedField6(prisma46, targetNodeId, "linkedVariableIds", [result.variableId]);
+      await addToNodeLinkedField7(prisma47, targetNodeId, "linkedVariableIds", [result.variableId]);
     } catch (e) {
       console.warn("\u26A0\uFE0F [COPY-LINKED-VAR] \xC9chec MAJ linkedVariableIds:", e.message);
     }
@@ -39422,7 +41451,7 @@ router56.post("/variables/:variableId/create-display", async (req2, res) => {
   try {
     const { variableId } = req2.params;
     const { label, suffix } = req2.body || {};
-    const result = await createDisplayNodeForExistingVariable(variableId, prisma46, label || "Nouveau Section", suffix ?? "nouveau");
+    const result = await createDisplayNodeForExistingVariable(variableId, prisma47, label || "Nouveau Section", suffix ?? "nouveau");
     res.status(201).json(result);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -39434,7 +41463,7 @@ router56.get("/variables/search", async (req2, res) => {
   try {
     const q = String(req2.query.displayName || "").trim();
     if (!q) return res.status(400).json({ error: "displayName query string requis" });
-    const found = await prisma46.treeBranchLeafNodeVariable.findMany({
+    const found = await prisma47.treeBranchLeafNodeVariable.findMany({
       where: { displayName: { contains: q, mode: "insensitive" } },
       select: { id: true, nodeId: true, exposedKey: true, displayName: true, sourceType: true, sourceRef: true }
     });
@@ -39448,10 +41477,10 @@ var treebranchleaf_routes_default = router56;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes.ts
 var import_express58 = __toESM(require("express"), 1);
-var import_client48 = require("@prisma/client");
+var import_client49 = require("@prisma/client");
 var router57 = import_express58.default.Router();
-var prisma47 = new import_client48.PrismaClient();
-function getAuthCtx3(req2) {
+var prisma48 = new import_client49.PrismaClient();
+function getAuthCtx4(req2) {
   const role = (req2.user?.role || "").toLowerCase();
   const possibleFlag = req2.user?.isSuperAdmin;
   const isSuperAdmin2 = role === "super_admin" || possibleFlag === true;
@@ -39460,8 +41489,8 @@ function getAuthCtx3(req2) {
 }
 router57.get("/variables", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
-    const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx3(req2);
-    const raw = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
+    const raw = await prisma48.treeBranchLeafNodeVariable.findMany({
       include: {
         TreeBranchLeafNode: {
           select: {
@@ -39505,8 +41534,8 @@ router57.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
       if (sourceRef.startsWith("table:")) return "4";
       return "1";
     };
-    const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx3(req2);
-    const rawVariables = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
+    const rawVariables = await prisma48.treeBranchLeafNodeVariable.findMany({
       include: {
         TreeBranchLeafNode: {
           select: {
@@ -39564,8 +41593,8 @@ router57.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
 });
 router57.get("/fields", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
-    const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx3(req2);
-    const nodes = await prisma47.treeBranchLeafNode.findMany({
+    const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
+    const nodes = await prisma48.treeBranchLeafNode.findMany({
       where: {
         OR: [
           { type: { startsWith: "leaf_" } },
@@ -39645,14 +41674,14 @@ router57.post("/devis", authMiddleware, requireRole(["user", "admin", "super_adm
 router57.get("/config/health", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const [varCount, formulaCount, conditionCount, tableCount] = await Promise.all([
-      prisma47.treeBranchLeafNodeVariable.count(),
-      prisma47.treeBranchLeafNodeFormula.count().catch(() => 0),
+      prisma48.treeBranchLeafNodeVariable.count(),
+      prisma48.treeBranchLeafNodeFormula.count().catch(() => 0),
       // @ts-expect-error table potentielle condition pas toujours générée
-      prisma47.treeBranchLeafNodeCondition?.count?.().catch?.(() => 0) || 0,
+      prisma48.treeBranchLeafNodeCondition?.count?.().catch?.(() => 0) || 0,
       // @ts-expect-error table potentielle table pas toujours générée
-      prisma47.treeBranchLeafNodeTable?.count?.().catch?.(() => 0) || 0
+      prisma48.treeBranchLeafNodeTable?.count?.().catch?.(() => 0) || 0
     ]);
-    const sample = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const sample = await prisma48.treeBranchLeafNodeVariable.findMany({
       select: { id: true, sourceRef: true },
       take: 500,
       orderBy: { updatedAt: "desc" }
@@ -39738,7 +41767,7 @@ var tbl_routes_default = router57;
 var import_express59 = __toESM(require("express"), 1);
 
 // src/components/TreeBranchLeaf/tbl-bridge/intelligence/TBLIntelligence.ts
-var import_client49 = require("@prisma/client");
+var import_client50 = require("@prisma/client");
 var TBLIntelligence = class {
   prisma;
   elementRegistry = /* @__PURE__ */ new Map();
@@ -39747,7 +41776,7 @@ var TBLIntelligence = class {
   tableRegistry = /* @__PURE__ */ new Map();
   dataCache = /* @__PURE__ */ new Map();
   constructor() {
-    this.prisma = new import_client49.PrismaClient();
+    this.prisma = new import_client50.PrismaClient();
   }
   /**
    * 📖 LECTURE ET DÉCODAGE DES DONNÉES ENCODÉES
@@ -41178,8 +43207,8 @@ function logRouteHit(route) {
 }
 router58.post("/evaluate", async (req2, res) => {
   logRouteHit("POST /api/tbl/evaluate");
-  const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-  const prisma68 = new PrismaClient70();
+  const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+  const prisma69 = new PrismaClient71();
   try {
     const { elementId, elementIds, contextData = {}, evalType } = req2.body || {};
     if (Array.isArray(elementIds) && elementIds.length > 0) {
@@ -41192,7 +43221,7 @@ router58.post("/evaluate", async (req2, res) => {
           continue;
         }
         try {
-          const single = await resolveSingleEvaluation(prisma68, id, contextData);
+          const single = await resolveSingleEvaluation(prisma69, id, contextData);
           results[id] = single.payload;
           traces[id] = single.trace;
         } catch (e) {
@@ -41215,7 +43244,7 @@ router58.post("/evaluate", async (req2, res) => {
     const trace = [];
     let resolvedNodeId = null;
     let variable = null;
-    const byKey = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const byKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (byKey) {
       resolvedNodeId = byKey.nodeId;
       variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -41224,7 +43253,7 @@ router58.post("/evaluate", async (req2, res) => {
       trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
     }
     if (!resolvedNodeId) {
-      const node = await prisma68.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+      const node = await prisma69.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
       if (node) {
         resolvedNodeId = node.id;
         trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -41233,7 +43262,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const formula = await prisma68.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
+      const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
       if (formula) {
         resolvedNodeId = formula.nodeId;
         trace.push({ step: "formula_id", info: "Formule trouv\xE9e via id", success: true });
@@ -41242,7 +43271,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceFormula = await prisma68.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceFormula = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceFormula) {
         resolvedNodeId = viaSourceFormula.nodeId;
         variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -41252,7 +43281,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceRaw = await prisma68.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceRaw = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceRaw) {
         resolvedNodeId = viaSourceRaw.nodeId;
         variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -41271,7 +43300,7 @@ router58.post("/evaluate", async (req2, res) => {
       });
     }
     if (!variable) {
-      const v = await prisma68.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+      const v = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
       if (v) {
         variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
         trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -41309,15 +43338,15 @@ router58.post("/evaluate", async (req2, res) => {
     console.error("\u{1F4A5} [TBL INTELLIGENCE] Erreur /evaluate:", e);
     return res.status(500).json({ success: false, error: "Erreur interne /evaluate", details: e instanceof Error ? e.message : "unknown" });
   } finally {
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
   }
 });
-async function resolveSingleEvaluation(prisma68, elementId, contextData) {
+async function resolveSingleEvaluation(prisma69, elementId, contextData) {
   const evaluationEngine2 = new TBLEvaluationEngine_default();
   const trace = [];
   let resolvedNodeId = null;
   let variable = null;
-  const byKey = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+  const byKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
   if (byKey) {
     resolvedNodeId = byKey.nodeId;
     variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -41326,7 +43355,7 @@ async function resolveSingleEvaluation(prisma68, elementId, contextData) {
     trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
   }
   if (!resolvedNodeId) {
-    const node = await prisma68.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+    const node = await prisma69.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
     if (node) {
       resolvedNodeId = node.id;
       trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -41335,7 +43364,7 @@ async function resolveSingleEvaluation(prisma68, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const formula = await prisma68.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
+    const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: elementId }, select: { nodeId: true } });
     if (formula) {
       resolvedNodeId = formula.nodeId;
       trace.push({ step: "formula_id", info: "Formule trouv\xE9e via id", success: true });
@@ -41344,7 +43373,7 @@ async function resolveSingleEvaluation(prisma68, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceFormula = await prisma68.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceFormula = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceFormula) {
       resolvedNodeId = viaSourceFormula.nodeId;
       variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -41354,7 +43383,7 @@ async function resolveSingleEvaluation(prisma68, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceRaw = await prisma68.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceRaw = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceRaw) {
       resolvedNodeId = viaSourceRaw.nodeId;
       variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -41367,7 +43396,7 @@ async function resolveSingleEvaluation(prisma68, elementId, contextData) {
     return { payload: { success: false, error: "Impossible de r\xE9soudre elementId", trace }, trace };
   }
   if (!variable) {
-    const v = await prisma68.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+    const v = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
     if (v) {
       variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
       trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -41465,10 +43494,10 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     });
   }
   console.log("\u{1F527} [TBL EVALUATE CONDITION] \xC9valuation avec operation-interpreter:", tblCode);
-  const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-  const prisma68 = new PrismaClient70();
+  const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+  const prisma69 = new PrismaClient71();
   try {
-    const conditionRecord = await prisma68.treeBranchLeafNodeCondition.findUnique({
+    const conditionRecord = await prisma69.treeBranchLeafNodeCondition.findUnique({
       where: { id: tblCode },
       select: { nodeId: true }
     });
@@ -41481,7 +43510,7 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     const result = await evaluateVariableOperation(
       conditionRecord.nodeId,
       submissionId || tblCode,
-      prisma68
+      prisma69
     );
     console.log("\u2705 [TBL EVALUATE CONDITION] R\xE9sultat operation-interpreter:", result);
     return res.json({
@@ -41501,7 +43530,7 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
       details: error instanceof Error ? error.message : "unknown"
     });
   } finally {
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
   }
 });
 router58.post("/evaluate/table/:tblCode", async (req2, res) => {
@@ -41518,9 +43547,9 @@ router58.post("/update-database-results", async (req2, res) => {
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F504} [TBL UPDATE] D\xE9but mise \xE0 jour base de donn\xE9es avec CapacityCalculator");
-    const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-    const prisma68 = new PrismaClient70();
-    const submissionData = await prisma68.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+    const prisma69 = new PrismaClient71();
+    const submissionData = await prisma69.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: "condition"
@@ -41558,7 +43587,7 @@ router58.post("/update-database-results", async (req2, res) => {
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           method: "CapacityCalculator"
         };
-        await prisma68.treeBranchLeafSubmissionData.update({
+        await prisma69.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: newOperationResult
@@ -41575,7 +43604,7 @@ router58.post("/update-database-results", async (req2, res) => {
         console.error(`\u274C [TBL UPDATE] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
     return res.json({
       success: true,
       updated,
@@ -41596,9 +43625,9 @@ router58.post("/check-submission-data", async (req2, res) => {
   logRouteHit("POST /api/tbl/check-submission-data");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
-    const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-    const prisma68 = new PrismaClient70();
-    const allData = await prisma68.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+    const prisma69 = new PrismaClient71();
+    const allData = await prisma69.treeBranchLeafSubmissionData.findMany({
       where: { submissionId }
     });
     const grouped = allData.reduce((acc, item) => {
@@ -41611,7 +43640,7 @@ router58.post("/check-submission-data", async (req2, res) => {
       });
       return acc;
     }, {});
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
     return res.json({
       success: true,
       submissionId,
@@ -41633,8 +43662,8 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F9E0} [TBL INTELLIGENT UPDATE] D\xE9but mise \xE0 jour avec traductions intelligentes");
-    const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-    const prisma68 = new PrismaClient70();
+    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+    const prisma69 = new PrismaClient71();
     let TBLIntelligentTranslator;
     try {
       const translatorModule = await import("../../../../../../tbl-intelligent-translator.cjs");
@@ -41646,8 +43675,8 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         error: "TBLIntelligentTranslator non disponible"
       });
     }
-    const translator = new TBLIntelligentTranslator(prisma68);
-    const submissionData = await prisma68.treeBranchLeafSubmissionData.findMany({
+    const translator = new TBLIntelligentTranslator(prisma69);
+    const submissionData = await prisma69.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -41674,7 +43703,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
           data.submissionId
         );
         console.log(`\u2705 [TBL INTELLIGENT] Traduction g\xE9n\xE9r\xE9e: ${intelligentResult.substring(0, 100)}...`);
-        await prisma68.treeBranchLeafSubmissionData.update({
+        await prisma69.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: intelligentResult,
@@ -41692,7 +43721,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         console.error(`\u274C [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
     return res.json({
       success: true,
       message: "Traductions intelligentes appliqu\xE9es",
@@ -41714,9 +43743,9 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
   logRouteHit("GET /api/tbl/check-intelligent-translations");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.query;
-    const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-    const prisma68 = new PrismaClient70();
-    const recentData = await prisma68.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+    const prisma69 = new PrismaClient71();
+    const recentData = await prisma69.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -41734,7 +43763,7 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
       },
       take: 10
     });
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
     const translations = recentData.map((data) => ({
       id: data.id,
       nodeLabel: data.TreeBranchLeafNode?.label,
@@ -41768,12 +43797,12 @@ router58.get("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log("\u{1F504} [TBL NODES] R\xE9cup\xE9ration node via TBL:", nodeId);
-    const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-    const prisma68 = new PrismaClient70();
-    const node = await prisma68.treeBranchLeafNode.findUnique({
+    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+    const prisma69 = new PrismaClient71();
+    const node = await prisma69.treeBranchLeafNode.findUnique({
       where: { id: nodeId }
     });
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
     if (!node) {
       return res.status(404).json({ success: false, error: "Node non trouv\xE9" });
     }
@@ -41791,14 +43820,14 @@ router58.get("/reusables/conditions", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/conditions");
   try {
     console.log("\u{1F504} [TBL CONDITIONS] R\xE9cup\xE9ration conditions via TBL");
-    const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-    const prisma68 = new PrismaClient70();
-    const conditions = await prisma68.treeBranchLeafNodeCondition.findMany({
+    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+    const prisma69 = new PrismaClient71();
+    const conditions = await prisma69.treeBranchLeafNodeCondition.findMany({
       include: {
         node: true
       }
     });
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
     return res.json({
       success: true,
       conditions,
@@ -41817,14 +43846,14 @@ router58.get("/reusables/formulas", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/formulas");
   try {
     console.log("\u{1F504} [TBL FORMULAS] R\xE9cup\xE9ration formules via TBL");
-    const { PrismaClient: PrismaClient70 } = await import("@prisma/client");
-    const prisma68 = new PrismaClient70();
-    const formulas = await prisma68.treeBranchLeafNodeFormula.findMany({
+    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
+    const prisma69 = new PrismaClient71();
+    const formulas = await prisma69.treeBranchLeafNodeFormula.findMany({
       include: {
         node: true
       }
     });
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
     return res.json({
       success: true,
       formulas,
@@ -41843,8 +43872,8 @@ var tbl_intelligence_routes_default = router58;
 
 // src/routes/tbl-capabilities.ts
 var import_express60 = __toESM(require("express"), 1);
-var import_client50 = require("@prisma/client");
-var prisma48 = new import_client50.PrismaClient();
+var import_client51 = require("@prisma/client");
+var prisma49 = new import_client51.PrismaClient();
 var router59 = import_express60.default.Router();
 function extractFormulaDependencies(tokens2) {
   const deps = [];
@@ -41880,7 +43909,7 @@ function extractConditionDependencies(conditionSet) {
 }
 async function resolveCapabilities(treeId, opts = {}) {
   const [variables, formulas, conditions, tables] = await Promise.all([
-    prisma48.treeBranchLeafNodeVariable.findMany({
+    prisma49.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: {
         id: true,
@@ -41893,15 +43922,15 @@ async function resolveCapabilities(treeId, opts = {}) {
         selectedNodeId: true
       }
     }),
-    prisma48.treeBranchLeafNodeFormula.findMany({
+    prisma49.treeBranchLeafNodeFormula.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, tokens: true, name: true }
     }),
-    prisma48.treeBranchLeafNodeCondition.findMany({
+    prisma49.treeBranchLeafNodeCondition.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, conditionSet: true, name: true }
     }),
-    prisma48.treeBranchLeafNodeTable.findMany({
+    prisma49.treeBranchLeafNodeTable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, type: true, name: true, meta: true }
     })
@@ -41986,10 +44015,10 @@ var tbl_capabilities_default = router59;
 
 // src/routes/leadGeneration.ts
 var import_express61 = require("express");
-var import_client51 = require("@prisma/client");
+var import_client52 = require("@prisma/client");
 var import_express_rate_limit6 = __toESM(require("express-rate-limit"), 1);
 var router60 = (0, import_express61.Router)();
-var prisma49 = new import_client51.PrismaClient();
+var prisma50 = new import_client52.PrismaClient();
 var leadGenRateLimit = (0, import_express_rate_limit6.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -42022,7 +44051,7 @@ router60.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: "Organization ID manquant" });
     }
-    const sources = await prisma49.leadSource.findMany({
+    const sources = await prisma50.leadSource.findMany({
       where: { organizationId },
       include: {
         _count: { select: { Lead: true } }
@@ -42031,7 +44060,7 @@ router60.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, 
     });
     const campaigns = await Promise.all(
       sources.map(async (s) => {
-        const completedLeads = await prisma49.lead.count({
+        const completedLeads = await prisma50.lead.count({
           where: { organizationId, sourceId: s.id, status: "completed" }
         });
         const leadsGenerated = s._count?.Lead ?? 0;
@@ -42074,7 +44103,7 @@ router60.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2,
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { name, description, isActive = true } = req2.body;
     if (!name) return res.status(400).json({ success: false, message: "Nom de campagne requis" });
-    const created = await prisma49.leadSource.create({
+    const created = await prisma50.leadSource.create({
       data: { organizationId, name, description, isActive: Boolean(isActive) }
     });
     res.json({ success: true, data: created, message: "Campagne cr\xE9\xE9e avec succ\xE8s" });
@@ -42093,10 +44122,10 @@ router60.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
     const originParam = getQueryString(req2.query.origin) ?? "d1m";
     const originWhere = buildOriginFilter(originParam);
     const [totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads] = await Promise.all([
-      prisma49.leadSource.count({ where: { organizationId } }),
-      prisma49.leadSource.count({ where: { organizationId, isActive: true } }),
-      prisma49.lead.count({ where: { organizationId, ...originWhere ?? {} } }),
-      prisma49.lead.count({ where: { organizationId, createdAt: { gte: monthStart }, ...originWhere ?? {} } })
+      prisma50.leadSource.count({ where: { organizationId } }),
+      prisma50.leadSource.count({ where: { organizationId, isActive: true } }),
+      prisma50.lead.count({ where: { organizationId, ...originWhere ?? {} } }),
+      prisma50.lead.count({ where: { organizationId, createdAt: { gte: monthStart }, ...originWhere ?? {} } })
     ]);
     res.json({ success: true, data: { totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads } });
   } catch (error) {
@@ -42109,10 +44138,10 @@ router60.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (re
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const existing = await prisma49.leadSource.findFirst({ where: { id, organizationId } });
+    const existing = await prisma50.leadSource.findFirst({ where: { id, organizationId } });
     if (!existing) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
     const { name, description, isActive } = req2.body;
-    const updated = await prisma49.leadSource.update({ where: { id }, data: { name, description, isActive } });
+    const updated = await prisma50.leadSource.update({ where: { id }, data: { name, description, isActive } });
     res.json({ success: true, data: updated, message: "Campagne modifi\xE9e avec succ\xE8s" });
   } catch (error) {
     console.error("\u274C [LEAD-GEN] Erreur modification campagne (LeadSource):", error);
@@ -42124,7 +44153,7 @@ router60.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async 
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const deleted = await prisma49.leadSource.deleteMany({ where: { id, organizationId } });
+    const deleted = await prisma50.leadSource.deleteMany({ where: { id, organizationId } });
     if (deleted.count === 0) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
     res.json({ success: true, message: "Campagne supprim\xE9e avec succ\xE8s" });
   } catch (error) {
@@ -42139,9 +44168,9 @@ router60.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), 
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     if (!status) return res.status(400).json({ success: false, message: "Statut requis" });
-    const target = await prisma49.leadSource.findFirst({ where: { id, organizationId } });
+    const target = await prisma50.leadSource.findFirst({ where: { id, organizationId } });
     if (!target) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
-    const updated = await prisma49.leadSource.update({ where: { id }, data: { isActive: status === "active" } });
+    const updated = await prisma50.leadSource.update({ where: { id }, data: { isActive: status === "active" } });
     res.json({ success: true, data: updated, message: "Statut mis \xE0 jour" });
   } catch (error) {
     console.error("\u274C [LEAD-GEN] Erreur MAJ statut (LeadSource):", error);
@@ -42153,9 +44182,9 @@ router60.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"])
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const source = await prisma49.leadSource.findFirst({ where: { id, organizationId } });
+    const source = await prisma50.leadSource.findFirst({ where: { id, organizationId } });
     if (!source) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
-    const copy = await prisma49.leadSource.create({
+    const copy = await prisma50.leadSource.create({
       data: {
         organizationId,
         name: `${source.name} (Copie)`,
@@ -42183,7 +44212,7 @@ router60.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async 
     start.setHours(0, 0, 0, 0);
     const originParam = getQueryString(req2.query.origin) ?? "d1m";
     const originWhere = buildOriginFilter(originParam);
-    const leads = await prisma49.lead.findMany({
+    const leads = await prisma50.lead.findMany({
       where: { organizationId, createdAt: { gte: start }, ...originWhere ?? {} },
       select: { createdAt: true, status: true }
     });
@@ -42213,10 +44242,10 @@ var leadGeneration_default = router60;
 
 // src/routes/marketplace-fixed.ts
 var import_express62 = require("express");
-var import_client52 = require("@prisma/client");
+var import_client53 = require("@prisma/client");
 var import_express_rate_limit7 = __toESM(require("express-rate-limit"), 1);
 var router61 = (0, import_express62.Router)();
-var prisma50 = new import_client52.PrismaClient();
+var prisma51 = new import_client53.PrismaClient();
 var marketplaceRateLimit = (0, import_express_rate_limit7.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -42262,7 +44291,7 @@ router61.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       where.targetRegions = { hasSome: [targetRegions] };
     }
     console.log("\u{1F50D} [MARKETPLACE] Requ\xEAte leads avec filtres:", where);
-    const leads = await prisma50.leadMarketplace.findMany({
+    const leads = await prisma51.leadMarketplace.findMany({
       where,
       include: {
         Lead: {
@@ -42294,7 +44323,7 @@ router61.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       take: parseInt(limit),
       skip: parseInt(offset)
     });
-    const total = await prisma50.leadMarketplace.count({ where });
+    const total = await prisma51.leadMarketplace.count({ where });
     const transformedLeads = leads.map((marketplace) => ({
       id: marketplace.id,
       leadId: marketplace.leadId,
@@ -42361,15 +44390,15 @@ router61.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
       totalPurchases,
       myPublishedLeads
     ] = await Promise.all([
-      prisma50.leadMarketplace.count({
+      prisma51.leadMarketplace.count({
         where: { status: "AVAILABLE" }
       }),
-      prisma50.leadMarketplace.count({
+      prisma51.leadMarketplace.count({
         where: { status: "PURCHASED" }
       }),
-      prisma50.leadPurchase.count().catch(() => 0),
+      prisma51.leadPurchase.count().catch(() => 0),
       // En cas d'erreur
-      prisma50.leadMarketplace.count({
+      prisma51.leadMarketplace.count({
         where: {
           Lead: {
             organizationId
@@ -42440,7 +44469,7 @@ router61.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async
         message: "Organization ID ou User ID manquant"
       });
     }
-    const leadMarketplace = await prisma50.leadMarketplace.findUnique({
+    const leadMarketplace = await prisma51.leadMarketplace.findUnique({
       where: { leadId },
       include: { Lead: true }
     });
@@ -42472,10 +44501,10 @@ var marketplace_fixed_default = router61;
 
 // src/routes/partner.ts
 var import_express63 = require("express");
-var import_client53 = require("@prisma/client");
+var import_client54 = require("@prisma/client");
 var import_express_rate_limit8 = __toESM(require("express-rate-limit"), 1);
 var router62 = (0, import_express63.Router)();
-var prisma51 = new import_client53.PrismaClient();
+var prisma52 = new import_client54.PrismaClient();
 var partnerRateLimit = (0, import_express_rate_limit8.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -42494,7 +44523,7 @@ router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         message: "Organization ID manquant"
       });
     }
-    const partnerOrg = await prisma51.partnerOrganization.findUnique({
+    const partnerOrg = await prisma52.partnerOrganization.findUnique({
       where: { organizationId },
       include: {
         organization: {
@@ -42519,23 +44548,23 @@ router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       monthlyRevenue,
       activeCampaigns
     ] = await Promise.all([
-      prisma51.lead.count({
+      prisma52.lead.count({
         where: { organizationId }
       }),
-      prisma51.lead.count({
+      prisma52.lead.count({
         where: {
           organizationId,
           createdAt: { gte: startOfMonth }
         }
       }),
-      prisma51.creditTransaction.aggregate({
+      prisma52.creditTransaction.aggregate({
         where: {
           organizationId,
           type: "SALE"
         },
         _sum: { amount: true }
       }),
-      prisma51.creditTransaction.aggregate({
+      prisma52.creditTransaction.aggregate({
         where: {
           organizationId,
           type: "SALE",
@@ -42543,7 +44572,7 @@ router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         },
         _sum: { amount: true }
       }),
-      prisma51.campaign.count({
+      prisma52.campaign.count({
         where: {
           organizationId,
           status: "ACTIVE"
@@ -42584,7 +44613,7 @@ router62.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, r
     const { period = "30", offset = 0, limit = 50 } = req2.query;
     const startDate = /* @__PURE__ */ new Date();
     startDate.setDate(startDate.getDate() - parseInt(period));
-    const earnings = await prisma51.creditTransaction.findMany({
+    const earnings = await prisma52.creditTransaction.findMany({
       where: {
         organizationId,
         type: "SALE",
@@ -42606,7 +44635,7 @@ router62.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, r
       take: parseInt(limit),
       skip: parseInt(offset)
     });
-    const totalEarnings = await prisma51.creditTransaction.aggregate({
+    const totalEarnings = await prisma52.creditTransaction.aggregate({
       where: {
         organizationId,
         type: "SALE",
@@ -42658,7 +44687,7 @@ router62.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
         isNot: null
       };
     }
-    const leads = await prisma51.lead.findMany({
+    const leads = await prisma52.lead.findMany({
       where,
       include: {
         campaign: {
@@ -42692,7 +44721,7 @@ router62.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       take: parseInt(limit),
       skip: parseInt(offset)
     });
-    const total = await prisma51.lead.count({ where });
+    const total = await prisma52.lead.count({ where });
     res.json({
       success: true,
       data: {
@@ -42737,7 +44766,7 @@ router62.post("/register", requireRole2(["admin", "super_admin"]), async (req2, 
         message: "Personne de contact et email requis"
       });
     }
-    const existingPartner = await prisma51.partnerOrganization.findUnique({
+    const existingPartner = await prisma52.partnerOrganization.findUnique({
       where: { organizationId }
     });
     if (existingPartner) {
@@ -42746,7 +44775,7 @@ router62.post("/register", requireRole2(["admin", "super_admin"]), async (req2, 
         message: "Organisation d\xE9j\xE0 enregistr\xE9e comme partenaire"
       });
     }
-    const partnerOrg = await prisma51.partnerOrganization.create({
+    const partnerOrg = await prisma52.partnerOrganization.create({
       data: {
         organizationId,
         partnerType: "LEAD_GENERATOR",
@@ -43407,10 +45436,10 @@ var publicForms_default = router63;
 
 // src/routes/landingPages.ts
 var import_express65 = require("express");
-var import_client54 = require("@prisma/client");
+var import_client55 = require("@prisma/client");
 var import_express_rate_limit10 = __toESM(require("express-rate-limit"), 1);
 var router64 = (0, import_express65.Router)();
-var prisma52 = new import_client54.PrismaClient();
+var prisma53 = new import_client55.PrismaClient();
 var publicLandingRateLimit = (0, import_express_rate_limit10.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -43453,7 +45482,7 @@ var toSnapshots = (value) => {
 router64.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
   try {
     const { slug } = req2.params;
-    const landingPage = await prisma52.treeBranchLeafTree.findFirst({
+    const landingPage = await prisma53.treeBranchLeafTree.findFirst({
       where: {
         category: "landing",
         isPublic: true,
@@ -43470,7 +45499,7 @@ router64.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
         message: "Landing page non trouv\xE9e"
       });
     }
-    await prisma52.treeBranchLeafSubmission.create({
+    await prisma53.treeBranchLeafSubmission.create({
       data: {
         treeId: landingPage.id,
         status: "view",
@@ -43527,7 +45556,7 @@ router64.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) =
         message: "Type d'\xE9v\xE9nement requis"
       });
     }
-    const landingPage = await prisma52.treeBranchLeafTree.findFirst({
+    const landingPage = await prisma53.treeBranchLeafTree.findFirst({
       where: {
         category: "landing",
         OR: [{ id: slug }, { name: slug }]
@@ -43540,7 +45569,7 @@ router64.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) =
         message: "Landing page non trouv\xE9e"
       });
     }
-    await prisma52.treeBranchLeafSubmission.create({
+    await prisma53.treeBranchLeafSubmission.create({
       data: {
         treeId: landingPage.id,
         status: event,
@@ -43575,15 +45604,15 @@ router64.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2,
         message: "Organization ID manquant"
       });
     }
-    const trees = await prisma52.treeBranchLeafTree.findMany({
+    const trees = await prisma53.treeBranchLeafTree.findMany({
       where: { organizationId, category: "landing" },
       orderBy: { createdAt: "desc" }
     });
     const data = await Promise.all(
       trees.map(async (t) => {
         const [views, conversions] = await Promise.all([
-          prisma52.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
-          prisma52.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
+          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
+          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
         ]);
         const conversionRate = views > 0 ? Math.round(conversions / views * 100) : 0;
         const content = toJsonObject(t.metadata);
@@ -43620,12 +45649,12 @@ router64.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", 
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const trees = await prisma52.treeBranchLeafTree.findMany({ where: { organizationId, category: "landing" }, orderBy: { createdAt: "desc" } });
+    const trees = await prisma53.treeBranchLeafTree.findMany({ where: { organizationId, category: "landing" }, orderBy: { createdAt: "desc" } });
     const data = await Promise.all(
       trees.map(async (t) => {
         const [views, conversions] = await Promise.all([
-          prisma52.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
-          prisma52.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
+          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
+          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
         ]);
         const conversionRate = views > 0 ? Math.round(conversions / views * 100) : 0;
         const content = toJsonObject(t.metadata);
@@ -43662,12 +45691,12 @@ router64.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["adm
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const totalPages = await prisma52.treeBranchLeafTree.count({ where: { organizationId, category: "landing" } });
-    const publishedPages = await prisma52.treeBranchLeafTree.count({ where: { organizationId, category: "landing", status: "published" } });
+    const totalPages = await prisma53.treeBranchLeafTree.count({ where: { organizationId, category: "landing" } });
+    const publishedPages = await prisma53.treeBranchLeafTree.count({ where: { organizationId, category: "landing", status: "published" } });
     const draftPages = totalPages - publishedPages;
     const [totalViews, totalConversions] = await Promise.all([
-      prisma52.treeBranchLeafSubmission.count({ where: { status: "view", TreeBranchLeafTree: { organizationId, category: "landing" } } }),
-      prisma52.treeBranchLeafSubmission.count({ where: { status: "form_submit", TreeBranchLeafTree: { organizationId, category: "landing" } } })
+      prisma53.treeBranchLeafSubmission.count({ where: { status: "view", TreeBranchLeafTree: { organizationId, category: "landing" } } }),
+      prisma53.treeBranchLeafSubmission.count({ where: { status: "form_submit", TreeBranchLeafTree: { organizationId, category: "landing" } } })
     ]);
     const avgConversionRate = totalViews > 0 ? Math.round(totalConversions / totalViews * 100) : 0;
     res.json({ success: true, data: { totalPages, publishedPages, draftPages, totalViews, totalConversions, avgConversionRate } });
@@ -43687,7 +45716,7 @@ router64.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, require
     const start = /* @__PURE__ */ new Date();
     start.setDate(start.getDate() - (days - 1));
     start.setHours(0, 0, 0, 0);
-    const submissions = await prisma52.treeBranchLeafSubmission.findMany({
+    const submissions = await prisma53.treeBranchLeafSubmission.findMany({
       where: { createdAt: { gte: start }, TreeBranchLeafTree: { organizationId, category: "landing" } },
       select: { createdAt: true, status: true }
     });
@@ -43717,7 +45746,7 @@ router64.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin",
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { title, description, content, status, settings } = req2.body;
     if (!title) return res.status(400).json({ success: false, message: "Titre requis" });
-    const created = await prisma52.treeBranchLeafTree.create({
+    const created = await prisma53.treeBranchLeafTree.create({
       data: {
         organizationId,
         name: title,
@@ -43739,10 +45768,10 @@ router64.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma52.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const { title, description, content, status, settings } = req2.body;
-    const updated = await prisma52.treeBranchLeafTree.update({
+    const updated = await prisma53.treeBranchLeafTree.update({
       where: { id },
       data: {
         name: title ?? tree.name,
@@ -43763,7 +45792,7 @@ router64.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["ad
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const deleted = await prisma52.treeBranchLeafTree.deleteMany({ where: { id, organizationId, category: "landing" } });
+    const deleted = await prisma53.treeBranchLeafTree.deleteMany({ where: { id, organizationId, category: "landing" } });
     if (deleted.count === 0) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     res.json({ success: true });
   } catch (error) {
@@ -43778,9 +45807,9 @@ router64.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRol
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     if (publish === void 0) return res.status(400).json({ success: false, message: "Param\xE8tre publish manquant" });
-    const tree = await prisma52.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
-    const updated = await prisma52.treeBranchLeafTree.update({ where: { id }, data: { status: publish ? "published" : "draft", isPublic: !!publish } });
+    const updated = await prisma53.treeBranchLeafTree.update({ where: { id }, data: { status: publish ? "published" : "draft", isPublic: !!publish } });
     res.json({ success: true, data: { id: updated.id, status: updated.status } });
   } catch (error) {
     console.error("\u274C [LANDING] Erreur publish:", error);
@@ -43792,7 +45821,7 @@ router64.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma52.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const content = toJsonObject(tree.metadata);
     const styling = toJsonObject(tree.settings);
@@ -43832,10 +45861,10 @@ router64.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRo
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma52.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const suffix = Math.random().toString(36).slice(2, 6);
-    const copy = await prisma52.treeBranchLeafTree.create({
+    const copy = await prisma53.treeBranchLeafTree.create({
       data: {
         organizationId,
         name: `${tree.name} (copie ${suffix})`,
@@ -43859,7 +45888,7 @@ router64.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRol
     const { label } = req2.body;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma52.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const settings = toJsonObject(tree.settings);
     const versions = toSnapshots(settings._versions);
@@ -43875,7 +45904,7 @@ router64.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRol
       ...settings,
       _versions: [snapshot, ...versions]
     };
-    const updated = await prisma52.treeBranchLeafTree.update({ where: { id }, data: { settings: updatedSettings } });
+    const updated = await prisma53.treeBranchLeafTree.update({ where: { id }, data: { settings: updatedSettings } });
     res.json({ success: true, data: { id: updated.id, snapshotId } });
   } catch (error) {
     console.error("\u274C [LANDING] Erreur snapshot:", error);
@@ -43887,7 +45916,7 @@ router64.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma52.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const settings = toJsonObject(tree.settings);
     const versions = toSnapshots(settings._versions);
@@ -43911,13 +45940,13 @@ router64.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     if (!snapshotId) return res.status(400).json({ success: false, message: "snapshotId requis" });
-    const tree = await prisma52.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const settings = toJsonObject(tree.settings);
     const versions = toSnapshots(settings._versions);
     const snap = versions.find((version) => version.id === snapshotId);
     if (!snap) return res.status(404).json({ success: false, message: "Snapshot non trouv\xE9" });
-    const updated = await prisma52.treeBranchLeafTree.update({
+    const updated = await prisma53.treeBranchLeafTree.update({
       where: { id },
       data: {
         metadata: snap.content,
@@ -43934,10 +45963,10 @@ var landingPages_default = router64;
 
 // src/routes/campaignAnalytics.ts
 var import_express66 = require("express");
-var import_client55 = require("@prisma/client");
+var import_client56 = require("@prisma/client");
 var import_express_rate_limit11 = __toESM(require("express-rate-limit"), 1);
 var router65 = (0, import_express66.Router)();
-var prisma53 = new import_client55.PrismaClient();
+var prisma54 = new import_client56.PrismaClient();
 var campaignAnalyticsRateLimit = (0, import_express_rate_limit11.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -43968,25 +45997,25 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       conversionFunnel
     ] = await Promise.all([
       // Total des leads
-      prisma53.lead.count({
+      prisma54.lead.count({
         where: { organizationId }
       }),
       // Leads de la période
-      prisma53.lead.count({
+      prisma54.lead.count({
         where: {
           organizationId,
           createdAt: { gte: startDate }
         }
       }),
       // Campagnes actives
-      prisma53.campaign.count({
+      prisma54.campaign.count({
         where: {
           organizationId,
           status: "ACTIVE"
         }
       }),
       // Revenus totaux
-      prisma53.creditTransaction.aggregate({
+      prisma54.creditTransaction.aggregate({
         where: {
           organizationId,
           type: "SALE"
@@ -43994,7 +46023,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         _sum: { amount: true }
       }),
       // Score IA moyen
-      prisma53.lead.aggregate({
+      prisma54.lead.aggregate({
         where: {
           organizationId,
           aiScore: { not: null }
@@ -44002,13 +46031,13 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         _avg: { aiScore: true }
       }),
       // Funnel de conversion
-      prisma53.lead.groupBy({
+      prisma54.lead.groupBy({
         by: ["status"],
         where: { organizationId },
         _count: true
       })
     ]);
-    const dailyLeads = await prisma53.$queryRaw`
+    const dailyLeads = await prisma54.$queryRaw`
       SELECT 
         DATE(created_at) as date,
         COUNT(*) as count
@@ -44018,7 +46047,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       GROUP BY DATE(created_at)
       ORDER BY date ASC
     `;
-    const topCampaigns = await prisma53.campaign.findMany({
+    const topCampaigns = await prisma54.campaign.findMany({
       where: { organizationId },
       select: {
         id: true,
@@ -44033,7 +46062,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       },
       take: 5
     });
-    const leadsSources = await prisma53.lead.groupBy({
+    const leadsSources = await prisma54.lead.groupBy({
       by: ["source"],
       where: {
         organizationId,
@@ -44088,7 +46117,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
     const { period = "30" } = req2.query;
     const startDate = /* @__PURE__ */ new Date();
     startDate.setDate(startDate.getDate() - parseInt(period));
-    const campaign = await prisma53.campaign.findFirst({
+    const campaign = await prisma54.campaign.findFirst({
       where: {
         id,
         organizationId
@@ -44118,14 +46147,14 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
       regionBreakdown
     ] = await Promise.all([
       // Leads de la période
-      prisma53.lead.count({
+      prisma54.lead.count({
         where: {
           campaignId: id,
           createdAt: { gte: startDate }
         }
       }),
       // Revenus générés par les leads de cette campagne
-      prisma53.leadMarketplace.aggregate({
+      prisma54.leadMarketplace.aggregate({
         where: {
           campaignId: id,
           status: "SOLD"
@@ -44133,7 +46162,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         _sum: { marketplacePrice: true }
       }),
       // Score IA moyen
-      prisma53.lead.aggregate({
+      prisma54.lead.aggregate({
         where: {
           campaignId: id,
           aiScore: { not: null }
@@ -44141,19 +46170,19 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         _avg: { aiScore: true }
       }),
       // Répartition par statut
-      prisma53.lead.groupBy({
+      prisma54.lead.groupBy({
         by: ["status"],
         where: { campaignId: id },
         _count: true
       }),
       // Répartition par source
-      prisma53.lead.groupBy({
+      prisma54.lead.groupBy({
         by: ["source"],
         where: { campaignId: id },
         _count: true
       }),
       // Répartition par région
-      prisma53.lead.groupBy({
+      prisma54.lead.groupBy({
         by: ["region"],
         where: {
           campaignId: id,
@@ -44162,7 +46191,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         _count: true
       })
     ]);
-    const dailyLeadsEvolution = await prisma53.$queryRaw`
+    const dailyLeadsEvolution = await prisma54.$queryRaw`
       SELECT 
         DATE(created_at) as date,
         COUNT(*) as count,
@@ -44173,7 +46202,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
       GROUP BY DATE(created_at)
       ORDER BY date ASC
     `;
-    const formsPerformance = await prisma53.publicForm.findMany({
+    const formsPerformance = await prisma54.publicForm.findMany({
       where: { campaignId: id },
       select: {
         id: true,
@@ -44185,7 +46214,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         }
       }
     });
-    const landingPagesPerformance = await prisma53.landingPage.findMany({
+    const landingPagesPerformance = await prisma54.landingPage.findMany({
       where: { campaignId: id },
       select: {
         id: true,
@@ -44256,7 +46285,7 @@ router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
         message: "Organization ID manquant"
       });
     }
-    const aiRecommendations = await prisma53.aiRecommendation.findMany({
+    const aiRecommendations = await prisma54.aiRecommendation.findMany({
       where: {
         lead: {
           organizationId
@@ -44277,7 +46306,7 @@ router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
       },
       take: 20
     });
-    const scoreDistribution = await prisma53.$queryRaw`
+    const scoreDistribution = await prisma54.$queryRaw`
       SELECT 
         CASE 
           WHEN ai_score >= 90 THEN 'Excellent (90-100)'
@@ -44293,7 +46322,7 @@ router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
       GROUP BY score_range
       ORDER BY MIN(ai_score) DESC
     `;
-    const campaignScores = await prisma53.campaign.findMany({
+    const campaignScores = await prisma54.campaign.findMany({
       where: { organizationId },
       select: {
         id: true,
@@ -44376,7 +46405,7 @@ router65.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
       if (startDate) where.createdAt.gte = new Date(startDate);
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
-    const leads = await prisma53.lead.findMany({
+    const leads = await prisma54.lead.findMany({
       where,
       include: {
         campaign: {
@@ -44436,9 +46465,9 @@ var campaignAnalytics_default = router65;
 // src/routes/dispatch.ts
 var import_express67 = require("express");
 var import_express_rate_limit12 = __toESM(require("express-rate-limit"), 1);
-var import_client56 = require("@prisma/client");
+var import_client57 = require("@prisma/client");
 var router66 = (0, import_express67.Router)();
-var prisma54 = new import_client56.PrismaClient();
+var prisma55 = new import_client57.PrismaClient();
 var dispatchRateLimit = (0, import_express_rate_limit12.default)({
   windowMs: 60 * 1e3,
   max: 60,
@@ -44450,7 +46479,7 @@ router66.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res)
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const rules = await prisma54.automationRule.findMany({
+    const rules = await prisma55.automationRule.findMany({
       where: { organizationId },
       orderBy: { createdAt: "desc" }
     });
@@ -44466,7 +46495,7 @@ router66.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { event, action: action2, params, active = true } = req2.body;
     if (!event || !action2) return res.status(400).json({ success: false, message: "event et action sont requis" });
-    const created = await prisma54.automationRule.create({ data: { organizationId, event, action: action2, params: params ?? {}, active: !!active } });
+    const created = await prisma55.automationRule.create({ data: { organizationId, event, action: action2, params: params ?? {}, active: !!active } });
     res.json({ success: true, data: created, message: "R\xE8gle cr\xE9\xE9e" });
   } catch (error) {
     console.error("\u274C [DISPATCH] Erreur cr\xE9ation:", error);
@@ -44478,10 +46507,10 @@ router66.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const existing = await prisma54.automationRule.findFirst({ where: { id, organizationId } });
+    const existing = await prisma55.automationRule.findFirst({ where: { id, organizationId } });
     if (!existing) return res.status(404).json({ success: false, message: "R\xE8gle non trouv\xE9e" });
     const { event, action: action2, params, active } = req2.body;
-    const updated = await prisma54.automationRule.update({ where: { id }, data: { event, action: action2, params, active } });
+    const updated = await prisma55.automationRule.update({ where: { id }, data: { event, action: action2, params, active } });
     res.json({ success: true, data: updated, message: "R\xE8gle mise \xE0 jour" });
   } catch (error) {
     console.error("\u274C [DISPATCH] Erreur mise \xE0 jour:", error);
@@ -44493,7 +46522,7 @@ router66.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const deleted = await prisma54.automationRule.deleteMany({ where: { id, organizationId } });
+    const deleted = await prisma55.automationRule.deleteMany({ where: { id, organizationId } });
     if (!deleted.count) return res.status(404).json({ success: false, message: "R\xE8gle non trouv\xE9e" });
     res.json({ success: true, message: "R\xE8gle supprim\xE9e" });
   } catch (error) {
@@ -44507,7 +46536,7 @@ router66.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, 
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { lead } = req2.body;
     if (!lead) return res.status(400).json({ success: false, message: "lead requis" });
-    const rules = await prisma54.automationRule.findMany({ where: { organizationId, active: true }, orderBy: { createdAt: "asc" } });
+    const rules = await prisma55.automationRule.findMany({ where: { organizationId, active: true }, orderBy: { createdAt: "asc" } });
     const matches = [];
     for (const r of rules) {
       const params = r.params || {};
@@ -44535,9 +46564,9 @@ var dispatch_default = router66;
 var import_express68 = require("express");
 var import_crypto11 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
-var import_client57 = require("@prisma/client");
+var import_client58 = require("@prisma/client");
 var router67 = (0, import_express68.Router)();
-var prisma55 = new import_client57.PrismaClient();
+var prisma56 = new import_client58.PrismaClient();
 var rl = (0, import_express_rate_limit13.default)({ windowMs: 60 * 1e3, max: 60 });
 router67.use(authMiddleware);
 router67.use(rl);
@@ -44546,9 +46575,9 @@ router67.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const [google8, telnyx, adPlatforms] = await Promise.all([
-      prisma55.googleWorkspaceConfig.findUnique({ where: { organizationId } }),
-      prisma55.telnyxConnection.findMany({ where: { organizationId } }),
-      prisma55.adPlatformIntegration.findMany({ where: { organizationId } })
+      prisma56.googleWorkspaceConfig.findUnique({ where: { organizationId } }),
+      prisma56.telnyxConnection.findMany({ where: { organizationId } }),
+      prisma56.adPlatformIntegration.findMany({ where: { organizationId } })
     ]);
     const status = {
       google: {
@@ -44579,10 +46608,10 @@ router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { platform, name, credentials, config } = req2.body;
     if (!platform) return res.status(400).json({ success: false, message: "Param\xE8tre platform requis" });
-    const existing = await prisma55.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const existing = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     let rec;
     if (existing) {
-      rec = await prisma55.adPlatformIntegration.update({
+      rec = await prisma56.adPlatformIntegration.update({
         where: { id: existing.id },
         data: {
           name: name ?? existing.name,
@@ -44594,7 +46623,7 @@ router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
         }
       });
     } else {
-      rec = await prisma55.adPlatformIntegration.create({
+      rec = await prisma56.adPlatformIntegration.create({
         data: {
           id: (0, import_crypto11.randomUUID)(),
           organizationId,
@@ -44620,9 +46649,9 @@ router67.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]),
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { platform } = req2.body;
     if (!platform) return res.status(400).json({ success: false, message: "Param\xE8tre platform requis" });
-    const existing = await prisma55.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const existing = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!existing) return res.status(404).json({ success: false, message: "Int\xE9gration non trouv\xE9e" });
-    await prisma55.adPlatformIntegration.update({
+    await prisma56.adPlatformIntegration.update({
       where: { id: existing.id },
       data: { status: "disconnected", active: false, updatedAt: /* @__PURE__ */ new Date() }
     });
@@ -44638,9 +46667,9 @@ router67.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { platform } = req2.body;
     if (!platform) return res.status(400).json({ success: false, message: "Param\xE8tre platform requis" });
-    const existing = await prisma55.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const existing = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!existing) return res.status(404).json({ success: false, message: "Int\xE9gration non trouv\xE9e" });
-    const rec = await prisma55.adPlatformIntegration.update({ where: { id: existing.id }, data: { lastSync: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() } });
+    const rec = await prisma56.adPlatformIntegration.update({ where: { id: existing.id }, data: { lastSync: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() } });
     res.json({ success: true, data: { id: rec.id, lastSync: rec.lastSync } });
   } catch (error) {
     console.error("\u274C [INTEGRATIONS] Erreur sync:", error);
@@ -44651,7 +46680,7 @@ var integrationsStatus_default = router67;
 
 // src/routes/integrations.ts
 var import_express69 = require("express");
-var import_client58 = require("@prisma/client");
+var import_client59 = require("@prisma/client");
 var import_axios2 = __toESM(require("axios"), 1);
 var import_googleapis7 = require("googleapis");
 var import_crypto12 = require("crypto");
@@ -45418,7 +47447,7 @@ var EcommerceService = class {
 };
 
 // src/routes/integrations.ts
-var prisma56 = new import_client58.PrismaClient();
+var prisma57 = new import_client59.PrismaClient();
 var router68 = (0, import_express69.Router)();
 var memCache = /* @__PURE__ */ new Map();
 function cacheGet(key2) {
@@ -45563,12 +47592,12 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
     const organizationId = parsed.organizationId;
     const userId = parsed.userId;
     const upsertIntegration = async (data) => {
-      const existing = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+      const existing = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
       if (existing) {
-        await prisma56.adPlatformIntegration.update({ where: { id: existing.id }, data: { ...data, status: "connected", active: true, updatedAt: /* @__PURE__ */ new Date() } });
+        await prisma57.adPlatformIntegration.update({ where: { id: existing.id }, data: { ...data, status: "connected", active: true, updatedAt: /* @__PURE__ */ new Date() } });
         return existing.id;
       }
-      const created = await prisma56.adPlatformIntegration.create({
+      const created = await prisma57.adPlatformIntegration.create({
         data: {
           id: (0, import_crypto12.randomUUID)(),
           organizationId,
@@ -45695,7 +47724,7 @@ router68.get("/", async (req2, res) => {
     return;
   }
   try {
-    const integrationsSettings = await prisma56.integrationsSettings.findMany({
+    const integrationsSettings = await prisma57.integrationsSettings.findMany({
       where: { organizationId },
       include: {
         user: { select: { id: true, email: true, firstName: true, lastName: true } }
@@ -45724,7 +47753,7 @@ router68.post("/", async (req2, res) => {
     return;
   }
   try {
-    const upsertedIntegration = await prisma56.integrationsSettings.upsert({
+    const upsertedIntegration = await prisma57.integrationsSettings.upsert({
       where: {
         organizationId_type: {
           organizationId,
@@ -45763,7 +47792,7 @@ router68.delete("/:type", async (req2, res) => {
     return;
   }
   try {
-    await prisma56.integrationsSettings.delete({
+    await prisma57.integrationsSettings.delete({
       where: {
         organizationId_type: {
           organizationId,
@@ -46105,7 +48134,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
     const platform = req2.params.platform;
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
-    let integration = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    let integration = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!integration) {
       return res.json({ success: true, platform, integration: null, accounts: [], note: "Aucune int\xE9gration configur\xE9e" });
     }
@@ -46183,7 +48212,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
           const credsWithError = credentialsForError(userError);
           if (credsWithError) data.credentials = credsWithError;
         }
-        const updated = await prisma56.adPlatformIntegration.update({
+        const updated = await prisma57.adPlatformIntegration.update({
           where: { id: integration.id },
           data
         });
@@ -46654,7 +48683,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
           const credsWithError = credentialsForError(userError, errorCode);
           if (credsWithError) data.credentials = credsWithError;
         }
-        const updated = await prisma56.adPlatformIntegration.update({
+        const updated = await prisma57.adPlatformIntegration.update({
           where: { id: integration.id },
           data
         });
@@ -46773,7 +48802,7 @@ router68.get("/advertising/google_ads/test/customers-get", async (req2, res) => 
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
-    const integ = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform: "google_ads" } });
+    const integ = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform: "google_ads" } });
     if (!integ) return res.status(404).json({ success: false, message: "Int\xE9gration Google Ads manquante" });
     const devTokenSan = sanitizeClientValue(process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "");
     const devToken = devTokenSan.value || "";
@@ -46903,7 +48932,7 @@ router68.delete("/advertising/:platform", async (req2, res) => {
     return;
   }
   try {
-    const deleted = await prisma56.adPlatformIntegration.deleteMany({
+    const deleted = await prisma57.adPlatformIntegration.deleteMany({
       where: {
         organizationId,
         platform
@@ -46928,7 +48957,7 @@ router68.post("/advertising/:platform/select-account", async (req2, res) => {
     if (!account || !account.id) {
       return res.status(400).json({ success: false, message: "Compte invalide" });
     }
-    const integ = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const integ = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!integ) return res.status(404).json({ success: false, message: "Int\xE9gration non trouv\xE9e" });
     const currentConfig = integ.config;
     const newConfig = { ...currentConfig || {}, selectedAccount: { id: account.id, name: account.name, currency: account.currency } };
@@ -46937,7 +48966,7 @@ router68.post("/advertising/:platform/select-account", async (req2, res) => {
     if (!newName || genericNames.has(newName)) {
       newName = `${platform} - ${account.name || account.id}`;
     }
-    await prisma56.adPlatformIntegration.update({
+    await prisma57.adPlatformIntegration.update({
       where: { id: integ.id },
       data: { config: newConfig, name: newName, updatedAt: /* @__PURE__ */ new Date() }
     });
@@ -47042,9 +49071,9 @@ var integrations_default = router68;
 var import_express70 = require("express");
 var import_express_rate_limit14 = require("express-rate-limit");
 var import_express_validator = require("express-validator");
-var import_client59 = require("@prisma/client");
+var import_client60 = require("@prisma/client");
 var router69 = (0, import_express70.Router)();
-var prisma57 = new import_client59.PrismaClient();
+var prisma58 = new import_client60.PrismaClient();
 var geminiService2 = new GoogleGeminiService();
 var publicRateLimit = (0, import_express_rate_limit14.rateLimit)({
   windowMs: 15 * 60 * 1e3,
@@ -47136,7 +49165,7 @@ router69.get("/health", (req2, res) => {
 });
 router69.get("/stats", publicRateLimit, async (req2, res) => {
   try {
-    const stats = await prisma57.$transaction(async (tx) => {
+    const stats = await prisma58.$transaction(async (tx) => {
       const totalLeads = await tx.lead.count();
       const recentLeads = await tx.lead.count({
         where: {
@@ -47237,7 +49266,7 @@ router69.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
     const clientIp = req2.ip || req2.connection.remoteAddress;
     console.log(`[PUBLIC-LEAD] Nouvelle demande depuis ${clientIp}`);
     console.log(`[PUBLIC-LEAD] Projet: ${leadData.projectType} - Budget: ${leadData.budget}\u20AC`);
-    const existingLead = await prisma57.lead.findFirst({
+    const existingLead = await prisma58.lead.findFirst({
       where: {
         email: leadData.email,
         createdAt: {
@@ -47253,7 +49282,7 @@ router69.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
       });
     }
     const qualityScore = await calculateLeadScore(leadData);
-    const lead = await prisma57.lead.create({
+    const lead = await prisma58.lead.create({
       data: {
         // Informations projet
         projectType: leadData.projectType,
@@ -47316,7 +49345,7 @@ router69.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
         error: "ID de demande invalide"
       });
     }
-    const lead = await prisma57.lead.findUnique({
+    const lead = await prisma58.lead.findUnique({
       where: { id },
       select: {
         id: true,
@@ -47506,7 +49535,7 @@ var routes_default = apiRouter;
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var import_express72 = require("express");
-var import_client60 = require("@prisma/client");
+var import_client61 = require("@prisma/client");
 init_operation_interpreter();
 
 // src/services/calculatedValuesService.ts
@@ -47583,7 +49612,7 @@ async function storeCalculatedValues(values, submissionId) {
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var router70 = (0, import_express72.Router)();
-var prisma58 = new import_client60.PrismaClient();
+var prisma59 = new import_client61.PrismaClient();
 var stagingStore = /* @__PURE__ */ new Map();
 var STAGE_TTL_MS = 1e3 * 60 * 60;
 function pruneStages() {
@@ -47631,7 +49660,7 @@ async function resolveSharedReferenceAliases(sharedRefs, treeId) {
   if (treeId) {
     where.treeId = treeId;
   }
-  const aliases = await prisma58.treeBranchLeafNode.findMany({
+  const aliases = await prisma59.treeBranchLeafNode.findMany({
     where,
     select: { id: true, sharedReferenceId: true }
   });
@@ -47696,7 +49725,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   }
   for (const entry of entries.values()) {
     const key2 = { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } };
-    const existing = await prisma58.treeBranchLeafSubmissionData.findUnique({ where: key2 });
+    const existing = await prisma59.treeBranchLeafSubmissionData.findUnique({ where: key2 });
     const normalize2 = (v) => {
       if (v === null || v === void 0) return null;
       if (typeof v === "string") return v;
@@ -47709,7 +49738,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
     if (existing) {
       const changed = normalize2(existing.value) !== normalize2(entry.value) || (existing.operationSource || null) !== (entry.operationSource || null);
       if (changed) {
-        await prisma58.treeBranchLeafSubmissionData.update({
+        await prisma59.treeBranchLeafSubmissionData.update({
           where: key2,
           data: {
             value: entry.value,
@@ -47721,14 +49750,14 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
         saved++;
       }
     } else {
-      await prisma58.treeBranchLeafSubmissionData.create({ data: entry });
+      await prisma59.treeBranchLeafSubmissionData.create({ data: entry });
       saved++;
     }
   }
   return saved;
 }
 async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId) {
-  const capacities = await prisma58.treeBranchLeafNodeVariable.findMany({
+  const capacities = await prisma59.treeBranchLeafNodeVariable.findMany({
     where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
     include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
   });
@@ -47748,7 +49777,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       const capacityResult = await evaluateVariableOperation(
         capacity.nodeId,
         submissionId,
-        prisma58
+        prisma59
       );
       const normalizedOperationSource = typeof capacityResult.operationSource === "string" ? capacityResult.operationSource.toLowerCase() : "neutral";
       let parsedDetail = null;
@@ -47758,7 +49787,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         parsedDetail = capacityResult.operationDetail;
       }
       const key2 = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } };
-      const existing = await prisma58.treeBranchLeafSubmissionData.findUnique({ where: key2 });
+      const existing = await prisma59.treeBranchLeafSubmissionData.findUnique({ where: key2 });
       const normalize2 = (v) => {
         if (v === null || v === void 0) return null;
         if (typeof v === "string") return v;
@@ -47771,7 +49800,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       if (existing) {
         const changed = (existing.sourceRef || null) !== (sourceRef || null) || (existing.operationSource || null) !== (normalizedOperationSource || null) || (existing.fieldLabel || null) !== (capacity.TreeBranchLeafNode?.label || null) || normalize2(existing.operationDetail) !== normalize2(parsedDetail) || normalize2(existing.operationResult) !== normalize2(capacityResult.operationResult);
         if (changed) {
-          await prisma58.treeBranchLeafSubmissionData.update({
+          await prisma59.treeBranchLeafSubmissionData.update({
             where: key2,
             data: {
               value: null,
@@ -47786,7 +49815,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           results.updated++;
         }
       } else {
-        await prisma58.treeBranchLeafSubmissionData.create({
+        await prisma59.treeBranchLeafSubmissionData.create({
           data: {
             id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             submissionId,
@@ -47848,7 +49877,7 @@ router70.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
     }
     console.log("\u{1F525} [TBL EVALUATE ALL] D\xE9but \xE9valuation compl\xE8te:", submissionId);
     console.log(`\u{1F3E2} [TBL EVALUATE ALL] Organisation: ${organizationId}, Utilisateur: ${userId}`);
-    const submissionData = await prisma58.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma59.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         sourceRef: { not: null }
@@ -47890,7 +49919,7 @@ router70.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
         const calculationResult = await evaluateVariableOperation(
           data.nodeId,
           submissionId,
-          prisma58
+          prisma59
         );
         console.log(`\u2705 [TBL EVALUATE ALL] R\xE9sultat pour ${data.sourceRef}:`, calculationResult.operationResult);
         const normalize2 = (v) => {
@@ -47913,7 +49942,7 @@ router70.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
         const nextResult = calculationResult.operationResult;
         const changed = (data.operationSource || null) !== (normalizedSource || null) || normalize2(data.operationDetail) !== normalize2(nextDetail) || normalize2(data.operationResult) !== normalize2(nextResult);
         if (changed) {
-          await prisma58.treeBranchLeafSubmissionData.update({
+          await prisma59.treeBranchLeafSubmissionData.update({
             where: { id: data.id },
             data: {
               operationDetail: nextDetail,
@@ -47969,7 +49998,7 @@ router70.get("/submissions/:submissionId/verification", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     console.log("\u{1F50D} [TBL VERIFICATION] V\xE9rification soumission:", submissionId);
-    const rows = await prisma58.treeBranchLeafSubmissionData.findMany({
+    const rows = await prisma59.treeBranchLeafSubmissionData.findMany({
       where: { submissionId, sourceRef: { not: null } },
       select: { operationResult: true }
     });
@@ -48039,7 +50068,7 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
     let effectiveTreeId = treeId;
     if (!effectiveTreeId) {
       console.log("\u26A0\uFE0F [TBL CREATE-AND-EVALUATE] Aucun treeId fourni, recherche du premier arbre disponible...");
-      const firstTree = await prisma58.treeBranchLeafTree.findFirst({
+      const firstTree = await prisma59.treeBranchLeafTree.findFirst({
         select: { id: true, name: true }
       });
       if (!firstTree) {
@@ -48048,13 +50077,13 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
       effectiveTreeId = firstTree.id;
       console.log(`\u{1F333} [TBL CREATE-AND-EVALUATE] Arbre par d\xE9faut s\xE9lectionn\xE9: ${effectiveTreeId} (${firstTree.name})`);
     } else {
-      const treeExists = await prisma58.treeBranchLeafTree.findUnique({
+      const treeExists = await prisma59.treeBranchLeafTree.findUnique({
         where: { id: effectiveTreeId },
         select: { id: true, name: true }
       });
       if (!treeExists) {
         console.log(`\u274C [TBL CREATE-AND-EVALUATE] Arbre ${effectiveTreeId} introuvable, recherche d'un arbre alternatif...`);
-        const firstTree = await prisma58.treeBranchLeafTree.findFirst({
+        const firstTree = await prisma59.treeBranchLeafTree.findFirst({
           select: { id: true, name: true }
         });
         if (!firstTree) {
@@ -48068,13 +50097,13 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
     }
     let effectiveLeadId = clientId;
     if (effectiveLeadId) {
-      const leadExists = await prisma58.lead.findUnique({
+      const leadExists = await prisma59.lead.findUnique({
         where: { id: effectiveLeadId },
         select: { id: true, firstName: true, lastName: true, email: true }
       });
       if (!leadExists) {
         console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable, cr\xE9ation d'un lead par d\xE9faut...`);
-        const defaultLead = await prisma58.lead.create({
+        const defaultLead = await prisma59.lead.create({
           data: {
             id: `lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             firstName: "Client",
@@ -48095,7 +50124,7 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
     }
     let effectiveUserId = userId;
     if (effectiveUserId) {
-      const userExists = await prisma58.user.findUnique({
+      const userExists = await prisma59.user.findUnique({
         where: { id: effectiveUserId },
         select: { id: true, firstName: true, lastName: true }
       });
@@ -48108,12 +50137,12 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
     }
     let submissionId = reuseSubmissionId;
     if (submissionId) {
-      const existing = await prisma58.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
+      const existing = await prisma59.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
       if (!existing) submissionId = void 0;
     }
     if (!submissionId) {
       submissionId = `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      await prisma58.treeBranchLeafSubmission.create({
+      await prisma59.treeBranchLeafSubmission.create({
         data: {
           id: submissionId,
           treeId: effectiveTreeId,
@@ -48133,7 +50162,7 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
     if (cleanFormData && typeof cleanFormData === "object") {
       const savedCount = await saveUserEntriesNeutral(submissionId, cleanFormData, effectiveTreeId);
       if (savedCount > 0) console.log(`\u2705 [TBL CREATE-AND-EVALUATE] ${savedCount} entr\xE9es utilisateur enregistr\xE9es`);
-      const capacities = await prisma58.treeBranchLeafNodeVariable.findMany({
+      const capacities = await prisma59.treeBranchLeafNodeVariable.findMany({
         where: {
           TreeBranchLeafNode: {
             treeId: effectiveTreeId
@@ -48150,7 +50179,7 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
       const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId);
       console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.stored} valeurs stock\xE9es`);
     }
-    const finalSubmission = await prisma58.treeBranchLeafSubmission.findUnique({
+    const finalSubmission = await prisma59.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: {
         TreeBranchLeafSubmissionData: true
@@ -48179,7 +50208,7 @@ router70.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
     if (!organizationId) {
       return res.status(400).json({ success: false, error: "Organisation ID manquant - authentification requise" });
     }
-    const submission = await prisma58.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma59.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       select: { id: true, treeId: true, status: true, exportData: true }
     });
@@ -48206,10 +50235,10 @@ router70.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
       }
     }
     if (Object.keys(updateData).length > 0) {
-      await prisma58.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
+      await prisma59.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
     }
     const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId);
-    const finalSubmission = await prisma58.treeBranchLeafSubmission.findUnique({
+    const finalSubmission = await prisma59.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: { TreeBranchLeafSubmissionData: true }
     });
@@ -48233,23 +50262,23 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
     }
     let effectiveTreeId = treeId;
     if (!effectiveTreeId) {
-      const firstTree = await prisma58.treeBranchLeafTree.findFirst({ select: { id: true } });
+      const firstTree = await prisma59.treeBranchLeafTree.findFirst({ select: { id: true } });
       if (!firstTree) {
         return res.status(404).json({ success: false, error: "Aucun arbre TreeBranchLeaf trouv\xE9" });
       }
       effectiveTreeId = firstTree.id;
     } else {
-      const exists = await prisma58.treeBranchLeafTree.findUnique({ where: { id: effectiveTreeId }, select: { id: true } });
+      const exists = await prisma59.treeBranchLeafTree.findUnique({ where: { id: effectiveTreeId }, select: { id: true } });
       if (!exists) {
         return res.status(404).json({ success: false, error: `Arbre introuvable: ${effectiveTreeId}` });
       }
     }
-    const nodes = await prisma58.treeBranchLeafNode.findMany({ where: { treeId: effectiveTreeId }, select: { id: true, label: true } });
+    const nodes = await prisma59.treeBranchLeafNode.findMany({ where: { treeId: effectiveTreeId }, select: { id: true, label: true } });
     const labelMap = /* @__PURE__ */ new Map();
     for (const n of nodes) labelMap.set(n.id, n.label);
     const valueMap = /* @__PURE__ */ new Map();
     if (leadId) {
-      const lead = await prisma58.lead.findUnique({
+      const lead = await prisma59.lead.findUnique({
         where: { id: leadId },
         select: {
           id: true,
@@ -48306,7 +50335,7 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
       }
     }
     if (baseSubmissionId) {
-      const existingData = await prisma58.treeBranchLeafSubmissionData.findMany({
+      const existingData = await prisma59.treeBranchLeafSubmissionData.findMany({
         where: { submissionId: baseSubmissionId },
         select: { nodeId: true, value: true }
       });
@@ -48327,7 +50356,7 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
       for (const [nodeId, value] of formEntries) {
         if (!nodeId.startsWith("__") && value !== null && value !== void 0 && value !== "") {
           console.log(`\u{1F50D} [Auto-Clean DEBUG] Analyse du champ ${nodeId} = "${value}"`);
-          const nodeInfo = await prisma58.treeBranchLeafNode.findUnique({
+          const nodeInfo = await prisma59.treeBranchLeafNode.findUnique({
             where: { id: nodeId },
             select: {
               id: true,
@@ -48357,7 +50386,7 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
                 console.log(`\u{1F50D} [Auto-Clean DEBUG] Option de type "${optionType}" d\xE9tect\xE9e`);
                 const referencesToClean = optionType === "plan" ? sharedReferenceMapping.inclinaison : sharedReferenceMapping.plan;
                 console.log(`\u{1F50D} [Auto-Clean DEBUG] Nettoyage des r\xE9f\xE9rences:`, referencesToClean);
-                const nodesToClean = await prisma58.treeBranchLeafNode.findMany({
+                const nodesToClean = await prisma59.treeBranchLeafNode.findMany({
                   where: {
                     treeId: effectiveTreeId,
                     sharedReferenceIds: { hasSome: referencesToClean }
@@ -48378,10 +50407,16 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
         }
       }
     }
-    const capacities = await prisma58.treeBranchLeafNodeVariable.findMany({
+    const capacitiesRaw = await prisma59.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
       include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
     });
+    const capacities = capacitiesRaw.sort((a, b) => {
+      const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
+      const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
+      return aIsSumFormula - bIsSumFormula;
+    });
+    console.log(`[UNIVERSAL] \u{1F504} Ordre d'\xE9valuation:`, capacities.map((c) => `${c.TreeBranchLeafNode?.label || c.nodeId} (${c.sourceRef?.includes("sum-formula") ? "SUM" : "SIMPLE"})`));
     const submissionId = baseSubmissionId || `preview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     console.log(`[UNIVERSAL] \u{1F4E6} valueMap contient ${valueMap.size} entr\xE9es:`);
     for (const [key2, val] of valueMap.entries()) {
@@ -48405,12 +50440,16 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
           // variableNodeId
           context.submissionId,
           // submissionId
-          prisma58,
+          prisma59,
           // prismaClient
           context.valueMap
           // valueMap (données temporaires du formulaire)
         );
         console.log(`[UNIVERSAL] \u2705 R\xE9sultat: value="${evaluation.value}", operationResult="${evaluation.operationResult}"`);
+        if (evaluation.value !== null && evaluation.value !== void 0 && evaluation.value !== "\u2205") {
+          context.valueMap.set(cap.nodeId, evaluation.value);
+          console.log(`[UNIVERSAL] \u{1F4E5} Valeur ajout\xE9e au valueMap: ${cap.nodeId} = ${evaluation.value}`);
+        }
         results.push({
           nodeId: cap.nodeId,
           nodeLabel: cap.TreeBranchLeafNode?.label || null,
@@ -48512,7 +50551,7 @@ router70.post("/submissions/stage", async (req2, res) => {
     if (!organizationId) return res.status(400).json({ success: false, error: "Organisation ID manquant" });
     let effectiveTreeId = treeId;
     if (!effectiveTreeId) {
-      const firstTree = await prisma58.treeBranchLeafTree.findFirst({ select: { id: true } });
+      const firstTree = await prisma59.treeBranchLeafTree.findFirst({ select: { id: true } });
       if (!firstTree) return res.status(404).json({ success: false, error: "Aucun arbre trouv\xE9" });
       effectiveTreeId = firstTree.id;
     }
@@ -48540,11 +50579,11 @@ router70.post("/submissions/stage/preview", async (req2, res) => {
     const { stageId } = req2.body || {};
     const stage = stageId ? stagingStore.get(stageId) : void 0;
     if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
-    const nodes = await prisma58.treeBranchLeafNode.findMany({ where: { treeId: stage.treeId }, select: { id: true, label: true } });
+    const nodes = await prisma59.treeBranchLeafNode.findMany({ where: { treeId: stage.treeId }, select: { id: true, label: true } });
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
     const valueMap = /* @__PURE__ */ new Map();
     if (stage.submissionId) {
-      const existingData = await prisma58.treeBranchLeafSubmissionData.findMany({
+      const existingData = await prisma59.treeBranchLeafSubmissionData.findMany({
         where: { submissionId: stage.submissionId },
         select: { nodeId: true, value: true }
       });
@@ -48553,7 +50592,12 @@ router70.post("/submissions/stage/preview", async (req2, res) => {
     }
     const stageEntries = Object.entries(stage.formData);
     await applySharedReferenceValues(valueMap, stageEntries, stage.treeId);
-    const capacities = await prisma58.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
+    const capacitiesRaw = await prisma59.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
+    const capacities = capacitiesRaw.sort((a, b) => {
+      const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
+      const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
+      return aIsSumFormula - bIsSumFormula;
+    });
     const context = { submissionId: stage.submissionId || `preview-${Date.now()}`, organizationId: stage.organizationId, userId: stage.userId, treeId: stage.treeId, labelMap, valueMap };
     const results = [];
     for (const c of capacities) {
@@ -48561,9 +50605,12 @@ router70.post("/submissions/stage/preview", async (req2, res) => {
         const r = await evaluateVariableOperation(
           c.nodeId,
           context.submissionId,
-          prisma58,
+          prisma59,
           context.valueMap
         );
+        if (r.value !== null && r.value !== void 0 && r.value !== "\u2205") {
+          context.valueMap.set(c.nodeId, r.value);
+        }
         results.push({
           nodeId: c.nodeId,
           nodeLabel: c.TreeBranchLeafNode?.label || null,
@@ -48612,15 +50659,15 @@ router70.post("/submissions/stage/commit", async (req2, res) => {
     const stage = stageId ? stagingStore.get(stageId) : void 0;
     if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
     if (!asNew && stage.submissionId) {
-      const submission = await prisma58.treeBranchLeafSubmission.findUnique({ where: { id: stage.submissionId } });
+      const submission = await prisma59.treeBranchLeafSubmission.findUnique({ where: { id: stage.submissionId } });
       if (!submission) return res.status(404).json({ success: false, error: "Soumission introuvable" });
-      await prisma58.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData } });
+      await prisma59.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData } });
       const saved2 = await saveUserEntriesNeutral(stage.submissionId, stage.formData, stage.treeId);
       const stats2 = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId);
       return res.json({ success: true, submissionId: stage.submissionId, saved: saved2, stats: stats2 });
     }
     const submissionId = `tbl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    await prisma58.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: "draft", summary: { name: `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` }, exportData: stage.formData, updatedAt: /* @__PURE__ */ new Date() } });
+    await prisma59.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: "draft", summary: { name: `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` }, exportData: stage.formData, updatedAt: /* @__PURE__ */ new Date() } });
     const saved = await saveUserEntriesNeutral(submissionId, stage.formData, stage.treeId);
     const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId);
     stage.submissionId = submissionId;
@@ -48642,7 +50689,7 @@ router70.get("/tables/:tableId", async (req2, res) => {
   try {
     const { tableId } = req2.params;
     console.log(`\u{1F4CA} [GET TABLE] R\xE9cup\xE9ration table: ${tableId}`);
-    const table = await prisma58.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma59.treeBranchLeafNodeTable.findUnique({
       where: { id: tableId },
       select: {
         id: true,
@@ -48929,15 +50976,22 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
     }
     const isTBLField = node.type === "field" && node.metadata && typeof node.metadata === "object";
     const hasTableLookup = isTBLField && node.metadata?.lookup?.enabled === true && node.metadata?.lookup?.tableReference;
-    if (hasTableLookup && node.treeId) {
+    const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
+      where: { nodeId },
+      select: { sourceType: true, sourceRef: true }
+    });
+    const hasFormulaVariable = variableMeta2?.sourceType === "formula" && variableMeta2?.sourceRef?.startsWith("node-formula:");
+    if ((hasTableLookup || hasFormulaVariable) && node.treeId) {
       const now = /* @__PURE__ */ new Date();
       const calculatedAt = node.calculatedAt ? new Date(node.calculatedAt) : null;
       const isStale = !calculatedAt || now.getTime() - calculatedAt.getTime() > 1e4;
-      const hasNoValue = !node.calculatedValue || node.calculatedValue === "" || node.calculatedValue === "[]";
-      if (isStale || hasNoValue) {
-        console.log(`\u{1F525} [CalculatedValueController] Champ TBL "${node.label}" n\xE9cessite recalcul:`, {
+      const hasNoValue = !node.calculatedValue || node.calculatedValue === "" || node.calculatedValue === "[]" || node.calculatedValue === "0";
+      if (isStale || hasNoValue || hasFormulaVariable) {
+        console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" n\xE9cessite recalcul:`, {
           nodeId,
           hasTableLookup,
+          hasFormulaVariable,
+          sourceRef: variableMeta2?.sourceRef,
           isStale,
           hasNoValue,
           calculatedAt,
@@ -48951,8 +51005,8 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
             prisma
           );
           console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
-          if (result && result.operationResult !== void 0) {
-            const stringValue = String(result.operationResult);
+          if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
+            const stringValue = String(result.value ?? result.operationResult);
             await prisma.treeBranchLeafNode.update({
               where: { id: nodeId },
               data: {
@@ -49098,9 +51152,9 @@ var calculatedValueController_default = router71;
 
 // src/api/websites.ts
 var import_express74 = require("express");
-var import_client61 = require("@prisma/client");
+var import_client62 = require("@prisma/client");
 var router72 = (0, import_express74.Router)();
-var prisma59 = new import_client61.PrismaClient();
+var prisma60 = new import_client62.PrismaClient();
 router72.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
@@ -49114,7 +51168,7 @@ router72.get("/websites", authenticateToken, async (req2, res) => {
     if (!showAll && organizationId) {
       whereClause.organizationId = organizationId;
     }
-    const websites = await prisma59.webSite.findMany({
+    const websites = await prisma60.webSite.findMany({
       where: whereClause,
       include: {
         config: true
@@ -49137,7 +51191,7 @@ router72.get("/websites/:slug", async (req2, res) => {
     if (organizationId) {
       whereClause.organizationId = organizationId;
     }
-    const website = await prisma59.webSite.findFirst({
+    const website = await prisma60.webSite.findFirst({
       where: whereClause,
       include: {
         config: {
@@ -49203,14 +51257,14 @@ router72.get("/websites/:slug", async (req2, res) => {
 router72.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
-    const website = await prisma59.webSite.findFirst({
+    const website = await prisma60.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
     if (!website) {
       return res.status(404).json({ error: "Website not found" });
     }
-    const services = await prisma59.webSiteService.findMany({
+    const services = await prisma60.webSiteService.findMany({
       where: {
         websiteId: website.id,
         isActive: true
@@ -49227,7 +51281,7 @@ router72.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
-    const website = await prisma59.webSite.findFirst({
+    const website = await prisma60.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -49241,7 +51295,7 @@ router72.get("/websites/:slug/projects", async (req2, res) => {
     if (featured === "true") {
       whereClause.isFeatured = true;
     }
-    const projects = await prisma59.webSiteProject.findMany({
+    const projects = await prisma60.webSiteProject.findMany({
       where: whereClause,
       orderBy: { displayOrder: "asc" }
     });
@@ -49255,7 +51309,7 @@ router72.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
-    const website = await prisma59.webSite.findFirst({
+    const website = await prisma60.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -49269,7 +51323,7 @@ router72.get("/websites/:slug/testimonials", async (req2, res) => {
     if (featured === "true") {
       whereClause.isFeatured = true;
     }
-    const testimonials = await prisma59.webSiteTestimonial.findMany({
+    const testimonials = await prisma60.webSiteTestimonial.findMany({
       where: whereClause,
       orderBy: { displayOrder: "asc" }
     });
@@ -49283,7 +51337,7 @@ router72.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
-    const website = await prisma59.webSite.findFirst({
+    const website = await prisma60.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -49297,7 +51351,7 @@ router72.get("/websites/:slug/blog", async (req2, res) => {
     if (featured === "true") {
       whereClause.isFeatured = true;
     }
-    const blogPosts = await prisma59.webSiteBlogPost.findMany({
+    const blogPosts = await prisma60.webSiteBlogPost.findMany({
       where: whereClause,
       orderBy: { publishedAt: "desc" },
       take: parseInt(limit),
@@ -49321,14 +51375,14 @@ router72.get("/websites/:slug/blog", async (req2, res) => {
 router72.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
-    const website = await prisma59.webSite.findFirst({
+    const website = await prisma60.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
     if (!website) {
       return res.status(404).json({ error: "Website not found" });
     }
-    const blogPost = await prisma59.webSiteBlogPost.findFirst({
+    const blogPost = await prisma60.webSiteBlogPost.findFirst({
       where: {
         websiteId: website.id,
         slug: postSlug,
@@ -49363,7 +51417,7 @@ router72.put("/websites/:id", authenticateToken, async (req2, res) => {
     if (!organizationId) {
       return res.status(400).json({ error: "Organization ID is required" });
     }
-    const existingWebsite = await prisma59.webSite.findFirst({
+    const existingWebsite = await prisma60.webSite.findFirst({
       where: {
         id: websiteId,
         organizationId
@@ -49372,7 +51426,7 @@ router72.put("/websites/:id", authenticateToken, async (req2, res) => {
     if (!existingWebsite) {
       return res.status(404).json({ error: "Website not found" });
     }
-    const updatedWebsite = await prisma59.webSite.update({
+    const updatedWebsite = await prisma60.webSite.update({
       where: { id: websiteId },
       data: {
         name: data.name,
@@ -49406,7 +51460,7 @@ router72.post("/websites", authenticateToken, async (req2, res) => {
     if (!organizationId) {
       return res.status(400).json({ error: "Organization ID is required" });
     }
-    const newWebsite = await prisma59.webSite.create({
+    const newWebsite = await prisma60.webSite.create({
       data: {
         name: data.name,
         slug: data.slug,
@@ -49445,13 +51499,13 @@ router72.delete("/websites/:id", authenticateToken, async (req2, res) => {
     if (!user?.isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
-    const existingWebsite = await prisma59.webSite.findFirst({
+    const existingWebsite = await prisma60.webSite.findFirst({
       where: whereClause
     });
     if (!existingWebsite) {
       return res.status(404).json({ error: "Website not found" });
     }
-    await prisma59.webSite.delete({
+    await prisma60.webSite.delete({
       where: { id: websiteId }
     });
     console.log(`\u2705 Site web ${websiteId} (${existingWebsite.name}) supprim\xE9 par ${user?.email || "unknown"}`);
@@ -49468,13 +51522,13 @@ var websites_default = router72;
 
 // src/api/website-services.ts
 var import_express75 = require("express");
-var import_client62 = require("@prisma/client");
+var import_client63 = require("@prisma/client");
 var router73 = (0, import_express75.Router)();
-var prisma60 = new import_client62.PrismaClient();
+var prisma61 = new import_client63.PrismaClient();
 router73.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const services = await prisma60.webSiteService.findMany({
+    const services = await prisma61.webSiteService.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -49494,11 +51548,11 @@ router73.post("/website-services", async (req2, res) => {
     if (!websiteId || !key2 || !title) {
       return res.status(400).json({ error: "websiteId, key, and title are required" });
     }
-    const maxOrder = await prisma60.webSiteService.aggregate({
+    const maxOrder = await prisma61.webSiteService.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const service = await prisma60.webSiteService.create({
+    const service = await prisma61.webSiteService.create({
       data: {
         websiteId: parseInt(websiteId),
         key: key2,
@@ -49522,7 +51576,7 @@ router73.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
-    const service = await prisma60.webSiteService.update({
+    const service = await prisma61.webSiteService.update({
       where: { id: parseInt(id) },
       data: {
         ...key2 && { key: key2 },
@@ -49544,7 +51598,7 @@ router73.put("/website-services/:id", async (req2, res) => {
 router73.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    await prisma60.webSiteService.delete({
+    await prisma61.webSiteService.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -49561,7 +51615,7 @@ router73.post("/website-services/reorder", async (req2, res) => {
     }
     await Promise.all(
       services.map(
-        (service) => prisma60.webSiteService.update({
+        (service) => prisma61.webSiteService.update({
           where: { id: service.id },
           data: { displayOrder: service.displayOrder }
         })
@@ -49577,13 +51631,13 @@ var website_services_default = router73;
 
 // src/api/website-projects.ts
 var import_express76 = require("express");
-var import_client63 = require("@prisma/client");
+var import_client64 = require("@prisma/client");
 var router74 = (0, import_express76.Router)();
-var prisma61 = new import_client63.PrismaClient();
+var prisma62 = new import_client64.PrismaClient();
 router74.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const projects = await prisma61.webSiteProject.findMany({
+    const projects = await prisma62.webSiteProject.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -49603,11 +51657,11 @@ router74.post("/website-projects", async (req2, res) => {
     if (!websiteId || !title) {
       return res.status(400).json({ error: "websiteId and title are required" });
     }
-    const maxOrder = await prisma61.webSiteProject.aggregate({
+    const maxOrder = await prisma62.webSiteProject.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const project = await prisma61.webSiteProject.create({
+    const project = await prisma62.webSiteProject.create({
       data: {
         websiteId: parseInt(websiteId),
         title,
@@ -49630,7 +51684,7 @@ router74.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
-    const project = await prisma61.webSiteProject.update({
+    const project = await prisma62.webSiteProject.update({
       where: { id: parseInt(id) },
       data: {
         ...title && { title },
@@ -49651,7 +51705,7 @@ router74.put("/website-projects/:id", async (req2, res) => {
 router74.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    await prisma61.webSiteProject.delete({
+    await prisma62.webSiteProject.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -49668,7 +51722,7 @@ router74.post("/website-projects/reorder", async (req2, res) => {
     }
     await Promise.all(
       projects.map(
-        (project) => prisma61.webSiteProject.update({
+        (project) => prisma62.webSiteProject.update({
           where: { id: project.id },
           data: { displayOrder: project.displayOrder }
         })
@@ -49684,13 +51738,13 @@ var website_projects_default = router74;
 
 // src/api/website-testimonials.ts
 var import_express77 = require("express");
-var import_client64 = require("@prisma/client");
+var import_client65 = require("@prisma/client");
 var router75 = (0, import_express77.Router)();
-var prisma62 = new import_client64.PrismaClient();
+var prisma63 = new import_client65.PrismaClient();
 router75.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const testimonials = await prisma62.webSiteTestimonial.findMany({
+    const testimonials = await prisma63.webSiteTestimonial.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -49710,11 +51764,11 @@ router75.post("/website-testimonials", async (req2, res) => {
     if (!websiteId || !customerName || !text) {
       return res.status(400).json({ error: "websiteId, customerName, and text are required" });
     }
-    const maxOrder = await prisma62.webSiteTestimonial.aggregate({
+    const maxOrder = await prisma63.webSiteTestimonial.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const testimonial = await prisma62.webSiteTestimonial.create({
+    const testimonial = await prisma63.webSiteTestimonial.create({
       data: {
         websiteId: parseInt(websiteId),
         customerName,
@@ -49738,7 +51792,7 @@ router75.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
-    const testimonial = await prisma62.webSiteTestimonial.update({
+    const testimonial = await prisma63.webSiteTestimonial.update({
       where: { id: parseInt(id) },
       data: {
         ...customerName && { customerName },
@@ -49760,7 +51814,7 @@ router75.put("/website-testimonials/:id", async (req2, res) => {
 router75.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    await prisma62.webSiteTestimonial.delete({
+    await prisma63.webSiteTestimonial.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -49777,7 +51831,7 @@ router75.post("/website-testimonials/reorder", async (req2, res) => {
     }
     await Promise.all(
       testimonials.map(
-        (testimonial) => prisma62.webSiteTestimonial.update({
+        (testimonial) => prisma63.webSiteTestimonial.update({
           where: { id: testimonial.id },
           data: { displayOrder: testimonial.displayOrder }
         })
@@ -49793,13 +51847,13 @@ var website_testimonials_default = router75;
 
 // src/api/website-sections.ts
 var import_express78 = __toESM(require("express"), 1);
-var import_client65 = require("@prisma/client");
+var import_client66 = require("@prisma/client");
 var router76 = import_express78.default.Router();
-var prisma63 = new import_client65.PrismaClient();
+var prisma64 = new import_client66.PrismaClient();
 router76.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const sections = await prisma63.webSiteSection.findMany({
+    const sections = await prisma64.webSiteSection.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -49816,11 +51870,11 @@ router76.get("/website-sections/:websiteId", async (req2, res) => {
 router76.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
-    const maxOrder = await prisma63.webSiteSection.aggregate({
+    const maxOrder = await prisma64.webSiteSection.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const section = await prisma63.webSiteSection.create({
+    const section = await prisma64.webSiteSection.create({
       data: {
         websiteId: parseInt(websiteId),
         key: key2,
@@ -49849,7 +51903,7 @@ router76.put("/website-sections/:id", async (req2, res) => {
     console.log("  ID:", id);
     console.log("  Body keys:", Object.keys(req2.body));
     console.log("  Content keys:", content ? Object.keys(content) : "undefined");
-    const existing = await prisma63.webSiteSection.findUnique({
+    const existing = await prisma64.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (!existing) {
@@ -49874,7 +51928,7 @@ router76.put("/website-sections/:id", async (req2, res) => {
     const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
     console.log("  \u{1F50D} Existing content keys:", existing.content ? Object.keys(existing.content) : "none");
     console.log("  \u{1F50D} Merged content keys:", mergedContent ? Object.keys(mergedContent) : "none");
-    const section = await prisma63.webSiteSection.update({
+    const section = await prisma64.webSiteSection.update({
       where: { id: parseInt(id) },
       data: {
         ...name !== void 0 && { name },
@@ -49899,7 +51953,7 @@ router76.patch("/website-sections/:id", async (req2, res) => {
     console.log("\u{1F527} PATCH /api/website-sections/:id");
     console.log("  ID:", id);
     console.log("  Body keys:", Object.keys(req2.body));
-    const existing = await prisma63.webSiteSection.findUnique({
+    const existing = await prisma64.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (!existing) {
@@ -49922,7 +51976,7 @@ router76.patch("/website-sections/:id", async (req2, res) => {
       return result;
     };
     const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
-    const section = await prisma63.webSiteSection.update({
+    const section = await prisma64.webSiteSection.update({
       where: { id: parseInt(id) },
       data: {
         ...name !== void 0 && { name },
@@ -49943,13 +51997,13 @@ router76.patch("/website-sections/:id", async (req2, res) => {
 router76.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const section = await prisma63.webSiteSection.findUnique({
+    const section = await prisma64.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (section?.isLocked) {
       return res.status(403).json({ error: "Cette section est verrouill\xE9e et ne peut pas \xEAtre supprim\xE9e" });
     }
-    await prisma63.webSiteSection.delete({
+    await prisma64.webSiteSection.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -49961,9 +52015,9 @@ router76.delete("/website-sections/:id", async (req2, res) => {
 router76.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
-    await prisma63.$transaction(
+    await prisma64.$transaction(
       sections.map(
-        (section) => prisma63.webSiteSection.update({
+        (section) => prisma64.webSiteSection.update({
           where: { id: section.id },
           data: { displayOrder: section.displayOrder }
         })
@@ -49978,14 +52032,14 @@ router76.post("/website-sections/reorder", async (req2, res) => {
 router76.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const original = await prisma63.webSiteSection.findUnique({
+    const original = await prisma64.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (!original) {
       return res.status(404).json({ error: "Section introuvable" });
     }
     const newKey = `${original.key}-copy-${Date.now()}`;
-    const duplicate = await prisma63.webSiteSection.create({
+    const duplicate = await prisma64.webSiteSection.create({
       data: {
         websiteId: original.websiteId,
         key: newKey,
@@ -50072,9 +52126,9 @@ var website_themes_default = router77;
 
 // src/api/contact-form.ts
 var import_express80 = require("express");
-var import_client66 = require("@prisma/client");
+var import_client67 = require("@prisma/client");
 var router78 = (0, import_express80.Router)();
-var prisma64 = new import_client66.PrismaClient();
+var prisma65 = new import_client67.PrismaClient();
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
@@ -50112,7 +52166,7 @@ router78.post("/contact-form", async (req2, res) => {
         message: "Website ID manquant"
       });
     }
-    const website = await prisma64.webSite.findUnique({
+    const website = await prisma65.webSite.findUnique({
       where: { id: data.websiteId },
       select: { id: true, organizationId: true }
     });
@@ -50125,7 +52179,7 @@ router78.post("/contact-form", async (req2, res) => {
     const spam = isSpam(data);
     const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || "unknown";
     const userAgent = req2.headers["user-agent"] || "unknown";
-    const submission = await prisma64.contactSubmission.create({
+    const submission = await prisma65.contactSubmission.create({
       data: {
         websiteId: data.websiteId,
         organizationId: website.organizationId,
@@ -50170,7 +52224,7 @@ router78.post("/contact-form", async (req2, res) => {
 router78.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
-    const submissions = await prisma64.contactSubmission.findMany({
+    const submissions = await prisma65.contactSubmission.findMany({
       where: { websiteId },
       orderBy: { submittedAt: "desc" },
       take: 100
@@ -50185,7 +52239,7 @@ router78.get("/contact-submissions/:websiteId", async (req2, res) => {
 router78.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
-    const submission = await prisma64.contactSubmission.update({
+    const submission = await prisma65.contactSubmission.update({
       where: { id },
       data: { isRead: true }
     });
@@ -50203,7 +52257,7 @@ router78.patch("/contact-submission/:id/status", async (req2, res) => {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: "Statut invalide" });
     }
-    const submission = await prisma64.contactSubmission.update({
+    const submission = await prisma65.contactSubmission.update({
       where: { id },
       data: {
         status,
@@ -50220,7 +52274,7 @@ router78.patch("/contact-submission/:id/status", async (req2, res) => {
 router78.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
-    await prisma64.contactSubmission.delete({
+    await prisma65.contactSubmission.delete({
       where: { id }
     });
     res.json({ success: true, message: "Soumission supprim\xE9e" });
@@ -50236,9 +52290,9 @@ var import_express81 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
 var import_path6 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
-var import_client67 = require("@prisma/client");
+var import_client68 = require("@prisma/client");
 var router79 = (0, import_express81.Router)();
-var prisma65 = new import_client67.PrismaClient();
+var prisma66 = new import_client68.PrismaClient();
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
     const uploadDir = import_path6.default.join(process.cwd(), "public", "uploads", "websites");
@@ -50282,7 +52336,7 @@ router79.post("/upload-image", upload2.single("image"), async (req2, res) => {
       });
     }
     const fileUrl = `/uploads/websites/${req2.file.filename}`;
-    const mediaFile = await prisma65.webSiteMediaFile.create({
+    const mediaFile = await prisma66.webSiteMediaFile.create({
       data: {
         websiteId: parseInt(websiteId),
         fileName: req2.file.originalname,
@@ -50331,7 +52385,7 @@ router79.get("/images/:websiteId", async (req2, res) => {
     if (category) {
       where.category = category;
     }
-    const images = await prisma65.webSiteMediaFile.findMany({
+    const images = await prisma66.webSiteMediaFile.findMany({
       where,
       orderBy: { uploadedAt: "desc" }
     });
@@ -50350,7 +52404,7 @@ router79.get("/images/:websiteId", async (req2, res) => {
 router79.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
-    const mediaFile = await prisma65.webSiteMediaFile.findUnique({
+    const mediaFile = await prisma66.webSiteMediaFile.findUnique({
       where: { id }
     });
     if (!mediaFile) {
@@ -50364,7 +52418,7 @@ router79.delete("/image/:id", async (req2, res) => {
     } catch (err) {
       console.warn("Fichier d\xE9j\xE0 supprim\xE9 ou inexistant");
     }
-    await prisma65.webSiteMediaFile.delete({
+    await prisma66.webSiteMediaFile.delete({
       where: { id }
     });
     res.json({
@@ -51840,7 +53894,7 @@ var parseJsonArray = (value) => {
     return [];
   }
 };
-async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
+async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
   console.log(`[repeat-blueprint-builder] \u{1F50D} Building blueprint for repeater: ${repeaterNodeId}`);
   if (!repeaterNodeId) {
     console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
@@ -51849,12 +53903,18 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
   const cached = captureRepeatTemplate(repeaterNodeId);
   if (cached) {
     console.log(`[repeat-blueprint-builder] Found cached blueprint`);
-    const candidateTemplateIds = deriveTemplateIdsFromBlueprint(cached);
+    const repeaterNodeForCache = await prisma69.treeBranchLeafNode.findUnique({
+      where: { id: repeaterNodeId },
+      select: { metadata: true, repeater_templateNodeIds: true }
+    });
+    const candidateTemplateIds = repeaterNodeForCache ? extractTemplateIds(repeaterNodeForCache) : [];
+    console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] Candidate IDs from metadata (NOT cache derivation): ${JSON.stringify(candidateTemplateIds)}`);
     const { validIds: cachedTemplateIds } = await filterExistingTemplateNodeIds(
-      prisma68,
+      prisma69,
       repeaterNodeId,
       candidateTemplateIds
     );
+    console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] Valid IDs after filter: ${JSON.stringify(cachedTemplateIds)}`);
     if (cachedTemplateIds.length) {
       console.log(`[repeat-blueprint-builder] \u2705 Using cached blueprint with ${cachedTemplateIds.length} templates`);
       const validTemplateSet = new Set(cachedTemplateIds);
@@ -51873,7 +53933,7 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
     });
   }
   console.log(`[repeat-blueprint-builder] Querying Prisma for repeater node...`);
-  const repeaterNode = await prisma68.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: {
       id: true,
@@ -51892,17 +53952,18 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
     treeId: repeaterNode.treeId,
     hasMetadata: !!repeaterNode.metadata
   });
-  const candidateTemplateNodeIds = await enrichTemplateIdsWithExistingCopies(
-    prisma68,
-    repeaterNodeId,
-    extractTemplateIds(repeaterNode)
-  );
+  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] repeater_templateNodeIds RAW: ${JSON.stringify(repeaterNode.repeater_templateNodeIds)}`);
+  const extractedIds = extractTemplateIds(repeaterNode);
+  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] extractTemplateIds result: ${JSON.stringify(extractedIds)}`);
+  const candidateTemplateNodeIds = extractedIds;
+  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] Candidate IDs (SANS enrichissement): ${JSON.stringify(candidateTemplateNodeIds)}`);
   console.log(`[repeat-blueprint-builder] Candidate templates: ${candidateTemplateNodeIds.length}`);
   const { validIds: templateNodeIds } = await filterExistingTemplateNodeIds(
-    prisma68,
+    prisma69,
     repeaterNodeId,
     candidateTemplateNodeIds
   );
+  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] After filterExistingTemplateNodeIds: ${JSON.stringify(templateNodeIds)}`);
   console.log(`[repeat-blueprint-builder] Valid templates after filtering: ${templateNodeIds.length}`);
   if (!templateNodeIds.length) {
     console.warn(`[repeat-blueprint-builder] \u26A0\uFE0F No valid templates found!`);
@@ -51915,7 +53976,7 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
       lastUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
-  const directVariables = await prisma68.treeBranchLeafNodeVariable.findMany({
+  const directVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
     where: { nodeId: { in: templateNodeIds } },
     select: {
       id: true,
@@ -51925,7 +53986,7 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
     }
   });
   const linkedVarsByNode = /* @__PURE__ */ new Map();
-  const templateNodesWithLinks = await prisma68.treeBranchLeafNode.findMany({
+  const templateNodesWithLinks = await prisma69.treeBranchLeafNode.findMany({
     where: { id: { in: templateNodeIds } },
     select: {
       id: true,
@@ -51946,7 +54007,7 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
     (id) => !directVariables.some((v) => v.id === id)
     // Avoid duplicates
   );
-  const linkedVariables = linkedVariableIds.length > 0 ? await prisma68.treeBranchLeafNodeVariable.findMany({
+  const linkedVariables = linkedVariableIds.length > 0 ? await prisma69.treeBranchLeafNodeVariable.findMany({
     where: { id: { in: linkedVariableIds } },
     select: {
       id: true,
@@ -51979,15 +54040,15 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
   }
   const variables = expandedVariables;
   const [formulas, conditions, tables] = await Promise.all([
-    prisma68.treeBranchLeafNodeFormula.findMany({
+    prisma69.treeBranchLeafNodeFormula.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     }),
-    prisma68.treeBranchLeafNodeCondition.findMany({
+    prisma69.treeBranchLeafNodeCondition.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     }),
-    prisma68.treeBranchLeafNodeTable.findMany({
+    prisma69.treeBranchLeafNodeTable.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     })
@@ -52029,15 +54090,21 @@ async function buildBlueprintForRepeater(prisma68, repeaterNodeId) {
   };
 }
 function extractTemplateIds(node) {
-  const fromColumn = parseJsonArray(node.repeater_templateNodeIds);
-  if (fromColumn.length) return fromColumn;
   const metaRepeater = typeof node.metadata === "object" && node.metadata !== null ? node.metadata.repeater : void 0;
   if (metaRepeater && typeof metaRepeater === "object") {
-    const legacy = metaRepeater.templateNodeIds;
-    if (Array.isArray(legacy)) {
-      return legacy.filter((id) => typeof id === "string");
+    const fromMetadata = metaRepeater.templateNodeIds;
+    if (Array.isArray(fromMetadata) && fromMetadata.length > 0) {
+      const filtered = fromMetadata.filter((id) => typeof id === "string");
+      console.log(`\u2705 [extractTemplateIds] Lecture depuis metadata: ${filtered.length} IDs`);
+      return filtered;
     }
   }
+  const fromColumn = parseJsonArray(node.repeater_templateNodeIds);
+  if (fromColumn.length) {
+    console.log(`\u26A0\uFE0F [extractTemplateIds] Fallback vers colonne: ${fromColumn.length} IDs`);
+    return fromColumn;
+  }
+  console.warn(`\u274C [extractTemplateIds] Aucun template trouv\xE9 !`);
   return [];
 }
 function extractTotalFieldConfig(metadata) {
@@ -52056,53 +54123,12 @@ function extractTotalFieldConfig(metadata) {
     metadata: typed.metadata ?? null
   };
 }
-function deriveTemplateIdsFromBlueprint(blueprint) {
-  const ids = /* @__PURE__ */ new Set();
-  blueprint.variables?.forEach((v) => v.nodeId && ids.add(v.nodeId));
-  blueprint.capacities?.forEach((c) => c.ownerNodeId && ids.add(c.ownerNodeId));
-  return Array.from(ids);
-}
-async function enrichTemplateIdsWithExistingCopies(prisma68, repeaterNodeId, initialIds) {
-  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-  const normalized = initialIds.filter((id) => typeof id === "string" && !!id).filter((id) => !hasCopySuffix.test(id));
-  const templateSet = new Set(normalized);
-  console.log(`[enrichTemplateIdsWithExistingCopies] \u{1F50D} Initial IDs filtered: ${initialIds.length} \u2192 ${normalized.length} (removed suffixed IDs)`);
-  if (!repeaterNodeId) {
-    return Array.from(templateSet);
-  }
-  try {
-    const copies = await prisma68.treeBranchLeafNode.findMany({
-      where: {
-        metadata: {
-          path: ["duplicatedFromRepeater"],
-          equals: repeaterNodeId
-        }
-      },
-      select: { metadata: true }
-    });
-    for (const copy of copies) {
-      const metadata = copy.metadata ?? {};
-      const sourceTemplateId = typeof metadata.sourceTemplateId === "string" ? metadata.sourceTemplateId : null;
-      const copiedFromNodeId = typeof metadata.copiedFromNodeId === "string" ? metadata.copiedFromNodeId : null;
-      if (sourceTemplateId && !sourceTemplateId.match(/-\d+$/)) {
-        templateSet.add(sourceTemplateId);
-      }
-      if (copiedFromNodeId && !copiedFromNodeId.match(/-\d+$/)) {
-        templateSet.add(copiedFromNodeId);
-      }
-    }
-  } catch (error) {
-    console.warn("[repeat-blueprint-builder] Unable to derive template IDs from existing copies:", error);
-  }
-  console.log(`[repeat-blueprint-builder] \u{1F50D} Enriched templates (ORIGINAUX SEULEMENT): ${Array.from(templateSet).length}`);
-  return Array.from(templateSet);
-}
-async function filterExistingTemplateNodeIds(prisma68, repeaterNodeId, candidateIds) {
+async function filterExistingTemplateNodeIds(prisma69, repeaterNodeId, candidateIds) {
   const normalized = Array.from(new Set(candidateIds.filter((id) => typeof id === "string" && !!id)));
   if (!normalized.length) {
     return { validIds: [], missingIds: [] };
   }
-  const existing = await prisma68.treeBranchLeafNode.findMany({
+  const existing = await prisma69.treeBranchLeafNode.findMany({
     where: { id: { in: normalized } },
     select: { id: true }
   });
@@ -52139,12 +54165,14 @@ function createInstantiationPlan(blueprint, options) {
   const variables = blueprint.variables.map((variable) => {
     const targetTemplateNodeId = variable.primaryTargetNodeId || variable.nodeId;
     const variableSuffix = resolveSuffix(targetTemplateNodeId);
+    const plannedVariableId = `${variable.variableId}-${targetTemplateNodeId}-${variableSuffix}`;
+    const plannedTargetNodeId = `${targetTemplateNodeId}-${variableSuffix}`;
     return {
       templateVariableId: variable.variableId,
       plannedSuffix: variableSuffix,
-      targetNodeId: `${targetTemplateNodeId}-${variableSuffix}`,
+      targetNodeId: plannedTargetNodeId,
       // ← NOW uses the template node that REFERENCES the variable
-      plannedVariableId: `${variable.variableId}-${variableSuffix}`
+      plannedVariableId
     };
   });
   let totalFieldPlan;
@@ -52163,7 +54191,6 @@ function createInstantiationPlan(blueprint, options) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/suffix-utils.ts
-var import_client68 = require("@prisma/client");
 function extractNumericSuffix(candidate) {
   if (typeof candidate === "number" && Number.isFinite(candidate)) {
     return candidate;
@@ -52180,34 +54207,58 @@ function extractSuffixFromId(id) {
   const parsed = Number(match[1]);
   return Number.isFinite(parsed) ? parsed : null;
 }
-async function computeTemplateCopySuffixMax(prisma68, treeId, templateNodeIds) {
+async function computeTemplateCopySuffixMax(prisma69, treeId, templateNodeIds) {
   if (!treeId || !templateNodeIds.length) {
     return /* @__PURE__ */ new Map();
   }
   const templateSet = new Set(templateNodeIds);
-  const copies = await prisma68.treeBranchLeafNode.findMany({
+  const templateIds = Array.from(templateSet);
+  const orStartsWith = templateIds.map((templateId) => ({ id: { startsWith: `${templateId}-` } }));
+  const copies = await prisma69.treeBranchLeafNode.findMany({
     where: {
       treeId,
-      metadata: {
-        path: ["sourceTemplateId"],
-        not: import_client68.Prisma.DbNull
-      }
+      OR: orStartsWith
+    },
+    select: { id: true, metadata: true }
+  });
+  const metaCopies = await prisma69.treeBranchLeafNode.findMany({
+    where: {
+      treeId,
+      OR: templateIds.map((templateId) => ({
+        OR: [
+          { metadata: { path: ["copiedFromNodeId"], equals: templateId } },
+          { metadata: { path: ["sourceTemplateId"], equals: templateId } }
+        ]
+      }))
     },
     select: { id: true, metadata: true }
   });
   const maxMap = /* @__PURE__ */ new Map();
   for (const copy of copies) {
-    const metadata = copy.metadata ?? {};
-    const sourceTemplateId = metadata.sourceTemplateId;
-    if (typeof sourceTemplateId !== "string" || !templateSet.has(sourceTemplateId)) {
-      continue;
+    let templateId = null;
+    for (const candidate of templateIds) {
+      if (copy.id.startsWith(`${candidate}-`)) {
+        templateId = candidate;
+        break;
+      }
     }
+    if (!templateId || !templateSet.has(templateId)) continue;
+    const rest = copy.id.slice(templateId.length + 1);
+    const idSuffix = /^\d+$/.test(rest) ? Number(rest) : null;
+    const metadata = copy.metadata ?? {};
     const metaSuffix = extractNumericSuffix(metadata.copySuffix);
-    const idSuffix = extractSuffixFromId(copy.id);
-    const resolved = metaSuffix ?? idSuffix ?? 0;
-    const prev = maxMap.get(sourceTemplateId) ?? 0;
-    if (resolved > prev) {
-      maxMap.set(sourceTemplateId, resolved);
+    const resolved = idSuffix ?? metaSuffix ?? 0;
+    const prev = maxMap.get(templateId) ?? 0;
+    if (resolved > prev) maxMap.set(templateId, resolved);
+  }
+  for (const copy of metaCopies) {
+    const meta = copy.metadata ?? {};
+    const metaTemplateId = meta.copiedFromNodeId || meta.sourceTemplateId || null;
+    if (!metaTemplateId || !templateSet.has(metaTemplateId)) continue;
+    const metaSuffix = extractNumericSuffix(meta.copySuffix) ?? extractSuffixFromId(copy.id) ?? 0;
+    const prev = maxMap.get(metaTemplateId) ?? 0;
+    if (metaSuffix > prev) {
+      maxMap.set(metaTemplateId, metaSuffix);
     }
   }
   return maxMap;
@@ -52228,17 +54279,11 @@ var makeScopeId = (repeaterNodeId, suffix) => {
   const trimmedSuffix = typeof suffix === "string" ? suffix.trim() : String(suffix);
   return `${repeaterNodeId}:${trimmedSuffix}`;
 };
-var ensureSuffix = (maybeSuffix) => {
-  if (maybeSuffix !== void 0 && maybeSuffix !== null && `${maybeSuffix}`.trim()) {
-    return maybeSuffix;
-  }
-  return Date.now();
-};
-async function planRepeatDuplication(prisma68, repeaterNodeId, options = {}) {
+async function planRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
   if (!repeaterNodeId) {
     throw new RepeatOperationError("Missing repeaterNodeId in request path.", 400);
   }
-  const blueprint = await buildBlueprintForRepeater(prisma68, repeaterNodeId);
+  const blueprint = await buildBlueprintForRepeater(prisma69, repeaterNodeId);
   if (!blueprint) {
     throw new RepeatOperationError(`No blueprint available for repeater ${repeaterNodeId}.`, 404);
   }
@@ -52248,106 +54293,78 @@ async function planRepeatDuplication(prisma68, repeaterNodeId, options = {}) {
       422
     );
   }
-  const repeaterNode = await prisma68.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: { treeId: true }
   });
   if (!repeaterNode) {
     throw new RepeatOperationError(`Repeater ${repeaterNodeId} was not found.`, 404);
   }
-  let forcedNumericSuffix = null;
-  if (options.suffix !== void 0 && options.suffix !== null && `${options.suffix}`.trim()) {
-    const parsed = Number(options.suffix);
-    if (!Number.isFinite(parsed)) {
+  const cleanedTemplateIds = blueprint.templateNodeIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id, idx, arr) => arr.indexOf(id) === idx);
+  const needsCleaning = blueprint.templateNodeIds.length !== cleanedTemplateIds.length;
+  if (needsCleaning) {
+    console.log(`\u{1F9F9} [repeat-service] NETTOYAGE DES IDs D\xC9TECT\xC9:`);
+    console.log(`   Avant: ${blueprint.templateNodeIds.length} IDs`);
+    console.log(`   Apr\xE8s: ${cleanedTemplateIds.length} IDs`);
+    blueprint.templateNodeIds.forEach((id, idx) => {
+      const cleaned = id.replace(/(-\d+)+$/, "");
+      if (id !== cleaned) {
+        console.log(`      "${id}" \u2192 "${cleaned}"`);
+      }
+    });
+  }
+  let actualSuffix;
+  let perTemplateSuffixes;
+  if (options.suffix) {
+    const parsed = parseInt(String(options.suffix), 10);
+    if (Number.isNaN(parsed)) {
       throw new RepeatOperationError("Repeat suffix must be numeric when provided.", 422);
     }
-    forcedNumericSuffix = parsed;
-  }
-  const suffix = forcedNumericSuffix ?? ensureSuffix(void 0);
-  const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, suffix);
-  let perTemplateSuffixes;
-  if (blueprint.templateNodeIds.length) {
-    const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-    const cleanedTemplateIds = blueprint.templateNodeIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id, idx, arr) => arr.indexOf(id) === idx).filter((id) => !hasCopySuffix.test(id));
-    if (blueprint.templateNodeIds.length !== cleanedTemplateIds.length) {
-      console.log(`\u{1F9F9} [repeat-service] NETTOYAGE des templateNodeIds:`);
-      console.log(`   Avant: ${blueprint.templateNodeIds.length} IDs`);
-      console.log(`   Apr\xE8s: ${cleanedTemplateIds.length} IDs`);
-      blueprint.templateNodeIds.forEach((id, idx) => {
-        const cleaned = id.replace(/(-\d+)+$/, "");
-        if (id !== cleaned) {
-          console.log(`      "${id}" \u2192 "${cleaned}"`);
-        }
-      });
-    }
-    if (forcedNumericSuffix !== null) {
-      perTemplateSuffixes = Object.fromEntries(
-        cleanedTemplateIds.map((id) => [id, forcedNumericSuffix])
-      );
-    } else {
-      const existingMax = await computeTemplateCopySuffixMax(
-        prisma68,
-        repeaterNode.treeId,
-        cleanedTemplateIds
-        // ← Utiliser les IDs nettoyés
-      );
-      const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
-      const nextSuffix = globalMax + 1;
-      console.log(`\u{1F4CA} [repeat-service] Calcul du suffixe:`);
-      console.log(`   Max existant: ${globalMax}`);
-      console.log(`   \u27A1\uFE0F  Prochain suffixe: ${nextSuffix}`);
-      perTemplateSuffixes = {};
-      for (const templateId of cleanedTemplateIds) {
-        perTemplateSuffixes[templateId] = nextSuffix;
-      }
+    actualSuffix = parsed;
+    perTemplateSuffixes = Object.fromEntries(
+      cleanedTemplateIds.map((id) => [id, actualSuffix])
+    );
+  } else {
+    const existingMax = await computeTemplateCopySuffixMax(
+      prisma69,
+      repeaterNode.treeId,
+      cleanedTemplateIds
+    );
+    const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
+    actualSuffix = globalMax + 1;
+    console.log(`\u{1F4CA} [repeat-service] Calcul du suffixe (execute)`);
+    console.log(`   Templates \xE9valu\xE9s: ${cleanedTemplateIds.length}`);
+    cleanedTemplateIds.forEach((id) => {
+      const mx = existingMax.get(id) ?? 0;
+      console.log(`   - ${id} => max ${mx}`);
+    });
+    console.log(`   Max global: ${globalMax}`);
+    console.log(`   \u27A1\uFE0F  Prochain suffixe appliqu\xE9 \xE0 tous: ${actualSuffix}`);
+    perTemplateSuffixes = {};
+    for (const templateId of cleanedTemplateIds) {
+      perTemplateSuffixes[templateId] = actualSuffix;
     }
   }
+  const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, actualSuffix);
+  blueprint.templateNodeIds = cleanedTemplateIds;
   const plan = createInstantiationPlan(blueprint, {
-    suffix,
+    suffix: actualSuffix,
     includeTotals: options.includeTotals ?? true,
     targetParentId: options.targetParentId ?? null,
     perTemplateSuffixes
   });
   return {
     repeaterNodeId,
-    suffix,
+    suffix: actualSuffix,
     scopeId,
     blueprint,
     plan
   };
 }
-async function executeRepeatDuplication(prisma68, repeaterNodeId, options = {}) {
+async function executeRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
   console.log(`[repeat-service] \u{1F504} executeRepeatDuplication called for ${repeaterNodeId}`, { options });
   try {
-    const planned = await planRepeatDuplication(prisma68, repeaterNodeId, options);
-    try {
-      const now = /* @__PURE__ */ new Date();
-      const recentWindowMs = 1e4;
-      const lookback = new Date(now.getTime() - recentWindowMs);
-      const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-      const cleanedTemplateIds = planned.blueprint.templateNodeIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id, idx, arr) => arr.indexOf(id) === idx).filter((id) => !hasCopySuffix.test(id));
-      const recentCopies = await prisma68.treeBranchLeafNode.findMany({
-        where: {
-          duplicatedFromRepeater: repeaterNodeId,
-          createdAt: { gt: lookback },
-          metadata: {
-            path: ["sourceTemplateId"],
-            in: cleanedTemplateIds
-          }
-        },
-        select: { id: true }
-      });
-      if (recentCopies.length > 0) {
-        console.warn(`[repeat-service] Duplicate protection: a recent duplication was detected for repeater ${repeaterNodeId}. Aborting duplicate run.`);
-        return {
-          ...planned,
-          status: "pending-execution",
-          operations: []
-        };
-      }
-    } catch (e) {
-      console.warn("[repeat-service] duplicate guard failed, proceeding with execution", e.message);
-    }
+    const planned = await planRepeatDuplication(prisma69, repeaterNodeId, options);
     console.log(`[repeat-service] \u2705 Plan created successfully`);
     console.log(`
 \u{1F525} [repeat-service] PLANNED VARIABLES:`, JSON.stringify(planned.plan.variables.slice(0, 2), null, 2));
@@ -52431,7 +54448,7 @@ function applySuffixToSourceRef2(sourceRef, suffix) {
   const newId = `${parsed.id}-${suffix}`;
   return `${parsed.prefix}${newId}`;
 }
-async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma68, options = {}) {
+async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma69, options = {}) {
   console.log(`
 ${"=".repeat(80)}`);
   console.log(`[ENTRY] copyVariableWithCapacities called`);
@@ -52461,24 +54478,30 @@ ${"=".repeat(80)}`);
   } = options;
   try {
     const cacheKey = `${originalVarId}|${newNodeId}`;
+    let cachedVariable = null;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
       console.log(`\u267B\uFE0F Variable d\xE9j\xE0 copi\xE9e (cache): ${cacheKey} \u2192 ${cachedId}`);
-      const cached = await prisma68.treeBranchLeafNodeVariable.findUnique({
+      const cached = await prisma69.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
         const parsed = parseSourceRef3(cached.sourceRef);
-        return {
-          variableId: cached.id,
-          exposedKey: cached.exposedKey,
-          capacityType: parsed?.type || null,
-          sourceRef: cached.sourceRef,
-          success: true
-        };
+        if (autoCreateDisplayNode) {
+          console.log(`\u2705 [CACHE] Variable trouv\xE9e. Cr\xE9ation du display node m\xEAme si variable en cache...`);
+          cachedVariable = cached;
+        } else {
+          return {
+            variableId: cached.id,
+            exposedKey: cached.exposedKey,
+            capacityType: parsed?.type || null,
+            sourceRef: cached.sourceRef,
+            success: true
+          };
+        }
       }
     }
-    const originalVar = await prisma68.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = await prisma69.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
@@ -52535,7 +54558,7 @@ ${"=".repeat(80)}`);
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, formulaCopyCache: formulaIdMap }
               );
               if (formulaResult.success) {
@@ -52564,7 +54587,7 @@ ${"=".repeat(80)}`);
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
               );
               if (conditionResult.success) {
@@ -52593,7 +54616,7 @@ ${"=".repeat(80)}`);
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma68,
+                prisma69,
                 { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -52627,8 +54650,9 @@ ${"=".repeat(80)}`);
       finalNodeId2 = nodeIdMap.get(originalVar.nodeId);
       console.log(`\u{1F4CD} nodeId mapp\xE9: ${originalVar.nodeId} \u2192 ${finalNodeId2}`);
     } else if (autoCreateDisplayNode) {
+      console.log(`\u{1F537} [DISPLAY_NODE_CREATE] ENTRANT dans cr\xE9ation display node. originalVar.nodeId="${originalVar.nodeId}", autoCreateDisplayNode=${autoCreateDisplayNode}, cachedVariable=${cachedVariable ? "YES" : "NO"}`);
       try {
-        const originalOwnerNode = await prisma68.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: {
             id: true,
@@ -52743,12 +54767,12 @@ ${"=".repeat(80)}`);
             fieldSubType: null,
             field_label: originalVar.displayName
           };
-          const maybeExisting = await prisma68.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+          const maybeExisting = await prisma69.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
           if (maybeExisting) {
-            await prisma68.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
+            await prisma69.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
             console.log("[CREATE DISPLAY] N\u0153ud d'affichage existant mis \xE0 jour:", { id: displayNodeId2, parentId: displayParentId, metadata: displayNodeData.metadata });
           } else {
-            await prisma68.treeBranchLeafNode.create({ data: displayNodeData });
+            await prisma69.treeBranchLeafNode.create({ data: displayNodeData });
             console.log("[CREATE DISPLAY] N\u0153ud d'affichage cr\xE9\xE9:", { id: displayNodeId2, parentId: displayParentId, metadata: displayNodeData.metadata });
           }
         } else {
@@ -52762,7 +54786,7 @@ ${"=".repeat(80)}`);
       console.log(`\u{1F4CD} nodeId utilis\xE9 (fallback): ${finalNodeId2}`);
     }
     try {
-      const existingById = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      const existingById = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
@@ -52773,7 +54797,7 @@ ${"=".repeat(80)}`);
       console.warn(`\u26A0\uFE0F V\xE9rification collision id variable \xE9chou\xE9e:`, e.message);
     }
     try {
-      const existingByKey = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      const existingByKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
@@ -52786,13 +54810,13 @@ ${"=".repeat(80)}`);
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma68.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
       if (existingForNode) {
         console.log(`\u267B\uFE0F Variable d\xE9j\xE0 existante pour display node ${finalNodeId2}, r\xE9utilisation: ${existingForNode.id}`);
         _reusingExistingVariable = true;
         _existingVariableForReuse = existingForNode;
         try {
-          await prisma68.treeBranchLeafNode.update({
+          await prisma69.treeBranchLeafNode.update({
             where: { id: finalNodeId2 },
             data: {
               hasData: true,
@@ -52806,7 +54830,7 @@ ${"=".repeat(80)}`);
               field_label: existingForNode.displayName || void 0
             }
           });
-          await addToNodeLinkedField7(prisma68, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+          await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
         } catch (e) {
           console.warn(`\u26A0\uFE0F Erreur MAJ display node (r\xE9utilisation):`, e.message);
         }
@@ -52816,7 +54840,10 @@ ${"=".repeat(80)}`);
       console.warn(`\u26A0\uFE0F V\xE9rification variable existante par nodeId \xE9chou\xE9e:`, e.message);
     }
     let newVariable;
-    if (_reusingExistingVariable && _existingVariableForReuse) {
+    if (cachedVariable) {
+      console.log(`\u267B\uFE0F [COPY-VAR] R\xE9utilisation de variable du cache: ${cachedVariable.id} pour cr\xE9er display node`);
+      newVariable = cachedVariable;
+    } else if (_reusingExistingVariable && _existingVariableForReuse) {
       console.log(`\u267B\uFE0F [COPY-VAR] Utilisation de variable existante: ${_existingVariableForReuse.id}`);
       newVariable = _existingVariableForReuse;
     } else {
@@ -52828,7 +54855,7 @@ ${"=".repeat(80)}`);
       console.log(`   displayName: ${originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName}`);
       console.log(`   sourceRef: ${newSourceRef}`);
       console.log(`   sourceType: ${originalVar.sourceType}`);
-      newVariable = await prisma68.treeBranchLeafNodeVariable.create({
+      newVariable = await prisma69.treeBranchLeafNodeVariable.create({
         data: {
           id: newVarId,
           nodeId: finalNodeId2,
@@ -52855,7 +54882,7 @@ ${"=".repeat(80)}`);
     console.log(`   nodeId: ${newVariable.nodeId}`);
     console.log(`   exposedKey: ${newVariable.exposedKey}`);
     console.log(`   \u{1F4CD} DEBUG displayName cr\xE9\xE9: "${newVariable.displayName}"`);
-    const verification = await prisma68.treeBranchLeafNodeVariable.findUnique({
+    const verification = await prisma69.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (verification) {
@@ -52864,7 +54891,7 @@ ${"=".repeat(80)}`);
       console.error(`\u274C\u274C\u274C PROBL\xC8ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xE8s cr\xE9ation !`);
     }
     try {
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: finalNodeId2 },
         data: {
           hasData: true,
@@ -52885,12 +54912,12 @@ ${"=".repeat(80)}`);
     }
     if (linkToDisplaySection) {
       try {
-        const originalOwnerNode = await prisma68.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: { parentId: true, treeId: true }
         });
         if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma68.treeBranchLeafNode.findFirst({
+          const displaySection = await prisma69.treeBranchLeafNode.findFirst({
             where: {
               treeId: originalOwnerNode.treeId,
               parentId: originalOwnerNode.parentId,
@@ -52900,7 +54927,7 @@ ${"=".repeat(80)}`);
             select: { id: true }
           });
           if (displaySection) {
-            await addToNodeLinkedField7(prisma68, displaySection.id, "linkedVariableIds", [newVariable.id]);
+            await addToNodeLinkedField8(prisma69, displaySection.id, "linkedVariableIds", [newVariable.id]);
             console.log(`\u2705 Variable li\xE9e \xE0 la section d'affichage ${displaySectionLabel}: ${displaySection.id}`);
           } else {
             console.log(`\u2139\uFE0F Section d'affichage "${displaySectionLabel}" introuvable sous le parent.`);
@@ -52911,7 +54938,7 @@ ${"=".repeat(80)}`);
       }
     } else if (autoCreateDisplayNode) {
       try {
-        await addToNodeLinkedField7(prisma68, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+        await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedVariableIds", [newVariable.id]);
       } catch (e) {
         console.warn(`\u26A0\uFE0F Erreur linkage variable\u2192display node:`, e.message);
       }
@@ -52921,8 +54948,8 @@ ${"=".repeat(80)}`);
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              const cond = await prisma68.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
-              await prisma68.treeBranchLeafNode.update({
+              const cond = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              await prisma69.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
@@ -52931,10 +54958,10 @@ ${"=".repeat(80)}`);
                   condition_description: cond?.description || null
                 }
               });
-              await addToNodeLinkedField7(prisma68, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedConditionIds", [capId]);
             } else if (parsedCap.type === "formula") {
-              const frm = await prisma68.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true, description: true } });
-              await prisma68.treeBranchLeafNode.update({
+              const frm = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              await prisma69.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasFormula: true,
@@ -52943,10 +54970,10 @@ ${"=".repeat(80)}`);
                   formula_description: frm?.description || null
                 }
               });
-              await addToNodeLinkedField7(prisma68, finalNodeId2, "linkedFormulaIds", [capId]);
+              await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedFormulaIds", [capId]);
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma68.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
-              await prisma68.treeBranchLeafNode.update({
+              const tbl = await prisma69.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
+              await prisma69.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
@@ -52956,7 +54983,7 @@ ${"=".repeat(80)}`);
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField7(prisma68, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedTableIds", [capId]);
             }
           }
         }
@@ -52970,30 +54997,30 @@ ${"=".repeat(80)}`);
       if (parsed && parsed.id) {
         try {
           if (capacityType === "formula") {
-            const formula = await prisma68.treeBranchLeafNodeFormula.findUnique({
+            const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (formula) {
-              await addToNodeLinkedField7(prisma68, formula.nodeId, "linkedFormulaIds", [parsed.id]);
+              await addToNodeLinkedField8(prisma69, formula.nodeId, "linkedFormulaIds", [parsed.id]);
               console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour formule ${parsed.id}`);
             }
           } else if (capacityType === "condition") {
-            const condition = await prisma68.treeBranchLeafNodeCondition.findUnique({
+            const condition = await prisma69.treeBranchLeafNodeCondition.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (condition) {
-              await addToNodeLinkedField7(prisma68, condition.nodeId, "linkedConditionIds", [parsed.id]);
+              await addToNodeLinkedField8(prisma69, condition.nodeId, "linkedConditionIds", [parsed.id]);
               console.log(`\u2705 linkedConditionIds mis \xE0 jour pour condition ${parsed.id}`);
             }
           } else if (capacityType === "table") {
-            const table = await prisma68.treeBranchLeafNodeTable.findUnique({
+            const table = await prisma69.treeBranchLeafNodeTable.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (table) {
-              await addToNodeLinkedField7(prisma68, table.nodeId, "linkedTableIds", [parsed.id]);
+              await addToNodeLinkedField8(prisma69, table.nodeId, "linkedTableIds", [parsed.id]);
               console.log(`\u2705 linkedTableIds mis \xE0 jour pour table ${parsed.id}`);
             }
           }
@@ -53012,7 +55039,9 @@ ${"\u2550".repeat(80)}`);
       exposedKey: newExposedKey,
       capacityType,
       sourceRef: newSourceRef,
-      success: true
+      success: true,
+      displayNodeId: finalNodeId2
+      // 🔑 IMPORTANT: Retourner l'ID du display node créé!
     };
   } catch (error) {
     console.error(`\u274C Erreur lors de la copie de la variable:`, error);
@@ -53022,13 +55051,15 @@ ${"\u2550".repeat(80)}`);
       capacityType: null,
       sourceRef: null,
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      displayNodeId: void 0
+      // Pas de display node en cas d'erreur
     };
   }
 }
-async function addToNodeLinkedField7(prisma68, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField8(prisma69, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma68.treeBranchLeafNode.findUnique({
+  const node = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -53038,7 +55069,7 @@ async function addToNodeLinkedField7(prisma68, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -53046,9 +55077,9 @@ async function addToNodeLinkedField7(prisma68, nodeId, field, idsToAdd) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/shared/shared-reference-helpers.ts
 async function applySharedReferencesFromOriginalInternal2(params) {
-  const { prisma: prisma68, nodeId, authCtx: authCtx2 } = params;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx2;
-  const copyRoot = await prisma68.treeBranchLeafNode.findFirst({
+  const { prisma: prisma69, nodeId, authCtx } = params;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
+  const copyRoot = await prisma69.treeBranchLeafNode.findFirst({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
@@ -53056,10 +55087,10 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
     throw new Error("Acc\xE8s non autoris\xE9");
   }
-  const all = await prisma68.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
+  const all = await prisma69.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const nodeVariableIdByNodeId = /* @__PURE__ */ new Map();
   if (all.length > 0) {
-    const nodeVariables = await prisma68.treeBranchLeafNodeVariable.findMany({
+    const nodeVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: all.map((n) => n.id) } },
       select: { nodeId: true, id: true }
     });
@@ -53095,7 +55126,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   }
   if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
   const originalIds = Array.from(originalToCopy.keys());
-  const originals = await prisma68.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
+  const originals = await prisma69.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
   const allRefIds = /* @__PURE__ */ new Set();
   for (const orig of originals) {
     if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
@@ -53114,11 +55145,11 @@ async function applySharedReferencesFromOriginalInternal2(params) {
       }
     }
     chosenSuffix = maxSuffix + 1 || 1;
-    await prisma68.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
+    await prisma69.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
   }
   const refCopyIdByOriginal = /* @__PURE__ */ new Map();
   const desiredIds = Array.from(allRefIds).map((id) => `${id}-${chosenSuffix}`);
-  const existingRefCopies = desiredIds.length > 0 ? await prisma68.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
+  const existingRefCopies = desiredIds.length > 0 ? await prisma69.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
   const existingSet = new Set(existingRefCopies.map((n) => n.id));
   const ensureRefCopy = async (origRefId) => {
     const desiredRootId = `${origRefId}-${chosenSuffix}`;
@@ -53140,7 +55171,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     const origSubtree = subtreeIds.map((id) => byId.get(id)).filter(Boolean);
     const desired = new Set(subtreeIds.map((id) => `${id}-${chosenSuffix}`));
     if (desired.size > 0) {
-      const already = await prisma68.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
+      const already = await prisma69.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
       for (const n of already) desired.delete(n.id);
     }
     const idMap = /* @__PURE__ */ new Map();
@@ -53148,7 +55179,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     for (const orig of origSubtree) {
       const newId = idMap.get(orig.id);
       if (!desired.has(newId)) continue;
-      const newParentId2 = orig.parentId ? idMap.get(orig.parentId) ?? null : null;
+      const newParentId = orig.parentId ? idMap.get(orig.parentId) ?? null : null;
       const toCreate = {
         id: newId,
         treeId: copyRoot.treeId,
@@ -53157,7 +55188,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
         fieldType: orig.fieldType ?? "TEXT",
         label: orig.label,
         description: orig.description,
-        parentId: newParentId2,
+        parentId: newParentId,
         order: orig.order ?? 9999,
         isVisible: orig.isVisible ?? true,
         isActive: orig.isActive ?? true,
@@ -53182,7 +55213,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
         metadata: { ...orig.metadata || {}, copiedFromNodeId: orig.id },
         updatedAt: /* @__PURE__ */ new Date()
       };
-      await prisma68.treeBranchLeafNode.create({ data: toCreate });
+      await prisma69.treeBranchLeafNode.create({ data: toCreate });
       const sourceVariableIds = /* @__PURE__ */ new Set();
       if (Array.isArray(orig.linkedVariableIds)) {
         for (const rawId of orig.linkedVariableIds) {
@@ -53210,7 +55241,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
               originalVarId,
               chosenSuffix,
               newId,
-              prisma68,
+              prisma69,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -53243,7 +55274,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     const mappedSingle = origSingle ? refCopyIdByOriginal.get(origSingle) || `${origSingle}-${chosenSuffix}` : null;
     const finalArray = mappedMultiple.length > 0 ? mappedMultiple : mappedSingle ? [mappedSingle] : [];
     const finalSingle = finalArray.length > 0 ? finalArray[0] : null;
-    updates.push(prisma68.treeBranchLeafNode.update({
+    updates.push(prisma69.treeBranchLeafNode.update({
       where: { id: copyId },
       data: {
         sharedReferenceId: finalSingle,
@@ -53257,1629 +55288,16 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     }));
     applied++;
   }
-  await prisma68.$transaction(updates);
+  await prisma69.$transaction(updates);
   return { success: true, applied, suffix: chosenSuffix };
 }
 
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/shared-helpers.ts
-function getAuthCtx4(req2) {
-  const user = req2 && req2.user || {};
-  const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
-  const role = user.role || user.userRole;
-  const isSuperAdmin2 = Boolean(user.isSuperAdmin || role === "super_admin" || role === "superadmin");
-  const organizationId = user.organizationId || headerOrg || null;
-  return { organizationId, isSuperAdmin: isSuperAdmin2 };
-}
-var uniq2 = (arr) => Array.from(new Set(arr));
-var uuidLikeRef = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var isRealNodeRef = (ref) => {
-  if (!ref) return false;
-  return uuidLikeRef.test(ref) || ref.startsWith("node_") || ref.startsWith("shared-ref-");
-};
-function normalizeRefId2(ref) {
-  if (!ref) return ref;
-  if (ref.startsWith("node-formula:")) return ref.replace(/^node-formula:/, "");
-  return ref;
-}
-function extractNodeIdsFromConditionSet2(conditionSet) {
-  const ids = /* @__PURE__ */ new Set();
-  if (!conditionSet || typeof conditionSet !== "object") return ids;
-  const obj = conditionSet;
-  if (Array.isArray(obj.tokens)) {
-    for (const t of obj.tokens) {
-      const asStr = typeof t === "string" ? t : JSON.stringify(t);
-      const re = /@value\.([a-f0-9-]{36})/gi;
-      let m;
-      while ((m = re.exec(asStr)) !== null) {
-        ids.add(m[1]);
-      }
-    }
-  }
-  if (Array.isArray(obj.branches)) {
-    for (const br of obj.branches) {
-      const b = br;
-      const when = b.when;
-      const scanWhen = (node) => {
-        if (!node) return;
-        const ref = node.ref;
-        if (typeof ref === "string") {
-          const m = /@value\.([a-f0-9-]{36})/i.exec(ref);
-          if (m && m[1]) ids.add(m[1]);
-        }
-        if (node.left && typeof node.left === "object") scanWhen(node.left);
-        if (node.right && typeof node.right === "object") scanWhen(node.right);
-      };
-      scanWhen(when);
-      const actions = b.actions;
-      if (Array.isArray(actions)) {
-        for (const a of actions) {
-          const aa = a;
-          const nodeIds = aa.nodeIds;
-          if (Array.isArray(nodeIds)) {
-            for (const nid of nodeIds) ids.add(normalizeRefId2(nid));
-          }
-        }
-      }
-    }
-  }
-  if (obj.fallback && typeof obj.fallback === "object") {
-    const fb = obj.fallback;
-    const actions = fb.actions;
-    if (Array.isArray(actions)) {
-      for (const a of actions) {
-        const aa = a;
-        const nodeIds = aa.nodeIds;
-        if (Array.isArray(nodeIds)) {
-          for (const nid of nodeIds) ids.add(normalizeRefId2(nid));
-        }
-      }
-    }
-  }
-  const str = JSON.stringify(obj);
-  if (str) {
-    const re = /@value\.([a-f0-9-]{36})/gi;
-    let m;
-    while ((m = re.exec(str)) !== null) ids.add(m[1]);
-  }
-  return ids;
-}
-function extractNodeIdsFromTokens2(tokens2) {
-  const ids = /* @__PURE__ */ new Set();
-  if (!tokens2) return ids;
-  const addFromString = (s) => {
-    let m;
-    const re = /@value\.([A-Za-z0-9_:-]+)/gi;
-    while ((m = re.exec(s)) !== null) ids.add(m[1]);
-  };
-  if (Array.isArray(tokens2)) {
-    for (const t of tokens2) {
-      if (typeof t === "string") addFromString(t);
-      else addFromString(JSON.stringify(t));
-    }
-  } else if (typeof tokens2 === "string") {
-    addFromString(tokens2);
-  } else {
-    addFromString(JSON.stringify(tokens2));
-  }
-  return ids;
-}
-async function getNodeLinkedField3(client, nodeId, field) {
-  const node = await client.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { [field]: true }
-  });
-  return node?.[field] ?? [];
-}
-async function setNodeLinkedField3(client, nodeId, field, values) {
-  try {
-    await client.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: { [field]: { set: uniq2(values) } }
-    });
-  } catch (e) {
-    console.warn("[TreeBranchLeaf API] setNodeLinkedField skipped:", { nodeId, field, error: e.message });
-  }
-}
-async function addToNodeLinkedField8(client, nodeId, field, idsToAdd) {
-  const sanitized2 = idsToAdd?.filter((id) => id && isRealNodeRef(id)) ?? [];
-  if (!sanitized2.length) return;
-  const current = await getNodeLinkedField3(client, nodeId, field);
-  const next = uniq2([...current, ...sanitized2]);
-  await setNodeLinkedField3(client, nodeId, field, next);
-}
-function buildResponseFromColumns2(node) {
-  const appearance = {
-    size: node.appearance_size || "md",
-    width: node.appearance_width || null,
-    variant: node.appearance_variant || null,
-    helpTooltipType: node.text_helpTooltipType || "none",
-    helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
-  };
-  const legacyRepeater = (() => {
-    if (node.metadata && typeof node.metadata === "object" && node.metadata.repeater) {
-      const legacy = node.metadata.repeater;
-      return typeof legacy === "object" && legacy !== null ? legacy : null;
-    }
-    return null;
-  })();
-  const repeater = {
-    templateNodeIds: (() => {
-      if (node.repeater_templateNodeIds) {
-        try {
-          const parsed = JSON.parse(node.repeater_templateNodeIds);
-          console.log("\u2705 [buildResponseFromColumns] repeater_templateNodeIds reconstruit:", parsed);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch (e) {
-          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
-          return [];
-        }
-      }
-      const legacyIds = legacyRepeater?.templateNodeIds;
-      if (Array.isArray(legacyIds)) {
-        return legacyIds;
-      }
-      return [];
-    })(),
-    templateNodeLabels: (() => {
-      if (node.repeater_templateNodeLabels) {
-        try {
-          const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
-          return parsedLabels && typeof parsedLabels === "object" ? parsedLabels : null;
-        } catch (e) {
-          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
-        }
-      }
-      const legacyLabels = legacyRepeater?.templateNodeLabels;
-      if (legacyLabels && typeof legacyLabels === "object") {
-        return legacyLabels;
-      }
-      return null;
-    })(),
-    minItems: node.repeater_minItems ?? legacyRepeater?.minItems ?? 0,
-    maxItems: node.repeater_maxItems ?? legacyRepeater?.maxItems ?? null,
-    addButtonLabel: node.repeater_addButtonLabel || legacyRepeater?.addButtonLabel || null,
-    buttonSize: node.repeater_buttonSize || legacyRepeater?.buttonSize || "middle",
-    buttonWidth: node.repeater_buttonWidth || legacyRepeater?.buttonWidth || "auto",
-    iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false
-  };
-  const appearanceConfig = {
-    size: node.appearance_size || "md",
-    variant: node.appearance_variant || "singleline",
-    placeholder: node.text_placeholder || "",
-    maxLength: node.text_maxLength || 255,
-    mask: node.text_mask || "",
-    regex: node.text_regex || "",
-    helpTooltipType: node.text_helpTooltipType || "none",
-    helpTooltipText: node.text_helpTooltipText || null,
-    helpTooltipImage: node.text_helpTooltipImage || null
-  };
-  const fieldConfig = {
-    text: {
-      placeholder: node.text_placeholder || null,
-      maxLength: node.text_maxLength || null,
-      minLength: node.text_minLength || null,
-      mask: node.text_mask || null,
-      regex: node.text_regex || null,
-      rows: node.text_rows || 3
-    },
-    number: {
-      min: node.number_min || null,
-      max: node.number_max || null,
-      step: node.number_step || 1,
-      decimals: node.number_decimals || 0,
-      prefix: node.number_prefix || null,
-      suffix: node.number_suffix || null,
-      unit: node.number_unit || null,
-      defaultValue: node.number_defaultValue || null
-    },
-    select: {
-      multiple: node.select_multiple || false,
-      searchable: node.select_searchable !== false,
-      allowClear: node.select_allowClear !== false,
-      defaultValue: node.select_defaultValue || null,
-      options: node.select_options || []
-    },
-    bool: {
-      trueLabel: node.bool_trueLabel || null,
-      falseLabel: node.bool_falseLabel || null,
-      defaultValue: node.bool_defaultValue || null
-    },
-    date: {
-      format: node.date_format || "DD/MM/YYYY",
-      showTime: node.date_showTime || false,
-      minDate: node.date_minDate || null,
-      maxDate: node.date_maxDate || null
-    },
-    image: {
-      maxSize: node.image_maxSize || null,
-      ratio: node.image_ratio || null,
-      crop: node.image_crop || false,
-      thumbnails: node.image_thumbnails || null
-    }
-  };
-  Object.keys(fieldConfig).forEach((key2) => {
-    const config = fieldConfig[key2];
-    const hasValues = Object.values(config).some((val) => val !== null && val !== void 0 && val !== false && val !== 0 && val !== "");
-    if (!hasValues) delete fieldConfig[key2];
-  });
-  const cleanedMetadata = {
-    ...node.metadata || {},
-    appearance
-  };
-  if (node.subtabs) {
-    try {
-      const parsed = JSON.parse(node.subtabs);
-      if (Array.isArray(parsed)) {
-        cleanedMetadata.subTabs = parsed;
-        console.log("\u{1F4DD} [buildResponseFromColumns] Reconstruit subTabs depuis colonne subtabs:", parsed);
-      }
-    } catch {
-    }
-  }
-  if (node.subtab !== void 0 && node.subtab !== null) {
-    const rawSubTab = node.subtab;
-    let parsedSubTab = rawSubTab;
-    if (typeof rawSubTab === "string") {
-      const trimmed = rawSubTab.trim();
-      if (trimmed.startsWith("[")) {
-        try {
-          const candidate = JSON.parse(trimmed);
-          if (Array.isArray(candidate)) {
-            parsedSubTab = candidate;
-          }
-        } catch {
-          parsedSubTab = rawSubTab;
-        }
-      } else if (trimmed.includes(",")) {
-        parsedSubTab = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
-      } else {
-        parsedSubTab = trimmed;
-      }
-    }
-    try {
-      cleanedMetadata.subTab = parsedSubTab;
-      console.log("\u{1F4DD} [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:", cleanedMetadata.subTab);
-    } catch {
-    }
-  }
-  if (node.id === "131a7b51-97d5-4f40-8a5a-9359f38939e8") {
-    console.log("\u{1F4DD} [buildResponseFromColumns][Test - liste] node.metadata BRUT:", node.metadata);
-    console.log("\u{1F4DD} [buildResponseFromColumns][Test - liste] cleanedMetadata:", cleanedMetadata);
-    console.log(
-      "\u{1F4DD} [buildResponseFromColumns][Test - liste] metadata.capabilities:",
-      node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : "N/A"
-    );
-  }
-  if (cleanedMetadata && cleanedMetadata.subTabs) {
-    try {
-      console.log("\u{1F4DD} [buildResponseFromColumns] metadata.subTabs present for node", node.id, JSON.stringify(cleanedMetadata.subTabs));
-    } catch {
-    }
-  }
-  const metadataWithRepeater = {
-    ...cleanedMetadata,
-    repeater
-  };
-  if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
-    console.log("\u{1F6A8}\u{1F6A8}\u{1F6A8} [REPEATER NODE FOUND]", {
-      nodeId: node.id,
-      nodeName: node.name,
-      nodeLabel: node.label,
-      nodeType: node.type,
-      parentId: node.parentId,
-      repeaterConfig: repeater
-    });
-  }
-  console.log("\u{1F3AF} [buildResponseFromColumns] metadata.repeater final:", metadataWithRepeater.repeater);
-  const result = {
-    ...node,
-    metadata: metadataWithRepeater,
-    fieldConfig,
-    appearance,
-    appearanceConfig,
-    fieldType: node.fieldType || node.type,
-    fieldSubType: node.fieldSubType || node.subType,
-    text_helpTooltipType: node.text_helpTooltipType,
-    text_helpTooltipText: node.text_helpTooltipText,
-    text_helpTooltipImage: node.text_helpTooltipImage,
-    tables: node.TreeBranchLeafNodeTable || [],
-    sharedReferenceIds: node.sharedReferenceIds || void 0
-  };
-  try {
-    const legacyMetaCaps = node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : void 0;
-    const buildInstances = (raw) => {
-      if (!raw) return void 0;
-      if (typeof raw === "object" && raw !== null) return raw;
-      return void 0;
-    };
-    const capabilities = {
-      data: node.hasData || node.data_activeId || node.data_instances ? {
-        enabled: !!node.hasData,
-        activeId: node.data_activeId || null,
-        instances: buildInstances(node.data_instances) || {},
-        unit: node.data_unit || null,
-        precision: typeof node.data_precision === "number" ? node.data_precision : 2,
-        exposedKey: node.data_exposedKey || null,
-        displayFormat: node.data_displayFormat || null,
-        visibleToUser: node.data_visibleToUser === true
-      } : void 0,
-      formula: node.hasFormula || node.formula_activeId || node.formula_instances ? {
-        enabled: !!node.hasFormula,
-        activeId: node.formula_activeId || null,
-        instances: buildInstances(node.formula_instances) || {},
-        tokens: buildInstances(node.formula_tokens) || void 0,
-        name: node.formula_name || null
-      } : void 0,
-      table: node.hasTable || node.table_activeId || node.table_instances ? {
-        enabled: !!node.hasTable,
-        activeId: node.table_activeId || null,
-        instances: buildInstances(node.table_instances) || {},
-        name: node.table_name || null,
-        meta: buildInstances(node.table_meta) || {},
-        type: node.table_type || "columns",
-        isImported: node.table_isImported === true,
-        importSource: node.table_importSource || null,
-        columns: Array.isArray(node.table_columns) ? node.table_columns : null,
-        rows: Array.isArray(node.table_rows) ? node.table_rows : null
-      } : void 0,
-      select: node.select_options || node.select_defaultValue ? {
-        options: Array.isArray(node.select_options) ? node.select_options : [],
-        allowClear: node.select_allowClear !== false,
-        multiple: node.select_multiple === true,
-        searchable: node.select_searchable !== false,
-        defaultValue: node.select_defaultValue || null
-      } : void 0,
-      number: node.number_min !== void 0 || node.number_max !== void 0 || node.number_defaultValue !== void 0 ? {
-        min: node.number_min ?? null,
-        max: node.number_max ?? null,
-        step: node.number_step ?? 1,
-        decimals: node.number_decimals ?? 0,
-        unit: node.number_unit || null,
-        prefix: node.number_prefix || null,
-        suffix: node.number_suffix || null,
-        defaultValue: node.number_defaultValue || null
-      } : void 0,
-      bool: node.bool_trueLabel || node.bool_falseLabel || node.bool_defaultValue !== void 0 ? {
-        trueLabel: node.bool_trueLabel || null,
-        falseLabel: node.bool_falseLabel || null,
-        defaultValue: node.bool_defaultValue ?? null
-      } : void 0,
-      date: node.date_format || node.date_showTime || node.date_minDate || node.date_maxDate ? {
-        format: node.date_format || "DD/MM/YYYY",
-        showTime: node.date_showTime === true,
-        minDate: node.date_minDate || null,
-        maxDate: node.date_maxDate || null
-      } : void 0,
-      image: node.image_maxSize || node.image_ratio || node.image_crop || node.image_thumbnails ? {
-        maxSize: node.image_maxSize || null,
-        ratio: node.image_ratio || null,
-        crop: node.image_crop === true,
-        thumbnails: node.image_thumbnails || null
-      } : void 0,
-      link: node.link_activeId || node.link_instances ? {
-        enabled: !!node.hasLink,
-        activeId: node.link_activeId || null,
-        instances: buildInstances(node.link_instances) || {},
-        mode: node.link_mode || "JUMP",
-        name: node.link_name || null,
-        carryContext: node.link_carryContext === true,
-        params: buildInstances(node.link_params) || {},
-        targetNodeId: node.link_targetNodeId || null,
-        targetTreeId: node.link_targetTreeId || null
-      } : void 0,
-      markers: node.markers_activeId || node.markers_instances || node.markers_selectedIds ? {
-        enabled: !!node.hasMarkers,
-        activeId: node.markers_activeId || null,
-        instances: buildInstances(node.markers_instances) || {},
-        available: buildInstances(node.markers_available) || {},
-        selectedIds: buildInstances(node.markers_selectedIds) || {}
-      } : void 0,
-      api: node.api_activeId || node.api_instances ? {
-        enabled: !!node.hasAPI,
-        activeId: node.api_activeId || null,
-        instances: buildInstances(node.api_instances) || {},
-        bodyVars: buildInstances(node.api_bodyVars) || {},
-        name: node.api_name || null
-      } : void 0
-    };
-    Object.keys(capabilities).forEach((key2) => {
-      if (capabilities[key2] === void 0) delete capabilities[key2];
-    });
-    let mergedCaps = capabilities;
-    if (legacyMetaCaps && typeof legacyMetaCaps === "object") {
-      mergedCaps = { ...legacyMetaCaps, ...capabilities };
-    }
-    result.capabilities = mergedCaps;
-  } catch (e) {
-    console.error("\u274C [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
-  }
-  if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
-    console.log("\u{1F4CC} [buildResponseFromColumns] OPTION AVEC SHARED REFS:", {
-      nodeId: node.id,
-      label: node.label || node.option_label,
-      type: node.type,
-      sharedReferenceIds: node.sharedReferenceIds
-    });
-  }
-  if (node.text_helpTooltipType && node.text_helpTooltipType !== "none") {
-    console.log("\u{1F525} [buildResponseFromColumns] TOOLTIP TROUV\xC9:", {
-      id: node.id,
-      name: node.name,
-      tooltipType: node.text_helpTooltipType,
-      hasTooltipText: !!node.text_helpTooltipText,
-      hasTooltipImage: !!node.text_helpTooltipImage,
-      textLength: node.text_helpTooltipText?.length || 0,
-      imageLength: node.text_helpTooltipImage?.length || 0
-    });
-  }
-  return result;
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/repeat-context-utils.ts
-var toRecord = (metadata) => {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return {};
-  }
-  return metadata;
-};
-var pickString = (value) => {
-  return typeof value === "string" && value.trim().length ? value : void 0;
-};
-var pickNumericLike = (value) => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim().length) {
-    return value;
-  }
-  return void 0;
-};
-function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
-  const meta = toRecord(carrier.metadata);
-  const repeaterNodeId = pickString(meta.duplicatedFromRepeater) ?? fallback.repeaterNodeId;
-  const templateNodeId = pickString(meta.sourceTemplateId) ?? fallback.templateNodeId;
-  const duplicatedFromNodeId = pickString(meta.copiedFromNodeId) ?? templateNodeId ?? fallback.templateNodeId ?? carrier.id;
-  const scopeId = pickString(meta.repeatScopeId) ?? pickString(meta.repeaterScopeId) ?? fallback.scopeId ?? repeaterNodeId;
-  const suffix = pickNumericLike(meta.copySuffix) ?? pickNumericLike(meta.suffixNum) ?? pickNumericLike(meta.suffix) ?? fallback.suffix;
-  if (!repeaterNodeId && !scopeId) {
-    return void 0;
-  }
-  return {
-    repeaterNodeId,
-    templateNodeId: templateNodeId ?? carrier.id,
-    duplicatedFromNodeId,
-    scopeId,
-    suffix,
-    mode: "repeater"
-  };
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
-async function deepCopyNodeInternal2(prisma68, req2, nodeId, opts) {
-  const {
-    targetParentId,
-    suffixNum,
-    preserveSharedReferences = false,
-    forcedSuffix,
-    repeatContext,
-    cloneExternalParents = false
-  } = opts || {};
-  const replaceIdsInTokens = (tokens2, idMap2) => {
-    console.log(`
-[\u{1F525} REPLACE-TOKENS] Called with ${Array.isArray(tokens2) ? tokens2.length : typeof tokens2} tokens`);
-    if (!tokens2) return tokens2;
-    const mapOne = (s) => s.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => {
-      if (idMap2.has(p1)) {
-        const newId = idMap2.get(p1);
-        console.log(`[DEBUG-REPLACE] \u2705 Trouv\xE9 dans idMap: @value.${p1} \u2192 @value.${newId}`);
-        return `@value.${newId}`;
-      }
-      const suffixedId = appendSuffix(p1);
-      console.log(`[DEBUG-REPLACE] \u2705 R\xE9f\xE9rence externe suffix\xE9e: @value.${p1} \u2192 @value.${suffixedId}`);
-      return `@value.${suffixedId}`;
-    });
-    if (Array.isArray(tokens2)) return tokens2.map((t) => typeof t === "string" ? mapOne(t) : t);
-    if (typeof tokens2 === "string") return mapOne(tokens2);
-    try {
-      const asStr = JSON.stringify(tokens2);
-      const replaced = mapOne(asStr);
-      return JSON.parse(replaced);
-    } catch {
-      return tokens2;
-    }
-  };
-  const replaceIdsInConditionSet = (conditionSet, idMap2, formulaIdMap2) => {
-    if (!conditionSet) return conditionSet;
-    try {
-      let str = JSON.stringify(conditionSet);
-      str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => {
-        if (idMap2.has(p1)) {
-          const newId = idMap2.get(p1);
-          console.log(`[DEBUG-CONDITION] \u2705 @value.${p1} \u2192 @value.${newId}`);
-          return `@value.${newId}`;
-        }
-        const suffixedId = appendSuffix(p1);
-        console.log(`[DEBUG-CONDITION] \u2705 @value.${p1} \u2192 @value.${suffixedId} (auto-suffix externe)`);
-        return `@value.${suffixedId}`;
-      });
-      str = str.replace(/node-formula:([a-f0-9-]{36})/gi, (_m, p1) => {
-        const newId = formulaIdMap2.get(p1) || p1;
-        console.log(`[DEBUG-CONDITION] Formula: node-formula:${p1} \u2192 node-formula:${newId}`);
-        return `node-formula:${newId}`;
-      });
-      str = str.replace(/("nodeIds":\s*\["?)([a-zA-Z0-9_:-]+)/g, (_m, prefix, nodeId2) => {
-        if (nodeId2.includes(":")) {
-          return _m;
-        }
-        if (nodeId2.startsWith("shared-ref-") || !nodeId2.includes("-")) {
-          if (idMap2.has(nodeId2)) {
-            const newId = idMap2.get(nodeId2);
-            console.log(`[DEBUG-CONDITION] NodeId in actions: ${nodeId2} \u2192 ${newId}`);
-            return prefix + newId;
-          }
-          const suffixedId = appendSuffix(nodeId2);
-          console.log(`[DEBUG-CONDITION] NodeId in actions (auto-suffix): ${nodeId2} \u2192 ${suffixedId}`);
-          return prefix + suffixedId;
-        }
-        return _m;
-      });
-      return JSON.parse(str);
-    } catch {
-      return conditionSet;
-    }
-  };
-  const source = await prisma68.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    include: { TreeBranchLeafTree: { select: { organizationId: true } } }
-  });
-  if (!source) {
-    throw new Error("N\u0153ud source introuvable");
-  }
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx4(req2);
-  if (!isSuperAdmin2 && organizationId && source.TreeBranchLeafTree?.organizationId !== organizationId) {
-    throw new Error("Acc\xE8s non autoris\xE9 \xE0 cet arbre");
-  }
-  const sanitizedForcedSuffix = (() => {
-    if (forcedSuffix === void 0 || forcedSuffix === null) return "";
-    const token = `${forcedSuffix}`.trim();
-    return token;
-  })();
-  console.log(`\u{1F50D} [DEBUG-DEEP-COPY] nodeId: ${nodeId}, forcedSuffix: ${forcedSuffix}, suffixNum: ${suffixNum}`);
-  let copySuffixNum = typeof forcedSuffix === "number" && Number.isFinite(forcedSuffix) ? forcedSuffix : suffixNum ?? null;
-  console.log(`\u{1F50D} [DEBUG-DEEP-COPY] copySuffixNum initial: ${copySuffixNum}`);
-  if (!sanitizedForcedSuffix) {
-    if (suffixNum != null && Number.isFinite(suffixNum)) {
-      console.log(`\u2705 [DEBUG-DEEP-COPY] SuffixNum fourni explicitement: ${suffixNum} - UTILISATION DIRECTE`);
-      copySuffixNum = suffixNum;
-    } else if (copySuffixNum != null && Number.isFinite(copySuffixNum)) {
-      console.log(`\u2705 [DEBUG-DEEP-COPY] CopySuffixNum valide: ${copySuffixNum} - UTILISATION DIRECTE`);
-    } else {
-      console.log(`\u{1F504} [DEBUG-DEEP-COPY] Aucun suffix fourni - calcul automatique n\xE9cessaire`);
-      const baseSourceId = source.id.replace(/-\d+(?:-\d+)*$/, "");
-      const existingIdsWithSuffix = await prisma68.treeBranchLeafNode.findMany({
-        where: {
-          treeId: source.treeId,
-          id: {
-            startsWith: `${baseSourceId}-`
-            // Exclure les suffixes composés (on cherche juste -1, -2, -3, pas -1-1)
-          }
-        },
-        select: { id: true }
-      });
-      let maxSuffix = 0;
-      for (const rec of existingIdsWithSuffix) {
-        const rest = rec.id.slice(baseSourceId.length + 1);
-        if (/^\d+$/.test(rest)) {
-          const num = Number(rest);
-          if (Number.isFinite(num) && num > maxSuffix) maxSuffix = num;
-        }
-      }
-      copySuffixNum = maxSuffix + 1;
-    }
-    console.log(`\u{1F3AF} [DEBUG-DEEP-COPY] copySuffixNum final: ${copySuffixNum}`);
-  }
-  const suffixToken = sanitizedForcedSuffix || `${copySuffixNum}`;
-  const computedLabelSuffix = `-${suffixToken}`;
-  const suffixPattern = new RegExp(`-${suffixToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
-  const numericSuffixPattern = /-\d+$/;
-  const hasCurrentSuffix = (value) => suffixPattern.test(value);
-  const hasAnySuffix = (value) => hasCurrentSuffix(value) || numericSuffixPattern.test(value);
-  const ensureSuffix2 = (value) => {
-    if (!value) return value;
-    if (hasCurrentSuffix(value)) return value;
-    if (hasAnySuffix(value)) return value;
-    return `${value}-${suffixToken}`;
-  };
-  const buildParentSuffix = (value) => {
-    if (!value) return value ?? null;
-    const base = value.replace(/-\d+$/, "");
-    return `${base}-${suffixToken}`;
-  };
-  const appendSuffix = (value) => `${value}-${suffixToken}`;
-  const normalizeLabelWithSuffix = (value) => {
-    if (!value) return value;
-    const base = value.replace(/-\d+(?:-\d+)*$/, "");
-    if (hasCurrentSuffix(value)) return `${base}-${suffixToken}`;
-    return `${base}-${suffixToken}`;
-  };
-  const metadataCopySuffix = Number.isFinite(Number(suffixToken)) ? Number(suffixToken) : suffixToken;
-  const derivedRepeatContext = repeatContext ?? deriveRepeatContextFromMetadata(source, { suffix: suffixToken });
-  const normalizedRepeatContext = derivedRepeatContext ? {
-    ...derivedRepeatContext,
-    suffix: derivedRepeatContext.suffix ?? suffixToken
-  } : void 0;
-  const allNodes = await prisma68.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
-  const byId = new Map(allNodes.map((n) => [n.id, n]));
-  const existingNodeIds = new Set(byId.keys());
-  const childrenByParent = /* @__PURE__ */ new Map();
-  for (const n of allNodes) {
-    if (!n.parentId) continue;
-    const arr = childrenByParent.get(n.parentId) || [];
-    arr.push(n.id);
-    childrenByParent.set(n.parentId, arr);
-  }
-  const toCopy = /* @__PURE__ */ new Set();
-  const queue = [source.id];
-  while (queue.length) {
-    const cur = queue.shift();
-    if (toCopy.has(cur)) continue;
-    toCopy.add(cur);
-    const children = childrenByParent.get(cur) || [];
-    for (const c of children) queue.push(c);
-  }
-  const idMap = /* @__PURE__ */ new Map();
-  for (const oldId of toCopy) {
-    const candidateId = appendSuffix(oldId);
-    idMap.set(oldId, candidateId);
-  }
-  const formulaIdMap = /* @__PURE__ */ new Map();
-  const conditionIdMap = /* @__PURE__ */ new Map();
-  const tableIdMap2 = /* @__PURE__ */ new Map();
-  const displayNodeIds = [];
-  const directVariableIdByNodeId = /* @__PURE__ */ new Map();
-  if (toCopy.size > 0) {
-    const nodeVariables = await prisma68.treeBranchLeafNodeVariable.findMany({
-      where: { nodeId: { in: Array.from(toCopy) } },
-      select: { nodeId: true, id: true }
-    });
-    for (const variable of nodeVariables) {
-      if (variable.nodeId && variable.id) {
-        directVariableIdByNodeId.set(variable.nodeId, variable.id);
-      }
-    }
-  }
-  const buildCreationOrder = () => {
-    const edges = /* @__PURE__ */ new Map();
-    const indegree = /* @__PURE__ */ new Map();
-    const ensureNode = (id) => {
-      if (!edges.has(id)) edges.set(id, /* @__PURE__ */ new Set());
-      if (!indegree.has(id)) indegree.set(id, 0);
-    };
-    for (const id of toCopy) ensureNode(id);
-    for (const id of toCopy) {
-      const n = byId.get(id);
-      if (n?.parentId && toCopy.has(n.parentId)) {
-        const from = n.parentId;
-        const to = id;
-        const set = edges.get(from);
-        if (!set.has(to)) {
-          set.add(to);
-          indegree.set(to, (indegree.get(to) || 0) + 1);
-        }
-      }
-    }
-    const localQueue = [];
-    const zeroIndegreeNodes = [];
-    for (const [id, deg] of indegree.entries()) if (deg === 0) zeroIndegreeNodes.push(id);
-    zeroIndegreeNodes.sort((a, b) => {
-      const nodeA = byId.get(a);
-      const nodeB = byId.get(b);
-      const orderA = nodeA?.order ?? 0;
-      const orderB = nodeB?.order ?? 0;
-      return orderA - orderB;
-    });
-    localQueue.push(...zeroIndegreeNodes);
-    const ordered = [];
-    while (localQueue.length) {
-      const id = localQueue.shift();
-      ordered.push(id);
-      const nextNodes = [];
-      for (const next of edges.get(id) || []) {
-        const d = (indegree.get(next) || 0) - 1;
-        indegree.set(next, d);
-        if (d === 0) nextNodes.push(next);
-      }
-      nextNodes.sort((a, b) => {
-        const nodeA = byId.get(a);
-        const nodeB = byId.get(b);
-        const orderA = nodeA?.order ?? 0;
-        const orderB = nodeB?.order ?? 0;
-        return orderA - orderB;
-      });
-      localQueue.push(...nextNodes);
-    }
-    if (ordered.length !== toCopy.size) {
-      const remaining = new Set(Array.from(toCopy).filter((id) => !ordered.includes(id)));
-      const depth = /* @__PURE__ */ new Map();
-      const getDepth = (id) => {
-        if (depth.has(id)) return depth.get(id);
-        const n = byId.get(id);
-        if (!n || !n.parentId || !toCopy.has(n.parentId)) {
-          depth.set(id, 0);
-          return 0;
-        }
-        const d = getDepth(n.parentId) + 1;
-        depth.set(id, d);
-        return d;
-      };
-      const rest = Array.from(remaining).sort((a, b) => getDepth(a) - getDepth(b));
-      return [...ordered, ...rest];
-    }
-    return ordered;
-  };
-  const nodesToCreate = buildCreationOrder();
-  const createdNodes = [];
-  const shouldCloneExternalParents = cloneExternalParents === true;
-  const resolvedExternalParents = /* @__PURE__ */ new Map();
-  const buildCloneData = (oldNode, newId, newParentId2) => ({
-    id: newId,
-    treeId: oldNode.treeId,
-    type: oldNode.type,
-    subType: oldNode.subType,
-    fieldType: oldNode.fieldType,
-    label: normalizeLabelWithSuffix(oldNode.label) ?? oldNode.label,
-    description: oldNode.description,
-    parentId: newParentId2,
-    order: oldNode.order,
-    isVisible: oldNode.isVisible,
-    isActive: oldNode.isActive,
-    isRequired: oldNode.isRequired,
-    isMultiple: oldNode.isMultiple,
-    hasData: oldNode.hasData,
-    hasFormula: oldNode.hasFormula,
-    hasCondition: oldNode.hasCondition,
-    hasTable: oldNode.hasTable,
-    hasAPI: oldNode.hasAPI,
-    hasLink: oldNode.hasLink,
-    hasMarkers: oldNode.hasMarkers,
-    defaultValue: oldNode.defaultValue,
-    calculatedValue: oldNode.hasFormula || oldNode.hasCondition || oldNode.hasTable ? null : oldNode.calculatedValue,
-    appearance_size: oldNode.appearance_size,
-    appearance_variant: oldNode.appearance_variant,
-    appearance_width: oldNode.appearance_width,
-    text_placeholder: oldNode.text_placeholder,
-    text_maxLength: oldNode.text_maxLength,
-    text_minLength: oldNode.text_minLength,
-    text_mask: oldNode.text_mask,
-    text_regex: oldNode.text_regex,
-    text_rows: oldNode.text_rows,
-    text_helpTooltipType: oldNode.text_helpTooltipType,
-    text_helpTooltipText: oldNode.text_helpTooltipText,
-    text_helpTooltipImage: oldNode.text_helpTooltipImage,
-    number_min: oldNode.number_min,
-    number_max: oldNode.number_max,
-    number_step: oldNode.number_step,
-    number_decimals: oldNode.number_decimals,
-    number_prefix: oldNode.number_prefix,
-    number_suffix: oldNode.number_suffix,
-    number_unit: oldNode.number_unit,
-    number_defaultValue: oldNode.number_defaultValue,
-    select_multiple: oldNode.select_multiple,
-    select_searchable: oldNode.select_searchable,
-    select_allowClear: oldNode.select_allowClear,
-    select_source: oldNode.select_source ? (() => {
-      const sourceValue = oldNode.select_source;
-      if (sourceValue.startsWith("@table.")) {
-        const tableId = sourceValue.substring(7);
-        const newTableId = idMap.get(tableId);
-        if (newTableId) {
-          return `@table.${newTableId}`;
-        }
-      }
-      return sourceValue;
-    })() : oldNode.select_source,
-    select_defaultValue: oldNode.select_defaultValue,
-    select_options: oldNode.select_options ? (() => {
-      try {
-        const str = JSON.stringify(oldNode.select_options);
-        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
-        replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
-        return JSON.parse(replaced);
-      } catch {
-        return oldNode.select_options;
-      }
-    })() : oldNode.select_options,
-    bool_trueLabel: oldNode.bool_trueLabel,
-    bool_falseLabel: oldNode.bool_falseLabel,
-    bool_defaultValue: oldNode.bool_defaultValue,
-    date_format: oldNode.date_format,
-    date_minDate: oldNode.date_minDate,
-    date_maxDate: oldNode.date_maxDate,
-    date_showTime: oldNode.date_showTime,
-    image_maxSize: oldNode.image_maxSize,
-    image_ratio: oldNode.image_ratio,
-    image_crop: oldNode.image_crop,
-    image_thumbnails: oldNode.image_thumbnails ? (() => {
-      try {
-        const str = JSON.stringify(oldNode.image_thumbnails);
-        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
-        replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
-        return JSON.parse(replaced);
-      } catch {
-        return oldNode.image_thumbnails;
-      }
-    })() : oldNode.image_thumbnails,
-    link_activeId: oldNode.link_activeId,
-    link_carryContext: oldNode.link_carryContext,
-    link_mode: oldNode.link_mode,
-    link_name: oldNode.link_name,
-    link_params: oldNode.link_params ? (() => {
-      try {
-        const str = JSON.stringify(oldNode.link_params);
-        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => idMap.get(uuid) || uuid);
-        replaced = replaced.replace(/(node_[a-z0-9_-]+)/gi, (id) => idMap.get(id) || id);
-        return JSON.parse(replaced);
-      } catch {
-        return oldNode.link_params;
-      }
-    })() : oldNode.link_params,
-    link_targetNodeId: oldNode.link_targetNodeId && idMap.has(oldNode.link_targetNodeId) ? idMap.get(oldNode.link_targetNodeId) : oldNode.link_targetNodeId,
-    link_targetTreeId: oldNode.link_targetTreeId,
-    table_activeId: oldNode.table_activeId ? ensureSuffix2(oldNode.table_activeId) : null,
-    table_instances: (() => {
-      if (!oldNode.table_instances) {
-        return oldNode.table_instances;
-      }
-      let rawInstances;
-      try {
-        if (typeof oldNode.table_instances === "string") {
-          rawInstances = JSON.parse(oldNode.table_instances);
-        } else if (typeof oldNode.table_instances === "object") {
-          rawInstances = JSON.parse(JSON.stringify(oldNode.table_instances));
-        } else {
-          return oldNode.table_instances;
-        }
-      } catch {
-        return oldNode.table_instances;
-      }
-      const updatedInstances = {};
-      for (const [key2, value] of Object.entries(rawInstances)) {
-        const hasSuffixRegex = /-\d+$/;
-        const newKey = hasSuffixRegex.test(key2) ? key2 : appendSuffix(key2);
-        if (value && typeof value === "object") {
-          const tableInstanceObj = value;
-          const updatedObj = { ...tableInstanceObj };
-          if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === "string") {
-            const oldTableId = tableInstanceObj.tableId;
-            updatedObj.tableId = hasSuffixRegex.test(oldTableId) ? oldTableId : appendSuffix(oldTableId);
-          }
-          updatedInstances[newKey] = updatedObj;
-        } else {
-          updatedInstances[newKey] = value;
-        }
-      }
-      return updatedInstances;
-    })(),
-    table_name: oldNode.table_name,
-    // ✅ FIX: Mapper les IDs du template repeater vers leurs copies suffixées
-    repeater_templateNodeIds: (() => {
-      if (normalizedRepeatContext) return null;
-      if (!oldNode.repeater_templateNodeIds) return oldNode.repeater_templateNodeIds;
-      try {
-        const parsed = typeof oldNode.repeater_templateNodeIds === "string" ? JSON.parse(oldNode.repeater_templateNodeIds) : oldNode.repeater_templateNodeIds;
-        if (Array.isArray(parsed)) {
-          const mapped = parsed.map((tid) => idMap.get(tid) || tid);
-          return JSON.stringify(mapped);
-        }
-      } catch {
-      }
-      return oldNode.repeater_templateNodeIds;
-    })(),
-    repeater_templateNodeLabels: oldNode.repeater_templateNodeLabels,
-    repeater_minItems: oldNode.repeater_minItems,
-    repeater_maxItems: oldNode.repeater_maxItems,
-    repeater_addButtonLabel: oldNode.repeater_addButtonLabel,
-    repeater_buttonSize: oldNode.repeater_buttonSize,
-    repeater_buttonWidth: oldNode.repeater_buttonWidth,
-    repeater_iconOnly: oldNode.repeater_iconOnly,
-    metadata: (() => {
-      const origMeta = typeof oldNode.metadata === "object" ? oldNode.metadata : {};
-      const newMeta = { ...origMeta, copiedFromNodeId: oldNode.id, copySuffix: metadataCopySuffix };
-      if (normalizedRepeatContext && newMeta.repeater) {
-        delete newMeta.repeater;
-      }
-      return newMeta;
-    })(),
-    // 🔧 TRAITER LE fieldConfig: suffix les références aux nodes
-    fieldConfig: (() => {
-      if (!oldNode.fieldConfig) {
-        return oldNode.fieldConfig;
-      }
-      try {
-        const str = JSON.stringify(oldNode.fieldConfig);
-        let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => {
-          const mapped = idMap.get(uuid);
-          if (mapped) {
-            console.log(`[fieldConfig] UUID remapp\xE9: ${uuid} \u2192 ${mapped}`);
-            return mapped;
-          }
-          if (!uuid.match(/-\d+$/)) {
-            console.log(`[fieldConfig] UUID suffix\xE9: ${uuid} \u2192 ${uuid}-${suffixNum}`);
-            return `${uuid}-${suffixNum}`;
-          }
-          return uuid;
-        });
-        return JSON.parse(replaced);
-      } catch {
-        console.warn("[fieldConfig] Erreur traitement fieldConfig, copie tel quel");
-        return oldNode.fieldConfig;
-      }
-    })(),
-    isSharedReference: preserveSharedReferences ? oldNode.isSharedReference : false,
-    sharedReferenceId: preserveSharedReferences ? oldNode.sharedReferenceId : null,
-    sharedReferenceIds: preserveSharedReferences ? oldNode.sharedReferenceIds : [],
-    sharedReferenceName: preserveSharedReferences ? oldNode.sharedReferenceName : null,
-    sharedReferenceDescription: preserveSharedReferences ? oldNode.sharedReferenceDescription : null,
-    linkedFormulaIds: Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [],
-    linkedConditionIds: Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [],
-    linkedTableIds: Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds.map((id) => ensureSuffix2(id) || id) : [],
-    linkedVariableIds: Array.isArray(oldNode.linkedVariableIds) ? oldNode.linkedVariableIds : [],
-    updatedAt: /* @__PURE__ */ new Date()
-  });
-  const ensureExternalParentChain = async (parentId) => {
-    if (!parentId) {
-      return parentId ?? null;
-    }
-    const cloneParentNodeChain = async (originalParentId, clonedParentId) => {
-      const parentNode = byId.get(originalParentId);
-      if (!parentNode) {
-        resolvedExternalParents.set(originalParentId, originalParentId ?? null);
-        return originalParentId ?? null;
-      }
-      if (!shouldCloneExternalParents && parentNode.type === "section") {
-        console.log(`\u23ED\uFE0F [deep-copy] Skipping section clone: "${parentNode.label}" (shouldCloneExternalParents=false)`);
-        resolvedExternalParents.set(originalParentId, originalParentId ?? null);
-        return originalParentId ?? null;
-      }
-      const parentOfParentId = await ensureExternalParentChain(parentNode.parentId ?? null);
-      const parentCloneData = buildCloneData(parentNode, clonedParentId, parentOfParentId);
-      await prisma68.treeBranchLeafNode.create({ data: parentCloneData });
-      createdNodes.push({ oldId: originalParentId, newId: clonedParentId });
-      existingNodeIds.add(clonedParentId);
-      resolvedExternalParents.set(originalParentId, clonedParentId);
-      idMap.set(originalParentId, clonedParentId);
-      return clonedParentId;
-    };
-    if (!shouldCloneExternalParents) {
-      const suffixedParentId2 = buildParentSuffix(parentId);
-      if (suffixedParentId2 && existingNodeIds.has(suffixedParentId2)) {
-        resolvedExternalParents.set(parentId, suffixedParentId2);
-        idMap.set(parentId, suffixedParentId2);
-        return suffixedParentId2;
-      }
-      const resolvedId = parentId ?? null;
-      resolvedExternalParents.set(parentId, resolvedId);
-      return resolvedId;
-    }
-    if (resolvedExternalParents.has(parentId)) {
-      const resolvedId = resolvedExternalParents.get(parentId);
-      if (resolvedId) {
-        idMap.set(parentId, resolvedId);
-      }
-      return resolvedId;
-    }
-    if (toCopy.has(parentId)) {
-      const mappedId = idMap.get(parentId);
-      resolvedExternalParents.set(parentId, mappedId);
-      idMap.set(parentId, mappedId);
-      return mappedId;
-    }
-    const suffixedParentId = buildParentSuffix(parentId);
-    if (!suffixedParentId) {
-      resolvedExternalParents.set(parentId, parentId ?? null);
-      return parentId ?? null;
-    }
-    if (existingNodeIds.has(suffixedParentId)) {
-      resolvedExternalParents.set(parentId, suffixedParentId);
-      idMap.set(parentId, suffixedParentId);
-      return suffixedParentId;
-    }
-    return cloneParentNodeChain(parentId, suffixedParentId);
-  };
-  const resolveParentId = async (oldNode, isRoot) => {
-    if (oldNode.parentId && toCopy.has(oldNode.parentId)) {
-      return idMap.get(oldNode.parentId);
-    }
-    if (isRoot && targetParentId !== void 0) {
-      return targetParentId ?? null;
-    }
-    return ensureExternalParentChain(oldNode.parentId);
-  };
-  for (const oldId of nodesToCreate) {
-    const oldNode = byId.get(oldId);
-    const newId = idMap.get(oldId);
-    const isRoot = oldId === source.id;
-    const newParentId2 = await resolveParentId(oldNode, isRoot);
-    const cloneData = buildCloneData(oldNode, newId, newParentId2);
-    await prisma68.treeBranchLeafNode.create({ data: cloneData });
-    createdNodes.push({ oldId, newId, newParentId: newParentId2 });
-    existingNodeIds.add(newId);
-    if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
-      displayNodeIds.push(newId);
-      console.log(`[DEEP-COPY] \u{1F4CA} Node ${newId} ajout\xE9 \xE0 displayNodeIds (linkedTableIds: ${cloneData.linkedTableIds.length})`);
-    }
-  }
-  for (const { oldId, newId, newParentId: newParentId2 } of createdNodes) {
-    const oldNode = byId.get(oldId);
-    const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
-    console.log(`[DEBUG] Processing node ${oldId}, linkedFormulaIds order: ${JSON.stringify(linkedFormulaIdOrder)}`);
-    const formulas = await prisma68.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
-    console.log(`[DEBUG] Found ${formulas.length} formulas for node ${oldId}`);
-    const formulaMap = new Map(formulas.map((f) => [f.id, f]));
-    const sortedFormulas = [];
-    const validLinkedIds = [];
-    for (const formulaId of linkedFormulaIdOrder) {
-      const formula = formulaMap.get(formulaId);
-      if (formula) {
-        sortedFormulas.push(formula);
-        validLinkedIds.push(formulaId);
-        formulaMap.delete(formulaId);
-        console.log(`[DEBUG] Added formula ${formula.id} (${formula.name}) at position ${sortedFormulas.length - 1}`);
-      } else {
-        console.warn(`[DEBUG] \u26A0\uFE0F  Formula ID ${formulaId} in linkedFormulaIds not found - skipping`);
-      }
-    }
-    const unlinkedFormulas = Array.from(formulaMap.values());
-    const allFormulas = [...sortedFormulas, ...unlinkedFormulas];
-    console.log(`[DEBUG] Final formula order: ${allFormulas.map((f) => f.id).join(", ")}`);
-    const newLinkedFormulaIds = [];
-    for (const f of allFormulas) {
-      try {
-        const formulaResult = await copyFormulaCapacity2(
-          f.id,
-          newId,
-          suffixNum,
-          prisma68,
-          {
-            formulaIdMap,
-            nodeIdMap: idMap
-          }
-        );
-        if (formulaResult.success) {
-          const newFormulaId = formulaResult.newFormulaId;
-          formulaIdMap.set(f.id, newFormulaId);
-          if (validLinkedIds.includes(f.id)) {
-            newLinkedFormulaIds.push(newFormulaId);
-            console.log(`[DEBUG] Linked formula (centralis\xE9): ${newFormulaId} added at position ${newLinkedFormulaIds.length - 1}`);
-          }
-          if (normalizedRepeatContext) {
-            const referencedNodeIds = Array.from(extractNodeIdsFromTokens2(formulaResult.tokens || f.tokens));
-            logCapacityEvent({
-              ownerNodeId: newId,
-              capacityId: newFormulaId,
-              capacityType: "formula",
-              referencedNodeIds,
-              context: normalizedRepeatContext
-            });
-          }
-        } else {
-          console.error(`\u274C Erreur copie formule centralis\xE9e: ${f.id}`);
-        }
-      } catch (error) {
-        console.error(`\u274C Exception copie formule ${f.id}:`, error);
-      }
-    }
-    console.log(`[DEBUG] Final newLinkedFormulaIds: ${JSON.stringify(newLinkedFormulaIds)}`);
-    if (newLinkedFormulaIds.length > 0) {
-      try {
-        await addToNodeLinkedField8(prisma68, newId, "linkedFormulaIds", newLinkedFormulaIds);
-        console.log(`[DEBUG] Successfully added linkedFormulaIds to node ${newId}`);
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:", e.message);
-      }
-    }
-    const conditions = await prisma68.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
-    const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
-    const conditionMap = new Map(conditions.map((c) => [c.id, c]));
-    const sortedConditions = [];
-    const validLinkedConditionIds = [];
-    for (const conditionId of linkedConditionIdOrder) {
-      const condition = conditionMap.get(conditionId);
-      if (condition) {
-        sortedConditions.push(condition);
-        validLinkedConditionIds.push(conditionId);
-        conditionMap.delete(conditionId);
-        console.log(`[DEBUG] Added condition ${condition.id} (${condition.name}) at position ${sortedConditions.length - 1}`);
-      } else {
-        console.warn(`[DEBUG] \u26A0\uFE0F  Condition ID ${conditionId} in linkedConditionIds not found - skipping`);
-      }
-    }
-    const unlinkedConditions = Array.from(conditionMap.values());
-    const allConditions = [...sortedConditions, ...unlinkedConditions];
-    const newLinkedConditionIds = [];
-    for (const c of allConditions) {
-      const newConditionId = appendSuffix(c.id);
-      conditionIdMap.set(c.id, newConditionId);
-      const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap);
-      await prisma68.treeBranchLeafNodeCondition.create({
-        data: {
-          id: newConditionId,
-          nodeId: newId,
-          organizationId: c.organizationId,
-          name: c.name ? `${c.name}${computedLabelSuffix}` : c.name,
-          conditionSet: newSet,
-          description: c.description,
-          isDefault: c.isDefault,
-          order: c.order,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-      if (validLinkedConditionIds.includes(c.id)) {
-        newLinkedConditionIds.push(newConditionId);
-      }
-      if (normalizedRepeatContext) {
-        const referencedNodeIds = Array.from(extractNodeIdsFromConditionSet2(newSet));
-        logCapacityEvent({
-          ownerNodeId: newId,
-          capacityId: newConditionId,
-          capacityType: "condition",
-          referencedNodeIds,
-          context: normalizedRepeatContext
-        });
-      }
-      try {
-        const refs = Array.from(extractNodeIdsFromConditionSet2(newSet));
-        for (const refId of refs) {
-          await addToNodeLinkedField8(prisma68, normalizeRefId2(refId), "linkedConditionIds", [newConditionId]);
-        }
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
-      }
-    }
-    if (newLinkedConditionIds.length > 0) {
-      try {
-        await addToNodeLinkedField8(prisma68, newId, "linkedConditionIds", newLinkedConditionIds);
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds for node:", e.message);
-      }
-    }
-    const tables = await prisma68.treeBranchLeafNodeTable.findMany({
-      where: { nodeId: oldId },
-      include: { tableColumns: true, tableRows: true }
-    });
-    const additionalTableIds = [];
-    if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
-      additionalTableIds.push(source.table_activeId);
-    }
-    const additionalTables = additionalTableIds.length > 0 ? await prisma68.treeBranchLeafNodeTable.findMany({
-      where: { id: { in: additionalTableIds } },
-      include: { tableColumns: true, tableRows: true }
-    }) : [];
-    const linkedTableIdOrder = Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : [];
-    const sortedTables = linkedTableIdOrder.map((id) => [...tables, ...additionalTables].find((t) => t.id === id)).filter((t) => t !== void 0);
-    const unlinkedTables = [...tables, ...additionalTables].filter((t) => !linkedTableIdOrder.includes(t.id));
-    const allTablesToCopy = [...sortedTables, ...unlinkedTables];
-    if (additionalTables.length > 0) {
-      console.log(`[DEEP-COPY] \u{1F4CA} Tables additionnelles trouv\xE9es via table_activeId: ${additionalTables.map((t) => t.id).join(", ")}`);
-    }
-    const newLinkedTableIds = [];
-    for (const t of allTablesToCopy) {
-      const newTableId = appendSuffix(t.id);
-      tableIdMap2.set(t.id, newTableId);
-      const existingTable = await prisma68.treeBranchLeafNodeTable.findUnique({
-        where: { id: newTableId }
-      });
-      if (existingTable) {
-        console.log(`[DEEP-COPY] \u23E9 Table ${newTableId} existe d\xE9j\xE0, skip`);
-        continue;
-      }
-      console.log(`[DEEP-COPY] \u{1F4CA} Copie table: ${t.id} -> ${newTableId} (source nodeId: ${t.nodeId}, target nodeId: ${newId})`);
-      if (linkedTableIdOrder.includes(t.id)) {
-        newLinkedTableIds.push(newTableId);
-      }
-      await prisma68.treeBranchLeafNodeTable.create({
-        data: {
-          id: newTableId,
-          nodeId: newId,
-          organizationId: t.organizationId,
-          name: t.name ? `${t.name}${computedLabelSuffix}` : t.name,
-          description: t.description,
-          type: t.type,
-          rowCount: t.rowCount,
-          columnCount: t.columnCount,
-          // 🔧 TRAITER LE meta: suffix les références aux nodes
-          meta: (() => {
-            if (!t.meta) {
-              return t.meta;
-            }
-            try {
-              const str = JSON.stringify(t.meta);
-              let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => {
-                const mapped = idMap.get(uuid);
-                if (mapped) {
-                  console.log(`[table.meta] UUID remapp\xE9: ${uuid} \u2192 ${mapped}`);
-                  return mapped;
-                }
-                if (!uuid.match(/-\d+$/)) {
-                  console.log(`[table.meta] UUID suffix\xE9: ${uuid} \u2192 ${uuid}-${suffixNum}`);
-                  return `${uuid}-${suffixNum}`;
-                }
-                return uuid;
-              });
-              return JSON.parse(replaced);
-            } catch {
-              console.warn("[table.meta] Erreur traitement meta, copie tel quel");
-              return t.meta;
-            }
-          })(),
-          isDefault: t.isDefault,
-          order: t.order,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date(),
-          lookupDisplayColumns: t.lookupDisplayColumns,
-          lookupSelectColumn: t.lookupSelectColumn,
-          tableColumns: {
-            create: t.tableColumns.map((col) => ({
-              id: appendSuffix(col.id),
-              columnIndex: col.columnIndex,
-              // Suffixer le name SEULEMENT si c'est du texte, pas si c'est numérique
-              name: col.name && /^\d+$/.test(col.name) ? col.name : col.name ? `${col.name}${computedLabelSuffix}` : col.name,
-              type: col.type,
-              width: col.width,
-              format: col.format,
-              metadata: col.metadata
-            }))
-          },
-          tableRows: {
-            create: t.tableRows.map((row) => ({
-              id: appendSuffix(row.id),
-              rowIndex: row.rowIndex,
-              cells: row.cells
-            }))
-          }
-        }
-      });
-      if (normalizedRepeatContext) {
-        logCapacityEvent({
-          ownerNodeId: newId,
-          capacityId: newTableId,
-          capacityType: "table",
-          referencedNodeIds: void 0,
-          context: normalizedRepeatContext
-        });
-      }
-    }
-    if (newLinkedTableIds.length > 0) {
-      try {
-        await addToNodeLinkedField8(prisma68, newId, "linkedTableIds", newLinkedTableIds);
-      } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedTableIds for node:", e.message);
-      }
-    }
-    const originalSelectConfig = await prisma68.treeBranchLeafSelectConfig.findUnique({
-      where: { nodeId: oldId }
-    });
-    if (originalSelectConfig) {
-      const existingCopyConfig = await prisma68.treeBranchLeafSelectConfig.findUnique({
-        where: { nodeId: newId }
-      });
-      if (!existingCopyConfig) {
-        const newTableReference = originalSelectConfig.tableReference ? appendSuffix(originalSelectConfig.tableReference) : null;
-        console.log(`[DEEP-COPY] \u{1F4CA} Duplication SELECT config: ${oldId} -> ${newId} (tableRef: ${newTableReference})`);
-        try {
-          await prisma68.treeBranchLeafSelectConfig.create({
-            data: {
-              id: appendSuffix(originalSelectConfig.id),
-              nodeId: newId,
-              options: originalSelectConfig.options,
-              multiple: originalSelectConfig.multiple,
-              searchable: originalSelectConfig.searchable,
-              allowCustom: originalSelectConfig.allowCustom,
-              maxSelections: originalSelectConfig.maxSelections,
-              optionsSource: originalSelectConfig.optionsSource,
-              apiEndpoint: originalSelectConfig.apiEndpoint,
-              tableReference: newTableReference,
-              dependsOnNodeId: originalSelectConfig.dependsOnNodeId ? idMap.get(originalSelectConfig.dependsOnNodeId) || appendSuffix(originalSelectConfig.dependsOnNodeId) : null,
-              keyColumn: originalSelectConfig.keyColumn ? `${originalSelectConfig.keyColumn}${computedLabelSuffix}` : null,
-              valueColumn: originalSelectConfig.valueColumn ? `${originalSelectConfig.valueColumn}${computedLabelSuffix}` : null,
-              displayColumn: originalSelectConfig.displayColumn ? `${originalSelectConfig.displayColumn}${computedLabelSuffix}` : null,
-              displayRow: originalSelectConfig.displayRow,
-              keyRow: originalSelectConfig.keyRow,
-              valueRow: originalSelectConfig.valueRow,
-              createdAt: /* @__PURE__ */ new Date(),
-              updatedAt: /* @__PURE__ */ new Date()
-            }
-          });
-          console.log(`[DEEP-COPY] \u2705 SELECT config cr\xE9\xE9e pour ${newId}`);
-        } catch (selectConfigErr) {
-          console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur cr\xE9ation SELECT config pour ${newId}:`, selectConfigErr.message);
-        }
-      } else {
-        console.log(`[DEEP-COPY] \u267B\uFE0F SELECT config existe d\xE9j\xE0 pour ${newId}`);
-      }
-    }
-    const originalNumberConfig = await prisma68.treeBranchLeafNumberConfig.findUnique({
-      where: { nodeId: oldId }
-    });
-    if (originalNumberConfig) {
-      const existingCopyNumberConfig = await prisma68.treeBranchLeafNumberConfig.findUnique({
-        where: { nodeId: newId }
-      });
-      if (!existingCopyNumberConfig) {
-        console.log(`[DEEP-COPY] \u{1F522} Duplication NUMBER config: ${oldId} -> ${newId}`);
-        try {
-          await prisma68.treeBranchLeafNumberConfig.create({
-            data: {
-              id: appendSuffix(originalNumberConfig.id),
-              nodeId: newId,
-              min: originalNumberConfig.min,
-              max: originalNumberConfig.max,
-              decimals: originalNumberConfig.decimals,
-              step: originalNumberConfig.step,
-              unit: originalNumberConfig.unit,
-              prefix: originalNumberConfig.prefix
-            }
-          });
-          console.log(`[DEEP-COPY] \u2705 NUMBER config cr\xE9\xE9e pour ${newId}`);
-        } catch (numberConfigErr) {
-          console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur cr\xE9ation NUMBER config pour ${newId}:`, numberConfigErr.message);
-        }
-      }
-    }
-  }
-  const variableCopyCache = /* @__PURE__ */ new Map();
-  for (const oldNodeId of toCopy) {
-    const newNodeId = idMap.get(oldNodeId);
-    const oldNode = byId.get(oldNodeId);
-    const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : []).map((id) => {
-      const mappedId = formulaIdMap.get(id);
-      if (mappedId) return mappedId;
-      const ensured = ensureSuffix2(id);
-      return ensured || appendSuffix(id);
-    }).filter(Boolean);
-    const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : []).map((id) => {
-      const mappedId = conditionIdMap.get(id);
-      if (mappedId) return mappedId;
-      const ensured = ensureSuffix2(id);
-      return ensured || appendSuffix(id);
-    }).filter(Boolean);
-    const newLinkedTableIds = (Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : []).map((id) => {
-      const mappedId = tableIdMap2.get(id);
-      if (mappedId) return mappedId;
-      const ensured = ensureSuffix2(id);
-      return ensured || appendSuffix(id);
-    }).filter(Boolean);
-    const sourceLinkedVariableIds = /* @__PURE__ */ new Set();
-    if (Array.isArray(oldNode.linkedVariableIds)) {
-      for (const rawId of oldNode.linkedVariableIds) {
-        if (typeof rawId === "string") {
-          const normalized = rawId.trim();
-          if (normalized) {
-            sourceLinkedVariableIds.add(normalized);
-          }
-        }
-      }
-    }
-    const directVarIdForNode = directVariableIdByNodeId.get(oldNodeId);
-    if (directVarIdForNode) {
-      sourceLinkedVariableIds.add(directVarIdForNode);
-    }
-    const newLinkedVariableIds = [];
-    const copiedVarsByOwner = /* @__PURE__ */ new Map();
-    if (sourceLinkedVariableIds.size > 0) {
-      for (const linkedVarId of sourceLinkedVariableIds) {
-        const isSharedRef = linkedVarId.startsWith("shared-ref-");
-        if (isSharedRef) {
-          newLinkedVariableIds.push(linkedVarId);
-        } else {
-          try {
-            const copyResult = await copyVariableWithCapacities(
-              linkedVarId,
-              suffixToken,
-              newNodeId,
-              prisma68,
-              {
-                formulaIdMap,
-                conditionIdMap,
-                tableIdMap: tableIdMap2,
-                nodeIdMap: idMap,
-                variableCopyCache,
-                autoCreateDisplayNode: true,
-                displayNodeAlreadyCreated: false,
-                displayParentId: newParentId,
-                isFromRepeaterDuplication: true,
-                repeatContext: normalizedRepeatContext
-              }
-            );
-            if (copyResult.success) {
-              newLinkedVariableIds.push(copyResult.variableId);
-              if (copyResult.displayNodeId) {
-                displayNodeIds.push(copyResult.displayNodeId);
-              }
-              const originalVar = await prisma68.treeBranchLeafNodeVariable.findUnique({
-                where: { id: linkedVarId },
-                select: { nodeId: true }
-              });
-              if (originalVar?.nodeId) {
-                if (!copiedVarsByOwner.has(originalVar.nodeId)) {
-                  copiedVarsByOwner.set(originalVar.nodeId, []);
-                }
-                copiedVarsByOwner.get(originalVar.nodeId).push(copyResult.variableId);
-              }
-            } else {
-              newLinkedVariableIds.push(linkedVarId);
-            }
-          } catch (e) {
-            newLinkedVariableIds.push(linkedVarId);
-          }
-        }
-      }
-    }
-    if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0 || newLinkedVariableIds.length > 0) {
-      try {
-        await prisma68.treeBranchLeafNode.update({
-          where: { id: newNodeId },
-          data: {
-            linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
-            linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
-            linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] },
-            linkedVariableIds: newLinkedVariableIds.length > 0 ? { set: newLinkedVariableIds } : { set: [] }
-          }
-        });
-        if (copiedVarsByOwner.size > 0) {
-          for (const [ownerNodeId, copiedVarIds] of copiedVarsByOwner) {
-            try {
-              const ownerNode = await prisma68.treeBranchLeafNode.findUnique({
-                where: { id: ownerNodeId },
-                select: { linkedVariableIds: true }
-              });
-              if (ownerNode) {
-                const currentVarIds = ownerNode.linkedVariableIds || [];
-                const updatedVarIds = Array.from(/* @__PURE__ */ new Set([...currentVarIds, ...copiedVarIds]));
-                await prisma68.treeBranchLeafNode.update({
-                  where: { id: ownerNodeId },
-                  data: {
-                    linkedVariableIds: { set: updatedVarIds }
-                  }
-                });
-                console.log(`[DEEP-COPY] \u{1F517} N\u0153ud propri\xE9taire ${ownerNodeId} mis \xE0 jour avec ${copiedVarIds.length} variable(s) copi\xE9e(s)`);
-              }
-            } catch (e) {
-              console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur lors de la mise \xE0 jour du n\u0153ud propri\xE9taire ${ownerNodeId}:`, e.message);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("[DEEP-COPY] Erreur lors du UPDATE des linked***", e.message);
-      }
-    }
-  }
-  const rootNewId = idMap.get(source.id);
-  if (displayNodeIds.length > 0) {
-    console.log(`[DEEP-COPY] \u{1F527} Cr\xE9ation variables pour ${displayNodeIds.length} noeuds avec linkedTableIds`);
-    for (const nodeId2 of displayNodeIds) {
-      try {
-        const copiedNode = await prisma68.treeBranchLeafNode.findUnique({
-          where: { id: nodeId2 },
-          select: { id: true, label: true, field_label: true, linkedTableIds: true }
-        });
-        if (!copiedNode || !copiedNode.linkedTableIds || copiedNode.linkedTableIds.length === 0) {
-          continue;
-        }
-        const originalNodeId = nodeId2.replace(/-\d+$/, "");
-        const originalNode = await prisma68.treeBranchLeafNode.findUnique({
-          where: { id: originalNodeId },
-          select: { id: true }
-        });
-        if (!originalNode) {
-          console.warn(`[DEEP-COPY] \u26A0\uFE0F Noeud original ${originalNodeId} non trouv\xE9 pour ${nodeId2}`);
-          continue;
-        }
-        const originalVar = await prisma68.treeBranchLeafNodeVariable.findFirst({
-          where: { nodeId: originalNodeId }
-        });
-        if (!originalVar) {
-          console.warn(`[DEEP-COPY] \u26A0\uFE0F Variable originale non trouv\xE9e pour ${originalNodeId}`);
-          continue;
-        }
-        const newVarId = `${originalVar.id}${suffixToken}`;
-        const newExposedKey = `${originalVar.exposedKey}${suffixToken}`;
-        await prisma68.treeBranchLeafNodeVariable.create({
-          data: {
-            id: newVarId,
-            nodeId: nodeId2,
-            exposedKey: newExposedKey,
-            displayName: copiedNode.label || copiedNode.field_label || originalVar.displayName,
-            displayFormat: originalVar.displayFormat,
-            precision: originalVar.precision,
-            unit: originalVar.unit,
-            visibleToUser: originalVar.visibleToUser,
-            treeId: originalVar.treeId,
-            organizationId: originalVar.organizationId,
-            createdBy: authCtx.userId,
-            updatedBy: authCtx.userId,
-            updatedAt: /* @__PURE__ */ new Date()
-          }
-        });
-        await prisma68.treeBranchLeafNode.update({
-          where: { id: nodeId2 },
-          data: {
-            hasData: true,
-            data_activeId: newVarId,
-            data_exposedKey: newExposedKey,
-            data_displayFormat: originalVar.displayFormat,
-            data_precision: originalVar.precision,
-            data_unit: originalVar.unit,
-            data_visibleToUser: originalVar.visibleToUser
-          }
-        });
-        console.log(`[DEEP-COPY] \u2705 Variable ${newVarId} cr\xE9\xE9e pour noeud ${nodeId2}`);
-      } catch (varError) {
-        console.error(`[DEEP-COPY] \u274C Erreur cr\xE9ation variable pour ${nodeId2}:`, varError);
-      }
-    }
-  }
-  try {
-    const newNodeIds = Array.from(idMap.values());
-    if (newNodeIds.length > 0) {
-      const copiedVariables = await prisma68.treeBranchLeafNodeVariable.findMany({
-        where: { nodeId: { in: newNodeIds } },
-        select: {
-          nodeId: true,
-          id: true,
-          exposedKey: true,
-          displayFormat: true,
-          precision: true,
-          unit: true,
-          visibleToUser: true,
-          displayName: true
-        }
-      });
-      for (const variable of copiedVariables) {
-        try {
-          await prisma68.treeBranchLeafNode.updateMany({
-            where: {
-              id: variable.nodeId,
-              OR: [{ data_activeId: null }, { hasData: false }]
-            },
-            data: {
-              hasData: true,
-              data_activeId: variable.id,
-              data_exposedKey: variable.exposedKey,
-              data_displayFormat: variable.displayFormat,
-              data_precision: variable.precision,
-              data_unit: variable.unit,
-              data_visibleToUser: variable.visibleToUser,
-              label: variable.displayName || void 0,
-              field_label: variable.displayName || void 0
-            }
-          });
-        } catch (syncError) {
-          console.warn("[DEEP-COPY] Post-copy data sync failed for node", variable.nodeId, syncError.message);
-        }
-      }
-    }
-  } catch (syncPassThroughError) {
-    console.warn("[DEEP-COPY] Post-copy data sync skipped:", syncPassThroughError.message);
-  }
-  return {
-    root: { oldId: source.id, newId: rootNewId },
-    idMap: Object.fromEntries(idMap),
-    formulaIdMap: Object.fromEntries(formulaIdMap),
-    conditionIdMap: Object.fromEntries(conditionIdMap),
-    tableIdMap: Object.fromEntries(tableIdMap2),
-    displayNodeIds
-  };
-}
-
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-values-service.ts
-async function resetCalculatedValuesAfterCopy(prisma68, copiedNodeIds) {
+async function resetCalculatedValuesAfterCopy(prisma69, copiedNodeIds) {
   console.log(`\u{1F504} [RESET] === D\xC9BUT RESET DES VALEURS CALCUL\xC9ES ===`);
   console.log(`\u{1F504} [RESET] N\u0153uds \xE0 traiter: ${copiedNodeIds.length}`);
   console.log(`\u{1F504} [RESET] IDs des n\u0153uds:`, copiedNodeIds.slice(0, 3), "...");
-  const nodesWithCapacities = await prisma68.treeBranchLeafNode.findMany({
+  const nodesWithCapacities = await prisma69.treeBranchLeafNode.findMany({
     where: {
       id: { in: copiedNodeIds },
       OR: [
@@ -54901,7 +55319,7 @@ async function resetCalculatedValuesAfterCopy(prisma68, copiedNodeIds) {
   for (const node of nodesWithCapacities) {
     console.log(`  - ${node.label} (${node.id}): calculatedValue=${node.calculatedValue}, hasFormula=${node.hasFormula}, hasCondition=${node.hasCondition}, hasTable=${node.hasTable}`);
   }
-  const result = await prisma68.treeBranchLeafNode.updateMany({
+  const result = await prisma69.treeBranchLeafNode.updateMany({
     where: {
       id: { in: copiedNodeIds },
       OR: [
@@ -54920,7 +55338,7 @@ async function resetCalculatedValuesAfterCopy(prisma68, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/strict-isolation-service.ts
-async function enforceStrictIsolation(prisma68, copiedNodeIds) {
+async function enforceStrictIsolation(prisma69, copiedNodeIds) {
   console.log(`\u{1F6AB} [ISOLATION] === D\xC9BUT ISOLATION STRICTE ===`);
   console.log(`\u{1F6AB} [ISOLATION] Isolation de ${copiedNodeIds.length} n\u0153uds copi\xE9s`);
   const result = {
@@ -54932,7 +55350,7 @@ async function enforceStrictIsolation(prisma68, copiedNodeIds) {
       const changes = [];
       console.log(`
 \u{1F6AB} [ISOLATION] Traitement ${nodeId}...`);
-      const node = await prisma68.treeBranchLeafNode.findUnique({
+      const node = await prisma69.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
           TreeBranchLeafNodeFormula: true,
@@ -54947,7 +55365,7 @@ async function enforceStrictIsolation(prisma68, copiedNodeIds) {
       }
       if (node.hasFormula || node.hasCondition || node.hasTable) {
         if (node.calculatedValue !== null) {
-          await prisma68.treeBranchLeafNode.update({
+          await prisma69.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
@@ -54956,7 +55374,7 @@ async function enforceStrictIsolation(prisma68, copiedNodeIds) {
         }
       }
       if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
-        await prisma68.treeBranchLeafNode.update({
+        await prisma69.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasFormula: false }
         });
@@ -54964,7 +55382,7 @@ async function enforceStrictIsolation(prisma68, copiedNodeIds) {
         console.log(`\u{1F6AB} [ISOLATION] ${node.label}: hasFormula corrig\xE9 \xE0 false`);
       }
       if (node.hasCondition && node.TreeBranchLeafNodeCondition.length === 0) {
-        await prisma68.treeBranchLeafNode.update({
+        await prisma69.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasCondition: false }
         });
@@ -54972,7 +55390,7 @@ async function enforceStrictIsolation(prisma68, copiedNodeIds) {
         console.log(`\u{1F6AB} [ISOLATION] ${node.label}: hasCondition corrig\xE9 \xE0 false`);
       }
       if (node.hasTable && node.TreeBranchLeafNodeTable.length === 0) {
-        await prisma68.treeBranchLeafNode.update({
+        await prisma69.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasTable: false }
         });
@@ -54987,7 +55405,7 @@ async function enforceStrictIsolation(prisma68, copiedNodeIds) {
         calculatedValueReset: true,
         independentCalculation: true
       };
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
@@ -55011,10 +55429,10 @@ async function enforceStrictIsolation(prisma68, copiedNodeIds) {
   console.log(`\u{1F6AB} [ISOLATION] === FIN ISOLATION STRICTE ===`);
   return result;
 }
-async function verifyIsolation(prisma68, copiedNodeIds) {
+async function verifyIsolation(prisma69, copiedNodeIds) {
   console.log(`\u{1F50D} [VERIFY-ISOLATION] V\xE9rification de ${copiedNodeIds.length} n\u0153uds`);
   for (const nodeId of copiedNodeIds) {
-    const node = await prisma68.treeBranchLeafNode.findUnique({
+    const node = await prisma69.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -55044,11 +55462,11 @@ async function verifyIsolation(prisma68, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-independent-calculation.ts
-async function forceIndependentCalculation(prisma68, copiedNodeIds) {
+async function forceIndependentCalculation(prisma69, copiedNodeIds) {
   console.log(`\u{1F504} [FORCE-CALC] === FOR\xC7AGE CALCUL IND\xC9PENDANT ===`);
   for (const nodeId of copiedNodeIds) {
     try {
-      const node = await prisma68.treeBranchLeafNode.findUnique({
+      const node = await prisma69.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
           TreeBranchLeafNodeFormula: true,
@@ -55070,7 +55488,7 @@ async function forceIndependentCalculation(prisma68, copiedNodeIds) {
           requiresFreshCalculation: true,
           calculationInvalidated: Date.now()
         };
-        await prisma68.treeBranchLeafNode.update({
+        await prisma69.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             calculatedValue: null,
@@ -55081,7 +55499,7 @@ async function forceIndependentCalculation(prisma68, copiedNodeIds) {
       } else if (!node.hasFormula && !node.hasCondition && !node.hasTable) {
         console.log(`\u{1F4DD} [FORCE-CALC] ${node.label}: champ de saisie - s'assurer qu'il est vide`);
         if (node.calculatedValue !== null) {
-          await prisma68.treeBranchLeafNode.update({
+          await prisma69.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
@@ -55094,12 +55512,12 @@ async function forceIndependentCalculation(prisma68, copiedNodeIds) {
   }
   console.log(`\u{1F504} [FORCE-CALC] === FIN FOR\xC7AGE CALCUL ===`);
 }
-async function createRecalculationTriggers(prisma68, copiedNodeIds) {
+async function createRecalculationTriggers(prisma69, copiedNodeIds) {
   console.log(`\u{1F3AF} [TRIGGERS] Cr\xE9ation de triggers de recalcul pour ${copiedNodeIds.length} n\u0153uds`);
   const triggerTimestamp = Date.now();
   for (const nodeId of copiedNodeIds) {
     try {
-      const currentMetadata = await prisma68.treeBranchLeafNode.findUnique({
+      const currentMetadata = await prisma69.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { metadata: true, label: true }
       });
@@ -55113,7 +55531,7 @@ async function createRecalculationTriggers(prisma68, copiedNodeIds) {
         independentNode: true,
         noFallbackToOriginal: true
       };
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
@@ -55125,7 +55543,7 @@ async function createRecalculationTriggers(prisma68, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/complete-duplication-fix.ts
-async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, suffix = "-1") {
+async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, suffix = "-1") {
   console.log(`\u{1F504} [COMPLETE-FIX] Correction compl\xE8te: ${originalNodeId} \u2192 ${copiedNodeId}`);
   const result = {
     nodeId: copiedNodeId,
@@ -55140,7 +55558,7 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
     calculatedValueReset: false
   };
   const [originalNode, copiedNode] = await Promise.all([
-    prisma68.treeBranchLeafNode.findUnique({
+    prisma69.treeBranchLeafNode.findUnique({
       where: { id: originalNodeId },
       include: {
         TreeBranchLeafNodeFormula: true,
@@ -55153,7 +55571,7 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
         }
       }
     }),
-    prisma68.treeBranchLeafNode.findUnique({
+    prisma69.treeBranchLeafNode.findUnique({
       where: { id: copiedNodeId }
     })
   ]);
@@ -55169,7 +55587,7 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
   const nodeIdMap = /* @__PURE__ */ new Map();
   const treeId = copiedNode.treeId;
   if (treeId) {
-    const allNodesInTree = await prisma68.treeBranchLeafNode.findMany({
+    const allNodesInTree = await prisma69.treeBranchLeafNode.findMany({
       where: { treeId },
       select: { id: true }
     });
@@ -55188,7 +55606,7 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
         formula.id,
         copiedNodeId,
         suffixNum,
-        prisma68,
+        prisma69,
         { formulaIdMap, nodeIdMap }
       );
       if (formulaResult.success) {
@@ -55203,12 +55621,12 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
   }
   for (const condition of originalNode.TreeBranchLeafNodeCondition) {
     const newConditionId = `${condition.id}${suffix}`;
-    const existingCondition = await prisma68.treeBranchLeafNodeCondition.findUnique({
+    const existingCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({
       where: { id: newConditionId }
     });
     if (!existingCondition) {
       const adaptedConditionSet = adaptReferencesForCopiedNode(condition.conditionSet, suffix);
-      await prisma68.treeBranchLeafNodeCondition.create({
+      await prisma69.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: copiedNodeId,
@@ -55225,11 +55643,11 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
   }
   for (const table of originalNode.TreeBranchLeafNodeTable) {
     const newTableId = `${table.id}${suffix}`;
-    const existingTable = await prisma68.treeBranchLeafNodeTable.findUnique({
+    const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
       where: { id: newTableId }
     });
     if (!existingTable) {
-      await prisma68.treeBranchLeafNodeTable.create({
+      await prisma69.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: copiedNodeId,
@@ -55239,7 +55657,41 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
           type: table.type,
           rowCount: table.rowCount,
           columnCount: table.columnCount,
-          meta: table.meta,
+          // 🔢 COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
+          meta: (() => {
+            if (!table.meta) return table.meta;
+            try {
+              const metaObj = typeof table.meta === "string" ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
+              const suffixNum2 = parseInt(suffix.replace("-", "")) || 1;
+              if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              return metaObj;
+            } catch {
+              return table.meta;
+            }
+          })(),
           isDefault: table.isDefault,
           order: table.order,
           lookupDisplayColumns: table.lookupDisplayColumns,
@@ -55248,12 +55700,13 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
       });
       await Promise.all([
         ...table.tableColumns.map(
-          (col) => prisma68.treeBranchLeafNodeTableColumn.create({
+          (col) => prisma69.treeBranchLeafNodeTableColumn.create({
             data: {
               id: `${col.id}${suffix}`,
               tableId: newTableId,
               columnIndex: col.columnIndex,
-              name: col.name ? `${col.name}${suffix}` : col.name,
+              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
               type: col.type,
               width: col.width,
               format: col.format,
@@ -55262,7 +55715,7 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
           })
         ),
         ...table.tableRows.map(
-          (row) => prisma68.treeBranchLeafNodeTableRow.create({
+          (row) => prisma69.treeBranchLeafNodeTableRow.create({
             data: {
               id: `${row.id}${suffix}`,
               tableId: newTableId,
@@ -55275,19 +55728,19 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
       result.capacitiesFixed.tables++;
     }
   }
-  await fixAssociatedLookups(prisma68, originalNode, copiedNode, suffix);
+  await fixAssociatedLookups(prisma69, originalNode, copiedNode, suffix);
   result.capacitiesFixed.lookups = 1;
   if (copiedNode.fieldConfig) {
     const newFieldConfig = updateFieldConfigReferences(copiedNode.fieldConfig, suffix);
     if (newFieldConfig !== copiedNode.fieldConfig) {
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: copiedNodeId },
         data: { fieldConfig: newFieldConfig }
       });
       result.fieldConfigUpdated = true;
     }
   }
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
@@ -55301,8 +55754,8 @@ async function fixCompleteDuplication(prisma68, originalNodeId, copiedNodeId, su
   result.calculatedValueReset = true;
   return result;
 }
-async function fixAssociatedLookups(prisma68, originalNode, copiedNode, suffix) {
-  const measureNodes = await prisma68.treeBranchLeafNode.findMany({
+async function fixAssociatedLookups(prisma69, originalNode, copiedNode, suffix) {
+  const measureNodes = await prisma69.treeBranchLeafNode.findMany({
     where: {
       AND: [
         { label: { contains: "Mesure" } },
@@ -55328,16 +55781,16 @@ async function fixAssociatedLookups(prisma68, originalNode, copiedNode, suffix) 
       if (lookupTable && lookupTable.tableRows.length === 0) {
         console.log(`   \u{1F517} Correction lookup: ${lookupTable.name}`);
         await Promise.all([
-          prisma68.treeBranchLeafNodeTableColumn.deleteMany({
+          prisma69.treeBranchLeafNodeTableColumn.deleteMany({
             where: { tableId: lookupTable.id }
           }),
-          prisma68.treeBranchLeafNodeTableRow.deleteMany({
+          prisma69.treeBranchLeafNodeTableRow.deleteMany({
             where: { tableId: lookupTable.id }
           })
         ]);
         await Promise.all([
           ...originalTable.tableColumns.map(
-            (col) => prisma68.treeBranchLeafNodeTableColumn.create({
+            (col) => prisma69.treeBranchLeafNodeTableColumn.create({
               data: {
                 id: `${col.id}-lookup${suffix}`,
                 tableId: lookupTable.id,
@@ -55351,7 +55804,7 @@ async function fixAssociatedLookups(prisma68, originalNode, copiedNode, suffix) 
             })
           ),
           ...originalTable.tableRows.map(
-            (row) => prisma68.treeBranchLeafNodeTableRow.create({
+            (row) => prisma69.treeBranchLeafNodeTableRow.create({
               data: {
                 id: `${row.id}-lookup${suffix}`,
                 tableId: lookupTable.id,
@@ -55361,7 +55814,7 @@ async function fixAssociatedLookups(prisma68, originalNode, copiedNode, suffix) 
             })
           )
         ]);
-        await prisma68.treeBranchLeafNodeTable.update({
+        await prisma69.treeBranchLeafNodeTable.update({
           where: { id: lookupTable.id },
           data: {
             rowCount: originalTable.rowCount,
@@ -55413,7 +55866,7 @@ function updateFieldConfigReferences(fieldConfig, suffix) {
   }
   return config;
 }
-async function fixAllCompleteDuplications(prisma68, repeaterNodeId) {
+async function fixAllCompleteDuplications(prisma69, repeaterNodeId) {
   console.log("\u{1F527} [COMPLETE-DUPLICATION-FIX] Correction compl\xE8te de tous les n\u0153uds...");
   const report = {
     totalNodesProcessed: 0,
@@ -55434,7 +55887,7 @@ async function fixAllCompleteDuplications(prisma68, repeaterNodeId) {
         }
       });
     }
-    const copiedNodes = await prisma68.treeBranchLeafNode.findMany({
+    const copiedNodes = await prisma69.treeBranchLeafNode.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -55452,7 +55905,7 @@ async function fixAllCompleteDuplications(prisma68, repeaterNodeId) {
         }
         if (!originalNodeId && node.label) {
           const originalLabel = node.label.replace("-1", "");
-          const originalNode = await prisma68.treeBranchLeafNode.findFirst({
+          const originalNode = await prisma69.treeBranchLeafNode.findFirst({
             where: {
               label: originalLabel,
               id: { not: node.id }
@@ -55470,7 +55923,7 @@ async function fixAllCompleteDuplications(prisma68, repeaterNodeId) {
           });
           continue;
         }
-        const result = await fixCompleteDuplication(prisma68, originalNodeId, node.id, "-1");
+        const result = await fixCompleteDuplication(prisma69, originalNodeId, node.id, "-1");
         report.nodesFixed.push(result);
       } catch (error) {
         report.errors.push({
@@ -55486,7 +55939,7 @@ async function fixAllCompleteDuplications(prisma68, repeaterNodeId) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-recalculation-service.ts
-async function forceNodeRecalculationWithOwnData(prisma68, copiedNodeId) {
+async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
   console.log(`\u{1F504} [FORCE-RECALC] Recalcul forc\xE9: ${copiedNodeId}`);
   const result = {
     nodeId: copiedNodeId,
@@ -55496,7 +55949,7 @@ async function forceNodeRecalculationWithOwnData(prisma68, copiedNodeId) {
     recalculationForced: false,
     referencesUpdated: []
   };
-  const copiedNode = await prisma68.treeBranchLeafNode.findUnique({
+  const copiedNode = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: copiedNodeId },
     include: {
       TreeBranchLeafNodeFormula: true,
@@ -55531,7 +55984,7 @@ async function forceNodeRecalculationWithOwnData(prisma68, copiedNodeId) {
       );
       if (updated) {
         const newTokens = JSON.parse(updatedTokensStr);
-        await prisma68.treeBranchLeafNodeFormula.update({
+        await prisma69.treeBranchLeafNodeFormula.update({
           where: { id: formula.id },
           data: { tokens: newTokens }
         });
@@ -55556,7 +56009,7 @@ async function forceNodeRecalculationWithOwnData(prisma68, copiedNodeId) {
       );
       if (updated) {
         const newConditionSet = JSON.parse(updatedConditionStr);
-        await prisma68.treeBranchLeafNodeCondition.update({
+        await prisma69.treeBranchLeafNodeCondition.update({
           where: { id: condition.id },
           data: { conditionSet: newConditionSet }
         });
@@ -55572,7 +56025,7 @@ async function forceNodeRecalculationWithOwnData(prisma68, copiedNodeId) {
     noFallbackToOriginal: true,
     recalculationReason: "Duplication independence enforcement"
   };
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       calculatedValue: null,
@@ -55586,7 +56039,7 @@ async function forceNodeRecalculationWithOwnData(prisma68, copiedNodeId) {
   console.log(`   \u2705 Recalcul forc\xE9 avec ${result.referencesUpdated.length} r\xE9f\xE9rences mises \xE0 jour`);
   return result;
 }
-async function forceAllNodesRecalculationWithOwnData(prisma68, repeaterNodeId) {
+async function forceAllNodesRecalculationWithOwnData(prisma69, repeaterNodeId) {
   console.log("\u{1F680} [FORCE-RECALC-ALL] Recalcul forc\xE9 de tous les n\u0153uds copi\xE9s...");
   const report = {
     totalNodesProcessed: 0,
@@ -55607,7 +56060,7 @@ async function forceAllNodesRecalculationWithOwnData(prisma68, repeaterNodeId) {
         }
       });
     }
-    const copiedNodes = await prisma68.treeBranchLeafNode.findMany({
+    const copiedNodes = await prisma69.treeBranchLeafNode.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -55621,7 +56074,7 @@ async function forceAllNodesRecalculationWithOwnData(prisma68, repeaterNodeId) {
       try {
         if (node.calculatedValue !== null) {
           console.log(`\u{1F4CA} For\xE7age recalcul: ${node.label} (${node.calculatedValue} \u2192 null)`);
-          const result = await forceNodeRecalculationWithOwnData(prisma68, node.id);
+          const result = await forceNodeRecalculationWithOwnData(prisma69, node.id);
           report.nodesRecalculated.push(result);
         } else {
           console.log(`\u23ED\uFE0F  Skip: ${node.label} (d\xE9j\xE0 null)`);
@@ -55638,10 +56091,10 @@ async function forceAllNodesRecalculationWithOwnData(prisma68, repeaterNodeId) {
   }
   return report;
 }
-async function blockFallbackToOriginalValues(prisma68, copiedNodeIds) {
+async function blockFallbackToOriginalValues(prisma69, copiedNodeIds) {
   console.log(`\u{1F6AB} [BLOCK-FALLBACK] Blocage du fallback pour ${copiedNodeIds.length} n\u0153uds...`);
   for (const nodeId of copiedNodeIds) {
-    const node = await prisma68.treeBranchLeafNode.findUnique({
+    const node = await prisma69.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true }
     });
@@ -55653,7 +56106,7 @@ async function blockFallbackToOriginalValues(prisma68, copiedNodeIds) {
         lastAntiFactbackUpdate: (/* @__PURE__ */ new Date()).toISOString(),
         calculationIsolationLevel: "STRICT"
       };
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: {
           metadata: antiFactbackMetadata,
@@ -55673,7 +56126,7 @@ var TableLookupDuplicationService = class {
    * Duplique complètement les tables TBL et leurs configurations SELECT associées
    * Assure l'indépendance totale des lookups pour les nœuds copiés
    */
-  async duplicateTableLookupSystem(prisma68, originalNodeId, arg) {
+  async duplicateTableLookupSystem(prisma69, originalNodeId, arg) {
     let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
     if (!suffixToken) suffixToken = "-1";
     if (!suffixToken.startsWith("-")) {
@@ -55683,7 +56136,7 @@ var TableLookupDuplicationService = class {
     const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
     console.log(`\u{1F5C2}\uFE0F [TableLookupDuplication] Duplication syst\xE8me table/lookup pour ${originalNodeId} -> ${copiedNodeId}`);
     try {
-      const originalSelectConfigs = await prisma68.treeBranchLeafSelectConfig.findMany({
+      const originalSelectConfigs = await prisma69.treeBranchLeafSelectConfig.findMany({
         where: { nodeId: originalNodeId }
       });
       if (originalSelectConfigs.length === 0) {
@@ -55691,7 +56144,7 @@ var TableLookupDuplicationService = class {
         return;
       }
       for (const selectConfig of originalSelectConfigs) {
-        await this.duplicateTableAndSelectConfig(prisma68, selectConfig, copiedNodeId, suffixToken);
+        await this.duplicateTableAndSelectConfig(prisma69, selectConfig, copiedNodeId, suffixToken);
       }
       console.log(`\u2705 [TableLookupDuplication] Syst\xE8me complet dupliqu\xE9 pour ${copiedNodeId}`);
     } catch (error) {
@@ -55702,42 +56155,99 @@ var TableLookupDuplicationService = class {
   /**
    * Duplique une table TBL et sa configuration SELECT associée
    */
-  async duplicateTableAndSelectConfig(prisma68, originalSelectConfig, copiedNodeId, suffix) {
+  async duplicateTableAndSelectConfig(prisma69, originalSelectConfig, copiedNodeId, suffix) {
     const originalTableId = originalSelectConfig.tableReference;
     const copiedTableId = `${originalTableId}${suffix}`;
     try {
-      const originalTable = await prisma68.tBLMatrix.findUnique({
-        where: { id: originalTableId }
+      const originalTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+        where: { id: originalTableId },
+        include: {
+          tableColumns: true,
+          tableRows: true
+        }
       });
       if (!originalTable) {
         console.log(`   \u26A0\uFE0F Table originale introuvable: ${originalTableId}`);
         return;
       }
-      const existingCopiedTable = await prisma68.tBLMatrix.findUnique({
+      const existingCopiedTable = await prisma69.treeBranchLeafNodeTable.findUnique({
         where: { id: copiedTableId }
       });
       if (!existingCopiedTable) {
         console.log(`   \u{1F4CB} Duplication table: ${originalTable.name} -> ${originalTable.name}${suffix}`);
-        await prisma68.tBLMatrix.create({
+        await prisma69.treeBranchLeafNodeTable.create({
           data: {
             id: copiedTableId,
+            nodeId: copiedNodeId,
             name: originalTable.name + suffix,
             type: originalTable.type,
-            data: originalTable.data,
-            // Copie des données JSON
-            metadata: originalTable.metadata,
-            createdAt: /* @__PURE__ */ new Date(),
-            updatedAt: /* @__PURE__ */ new Date(),
+            description: originalTable.description,
+            // 🔢 COPIE TABLE META: suffixer UUIDs et comparisonColumn
+            meta: (() => {
+              if (!originalTable.meta) return originalTable.meta;
+              try {
+                const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
+                const suffixNum = parseInt(suffix.replace("-", "")) || 1;
+                if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+                  }
+                }
+                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                  }
+                }
+                return metaObj;
+              } catch {
+                return originalTable.meta;
+              }
+            })(),
             organizationId: originalTable.organizationId,
-            sourceFile: originalTable.sourceFile,
-            description: originalTable.description
+            rowCount: originalTable.rowCount,
+            columnCount: originalTable.columnCount,
+            lookupDisplayColumns: originalTable.lookupDisplayColumns,
+            lookupSelectColumn: originalTable.lookupSelectColumn,
+            // Duplication des colonnes
+            // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+            tableColumns: {
+              create: originalTable.tableColumns.map((col) => ({
+                columnIndex: col.columnIndex,
+                name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
+                type: col.type,
+                width: col.width,
+                format: col.format,
+                metadata: col.metadata
+              }))
+            },
+            // Duplication des lignes
+            tableRows: {
+              create: originalTable.tableRows.map((row) => ({
+                rowIndex: row.rowIndex,
+                cells: row.cells
+              }))
+            }
           }
         });
         console.log(`   \u2705 Table copi\xE9e cr\xE9\xE9e: ${copiedTableId}`);
       } else {
         console.log(`   \u267B\uFE0F Table copi\xE9e existe d\xE9j\xE0: ${copiedTableId}`);
       }
-      const existingSelectConfig = await prisma68.treeBranchLeafSelectConfig.findFirst({
+      const existingSelectConfig = await prisma69.treeBranchLeafSelectConfig.findFirst({
         where: {
           nodeId: copiedNodeId,
           tableReference: copiedTableId
@@ -55745,7 +56255,7 @@ var TableLookupDuplicationService = class {
       });
       if (!existingSelectConfig) {
         console.log(`   \u{1F517} Cr\xE9ation config SELECT pour ${copiedNodeId} -> ${copiedTableId}`);
-        await prisma68.treeBranchLeafSelectConfig.create({
+        await prisma69.treeBranchLeafSelectConfig.create({
           data: {
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
@@ -55761,7 +56271,7 @@ var TableLookupDuplicationService = class {
         });
         console.log(`   \u2705 Config SELECT cr\xE9\xE9e pour ${copiedNodeId}`);
         try {
-          const node = await prisma68.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
+          const node = await prisma69.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
           const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
           currentCapabilities.table = currentCapabilities.table || {};
           currentCapabilities.table.enabled = true;
@@ -55770,7 +56280,7 @@ var TableLookupDuplicationService = class {
           currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
           const currentLinked = node?.linkedTableIds || [];
           const newLinked = Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
-          await prisma68.treeBranchLeafNode.update({
+          await prisma69.treeBranchLeafNode.update({
             where: { id: copiedNodeId },
             data: {
               hasTable: true,
@@ -55797,10 +56307,10 @@ var TableLookupDuplicationService = class {
   /**
    * Répare les configurations SELECT manquantes pour les nœuds copiés existants
    */
-  async repairMissingSelectConfigs(prisma68) {
+  async repairMissingSelectConfigs(prisma69) {
     console.log(`\u{1F527} [TableLookupDuplication] R\xE9paration configurations SELECT manquantes`);
     try {
-      const copiedNodes = await prisma68.treeBranchLeafNode.findMany({
+      const copiedNodes = await prisma69.treeBranchLeafNode.findMany({
         where: {
           id: {
             endsWith: "-1"
@@ -55810,12 +56320,12 @@ var TableLookupDuplicationService = class {
       console.log(`   \u{1F4CA} Trouv\xE9 ${copiedNodes.length} n\u0153uds copi\xE9s \xE0 v\xE9rifier`);
       for (const copiedNode of copiedNodes) {
         const originalNodeId = copiedNode.id.replace("-1", "");
-        const copiedSelectConfigs = await prisma68.treeBranchLeafSelectConfig.findMany({
+        const copiedSelectConfigs = await prisma69.treeBranchLeafSelectConfig.findMany({
           where: { nodeId: copiedNode.id }
         });
         if (copiedSelectConfigs.length === 0) {
           console.log(`   \u{1F527} R\xE9paration n\xE9cessaire pour ${copiedNode.id}`);
-          await this.duplicateTableLookupSystem(prisma68, originalNodeId, {
+          await this.duplicateTableLookupSystem(prisma69, originalNodeId, {
             copiedNodeId: copiedNode.id,
             suffixToken: "-1"
           });
@@ -55835,7 +56345,7 @@ function normalizeNodeBase(value) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
 init_operation_interpreter();
-async function recalculateNodeWithOperationInterpreter(prisma68, nodeId, submissionId) {
+async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submissionId) {
   console.log(`\u{1F9EE} [RECALC] Recalculation du n\u0153ud: ${nodeId}`);
   const result = {
     nodeId,
@@ -55847,7 +56357,7 @@ async function recalculateNodeWithOperationInterpreter(prisma68, nodeId, submiss
     recalculationSuccess: false
   };
   try {
-    const node = await prisma68.treeBranchLeafNode.findUnique({
+    const node = await prisma69.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -55903,7 +56413,7 @@ async function recalculateNodeWithOperationInterpreter(prisma68, nodeId, submiss
       const interpretResult = await interpretReference(
         sourceRef,
         submissionId || "",
-        prisma68,
+        prisma69,
         valuesCache,
         0,
         /* @__PURE__ */ new Map(),
@@ -55913,7 +56423,7 @@ async function recalculateNodeWithOperationInterpreter(prisma68, nodeId, submiss
       result.recalculationSuccess = true;
       console.log(`   \u2705 Nouvelle valeur calcul\xE9e: ${result.newValue}`);
       if (result.newValue && result.newValue !== "null" && result.newValue !== "\u2205") {
-        await prisma68.treeBranchLeafNode.update({
+        await prisma69.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             calculatedValue: result.newValue,
@@ -55933,7 +56443,7 @@ async function recalculateNodeWithOperationInterpreter(prisma68, nodeId, submiss
   }
   return result;
 }
-async function recalculateAllCopiedNodesWithOperationInterpreter(prisma68, repeaterNodeId, suffixMarker = "-1") {
+async function recalculateAllCopiedNodesWithOperationInterpreter(prisma69, repeaterNodeId, suffixMarker = "-1") {
   console.log(`
 \u{1F680} [RECALC-REPORT] Recalculation de TOUS les n\u0153uds copi\xE9s du repeater ${repeaterNodeId}`);
   console.log(`   Cherchant n\u0153uds avec suffixe: ${suffixMarker}`);
@@ -55944,7 +56454,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma68, repea
   };
   try {
     console.log(`   \u{1F4CD} Recherche des enfants du repeater: ${repeaterNodeId}`);
-    const repeaterChildren = await prisma68.treeBranchLeafNode.findMany({
+    const repeaterChildren = await prisma69.treeBranchLeafNode.findMany({
       where: {
         parentId: repeaterNodeId
       },
@@ -55960,7 +56470,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma68, repea
       const current = queue.shift();
       if (!current) continue;
       allDescendants.push(current);
-      const children = await prisma68.treeBranchLeafNode.findMany({
+      const children = await prisma69.treeBranchLeafNode.findMany({
         where: {
           parentId: current.id
         },
@@ -55979,7 +56489,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma68, repea
       try {
         console.log(`   \u23F3 Recalculation de: ${node.id} (${node.field_label})`);
         const recalcResult = await recalculateNodeWithOperationInterpreter(
-          prisma68,
+          prisma69,
           node.id
         );
         report.recalculated.push(recalcResult);
@@ -56036,11 +56546,11 @@ var buildMetadataPayload = (metadata, templateNodeIds) => {
   base.repeater = repeaterMeta;
   return base;
 };
-async function syncRepeaterTemplateIds(prisma68, repeaterNodeId, templateNodeIds) {
+async function syncRepeaterTemplateIds(prisma69, repeaterNodeId, templateNodeIds) {
   if (!repeaterNodeId || !templateNodeIds.length) {
     return;
   }
-  const repeater = await prisma68.treeBranchLeafNode.findUnique({
+  const repeater = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: { repeater_templateNodeIds: true, metadata: true }
   });
@@ -56050,15 +56560,15 @@ async function syncRepeaterTemplateIds(prisma68, repeaterNodeId, templateNodeIds
   const columnIds = parseJsonArray2(repeater.repeater_templateNodeIds);
   const metaIds = extractMetaTemplateIds(repeater.metadata);
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-  const allIds = [...columnIds, ...metaIds, ...templateNodeIds].filter((id) => typeof id === "string" && !!id).filter((id) => !hasCopySuffix.test(id));
+  const allIds = [...columnIds, ...metaIds].filter((id) => typeof id === "string" && !!id).filter((id) => !hasCopySuffix.test(id));
   const nextIds = Array.from(new Set(allIds));
-  console.log(`[syncRepeaterTemplateIds] \u{1F50D} Filtered IDs: ${columnIds.length + metaIds.length + templateNodeIds.length} \u2192 ${nextIds.length} (removed suffixed IDs)`);
+  console.log(`[syncRepeaterTemplateIds] \u{1F50D} Filtered IDs: ${columnIds.length} + ${metaIds.length} \u2192 ${nextIds.length} (removed suffixed IDs, ignored incoming templateNodeIds)`);
   const columnChanged = columnIds.length !== nextIds.length || columnIds.some((id, idx) => id !== nextIds[idx]);
   const metadataChanged = metaIds.length !== nextIds.length || metaIds.some((id, idx) => id !== nextIds[idx]);
   if (!columnChanged && !metadataChanged) {
     return;
   }
-  await prisma68.treeBranchLeafNode.update({
+  await prisma69.treeBranchLeafNode.update({
     where: { id: repeaterNodeId },
     data: {
       repeater_templateNodeIds: JSON.stringify(nextIds),
@@ -56068,22 +56578,22 @@ async function syncRepeaterTemplateIds(prisma68, repeaterNodeId, templateNodeIds
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-async function runRepeatExecution(prisma68, req2, execution) {
+async function runRepeatExecution(prisma69, req2, execution) {
   console.log(`\u{1F680}\u{1F680}\u{1F680} [REPEAT-EXECUTOR] *** NOUVEAU REPEAT-EXECUTOR EN MARCHE *** D\xE9but duplication`);
   const { repeaterNodeId, scopeId, plan, blueprint } = execution;
-  const authCtx2 = getAuthCtx4(req2);
-  const repeaterNode = await prisma68.treeBranchLeafNode.findUnique({
+  const authCtx = getAuthCtx(req2);
+  const repeaterNode = await prisma69.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     include: { TreeBranchLeafTree: true }
   });
   if (!repeaterNode) {
     throw new RepeatOperationError(`Repeater node ${repeaterNodeId} not found.`, 404);
   }
-  if (!authCtx2.isSuperAdmin && authCtx2.organizationId && repeaterNode.TreeBranchLeafTree?.organizationId !== authCtx2.organizationId) {
+  if (!authCtx.isSuperAdmin && authCtx.organizationId && repeaterNode.TreeBranchLeafTree?.organizationId !== authCtx.organizationId) {
     throw new RepeatOperationError("Access denied for this repeater tree.", 403);
   }
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-  const rawIds = plan.nodes.length ? Array.from(new Set(plan.nodes.map((nodePlan) => nodePlan.templateNodeId))) : blueprint.templateNodeIds;
+  const rawIds = blueprint.templateNodeIds;
   const templateNodeIds = rawIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id) => !hasCopySuffix.test(id));
   console.log(`\u{1F50D} [REPEAT-EXECUTOR] DEBUG templateNodeIds:`);
   console.log(`   Source: ${plan.nodes.length ? "PLAN" : "BLUEPRINT"}`);
@@ -56105,11 +56615,11 @@ async function runRepeatExecution(prisma68, req2, execution) {
     throw new RepeatOperationError(`Repeater ${repeaterNodeId} does not declare template nodes to duplicate.`, 422);
   }
   const templateNodes = await loadTemplateNodesWithFallback(
-    prisma68,
+    prisma69,
     templateNodeIds,
     repeaterNode.treeId,
-    authCtx2.organizationId,
-    authCtx2.isSuperAdmin
+    authCtx.organizationId,
+    authCtx.isSuperAdmin
   );
   const nodesToDuplicate = templateNodes.filter((node) => node.type !== "section");
   const sectionNodes = templateNodes.filter((node) => node.type === "section");
@@ -56119,12 +56629,26 @@ async function runRepeatExecution(prisma68, req2, execution) {
   console.log(`   - Nodes to duplicate: ${nodesToDuplicate.length} (excluding ${sectionNodes.length} sections)`);
   sectionNodes.forEach((s) => console.log(`   - \u23ED\uFE0F Skipping section: "${s.label}" (${s.id})`));
   const templateById = new Map(nodesToDuplicate.map((node) => [node.id, node]));
+  const templateIdsForSuffix = Array.from(templateById.keys());
+  const existingMax = await computeTemplateCopySuffixMax(
+    prisma69,
+    repeaterNode.treeId,
+    templateIdsForSuffix
+  );
+  console.log("\u{1F4CA} [REPEAT-EXECUTOR] Recalcul suffixes juste avant copie");
+  templateIdsForSuffix.forEach((id) => {
+    console.log(`   - ${id}: max vu=${existingMax.get(id) ?? 0}`);
+  });
   const plannedSuffixByTemplate = /* @__PURE__ */ new Map();
+  for (const templateId of templateIdsForSuffix) {
+    const maxSeen = existingMax.get(templateId) ?? 0;
+    plannedSuffixByTemplate.set(templateId, maxSeen + 1);
+  }
   for (const nodePlan of plan.nodes) {
-    const numericSuffix = coerceSuffix(nodePlan.plannedSuffix);
-    if (numericSuffix !== null) {
-      plannedSuffixByTemplate.set(nodePlan.templateNodeId, numericSuffix);
-    }
+    const planned = coerceSuffix(nodePlan.plannedSuffix);
+    const maxSeen = existingMax.get(nodePlan.templateNodeId) ?? 0;
+    const enforcedNext = Math.max(planned ?? 0, maxSeen + 1);
+    plannedSuffixByTemplate.set(nodePlan.templateNodeId, enforcedNext);
   }
   const duplicatedSummaries = [];
   const duplicatedNodeIds = /* @__PURE__ */ new Set();
@@ -56135,10 +56659,8 @@ async function runRepeatExecution(prisma68, req2, execution) {
   const globalConditionIdMap = /* @__PURE__ */ new Map();
   const globalTableIdMap = /* @__PURE__ */ new Map();
   const globalVariableCopyCache = /* @__PURE__ */ new Map();
-  for (const nodePlan of plan.nodes) {
-    let template;
+  for (const template of nodesToDuplicate) {
     try {
-      template = templateById.get(nodePlan.templateNodeId);
       if (!template) continue;
       const plannedSuffix = plannedSuffixByTemplate.get(template.id);
       const baseContext = {
@@ -56159,7 +56681,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
           options.suffixNum = forcedSuffix;
         }
         try {
-          const result = await deepCopyNodeInternal2(prisma68, req2, template.id, options);
+          const result = await deepCopyNodeInternal(prisma69, req2, template.id, options);
           return { result, appliedSuffix: forcedSuffix };
         } catch (error) {
           if (forcedSuffix !== void 0 && isUniqueConstraintError(error)) {
@@ -56174,7 +56696,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
       };
       const { result: copyResult, appliedSuffix } = await attemptCopy(plannedSuffix);
       const newRootId = copyResult.root.newId;
-      const created = await prisma68.treeBranchLeafNode.findUnique({
+      const created = await prisma69.treeBranchLeafNode.findUnique({
         where: { id: newRootId }
       });
       if (!created) {
@@ -56183,6 +56705,8 @@ async function runRepeatExecution(prisma68, req2, execution) {
       const createdMetadata = created.metadata && typeof created.metadata === "object" ? created.metadata : {};
       const resolvedSuffix = coerceSuffix(createdMetadata.copySuffix) ?? extractSuffixFromId2(created.id) ?? appliedSuffix ?? null;
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
+      console.log(`\u{1F522} [REPEAT-EXECUTOR] Suffix appliqu\xE9 pour template ${template.id}:`);
+      console.log(`   plannedSuffix=${plannedSuffix}, appliedSuffix=${appliedSuffix}, copySuffix(meta)=${createdMetadata.copySuffix}, idSuffix=${extractSuffixFromId2(created.id)}, effective=${effectiveSuffix}`);
       const updatedMetadata = {
         ...createdMetadata,
         sourceTemplateId: template.id,
@@ -56192,7 +56716,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
         copySuffix: effectiveSuffix,
         repeatScopeId: scopeId
       };
-      await prisma68.treeBranchLeafNode.update({
+      await prisma69.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
           metadata: updatedMetadata
@@ -56205,6 +56729,10 @@ async function runRepeatExecution(prisma68, req2, execution) {
         parentId: created.parentId,
         sourceTemplateId: template.id
       });
+      console.log(`\u2705 [REPEAT-EXECUTOR] N\u0153ud copi\xE9 cr\xE9\xE9 dans la base :`);
+      console.log(`   ID: ${created.id}`);
+      console.log(`   Label: ${created.label}`);
+      console.log(`   Template source: ${template.id}`);
       duplicatedNodeIds.add(created.id);
       originalNodeIdByCopyId.set(created.id, template.id);
       const plannedRootId = `${template.id}-${effectiveSuffix}`;
@@ -56244,9 +56772,9 @@ async function runRepeatExecution(prisma68, req2, execution) {
       }
       try {
         await applySharedReferencesFromOriginalInternal2({
-          prisma: prisma68,
+          prisma: prisma69,
           nodeId: newRootId,
-          authCtx: authCtx2
+          authCtx
         });
       } catch (sharedErr) {
         console.warn("[repeat-executor] Failed to apply shared references", sharedErr);
@@ -56258,7 +56786,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
           tableIdMap: new Map(Object.entries(copyResult.tableIdMap || {}))
         };
         await copySelectorTablesAfterNodeCopy(
-          prisma68,
+          prisma69,
           newRootId,
           template.id,
           selectorOptions,
@@ -56289,7 +56817,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
 \u{1F504} [REPEAT-EXECUTOR] ITERATION BOUCLE VARIABLE - variablePlan:`, JSON.stringify(variablePlan));
     try {
       let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
-      const templateVar = await prisma68.treeBranchLeafNodeVariable.findUnique({
+      const templateVar = await prisma69.treeBranchLeafNodeVariable.findUnique({
         where: { id: templateVariableId },
         select: { displayName: true }
       });
@@ -56321,7 +56849,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
         templateVariableId,
         plannedSuffix,
         targetNodeId,
-        prisma68,
+        prisma69,
         {
           autoCreateDisplayNode: true,
           isFromRepeaterDuplication: true,
@@ -56373,7 +56901,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
   console.log(`
 \u{1F525}\u{1F525}\u{1F525} [REPEAT-EXECUTOR] COPIE DES VARIABLES - FIN (sortie de boucle) \u{1F525}\u{1F525}\u{1F525}`);
   try {
-    await syncRepeaterTemplateIds(prisma68, repeaterNodeId, templateNodeIds);
+    await syncRepeaterTemplateIds(prisma69, repeaterNodeId, templateNodeIds);
   } catch (syncErr) {
     console.warn("[repeat-executor] Unable to sync repeater template IDs", syncErr);
   }
@@ -56381,7 +56909,7 @@ async function runRepeatExecution(prisma68, req2, execution) {
     console.log(`\u{1F6AB} [REPEAT-EXECUTOR] ISOLATION STRICTE pour ${duplicatedNodeIds.size} n\u0153uds dupliqu\xE9s`);
     try {
       console.log(`\u{1F527} [REPEAT-EXECUTOR] CORRECTION COMPL\xC8TE de toutes les duplications...`);
-      const completeDuplicationReport = await fixAllCompleteDuplications(prisma68, repeaterNodeId);
+      const completeDuplicationReport = await fixAllCompleteDuplications(prisma69, repeaterNodeId);
       console.log(`\u{1F527} [REPEAT-EXECUTOR] Duplications compl\xE8tement corrig\xE9es:`);
       console.log(`  - N\u0153uds trait\xE9s: ${completeDuplicationReport.totalNodesProcessed}`);
       console.log(`  - N\u0153uds corrig\xE9s: ${completeDuplicationReport.nodesFixed.length}`);
@@ -56394,41 +56922,41 @@ async function runRepeatExecution(prisma68, req2, execution) {
         const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
         if (!suffixToken) continue;
         console.log(`\u{1F5C2}\uFE0F [REPEAT-EXECUTOR] Duplication table/lookup pour ${originalNodeId} -> ${nodeId} (suffix ${suffixToken})`);
-        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma68, originalNodeId, {
+        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma69, originalNodeId, {
           copiedNodeId: nodeId,
           suffixToken
         });
       }
-      await reassignCopiedNodesToDuplicatedParents(prisma68, duplicatedNodeIds, originalNodeIdByCopyId);
+      await reassignCopiedNodesToDuplicatedParents(prisma69, duplicatedNodeIds, originalNodeIdByCopyId);
       const isolationResult = await enforceStrictIsolation(
-        prisma68,
+        prisma69,
         Array.from(duplicatedNodeIds)
       );
       console.log(`\u{1F6AB} [REPEAT-EXECUTOR] Isolation termin\xE9e:`);
       console.log(`  - N\u0153uds isol\xE9s: ${isolationResult.isolatedNodes.length}`);
       console.log(`  - Erreurs: ${isolationResult.errors.length}`);
-      await verifyIsolation(prisma68, Array.from(duplicatedNodeIds));
+      await verifyIsolation(prisma69, Array.from(duplicatedNodeIds));
       const resetCount = await resetCalculatedValuesAfterCopy(
-        prisma68,
+        prisma69,
         Array.from(duplicatedNodeIds)
       );
       console.log(`\u2705 [REPEAT-EXECUTOR] ${resetCount} valeurs calcul\xE9es finalement remises \xE0 null`);
-      await forceIndependentCalculation(prisma68, Array.from(duplicatedNodeIds));
-      await createRecalculationTriggers(prisma68, Array.from(duplicatedNodeIds));
+      await forceIndependentCalculation(prisma69, Array.from(duplicatedNodeIds));
+      await createRecalculationTriggers(prisma69, Array.from(duplicatedNodeIds));
       console.log(`\u{1F680} [REPEAT-EXECUTOR] FOR\xC7AGE RECALCUL avec donn\xE9es propres...`);
-      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma68, repeaterNodeId);
+      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma69, repeaterNodeId);
       console.log(`\u{1F680} [REPEAT-EXECUTOR] Recalculs forc\xE9s:`);
       console.log(`  - N\u0153uds trait\xE9s: ${forceRecalcReport.totalNodesProcessed}`);
       console.log(`  - N\u0153uds recalcul\xE9s: ${forceRecalcReport.nodesRecalculated.length}`);
       console.log(`  - Erreurs: ${forceRecalcReport.errors.length}`);
-      await blockFallbackToOriginalValues(prisma68, Array.from(duplicatedNodeIds));
+      await blockFallbackToOriginalValues(prisma69, Array.from(duplicatedNodeIds));
       console.log(`\u{1F389} [REPEAT-EXECUTOR] ISOLATION STRICTE TERMIN\xC9E - Les champs copi\xE9s sont maintenant 100% ind\xE9pendants`);
       console.log(`\u{1F4DD} [REPEAT-EXECUTOR] Les champs de donn\xE9es d'affichage -1 doivent maintenant calculer avec leurs propres donn\xE9es`);
       console.log(`\u{1F6AB} [REPEAT-EXECUTOR] FALLBACK D\xC9FINITIVEMENT BLOQU\xC9 - Impossible de retomber sur les valeurs originales`);
       console.log(`
 \u{1F9EE} [REPEAT-EXECUTOR] RECALCUL AVEC OPERATION INTERPRETER - Calcul des vraies valeurs...`);
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
-        prisma68,
+        prisma69,
         repeaterNodeId,
         "-1"
       );
@@ -56447,53 +56975,70 @@ async function runRepeatExecution(prisma68, req2, execution) {
   }
   let nodesPayload = [];
   if (duplicatedNodeIds.size > 0) {
-    const nodes = await prisma68.treeBranchLeafNode.findMany({
+    const nodes = await prisma69.treeBranchLeafNode.findMany({
       where: {
         treeId: repeaterNode.treeId,
         id: { in: Array.from(duplicatedNodeIds) }
       }
     });
-    nodesPayload = nodes.map(buildResponseFromColumns2);
+    nodesPayload = nodes.map(buildResponseFromColumns);
   }
   return {
     duplicated: duplicatedSummaries,
     nodes: nodesPayload,
-    count: duplicatedSummaries.length
+    count: duplicatedSummaries.length,
+    debug: {
+      templateNodeIds,
+      nodesToDuplicateIds: nodesToDuplicate.map((n) => n.id),
+      sectionIds: sectionNodes.map((n) => n.id),
+      templateCount: templateNodeIds.length,
+      nodesToDuplicateCount: nodesToDuplicate.length,
+      sectionCount: sectionNodes.length
+    }
   };
 }
-async function loadTemplateNodesWithFallback(prisma68, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
+async function loadTemplateNodesWithFallback(prisma69, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
   if (!templateNodeIds.length) {
     throw new RepeatOperationError("Repeater does not declare template nodes to duplicate.", 422);
   }
-  const scoped = await prisma68.treeBranchLeafNode.findMany({
+  const scoped = await prisma69.treeBranchLeafNode.findMany({
     where: {
       id: { in: templateNodeIds },
       treeId: repeaterTreeId
     }
   });
-  if (scoped.length) {
-    return scoped;
-  }
-  const crossTree = await prisma68.treeBranchLeafNode.findMany({
-    where: {
-      id: { in: templateNodeIds }
-    },
-    include: {
-      TreeBranchLeafTree: {
-        select: { organizationId: true }
+  const foundIds = new Set(scoped.map((n) => n.id));
+  const missingIds = templateNodeIds.filter((id) => !foundIds.has(id));
+  let crossTree = [];
+  if (missingIds.length) {
+    crossTree = await prisma69.treeBranchLeafNode.findMany({
+      where: { id: { in: missingIds } },
+      include: {
+        TreeBranchLeafTree: { select: { organizationId: true } }
+      }
+    });
+    if (!crossTree.length) {
+      if (!scoped.length) {
+        throw new RepeatOperationError("No template nodes could be loaded for this repeater.", 404);
       }
     }
-  });
-  if (!crossTree.length) {
-    throw new RepeatOperationError("No template nodes could be loaded for this repeater.", 404);
-  }
-  if (!isSuperAdmin2 && organizationId) {
-    const unauthorized = crossTree.find((node) => node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId);
-    if (unauthorized) {
-      throw new RepeatOperationError("Access denied to template library for this repeater.", 403);
+    if (!isSuperAdmin2 && organizationId) {
+      const unauthorized = crossTree.find(
+        (node) => node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId
+      );
+      if (unauthorized) {
+        throw new RepeatOperationError("Access denied to template library for this repeater.", 403);
+      }
     }
   }
-  return crossTree.map(({ TreeBranchLeafTree, ...rest }) => rest);
+  const merged = [
+    ...scoped,
+    ...crossTree.map(({ TreeBranchLeafTree, ...rest }) => rest)
+  ];
+  if (!merged.length) {
+    throw new RepeatOperationError("No template nodes could be loaded for this repeater.", 404);
+  }
+  return merged;
 }
 function coerceSuffix(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -56531,12 +57076,12 @@ function normalizeNodeBase2(value) {
 function isUniqueConstraintError(error) {
   return error instanceof import_client69.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
-async function reassignCopiedNodesToDuplicatedParents(prisma68, copiedNodeIds, originalNodeIdByCopyId) {
+async function reassignCopiedNodesToDuplicatedParents(prisma69, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {
     return;
   }
   const copyIds = Array.from(copiedNodeIds);
-  const copies = await prisma68.treeBranchLeafNode.findMany({
+  const copies = await prisma69.treeBranchLeafNode.findMany({
     where: { id: { in: copyIds } },
     select: {
       id: true,
@@ -56555,7 +57100,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma68, copiedNodeIds, o
   if (!originalIds.length) {
     return;
   }
-  const originalNodes = await prisma68.treeBranchLeafNode.findMany({
+  const originalNodes = await prisma69.treeBranchLeafNode.findMany({
     where: { id: { in: originalIds } },
     select: { id: true, parentId: true }
   });
@@ -56593,7 +57138,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma68, copiedNodeIds, o
   if (!reassignmentTargets.length) {
     return;
   }
-  const existingParents = await prisma68.treeBranchLeafNode.findMany({
+  const existingParents = await prisma69.treeBranchLeafNode.findMany({
     where: { id: { in: Array.from(parentIdsToCheck) } },
     select: { id: true }
   });
@@ -56604,7 +57149,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma68, copiedNodeIds, o
       continue;
     }
     updates.push(
-      prisma68.treeBranchLeafNode.update({
+      prisma69.treeBranchLeafNode.update({
         where: { id: target.nodeId },
         data: { parentId: target.targetParentId }
       })
@@ -56613,7 +57158,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma68, copiedNodeIds, o
   if (!updates.length) {
     return;
   }
-  await prisma68.$transaction(updates);
+  await prisma69.$transaction(updates);
   console.log(`\u{1F9ED} [REPEAT-EXECUTOR] Parents r\xE9align\xE9s pour ${updates.length} copie(s).`);
 }
 function getCopySuffixToken(nodeId, metadata) {
@@ -56653,14 +57198,15 @@ function normalizeMetadata(metadata) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-function createRepeatRouter(prisma68) {
+function createRepeatRouter(prisma69) {
   const router83 = (0, import_express85.Router)();
+  const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
   router83.use(authenticateToken);
   router83.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
-      const result = await planRepeatDuplication(prisma68, repeaterNodeId, {
+      const result = await planRepeatDuplication(prisma69, repeaterNodeId, {
         suffix: body2.suffix,
         includeTotals: body2.includeTotals,
         targetParentId: body2.targetParentId,
@@ -56691,18 +57237,36 @@ function createRepeatRouter(prisma68) {
   router83.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
-    console.log(`[repeat-route] \u{1F680} POST execute called for repeater: ${repeaterNodeId}`);
+    console.log(`
+
+\u{1F525}\u{1F525}\u{1F525} [repeat-route] BOUTON AJOUTER CLIQU\xC9 !`);
+    console.log(`[repeat-route] RepeaterNodeId: ${repeaterNodeId}`);
     console.log(`[repeat-route] Body:`, JSON.stringify(body2));
     try {
+      const fs9 = require("fs");
+      const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+      fs9.appendFileSync("repeat-execute-calls.log", `${timestamp} - Repeater: ${repeaterNodeId}
+`);
+    } catch (e) {
+      console.error("[repeat-route] Failed to write log file:", e);
+    }
+    if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
+      return res.status(409).json({
+        error: "Repeat execution already in progress for this repeater.",
+        details: "Another request is currently duplicating this repeater. Please retry in a moment."
+      });
+    }
+    inFlightExecuteByRepeater.add(repeaterNodeId);
+    try {
       console.log(`[repeat-route] Calling executeRepeatDuplication...`);
-      const executionPlan = await executeRepeatDuplication(prisma68, repeaterNodeId, {
+      const executionPlan = await executeRepeatDuplication(prisma69, repeaterNodeId, {
         suffix: body2.suffix,
         includeTotals: body2.includeTotals,
         targetParentId: body2.targetParentId,
         scopeId: body2.scopeId
       });
       const executionSummary = await runRepeatExecution(
-        prisma68,
+        prisma69,
         req2,
         executionPlan
       );
@@ -56716,7 +57280,8 @@ function createRepeatRouter(prisma68) {
         blueprint: executionPlan.blueprint,
         duplicated: executionSummary.duplicated,
         nodes: executionSummary.nodes,
-        count: executionSummary.count
+        count: executionSummary.count,
+        debug: executionSummary.debug
       });
     } catch (error) {
       if (error instanceof RepeatOperationError) {
@@ -56731,6 +57296,8 @@ function createRepeatRouter(prisma68) {
         error: "Failed to execute repeat duplication.",
         details: error instanceof Error ? error.message : String(error)
       });
+    } finally {
+      inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
   return router83;
@@ -56970,7 +57537,7 @@ async function renderWebsite(req2, res) {
 }
 
 // src/middleware/websiteDetection.ts
-var prisma66 = new import_client70.PrismaClient();
+var prisma67 = new import_client70.PrismaClient();
 var CRM_DOMAINS = [
   "app.2thier.be",
   "api.2thier.be",
@@ -56992,7 +57559,7 @@ async function detectWebsite(req2, res, next) {
     }
     const cleanDomain = hostname.replace(/^www\./, "");
     console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
-    const website = await prisma66.webSite.findFirst({
+    const website = await prisma67.webSite.findFirst({
       where: {
         OR: [
           { domain: cleanDomain },
@@ -57206,11 +57773,11 @@ var inputSanitization = (req2, res, next) => {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts
 var import_client71 = require("@prisma/client");
-var prisma67 = new import_client71.PrismaClient();
+var prisma68 = new import_client71.PrismaClient();
 async function syncVariableSourceRefs() {
   try {
     console.log("\n\u{1F504} [SYNC HOOK] Synchronisation des sourceRef...");
-    const nodes = await prisma67.treeBranchLeafNode.findMany({
+    const nodes = await prisma68.treeBranchLeafNode.findMany({
       where: {
         data_instances: { not: null }
       },
@@ -57241,7 +57808,7 @@ async function syncVariableSourceRefs() {
       if (jsonSourceRef === dbSourceRef) {
         continue;
       }
-      await prisma67.treeBranchLeafNodeVariable.update({
+      await prisma68.treeBranchLeafNodeVariable.update({
         where: { id: node.TreeBranchLeafNodeVariable.id },
         data: { sourceRef: jsonSourceRef }
       });
@@ -57266,7 +57833,7 @@ async function initializeTreeBranchLeafSync() {
   } catch (error) {
     console.error("\u274C [INIT SYNC] Erreur:", error);
   } finally {
-    await prisma67.$disconnect();
+    await prisma68.$disconnect();
   }
 }
 
