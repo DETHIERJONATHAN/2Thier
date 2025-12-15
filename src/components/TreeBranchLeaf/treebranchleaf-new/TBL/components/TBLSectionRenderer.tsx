@@ -99,6 +99,11 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
     return label.includes('total') || label.includes('- total');
   };
   
+  // 🔧 FIX: Extraire le nom de base d'un label (sans le suffix -1, -2, etc.)
+  const getBaseName = (label: string): string => {
+    return (label || '').replace(/-\d+$/, '').trim();
+  };
+  
   const normalFields = fields.filter(f => !isTotal(f));
   const totalFields = fields.filter(f => isTotal(f));
   
@@ -130,10 +135,28 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
 
   const entries = Array.from(groups.entries()).sort((a, b) => compareSuffix(a[0], b[0]));
   
+  // 🔧 FIX: Construire un map d'ordre basé sur les originaux (groupe BASE)
+  const baseOrderMap = new Map<string, number>();
+  const baseGroup = groups.get(BASE_SUFFIX_KEY);
+  if (baseGroup) {
+    // Trier les originaux par leur `order` pour établir l'ordre de référence
+    const sortedBase = [...baseGroup].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+    sortedBase.forEach((field, index) => {
+      const baseName = getBaseName(field.label);
+      baseOrderMap.set(baseName.toLowerCase(), index);
+    });
+  }
+  
   // Recalculer isLastInCopyGroup pour chaque groupe APRÈS le tri
   const result = entries.map(([suffix, groupedFields]) => {
-    // 🔧 FIX: Trier les champs dans chaque groupe par leur `order` pour maintenir l'ordre cohérent
-    const sortedFields = [...groupedFields].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+    // 🔧 FIX: Trier les champs selon l'ordre de leur original (via le nom de base)
+    const sortedFields = [...groupedFields].sort((a, b) => {
+      const baseNameA = getBaseName(a.label).toLowerCase();
+      const baseNameB = getBaseName(b.label).toLowerCase();
+      const orderA = baseOrderMap.get(baseNameA) ?? (a.order ?? 9999);
+      const orderB = baseOrderMap.get(baseNameB) ?? (b.order ?? 9999);
+      return orderA - orderB;
+    });
     
     const fieldsWithUpdatedFlag = sortedFields.map((field, idx, arr) => {
       // Seules les copies (suffix !== BASE_SUFFIX_KEY) doivent avoir le bouton de suppression
@@ -147,9 +170,15 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
     return { suffix, fields: fieldsWithUpdatedFlag };
   });
   
-  // 🔧 FIX: Ajouter les champs "Total" à la fin, triés par ordre
+  // 🔧 FIX: Ajouter les champs "Total" à la fin, triés par le nom de base
   if (totalFields.length > 0) {
-    const sortedTotals = [...totalFields].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+    const sortedTotals = [...totalFields].sort((a, b) => {
+      const baseNameA = getBaseName(a.label).toLowerCase();
+      const baseNameB = getBaseName(b.label).toLowerCase();
+      const orderA = baseOrderMap.get(baseNameA) ?? (a.order ?? 9999);
+      const orderB = baseOrderMap.get(baseNameB) ?? (b.order ?? 9999);
+      return orderA - orderB;
+    });
     result.push({ 
       suffix: '__TOTAL__', 
       fields: sortedTotals.map(f => ({ ...f, isLastInCopyGroup: false }))
