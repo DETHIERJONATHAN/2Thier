@@ -2036,6 +2036,12 @@ async function deepCopyNodeInternal(
         hasAPI: oldNode.hasAPI,
         hasLink: oldNode.hasLink,
         hasMarkers: oldNode.hasMarkers,
+        // 🔧 FIX: Copier les propriétés data_* pour hériter de l'unité et de la précision
+        data_unit: oldNode.data_unit,
+        data_precision: oldNode.data_precision,
+        data_displayFormat: oldNode.data_displayFormat,
+        data_exposedKey: oldNode.data_exposedKey,
+        data_visibleToUser: oldNode.data_visibleToUser,
         // Colonnes simples
         defaultValue: oldNode.defaultValue,
         calculatedValue: oldNode.calculatedValue,
@@ -5093,7 +5099,18 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 
       // Marquer le nÅ"ud comme ayant des donnÃ©es configurÃ©es (capacitÃ© "DonnÃ©e" active)
       // 🎯 NOUVEAU: Si sourceRef pointe vers une table, mettre à jour table_activeId et table_instances
-      const nodeUpdateData: any = { hasData: true, updatedAt: new Date() };
+      // 🔧 FIX: Synchroniser data_unit et data_precision depuis la variable vers le nœud
+      const nodeUpdateData: any = { 
+        hasData: true, 
+        updatedAt: new Date(),
+        // 🔧 FIX: Toujours synchroniser unit et precision de la variable vers le nœud
+        data_unit: variable.unit ?? null,
+        data_precision: variable.precision ?? null,
+        data_displayFormat: variable.displayFormat ?? null,
+        data_exposedKey: variable.exposedKey ?? null,
+        data_visibleToUser: variable.visibleToUser ?? true,
+        data_activeId: variable.id,
+      };
       
       if (variable.sourceRef && variable.sourceRef.startsWith('@table.')) {
         const tableId = variable.sourceRef.replace('@table.', '');

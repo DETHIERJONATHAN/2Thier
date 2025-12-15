@@ -401,6 +401,12 @@ export async function deepCopyNodeInternal(
     hasAPI: oldNode.hasAPI,
     hasLink: oldNode.hasLink,
     hasMarkers: oldNode.hasMarkers,
+    // 🔧 FIX: Copier les propriétés data_* pour hériter de l'unité et de la précision
+    data_unit: oldNode.data_unit,
+    data_precision: oldNode.data_precision,
+    data_displayFormat: oldNode.data_displayFormat,
+    data_exposedKey: oldNode.data_exposedKey,
+    data_visibleToUser: oldNode.data_visibleToUser,
     defaultValue: oldNode.defaultValue,
     calculatedValue: (oldNode.hasFormula || oldNode.hasCondition || oldNode.hasTable)
       ? null
