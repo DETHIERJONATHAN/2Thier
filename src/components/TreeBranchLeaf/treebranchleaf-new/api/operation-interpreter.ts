@@ -1197,11 +1197,23 @@ function tryParseTokenReference(token?: string | null): FormulaReferenceMeta | n
   if (normalizedToken.startsWith('node-formula:')) {
     return createMeta('formula', normalizedToken.slice('node-formula:'.length));
   }
+  // Support aussi "formula:" sans préfixe "node-"
+  if (normalizedToken.startsWith('formula:') && !normalizedToken.startsWith('formula:node-')) {
+    return createMeta('formula', normalizedToken.slice('formula:'.length));
+  }
   if (normalizedToken.startsWith('node-table:')) {
     return createMeta('table', normalizedToken.slice('node-table:'.length));
   }
+  // Support aussi "table:" sans préfixe "node-"
+  if (normalizedToken.startsWith('table:') && !normalizedToken.startsWith('table:node-')) {
+    return createMeta('table', normalizedToken.slice('table:'.length));
+  }
   if (normalizedToken.startsWith('node-condition:')) {
     return createMeta('condition', normalizedToken.slice('node-condition:'.length));
+  }
+  // Support aussi "condition:" sans préfixe "node-"
+  if (normalizedToken.startsWith('condition:') && !normalizedToken.startsWith('condition:node-')) {
+    return createMeta('condition', normalizedToken.slice('condition:'.length));
   }
 
   if (normalizedToken.startsWith('shared-ref-') || normalizedToken.startsWith('node_') || UUID_REGEX.test(normalizedToken)) {
