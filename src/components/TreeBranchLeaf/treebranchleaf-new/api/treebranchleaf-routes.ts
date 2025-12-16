@@ -58,6 +58,7 @@ registerSumDisplayFieldRoutes(router);
 
 const prisma = new PrismaClient();
 
+
 type InlineRolesInput = Record<string, unknown> | undefined;
 
 const normalizeRolesMap = (rolesMap: InlineRolesInput): Record<string, string> => {
@@ -4261,6 +4262,7 @@ router.get('/nodes/:nodeId', async (req, res) => {
         type: true,
         subType: true,
         label: true,
+        metadata: true,
         TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
@@ -4274,7 +4276,15 @@ router.get('/nodes/:nodeId', async (req, res) => {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
-    return res.json({ id: node.id, treeId: node.treeId, parentId: node.parentId, type: node.type, subType: node.subType, label: node.label });
+    return res.json({
+      id: node.id,
+      treeId: node.treeId,
+      parentId: node.parentId,
+      type: node.type,
+      subType: node.subType,
+      label: node.label,
+      metadata: node.metadata
+    });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node info:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération du nœud' });

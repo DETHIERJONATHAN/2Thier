@@ -3591,8 +3591,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         fieldMetadata.copiedFromNodeId ||
         fieldMetadata.fromVariableId ||
         fieldMetadata.sourceTemplateId ||
-        fieldMetadata.tbl_auto_generated
+        fieldMetadata.tbl_auto_generated ||
+        fieldMetadata.isSumDisplayField // 🎯 NOUVEAU: Champs Total
       );
+      
+      // 🎯 NOUVEAU: Détection directe des champs -sum-total
+      const isSumTotalField = typeof field.id === 'string' && field.id.endsWith('-sum-total');
 
       const isCopyWithSuffix = typeof field.id === 'string' && /^.+-\d+$/.test(field.id);
       const isRepeaterCopy = Boolean(fieldMetadata.duplicatedFromRepeater || fieldMetadata.copySuffix || fieldMetadata.suffixNum);
@@ -3613,6 +3617,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const resolveBackendNodeId = (f: any): string | undefined => {
         try {
           const meta = (f && f.metadata) || {};
+          
+          // 🎯 NOUVEAU: Les champs Total (-sum-total) doivent TOUJOURS utiliser leur propre ID
+          // Ils ne sont PAS des copies, ils ont leur propre valeur calculée
+          if (f?.id && typeof f.id === 'string' && f.id.endsWith('-sum-total')) {
+            return String(f.id);
+          }
+          if (meta?.isSumDisplayField) {
+            if (f?.id) return String(f.id);
+          }
+          
           // ⚖️ RÈGLE IMPORTANTE: pour les champs d'affichage COPIÉS (suffixe ou duplications de répéteur),
           // on privilégie l'ID DE LA COPIE comme clé backend pour que chaque versant
           // ait sa propre valeur calculée, au lieu de réutiliser copiedFromNodeId.
@@ -3703,6 +3717,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           />
         );
       };
+
+      // 🎯 PRIORITÉ 0 ABSOLUE: Champs Total (-sum-total) - AVANT TOUT
+      // Ces champs ont leur propre valeur calculée stockée en base, pas besoin de capacités complexes
+      if (treeId && isSumTotalField) {
+        console.log(`🎯 [SUM-TOTAL] Affichage direct pour champ Total: ${field.id} (${field.label})`);
+        return renderStoredCalculatedValue(field.id, {
+          fallbackValue: rawValue
+        });
+      }
 
       // 🔥 FIX PRIORITAIRE: Forcer l'affichage via CalculatedValueDisplay pour TOUTES les copies
       if (treeId && isCopyWithSuffix) {

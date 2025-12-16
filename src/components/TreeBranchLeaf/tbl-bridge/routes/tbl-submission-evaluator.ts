@@ -340,7 +340,9 @@ async function evaluateCapacitiesForSubmission(
         results.created++;
       }
 
-      const rawValue = (capacityResult as { value?: unknown }).value;
+      const rawValue = (capacityResult as { value?: unknown; calculatedValue?: unknown; result?: unknown }).value
+        ?? (capacityResult as { calculatedValue?: unknown }).calculatedValue
+        ?? (capacityResult as { result?: unknown }).result;
       const stringified = rawValue === null || rawValue === undefined ? null : String(rawValue).trim();
       if (rawValue !== null && rawValue !== undefined && stringified !== '' && stringified !== '∅') {
         let normalizedValue: string | number | boolean;
@@ -1214,16 +1216,20 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     // 💾 STOCKER LES VALEURS CALCULÉES DANS PRISMA
     try {
       const calculatedValues = results
+        .map(r => {
+          const candidate = r.value ?? (r as { calculatedValue?: unknown }).calculatedValue;
+          return { ...r, candidate };
+        })
         .filter(r => {
           // Exclure null, undefined, chaînes vides, et symboles de vide (∅)
-          if (r.value === null || r.value === undefined) return false;
-          const strValue = String(r.value).trim();
+          if (r.candidate === null || r.candidate === undefined) return false;
+          const strValue = String(r.candidate).trim();
           if (strValue === '' || strValue === '∅') return false;
           return true;
         })
         .map(r => ({
           nodeId: r.nodeId,
-          calculatedValue: String(r.value),
+          calculatedValue: String(r.candidate),
           calculatedBy: `preview-${userId}`
         }));
 

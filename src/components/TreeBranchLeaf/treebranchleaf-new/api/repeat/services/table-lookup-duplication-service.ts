@@ -129,6 +129,42 @@ export class TableLookupDuplicationService {
                     metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
                   }
                 }
+                // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+                if (metaObj?.lookup?.displayColumn) {
+                  if (Array.isArray(metaObj.lookup.displayColumn)) {
+                    metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
+                      if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                        console.log(`[table.meta] displayColumn[]: ${col} → ${col}${suffix}`);
+                        return `${col}${suffix}`;
+                      }
+                      return col;
+                    });
+                  } else if (typeof metaObj.lookup.displayColumn === 'string') {
+                    const val = metaObj.lookup.displayColumn;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      console.log(`[table.meta] displayColumn: ${val} → ${val}${suffix}`);
+                      metaObj.lookup.displayColumn = `${val}${suffix}`;
+                    }
+                  }
+                }
+                // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+                if (metaObj?.lookup?.displayRow) {
+                  if (Array.isArray(metaObj.lookup.displayRow)) {
+                    metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
+                      if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
+                        console.log(`[table.meta] displayRow[]: ${row} → ${row}${suffix}`);
+                        return `${row}${suffix}`;
+                      }
+                      return row;
+                    });
+                  } else if (typeof metaObj.lookup.displayRow === 'string') {
+                    const val = metaObj.lookup.displayRow;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      console.log(`[table.meta] displayRow: ${val} → ${val}${suffix}`);
+                      metaObj.lookup.displayRow = `${val}${suffix}`;
+                    }
+                  }
+                }
                 return metaObj;
               } catch {
                 return originalTable.meta;

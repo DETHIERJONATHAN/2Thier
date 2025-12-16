@@ -852,6 +852,25 @@ export async function deepCopyNodeInternal(
       const newConditionId = appendSuffix(c.id);
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap) as Prisma.InputJsonValue;
+      
+      // 🔧 FIX DYNAMIQUE: Vérifier si la condition existe déjà AVANT de la créer
+      const existingCondition = await prisma.treeBranchLeafNodeCondition.findUnique({
+        where: { id: newConditionId }
+      });
+      
+      if (existingCondition) {
+        // La condition existe déjà - si elle appartient à un autre nœud, c'est OK
+        // On l'ajoute juste aux linkedConditionIds de ce nœud
+        console.log(`[DEEP-COPY] ⚠️ Condition ${newConditionId} existe déjà (nodeId: ${existingCondition.nodeId}), skip création`);
+        
+        // Si elle appartient à ce nœud, parfait. Sinon, on la référence quand même.
+        if (validLinkedConditionIds.includes(c.id)) {
+          newLinkedConditionIds.push(newConditionId);
+        }
+        continue;
+      }
+      
+      // La condition n'existe pas, on la crée avec le bon nodeId
       await prisma.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
@@ -866,6 +885,7 @@ export async function deepCopyNodeInternal(
           updatedAt: new Date()
         }
       });
+      console.log(`[DEEP-COPY] ✅ Condition ${newConditionId} créée pour nodeId: ${newId}`);
       
       // 🔑 Ajouter au linkedConditionIds seulement si c'était lié à l'original (et que l'ID était valide)
       if (validLinkedConditionIds.includes(c.id)) {
@@ -907,6 +927,42 @@ export async function deepCopyNodeInternal(
       }
     }
 
+    // 🔧 FIX: Mettre à jour condition_activeId et formula_activeId avec les IDs remappés
+    // APRÈS la copie des conditions et formules pour que les maps soient complètes
+    const updateActiveIds: { condition_activeId?: string | null; formula_activeId?: string | null } = {};
+    
+    if (oldNode.condition_activeId) {
+      const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
+      if (newConditionActiveId) {
+        updateActiveIds.condition_activeId = newConditionActiveId;
+        console.log(`[DEEP-COPY] 🔗 condition_activeId remappé: ${oldNode.condition_activeId} → ${newConditionActiveId}`);
+      }
+    }
+    
+    if (oldNode.formula_activeId) {
+      const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
+      if (newFormulaActiveId) {
+        updateActiveIds.formula_activeId = newFormulaActiveId;
+        console.log(`[DEEP-COPY] 🔗 formula_activeId remappé: ${oldNode.formula_activeId} → ${newFormulaActiveId}`);
+      }
+    }
+    
+    if (Object.keys(updateActiveIds).length > 0) {
+      try {
+        await prisma.treeBranchLeafNode.update({
+          where: { id: newId },
+          data: updateActiveIds
+        });
+        console.log(`[DEEP-COPY] ✅ ActiveIds mis à jour pour ${newId}:`, updateActiveIds);
+      } catch (e) {
+        console.warn('[DEEP-COPY] ⚠️ Erreur mise à jour activeIds:', (e as Error).message);
+      }
+    }
+
+    // 🔴 COPIE DES TABLES: Chercher les tables de 3 façons:
+    // 1. Tables où nodeId = oldId (propriété directe)
+    // 2. Tables via table_activeId (référence active)
+    // 3. Tables via linkedTableIds (références multiples)
     const tables = await prisma.treeBranchLeafNodeTable.findMany({
       where: { nodeId: oldId },
       include: { tableColumns: true, tableRows: true }
@@ -916,6 +972,21 @@ export async function deepCopyNodeInternal(
     // Cas typique: un champ "Orientation" template (22de...) référence une table (0701ed...) 
     // qui est liée à un display node (440d...), pas au template node lui-même
     const additionalTableIds: string[] = [];
+    if (source.table_activeId && !tables.some(t => t.id === source.table_activeId)) {
+      additionalTableIds.push(source.table_activeId);
+    }
+    
+    // 🆕 CRITIQUE: Aussi copier les tables référencées via linkedTableIds
+    // Cas typique: "Panneaux max" a linkedTableIds: ["Longueur panneau", "Largeur panneau"]
+    // Ces tables ont nodeId = Panneaux max, donc déjà incluses dans `tables`
+    // MAIS si le nodeId de la table est différent (ex: table partagée), on doit l'ajouter
+    if (Array.isArray(oldNode.linkedTableIds)) {
+      for (const linkedTableId of oldNode.linkedTableIds) {
+        if (!tables.some(t => t.id === linkedTableId) && !additionalTableIds.includes(linkedTableId)) {
+          additionalTableIds.push(linkedTableId);
+        }
+      }
+    }
     if (source.table_activeId && !tables.some(t => t.id === source.table_activeId)) {
       additionalTableIds.push(source.table_activeId);
     }
@@ -1017,6 +1088,44 @@ export async function deepCopyNodeInternal(
                 const val = metaObj.lookup.columnSourceOption.comparisonColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
                   metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
+                }
+              }
+              
+              // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+              if (metaObj?.lookup?.displayColumn) {
+                if (Array.isArray(metaObj.lookup.displayColumn)) {
+                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
+                    if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(computedLabelSuffix)) {
+                      console.log(`[table.meta] displayColumn[]: ${col} → ${col}${computedLabelSuffix}`);
+                      return `${col}${computedLabelSuffix}`;
+                    }
+                    return col;
+                  });
+                } else if (typeof metaObj.lookup.displayColumn === 'string') {
+                  const val = metaObj.lookup.displayColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                    console.log(`[table.meta] displayColumn: ${val} → ${val}${computedLabelSuffix}`);
+                    metaObj.lookup.displayColumn = `${val}${computedLabelSuffix}`;
+                  }
+                }
+              }
+              
+              // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+              if (metaObj?.lookup?.displayRow) {
+                if (Array.isArray(metaObj.lookup.displayRow)) {
+                  metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
+                    if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(computedLabelSuffix)) {
+                      console.log(`[table.meta] displayRow[]: ${row} → ${row}${computedLabelSuffix}`);
+                      return `${row}${computedLabelSuffix}`;
+                    }
+                    return row;
+                  });
+                } else if (typeof metaObj.lookup.displayRow === 'string') {
+                  const val = metaObj.lookup.displayRow;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                    console.log(`[table.meta] displayRow: ${val} → ${val}${computedLabelSuffix}`);
+                    metaObj.lookup.displayRow = `${val}${computedLabelSuffix}`;
+                  }
                 }
               }
               

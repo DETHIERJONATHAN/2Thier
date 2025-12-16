@@ -2393,7 +2393,9 @@ async function enrichDataFromSubmission(submissionId, prisma69, valueMap, labelM
           id: true,
           label: true,
           sharedReferenceName: true,
-          field_label: true
+          field_label: true,
+          calculatedValue: true
+          // 🆕 Récupérer les valeurs calculées
         }
       });
       console.log(`[ENRICHMENT] \u{1F3F7}\uFE0F ${allNodes.length} labels r\xE9cup\xE9r\xE9s depuis l'arbre`);
@@ -2402,21 +2404,23 @@ async function enrichDataFromSubmission(submissionId, prisma69, valueMap, labelM
           const canonicalLabel = node.sharedReferenceName || node.field_label || node.label;
           labelMap.set(node.id, canonicalLabel);
         }
+        if (!valueMap.has(node.id) && node.calculatedValue !== null && node.calculatedValue !== void 0 && node.calculatedValue !== "") {
+          valueMap.set(node.id, node.calculatedValue);
+          console.log(`[ENRICHMENT] \u{1F9EE} calculatedValue enrichi: ${node.id} (${node.label}) = ${node.calculatedValue}`);
+        }
       }
     } else {
       console.warn(`[ENRICHMENT] \u26A0\uFE0F Impossible de trouver l'arbre pour la soumission ${submissionId}`);
     }
     for (const data of submissionData) {
       if (data.nodeId && data.value !== null) {
-        if (!valueMap.has(data.nodeId)) {
-          let parsedValue;
-          try {
-            parsedValue = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
-          } catch {
-            parsedValue = data.value;
-          }
-          valueMap.set(data.nodeId, parsedValue);
+        let parsedValue;
+        try {
+          parsedValue = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+        } catch {
+          parsedValue = data.value;
         }
+        valueMap.set(data.nodeId, parsedValue);
       }
     }
     console.log(`[ENRICHMENT] \u{1F389} Enrichissement termin\xE9 - labels: ${labelMap.size}, valeurs: ${valueMap.size}`);
@@ -3953,9 +3957,14 @@ ${"\u2550".repeat(80)}`);
   console.log(`   Submission: ${submissionId}`);
   console.log(`${"\u2550".repeat(80)}
 `);
+  const variableNode = await prisma69.treeBranchLeafNode.findUnique({
+    where: { id: variableNodeId },
+    select: { treeId: true }
+  });
+  const treeId = variableNode?.treeId;
   const localValueMap = valueMap || /* @__PURE__ */ new Map();
   const labelMap = /* @__PURE__ */ new Map();
-  await enrichDataFromSubmission(submissionId, prisma69, localValueMap, labelMap);
+  await enrichDataFromSubmission(submissionId, prisma69, localValueMap, labelMap, treeId);
   console.log(`\u2705 Maps enrichies: ${localValueMap.size} valeurs, ${labelMap.size} labels`);
   const variable = await prisma69.treeBranchLeafNodeVariable.findUnique({
     where: { nodeId: variableNodeId },
@@ -26550,7 +26559,7 @@ function extractNodeIdsFromCondition(conditionSet) {
   const ids = /* @__PURE__ */ new Set();
   if (!conditionSet || typeof conditionSet !== "object") return ids;
   const str = JSON.stringify(conditionSet);
-  const uuidRegex = /@value\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const uuidRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   let match;
   while ((match = uuidRegex.exec(str)) !== null) {
     ids.add(match[1]);
@@ -26559,7 +26568,7 @@ function extractNodeIdsFromCondition(conditionSet) {
   while ((match = nodeRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
-  const sharedRefRegex = /@value\.(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRefRegex = /@(?:value|calculated|select)\.(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
@@ -26590,15 +26599,15 @@ function extractNodeIdsFromCondition(conditionSet) {
   if (obj.fallback && Array.isArray(obj.fallback.actions)) {
     extractFromActions(obj.fallback.actions);
   }
-  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((match = genericUuid.exec(str)) !== null) {
     ids.add(match[1]);
   }
-  const genericNode = /(node_[a-z0-9_-]+)/gi;
+  const genericNode = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = genericNode.exec(str)) !== null) {
     ids.add(match[1]);
   }
-  const genericShared = /(shared-ref-[a-z0-9-]+)/gi;
+  const genericShared = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = genericShared.exec(str)) !== null) {
     ids.add(match[1]);
   }
@@ -26609,12 +26618,12 @@ function extractNodeAndCapacityRefsFromCondition(conditionSet) {
   const capacityRefs = /* @__PURE__ */ new Set();
   if (!conditionSet || typeof conditionSet !== "object") return { nodeIds, capacityRefs };
   const str = JSON.stringify(conditionSet);
-  const uuidRegex = /@value\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const uuidRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   let match;
   while ((match = uuidRegex.exec(str)) !== null) nodeIds.add(match[1]);
-  const nodeRegex = /@value\.(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /@(?:value|calculated|select)\.(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = nodeRegex.exec(str)) !== null) nodeIds.add(match[1]);
-  const sharedRefRegex = /@value\.(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRefRegex = /@(?:value|calculated|select)\.(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) nodeIds.add(match[1]);
   const obj = conditionSet;
   const extractFromActions = (actions) => {
@@ -26641,11 +26650,11 @@ function extractNodeAndCapacityRefsFromCondition(conditionSet) {
   if (obj.fallback && Array.isArray(obj.fallback.actions)) {
     extractFromActions(obj.fallback.actions);
   }
-  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((match = genericUuid.exec(str)) !== null) nodeIds.add(match[1]);
-  const genericNode = /(node_[a-z0-9_-]+)/gi;
+  const genericNode = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = genericNode.exec(str)) !== null) nodeIds.add(match[1]);
-  const genericShared = /(shared-ref-[a-z0-9-]+)/gi;
+  const genericShared = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = genericShared.exec(str)) !== null) nodeIds.add(match[1]);
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
   return { nodeIds, capacityRefs };
@@ -26681,11 +26690,13 @@ function extractNodeIdsFromFormula(tokens2) {
   }
   const str = JSON.stringify(tokensArray);
   let m;
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const refWithSuffixRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
+  while ((m = refWithSuffixRegex.exec(str)) !== null) ids.add(m[1]);
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((m = uuidRegex.exec(str)) !== null) ids.add(m[1]);
   const nodeRegex = /(node_[a-z0-9_-]+)/gi;
   while ((m = nodeRegex.exec(str)) !== null) ids.add(m[1]);
-  const sharedRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((m = sharedRegex.exec(str)) !== null) ids.add(m[1]);
   return ids;
 }
@@ -26716,11 +26727,11 @@ function extractNodeAndCapacityRefsFromFormula(tokens2) {
   }
   const str = JSON.stringify(tokensArray);
   let m;
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((m = uuidRegex.exec(str)) !== null) nodeIds.add(m[1]);
-  const nodeRegex = /(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((m = nodeRegex.exec(str)) !== null) nodeIds.add(m[1]);
-  const sharedRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((m = sharedRegex.exec(str)) !== null) nodeIds.add(m[1]);
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
   return { nodeIds, capacityRefs };
@@ -26729,16 +26740,16 @@ function extractNodeIdsFromTable(tableData) {
   const ids = /* @__PURE__ */ new Set();
   if (!tableData || typeof tableData !== "object") return ids;
   const str = JSON.stringify(tableData);
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   let match;
   while ((match = uuidRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
-  const nodeRegex = /(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = nodeRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
-  const sharedRefRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRefRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
@@ -26750,11 +26761,11 @@ function extractNodeAndCapacityRefsFromTable(tableData) {
   if (!tableData || typeof tableData !== "object") return { nodeIds, capacityRefs };
   const str = JSON.stringify(tableData);
   let match;
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((match = uuidRegex.exec(str)) !== null) nodeIds.add(match[1]);
-  const nodeRegex = /(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = nodeRegex.exec(str)) !== null) nodeIds.add(match[1]);
-  const sharedRefRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRefRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) nodeIds.add(match[1]);
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
   return { nodeIds, capacityRefs };
@@ -27438,145 +27449,156 @@ function registerSumDisplayFieldRoutes(router83) {
         tokens: sumTokens,
         description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
       };
+      const sumNodeData = {
+        label: sumDisplayName,
+        field_label: sumDisplayName,
+        fieldType: null,
+        // 🔧 UNIFIÉ: null comme M² toiture - Total
+        subType: null,
+        fieldSubType: null,
+        hasData: true,
+        hasFormula: true,
+        data_visibleToUser: false,
+        // 🔧 UNIFIÉ: false comme M² toiture - Total
+        formula_activeId: sumFormulaId,
+        formula_instances: { [sumFormulaId]: formulaInstance },
+        formula_tokens: sumTokens,
+        linkedFormulaIds: [sumFormulaId],
+        data_activeId: sumFieldVariableId,
+        data_displayFormat: mainVariable.displayFormat,
+        data_unit: mainVariable.unit,
+        data_precision: mainVariable.precision,
+        metadata: {
+          ...existingSumNode?.metadata || {},
+          isSumDisplayField: true,
+          sourceVariableId: mainVariable.id,
+          sourceNodeId: nodeId,
+          sumTokens,
+          copiesCount: allCopies.length,
+          // 🚫 PAS de capabilities.datas ici - le frontend utilise formula_instances directement
+          // C'est le chemin qui fonctionne pour M² toiture - Total
+          updatedAt: now.toISOString()
+        },
+        updatedAt: now
+      };
       if (existingSumNode) {
         await prisma45.treeBranchLeafNode.update({
           where: { id: sumFieldNodeId },
-          data: {
-            label: sumDisplayName,
-            field_label: sumDisplayName,
-            formula_activeId: sumFormulaId,
-            formula_instances: { [sumFormulaId]: formulaInstance },
-            formula_tokens: sumTokens,
-            linkedFormulaIds: [sumFormulaId],
-            updatedAt: now,
-            metadata: {
-              ...existingSumNode.metadata || {},
-              isSumDisplayField: true,
-              sourceVariableId: mainVariable.id,
-              sourceNodeId: nodeId,
-              sumTokens,
-              copiesCount: allCopies.length,
-              updatedAt: now.toISOString()
-            }
-          }
+          data: sumNodeData
         });
         console.log(`\u{1F4CA} [SUM DISPLAY] N\u0153ud Total mis \xE0 jour: ${sumFieldNodeId}`);
       } else {
-        await prisma45.treeBranchLeafNode.create({
-          data: {
-            id: sumFieldNodeId,
-            treeId,
-            parentId: node.parentId,
-            // Même section que le nœud original
-            type: "leaf_field",
-            label: sumDisplayName,
-            field_label: sumDisplayName,
-            order: maxCopyOrder + 1,
-            // 🔥 APRÈS le dernier nœud copié (Mur-1, Mur-2, etc.)
-            isVisible: true,
-            isActive: true,
-            subtab: node.subtab,
-            hasData: true,
-            hasFormula: true,
-            formula_activeId: sumFormulaId,
-            formula_instances: { [sumFormulaId]: formulaInstance },
-            formula_tokens: sumTokens,
-            linkedFormulaIds: [sumFormulaId],
-            data_activeId: sumFieldVariableId,
-            data_displayFormat: mainVariable.displayFormat,
-            data_unit: mainVariable.unit,
-            data_precision: mainVariable.precision,
-            metadata: {
-              isSumDisplayField: true,
-              sourceVariableId: mainVariable.id,
-              sourceNodeId: nodeId,
-              sumTokens,
-              copiesCount: allCopies.length,
-              createdAt: now.toISOString()
-            },
-            createdAt: now,
-            updatedAt: now
+        try {
+          await prisma45.treeBranchLeafNode.create({
+            data: {
+              id: sumFieldNodeId,
+              treeId,
+              parentId: node.parentId,
+              // Même section que le nœud original
+              type: "leaf_field",
+              label: sumDisplayName,
+              field_label: sumDisplayName,
+              order: maxCopyOrder + 1,
+              // 🔥 APRÈS le dernier nœud copié (Mur-1, Mur-2, etc.)
+              isVisible: true,
+              isActive: true,
+              subtab: node.subtab,
+              hasData: true,
+              hasFormula: true,
+              data_activeId: sumFieldVariableId,
+              createdAt: now,
+              updatedAt: now,
+              ...sumNodeData
+            }
+          });
+          console.log(`\u{1F4CA} [SUM DISPLAY] N\u0153ud Total cr\xE9\xE9: ${sumFieldNodeId}`);
+        } catch (err) {
+          if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            await prisma45.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
+            console.warn(`\u26A0\uFE0F [SUM DISPLAY] N\u0153ud Total d\xE9j\xE0 existant, mise \xE0 jour forc\xE9e: ${sumFieldNodeId}`);
+          } else {
+            throw err;
           }
-        });
-        console.log(`\u{1F4CA} [SUM DISPLAY] N\u0153ud Total cr\xE9\xE9: ${sumFieldNodeId}`);
+        }
       }
       const existingSumVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId: sumFieldNodeId }
       });
+      const sumVariableData = {
+        displayName: sumDisplayName,
+        displayFormat: mainVariable.displayFormat,
+        unit: mainVariable.unit,
+        precision: mainVariable.precision,
+        visibleToUser: true,
+        sourceType: "formula",
+        sourceRef: `node-formula:${sumFormulaId}`,
+        metadata: {
+          isSumVariable: true,
+          sumTokens,
+          copiesCount: allCopies.length,
+          sourceVariableId: mainVariable.id
+        },
+        updatedAt: now
+      };
       if (existingSumVariable) {
         await prisma45.treeBranchLeafNodeVariable.update({
           where: { nodeId: sumFieldNodeId },
-          data: {
-            displayName: sumDisplayName,
-            sourceType: "formula",
-            sourceRef: `node-formula:${sumFormulaId}`,
-            // 🔑 CRITIQUE pour preview-evaluate
-            updatedAt: now,
-            metadata: {
-              isSumVariable: true,
-              sumTokens,
-              copiesCount: allCopies.length,
-              sourceVariableId: mainVariable.id
-            }
-          }
+          data: sumVariableData
         });
       } else {
-        const existingKey = await prisma45.treeBranchLeafNodeVariable.findUnique({
-          where: { exposedKey: sumExposedKey }
-        });
+        const existingKey = await prisma45.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: sumExposedKey } });
         const finalExposedKey = existingKey ? `${sumExposedKey}_${Date.now()}` : sumExposedKey;
-        await prisma45.treeBranchLeafNodeVariable.create({
-          data: {
-            id: sumFieldVariableId,
-            nodeId: sumFieldNodeId,
-            exposedKey: finalExposedKey,
-            displayName: sumDisplayName,
-            displayFormat: mainVariable.displayFormat,
-            unit: mainVariable.unit,
-            precision: mainVariable.precision,
-            visibleToUser: true,
-            sourceType: "formula",
-            sourceRef: `node-formula:${sumFormulaId}`,
-            // 🔑 CRITIQUE pour preview-evaluate
-            metadata: {
-              isSumVariable: true,
-              sumTokens,
-              copiesCount: allCopies.length,
-              sourceVariableId: mainVariable.id
-            },
-            createdAt: now,
-            updatedAt: now
+        try {
+          await prisma45.treeBranchLeafNodeVariable.create({
+            data: {
+              id: sumFieldVariableId,
+              nodeId: sumFieldNodeId,
+              exposedKey: finalExposedKey,
+              createdAt: now,
+              ...sumVariableData
+            }
+          });
+        } catch (err) {
+          if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            await prisma45.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
+            console.warn(`\u26A0\uFE0F [SUM DISPLAY] Variable Total d\xE9j\xE0 existante, mise \xE0 jour forc\xE9e: ${sumFieldNodeId}`);
+          } else {
+            throw err;
           }
-        });
+        }
       }
       const existingSumFormula = await prisma45.treeBranchLeafNodeFormula.findUnique({
         where: { id: sumFormulaId }
       });
       const formulaOrgId = tree.organizationId || organizationId;
+      const sumFormulaData = {
+        tokens: sumTokens,
+        organizationId: formulaOrgId,
+        updatedAt: now
+      };
       if (existingSumFormula) {
-        await prisma45.treeBranchLeafNodeFormula.update({
-          where: { id: sumFormulaId },
-          data: {
-            tokens: sumTokens,
-            organizationId: formulaOrgId,
-            // 🔥 Mise à jour de l'organizationId
-            updatedAt: now
-          }
-        });
+        await prisma45.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
       } else {
-        await prisma45.treeBranchLeafNodeFormula.create({
-          data: {
-            id: sumFormulaId,
-            nodeId: sumFieldNodeId,
-            organizationId: formulaOrgId,
-            // 🔥 AJOUT de l'organizationId
-            name: `Somme ${mainVariable.displayName}`,
-            description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`,
-            tokens: sumTokens,
-            createdAt: now,
-            updatedAt: now
+        try {
+          await prisma45.treeBranchLeafNodeFormula.create({
+            data: {
+              id: sumFormulaId,
+              nodeId: sumFieldNodeId,
+              organizationId: formulaOrgId,
+              name: `Somme ${mainVariable.displayName}`,
+              description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`,
+              createdAt: now,
+              ...sumFormulaData
+            }
+          });
+        } catch (err) {
+          if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            await prisma45.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
+            console.warn(`\u26A0\uFE0F [SUM DISPLAY] Formule Total d\xE9j\xE0 existante, mise \xE0 jour forc\xE9e: ${sumFormulaId}`);
+          } else {
+            throw err;
           }
-        });
+        }
       }
       const existingMeta = node.metadata || {};
       await prisma45.treeBranchLeafNode.update({
@@ -28041,6 +28063,17 @@ ${"\u2550".repeat(80)}`);
     console.log(`   Tokens originaux:`, originalFormula.tokens);
     const newFormulaId = `${originalFormula.id}-${suffix}`;
     console.log(`\u{1F4DD} Nouvel ID formule: ${newFormulaId}`);
+    const originalOwnerNodeId = originalFormula.nodeId;
+    const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
+    const ownerNodeExists = await prisma69.treeBranchLeafNode.findUnique({
+      where: { id: correctOwnerNodeId },
+      select: { id: true, label: true }
+    });
+    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    console.log(`\u{1F527} [OWNER FIX] NodeId original propri\xE9taire: ${originalOwnerNodeId}`);
+    console.log(`\u{1F527} [OWNER FIX] NodeId propri\xE9taire suffix\xE9: ${correctOwnerNodeId}`);
+    console.log(`\u{1F527} [OWNER FIX] Propri\xE9taire suffix\xE9 existe: ${ownerNodeExists ? "OUI (" + ownerNodeExists.label + ")" : "NON"}`);
+    console.log(`\u{1F527} [OWNER FIX] NodeId FINAL utilis\xE9: ${finalOwnerNodeId}`);
     console.log(`
 \u{1F504} R\xE9\xE9criture des tokens...`);
     console.log(`   Nombre d'IDs dans la map: ${nodeIdMap.size}`);
@@ -28083,7 +28116,7 @@ ${"\u2550".repeat(80)}`);
     const newFormula = await prisma69.treeBranchLeafNodeFormula.create({
       data: {
         id: newFormulaId,
-        nodeId: newNodeId,
+        nodeId: finalOwnerNodeId,
         organizationId: originalFormula.organizationId,
         name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
         description: originalFormula.description,
@@ -28122,14 +28155,14 @@ ${"\u2550".repeat(80)}`);
       console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField2(prisma69, newNodeId, "linkedFormulaIds", [newFormulaId]);
-      console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${newNodeId}`);
+      await addToNodeLinkedField2(prisma69, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
+      console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${finalOwnerNodeId}`);
     } catch (e) {
       console.warn(`\u26A0\uFE0F Erreur MAJ linkedFormulaIds du propri\xE9taire:`, e.message);
     }
     try {
       await prisma69.treeBranchLeafNode.update({
-        where: { id: newNodeId },
+        where: { id: finalOwnerNodeId },
         data: {
           hasFormula: true,
           formula_activeId: newFormulaId,
@@ -28137,7 +28170,7 @@ ${"\u2550".repeat(80)}`);
           formula_description: newFormula.description
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (formula) mis \xE0 jour pour n\u0153ud ${newNodeId}`);
+      console.log(`\u2705 Param\xE8tres capacit\xE9 (formula) mis \xE0 jour pour n\u0153ud ${finalOwnerNodeId}`);
       console.log(`   - formula_activeId: ${newFormulaId}`);
       console.log(`   - formula_name: ${newFormula.name || "null"}`);
     } catch (e) {
@@ -28151,7 +28184,7 @@ ${"\u2550".repeat(80)}`);
 `);
     return {
       newFormulaId,
-      nodeId: newNodeId,
+      nodeId: finalOwnerNodeId,
       tokens: rewrittenTokens,
       success: true
     };
@@ -28323,6 +28356,17 @@ ${"\u2550".repeat(80)}`);
     console.log(`   conditionSet original:`, originalCondition.conditionSet);
     const newConditionId = `${originalCondition.id}-${suffix}`;
     console.log(`\u{1F4DD} Nouvel ID condition: ${newConditionId}`);
+    const originalOwnerNodeId = originalCondition.nodeId;
+    const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
+    const ownerNodeExists = await prisma69.treeBranchLeafNode.findUnique({
+      where: { id: correctOwnerNodeId },
+      select: { id: true, label: true }
+    });
+    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    console.log(`\u{1F527} [OWNER FIX] NodeId original propri\xE9taire: ${originalOwnerNodeId}`);
+    console.log(`\u{1F527} [OWNER FIX] NodeId propri\xE9taire suffix\xE9: ${correctOwnerNodeId}`);
+    console.log(`\u{1F527} [OWNER FIX] Propri\xE9taire suffix\xE9 existe: ${ownerNodeExists ? "OUI (" + ownerNodeExists.label + ")" : "NON"}`);
+    console.log(`\u{1F527} [OWNER FIX] NodeId FINAL utilis\xE9: ${finalOwnerNodeId}`);
     console.log(`
 \u{1F504} R\xE9\xE9criture du conditionSet...`);
     console.log(`   Nombre d'IDs n\u0153uds dans la map: ${nodeIdMap.size}`);
@@ -28356,9 +28400,9 @@ ${"\u2550".repeat(80)}`);
         }
       }
       const enrichedNodeIdMap = new Map(nodeIdMap);
-      if (originalCondition.nodeId && newNodeId) {
-        enrichedNodeIdMap.set(originalCondition.nodeId, newNodeId);
-        console.log(`   \u{1F4CD} NodeIdMap enrichie: ${originalCondition.nodeId} \u2192 ${newNodeId}`);
+      if (originalCondition.nodeId && finalOwnerNodeId) {
+        enrichedNodeIdMap.set(originalCondition.nodeId, finalOwnerNodeId);
+        console.log(`   \u{1F4CD} NodeIdMap enrichie: ${originalCondition.nodeId} \u2192 ${finalOwnerNodeId}`);
       }
       for (const linkedFormId of linkedFormulaIdsFromSet) {
         if (formulaIdMap.has(linkedFormId)) {
@@ -28368,8 +28412,8 @@ ${"\u2550".repeat(80)}`);
             console.log(`   \u{1F500} Copie formule li\xE9e: ${linkedFormId}...`);
             const linkedFormResult = await copyFormulaCapacity(
               linkedFormId,
-              newNodeId,
-              // Même nœud propriétaire
+              finalOwnerNodeId,
+              // Même nœud propriétaire (corrigé)
               suffix,
               prisma69,
               { nodeIdMap: enrichedNodeIdMap, formulaIdMap }
@@ -28422,8 +28466,8 @@ ${"\u2550".repeat(80)}`);
     console.log(`
 \u{1F50D} DEBUG: conditionSet apr\xE8s 1\xE8re r\xE9\xE9criture:`, JSON.stringify(rewrittenConditionSet).substring(0, 500));
     const enrichedRewriteMaps = {
-      nodeIdMap: new Map([...nodeIdMap, [originalCondition.nodeId, newNodeId]]),
-      // Enrichi
+      nodeIdMap: new Map([...nodeIdMap, [originalCondition.nodeId, finalOwnerNodeId]]),
+      // Enrichi avec le bon propriétaire
       formulaIdMap,
       conditionIdMap: conditionCopyCache || /* @__PURE__ */ new Map(),
       tableIdMap: /* @__PURE__ */ new Map()
@@ -28463,8 +28507,8 @@ ${"\u2550".repeat(80)}`);
             console.log(`   \u{1F500} Copie condition li\xE9e: ${linkedCondId}...`);
             const linkedCondResult = await copyConditionCapacity(
               linkedCondId,
-              newNodeId,
-              // Même nœud propriétaire
+              finalOwnerNodeId,
+              // Même nœud propriétaire (corrigé)
               suffix,
               prisma69,
               { nodeIdMap, formulaIdMap, conditionCopyCache }
@@ -28510,8 +28554,8 @@ ${"\u2550".repeat(80)}`);
             console.log(`   \u{1F500} Copie table li\xE9e: ${linkedTableId}...`);
             const linkedTableResult = await copyTableCapacity(
               linkedTableId,
-              newNodeId,
-              // Même nœud propriétaire
+              finalOwnerNodeId,
+              // Même nœud propriétaire (corrigé)
               suffix,
               prisma69,
               { nodeIdMap, tableIdMap }
@@ -28542,7 +28586,7 @@ ${"\u2550".repeat(80)}`);
       newCondition = await prisma69.treeBranchLeafNodeCondition.update({
         where: { id: newConditionId },
         data: {
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           name: originalCondition.name ? `${originalCondition.name}-${suffix}` : null,
           description: originalCondition.description,
           conditionSet: rewrittenConditionSet,
@@ -28554,7 +28598,7 @@ ${"\u2550".repeat(80)}`);
       newCondition = await prisma69.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           organizationId: originalCondition.organizationId,
           name: originalCondition.name ? `${originalCondition.name}-${suffix}` : null,
           description: originalCondition.description,
@@ -28572,14 +28616,14 @@ ${"\u2550".repeat(80)}`);
       console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField3(prisma69, newNodeId, "linkedConditionIds", [newConditionId]);
-      console.log(`\u2705 linkedConditionIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${newNodeId}`);
+      await addToNodeLinkedField3(prisma69, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
+      console.log(`\u2705 linkedConditionIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${finalOwnerNodeId}`);
     } catch (e) {
       console.warn(`\u26A0\uFE0F Erreur MAJ linkedConditionIds du propri\xE9taire:`, e.message);
     }
     try {
       await prisma69.treeBranchLeafNode.update({
-        where: { id: newNodeId },
+        where: { id: finalOwnerNodeId },
         data: {
           hasCondition: true,
           condition_activeId: newConditionId,
@@ -28587,7 +28631,7 @@ ${"\u2550".repeat(80)}`);
           condition_description: newCondition.description
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (condition) mis \xE0 jour pour n\u0153ud ${newNodeId}`);
+      console.log(`\u2705 Param\xE8tres capacit\xE9 (condition) mis \xE0 jour pour n\u0153ud ${finalOwnerNodeId}`);
       console.log(`   - condition_activeId: ${newConditionId}`);
       console.log(`   - condition_name: ${newCondition.name || "null"}`);
     } catch (e) {
@@ -28601,7 +28645,7 @@ ${"\u2550".repeat(80)}`);
 `);
     return {
       newConditionId,
-      nodeId: newNodeId,
+      nodeId: finalOwnerNodeId,
       conditionSet: rewrittenConditionSet,
       success: true
     };
@@ -28716,6 +28760,17 @@ ${"\u2550".repeat(80)}`);
     console.log(`   Cellules (total): ${originalTotalCells}`);
     const newTableId = `${originalTable.id}-${suffix}`;
     console.log(`\u{1F4DD} Nouvel ID table: ${newTableId}`);
+    const originalOwnerNodeId = originalTable.nodeId;
+    const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
+    const ownerNodeExists = await prisma69.treeBranchLeafNode.findUnique({
+      where: { id: correctOwnerNodeId },
+      select: { id: true, label: true }
+    });
+    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    console.log(`\u{1F527} [OWNER FIX] NodeId original propri\xE9taire: ${originalOwnerNodeId}`);
+    console.log(`\u{1F527} [OWNER FIX] NodeId propri\xE9taire suffix\xE9: ${correctOwnerNodeId}`);
+    console.log(`\u{1F527} [OWNER FIX] Propri\xE9taire suffix\xE9 existe: ${ownerNodeExists ? "OUI (" + ownerNodeExists.label + ")" : "NON"}`);
+    console.log(`\u{1F527} [OWNER FIX] NodeId FINAL utilis\xE9: ${finalOwnerNodeId}`);
     const columnIdMap = /* @__PURE__ */ new Map();
     const rowIdMap = /* @__PURE__ */ new Map();
     let newTable = await prisma69.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
@@ -28723,7 +28778,7 @@ ${"\u2550".repeat(80)}`);
       newTable = await prisma69.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
@@ -28765,7 +28820,7 @@ ${"\u2550".repeat(80)}`);
       newTable = await prisma69.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           organizationId: originalTable.organizationId,
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
@@ -28917,8 +28972,8 @@ ${"\u2550".repeat(80)}`);
       console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField4(prisma69, newNodeId, "linkedTableIds", [newTableId]);
-      console.log(`\u2705 linkedTableIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${newNodeId}`);
+      await addToNodeLinkedField4(prisma69, finalOwnerNodeId, "linkedTableIds", [newTableId]);
+      console.log(`\u2705 linkedTableIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${finalOwnerNodeId}`);
     } catch (e) {
       console.warn(`\u26A0\uFE0F Erreur MAJ linkedTableIds du propri\xE9taire:`, e.message);
     }
@@ -28956,7 +29011,7 @@ ${"\u2550".repeat(80)}`);
         console.log(`   \u2705 Instance ajout\xE9e pour nouvelle table: ${newTableId}`);
       }
       await prisma69.treeBranchLeafNode.update({
-        where: { id: newNodeId },
+        where: { id: finalOwnerNodeId },
         data: {
           hasTable: true,
           table_activeId: newTableId,
@@ -28968,7 +29023,7 @@ ${"\u2550".repeat(80)}`);
           table_type: newTable.type
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (table) mis \xE0 jour pour n\u0153ud ${newNodeId}`);
+      console.log(`\u2705 Param\xE8tres capacit\xE9 (table) mis \xE0 jour pour n\u0153ud ${finalOwnerNodeId}`);
       console.log(`   - table_activeId: ${newTableId}`);
       console.log(`   - table_instances: ${Object.keys(newTableInstances).length} cl\xE9(s) copi\xE9e(s)`);
       console.log(`   - table_name: ${newTable.name || "null"}`);
@@ -28993,7 +29048,7 @@ ${"\u2550".repeat(80)}`);
 `);
     return {
       newTableId,
-      nodeId: newNodeId,
+      nodeId: finalOwnerNodeId,
       columnsCount: originalTable.tableColumns.length,
       rowsCount: originalTable.tableRows.length,
       cellsCount: cellsCopied,
@@ -29348,6 +29403,11 @@ ${"\u2550".repeat(80)}`);
               hasFormula: true,
               hasLink: true,
               hasMarkers: true,
+              // 🔧 FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
+              condition_activeId: true,
+              formula_activeId: true,
+              linkedConditionIds: true,
+              linkedFormulaIds: true,
               data_activeId: true,
               data_displayFormat: true,
               data_exposedKey: true,
@@ -29388,6 +29448,11 @@ ${"\u2550".repeat(80)}`);
             hasFormula: true,
             hasLink: true,
             hasMarkers: true,
+            // 🔧 FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
+            condition_activeId: true,
+            formula_activeId: true,
+            linkedConditionIds: true,
+            linkedFormulaIds: true,
             data_activeId: true,
             data_displayFormat: true,
             data_exposedKey: true,
@@ -29639,8 +29704,11 @@ ${"\u2550".repeat(80)}`);
               table_rows: tableSourceNode.table_rows,
               table_type: tableSourceNode.table_type,
               linkedTableIds: Array.isArray(tableSourceNode.linkedTableIds) ? tableSourceNode.linkedTableIds.map((id) => appendSuffix(String(id))) : [],
-              linkedConditionIds: [],
-              linkedFormulaIds: [],
+              // 🔧 FIX 16/12/2025: NE PAS inclure linkedConditionIds et linkedFormulaIds ici
+              // car ils seront mis à jour APRÈS la copie des conditions/formules.
+              // Si on les inclut avec [], ils écraseraient les valeurs ajoutées par copyFormulaCapacity!
+              // linkedConditionIds: [] as any,  // SUPPRIMÉ
+              // linkedFormulaIds: [] as any,    // SUPPRIMÉ
               linkedVariableIds: [newVarId],
               data_activeId: tableSourceNode.data_activeId ? appendSuffix(String(tableSourceNode.data_activeId)) : null,
               data_displayFormat: tableSourceNode.data_displayFormat,
@@ -29668,15 +29736,19 @@ ${"\u2550".repeat(80)}`);
             const copiedConditionIds = [];
             try {
               const originalFormulas = await prisma69.treeBranchLeafNodeFormula.findMany({
-                where: { nodeId: originalOwnerNode.id }
+                where: { nodeId: tableSourceNode.id }
               });
-              console.log(`\u{1F4CB} Formules \xE0 copier depuis ${originalOwnerNode.id}: ${originalFormulas.length}`);
+              console.log(`\u{1F4CB} Formules \xE0 copier depuis ${tableSourceNode.id}: ${originalFormulas.length}`);
               for (const f of originalFormulas) {
                 const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
                 const existingFormula = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
                 if (existingFormula) {
-                  console.log(`   \u267B\uFE0F Formule ${newFormulaId} d\xE9j\xE0 existante, skip`);
-                  copiedFormulaIds.push(newFormulaId);
+                  if (existingFormula.nodeId === displayNodeId2) {
+                    console.log(`   \u267B\uFE0F Formule ${newFormulaId} existe d\xE9j\xE0 pour CE n\u0153ud, skip`);
+                    copiedFormulaIds.push(newFormulaId);
+                    continue;
+                  }
+                  console.log(`   \u26A0\uFE0F Formule ${newFormulaId} existe pour autre n\u0153ud (${existingFormula.nodeId}), skip`);
                   continue;
                 }
                 try {
@@ -29699,56 +29771,75 @@ ${"\u2550".repeat(80)}`);
                 }
               }
               const originalConditions = await prisma69.treeBranchLeafNodeCondition.findMany({
-                where: { nodeId: originalOwnerNode.id }
+                where: { nodeId: tableSourceNode.id }
               });
-              console.log(`\u{1F4CB} Conditions \xE0 copier depuis ${originalOwnerNode.id}: ${originalConditions.length}`);
+              console.log(`\u{1F4CB} Conditions \xE0 copier depuis ${tableSourceNode.id}: ${originalConditions.length}`);
               for (const c of originalConditions) {
                 const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
                 const existingCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
                 if (existingCondition) {
-                  console.log(`   \u267B\uFE0F Condition ${newConditionId} d\xE9j\xE0 existante, skip`);
-                  copiedConditionIds.push(newConditionId);
+                  if (existingCondition.nodeId === displayNodeId2) {
+                    console.log(`   \u267B\uFE0F Condition ${newConditionId} existe d\xE9j\xE0 pour CE n\u0153ud, skip`);
+                    copiedConditionIds.push(newConditionId);
+                    continue;
+                  }
+                  console.log(`   \u26A0\uFE0F Condition ${newConditionId} existe pour autre n\u0153ud (${existingCondition.nodeId}), skip`);
                   continue;
                 }
-                let newConditionSet = c.conditionSet;
-                if (newConditionSet && nodeIdMap && nodeIdMap.size > 0) {
-                  const setStr = JSON.stringify(newConditionSet);
-                  let updatedStr = setStr;
-                  for (const [oldId, newId] of nodeIdMap.entries()) {
-                    updatedStr = updatedStr.split(oldId).join(newId);
+                try {
+                  const conditionResult = await copyConditionCapacity(
+                    c.id,
+                    displayNodeId2,
+                    suffix,
+                    prisma69,
+                    { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
+                  );
+                  if (conditionResult.success) {
+                    conditionIdMap.set(c.id, conditionResult.newConditionId);
+                    copiedConditionIds.push(conditionResult.newConditionId);
+                    console.log(`   \u2705 Condition copi\xE9e (centralis\xE9e): ${c.id} \u2192 ${conditionResult.newConditionId}`);
+                  } else {
+                    console.error(`   \u274C Erreur copie condition: ${c.id}`);
                   }
-                  for (const formulaId of copiedFormulaIds) {
-                    const originalFormulaId = formulaId.replace(new RegExp(`-${suffix}$`), "");
-                    updatedStr = updatedStr.split(originalFormulaId).join(formulaId);
-                  }
-                  newConditionSet = JSON.parse(updatedStr);
+                } catch (error) {
+                  console.error(`   \u274C Exception copie condition ${c.id}:`, error);
                 }
-                await prisma69.treeBranchLeafNodeCondition.create({
-                  data: {
-                    id: newConditionId,
-                    nodeId: displayNodeId2,
-                    organizationId: c.organizationId,
-                    name: c.name ? `${c.name} (${suffix})` : c.name,
-                    conditionSet: newConditionSet,
-                    description: c.description,
-                    isDefault: c.isDefault,
-                    order: c.order,
-                    createdAt: /* @__PURE__ */ new Date(),
-                    updatedAt: /* @__PURE__ */ new Date()
-                  }
-                });
-                copiedConditionIds.push(newConditionId);
-                console.log(`   \u2705 Condition copi\xE9e: ${c.id} \u2192 ${newConditionId}`);
               }
               const updateData = {};
               if (copiedFormulaIds.length > 0) {
                 updateData.hasFormula = true;
                 updateData.linkedFormulaIds = copiedFormulaIds;
+                if (tableSourceNode.formula_activeId) {
+                  const newFormulaActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.formula_activeId)));
+                  if (copiedFormulaIds.includes(newFormulaActiveId)) {
+                    updateData.formula_activeId = newFormulaActiveId;
+                    console.log(`   \u{1F4CA} formula_activeId=${newFormulaActiveId}`);
+                  } else {
+                    updateData.formula_activeId = copiedFormulaIds[0];
+                    console.log(`   \u{1F4CA} formula_activeId=${copiedFormulaIds[0]} (premier disponible)`);
+                  }
+                } else if (copiedFormulaIds.length > 0) {
+                  updateData.formula_activeId = copiedFormulaIds[0];
+                  console.log(`   \u{1F4CA} formula_activeId=${copiedFormulaIds[0]} (premier par d\xE9faut)`);
+                }
                 console.log(`   \u{1F4CA} hasFormula=true, linkedFormulaIds=${copiedFormulaIds.join(", ")}`);
               }
               if (copiedConditionIds.length > 0) {
                 updateData.hasCondition = true;
                 updateData.linkedConditionIds = copiedConditionIds;
+                if (tableSourceNode.condition_activeId) {
+                  const newConditionActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.condition_activeId)));
+                  if (copiedConditionIds.includes(newConditionActiveId)) {
+                    updateData.condition_activeId = newConditionActiveId;
+                    console.log(`   \u{1F4CA} condition_activeId=${newConditionActiveId}`);
+                  } else {
+                    updateData.condition_activeId = copiedConditionIds[0];
+                    console.log(`   \u{1F4CA} condition_activeId=${copiedConditionIds[0]} (premier disponible)`);
+                  }
+                } else if (copiedConditionIds.length > 0) {
+                  updateData.condition_activeId = copiedConditionIds[0];
+                  console.log(`   \u{1F4CA} condition_activeId=${copiedConditionIds[0]} (premier par d\xE9faut)`);
+                }
                 console.log(`   \u{1F4CA} hasCondition=true, linkedConditionIds=${copiedConditionIds.join(", ")}`);
               }
               if (Object.keys(updateData).length > 0) {
@@ -29757,6 +29848,52 @@ ${"\u2550".repeat(80)}`);
                   data: updateData
                 });
                 console.log(`\u2705 N\u0153ud d'affichage ${displayNodeId2} mis \xE0 jour avec formules/conditions`);
+              }
+              const copiedTableIds = [];
+              if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
+                console.log(`
+\u{1F4CA} [COPY-TABLES] N\u0153ud original a ${tableSourceNode.linkedTableIds.length} tables \xE0 copier`);
+                for (const originalTableId of tableSourceNode.linkedTableIds) {
+                  const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
+                  const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+                    where: { id: newTableId }
+                  });
+                  if (existingTable) {
+                    console.log(`   \u267B\uFE0F Table ${newTableId} existe d\xE9j\xE0, skip`);
+                    copiedTableIds.push(newTableId);
+                    tableIdMap2.set(String(originalTableId), newTableId);
+                    continue;
+                  }
+                  try {
+                    const tableResult = await copyTableCapacity2(
+                      String(originalTableId),
+                      displayNodeId2,
+                      // La nouvelle table appartient au display node copié
+                      suffix,
+                      prisma69,
+                      { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
+                    );
+                    if (tableResult.success) {
+                      tableIdMap2.set(String(originalTableId), tableResult.newTableId);
+                      copiedTableIds.push(tableResult.newTableId);
+                      console.log(`   \u2705 Table copi\xE9e: ${originalTableId} \u2192 ${tableResult.newTableId} (${tableResult.columnsCount} cols, ${tableResult.rowsCount} rows)`);
+                    } else {
+                      console.warn(`   \u26A0\uFE0F \xC9chec copie table ${originalTableId}: ${tableResult.error}`);
+                    }
+                  } catch (tableErr) {
+                    console.error(`   \u274C Exception copie table ${originalTableId}:`, tableErr.message);
+                  }
+                }
+                if (copiedTableIds.length > 0) {
+                  await prisma69.treeBranchLeafNode.update({
+                    where: { id: displayNodeId2 },
+                    data: {
+                      hasTable: true,
+                      linkedTableIds: copiedTableIds
+                    }
+                  });
+                  console.log(`   \u2705 hasTable=true, linkedTableIds mis \xE0 jour sur ${displayNodeId2}`);
+                }
               }
             } catch (copyCapErr) {
               console.warn(`\u26A0\uFE0F Erreur lors de la copie des formules/conditions pour display node:`, copyCapErr.message);
@@ -31640,6 +31777,16 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       const newConditionId = appendSuffix(c.id);
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap);
+      const existingCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({
+        where: { id: newConditionId }
+      });
+      if (existingCondition) {
+        console.log(`[DEEP-COPY] \u26A0\uFE0F Condition ${newConditionId} existe d\xE9j\xE0 (nodeId: ${existingCondition.nodeId}), skip cr\xE9ation`);
+        if (validLinkedConditionIds.includes(c.id)) {
+          newLinkedConditionIds.push(newConditionId);
+        }
+        continue;
+      }
       await prisma69.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
@@ -31654,6 +31801,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
+      console.log(`[DEEP-COPY] \u2705 Condition ${newConditionId} cr\xE9\xE9e pour nodeId: ${newId}`);
       if (validLinkedConditionIds.includes(c.id)) {
         newLinkedConditionIds.push(newConditionId);
       }
@@ -31687,11 +31835,47 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds for node:", e.message);
       }
     }
+    const updateActiveIds = {};
+    if (oldNode.condition_activeId) {
+      const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
+      if (newConditionActiveId) {
+        updateActiveIds.condition_activeId = newConditionActiveId;
+        console.log(`[DEEP-COPY] \u{1F517} condition_activeId remapp\xE9: ${oldNode.condition_activeId} \u2192 ${newConditionActiveId}`);
+      }
+    }
+    if (oldNode.formula_activeId) {
+      const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
+      if (newFormulaActiveId) {
+        updateActiveIds.formula_activeId = newFormulaActiveId;
+        console.log(`[DEEP-COPY] \u{1F517} formula_activeId remapp\xE9: ${oldNode.formula_activeId} \u2192 ${newFormulaActiveId}`);
+      }
+    }
+    if (Object.keys(updateActiveIds).length > 0) {
+      try {
+        await prisma69.treeBranchLeafNode.update({
+          where: { id: newId },
+          data: updateActiveIds
+        });
+        console.log(`[DEEP-COPY] \u2705 ActiveIds mis \xE0 jour pour ${newId}:`, updateActiveIds);
+      } catch (e) {
+        console.warn("[DEEP-COPY] \u26A0\uFE0F Erreur mise \xE0 jour activeIds:", e.message);
+      }
+    }
     const tables = await prisma69.treeBranchLeafNodeTable.findMany({
       where: { nodeId: oldId },
       include: { tableColumns: true, tableRows: true }
     });
     const additionalTableIds = [];
+    if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
+      additionalTableIds.push(source.table_activeId);
+    }
+    if (Array.isArray(oldNode.linkedTableIds)) {
+      for (const linkedTableId of oldNode.linkedTableIds) {
+        if (!tables.some((t) => t.id === linkedTableId) && !additionalTableIds.includes(linkedTableId)) {
+          additionalTableIds.push(linkedTableId);
+        }
+      }
+    }
     if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
       additionalTableIds.push(source.table_activeId);
     }
@@ -31768,6 +31952,42 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
                 const val = metaObj.lookup.columnSourceOption.comparisonColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
                   metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
+                }
+              }
+              // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+              if (metaObj?.lookup?.displayColumn) {
+                if (Array.isArray(metaObj.lookup.displayColumn)) {
+                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                    if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(computedLabelSuffix)) {
+                      console.log(`[table.meta] displayColumn[]: ${col} -> ${col}${computedLabelSuffix}`);
+                      return `${col}${computedLabelSuffix}`;
+                    }
+                    return col;
+                  });
+                } else if (typeof metaObj.lookup.displayColumn === 'string') {
+                  const val = metaObj.lookup.displayColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                    console.log(`[table.meta] displayColumn: ${val} -> ${val}${computedLabelSuffix}`);
+                    metaObj.lookup.displayColumn = `${val}${computedLabelSuffix}`;
+                  }
+                }
+              }
+              // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+              if (metaObj?.lookup?.displayRow) {
+                if (Array.isArray(metaObj.lookup.displayRow)) {
+                  metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
+                    if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(computedLabelSuffix)) {
+                      console.log(`[table.meta] displayRow[]: ${row} -> ${row}${computedLabelSuffix}`);
+                      return `${row}${computedLabelSuffix}`;
+                    }
+                    return row;
+                  });
+                } else if (typeof metaObj.lookup.displayRow === 'string') {
+                  const val = metaObj.lookup.displayRow;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
+                    console.log(`[table.meta] displayRow: ${val} -> ${val}${computedLabelSuffix}`);
+                    metaObj.lookup.displayRow = `${val}${computedLabelSuffix}`;
+                  }
                 }
               }
               console.log(`[table.meta] \u2705 APR\xC8S traitement:`, JSON.stringify(metaObj).substring(0, 300));
@@ -33109,7 +33329,7 @@ async function removeFromNodeLinkedField(client, nodeId, field, idsToRemove) {
   await setNodeLinkedField3(client, nodeId, field, next);
 }
 function fmtLV(label, value) {
-  return `${label ?? "\xE2\u20AC\u201D"}(${value ?? "\xE2\u02C6\u2026"})`;
+  return `${label ?? "\u2014"}(${value ?? "\u2205"})`;
 }
 function getTestValueForNode(nodeId, fixedValue, defaultValue) {
   if (fixedValue && fixedValue.trim() !== "") return fixedValue;
@@ -33119,15 +33339,15 @@ function getTestValueForNode(nodeId, fixedValue, defaultValue) {
     "702d1b09-abc9-4096-9aaa-77155ac5294f": "0.35",
     // Calcul du prix Kw/h (devrait avoir 4000)
     "d6212e5e-3fe9-4cce-b380-e6745524d011": "4000",
-    // Consommation annuelle Ã©lectricitÃ© (devrait avoir 1000)
+    // Consommation annuelle électricité (devrait avoir 1000)
     "node_1757366229534_x6jxzmvmu": "1000",
     // Consommation annuelle (valeur test)
     "node_1757366229561_dyfsa3p7n": "2500",
     // Cout Annuelle chauffage (valeur test)  
     "node_1757366229564_z28kl0eb4": "1200",
-    // Longueur faÃ§ade avant (valeur test)
+    // Longueur façade avant (valeur test)
     "node_1757366229578_c9yf18eho": "12",
-    // Hauteur faÃ§ade avant (valeur test)
+    // Hauteur façade avant (valeur test)
     "4fd0bb1d-836b-4cd0-9c2d-2f48808732eb": "3"
   };
   return testValues[nodeId] || null;
@@ -33184,15 +33404,15 @@ function buildResultText(prefixExpr, resultValue, unit) {
   return right ? `${right}${u}` : "";
 }
 async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma69, submissionId, organizationId, userId) {
-  console.log("\xF0\u0178\u0161\xAB [LEGACY DISABLED] buildDetailAndResultForOperation est d\xC3\xA9sactiv\xC3\xA9e - utilisez TBL Prisma !");
-  console.log("\xF0\u0178\u201D\u201E Redirection vers endpoints TBL Prisma: /api/tbl/submissions/create-and-evaluate");
+  console.log("\u{1F6AB} [LEGACY DISABLED] buildDetailAndResultForOperation est d\xE9sactiv\xE9e - utilisez TBL Prisma !");
+  console.log("\u{1F504} Redirection vers endpoints TBL Prisma: /api/tbl/submissions/create-and-evaluate");
   return {
     detail: {
       type: "legacy-disabled",
-      message: "\xF0\u0178\u201D\u201E Fonction d\xC3\xA9sactiv\xC3\xA9e - utilisez TBL Prisma exclusivement",
+      message: "\u{1F504} Fonction d\xE9sactiv\xE9e - utilisez TBL Prisma exclusivement",
       tblPrismaEndpoint: "/api/tbl/submissions/create-and-evaluate"
     },
-    result: "\xF0\u0178\u201D\u201E \xC3\u2030valuation via TBL Prisma uniquement"
+    result: "\u{1F504} \xC9valuation via TBL Prisma uniquement"
   };
 }
 function calculateResult(expression) {
@@ -33227,18 +33447,18 @@ router56.use((req2, res, next) => {
     isSuperAdmin: true,
     role: "super_admin"
   };
-  console.log("[TreeBranchLeaf API] \xF0\u0178\u0161\xA9 Mock auth user assign\xC3\xA9 pour tests");
+  console.log("[TreeBranchLeaf API] \u{1F6A9} Mock auth user assign\xE9 pour tests");
   next();
 });
 router56.get("/trees", async (req2, res) => {
   try {
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] GET /trees - D\xC3\u2030BUT de la route");
+    console.log("\u{1F50D} [TBL-ROUTES] GET /trees - D\xC9BUT de la route");
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Organization ID:", organizationId);
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
+    console.log("\u{1F50D} [TBL-ROUTES] Organization ID:", organizationId);
+    console.log("\u{1F50D} [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
     const whereFilter = isSuperAdmin2 || !organizationId ? {} : { organizationId };
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Where filter:", whereFilter);
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Recherche des arbres TreeBranchLeaf...");
+    console.log("\u{1F50D} [TBL-ROUTES] Where filter:", whereFilter);
+    console.log("\u{1F50D} [TBL-ROUTES] Recherche des arbres TreeBranchLeaf...");
     const trees = await prisma47.treeBranchLeafTree.findMany({
       where: whereFilter,
       include: {
@@ -33251,10 +33471,10 @@ router56.get("/trees", async (req2, res) => {
       },
       orderBy: { createdAt: "desc" }
     });
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Arbres trouv\xC3\xA9s:", trees.length);
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Premier arbre:", trees[0] ? `${trees[0].id} - ${trees[0].name}` : "Aucun");
+    console.log("\u{1F50D} [TBL-ROUTES] Arbres trouv\xE9s:", trees.length);
+    console.log("\u{1F50D} [TBL-ROUTES] Premier arbre:", trees[0] ? `${trees[0].id} - ${trees[0].name}` : "Aucun");
     if (trees.length > 0) {
-      console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] D\xC3\xA9tails premier arbre:", {
+      console.log("\u{1F50D} [TBL-ROUTES] D\xE9tails premier arbre:", {
         id: trees[0].id,
         name: trees[0].name,
         organizationId: trees[0].organizationId,
@@ -33264,7 +33484,7 @@ router56.get("/trees", async (req2, res) => {
     res.json(trees);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching trees:", error);
-    res.status(500).json({ error: "Impossible de r\xC3\xA9cup\xC3\xA9rer les arbres" });
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les arbres" });
   }
 });
 router56.get("/trees/:id", async (req2, res) => {
@@ -33283,12 +33503,12 @@ router56.get("/trees/:id", async (req2, res) => {
       }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     res.json(tree);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching tree:", error);
-    res.status(500).json({ error: "Impossible de r\xC3\xA9cup\xC3\xA9rer l'arbre" });
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer l'arbre" });
   }
 });
 router56.post("/trees", async (req2, res) => {
@@ -33311,7 +33531,7 @@ router56.post("/trees", async (req2, res) => {
     }
     const targetOrgId = getAuthCtx3(req2).organizationId || (typeof bodyOrgId === "string" ? bodyOrgId : null);
     if (!targetOrgId) {
-      return res.status(400).json({ error: "organizationId requis (en-t\xC3\xAAte x-organization-id ou dans le corps)" });
+      return res.status(400).json({ error: "organizationId requis (en-t\xEAte x-organization-id ou dans le corps)" });
     }
     const id = (0, import_crypto10.randomUUID)();
     const tree = await prisma47.treeBranchLeafTree.create({
@@ -33334,7 +33554,7 @@ router56.post("/trees", async (req2, res) => {
     res.status(201).json(tree);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating tree:", error);
-    res.status(500).json({ error: "Impossible de cr\xC3\xA9er l'arbre" });
+    res.status(500).json({ error: "Impossible de cr\xE9er l'arbre" });
   }
 });
 router56.put("/trees/:id", async (req2, res) => {
@@ -33356,7 +33576,7 @@ router56.put("/trees/:id", async (req2, res) => {
       }
     });
     if (tree.count === 0) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     const updatedTree = await prisma47.treeBranchLeafTree.findFirst({
       where: { id, organizationId }
@@ -33364,7 +33584,7 @@ router56.put("/trees/:id", async (req2, res) => {
     res.json(updatedTree);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating tree:", error);
-    res.status(500).json({ error: "Impossible de mettre \xC3\xA0 jour l'arbre" });
+    res.status(500).json({ error: "Impossible de mettre \xE0 jour l'arbre" });
   }
 });
 router56.delete("/trees/:id", async (req2, res) => {
@@ -33381,9 +33601,9 @@ router56.delete("/trees/:id", async (req2, res) => {
       }
     });
     if (result.count === 0) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
-    res.json({ success: true, message: "Arbre supprim\xC3\xA9 avec succ\xC3\xA8s" });
+    res.json({ success: true, message: "Arbre supprim\xE9 avec succ\xE8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting tree:", error);
     res.status(500).json({ error: "Impossible de supprimer l'arbre" });
@@ -33391,20 +33611,20 @@ router56.delete("/trees/:id", async (req2, res) => {
 });
 router56.get("/trees/:treeId/nodes", async (req2, res) => {
   try {
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] GET /trees/:treeId/nodes - D\xC3\u2030BUT");
+    console.log("\u{1F50D} [TBL-ROUTES] GET /trees/:treeId/nodes - D\xC9BUT");
     const { treeId } = req2.params;
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] TreeId:", treeId);
+    console.log("\u{1F50D} [TBL-ROUTES] TreeId:", treeId);
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Organization ID:", organizationId);
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
+    console.log("\u{1F50D} [TBL-ROUTES] Organization ID:", organizationId);
+    console.log("\u{1F50D} [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Tree where filter:", treeWhereFilter);
+    console.log("\u{1F50D} [TBL-ROUTES] Tree where filter:", treeWhereFilter);
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] Arbre trouv\xC3\xA9:", tree ? `${tree.id} - ${tree.name}` : "null");
+    console.log("\u{1F50D} [TBL-ROUTES] Arbre trouv\xE9:", tree ? `${tree.id} - ${tree.name}` : "null");
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     const nodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId },
@@ -33430,15 +33650,15 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
         { createdAt: "asc" }
       ]
     });
-    console.log("\xF0\u0178\u201D\x8D [TBL-ROUTES] N\xC5\u201Cuds trouv\xC3\xA9s:", nodes.length);
-    console.log("\xF0\u0178\u201D\u201E [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour", nodes.length, "n\xC5\u201Cuds");
+    console.log("\u{1F50D} [TBL-ROUTES] N\u0153uds trouv\xE9s:", nodes.length);
+    console.log("\u{1F504} [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour", nodes.length, "n\u0153uds");
     const reconstructedNodes = nodes.map((node) => buildResponseFromColumns2(node));
     const nodesWithTooltips = reconstructedNodes.filter(
       (node) => node.text_helpTooltipType && node.text_helpTooltipType !== "none"
     );
     if (nodesWithTooltips.length > 0) {
       console.log(
-        "\xF0\u0178\u017D\xAF [GET /trees/:treeId/nodes] ENVOI AU CLIENT - N\xC5\u201Cuds avec tooltips:",
+        "\u{1F3AF} [GET /trees/:treeId/nodes] ENVOI AU CLIENT - N\u0153uds avec tooltips:",
         nodesWithTooltips.map((node) => ({
           id: node.id,
           name: node.name,
@@ -33451,12 +33671,12 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
     res.json(reconstructedNodes);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching nodes:", error);
-    res.status(500).json({ error: "Impossible de r\xC3\xA9cup\xC3\xA9rer les n\xC5\u201Cuds" });
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les n\u0153uds" });
   }
 });
 router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
   try {
-    console.log("\xF0\u0178\u201D\x81 [TBL-ROUTES] GET /trees/:treeId/repeater-fields - D\xC3\u2030BUT");
+    console.log("\u{1F501} [TBL-ROUTES] GET /trees/:treeId/repeater-fields - D\xC9BUT");
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
@@ -33464,12 +33684,12 @@ router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
       where: treeWhereFilter
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     const allNodesRaw = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId }
     });
-    console.log(`\xF0\u0178\u201D\x81 [TBL-ROUTES] ${allNodesRaw.length} n\xC5\u201Cuds bruts r\xC3\xA9cup\xC3\xA9r\xC3\xA9s depuis la base`);
+    console.log(`\u{1F501} [TBL-ROUTES] ${allNodesRaw.length} n\u0153uds bruts r\xE9cup\xE9r\xE9s depuis la base`);
     const allNodes = allNodesRaw.map((node) => buildResponseFromColumns2(node));
     const _nodesById = new Map(allNodes.map((n) => [n.id, n]));
     const repeaterFields = [];
@@ -33479,45 +33699,45 @@ router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
       const repeaterMeta = metadata.repeater;
       const templateNodeIds = repeaterMeta.templateNodeIds || [];
       const _templateNodeLabels = repeaterMeta.templateNodeLabels || {};
-      console.log(`\xF0\u0178\u201D\x81 [TBL-ROUTES] N\xC5\u201Cud repeater "${node.label}" a ${templateNodeIds.length} templates configur\xC3\xA9s`);
+      console.log(`\u{1F501} [TBL-ROUTES] N\u0153ud repeater "${node.label}" a ${templateNodeIds.length} templates configur\xE9s`);
       const physicalChildren = allNodes.filter((child) => {
         if (child.parentId !== node.id) return false;
         const childMeta = child.metadata;
         return childMeta?.sourceTemplateId && templateNodeIds.includes(childMeta.sourceTemplateId);
       });
-      console.log(`\xF0\u0178\u201D\x81 [TBL-ROUTES] \xE2\u2020\u2019 ${physicalChildren.length} enfants physiques avec sourceTemplateId trouv\xC3\xA9s`);
+      console.log(`\u{1F501} [TBL-ROUTES] \u2192 ${physicalChildren.length} enfants physiques avec sourceTemplateId trouv\xE9s`);
       if (physicalChildren.length === 0) {
-        console.log(`\xE2\u0161\xA0\xEF\xB8\x8F [TBL-ROUTES] Aucun enfant physique pour "${node.label}", il faut dupliquer les templates d'abord`);
+        console.log(`\u26A0\uFE0F [TBL-ROUTES] Aucun enfant physique pour "${node.label}", il faut dupliquer les templates d'abord`);
         continue;
       }
       for (const child of physicalChildren) {
-        console.log(`\xE2\u0153\u2026 [TBL-ROUTES] Enfant physique ajout\xC3\xA9: "${child.label}" (${child.id})`);
+        console.log(`\u2705 [TBL-ROUTES] Enfant physique ajout\xE9: "${child.label}" (${child.id})`);
         repeaterFields.push({
           id: child.id,
-          // âœ… VRAI UUID de l'enfant physique
+          // ✅ VRAI UUID de l'enfant physique
           label: `${node.label} / ${child.label}`,
-          // Label complet affichÃ©
+          // Label complet affiché
           repeaterLabel: node.label,
           // Label du repeater parent
           repeaterParentId: node.id,
-          // ID du nÅ“ud repeater
+          // ID du nœud repeater
           nodeLabel: child.label,
           // Label de l'enfant
           nodeId: child.id
-          // âœ… VRAI UUID de l'enfant
+          // ✅ VRAI UUID de l'enfant
         });
       }
     }
-    console.log(`\xF0\u0178\u201D\x81 [TBL-ROUTES] ${repeaterFields.length} champs r\xC3\xA9p\xC3\xA9titeurs trouv\xC3\xA9s`);
+    console.log(`\u{1F501} [TBL-ROUTES] ${repeaterFields.length} champs r\xE9p\xE9titeurs trouv\xE9s`);
     res.json(repeaterFields);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching repeater fields:", error);
-    res.status(500).json({ error: "Impossible de r\xC3\xA9cup\xC3\xA9rer les champs r\xC3\xA9p\xC3\xA9titeurs" });
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les champs r\xE9p\xE9titeurs" });
   }
 });
 router56.get("/trees/:treeId/shared-references", async (req2, res) => {
   try {
-    console.log("\xF0\u0178\u201D\u2014 [TBL-ROUTES] GET /trees/:treeId/shared-references - D\xC3\u2030BUT");
+    console.log("\u{1F517} [TBL-ROUTES] GET /trees/:treeId/shared-references - D\xC9BUT");
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
@@ -33525,7 +33745,7 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
       where: treeWhereFilter
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     const sharedReferencesRaw = await prisma47.treeBranchLeafNode.findMany({
       where: {
@@ -33533,12 +33753,12 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
         isSharedReference: true
       }
     });
-    console.log(`\xF0\u0178\u201D\u2014 [TBL-ROUTES] ${sharedReferencesRaw.length} r\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es trouv\xC3\xA9es`);
+    console.log(`\u{1F517} [TBL-ROUTES] ${sharedReferencesRaw.length} r\xE9f\xE9rences partag\xE9es trouv\xE9es`);
     const sharedReferences = sharedReferencesRaw.map((node) => {
       const response = buildResponseFromColumns2(node);
       return {
         id: response.id,
-        label: response.label || response.sharedReferenceName || "R\xC3\xA9f\xC3\xA9rence sans nom",
+        label: response.label || response.sharedReferenceName || "R\xE9f\xE9rence sans nom",
         category: response.sharedReferenceCategory,
         description: response.sharedReferenceDescription,
         type: response.type,
@@ -33546,39 +33766,39 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
         nodeId: response.id
       };
     });
-    console.log(`\xF0\u0178\u201D\u2014 [TBL-ROUTES] R\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es format\xC3\xA9es:`, sharedReferences.map((r) => ({ id: r.id, label: r.label, category: r.category })));
+    console.log(`\u{1F517} [TBL-ROUTES] R\xE9f\xE9rences partag\xE9es format\xE9es:`, sharedReferences.map((r) => ({ id: r.id, label: r.label, category: r.category })));
     res.json(sharedReferences);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching shared references:", error);
-    res.status(500).json({ error: "Impossible de r\xC3\xA9cup\xC3\xA9rer les r\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es" });
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les r\xE9f\xE9rences partag\xE9es" });
   }
 });
 router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { templateNodeIds } = req2.body;
-    console.log("\xF0\u0178\u201D\x81 [DUPLICATE-TEMPLATES] Duplication des templates:", { nodeId, templateNodeIds });
+    console.log("\u{1F501} [DUPLICATE-TEMPLATES] Duplication des templates:", { nodeId, templateNodeIds });
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     if (!Array.isArray(templateNodeIds) || templateNodeIds.length === 0) {
-      return res.status(400).json({ error: "templateNodeIds doit \xC3\xAAtre un tableau non vide" });
+      return res.status(400).json({ error: "templateNodeIds doit \xEAtre un tableau non vide" });
     }
     const parentNode = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
     if (!parentNode) {
-      return res.status(404).json({ error: "N\xC5\u201Cud parent non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud parent non trouv\xE9" });
     }
     if (!isSuperAdmin2 && organizationId && parentNode.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9 \xC3\xA0 cet arbre" });
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 cet arbre" });
     }
     const existingChildrenByParent = await prisma47.treeBranchLeafNode.findMany({
       where: { parentId: nodeId },
       select: { id: true, metadata: true, parentId: true }
     });
-    console.log("\xEF\xBF\xBD [DUPLICATE-TEMPLATES] Cr\xC3\xA9ation de nouvelles copies autoris\xC3\xA9e pour repeater");
+    console.log("\uFFFD [DUPLICATE-TEMPLATES] Cr\xE9ation de nouvelles copies autoris\xE9e pour repeater");
     const newTemplateIds = templateNodeIds;
-    console.log("\xF0\u0178\u2020\u2022 [DUPLICATE-TEMPLATES] Templates \xC3\xA0 dupliquer:", newTemplateIds);
+    console.log("\u{1F195} [DUPLICATE-TEMPLATES] Templates \xE0 dupliquer:", newTemplateIds);
     const requestedNodes = await prisma47.treeBranchLeafNode.findMany({
       where: {
         id: { in: newTemplateIds },
@@ -33587,7 +33807,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       select: { id: true, label: true, type: true, metadata: true }
     });
     if (requestedNodes.length === 0) {
-      return res.status(404).json({ error: "Aucun template trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Aucun template trouv\xE9" });
     }
     const resolveBaseTemplateId = (n) => {
       const md = n.metadata ?? {};
@@ -33609,9 +33829,9 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     const baseById = new Map(baseTemplateNodes.map((n) => [n.id, n]));
     const templatesToDuplicateInOrder = baseTemplateIdsInOrder.map((baseId) => baseById.get(baseId)).filter((n) => Boolean(n));
     if (templatesToDuplicateInOrder.length === 0) {
-      return res.status(404).json({ error: "Aucun template de base trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Aucun template de base trouv\xE9" });
     }
-    console.log(`\xF0\u0178\u201D\x81 [DUPLICATE-TEMPLATES] ${templatesToDuplicateInOrder.length} duplication(s) demand\xC3\xA9e(s) (base templates: ${uniqueBaseTemplateIds.length})`);
+    console.log(`\u{1F501} [DUPLICATE-TEMPLATES] ${templatesToDuplicateInOrder.length} duplication(s) demand\xE9e(s) (base templates: ${uniqueBaseTemplateIds.length})`);
     const duplicatedSummaries = [];
     const extractNumericSuffix2 = (candidate) => {
       if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate;
@@ -33633,7 +33853,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       select: { id: true, parentId: true }
     });
     console.log(
-      `\u{1F50E} [DUPLICATE-TEMPLATES] Racines de copies d\xE9tect\xE9es (repeater=${nodeId}) parentChildren=${existingChildrenByParent.length} rootCandidates=${copyRootCandidates.length}`
+      `?? [DUPLICATE-TEMPLATES] Racines de copies d\uFFFDtect\uFFFDes (repeater=${nodeId}) parentChildren=${existingChildrenByParent.length} rootCandidates=${copyRootCandidates.length}`
     );
     let globalMax = 0;
     for (const root of copyRootCandidates) {
@@ -33647,11 +33867,11 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
         const fromId = extractSuffixFromId3(c.id);
         return { id: c.id, parentId: c.parentId, fromId };
       });
-      console.log("\u{1F50E} [DUPLICATE-TEMPLATES] Sample racines candidates (id/suffix):", sample);
+      console.log("?? [DUPLICATE-TEMPLATES] Sample racines candidates (id/suffix):", sample);
     } catch {
     }
-    console.log("\u{1F522} [DUPLICATE-TEMPLATES] Suffixe global calcul\xE9 (depuis enfants existants):");
-    console.log(`   max global existant: ${globalMax} \u2192 prochain suffixe: ${nextSuffix}`);
+    console.log("?? [DUPLICATE-TEMPLATES] Suffixe global calcul\uFFFD (depuis enfants existants):");
+    console.log(`   max global existant: ${globalMax} ? prochain suffixe: ${nextSuffix}`);
     for (const template of templatesToDuplicateInOrder) {
       const baseTemplateId = template.id;
       const copyNumber = nextSuffix;
@@ -33663,7 +33883,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
         isFromRepeaterDuplication: true
       });
       const newRootId = result.root.newId;
-      console.log(`\u{1F3AF} [DUPLICATE-TEMPLATES] deepCopyNodeInternalService newRootId:`, newRootId, `(type: ${typeof newRootId})`);
+      console.log(`?? [DUPLICATE-TEMPLATES] deepCopyNodeInternalService newRootId:`, newRootId, `(type: ${typeof newRootId})`);
       const normalizedCopyLabel = `${template.label || baseTemplateId}-${copyNumber}`;
       await prisma47.treeBranchLeafNode.update({
         where: { id: newRootId },
@@ -33683,7 +33903,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
         where: { id: newRootId },
         select: { id: true, label: true, type: true, parentId: true }
       });
-      console.log(`\u{1F3AF} [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : "NULL");
+      console.log(`?? [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : "NULL");
       if (created) {
         duplicatedSummaries.push({
           id: created.id,
@@ -33692,19 +33912,19 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
           parentId: created.parentId,
           sourceTemplateId: baseTemplateId
         });
-        console.log(`\xE2\u0153\u2026 [DUPLICATE-TEMPLATES] Template "${template.label}" dupliqu\xC3\xA9 en profondeur \xE2\u2020\u2019 "${created.label}" (${created.id})`);
+        console.log(`\u2705 [DUPLICATE-TEMPLATES] Template "${template.label}" dupliqu\xE9 en profondeur \u2192 "${created.label}" (${created.id})`);
         try {
           const r = await applySharedReferencesFromOriginalInternal(req2, newRootId);
-          console.log(`\xF0\u0178\u201D\u2014 [DUPLICATE-TEMPLATES] R\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es appliqu\xC3\xA9es (suffixe -${r.suffix}) pour`, newRootId);
+          console.log(`\u{1F517} [DUPLICATE-TEMPLATES] R\xE9f\xE9rences partag\xE9es appliqu\xE9es (suffixe -${r.suffix}) pour`, newRootId);
         } catch (e) {
-          console.warn("\xE2\u0161\xA0\xEF\xB8\x8F [DUPLICATE-TEMPLATES] \xC3\u2030chec application des r\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es pour", newRootId, e);
+          console.warn("\u26A0\uFE0F [DUPLICATE-TEMPLATES] \xC9chec application des r\xE9f\xE9rences partag\xE9es pour", newRootId, e);
         }
         try {
           const selectorCopyOptions = {
             nodeIdMap: result.idMap,
             tableCopyCache: /* @__PURE__ */ new Map(),
             tableIdMap: new Map(Object.entries(result.tableIdMap))
-            // ✅ Utiliser le tableIdMap peuplé
+            // ? Utiliser le tableIdMap peupl�
           };
           await copySelectorTablesAfterNodeCopy(
             prisma47,
@@ -33713,20 +33933,20 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
             selectorCopyOptions,
             copyNumber
           );
-          console.log(`\u2705 [DUPLICATE-TEMPLATES] Tables des s\xE9lecteurs copi\xE9es pour ${newRootId}`);
+          console.log(`? [DUPLICATE-TEMPLATES] Tables des s\uFFFDlecteurs copi\uFFFDes pour ${newRootId}`);
         } catch (selectorErr) {
-          console.warn("\u26A0\uFE0F  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s\xE9lecteurs pour", newRootId, selectorErr);
+          console.warn("??  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s\uFFFDlecteurs pour", newRootId, selectorErr);
         }
-        console.log(`\u2139\uFE0F [DUPLICATE-TEMPLATES] Variables li\xE9es d\xE9j\xE0 copi\xE9es par deepCopyNodeInternal pour ${newRootId}`);
+        console.log(`?? [DUPLICATE-TEMPLATES] Variables li\uFFFDes d\uFFFDj\uFFFD copi\uFFFDes par deepCopyNodeInternal pour ${newRootId}`);
       }
     }
-    console.log(`\xF0\u0178\u017D\u2030 [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} n\xC5\u201Cuds dupliqu\xC3\xA9s (deep) avec succ\xC3\xA8s`);
+    console.log(`\u{1F389} [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} n\u0153uds dupliqu\xE9s (deep) avec succ\xE8s`);
     res.status(201).json({
       duplicated: duplicatedSummaries.map((n) => ({ id: n.id, label: n.label, type: n.type, parentId: n.parentId, sourceTemplateId: n.sourceTemplateId })),
       count: duplicatedSummaries.length
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [DUPLICATE-TEMPLATES] Erreur:", error);
+    console.error("\u274C [DUPLICATE-TEMPLATES] Erreur:", error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: "Erreur lors de la duplication des templates", details: msg });
   }
@@ -33738,7 +33958,7 @@ router56.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
     const result = await deepCopyNodeInternal(prisma47, req2, nodeId, { targetParentId });
     res.json(result);
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [/nodes/:nodeId/deep-copy] Erreur:", error);
+    console.error("\u274C [/nodes/:nodeId/deep-copy] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de la copie profonde" });
   }
 });
@@ -33752,44 +33972,44 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
       where: { id: treeId, organizationId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     if (!nodeData.type || !nodeData.label) {
       return res.status(400).json({ error: "Les champs type et label sont obligatoires" });
     }
     const allowedTypes = [
       "branch",
-      // Branche = conteneur hiÃ©rarchique
+      // Branche = conteneur hiérarchique
       "section",
-      // Section = groupe de champs calculÃ©s
+      // Section = groupe de champs calculés
       "leaf_field",
       // Champ standard (text, email, etc.)
       "leaf_option",
       // Option pour un champ SELECT
       "leaf_option_field",
-      // Option + Champ (combinÃ©) â† ajoutÃ© pour dÃ©bloquer O+C
+      // Option + Champ (combiné) ← ajouté pour débloquer O+C
       "leaf_text",
       // Champ texte simple
       "leaf_email",
       // Champ email
       "leaf_phone",
-      // Champ tÃ©lÃ©phone
+      // Champ téléphone
       "leaf_date",
       // Champ date
       "leaf_number",
-      // Champ numÃ©rique
+      // Champ numérique
       "leaf_checkbox",
-      // Case Ã  cocher
+      // Case à cocher
       "leaf_select",
-      // Liste dÃ©roulante
+      // Liste déroulante
       "leaf_radio",
       // Boutons radio
       "leaf_repeater"
-      // Bloc rÃ©pÃ©table (conteneur de champs rÃ©pÃ©tables)
+      // Bloc répétable (conteneur de champs répétables)
     ];
     if (!allowedTypes.includes(nodeData.type)) {
       return res.status(400).json({
-        error: `Type de n\xC5\u201Cud non autoris\xC3\xA9: ${nodeData.type}. Types autoris\xC3\xA9s: ${allowedTypes.join(", ")}`
+        error: `Type de n\u0153ud non autoris\xE9: ${nodeData.type}. Types autoris\xE9s: ${allowedTypes.join(", ")}`
       });
     }
     if (nodeData.parentId) {
@@ -33797,7 +34017,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
         where: { id: nodeData.parentId, treeId }
       });
       if (!parentNode) {
-        return res.status(400).json({ error: "N\xC5\u201Cud parent non trouv\xC3\xA9" });
+        return res.status(400).json({ error: "N\u0153ud parent non trouv\xE9" });
       }
       const parentType = parentNode.type;
       const parentSubType = parentNode.subType;
@@ -33859,7 +34079,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
         order: nodeData.order ?? 0,
         isVisible: nodeData.isVisible ?? true,
         isActive: nodeData.isActive ?? true,
-        // Par dÃ©faut, AUCUNE capacitÃ© n'est activÃ©e automatiquement
+        // Par défaut, AUCUNE capacité n'est activée automatiquement
         hasData: nodeData.hasData ?? false,
         hasFormula: nodeData.hasFormula ?? false,
         hasCondition: nodeData.hasCondition ?? false,
@@ -33875,19 +34095,19 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
     res.status(201).json(node);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating node:", error);
-    res.status(500).json({ error: "Impossible de cr\xC3\xA9er le n\xC5\u201Cud" });
+    res.status(500).json({ error: "Impossible de cr\xE9er le n\u0153ud" });
   }
 });
 function mapJSONToColumns(updateData) {
   const columnData = {};
   if (!updateData || typeof updateData !== "object") {
-    console.log("\xF0\u0178\u201D\u201E [mapJSONToColumns] \xE2\x9D\u0152 updateData invalide:", updateData);
+    console.log("\u{1F504} [mapJSONToColumns] \u274C updateData invalide:", updateData);
     return columnData;
   }
   const metadata = updateData.metadata && typeof updateData.metadata === "object" ? updateData.metadata : {};
   const fieldConfig = updateData.fieldConfig && typeof updateData.fieldConfig === "object" ? updateData.fieldConfig : {};
   const appearanceConfig = updateData.appearanceConfig && typeof updateData.appearanceConfig === "object" ? updateData.appearanceConfig : {};
-  console.log("\xF0\u0178\u201D\u201E [mapJSONToColumns] Entr\xC3\xA9es d\xC3\xA9tect\xC3\xA9es:", {
+  console.log("\u{1F504} [mapJSONToColumns] Entr\xE9es d\xE9tect\xE9es:", {
     hasMetadata: Object.keys(metadata).length > 0,
     hasFieldConfig: Object.keys(fieldConfig).length > 0,
     hasAppearanceConfig: Object.keys(appearanceConfig).length > 0,
@@ -33896,7 +34116,7 @@ function mapJSONToColumns(updateData) {
     appearanceConfigKeys: Object.keys(appearanceConfig)
   });
   if (Object.keys(appearanceConfig).length > 0) {
-    console.log("\xF0\u0178\u201D\u201E [mapJSONToColumns] Traitement appearanceConfig:", appearanceConfig);
+    console.log("\u{1F504} [mapJSONToColumns] Traitement appearanceConfig:", appearanceConfig);
     if (appearanceConfig.size) columnData.appearance_size = appearanceConfig.size;
     if (appearanceConfig.width) columnData.appearance_width = appearanceConfig.width;
     if (appearanceConfig.variant) columnData.appearance_variant = appearanceConfig.variant;
@@ -33928,26 +34148,26 @@ function mapJSONToColumns(updateData) {
   }
   if (metadata.appearance && typeof metadata.appearance === "object") {
     const metaAppearance = metadata.appearance;
-    console.log("\xF0\u0178\u201D\u201E [mapJSONToColumns] Traitement metadata.appearance:", metaAppearance);
+    console.log("\u{1F504} [mapJSONToColumns] Traitement metadata.appearance:", metaAppearance);
     if (metaAppearance.size && !columnData.appearance_size) columnData.appearance_size = metaAppearance.size;
     if (metaAppearance.width && !columnData.appearance_width) columnData.appearance_width = metaAppearance.width;
     if (metaAppearance.variant && !columnData.appearance_variant) columnData.appearance_variant = metaAppearance.variant;
   }
   if (metadata.repeater && typeof metadata.repeater === "object") {
     const repeaterMeta = metadata.repeater;
-    console.log("\xF0\u0178\u201D\u201E [mapJSONToColumns] \xF0\u0178\u201D\xA5 Traitement metadata.repeater:", repeaterMeta);
+    console.log("\u{1F504} [mapJSONToColumns] \u{1F525} Traitement metadata.repeater:", repeaterMeta);
     if ("templateNodeIds" in repeaterMeta) {
       if (Array.isArray(repeaterMeta.templateNodeIds)) {
         columnData.repeater_templateNodeIds = repeaterMeta.templateNodeIds.length > 0 ? JSON.stringify(repeaterMeta.templateNodeIds) : null;
-        console.log("\xE2\u0153\u2026 [mapJSONToColumns] repeater_templateNodeIds sauvegard\xC3\xA9:", repeaterMeta.templateNodeIds);
+        console.log("\u2705 [mapJSONToColumns] repeater_templateNodeIds sauvegard\xE9:", repeaterMeta.templateNodeIds);
       } else {
         columnData.repeater_templateNodeIds = null;
-        console.log("\xE2\u0153\u2026 [mapJSONToColumns] repeater_templateNodeIds remis \xC3\xA0 NULL (valeur non-array)");
+        console.log("\u2705 [mapJSONToColumns] repeater_templateNodeIds remis \xE0 NULL (valeur non-array)");
       }
     }
     if (repeaterMeta.templateNodeLabels && typeof repeaterMeta.templateNodeLabels === "object") {
       columnData.repeater_templateNodeLabels = JSON.stringify(repeaterMeta.templateNodeLabels);
-      console.log("\xE2\u0153\u2026 [mapJSONToColumns] \xF0\u0178\x8F\xB7\xEF\xB8\x8F repeater_templateNodeLabels sauvegard\xC3\xA9:", repeaterMeta.templateNodeLabels);
+      console.log("\u2705 [mapJSONToColumns] \u{1F3F7}\uFE0F repeater_templateNodeLabels sauvegard\xE9:", repeaterMeta.templateNodeLabels);
     } else if ("templateNodeLabels" in repeaterMeta) {
       columnData.repeater_templateNodeLabels = null;
     }
@@ -33961,23 +34181,23 @@ function mapJSONToColumns(updateData) {
   if ("subTabs" in metadata) {
     if (Array.isArray(metadata.subTabs) && metadata.subTabs.length > 0) {
       columnData.subtabs = JSON.stringify(metadata.subTabs);
-      console.log("\u{1F3AF} [mapJSONToColumns] \u2705 metadata.subTabs sauvegard\xE9 en colonne subtabs:", metadata.subTabs);
+      console.log("?? [mapJSONToColumns] ? metadata.subTabs sauvegard\uFFFD en colonne subtabs:", metadata.subTabs);
     } else {
       columnData.subtabs = null;
-      console.log("\u{1F3AF} [mapJSONToColumns] \u2705 metadata.subTabs vid\xE9 : colonne subtabs remise \xE0 NULL");
+      console.log("?? [mapJSONToColumns] ? metadata.subTabs vid\uFFFD : colonne subtabs remise \uFFFD NULL");
     }
   }
   if ("subTab" in metadata) {
     const subTabValue = metadata.subTab;
     if (typeof subTabValue === "string" && subTabValue.trim().length > 0) {
       columnData.subtab = subTabValue;
-      console.log("\u{1F3AF} [mapJSONToColumns] \u2705 metadata.subTab (string assignment) sauvegard\xE9 en colonne subtab:", subTabValue);
+      console.log("?? [mapJSONToColumns] ? metadata.subTab (string assignment) sauvegard\uFFFD en colonne subtab:", subTabValue);
     } else if (Array.isArray(subTabValue) && subTabValue.length > 0) {
       columnData.subtab = JSON.stringify(subTabValue);
-      console.log("\u{1F3AF} [mapJSONToColumns] \u2705 metadata.subTab (array assignment) sauvegard\xE9 en colonne subtab:", subTabValue);
+      console.log("?? [mapJSONToColumns] ? metadata.subTab (array assignment) sauvegard\uFFFD en colonne subtab:", subTabValue);
     } else {
       columnData.subtab = null;
-      console.log("\u{1F3AF} [mapJSONToColumns] \u2705 metadata.subTab vid\xE9 : colonne subtab remise \xE0 NULL");
+      console.log("?? [mapJSONToColumns] ? metadata.subTab vid\uFFFD : colonne subtab remise \uFFFD NULL");
     }
   }
   const textConfig = metadata.textConfig || fieldConfig.text || fieldConfig.textConfig || {};
@@ -34037,7 +34257,7 @@ function mapJSONToColumns(updateData) {
   if (updateData.fieldSubType) columnData.fieldSubType = updateData.fieldSubType;
   if (updateData.subType) columnData.fieldSubType = updateData.subType;
   if (updateData.type) columnData.fieldType = updateData.type;
-  console.log("\xF0\u0178\u201D\u201E [mapJSONToColumns] Migration JSON vers colonnes:", {
+  console.log("\u{1F504} [mapJSONToColumns] Migration JSON vers colonnes:", {
     input: { metadata: !!metadata, fieldConfig: !!fieldConfig },
     output: Object.keys(columnData),
     columnDataPreview: columnData
@@ -34049,7 +34269,7 @@ function buildResponseFromColumns2(node) {
     size: node.appearance_size || "md",
     width: node.appearance_width || null,
     variant: node.appearance_variant || null,
-    // ðŸ”¥ TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
+    // 🔥 TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
     helpTooltipType: node.text_helpTooltipType || "none",
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null
@@ -34066,10 +34286,10 @@ function buildResponseFromColumns2(node) {
       if (node.repeater_templateNodeIds) {
         try {
           const parsed = JSON.parse(node.repeater_templateNodeIds);
-          console.log("\xE2\u0153\u2026 [buildResponseFromColumns] repeater_templateNodeIds reconstruit:", parsed);
+          console.log("\u2705 [buildResponseFromColumns] repeater_templateNodeIds reconstruit:", parsed);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error("\xE2\x9D\u0152 [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
+          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
           return [];
         }
       }
@@ -34085,7 +34305,7 @@ function buildResponseFromColumns2(node) {
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === "object" ? parsedLabels : null;
         } catch (e) {
-          console.error("\xE2\x9D\u0152 [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
+          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -34125,7 +34345,7 @@ function buildResponseFromColumns2(node) {
       min: node.number_min || null,
       max: node.number_max || null,
       step: node.number_step || 1,
-      // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      // ?? FIX: Priorit� � data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
       decimals: node.data_precision ?? node.number_decimals ?? 0,
       prefix: node.number_prefix || null,
       suffix: node.number_suffix || null,
@@ -34135,9 +34355,9 @@ function buildResponseFromColumns2(node) {
     select: {
       multiple: node.select_multiple || false,
       searchable: node.select_searchable !== false,
-      // true par dÃ©faut
+      // true par défaut
       allowClear: node.select_allowClear !== false,
-      // true par dÃ©faut
+      // true par défaut
       defaultValue: node.select_defaultValue || null,
       options: node.select_options || []
     },
@@ -34169,16 +34389,16 @@ function buildResponseFromColumns2(node) {
     appearance
   };
   if (node.id === "131a7b51-97d5-4f40-8a5a-9359f38939e8") {
-    console.log("\xF0\u0178\u201D\x8D [buildResponseFromColumns][Test - liste] node.metadata BRUT:", node.metadata);
-    console.log("\xF0\u0178\u201D\x8D [buildResponseFromColumns][Test - liste] cleanedMetadata:", cleanedMetadata);
+    console.log("\u{1F50D} [buildResponseFromColumns][Test - liste] node.metadata BRUT:", node.metadata);
+    console.log("\u{1F50D} [buildResponseFromColumns][Test - liste] cleanedMetadata:", cleanedMetadata);
     console.log(
-      "\xF0\u0178\u201D\x8D [buildResponseFromColumns][Test - liste] metadata.capabilities:",
+      "\u{1F50D} [buildResponseFromColumns][Test - liste] metadata.capabilities:",
       node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : "N/A"
     );
   }
   const metadataWithRepeater = repeater.templateNodeIds && repeater.templateNodeIds.length > 0 ? { ...cleanedMetadata, repeater } : cleanedMetadata;
   if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
-    console.log("\xF0\u0178\u201D\x81\xF0\u0178\u201D\x81\xF0\u0178\u201D\x81 [REPEATER NODE FOUND]", {
+    console.log("\u{1F501}\u{1F501}\u{1F501} [REPEATER NODE FOUND]", {
       nodeId: node.id,
       nodeName: node.name,
       nodeLabel: node.label,
@@ -34217,20 +34437,20 @@ function buildResponseFromColumns2(node) {
     ...node,
     metadata: metadataWithRepeater,
     fieldConfig,
-    // Ajouter les champs d'interface pour compatibilitÃ©
+    // Ajouter les champs d'interface pour compatibilité
     appearance,
     appearanceConfig,
-    // ðŸŽ¯ CORRECTION : Ajouter appearanceConfig pour l'interface Parameters
-    // âš ï¸ IMPORTANT : fieldType depuis les colonnes dÃ©diÃ©es
+    // 🎯 CORRECTION : Ajouter appearanceConfig pour l'interface Parameters
+    // ⚠️ IMPORTANT : fieldType depuis les colonnes dédiées
     fieldType: node.fieldType || node.type,
     fieldSubType: node.fieldSubType || node.subType,
-    // ðŸ”¥ TOOLTIP FIX : Ajouter les propriÃ©tÃ©s tooltip au niveau racine pour TBL
+    // 🔥 TOOLTIP FIX : Ajouter les propriétés tooltip au niveau racine pour TBL
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
-    // ðŸ”¥ TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
+    // 🔥 TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
     tables: node.TreeBranchLeafNodeTable || [],
-    // ðŸ”— SHARED REFERENCES : Inclure les rÃ©fÃ©rences partagÃ©es pour les cascades
+    // 🔗 SHARED REFERENCES : Inclure les références partagées pour les cascades
     sharedReferenceIds: node.sharedReferenceIds || void 0
   };
   try {
@@ -34241,7 +34461,7 @@ function buildResponseFromColumns2(node) {
       return void 0;
     };
     const capabilities = {
-      // Données dynamiques / variables
+      // Donn�es dynamiques / variables
       data: node.hasData || node.data_activeId || node.data_instances ? {
         enabled: !!node.hasData,
         activeId: node.data_activeId || null,
@@ -34273,7 +34493,7 @@ function buildResponseFromColumns2(node) {
         columns: Array.isArray(node.table_columns) ? node.table_columns : null,
         rows: Array.isArray(node.table_rows) ? node.table_rows : null
       } : void 0,
-      // Select (options statiques ou dynamiques déjà résolues)
+      // Select (options statiques ou dynamiques d�j� r�solues)
       select: node.select_options || node.select_defaultValue ? {
         options: Array.isArray(node.select_options) ? node.select_options : [],
         allowClear: node.select_allowClear !== false,
@@ -34286,14 +34506,14 @@ function buildResponseFromColumns2(node) {
         min: node.number_min ?? null,
         max: node.number_max ?? null,
         step: node.number_step ?? 1,
-        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage
+        // ?? FIX: Priorit� � data_precision pour les champs d'affichage
         decimals: node.data_precision ?? node.number_decimals ?? 0,
         unit: node.number_unit ?? node.data_unit ?? null,
         prefix: node.number_prefix || null,
         suffix: node.number_suffix || null,
         defaultValue: node.number_defaultValue || null
       } : void 0,
-      // Booléen
+      // Bool�en
       bool: node.bool_trueLabel || node.bool_falseLabel || node.bool_defaultValue !== void 0 ? {
         trueLabel: node.bool_trueLabel || null,
         falseLabel: node.bool_falseLabel || null,
@@ -34313,7 +34533,7 @@ function buildResponseFromColumns2(node) {
         crop: node.image_crop === true,
         thumbnails: node.image_thumbnails || null
       } : void 0,
-      // Linking / navigation (simplifié)
+      // Linking / navigation (simplifi�)
       link: node.link_activeId || node.link_instances ? {
         enabled: !!node.hasLink,
         activeId: node.link_activeId || null,
@@ -34351,10 +34571,10 @@ function buildResponseFromColumns2(node) {
     }
     result.capabilities = mergedCaps;
   } catch (e) {
-    console.error("\u274C [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
+    console.error("? [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
   }
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
-    console.log("\xF0\u0178\u201D\u2014 [buildResponseFromColumns] OPTION AVEC SHARED REFS:", {
+    console.log("\u{1F517} [buildResponseFromColumns] OPTION AVEC SHARED REFS:", {
       nodeId: node.id,
       label: node.label || node.option_label,
       type: node.type,
@@ -34362,7 +34582,7 @@ function buildResponseFromColumns2(node) {
     });
   }
   if (node.text_helpTooltipType && node.text_helpTooltipType !== "none") {
-    console.log("\xF0\u0178\u201D\xA5 [buildResponseFromColumns] TOOLTIP TROUV\xC3\u2030:", {
+    console.log("\u{1F525} [buildResponseFromColumns] TOOLTIP TROUV\xC9:", {
       id: node.id,
       name: node.name,
       tooltipType: node.text_helpTooltipType,
@@ -34384,11 +34604,11 @@ function removeJSONFromUpdate(updateData) {
     }
     if ("subTabs" in metaObj) {
       preservedMeta.subTabs = metaObj.subTabs;
-      console.log("\u{1F3AF} [removeJSONFromUpdate] Pr\xE9servation de metadata.subTabs:", metaObj.subTabs);
+      console.log("?? [removeJSONFromUpdate] Pr\uFFFDservation de metadata.subTabs:", metaObj.subTabs);
     }
     if ("subTab" in metaObj) {
       preservedMeta.subTab = metaObj.subTab;
-      console.log("\u{1F3AF} [removeJSONFromUpdate] Pr\xE9servation de metadata.subTab:", metaObj.subTab);
+      console.log("?? [removeJSONFromUpdate] Pr\uFFFDservation de metadata.subTab:", metaObj.subTab);
     }
     if (Object.keys(preservedMeta).length > 0) {
       return {
@@ -34429,7 +34649,7 @@ var updateOrMoveNode = async (req2, res) => {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
     const updateData = req2.body || {};
-    console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] AVANT migration - donn\xC3\xA9es re\xC3\xA7ues:", {
+    console.log("\u{1F504} [updateOrMoveNode] AVANT migration - donn\xE9es re\xE7ues:", {
       hasMetadata: !!updateData.metadata,
       hasFieldConfig: !!updateData.fieldConfig,
       hasAppearanceConfig: !!updateData.appearanceConfig,
@@ -34441,7 +34661,7 @@ var updateOrMoveNode = async (req2, res) => {
     const columnData = mapJSONToColumns(updateData);
     const cleanUpdateData = removeJSONFromUpdate(updateData);
     const updateObj = { ...cleanUpdateData, ...columnData };
-    console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S migration - donn\xC3\xA9es finales:", {
+    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S migration - donn\xE9es finales:", {
       originalKeys: Object.keys(updateData),
       cleanedKeys: Object.keys(cleanUpdateData),
       columnKeys: Object.keys(columnData),
@@ -34458,12 +34678,12 @@ var updateOrMoveNode = async (req2, res) => {
       where: { id: treeId, organizationId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     delete updateObj.id;
     delete updateObj.treeId;
     delete updateObj.createdAt;
-    console.log("\xF0\u0178\u201D\x8D [updateOrMoveNode] Recherche n\xC5\u201Cud:", { nodeId, treeId, organizationId });
+    console.log("\u{1F50D} [updateOrMoveNode] Recherche n\u0153ud:", { nodeId, treeId, organizationId });
     const existingNode = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId }
     });
@@ -34471,7 +34691,7 @@ var updateOrMoveNode = async (req2, res) => {
       const nodeAnyTree = await prisma47.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
       });
-      console.error("\u274C [updateOrMoveNode] N\u0153ud non trouv\xE9 - DEBUG:", {
+      console.error("? [updateOrMoveNode] N\uFFFDud non trouv\uFFFD - DEBUG:", {
         nodeId,
         treeId,
         organizationId,
@@ -34480,7 +34700,7 @@ var updateOrMoveNode = async (req2, res) => {
         allNodesInTree: await prisma47.treeBranchLeafNode.count({ where: { treeId } })
       });
       return res.status(404).json({
-        error: "N\u0153ud non trouv\xE9",
+        error: "N\uFFFDud non trouv\uFFFD",
         debug: {
           nodeId,
           treeId,
@@ -34496,7 +34716,7 @@ var updateOrMoveNode = async (req2, res) => {
     if (targetId) {
       const targetNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: targetId, treeId } });
       if (!targetNode) {
-        return res.status(400).json({ error: "Cible de d\xC3\xA9placement non trouv\xC3\xA9e" });
+        return res.status(400).json({ error: "Cible de d\xE9placement non trouv\xE9e" });
       }
       if (position === "child") {
         newParentId = targetNode.id;
@@ -34512,33 +34732,33 @@ var updateOrMoveNode = async (req2, res) => {
           where: { id: newParentId, treeId }
         });
         if (!newParentNode) {
-          return res.status(400).json({ error: "Parent non trouv\xC3\xA9" });
+          return res.status(400).json({ error: "Parent non trouv\xE9" });
         }
         if (existingNode.type === "leaf_option") {
           const isSelectField = newParentNode.type.startsWith("leaf_") && newParentNode.subType === "SELECT";
           const isSelectBranch = newParentNode.type === "branch" && newParentNode.parentId !== null;
           if (!isSelectField && !isSelectBranch) {
             return res.status(400).json({
-              error: "Les options ne peuvent \xC3\xAAtre d\xC3\xA9plac\xC3\xA9es que sous des champs SELECT ou des branches de niveau 2+"
+              error: "Les options ne peuvent \xEAtre d\xE9plac\xE9es que sous des champs SELECT ou des branches de niveau 2+"
             });
           }
         } else if (existingNode.type.startsWith("leaf_")) {
           if (newParentNode.type !== "branch" && !newParentNode.type.startsWith("leaf_")) {
             return res.status(400).json({
-              error: "Les champs ne peuvent \xC3\xAAtre d\xC3\xA9plac\xC3\xA9s que sous des branches ou d'autres champs"
+              error: "Les champs ne peuvent \xEAtre d\xE9plac\xE9s que sous des branches ou d'autres champs"
             });
           }
         } else if (existingNode.type === "branch") {
           if (!(newParentNode.type === "tree" || newParentNode.type === "branch")) {
             return res.status(400).json({
-              error: "Les branches doivent \xC3\xAAtre sous l'arbre ou sous une autre branche"
+              error: "Les branches doivent \xEAtre sous l'arbre ou sous une autre branche"
             });
           }
         }
       } else {
         if (existingNode.type !== "branch") {
           return res.status(400).json({
-            error: "Seules les branches peuvent \xC3\xAAtre d\xC3\xA9plac\xC3\xA9es directement sous l'arbre racine (niveau 2)"
+            error: "Seules les branches peuvent \xEAtre d\xE9plac\xE9es directement sous l'arbre racine (niveau 2)"
           });
         }
       }
@@ -34585,7 +34805,7 @@ var updateOrMoveNode = async (req2, res) => {
         }
       });
       const updatedNode2 = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
-      console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S d\xC3\xA9placement - reconstruction depuis colonnes");
+      console.log("\u{1F504} [updateOrMoveNode] APR\xC8S d\xE9placement - reconstruction depuis colonnes");
       const responseData2 = updatedNode2 ? buildResponseFromColumns2(updatedNode2) : updatedNode2;
       return res.json(responseData2);
     }
@@ -34604,7 +34824,7 @@ var updateOrMoveNode = async (req2, res) => {
         ...currentMetadata,
         repeater: updatedRepeaterMetadata
       };
-      console.warn("\xF0\u0178\u201D\xA5 [updateOrMoveNode] Synchronisation metadata.repeater:", updatedRepeaterMetadata);
+      console.warn("\u{1F525} [updateOrMoveNode] Synchronisation metadata.repeater:", updatedRepeaterMetadata);
     }
     if ("repeater_templateNodeIds" in updateObj && updateObj.repeater_templateNodeIds === null) {
       const currentMetadata = existingNode.metadata || {};
@@ -34619,19 +34839,19 @@ var updateOrMoveNode = async (req2, res) => {
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
     });
     const updatedNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
-    console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S mise \xC3\xA0 jour - n\xC5\u201Cud brut Prisma:", {
+    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S mise \xE0 jour - n\u0153ud brut Prisma:", {
       "updatedNode.metadata": updatedNode?.metadata,
       "updatedNode.metadata typeof": typeof updatedNode?.metadata
     });
-    console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S mise \xC3\xA0 jour - reconstruction depuis colonnes");
+    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S mise \xE0 jour - reconstruction depuis colonnes");
     const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
-    console.log("\xF0\u0178\u201D\u201E [updateOrMoveNode] APR\xC3\u02C6S buildResponseFromColumns:", {
+    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S buildResponseFromColumns:", {
       "responseData.metadata": responseData?.metadata,
       "responseData.metadata.repeater": responseData?.metadata?.repeater
     });
     return res.json(responseData);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 ERREUR D\xC3\u2030TAILL\xC3\u2030E lors de updateOrMoveNode:", {
+    console.error("[TreeBranchLeaf API] \u274C ERREUR D\xC9TAILL\xC9E lors de updateOrMoveNode:", {
       error,
       message: error.message,
       stack: error.stack,
@@ -34640,7 +34860,7 @@ var updateOrMoveNode = async (req2, res) => {
       updateDataKeys: Object.keys(req2.body || {}),
       organizationId: req2.user?.organizationId
     });
-    res.status(500).json({ error: "Impossible de mettre \xC3\xA0 jour le n\xC5\u201Cud", details: error.message });
+    res.status(500).json({ error: "Impossible de mettre \xE0 jour le n\u0153ud", details: error.message });
   }
 };
 router56.put("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
@@ -34653,10 +34873,10 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       where: { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     if (!isSuperAdmin2 && organizationId && tree.organizationId && tree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
     }
     const allNodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
     const childrenByParent = /* @__PURE__ */ new Map();
@@ -34668,7 +34888,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     }
     const exists = allNodes.find((n) => n.id === nodeId);
     if (!exists) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const toDelete = [];
     const queue = [nodeId];
@@ -34762,7 +34982,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         const l = String(label);
         const m1 = /\(Copie\s*([0-9]+)\)$/i.exec(l);
         if (m1 && m1[1]) return m1[1];
-        const m2 = /[-–—]\s*(\d+)$/i.exec(l);
+        const m2 = /[-��]\s*(\d+)$/i.exec(l);
         if (m2 && m2[1]) return m2[1];
         return null;
       };
@@ -34786,7 +35006,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       const extraCandidates = nodesToScan.filter((n) => {
         const meta = n.metadata || {};
         if (meta?.isSumDisplayField === true || n.id.endsWith("-sum-total")) {
-          if (debugDelete) console.log("[DELETE DEBUG] \u{1F6E1}\uFE0F N\u0153ud Total PROT\xC9G\xC9 (extraCandidates):", n.id);
+          if (debugDelete) console.log("[DELETE DEBUG] ??? N\uFFFDud Total PROT\uFFFDG\uFFFD (extraCandidates):", n.id);
           return false;
         }
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
@@ -34993,31 +35213,31 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         where: {
           OR: [
             { nodeId: { in: allDeletedIds } },
-            // Variables attachées aux nodes supprimés
+            // Variables attach�es aux nodes supprim�s
             { sourceNodeId: { in: allDeletedIds } }
-            // Variables pointant depuis les nodes supprimés
+            // Variables pointant depuis les nodes supprim�s
           ]
         },
         select: { id: true, name: true, nodeId: true }
       });
-      console.log(`[DELETE] Trouv\xE9 ${variablesToCheck.length} variable(s) potentiellement orpheline(s)`);
+      console.log(`[DELETE] Trouv\uFFFD ${variablesToCheck.length} variable(s) potentiellement orpheline(s)`);
       const varIdsToDelete = [];
       const suffixPattern = /-\d+$/;
       for (const variable of variablesToCheck) {
         if (suffixPattern.test(variable.id)) {
-          console.log(`[DELETE] \u{1F5D1}\uFE0F Variable suffix\xE9e sera supprim\xE9e: ${variable.name} (${variable.id})`);
+          console.log(`[DELETE] ??? Variable suffix\uFFFDe sera supprim\uFFFDe: ${variable.name} (${variable.id})`);
           varIdsToDelete.push(variable.id);
         } else {
-          console.log(`[DELETE] \u{1F6E1}\uFE0F Variable ORIGINALE sera PR\xC9SERV\xC9E: ${variable.name} (${variable.id})`);
+          console.log(`[DELETE] ??? Variable ORIGINALE sera PR\uFFFDSERV\uFFFDE: ${variable.name} (${variable.id})`);
         }
       }
       if (varIdsToDelete.length > 0) {
         const deletedVarCount = await prisma47.treeBranchLeafNodeVariable.deleteMany({
           where: { id: { in: varIdsToDelete } }
         });
-        console.log(`[DELETE] \u2705 ${deletedVarCount.count} variable(s) suffix\xE9e(s) supprim\xE9e(s)`);
+        console.log(`[DELETE] ? ${deletedVarCount.count} variable(s) suffix\uFFFDe(s) supprim\uFFFDe(s)`);
       } else {
-        console.log(`[DELETE] \u2139\uFE0F Aucune variable suffix\xE9e \xE0 supprimer (variables originales pr\xE9serv\xE9es)`);
+        console.log(`[DELETE] ?? Aucune variable suffix\uFFFDe \uFFFD supprimer (variables originales pr\uFFFDserv\uFFFDes)`);
       }
     } catch (varCleanError) {
       console.warn("[DELETE] Impossible de nettoyer les variables orphelines:", varCleanError.message);
@@ -35030,18 +35250,18 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       for (const node of remainingNodes) {
         const meta = node.metadata;
         if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
-          console.log(`[DELETE] \u{1F4CA} Mise \xE0 jour du champ Total: ${node.id}`);
+          console.log(`[DELETE] ?? Mise \uFFFD jour du champ Total: ${node.id}`);
           updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma47).catch((err) => {
-            console.warn(`[DELETE] \u26A0\uFE0F Erreur mise \xE0 jour champ Total ${node.id}:`, err);
+            console.warn(`[DELETE] ?? Erreur mise \uFFFD jour champ Total ${node.id}:`, err);
           });
         }
       }
     } catch (sumUpdateError) {
-      console.warn("[DELETE] Erreur lors de la mise \xE0 jour des champs Total:", sumUpdateError.message);
+      console.warn("[DELETE] Erreur lors de la mise \uFFFD jour des champs Total:", sumUpdateError.message);
     }
     res.json({
       success: true,
-      message: `Sous-arbre supprim\xE9 (${deletedSubtreeIds.length} n\u0153ud(s)), orphelines supprim\xE9es: ${deletedOrphans}`,
+      message: `Sous-arbre supprim\uFFFD (${deletedSubtreeIds.length} n\uFFFDud(s)), orphelines supprim\uFFFDes: ${deletedOrphans}`,
       deletedCount: deletedSubtreeIds.length,
       deletedIds: allDeletedIds,
       // merged: subtree + orphan + extra display nodes
@@ -35076,11 +35296,11 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         if (!n.metadata) return false;
         const meta = n.metadata;
         if (meta?.isSumDisplayField === true) {
-          console.log(`[AGGRESSIVE CLEANUP] \u{1F6E1}\uFE0F N\u0153ud Total PROT\xC9G\xC9: ${n.id} (${n.label})`);
+          console.log(`[AGGRESSIVE CLEANUP] ??? N\uFFFDud Total PROT\uFFFDG\uFFFD: ${n.id} (${n.label})`);
           return false;
         }
         if (n.id.endsWith("-sum-total")) {
-          console.log(`[AGGRESSIVE CLEANUP] \u{1F6E1}\uFE0F N\u0153ud Total PROT\xC9G\xC9 (par ID): ${n.id}`);
+          console.log(`[AGGRESSIVE CLEANUP] ??? N\uFFFDud Total PROT\uFFFDG\uFFFD (par ID): ${n.id}`);
           return false;
         }
         try {
@@ -35110,7 +35330,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     }
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node subtree:", error);
-    res.status(500).json({ error: "Impossible de supprimer le n\xC5\u201Cud et ses descendants" });
+    res.status(500).json({ error: "Impossible de supprimer le n\u0153ud et ses descendants" });
   }
 });
 router56.get("/nodes/:nodeId", async (req2, res) => {
@@ -35126,19 +35346,28 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
         type: true,
         subType: true,
         label: true,
+        metadata: true,
         TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
-    if (!node) return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+    if (!node) return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
     }
-    return res.json({ id: node.id, treeId: node.treeId, parentId: node.parentId, type: node.type, subType: node.subType, label: node.label });
+    return res.json({
+      id: node.id,
+      treeId: node.treeId,
+      parentId: node.parentId,
+      type: node.type,
+      subType: node.subType,
+      label: node.label,
+      metadata: node.metadata
+    });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node info:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du n\u0153ud" });
   }
 });
 router56.get("/nodes/:nodeId/full", async (req2, res) => {
@@ -35149,9 +35378,9 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!root) return res.status(404).json({ error: "N\xC5\u201Cud introuvable" });
+    if (!root) return res.status(404).json({ error: "N\u0153ud introuvable" });
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
     }
     const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
@@ -35208,8 +35437,8 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
       nodes
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [/nodes/:nodeId/full] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors de l\xE2\u20AC\u2122analyse compl\xC3\xA8te de la branche" });
+    console.error("\u274C [/nodes/:nodeId/full] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de l\u2019analyse compl\xE8te de la branche" });
   }
 });
 router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
@@ -35220,9 +35449,9 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!node) return res.status(404).json({ error: "N\xC5\u201Cud introuvable" });
+    if (!node) return res.status(404).json({ error: "N\u0153ud introuvable" });
     if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
     }
     const ids = /* @__PURE__ */ new Set();
     if (node.sharedReferenceId) ids.add(node.sharedReferenceId);
@@ -35255,8 +35484,8 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [/nodes/:nodeId/shared-references] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors de l\xE2\u20AC\u2122analyse des r\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es" });
+    console.error("\u274C [/nodes/:nodeId/shared-references] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de l\u2019analyse des r\xE9f\xE9rences partag\xE9es" });
   }
 });
 async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
@@ -35265,9 +35494,9 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
-  if (!copyRoot) throw new Error("N\xC5\u201Cud introuvable");
+  if (!copyRoot) throw new Error("N\u0153ud introuvable");
   if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
-    throw new Error("Acc\xC3\xA8s non autoris\xC3\xA9");
+    throw new Error("Acc\xE8s non autoris\xE9");
   }
   const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const byId = new Map(all.map((n) => [n.id, n]));
@@ -35376,7 +35605,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
         sharedReferenceIds: [],
         sharedReferenceName: orig.sharedReferenceName ?? orig.label ?? null,
         sharedReferenceDescription: orig.sharedReferenceDescription ?? orig.description ?? null,
-        // 🔗 COLONNES LINKED*** : Copier les références depuis le nœud original avec IDs suffixés
+        // ?? COLONNES LINKED*** : Copier les r�f�rences depuis le n�ud original avec IDs suffix�s
         linkedFormulaIds: Array.isArray(orig.linkedFormulaIds) ? orig.linkedFormulaIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
         linkedConditionIds: Array.isArray(orig.linkedConditionIds) ? orig.linkedConditionIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
         linkedTableIds: Array.isArray(orig.linkedTableIds) ? orig.linkedTableIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
@@ -35386,7 +35615,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
       };
       await prisma47.treeBranchLeafNode.create({ data: toCreate });
       if (Array.isArray(orig.linkedVariableIds) && orig.linkedVariableIds.length > 0) {
-        console.log(`\u{1F517} [SHARED-REF] Copie de ${orig.linkedVariableIds.length} variable(s) pour ${newId}`);
+        console.log(`?? [SHARED-REF] Copie de ${orig.linkedVariableIds.length} variable(s) pour ${newId}`);
         const variableCopyCache = /* @__PURE__ */ new Map();
         const formulaIdMap = /* @__PURE__ */ new Map();
         const conditionIdMap = /* @__PURE__ */ new Map();
@@ -35398,7 +35627,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
               originalVarId,
               chosenSuffix,
               newId,
-              // Le nouveau nœud qui possède cette variable
+              // Le nouveau n�ud qui poss�de cette variable
               prisma47,
               {
                 formulaIdMap,
@@ -35411,12 +35640,12 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
               }
             );
             if (copyResult.success) {
-              console.log(`  \u2705 [SHARED-REF] Variable copi\xE9e: ${copyResult.variableId}`);
+              console.log(`  ? [SHARED-REF] Variable copi\uFFFDe: ${copyResult.variableId}`);
             } else {
-              console.warn(`  \u26A0\uFE0F [SHARED-REF] \xC9chec copie variable ${originalVarId}: ${copyResult.error}`);
+              console.warn(`  ?? [SHARED-REF] \uFFFDchec copie variable ${originalVarId}: ${copyResult.error}`);
             }
           } catch (e) {
-            console.warn(`  \u26A0\uFE0F [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
+            console.warn(`  ?? [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
           }
         }
       }
@@ -35458,8 +35687,8 @@ router56.post("/nodes/:nodeId/apply-shared-references-from-original", async (req
     const result = await applySharedReferencesFromOriginalInternal(req2, nodeId);
     return res.json(result);
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [/nodes/:nodeId/apply-shared-references-from-original] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors de l'application des r\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es" });
+    console.error("\u274C [/nodes/:nodeId/apply-shared-references-from-original] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de l'application des r\xE9f\xE9rences partag\xE9es" });
   }
 });
 router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
@@ -35471,9 +35700,9 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!root) return res.status(404).json({ error: "N\xC5\u201Cud introuvable" });
+    if (!root) return res.status(404).json({ error: "N\u0153ud introuvable" });
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
     }
     const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
@@ -35546,20 +35775,20 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     }
     return res.json({ success: true, unlinked: collected.size, orphanCandidates, deletedOrphans: deletedCount });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [/nodes/:nodeId/unlink-shared-references] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors du d\xC3\xA9lier/suppression des r\xC3\xA9f\xC3\xA9rences partag\xC3\xA9es" });
+    console.error("\u274C [/nodes/:nodeId/unlink-shared-references] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors du d\xE9lier/suppression des r\xE9f\xE9rences partag\xE9es" });
   }
 });
 router56.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
-    console.log("\u{1F6E0}\uFE0F [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s", treeId, nodeId);
+    console.log("??? [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s", treeId, nodeId);
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\uFFFD" });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
@@ -35572,7 +35801,7 @@ router56.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     if (variable) {
       const { sourceType, sourceRef, fixedValue, selectedNodeId, exposedKey } = variable;
       console.log(
-        "\u{1F9F0} [TBL NEW ROUTE][GET /data] payload keys=%s hasSource=%s ref=%s fixed=%s selNode=%s (owner=%s proxied=%s)",
+        "?? [TBL NEW ROUTE][GET /data] payload keys=%s hasSource=%s ref=%s fixed=%s selNode=%s (owner=%s proxied=%s)",
         Object.keys(variable).join(","),
         !!sourceType,
         sourceRef,
@@ -35582,10 +35811,10 @@ router56.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         proxiedFromNodeId
       );
       if (!sourceType && !sourceRef) {
-        console.log("\u26A0\uFE0F [TBL NEW ROUTE][GET /data] Aucune sourceType/sourceRef retournee pour nodeId=%s (exposedKey=%s)", nodeId, exposedKey);
+        console.log("?? [TBL NEW ROUTE][GET /data] Aucune sourceType/sourceRef retournee pour nodeId=%s (exposedKey=%s)", nodeId, exposedKey);
       }
     } else {
-      console.log("\u2139\uFE0F [TBL NEW ROUTE][GET /data] variable inexistante nodeId=%s -> {} (owner=%s proxied=%s)", nodeId, ownerNodeId, proxiedFromNodeId);
+      console.log("?? [TBL NEW ROUTE][GET /data] variable inexistante nodeId=%s -> {} (owner=%s proxied=%s)", nodeId, ownerNodeId, proxiedFromNodeId);
     }
     const usedVariableId = node.data_activeId || variable?.id || null;
     if (variable) {
@@ -35610,18 +35839,18 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       isReadonly,
       defaultValue,
       metadata,
-      // ðŸŽ¯ NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
+      // 🎯 NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
       sourceType,
       sourceRef,
       fixedValue,
       selectedNodeId
     } = req2.body || {};
-    console.log("\xF0\u0178\u203A\xB0\xEF\xB8\x8F [TBL NEW ROUTE][PUT /data] nodeId=%s body=%o", nodeId, { exposedKey, sourceType, sourceRef, fixedValue, selectedNodeId });
+    console.log("\u{1F6F0}\uFE0F [TBL NEW ROUTE][PUT /data] nodeId=%s body=%o", nodeId, { exposedKey, sourceType, sourceRef, fixedValue, selectedNodeId });
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
@@ -35631,7 +35860,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       select: { id: true, label: true, linkedVariableIds: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const safeExposedKey = typeof exposedKey === "string" && exposedKey.trim() ? exposedKey.trim() : null;
     const displayName = safeExposedKey || node.label || `var_${String(nodeId).slice(0, 4)}`;
@@ -35642,7 +35871,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const targetNodeId = ownerNodeId ?? nodeId;
     const proxiedTargetNodeId = nodeId === targetNodeId ? null : nodeId;
     if (proxiedTargetNodeId) {
-      console.log("\u{1F4CE} [TBL NEW ROUTE][PUT /data] node %s proxied vers variable du noeud %s", nodeId, targetNodeId);
+      console.log("?? [TBL NEW ROUTE][PUT /data] node %s proxied vers variable du noeud %s", nodeId, targetNodeId);
     }
     const updated = await prisma47.$transaction(async (tx) => {
       const variable = await tx.treeBranchLeafNodeVariable.upsert({
@@ -35657,7 +35886,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           isReadonly: typeof isReadonly === "boolean" ? isReadonly : void 0,
           defaultValue: typeof defaultValue === "string" ? defaultValue : void 0,
           metadata: metadata && typeof metadata === "object" ? metadata : void 0,
-          // ðŸŽ¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: typeof sourceType === "string" ? sourceType : void 0,
           sourceRef: typeof sourceRef === "string" ? sourceRef : void 0,
           fixedValue: typeof fixedValue === "string" ? fixedValue : void 0,
@@ -35676,7 +35905,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           isReadonly: typeof isReadonly === "boolean" ? isReadonly : false,
           defaultValue: typeof defaultValue === "string" ? defaultValue : null,
           metadata: metadata && typeof metadata === "object" ? metadata : {},
-          // ðŸŽ¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: typeof sourceType === "string" ? sourceType : "fixed",
           sourceRef: typeof sourceRef === "string" ? sourceRef : null,
           fixedValue: typeof fixedValue === "string" ? fixedValue : null,
@@ -35693,7 +35922,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           isReadonly: true,
           defaultValue: true,
           metadata: true,
-          // ðŸŽ¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: true,
           sourceRef: true,
           fixedValue: true,
@@ -35703,7 +35932,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       const nodeUpdateData = {
         hasData: true,
         updatedAt: /* @__PURE__ */ new Date(),
-        // 🔧 FIX: Toujours synchroniser unit et precision de la variable vers le nœud
+        // ?? FIX: Toujours synchroniser unit et precision de la variable vers le n�ud
         data_unit: variable.unit ?? null,
         data_precision: variable.precision ?? null,
         data_displayFormat: variable.displayFormat ?? null,
@@ -35713,7 +35942,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       };
       if (variable.sourceRef && variable.sourceRef.startsWith("@table.")) {
         const tableId = variable.sourceRef.replace("@table.", "");
-        console.log(`[TBL] \u{1F527} Configuration lookup pour table ${tableId}`);
+        console.log(`[TBL] ?? Configuration lookup pour table ${tableId}`);
         const instanceConfig = {
           sourceType: variable.sourceType || "tree",
           sourceRef: variable.sourceRef,
@@ -35735,7 +35964,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         nodeUpdateData.table_activeId = tableId;
         nodeUpdateData.table_instances = { [tableId]: instanceConfig };
         nodeUpdateData.hasTable = true;
-        console.log(`[TBL] \u2705 data_activeId/table_activeId="${tableId}" configur\xE9s`);
+        console.log(`[TBL] ? data_activeId/table_activeId="${tableId}" configur\uFFFDs`);
       }
       const nodesToUpdate = /* @__PURE__ */ new Set([targetNodeId]);
       if (nodeId !== targetNodeId) {
@@ -35759,7 +35988,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         try {
           await linkVariableToAllCapacityNodes(tx, variable.id, variable.sourceRef);
         } catch (e) {
-          console.warn(`\u26A0\uFE0F [TreeBranchLeaf API] \xC9chec liaison automatique linkedVariableIds pour ${variable.id}:`, e.message);
+          console.warn(`?? [TreeBranchLeaf API] \uFFFDchec liaison automatique linkedVariableIds pour ${variable.id}:`, e.message);
         }
       }
       try {
@@ -35838,7 +36067,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
             select: { linkedTableIds: true }
           });
           if (nodeData && nodeData.linkedTableIds && nodeData.linkedTableIds.length > 0) {
-            console.log(`[TBL] \u{1F50D} Traitement des lookups pour ${nodeData.linkedTableIds.length} table(s)...`);
+            console.log(`[TBL] ?? Traitement des lookups pour ${nodeData.linkedTableIds.length} table(s)...`);
             for (const tableId of nodeData.linkedTableIds) {
               const table = await tx.treeBranchLeafNodeTable.findUnique({
                 where: { id: tableId },
@@ -35851,13 +36080,13 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
                 }
               });
               if (table) {
-                console.log(`[TBL] \u{1F4CA} Table trouv\xE9e: "${table.name}" (ID: ${table.id})`);
+                console.log(`[TBL] ?? Table trouv\uFFFDe: "${table.name}" (ID: ${table.id})`);
                 const selectConfigsUsingTable = await tx.treeBranchLeafSelectConfig.findMany({
                   where: { tableReference: table.id },
                   select: { nodeId: true }
                 });
                 if (selectConfigsUsingTable.length > 0) {
-                  console.log(`[TBL] \u2728 ${selectConfigsUsingTable.length} champ(s) Select/Cascader utilise(nt) cette table`);
+                  console.log(`[TBL] ? ${selectConfigsUsingTable.length} champ(s) Select/Cascader utilise(nt) cette table`);
                   for (const config of selectConfigsUsingTable) {
                     const selectNode = await tx.treeBranchLeafNode.findUnique({
                       where: { id: config.nodeId },
@@ -35878,9 +36107,9 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
                             updatedAt: /* @__PURE__ */ new Date()
                           }
                         });
-                        console.log(`[TBL] \u2705 linkedVariableIds mis \xE0 jour pour "${selectNode.label}" (${selectNode.id})`);
+                        console.log(`[TBL] ? linkedVariableIds mis \uFFFD jour pour "${selectNode.label}" (${selectNode.id})`);
                       } else {
-                        console.log(`[TBL] \u2139\uFE0F linkedVariableIds d\xE9j\xE0 \xE0 jour pour "${selectNode.label}"`);
+                        console.log(`[TBL] ?? linkedVariableIds d\uFFFDj\uFFFD \uFFFD jour pour "${selectNode.label}"`);
                       }
                     }
                   }
@@ -35911,37 +36140,37 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   } catch (error) {
     const err = error;
     if (err && err.code === "P2002") {
-      return res.status(409).json({ error: "La variable expos\xC3\xA9e (exposedKey) existe d\xC3\xA9j\xC3\xA0" });
+      return res.status(409).json({ error: "La variable expos\xE9e (exposedKey) existe d\xE9j\xE0" });
     }
     console.error("[TreeBranchLeaf API] Error updating node data:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour de la donn\xC3\xA9e du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la donn\xE9e du n\u0153ud" });
   }
 });
 router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
-    console.log(`\xF0\u0178\u2014\u2018\xEF\xB8\x8F [DELETE Variable] D\xC3\xA9but suppression pour nodeId=${nodeId}`);
+    console.log(`\u{1F5D1}\uFE0F [DELETE Variable] D\xE9but suppression pour nodeId=${nodeId}`);
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
       select: { id: true, linkedVariableIds: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
     if (!variable || !ownerNodeId) {
-      return res.status(404).json({ error: "Variable non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Variable non trouv\xE9e" });
     }
-    console.log(`\xF0\u0178\u201D\x8D [DELETE Variable] Variable trouv\xC3\xA9e avec sourceRef: ${variable.sourceRef}`);
-    console.log(`\xF0\u0178\u201D\x8D [DELETE Variable] Variable trouv\xC3\xA9e avec sourceRef: ${variable.sourceRef}`);
-    console.log(`\xF0\u0178\u201C\u0152 [DELETE Variable] La capacit\xC3\xA9 r\xC3\xA9f\xC3\xA9renc\xC3\xA9e sera conserv\xC3\xA9e`);
+    console.log(`\u{1F50D} [DELETE Variable] Variable trouv\xE9e avec sourceRef: ${variable.sourceRef}`);
+    console.log(`\u{1F50D} [DELETE Variable] Variable trouv\xE9e avec sourceRef: ${variable.sourceRef}`);
+    console.log(`\u{1F4CC} [DELETE Variable] La capacit\xE9 r\xE9f\xE9renc\xE9e sera conserv\xE9e`);
     await prisma47.treeBranchLeafNodeVariable.delete({
       where: { nodeId: ownerNodeId }
     });
@@ -35957,26 +36186,26 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         where: {
           treeId,
           linkedVariableIds: { has: variable.id }
-          // On cherche les nÅ“uds qui ont l'ID de notre variable
+          // On cherche les nœuds qui ont l'ID de notre variable
         },
         select: { id: true, linkedVariableIds: true }
       });
-      console.log(`\xF0\u0178\xA7\xB9 [DELETE Variable] ${dependentNodes.length} n\xC5\u201Cud(s) d\xC3\xA9pendant(s) trouv\xC3\xA9(s) \xC3\xA0 nettoyer.`);
+      console.log(`\u{1F9F9} [DELETE Variable] ${dependentNodes.length} n\u0153ud(s) d\xE9pendant(s) trouv\xE9(s) \xE0 nettoyer.`);
       for (const nodeToClean of dependentNodes) {
         const updatedLinkedIds = nodeToClean.linkedVariableIds.filter((id) => id !== variable.id);
         await prisma47.treeBranchLeafNode.update({
           where: { id: nodeToClean.id },
           data: { linkedVariableIds: updatedLinkedIds }
         });
-        console.log(`\xE2\u0153\u2026 [DELETE Variable] Nettoyage de linkedVariableIds termin\xC3\xA9 pour le n\xC5\u201Cud ${nodeToClean.id}`);
+        console.log(`\u2705 [DELETE Variable] Nettoyage de linkedVariableIds termin\xE9 pour le n\u0153ud ${nodeToClean.id}`);
       }
     } catch (e) {
       console.warn("[DELETE Variable] Avertissement lors du nettoyage des linkedVariableIds:", e.message);
     }
-    console.log(`\xE2\u0153\u2026 [DELETE Variable] Variable ${variable.id} supprim\xC3\xA9e avec succ\xC3\xA8s (+ capacit\xC3\xA9 associ\xC3\xA9e si existante)`);
-    return res.json({ success: true, message: "Variable supprim\xC3\xA9e avec succ\xC3\xA8s" });
+    console.log(`\u2705 [DELETE Variable] Variable ${variable.id} supprim\xE9e avec succ\xE8s (+ capacit\xE9 associ\xE9e si existante)`);
+    return res.json({ success: true, message: "Variable supprim\xE9e avec succ\xE8s" });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [DELETE Variable] Erreur lors de la suppression:", error);
+    console.error("\u274C [DELETE Variable] Erreur lors de la suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la variable" });
   }
 });
@@ -35994,12 +36223,12 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
     }
     const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -36013,7 +36242,7 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
     return res.json(updated.conditionConfig || {});
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node conditions:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour des conditions du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour des conditions du n\u0153ud" });
   }
 });
 router56.get("/nodes/:nodeId/formula", async (req2, res) => {
@@ -36028,17 +36257,17 @@ router56.get("/nodes/:nodeId/formula", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
     }
     return res.json(node.formulaConfig || {});
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la formule du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la formule du n\u0153ud" });
   }
 });
 router56.put("/nodes/:nodeId/formula", async (req2, res) => {
@@ -36055,12 +36284,12 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
     }
     const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -36074,7 +36303,7 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
     return res.json(updated.formulaConfig || {});
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour de la formule du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la formule du n\u0153ud" });
   }
 });
 router56.get("/nodes/:nodeId/formulas", async (req2, res) => {
@@ -36091,15 +36320,15 @@ router56.get("/nodes/:nodeId/formulas", async (req2, res) => {
     return res.json({ formulas });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node formulas:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des formules du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules du n\u0153ud" });
   }
 });
 router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const { name, tokens: tokens2, description } = req2.body || {};
-    console.log("\xF0\u0178\u201D\x8D Formula creation auth debug:", {
+    const { name, tokens: tokens2, description, targetProperty, constraintMessage } = req2.body || {};
+    console.log("\u{1F50D} Formula creation auth debug:", {
       nodeId,
       organizationId,
       isSuperAdmin: isSuperAdmin2,
@@ -36127,7 +36356,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
         uniqueName = `${name} (${counter})`;
         counter++;
       } catch (error) {
-        console.error("Erreur lors de la v\xC3\xA9rification du nom de formule:", error);
+        console.error("Erreur lors de la v\xE9rification du nom de formule:", error);
         break;
       }
     }
@@ -36139,16 +36368,20 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
         name: uniqueName,
         tokens: tokens2,
         description: description ? String(description) : null,
+        targetProperty: targetProperty ? String(targetProperty) : null,
+        // 🆕 Propriété cible
+        constraintMessage: constraintMessage ? String(constraintMessage) : null,
+        // 🆕 Message de contrainte
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] Activation automatique de la formule cr\xC3\xA9\xC3\xA9e pour le n\xC5\u201Cud ${nodeId}`);
+    console.log(`[TreeBranchLeaf API] Activation automatique de la formule cr\xE9\xE9e pour le n\u0153ud ${nodeId}`);
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasFormula: true,
         formula_activeId: formula.id
-        // ðŸŽ¯ NOUVEAU : Activer automatiquement la formule
+        // 🎯 NOUVEAU : Activer automatiquement la formule
       }
     });
     try {
@@ -36164,21 +36397,21 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     return res.status(201).json(formula);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xC3\xA9ation de la formule" });
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la formule" });
   }
 });
 router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
   try {
     const { nodeId, formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const { name, tokens: tokens2, description } = req2.body || {};
+    const { name, tokens: tokens2, description, targetProperty, constraintMessage } = req2.body || {};
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const existingFormula = await prisma47.treeBranchLeafNodeFormula.findFirst({
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
-      return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Formule non trouv\xE9e" });
     }
     const updated = await prisma47.treeBranchLeafNodeFormula.update({
       where: { id: formulaId },
@@ -36186,6 +36419,10 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
         name: name ? String(name) : void 0,
         tokens: Array.isArray(tokens2) ? tokens2 : void 0,
         description: description !== void 0 ? description ? String(description) : null : void 0,
+        targetProperty: targetProperty !== void 0 ? targetProperty ? String(targetProperty) : null : void 0,
+        // 🆕 Propriété cible
+        constraintMessage: constraintMessage !== void 0 ? constraintMessage ? String(constraintMessage) : null : void 0,
+        // 🆕 Message de contrainte
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
@@ -36210,7 +36447,7 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
     return res.json(updated);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour de la formule" });
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la formule" });
   }
 });
 router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
@@ -36223,7 +36460,7 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
-      return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Formule non trouv\xE9e" });
     }
     await prisma47.treeBranchLeafNodeFormula.delete({
       where: { id: formulaId }
@@ -36240,7 +36477,7 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
         await prisma47.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
-        console.log(`\xE2\u0153\u2026 [TreeBranchLeaf API] Variable associ\xC3\xA9e supprim\xC3\xA9e pour formule ${formulaId}`);
+        console.log(`\u2705 [TreeBranchLeaf API] Variable associ\xE9e supprim\xE9e pour formule ${formulaId}`);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
@@ -36260,7 +36497,7 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       data: { hasFormula: remainingFormulas > 0 }
     });
     console.log(`[TreeBranchLeaf API] Updated hasFormula to ${remainingFormulas > 0} for node ${nodeId}`);
-    return res.json({ success: true, message: "Formule supprim\xC3\xA9e avec succ\xC3\xA8s" });
+    return res.json({ success: true, message: "Formule supprim\xE9e avec succ\xE8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node formula:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la formule" });
@@ -36291,7 +36528,7 @@ router56.get("/reusables/formulas", async (req2, res) => {
     const items = allFormulas.map((f) => ({
       ...f,
       type: "node",
-      nodeLabel: f.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+      nodeLabel: f.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
       treeId: f.TreeBranchLeafNode?.treeId || null
     }));
     console.log("[TreeBranchLeaf API] All formulas listing", {
@@ -36302,7 +36539,7 @@ router56.get("/reusables/formulas", async (req2, res) => {
     return res.json({ items });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error listing all formulas:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des formules" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules" });
   }
 });
 router56.get("/reusables/formulas/:id", async (req2, res) => {
@@ -36320,21 +36557,21 @@ router56.get("/reusables/formulas/:id", async (req2, res) => {
         }
       }
     });
-    if (!item) return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
+    if (!item) return res.status(404).json({ error: "Formule non trouv\xE9e" });
     if (!isSuperAdmin2) {
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+        return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
       }
     }
     return res.json({
       ...item,
       type: "node",
-      nodeLabel: item.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+      nodeLabel: item.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
       treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting formula:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la formule" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la formule" });
   }
 });
 router56.get("/reusables/conditions", async (req2, res) => {
@@ -36362,7 +36599,7 @@ router56.get("/reusables/conditions", async (req2, res) => {
     const items = allConditions.map((c) => ({
       ...c,
       type: "node",
-      nodeLabel: c.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+      nodeLabel: c.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
       treeId: c.TreeBranchLeafNode?.treeId || null,
       nodeId: c.nodeId
     }));
@@ -36374,7 +36611,7 @@ router56.get("/reusables/conditions", async (req2, res) => {
     return res.json({ items });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error listing reusable conditions:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des conditions r\xC3\xA9utilisables" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des conditions r\xE9utilisables" });
   }
 });
 router56.get("/reusables/conditions/:id", async (req2, res) => {
@@ -36392,21 +36629,21 @@ router56.get("/reusables/conditions/:id", async (req2, res) => {
         }
       }
     });
-    if (!item) return res.status(404).json({ error: "Condition non trouv\xC3\xA9e" });
+    if (!item) return res.status(404).json({ error: "Condition non trouv\xE9e" });
     if (!isSuperAdmin2) {
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+        return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
       }
     }
     return res.json({
       ...item,
       type: "node",
-      nodeLabel: item.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+      nodeLabel: item.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
       treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting condition:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la condition" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la condition" });
   }
 });
 router56.get("/reusables/tables", async (req2, res) => {
@@ -36436,7 +36673,7 @@ router56.get("/reusables/tables", async (req2, res) => {
       name: t.name,
       type: t.type,
       description: t.description,
-      nodeLabel: t.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+      nodeLabel: t.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
       treeId: t.TreeBranchLeafNode?.treeId || null,
       nodeId: t.nodeId,
       createdAt: t.createdAt,
@@ -36450,14 +36687,14 @@ router56.get("/reusables/tables", async (req2, res) => {
     return res.json({ items });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error listing reusable tables:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des tables r\xC3\xA9utilisables" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des tables r\xE9utilisables" });
   }
 });
 router56.get("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET conditions for node ${nodeId}:`);
+    console.log(`[TreeBranchLeaf API] \u{1F50D} GET conditions for node ${nodeId}:`);
     console.log(`[TreeBranchLeaf API] - organizationId: ${organizationId}`);
     console.log(`[TreeBranchLeaf API] - isSuperAdmin: ${isSuperAdmin2}`);
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
@@ -36476,7 +36713,7 @@ router56.get("/nodes/:nodeId/conditions", async (req2, res) => {
     return res.json({ conditions });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node conditions:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des conditions du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des conditions du n\u0153ud" });
   }
 });
 router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
@@ -36485,7 +36722,7 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
     const { fieldValues = {}, values = {}, submissionId, testMode = true } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const allValues = { ...fieldValues, ...values };
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE \xC3\u2030valuation condition ${conditionId}:`, { allValues, submissionId, testMode });
+    console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9valuation condition ${conditionId}:`, { allValues, submissionId, testMode });
     const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
@@ -36498,10 +36735,10 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       }
     });
     if (!condition) {
-      return res.status(404).json({ error: "Condition non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Condition non trouv\xE9e" });
     }
     if (!isSuperAdmin2 && condition.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette condition" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette condition" });
     }
     try {
       const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
@@ -36509,18 +36746,18 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       Object.entries(allValues).forEach(([nodeId, value]) => {
         valueMapLocal.set(nodeId, value);
       });
-      console.log("[TBL-PRISMA] \xF0\u0178\xA7\xAE \xC3\u2030valuation avec operation-interpreter:", { conditionId, values: Object.fromEntries(valueMapLocal) });
+      console.log("[TBL-PRISMA] \u{1F9EE} \xC9valuation avec operation-interpreter:", { conditionId, values: Object.fromEntries(valueMapLocal) });
       const calculationResult = await evaluateVariableOperation2(
         condition.nodeId,
         submissionId || conditionId,
         prisma47,
         valueMapLocal
       );
-      console.log("[TBL-PRISMA] \xE2\u0153\u2026 R\xC3\xA9sultat \xC3\xA9valuation:", calculationResult);
+      console.log("[TBL-PRISMA] \u2705 R\xE9sultat \xE9valuation:", calculationResult);
       const result = {
         conditionId: condition.id,
         conditionName: condition.name,
-        nodeLabel: condition.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+        nodeLabel: condition.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
         operationSource: calculationResult.operationSource,
         operationDetail: calculationResult.operationDetail,
         operationResult: calculationResult.operationResult,
@@ -36533,15 +36770,15 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       };
       return res.json(result);
     } catch (error) {
-      console.error("[TBL-PRISMA] \xE2\x9D\u0152 Erreur \xC3\xA9valuation TBL-prisma:", error);
+      console.error("[TBL-PRISMA] \u274C Erreur \xE9valuation TBL-prisma:", error);
       return res.status(500).json({
-        error: "Erreur lors de l'\xC3\xA9valuation TBL-prisma",
+        error: "Erreur lors de l'\xE9valuation TBL-prisma",
         details: error instanceof Error ? error.message : "Erreur inconnue"
       });
     }
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error evaluating condition:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xC3\xA9valuation de la condition" });
+    res.status(500).json({ error: "Erreur lors de l'\xE9valuation de la condition" });
   }
 });
 router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
@@ -36549,7 +36786,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, conditionSet, description } = req2.body || {};
-    console.log("\xF0\u0178\u201D\x8D Condition creation auth debug:", {
+    console.log("\u{1F50D} Condition creation auth debug:", {
       nodeId,
       organizationId,
       isSuperAdmin: isSuperAdmin2,
@@ -36581,7 +36818,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
         break;
       }
     }
-    console.log(`[TreeBranchLeaf API] Nom unique g\xC3\xA9n\xC3\xA9r\xC3\xA9: "${uniqueName}" (original: "${name}")`);
+    console.log(`[TreeBranchLeaf API] Nom unique g\xE9n\xE9r\xE9: "${uniqueName}" (original: "${name}")`);
     const condition = await prisma47.treeBranchLeafNodeCondition.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
@@ -36593,13 +36830,13 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] Activation automatique de la condition cr\xC3\xA9\xC3\xA9e pour le n\xC5\u201Cud ${nodeId}`);
+    console.log(`[TreeBranchLeaf API] Activation automatique de la condition cr\xE9\xE9e pour le n\u0153ud ${nodeId}`);
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasCondition: true,
         condition_activeId: condition.id
-        // ðŸŽ¯ NOUVEAU : Activer automatiquement la condition
+        // 🎯 NOUVEAU : Activer automatiquement la condition
       }
     });
     console.log(`[TreeBranchLeaf API] Created condition for node ${nodeId}:`, condition.name);
@@ -36615,7 +36852,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     return res.status(201).json(condition);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating node condition:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xC3\xA9ation de la condition" });
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la condition" });
   }
 });
 router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
@@ -36629,7 +36866,7 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
-      return res.status(404).json({ error: "Condition non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Condition non trouv\xE9e" });
     }
     const updated = await prisma47.treeBranchLeafNodeCondition.update({
       where: { id: conditionId },
@@ -36661,7 +36898,7 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
     return res.json(updated);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node condition:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour de la condition" });
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la condition" });
   }
 });
 router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
@@ -36674,7 +36911,7 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
-      return res.status(404).json({ error: "Condition non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Condition non trouv\xE9e" });
     }
     await prisma47.treeBranchLeafNodeCondition.delete({
       where: { id: conditionId }
@@ -36691,7 +36928,7 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
         await prisma47.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
-        console.log(`\xE2\u0153\u2026 [TreeBranchLeaf API] Variable associ\xC3\xA9e supprim\xC3\xA9e pour condition ${conditionId}`);
+        console.log(`\u2705 [TreeBranchLeaf API] Variable associ\xE9e supprim\xE9e pour condition ${conditionId}`);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
@@ -36711,7 +36948,7 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       data: { hasCondition: remainingConditions > 0 }
     });
     console.log(`[TreeBranchLeaf API] Updated hasCondition to ${remainingConditions > 0} for node ${nodeId}`);
-    return res.json({ success: true, message: "Condition supprim\xC3\xA9e avec succ\xC3\xA8s" });
+    return res.json({ success: true, message: "Condition supprim\xE9e avec succ\xE8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node condition:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la condition" });
@@ -36723,7 +36960,7 @@ router56.get("/tables/:id", async (req2, res) => {
   const page = parseInt(req2.query.page) || 1;
   const limit = parseInt(req2.query.limit) || 100;
   const offset = (page - 1) * limit;
-  console.log(`[GET /tables/:id] R\xC3\xA9cup\xC3\xA9ration de la table ${id} avec pagination (page: ${page}, limit: ${limit})`);
+  console.log(`[GET /tables/:id] R\xE9cup\xE9ration de la table ${id} avec pagination (page: ${page}, limit: ${limit})`);
   try {
     const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id },
@@ -36741,11 +36978,11 @@ router56.get("/tables/:id", async (req2, res) => {
       }
     });
     if (!table) {
-      return res.status(404).json({ error: "Table non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Table non trouv\xE9e" });
     }
     const tableOrgId = table.node?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s non autoris\xC3\xA9 \xC3\xA0 cette table" });
+      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 cette table" });
     }
     const rows = await prisma47.treeBranchLeafNodeTableRow.findMany({
       where: { tableId: id },
@@ -36753,19 +36990,19 @@ router56.get("/tables/:id", async (req2, res) => {
       take: limit,
       skip: offset
     });
-    console.log(`[GET /tables/:id] ${rows.length} lignes r\xC3\xA9cup\xC3\xA9r\xC3\xA9es pour la table ${id}.`);
+    console.log(`[GET /tables/:id] ${rows.length} lignes r\xE9cup\xE9r\xE9es pour la table ${id}.`);
     res.json({
       ...table,
       rows: rows.map((r) => r.cells),
-      // Renvoyer uniquement les donnÃ©es des cellules
+      // Renvoyer uniquement les données des cellules
       page,
       limit,
       totalRows: table.rowCount,
       totalPages: Math.ceil(table.rowCount / limit)
     });
   } catch (error) {
-    console.error(`\xE2\x9D\u0152 [GET /tables/:id] Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la table ${id}:`, error);
-    res.status(500).json({ error: "Impossible de r\xC3\xA9cup\xC3\xA9rer la table" });
+    console.error(`\u274C [GET /tables/:id] Erreur lors de la r\xE9cup\xE9ration de la table ${id}:`, error);
+    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer la table" });
   }
 });
 var isJsonObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
@@ -36776,7 +37013,7 @@ var readMeta = (value) => {
   return jsonClone(value);
 };
 var buildRecordRows = (columns, matrix) => {
-  console.log("[buildRecordRows] \xF0\u0178\u201D\x8D ENTR\xC3\u2030E:");
+  console.log("[buildRecordRows] \u{1F50D} ENTR\xC9E:");
   console.log("[buildRecordRows] columns:", columns.length);
   console.log("[buildRecordRows] matrix:", matrix.length, "lignes");
   const result = matrix.map((row) => {
@@ -36786,12 +37023,12 @@ var buildRecordRows = (columns, matrix) => {
     });
     return obj;
   });
-  console.log("[buildRecordRows] \xF0\u0178\u017D\xAF SORTIE:", result.length, "records");
+  console.log("[buildRecordRows] \u{1F3AF} SORTIE:", result.length, "records");
   return result;
 };
 var normalizeTableInstance = (table) => {
   try {
-    console.log("[normalizeTableInstance] \xF0\u0178\u201D\u201E ARCHITECTURE NORMALIS\xC3\u2030E");
+    console.log("[normalizeTableInstance] \u{1F504} ARCHITECTURE NORMALIS\xC9E");
     console.log("[normalizeTableInstance] table.id:", table.id);
     console.log("[normalizeTableInstance] tableColumns:", table.tableColumns?.length || 0);
     console.log("[normalizeTableInstance] tableRows:", table.tableRows?.length || 0);
@@ -36820,9 +37057,9 @@ var normalizeTableInstance = (table) => {
       }
       return Array.isArray(cells) ? cells.slice(1) : [];
     });
-    console.log("[normalizeTableInstance] \xE2\u0153\u2026 columns:", columns.length, columns);
-    console.log("[normalizeTableInstance] \xE2\u0153\u2026 rows:", rows.length, rows);
-    console.log("[normalizeTableInstance] \xE2\u0153\u2026 matrix:", matrix.length);
+    console.log("[normalizeTableInstance] \u2705 columns:", columns.length, columns);
+    console.log("[normalizeTableInstance] \u2705 rows:", rows.length, rows);
+    console.log("[normalizeTableInstance] \u2705 matrix:", matrix.length);
     const meta = readMeta(table.meta);
     const result = {
       id: table.id,
@@ -36838,14 +37075,14 @@ var normalizeTableInstance = (table) => {
       order: table.order ?? 0,
       isDefault: Boolean(table.isDefault)
     };
-    console.log("[normalizeTableInstance] \xF0\u0178\u017D\xAF SORTIE:");
+    console.log("[normalizeTableInstance] \u{1F3AF} SORTIE:");
     console.log("[normalizeTableInstance] result.columns:", result.columns.length);
     console.log("[normalizeTableInstance] result.rows:", result.rows.length);
     console.log("[normalizeTableInstance] result.matrix:", result.matrix.length);
     console.log("[normalizeTableInstance] result.records:", result.records.length);
     return result;
   } catch (error) {
-    console.error("[normalizeTableInstance] \xE2\x9D\u0152 ERREUR FATALE:", error);
+    console.error("[normalizeTableInstance] \u274C ERREUR FATALE:", error);
     console.error("[normalizeTableInstance] table.id:", table?.id);
     console.error("[normalizeTableInstance] table structure:", JSON.stringify(table, null, 2));
     throw error;
@@ -36896,12 +37133,12 @@ router56.get("/nodes/:nodeId/tables", async (req2, res) => {
     return res.json(normalized);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node tables:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des tableaux" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des tableaux" });
   }
 });
 router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { tableId } = req2.params;
-  console.log(`[DELETE /nodes/:nodeId/tables/:tableId] \u{1F5D1}\uFE0F Suppression table ${tableId} avec nettoyage complet`);
+  console.log(`[DELETE /nodes/:nodeId/tables/:tableId] ??? Suppression table ${tableId} avec nettoyage complet`);
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const table = await prisma47.treeBranchLeafNodeTable.findUnique({
@@ -36913,21 +37150,21 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       }
     });
     if (!table) {
-      return res.status(404).json({ error: "Table non trouv\xE9e" });
+      return res.status(404).json({ error: "Table non trouv\uFFFDe" });
     }
     const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+      return res.status(403).json({ error: "Acc\uFFFDs non autoris\uFFFD" });
     }
     await prisma47.treeBranchLeafNodeTable.delete({ where: { id: tableId } });
-    console.log(`[DELETE Table] \u2705 Table ${tableId} supprim\xE9e (+ colonnes/lignes en cascade)`);
+    console.log(`[DELETE Table] ? Table ${tableId} supprim\uFFFDe (+ colonnes/lignes en cascade)`);
     try {
       const selectConfigsUsingTable = await prisma47.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: tableId },
         select: { nodeId: true }
       });
       if (selectConfigsUsingTable.length > 0) {
-        console.log(`[DELETE Table] \u{1F9F9} ${selectConfigsUsingTable.length} champ(s) Select/Cascader r\xE9f\xE9rencent cette table - D\xC9SACTIVATION LOOKUP`);
+        console.log(`[DELETE Table] ?? ${selectConfigsUsingTable.length} champ(s) Select/Cascader r\uFFFDf\uFFFDrencent cette table - D\uFFFDSACTIVATION LOOKUP`);
         for (const config of selectConfigsUsingTable) {
           const selectNode = await prisma47.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
@@ -36937,7 +37174,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
             }
           });
           if (selectNode) {
-            console.log(`[DELETE Table] \u{1F527} D\xE9sactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
+            console.log(`[DELETE Table] ?? D\uFFFDsactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
             const oldMetadata = selectNode.metadata || {};
             const oldCapabilities = oldMetadata.capabilities || {};
             const newCapabilities = {
@@ -36973,13 +37210,13 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
             await prisma47.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
-            console.log(`[DELETE Table] \u2705 Lookup d\xE9sactiv\xE9 pour "${selectNode.label}" - champ d\xE9bloqu\xE9`);
+            console.log(`[DELETE Table] ? Lookup d\uFFFDsactiv\uFFFD pour "${selectNode.label}" - champ d\uFFFDbloqu\uFFFD`);
           }
         }
-        console.log(`[DELETE Table] \u2705 ${selectConfigsUsingTable.length} champ(s) Select D\xC9BLOQU\xC9S (lookup d\xE9sactiv\xE9)`);
+        console.log(`[DELETE Table] ? ${selectConfigsUsingTable.length} champ(s) Select D\uFFFDBLOQU\uFFFDS (lookup d\uFFFDsactiv\uFFFD)`);
       }
     } catch (selectConfigError) {
-      console.error(`[DELETE Table] \u26A0\uFE0F Erreur d\xE9sactivation lookups:`, selectConfigError);
+      console.error(`[DELETE Table] ?? Erreur d\uFFFDsactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
       const node = await prisma47.treeBranchLeafNode.findUnique({
@@ -37023,7 +37260,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           }
         }
       });
-      console.log(`[DELETE Table] \u2705 N\u0153ud ${table.nodeId} enti\xE8rement nettoy\xE9`, {
+      console.log(`[DELETE Table] ? N\uFFFDud ${table.nodeId} enti\uFFFDrement nettoy\uFFFD`, {
         hasTable: remainingTables > 0,
         linkedTableIds: nextLinkedIds.length,
         table_activeId_reset: wasActiveTable,
@@ -37031,9 +37268,9 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         all_fields_reset: remainingTables === 0
       });
     }
-    return res.json({ success: true, message: "Tableau supprim\xE9 avec succ\xE8s" });
+    return res.json({ success: true, message: "Tableau supprim\uFFFD avec succ\uFFFDs" });
   } catch (error) {
-    console.error("[DELETE Table] \u274C Erreur lors de la suppression:", error);
+    console.error("[DELETE Table] ? Erreur lors de la suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression du tableau" });
   }
 });
@@ -37066,7 +37303,7 @@ router56.get("/nodes/:nodeId/tables/options", async (req2, res) => {
     return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching table options:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des options du tableau" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des options du tableau" });
   }
 });
 router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
@@ -37088,7 +37325,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       tableId: tableId && tableId.length ? tableId : void 0
     });
     if (!normalized) {
-      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\xC5\u201Cud" });
+      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\u0153ud" });
     }
     const { table } = normalized;
     const rawLookup = table.meta && typeof table.meta.lookup === "object" ? table.meta.lookup : void 0;
@@ -37096,7 +37333,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       const colLabel = column || (valueColumn && valueColumn === "column" ? valueColumn : void 0);
       const rowLabel = row;
       if (!colLabel || !rowLabel) {
-        return res.status(400).json({ error: "Param\xC3\xA8tres column et row requis pour un tableau crois\xC3\xA9" });
+        return res.status(400).json({ error: "Param\xE8tres column et row requis pour un tableau crois\xE9" });
       }
       const columnIndex = table.columns.findIndex((c) => c === colLabel);
       const rowIndex = table.rows.findIndex((r) => r === rowLabel);
@@ -37119,15 +37356,15 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
     }
     const resolvedKeyColumn = (keyColumn && keyColumn.length ? keyColumn : void 0) ?? (rawLookup && typeof rawLookup.keyColumn === "string" ? rawLookup.keyColumn : void 0);
     if (!resolvedKeyColumn) {
-      return res.status(400).json({ error: "Colonne cl\xC3\xA9 non d\xC3\xA9finie pour ce tableau" });
+      return res.status(400).json({ error: "Colonne cl\xE9 non d\xE9finie pour ce tableau" });
     }
     const lookupValue = (keyValue && keyValue.length ? keyValue : void 0) ?? (key2 && key2.length ? key2 : void 0) ?? (column && !table.columns.includes(column) ? column : void 0);
     if (lookupValue === void 0) {
-      return res.status(400).json({ error: "Valeur de cl\xC3\xA9 requise" });
+      return res.status(400).json({ error: "Valeur de cl\xE9 requise" });
     }
     const keyIndex = table.columns.findIndex((colName) => colName === resolvedKeyColumn);
     if (keyIndex === -1) {
-      return res.status(404).json({ error: `Colonne cl\xC3\xA9 "${resolvedKeyColumn}" introuvable` });
+      return res.status(404).json({ error: `Colonne cl\xE9 "${resolvedKeyColumn}" introuvable` });
     }
     let matchedIndex = -1;
     for (let i = 0; i < table.matrix.length; i += 1) {
@@ -37138,7 +37375,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       }
     }
     if (matchedIndex === -1) {
-      return res.status(404).json({ error: "Aucune ligne correspondant \xC3\xA0 cette cl\xC3\xA9" });
+      return res.status(404).json({ error: "Aucune ligne correspondant \xE0 cette cl\xE9" });
     }
     const matchedRow = table.matrix[matchedIndex] ?? [];
     const matchedRecord = table.records[matchedIndex] ?? null;
@@ -37182,7 +37419,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       tableId: typeof requestedTableId === "string" && requestedTableId.trim().length ? requestedTableId.trim() : void 0
     });
     if (!normalized) {
-      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\xC5\u201Cud" });
+      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\u0153ud" });
     }
     const { table } = normalized;
     if (!table.columns.length) {
@@ -37193,7 +37430,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       select: { id: true, treeId: true, parentId: true }
     });
     if (!baseNode) {
-      return res.status(404).json({ error: "N\xC5\u201Cud de base introuvable" });
+      return res.status(404).json({ error: "N\u0153ud de base introuvable" });
     }
     const parentId = baseNode.parentId ?? null;
     const siblingsCount = await prisma47.treeBranchLeafNode.count({
@@ -37212,7 +37449,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       toCreate.push({ label: fallbackRowsLabel, dimension: "rows" });
     }
     if (!toCreate.length) {
-      return res.status(400).json({ error: "Aucune dimension exploitable pour g\xC3\xA9n\xC3\xA9rer des champs SELECT" });
+      return res.status(400).json({ error: "Aucune dimension exploitable pour g\xE9n\xE9rer des champs SELECT" });
     }
     const created = [];
     let insertOrder = siblingsCount;
@@ -37279,7 +37516,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error generating selects from table:", error);
-    res.status(500).json({ error: "Erreur lors de la g\xC3\xA9n\xC3\xA9ration des champs d\xC3\xA9pendants" });
+    res.status(500).json({ error: "Erreur lors de la g\xE9n\xE9ration des champs d\xE9pendants" });
   }
 });
 router56.get("/effective-values", async (req2, res) => {
@@ -37303,7 +37540,7 @@ router56.get("/effective-values", async (req2, res) => {
     return res.json({ success: true, data: result });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting effective values:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des valeurs effectives" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des valeurs effectives" });
   }
 });
 router56.get("/debug/formula-vars", async (req2, res) => {
@@ -37326,7 +37563,7 @@ router56.get("/debug/formula-vars", async (req2, res) => {
     return res.json(vars);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching formula variables:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des variables de formule" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des variables de formule" });
   }
 });
 router56.get("/debug/formula-eval", async (req2, res) => {
@@ -37339,14 +37576,14 @@ router56.get("/debug/formula-eval", async (req2, res) => {
       where: { id: formulaId }
     });
     if (!formula) {
-      return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Formule non trouv\xE9e" });
     }
     const node = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafNodeVariable: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const fieldValues = {
       ...node.TreeBranchLeafNodeVariable?.reduce((acc, v) => {
@@ -37355,9 +37592,9 @@ router56.get("/debug/formula-eval", async (req2, res) => {
         }
         return acc;
       }, {})
-      // Ajouter des valeurs de test supplÃ©mentaires si nÃ©cessaire
+      // Ajouter des valeurs de test supplémentaires si nécessaire
     };
-    console.log("\xF0\u0178\xA7\xAA [DEBUG] \xC3\u2030valuation de la formule avec les fieldValues suivants:", fieldValues);
+    console.log("\u{1F9EA} [DEBUG] \xC9valuation de la formule avec les fieldValues suivants:", fieldValues);
     const { value, errors } = await evaluateTokens(formula.tokens, {
       resolveVariable: async (nodeId2) => {
         const found = Object.values(fieldValues).find((v) => v.nodeId === nodeId2);
@@ -37368,14 +37605,14 @@ router56.get("/debug/formula-eval", async (req2, res) => {
     return res.json({ value, errors });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error evaluating formula in debug:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xC3\xA9valuation de la formule en mode d\xC3\xA9bogage" });
+    res.status(500).json({ error: "Erreur lors de l'\xE9valuation de la formule en mode d\xE9bogage" });
   }
 });
 router56.get("/formulas-version", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[TBL LEGACY] /api/treebranchleaf/formulas-version appel\xC3\xA9 (d\xC3\xA9pr\xC3\xA9ci\xC3\xA9). Utiliser /api/tbl/evaluate avec futur cache d\xC3\xA9pendances.");
+      console.warn("[TBL LEGACY] /api/treebranchleaf/formulas-version appel\xE9 (d\xE9pr\xE9ci\xE9). Utiliser /api/tbl/evaluate avec futur cache d\xE9pendances.");
     }
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const version = {
@@ -37388,7 +37625,7 @@ router56.get("/formulas-version", async (req2, res) => {
     return res.json(version);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting formulas version:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la version des formules" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la version des formules" });
   }
 });
 router56.post("/formulas/validate", (req2, res) => {
@@ -37455,19 +37692,19 @@ router56.post("/evaluate/formula", async (req2, res) => {
       return res.status(400).json({ error: "Parse error", details: error.message });
     }
     console.error("[TreeBranchLeaf API] Error evaluating inline formula:", error);
-    return res.status(500).json({ error: "Erreur \xC3\xA9valuation inline" });
+    return res.status(500).json({ error: "Erreur \xE9valuation inline" });
   }
 });
 router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appel\xC3\xA9 (d\xC3\xA9pr\xC3\xA9ci\xC3\xA9). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.");
+      console.warn("[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appel\xE9 (d\xE9pr\xE9ci\xE9). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.");
     }
     const { formulaId } = req2.params;
     const { fieldValues = {}, testMode = true } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE \xC3\u2030valuation formule ${formulaId}:`, { fieldValues, testMode });
+    console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9valuation formule ${formulaId}:`, { fieldValues, testMode });
     const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
@@ -37483,29 +37720,29 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
       }
     });
     if (!formula) {
-      return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Formule non trouv\xE9e" });
     }
     const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette formule" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette formule" });
     }
     try {
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE \xC3\u2030VALUATION FORMULE ULTRA-D\xC3\u2030TAILL\xC3\u2030E:`, {
+      console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9VALUATION FORMULE ULTRA-D\xC9TAILL\xC9E:`, {
         formulaId: formula.id,
         formulaName: formula.name,
         tokens: formula.tokens,
         fieldValues
       });
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D FIELDVALUES RE\xC3\u2021UES:`, Object.entries(fieldValues));
+      console.log(`[TreeBranchLeaf API] \u{1F50D} FIELDVALUES RE\xC7UES:`, Object.entries(fieldValues));
       const isDebugMode = process.env.NODE_ENV === "development";
       if (isDebugMode && formula) {
-        console.log(`[TreeBranchLeaf API] \xEF\xBF\xBD === FORMULE EN COURS D'ANALYSE ===`);
-        console.log(`[TreeBranchLeaf API] \xEF\xBF\xBD ID:`, formula.id);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D Expression:`, formula.expression || "undefined");
-        console.log(`[TreeBranchLeaf API] \xEF\xBF\xBD Tokens BRUTS:`, JSON.stringify(formula.tokens, null, 2));
+        console.log(`[TreeBranchLeaf API] \uFFFD === FORMULE EN COURS D'ANALYSE ===`);
+        console.log(`[TreeBranchLeaf API] \uFFFD ID:`, formula.id);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} Expression:`, formula.expression || "undefined");
+        console.log(`[TreeBranchLeaf API] \uFFFD Tokens BRUTS:`, JSON.stringify(formula.tokens, null, 2));
         if (Array.isArray(formula.tokens)) {
           formula.tokens.forEach((token, index) => {
-            console.log(`[TreeBranchLeaf API] \xEF\xBF\xBD Token ${index}:`, {
+            console.log(`[TreeBranchLeaf API] \uFFFD Token ${index}:`, {
               type: token.type,
               value: token.value,
               name: token.name,
@@ -37514,9 +37751,9 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
             });
           });
         }
-        console.log(`[TreeBranchLeaf API] \xEF\xBF\xBD FieldValues pour cette formule:`);
+        console.log(`[TreeBranchLeaf API] \uFFFD FieldValues pour cette formule:`);
         Object.entries(fieldValues).forEach(([k, v]) => {
-          console.log(`[TreeBranchLeaf API] \xEF\xBF\xBD   ${k}: "${v}" (${typeof v})`);
+          console.log(`[TreeBranchLeaf API] \uFFFD   ${k}: "${v}" (${typeof v})`);
         });
       }
       const tokens2 = Array.isArray(formula.tokens) ? formula.tokens : [];
@@ -37533,23 +37770,23 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
           hasOperatorsOverride: req2.body?.hasOperators
         });
         if (process.env.NODE_ENV === "development") {
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 === R\xC3\u2030SULTAT ORCHESTRATEUR ===`);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 resolvedVariables:`, orchestrated2.resolvedVariables);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 strategy:`, orchestrated2.strategy);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 operatorsDetected:`, orchestrated2.operatorsDetected);
+          console.log(`[TreeBranchLeaf API] \u{1F6A8} === R\xC9SULTAT ORCHESTRATEUR ===`);
+          console.log(`[TreeBranchLeaf API] \u{1F6A8} resolvedVariables:`, orchestrated2.resolvedVariables);
+          console.log(`[TreeBranchLeaf API] \u{1F6A8} strategy:`, orchestrated2.strategy);
+          console.log(`[TreeBranchLeaf API] \u{1F6A8} operatorsDetected:`, orchestrated2.operatorsDetected);
           const variableCount = Object.keys(orchestrated2.resolvedVariables).filter((k) => orchestrated2.resolvedVariables[k] !== 0).length;
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 Variable count (non-zero):`, variableCount);
+          console.log(`[TreeBranchLeaf API] \u{1F6A8} Variable count (non-zero):`, variableCount);
           if (variableCount === 1) {
             const singleValue = Object.values(orchestrated2.resolvedVariables).find((v) => v !== 0);
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 \xE2\x9D\u0152 UNE SEULE VARIABLE \xE2\u2020\u2019 RETOUR DIRECT: ${singleValue}`);
+            console.log(`[TreeBranchLeaf API] \u{1F6A8} \u274C UNE SEULE VARIABLE \u2192 RETOUR DIRECT: ${singleValue}`);
           } else if (variableCount >= 2) {
             const values = Object.values(orchestrated2.resolvedVariables);
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 \xE2\u0153\u2026 PLUSIEURS VARIABLES \xE2\u2020\u2019 CALCUL: ${values[0]} / ${values[1]} = ${values[0] / values[1]}`);
+            console.log(`[TreeBranchLeaf API] \u{1F6A8} \u2705 PLUSIEURS VARIABLES \u2192 CALCUL: ${values[0]} / ${values[1]} = ${values[0] / values[1]}`);
           }
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\xA8 Trace orchestrateur:`, orchestrated2.trace);
+          console.log(`[TreeBranchLeaf API] \u{1F6A8} Trace orchestrateur:`, orchestrated2.trace);
         }
       } catch (orchestratorError) {
-        console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 Erreur orchestrateur:", orchestratorError);
+        console.error("[TreeBranchLeaf API] \u274C Erreur orchestrateur:", orchestratorError);
         return res.status(500).json({
           error: "Erreur orchestrateur formule",
           details: orchestratorError.message || "unknown",
@@ -37562,13 +37799,13 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         });
       }
       const resolvedVariables = orchestrated2.resolvedVariables;
-      console.log("[TreeBranchLeaf API] \xF0\u0178\u017D\xAF Variables finales r\xC3\xA9solues (orchestrateur):", resolvedVariables);
-      console.log("[TreeBranchLeaf API] \xF0\u0178\u017D\xAF Strat\xC3\xA9gie orchestrateur:", orchestrated2.strategy, "operatorsDetected=", orchestrated2.operatorsDetected);
-      console.log("[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 FieldValues disponibles:", Object.keys(fieldValues));
-      console.log("[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 Valeurs FieldValues:", fieldValues);
+      console.log("[TreeBranchLeaf API] \u{1F3AF} Variables finales r\xE9solues (orchestrateur):", resolvedVariables);
+      console.log("[TreeBranchLeaf API] \u{1F3AF} Strat\xE9gie orchestrateur:", orchestrated2.strategy, "operatorsDetected=", orchestrated2.operatorsDetected);
+      console.log("[TreeBranchLeaf API] \u{1F4CB} FieldValues disponibles:", Object.keys(fieldValues));
+      console.log("[TreeBranchLeaf API] \u{1F4CB} Valeurs FieldValues:", fieldValues);
       const universalAnalyzer = (fieldValues2) => {
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xA0 === ANALYSE INTELLIGENTE UNIVERSELLE ===`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xA0 Donn\xC3\xA9es re\xC3\xA7ues:`, fieldValues2);
+        console.log(`[TreeBranchLeaf API] \u{1F9E0} === ANALYSE INTELLIGENTE UNIVERSELLE ===`);
+        console.log(`[TreeBranchLeaf API] \u{1F9E0} Donn\xE9es re\xE7ues:`, fieldValues2);
         const classified2 = {
           userInputs: {},
           systemRefs: {},
@@ -37579,55 +37816,55 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         Object.entries(fieldValues2).forEach(([key2, value]) => {
           if (value == null || value === "") return;
           const strValue = String(value);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D Analyse "${key2}": "${strValue}"`);
+          console.log(`[TreeBranchLeaf API] \u{1F50D} Analyse "${key2}": "${strValue}"`);
           if (key2.includes("_field")) {
             classified2.userInputs[key2] = value;
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\u2018\xA4 INPUT UTILISATEUR: "${key2}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] \u{1F464} INPUT UTILISATEUR: "${key2}" = "${value}"`);
           } else if (key2.startsWith("node_") || key2.includes("-") && key2.length > 10) {
             classified2.systemRefs[key2] = value;
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\u2014 R\xC3\u2030F\xC3\u2030RENCE SYST\xC3\u02C6ME: "${key2}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] \u{1F517} R\xC9F\xC9RENCE SYST\xC8ME: "${key2}" = "${value}"`);
           } else if (key2.startsWith("__mirror_")) {
             classified2.metadata[key2] = value;
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\xAA\u017E M\xC3\u2030TADONN\xC3\u2030E: "${key2}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] \u{1FA9E} M\xC9TADONN\xC9E: "${key2}" = "${value}"`);
           } else {
             classified2.calculations[key2] = value;
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE CALCUL/CONDITION: "${key2}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] \u{1F9EE} CALCUL/CONDITION: "${key2}" = "${value}"`);
           }
         });
         return classified2;
       };
       const intelligentStrategy = (classified2, resolvedVariables2, context) => {
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u017D\xAF === STRAT\xC3\u2030GIE INTELLIGENTE ===`);
+        console.log(`[TreeBranchLeaf API] \u{1F3AF} === STRAT\xC9GIE INTELLIGENTE ===`);
         const userInputCount = Object.keys(classified2.userInputs).length;
         const systemRefCount = Object.keys(classified2.systemRefs).length;
         const calculationCount = Object.keys(classified2.calculations).length;
         const tokenVariableCount = context.tokenVariablesCount;
         const variableCount = Object.keys(resolvedVariables2).filter((k) => resolvedVariables2[k] !== 0).length;
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u0160 COMPTAGE:`, {
+        console.log(`[TreeBranchLeaf API] \u{1F4CA} COMPTAGE:`, {
           userInputs: userInputCount,
           systemRefs: systemRefCount,
           calculations: calculationCount,
           variables: variableCount,
           tokenVariables: tokenVariableCount,
-          // ðŸ”§ UTILISER CETTE VALEUR
+          // 🔧 UTILISER CETTE VALEUR
           tokens: context.tokensCount
         });
         if (userInputCount > 0 && context.tokenVariablesCount === 0) {
           const userValue = Object.values(classified2.userInputs)[0];
-          console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 STRAT\xC3\u2030GIE: PRIORIT\xC3\u2030 UTILISATEUR`);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D D\xC3\u2030TAIL VALEUR UTILISATEUR:`);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - Type: ${typeof userValue}`);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - Valeur brute: "${userValue}"`);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - String conversion: "${String(userValue)}"`);
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - Longueur: ${String(userValue).length}`);
+          console.log(`[TreeBranchLeaf API] \u2705 STRAT\xC9GIE: PRIORIT\xC9 UTILISATEUR`);
+          console.log(`[TreeBranchLeaf API] \u{1F50D} D\xC9TAIL VALEUR UTILISATEUR:`);
+          console.log(`[TreeBranchLeaf API] \u{1F50D} - Type: ${typeof userValue}`);
+          console.log(`[TreeBranchLeaf API] \u{1F50D} - Valeur brute: "${userValue}"`);
+          console.log(`[TreeBranchLeaf API] \u{1F50D} - String conversion: "${String(userValue)}"`);
+          console.log(`[TreeBranchLeaf API] \u{1F50D} - Longueur: ${String(userValue).length}`);
           return {
             strategy: "USER_PRIORITY",
             value: userValue,
-            reason: "L'utilisateur a entr\xC3\xA9 une valeur directe"
+            reason: "L'utilisateur a entr\xE9 une valeur directe"
           };
         }
         if (tokenVariableCount >= 2) {
-          console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 STRAT\xC3\u2030GIE: CALCUL AUTOMATIQUE (${tokenVariableCount} variables dans les tokens, ${variableCount} r\xC3\xA9solues non-nulles)`);
+          console.log(`[TreeBranchLeaf API] \u2705 STRAT\xC9GIE: CALCUL AUTOMATIQUE (${tokenVariableCount} variables dans les tokens, ${variableCount} r\xE9solues non-nulles)`);
           return {
             strategy: "AUTO_CALCULATION",
             value: null,
@@ -37636,39 +37873,39 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         }
         if (tokenVariableCount === 1) {
           const singleValue = Object.values(resolvedVariables2).find((v) => v !== 0);
-          console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 STRAT\xC3\u2030GIE: VALEUR UNIQUE (valeur: ${singleValue})`);
+          console.log(`[TreeBranchLeaf API] \u2705 STRAT\xC9GIE: VALEUR UNIQUE (valeur: ${singleValue})`);
           return {
             strategy: "SINGLE_VALUE",
             value: singleValue,
             reason: "Une seule variable dans les tokens"
           };
         }
-        console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F STRAT\xC3\u2030GIE: NEUTRE (aucune donn\xC3\xA9e significative)`);
+        console.log(`[TreeBranchLeaf API] \u26A0\uFE0F STRAT\xC9GIE: NEUTRE (aucune donn\xE9e significative)`);
         return {
           strategy: "NEUTRAL",
           value: 0,
-          reason: "Aucune donn\xC3\xA9e disponible"
+          reason: "Aucune donn\xE9e disponible"
         };
       };
       const classified = universalAnalyzer(fieldValues);
       const strategy = intelligentStrategy(classified, resolvedVariables, { tokenVariablesCount: tokenVariables.length, tokensCount: tokens2.length });
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\u20AC === EX\xC3\u2030CUTION INTELLIGENTE ===`);
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\u20AC Strat\xC3\xA9gie choisie: ${strategy.strategy}`);
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\u0161\u20AC Raison: ${strategy.reason}`);
+      console.log(`[TreeBranchLeaf API] \u{1F680} === EX\xC9CUTION INTELLIGENTE ===`);
+      console.log(`[TreeBranchLeaf API] \u{1F680} Strat\xE9gie choisie: ${strategy.strategy}`);
+      console.log(`[TreeBranchLeaf API] \u{1F680} Raison: ${strategy.reason}`);
       if (strategy.strategy === "USER_PRIORITY" || strategy.strategy === "SINGLE_VALUE") {
         const rawValue = strategy.value;
-        console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 === RETOUR DIRECT ===`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D ANALYSE CONVERSION:`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - Valeur strategy.value: "${rawValue}"`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - Type de strategy.value: ${typeof rawValue}`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - String(rawValue): "${String(rawValue)}"`);
+        console.log(`[TreeBranchLeaf API] \u2705 === RETOUR DIRECT ===`);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} ANALYSE CONVERSION:`);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} - Valeur strategy.value: "${rawValue}"`);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} - Type de strategy.value: ${typeof rawValue}`);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} - String(rawValue): "${String(rawValue)}"`);
         const cleanedString = String(rawValue).replace(/\s+/g, "").replace(/,/g, ".");
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - Apr\xC3\xA8s nettoyage: "${cleanedString}"`);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} - Apr\xE8s nettoyage: "${cleanedString}"`);
         const numValue = parseFloat(cleanedString);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - parseFloat r\xC3\xA9sultat: ${numValue}`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D - isNaN(numValue): ${isNaN(numValue)}`);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} - parseFloat r\xE9sultat: ${numValue}`);
+        console.log(`[TreeBranchLeaf API] \u{1F50D} - isNaN(numValue): ${isNaN(numValue)}`);
         const finalValue = isNaN(numValue) ? 0 : numValue;
-        console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Valeur finale: ${finalValue}`);
+        console.log(`[TreeBranchLeaf API] \u2705 Valeur finale: ${finalValue}`);
         return res.json({
           success: true,
           result: finalValue,
@@ -37685,7 +37922,7 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         });
       }
       if (strategy.strategy === "NEUTRAL") {
-        console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F === RETOUR NEUTRE ===`);
+        console.log(`[TreeBranchLeaf API] \u26A0\uFE0F === RETOUR NEUTRE ===`);
         return res.json({
           success: true,
           result: 0,
@@ -37701,27 +37938,27 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         });
       }
       if (strategy.strategy === "AUTO_CALCULATION") {
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE === MODE CALCUL AUTOMATIQUE ===`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE Variables pour calcul:`, resolvedVariables);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE Proc\xC3\xA9dure automatique de calcul activ\xC3\xA9e`);
+        console.log(`[TreeBranchLeaf API] \u{1F9EE} === MODE CALCUL AUTOMATIQUE ===`);
+        console.log(`[TreeBranchLeaf API] \u{1F9EE} Variables pour calcul:`, resolvedVariables);
+        console.log(`[TreeBranchLeaf API] \u{1F9EE} Proc\xE9dure automatique de calcul activ\xE9e`);
       }
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE === MODE CALCUL ===`);
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE Formule \xC3\xA0 \xC3\xA9valuer avec variables:`, resolvedVariables);
+      console.log(`[TreeBranchLeaf API] \u{1F9EE} === MODE CALCUL ===`);
+      console.log(`[TreeBranchLeaf API] \u{1F9EE} Formule \xE0 \xE9valuer avec variables:`, resolvedVariables);
       const evaluateTokens2 = (tokens3) => {
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE === D\xC3\u2030BUT \xC3\u2030VALUATION COMPL\xC3\u02C6TE ===`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE Tokens \xC3\xA0 \xC3\xA9valuer:`, tokens3);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE Variables disponibles:`, resolvedVariables);
+        console.log(`[TreeBranchLeaf API] \u{1F9EE} === D\xC9BUT \xC9VALUATION COMPL\xC8TE ===`);
+        console.log(`[TreeBranchLeaf API] \u{1F9EE} Tokens \xE0 \xE9valuer:`, tokens3);
+        console.log(`[TreeBranchLeaf API] \u{1F9EE} Variables disponibles:`, resolvedVariables);
         const stack = [];
         const operations = [];
         console.log(
-          `[TreeBranchLeaf API] \xF0\u0178\xA7\xAE D\xC3\xA9but \xC3\xA9valuation avec ${tokens3.length} tokens:`,
+          `[TreeBranchLeaf API] \u{1F9EE} D\xE9but \xE9valuation avec ${tokens3.length} tokens:`,
           tokens3.map((t) => `${t.type}:${t.value || t.name}`).join(" ")
         );
         const convertToPostfix = (tokens4) => {
           const outputQueue = [];
           const operatorStack = [];
           const precedence = { "+": 1, "-": 1, "*": 2, "/": 2 };
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\u201E Conversion infix \xE2\u2020\u2019 postfix pour:`, tokens4.map((t) => t.value || t.name).join(" "));
+          console.log(`[TreeBranchLeaf API] \u{1F504} Conversion infix \u2192 postfix pour:`, tokens4.map((t) => t.value || t.name).join(" "));
           for (const token of tokens4) {
             if (token.type === "value" || token.type === "variable") {
               outputQueue.push(token);
@@ -37735,7 +37972,7 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
           while (operatorStack.length > 0) {
             outputQueue.push(operatorStack.pop());
           }
-          console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Postfix converti:`, outputQueue.map((t) => t.value || t.variableId || t.name || "unknown").join(" "));
+          console.log(`[TreeBranchLeaf API] \u2705 Postfix converti:`, outputQueue.map((t) => t.value || t.variableId || t.name || "unknown").join(" "));
           return outputQueue;
         };
         const postfixTokens = convertToPostfix(tokens3);
@@ -37747,13 +37984,13 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
             const finalValue = isNaN(value) ? 0 : value;
             stack.push(finalValue);
             operations.push(`PUSH(${finalValue})`);
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u0160 Valeur: ${finalValue}`);
+            console.log(`[TreeBranchLeaf API] \u{1F4CA} Valeur: ${finalValue}`);
           } else if (token.type === "variable") {
             const varName = token.variableId || token.name || "";
             const value = resolvedVariables[varName] || 0;
             stack.push(value);
             operations.push(`PUSH(${varName}=${value})`);
-            console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\xA2 Variable: ${varName} = ${value} (propri\xC3\xA9t\xC3\xA9: ${token.variableId ? "variableId" : "name"})`);
+            console.log(`[TreeBranchLeaf API] \u{1F522} Variable: ${varName} = ${value} (propri\xE9t\xE9: ${token.variableId ? "variableId" : "name"})`);
           } else if (token.type === "operator" && ["+", "-", "*", "/"].includes(String(token.value))) {
             if (stack.length >= 2) {
               const b = stack.pop();
@@ -37779,24 +38016,24 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
                     operations.push(`${a} / ${b} = ${result2}`);
                   } else {
                     result2 = 0;
-                    operations.push(`${a} / ${b} = 0 (division par z\xC3\xA9ro \xC3\xA9vit\xC3\xA9e)`);
-                    console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Division par z\xC3\xA9ro \xC3\xA9vit\xC3\xA9e: ${a} / ${b}`);
+                    operations.push(`${a} / ${b} = 0 (division par z\xE9ro \xE9vit\xE9e)`);
+                    console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Division par z\xE9ro \xE9vit\xE9e: ${a} / ${b}`);
                   }
                   break;
               }
               stack.push(result2);
-              console.log(`[TreeBranchLeaf API] \xE2\u0161\xA1 Op\xC3\xA9ration: ${a} ${operator} ${b} = ${result2}`);
+              console.log(`[TreeBranchLeaf API] \u26A1 Op\xE9ration: ${a} ${operator} ${b} = ${result2}`);
             } else {
-              console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Pile insuffisante pour l'op\xC3\xA9rateur ${token.value}, pile actuelle:`, stack);
+              console.log(`[TreeBranchLeaf API] \u274C Pile insuffisante pour l'op\xE9rateur ${token.value}, pile actuelle:`, stack);
               operations.push(`ERREUR: Pile insuffisante pour ${token.value}`);
             }
           } else {
-            console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Token ignor\xC3\xA9:`, token);
+            console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Token ignor\xE9:`, token);
           }
         }
         const finalResult = stack.length > 0 ? stack[0] : 0;
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u017D\xAF R\xC3\xA9sultat final: ${finalResult}`);
-        console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\x9D Op\xC3\xA9rations effectu\xC3\xA9es:`, operations);
+        console.log(`[TreeBranchLeaf API] \u{1F3AF} R\xE9sultat final: ${finalResult}`);
+        console.log(`[TreeBranchLeaf API] \u{1F4DD} Op\xE9rations effectu\xE9es:`, operations);
         return finalResult;
       };
       let result = null;
@@ -37805,11 +38042,11 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
       } else {
         result = 0;
       }
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE R\xC3\xA9sultat du calcul:`, result);
+      console.log(`[TreeBranchLeaf API] \u{1F9EE} R\xE9sultat du calcul:`, result);
       const responseData = {
         formulaId: formula.id,
         formulaName: formula.name,
-        nodeLabel: formula.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+        nodeLabel: formula.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
         evaluation: {
           success: result !== null,
           result,
@@ -37832,9 +38069,9 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
       };
       return res.json(responseData);
     } catch (evaluationError) {
-      console.error(`[TreeBranchLeaf API] Erreur lors de l'\xC3\xA9valuation:`, evaluationError);
+      console.error(`[TreeBranchLeaf API] Erreur lors de l'\xE9valuation:`, evaluationError);
       return res.status(500).json({
-        error: "Erreur lors de l'\xC3\xA9valuation de la formule",
+        error: "Erreur lors de l'\xE9valuation de la formule",
         details: evaluationError.message,
         debug: {
           formulaId,
@@ -37850,19 +38087,19 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
     }
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error evaluating formula:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xC3\xA9valuation de la formule" });
+    res.status(500).json({ error: "Erreur lors de l'\xE9valuation de la formule" });
   }
 });
 router56.post("/evaluate/batch", async (req2, res) => {
   try {
     const { requests = [], nodeIds = [], fieldValues = {} } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE \xC3\u2030valuation batch - requests: ${requests.length}, nodeIds: ${nodeIds.length}`);
+    console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9valuation batch - requests: ${requests.length}, nodeIds: ${nodeIds.length}`);
     let finalRequests = [];
     if (Array.isArray(requests) && requests.length > 0) {
       finalRequests = requests;
     } else if (Array.isArray(nodeIds) && nodeIds.length > 0) {
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D R\xC3\xA9cup\xC3\xA9ration formules pour nodeIds:`, nodeIds);
+      console.log(`[TreeBranchLeaf API] \u{1F50D} R\xE9cup\xE9ration formules pour nodeIds:`, nodeIds);
       for (const nodeId of nodeIds) {
         const nodeFormulas = await prisma47.treeBranchLeafNodeFormula.findMany({
           where: { nodeId },
@@ -37876,10 +38113,10 @@ router56.post("/evaluate/batch", async (req2, res) => {
           });
         }
       }
-      console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D Formules trouv\xC3\xA9es: ${finalRequests.length} pour ${nodeIds.length} n\xC5\u201Cuds`);
+      console.log(`[TreeBranchLeaf API] \u{1F50D} Formules trouv\xE9es: ${finalRequests.length} pour ${nodeIds.length} n\u0153uds`);
     }
     if (finalRequests.length === 0) {
-      return res.status(400).json({ error: "Aucune formule \xC3\xA0 \xC3\xA9valuer dans la requ\xC3\xAAte batch" });
+      return res.status(400).json({ error: "Aucune formule \xE0 \xE9valuer dans la requ\xEAte batch" });
     }
     const results = [];
     for (const request of finalRequests) {
@@ -37910,7 +38147,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         if (!formula) {
           results.push({
             formulaId,
-            error: "Formule non trouv\xC3\xA9e",
+            error: "Formule non trouv\xE9e",
             success: false
           });
           continue;
@@ -37919,7 +38156,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
           results.push({
             formulaId,
-            error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette formule",
+            error: "Acc\xE8s refus\xE9 \xE0 cette formule",
             success: false
           });
           continue;
@@ -37977,7 +38214,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         results.push({
           formulaId: formula.id,
           formulaName: formula.name,
-          nodeLabel: formula.TreeBranchLeafNode?.label || "N\xC5\u201Cud inconnu",
+          nodeLabel: formula.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
           success: true,
           evaluation: {
             success: result !== null,
@@ -37994,15 +38231,15 @@ router56.post("/evaluate/batch", async (req2, res) => {
           }
         });
       } catch (evaluationError) {
-        console.error(`[TreeBranchLeaf API] Erreur \xC3\xA9valuation batch formule ${formulaId}:`, evaluationError);
+        console.error(`[TreeBranchLeaf API] Erreur \xE9valuation batch formule ${formulaId}:`, evaluationError);
         results.push({
           formulaId,
-          error: `Erreur d'\xC3\xA9valuation: ${evaluationError.message}`,
+          error: `Erreur d'\xE9valuation: ${evaluationError.message}`,
           success: false
         });
       }
     }
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\xA7\xAE Batch termin\xC3\xA9: ${results.filter((r) => r.success).length}/${results.length} succ\xC3\xA8s`);
+    console.log(`[TreeBranchLeaf API] \u{1F9EE} Batch termin\xE9: ${results.filter((r) => r.success).length}/${results.length} succ\xE8s`);
     return res.json({
       success: true,
       totalRequests: finalRequests.length,
@@ -38011,7 +38248,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error in batch evaluation:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xC3\xA9valuation batch" });
+    res.status(500).json({ error: "Erreur lors de l'\xE9valuation batch" });
   }
 });
 async function ensureNodeOrgAccess(prisma69, nodeId, auth) {
@@ -38021,7 +38258,7 @@ async function ensureNodeOrgAccess(prisma69, nodeId, auth) {
       select: { treeId: true }
     });
     if (!node) {
-      return { ok: false, status: 404, error: "N\xC5\u201Cud non trouv\xC3\xA9" };
+      return { ok: false, status: 404, error: "N\u0153ud non trouv\xE9" };
     }
     if (auth.isSuperAdmin) {
       return { ok: true };
@@ -38031,22 +38268,22 @@ async function ensureNodeOrgAccess(prisma69, nodeId, auth) {
       select: { organizationId: true }
     });
     if (!tree) {
-      return { ok: false, status: 404, error: "Arbre non trouv\xC3\xA9" };
+      return { ok: false, status: 404, error: "Arbre non trouv\xE9" };
     }
     if (tree.organizationId && tree.organizationId !== auth.organizationId) {
-      return { ok: false, status: 403, error: "Acc\xC3\xA8s refus\xC3\xA9" };
+      return { ok: false, status: 403, error: "Acc\xE8s refus\xE9" };
     }
     return { ok: true };
   } catch (error) {
     console.error("Error checking node org access:", error);
-    return { ok: false, status: 500, error: "Erreur de v\xC3\xA9rification d'acc\xC3\xA8s" };
+    return { ok: false, status: 500, error: "Erreur de v\xE9rification d'acc\xE8s" };
   }
 }
 router56.get("/conditions/:conditionId", async (req2, res) => {
   try {
     const { conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET condition par ID: ${conditionId}`);
+    console.log(`[TreeBranchLeaf API] \u{1F50D} GET condition par ID: ${conditionId}`);
     const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
@@ -38062,26 +38299,26 @@ router56.get("/conditions/:conditionId", async (req2, res) => {
       }
     });
     if (!condition) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Condition ${conditionId} non trouv\xC3\xA9e`);
-      return res.status(404).json({ error: "Condition non trouv\xC3\xA9e" });
+      console.log(`[TreeBranchLeaf API] \u274C Condition ${conditionId} non trouv\xE9e`);
+      return res.status(404).json({ error: "Condition non trouv\xE9e" });
     }
     const nodeOrg = condition.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 condition ${conditionId} (org: ${nodeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette condition" });
+      console.log(`[TreeBranchLeaf API] \u274C Acc\xE8s refus\xE9 \xE0 condition ${conditionId} (org: ${nodeOrg} vs ${organizationId})`);
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette condition" });
     }
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Condition ${conditionId} trouv\xC3\xA9e et autoris\xC3\xA9e`);
+    console.log(`[TreeBranchLeaf API] \u2705 Condition ${conditionId} trouv\xE9e et autoris\xE9e`);
     return res.json(condition);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting condition by ID:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la condition" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la condition" });
   }
 });
 router56.get("/formulas/:formulaId", async (req2, res) => {
   try {
     const { formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET formule par ID: ${formulaId}`);
+    console.log(`[TreeBranchLeaf API] \u{1F50D} GET formule par ID: ${formulaId}`);
     const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
@@ -38097,26 +38334,26 @@ router56.get("/formulas/:formulaId", async (req2, res) => {
       }
     });
     if (!formula) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Formule ${formulaId} non trouv\xC3\xA9e`);
-      return res.status(404).json({ error: "Formule non trouv\xC3\xA9e" });
+      console.log(`[TreeBranchLeaf API] \u274C Formule ${formulaId} non trouv\xE9e`);
+      return res.status(404).json({ error: "Formule non trouv\xE9e" });
     }
     const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 formule ${formulaId} (org: ${nodeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette formule" });
+      console.log(`[TreeBranchLeaf API] \u274C Acc\xE8s refus\xE9 \xE0 formule ${formulaId} (org: ${nodeOrg} vs ${organizationId})`);
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette formule" });
     }
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Formule ${formulaId} trouv\xC3\xA9e et autoris\xC3\xA9e`);
+    console.log(`[TreeBranchLeaf API] \u2705 Formule ${formulaId} trouv\xE9e et autoris\xE9e`);
     return res.json(formula);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting formula by ID:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la formule" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la formule" });
   }
 });
 router56.get("/submissions", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { treeId, leadId, userId } = req2.query;
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 GET submissions avec filtres:`, { treeId, leadId, userId });
+    console.log(`[TreeBranchLeaf API] \u{1F4CB} GET submissions avec filtres:`, { treeId, leadId, userId });
     const whereClause = {};
     if (treeId) whereClause.treeId = treeId;
     if (leadId) whereClause.leadId = leadId;
@@ -38167,11 +38404,11 @@ router56.get("/submissions", async (req2, res) => {
       },
       orderBy: { createdAt: "desc" }
     });
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 ${submissions.length} soumissions trouv\xC3\xA9es`);
+    console.log(`[TreeBranchLeaf API] \u2705 ${submissions.length} soumissions trouv\xE9es`);
     res.json(submissions);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching submissions:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des soumissions" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des soumissions" });
   }
 });
 router56.get("/submissions/by-leads", async (req2, res) => {
@@ -38179,7 +38416,7 @@ router56.get("/submissions/by-leads", async (req2, res) => {
     const authCtx = getAuthCtx3(req2);
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
     const { treeId, search, leadId } = req2.query;
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 GET devis par leads - TreeId: ${treeId}, Search: ${search}, LeadId: ${leadId}`);
+    console.log(`[TreeBranchLeaf API] \u{1F4CB} GET devis par leads - TreeId: ${treeId}, Search: ${search}, LeadId: ${leadId}`);
     const submissionWhere = {};
     if (treeId) {
       submissionWhere.treeId = treeId;
@@ -38234,7 +38471,7 @@ router56.get("/submissions/by-leads", async (req2, res) => {
         { lastName: "asc" }
       ]
     });
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u0160 Trouv\xC3\xA9 ${leadsWithSubmissions.length} leads avec devis`);
+    console.log(`[TreeBranchLeaf API] \u{1F4CA} Trouv\xE9 ${leadsWithSubmissions.length} leads avec devis`);
     const formattedData = leadsWithSubmissions.map((lead) => ({
       id: lead.id,
       firstName: lead.firstName,
@@ -38253,14 +38490,14 @@ router56.get("/submissions/by-leads", async (req2, res) => {
     res.json(formattedData);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting submissions by leads:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des devis par leads" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des devis par leads" });
   }
 });
 router56.get("/submissions/:id", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 GET submission par ID: ${id}`);
+    console.log(`[TreeBranchLeaf API] \u{1F4CB} GET submission par ID: ${id}`);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
@@ -38302,26 +38539,26 @@ router56.get("/submissions/:id", async (req2, res) => {
       }
     });
     if (!submission) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Soumission ${id} non trouv\xC3\xA9e`);
-      return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
+      console.log(`[TreeBranchLeaf API] \u274C Soumission ${id} non trouv\xE9e`);
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     }
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 soumission ${id} (org: ${treeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
+      console.log(`[TreeBranchLeaf API] \u274C Acc\xE8s refus\xE9 \xE0 soumission ${id} (org: ${treeOrg} vs ${organizationId})`);
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
     }
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Soumission ${id} trouv\xC3\xA9e et autoris\xC3\xA9e`);
+    console.log(`[TreeBranchLeaf API] \u2705 Soumission ${id} trouv\xE9e et autoris\xE9e`);
     res.json(submission);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching submission:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la soumission" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la soumission" });
   }
 });
 router56.get("/submissions/:id/fields", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u2014\u201A\xEF\xB8\x8F GET /submissions/${id}/fields - R\xC3\xA9cup\xC3\xA9ration de tous les champs`);
+    console.log(`[TreeBranchLeaf API] \u{1F5C2}\uFE0F GET /submissions/${id}/fields - R\xE9cup\xE9ration de tous les champs`);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
@@ -38343,11 +38580,11 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
       }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     }
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
     }
     const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
@@ -38378,7 +38615,7 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
         fieldType: node.fieldType,
         fieldSubType: node.fieldSubType,
         value: row.value,
-        // Valeur parsÃ©e (JSON)
+        // Valeur parsée (JSON)
         rawValue: row.rawValue
         // Valeur brute (string)
       };
@@ -38414,11 +38651,11 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
       // Tous les champs de la soumission
       totalFields: Object.keys(fieldsMap).length
     };
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 ${response.totalFields} champs r\xC3\xA9cup\xC3\xA9r\xC3\xA9s pour soumission ${id}`);
+    console.log(`[TreeBranchLeaf API] \u2705 ${response.totalFields} champs r\xE9cup\xE9r\xE9s pour soumission ${id}`);
     res.json(response);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 Erreur GET /submissions/:id/fields:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des champs" });
+    console.error("[TreeBranchLeaf API] \u274C Erreur GET /submissions/:id/fields:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des champs" });
   }
 });
 router56.get("/submissions/:id/summary", async (req2, res) => {
@@ -38430,11 +38667,11 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     }
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
     }
     const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
@@ -38471,8 +38708,8 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
       completion
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 Erreur GET /submissions/:id/summary:", error);
-    return res.status(500).json({ error: "Erreur lors du calcul du r\xC3\xA9sum\xC3\xA9 de la soumission" });
+    console.error("[TreeBranchLeaf API] \u274C Erreur GET /submissions/:id/summary:", error);
+    return res.status(500).json({ error: "Erreur lors du calcul du r\xE9sum\xE9 de la soumission" });
   }
 });
 router56.get("/submissions/:id/operations", async (req2, res) => {
@@ -38487,10 +38724,10 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
         TreeBranchLeafTree: { select: { id: true, organizationId: true } }
       }
     });
-    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
+    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
     }
     const rows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
@@ -38504,7 +38741,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       ]
     });
     if (rows.length === 0) {
-      console.log(`[TBL Operations] Aucune donn\xC3\xA9e de soumission trouv\xC3\xA9e pour ${id}, r\xC3\xA9cup\xC3\xA9ration des variables configur\xC3\xA9es...`);
+      console.log(`[TBL Operations] Aucune donn\xE9e de soumission trouv\xE9e pour ${id}, r\xE9cup\xE9ration des variables configur\xE9es...`);
       if (submission?.treeId) {
         const treeVariables = await prisma47.treeBranchLeafNodeVariable.findMany({
           where: { TreeBranchLeafNode: { treeId: submission.treeId } },
@@ -38529,8 +38766,8 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
           variableKey: v.exposedKey,
           variableUnit: v.unit,
           sourceRef: v.sourceRef,
-          // ðŸŽ¯ CORRECTION: Utiliser fixedValue ou defaultValue comme valeur
-          // ðŸš§ TEMPORAIRE: Valeurs de test hardcodÃ©es pour validation
+          // 🎯 CORRECTION: Utiliser fixedValue ou defaultValue comme valeur
+          // 🚧 TEMPORAIRE: Valeurs de test hardcodées pour validation
           value: getTestValueForNode(v.nodeId, v.fixedValue, v.defaultValue),
           operationSource: null,
           operationDetail: null,
@@ -38539,7 +38776,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
           createdAt: /* @__PURE__ */ new Date(),
           TreeBranchLeafNode: v.TreeBranchLeafNode
         }));
-        console.log(`[TBL Operations] ${pseudoRows.length} variables configur\xC3\xA9es trouv\xC3\xA9es`);
+        console.log(`[TBL Operations] ${pseudoRows.length} variables configur\xE9es trouv\xE9es`);
         console.log(`[TBL Operations] Variables avec valeurs:`, pseudoRows.map((r) => ({ nodeId: r.nodeId, label: r.fieldLabel, value: r.value })));
         console.log(`[TBL Operations] Variables brutes:`, treeVariables.map((v) => ({ nodeId: v.nodeId, displayName: v.displayName, fixedValue: v.fixedValue, defaultValue: v.defaultValue })));
         rows.push(...pseudoRows);
@@ -38554,7 +38791,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     };
     const treeId = submission?.treeId;
     if (!treeId) {
-      return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     }
     const allTreeNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId },
@@ -38617,7 +38854,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       const response = val;
       const source = r.isVariable ? inferSource(r.sourceRef) : "neutral";
       const operationDetail = r.operationDetail ?? (r.isVariable ? r.sourceRef || void 0 : nodeLabel || void 0);
-      const labelForResult = displayName || nodeLabel || labelMap.get(r.nodeId) || r.TreeBranchLeafNode?.id || "\xE2\u20AC\u201D";
+      const labelForResult = displayName || nodeLabel || labelMap.get(r.nodeId) || r.TreeBranchLeafNode?.id || "\u2014";
       const operationResult = unit && response ? `${labelForResult}: ${response} ${unit}` : `${labelForResult}: ${response ?? ""}`;
       const detNormalized = await resolveDetailForRow(r);
       let operationDetailResolved = void 0;
@@ -38661,7 +38898,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
               actions: resolveActionsLabels(actions, labelsForText)
             };
           });
-          operationHumanText = "\xF0\u0178\u201D\u201E Condition \xC3\xA9valu\xC3\xA9e via TBL Prisma (ligne 4755)";
+          operationHumanText = "\u{1F504} Condition \xE9valu\xE9e via TBL Prisma (ligne 4755)";
           const { detail, result } = buildDetailAndResultForOperation(det, operationHumanText, unit, labelForResult, response);
           operationDetailResolved = detail;
           operationResultResolved = result;
@@ -38706,7 +38943,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
         operationSource: source,
         operationDetail: operationDetailResolved || detNormalized || operationDetail,
         operationResult: operationResultResolved || operationResult,
-        // Pour les conditions, operationHumanText contient dÃ©jÃ  l'expression complÃ¨te souhaitÃ©e
+        // Pour les conditions, operationHumanText contient déjà l'expression complète souhaitée
         operationResultText: operationHumanText ? operationHumanText : null,
         operationResultResolved,
         operationDetailResolved,
@@ -38716,8 +38953,8 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     }));
     return res.json({ submissionId: id, items });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 Erreur GET /submissions/:id/operations:", error);
-    return res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des op\xC3\xA9rations" });
+    console.error("[TreeBranchLeaf API] \u274C Erreur GET /submissions/:id/operations:", error);
+    return res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des op\xE9rations" });
   }
 });
 router56.post("/submissions/:id/repair-ops", async (req2, res) => {
@@ -38728,11 +38965,11 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
+    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     const treeId = submission.treeId;
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
     }
     const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
@@ -38799,7 +39036,7 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
         where: { submissionId: id, nodeId: row.nodeId },
         data: {
           operationSource: opSrc,
-          // Fallback prioritaire: row.sourceRef (prÃ©sent cÃ´tÃ© submissionData), puis meta.sourceRef, sinon label
+          // Fallback prioritaire: row.sourceRef (présent côté submissionData), puis meta.sourceRef, sinon label
           operationDetail: isVar ? opDetail ?? (row.sourceRef || meta?.sourceRef || void 0) : label || void 0,
           operationResult: opRes,
           lastResolved: now
@@ -38808,8 +39045,8 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
     }
     return res.json({ success: true, updated: rows.length });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 Erreur POST /submissions/:id/repair-ops:", error);
-    return res.status(500).json({ error: "Erreur lors du backfill des op\xC3\xA9rations" });
+    console.error("[TreeBranchLeaf API] \u274C Erreur POST /submissions/:id/repair-ops:", error);
+    return res.status(500).json({ error: "Erreur lors du backfill des op\xE9rations" });
   }
 });
 router56.post("/submissions", async (req2, res) => {
@@ -38826,7 +39063,7 @@ router56.post("/submissions", async (req2, res) => {
         return 0;
       }
     })();
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 POST nouvelle soumission (entr\xC3\xA9e)`, {
+    console.log(`[TreeBranchLeaf API] \u{1F4CB} POST nouvelle soumission (entr\xE9e)`, {
       treeId: normalizedTreeId,
       leadId: normalizedLeadId,
       providedName: name,
@@ -38840,10 +39077,10 @@ router56.post("/submissions", async (req2, res) => {
       return res.status(400).json({ error: "treeId est requis" });
     }
     if (!userId) {
-      console.warn("[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Aucun userId dans la requ\xC3\xAAte (mode anonyme/mock) \xE2\u20AC\u201C poursuite sans liaison utilisateur");
+      console.warn("[TreeBranchLeaf API] \u26A0\uFE0F Aucun userId dans la requ\xEAte (mode anonyme/mock) \u2013 poursuite sans liaison utilisateur");
     }
     if (!name || typeof name !== "string") {
-      return res.status(400).json({ error: "name est requis et doit \xC3\xAAtre une cha\xC3\xAEne" });
+      return res.status(400).json({ error: "name est requis et doit \xEAtre une cha\xEEne" });
     }
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: {
@@ -38852,8 +39089,8 @@ router56.post("/submissions", async (req2, res) => {
       }
     });
     if (!tree) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Arbre ${treeId} non trouv\xC3\xA9 ou acc\xC3\xA8s refus\xC3\xA9`);
-      return res.status(404).json({ error: "Arbre non trouv\xC3\xA9 ou acc\xC3\xA8s refus\xC3\xA9" });
+      console.log(`[TreeBranchLeaf API] \u274C Arbre ${treeId} non trouv\xE9 ou acc\xE8s refus\xE9`);
+      return res.status(404).json({ error: "Arbre non trouv\xE9 ou acc\xE8s refus\xE9" });
     }
     let lead = null;
     if (normalizedLeadId) {
@@ -38864,18 +39101,18 @@ router56.post("/submissions", async (req2, res) => {
         }
       });
       if (!lead) {
-        console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Lead ${leadId} non trouv\xC3\xA9 ou acc\xC3\xA8s refus\xC3\xA9`);
-        return res.status(404).json({ error: "Lead non trouv\xC3\xA9 ou acc\xC3\xA8s refus\xC3\xA9" });
+        console.log(`[TreeBranchLeaf API] \u274C Lead ${leadId} non trouv\xE9 ou acc\xE8s refus\xE9`);
+        return res.status(404).json({ error: "Lead non trouv\xE9 ou acc\xE8s refus\xE9" });
       }
     } else {
-      console.log(`[TreeBranchLeaf API] \xE2\u201E\xB9\xEF\xB8\x8F Cr\xC3\xA9ation de soumission sans lead associ\xC3\xA9`);
+      console.log(`[TreeBranchLeaf API] \u2139\uFE0F Cr\xE9ation de soumission sans lead associ\xE9`);
     }
     const validNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId: normalizedTreeId },
       select: { id: true }
     });
     const validNodeIds = new Set(validNodes.map((node) => node.id));
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 N\xC5\u201Cuds valides trouv\xC3\xA9s: ${validNodeIds.size}`);
+    console.log(`[TreeBranchLeaf API] \u{1F4CB} N\u0153uds valides trouv\xE9s: ${validNodeIds.size}`);
     const rawEntries = (() => {
       if (Array.isArray(data)) {
         return data.map((it) => {
@@ -38893,11 +39130,11 @@ router56.post("/submissions", async (req2, res) => {
     })();
     const filteredEntries = rawEntries.filter(({ nodeId }) => {
       const isValid = validNodeIds.has(nodeId);
-      if (!isValid) console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F NodeId invalide ignor\xC3\xA9: ${nodeId}`);
+      if (!isValid) console.log(`[TreeBranchLeaf API] \u26A0\uFE0F NodeId invalide ignor\xE9: ${nodeId}`);
       return isValid;
     });
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 Donn\xC3\xA9es filtr\xC3\xA9es: ${filteredEntries.length}/${rawEntries.length}`);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\xA7 Cr\xC3\xA9ation Prisma de la soumission`);
+    console.log(`[TreeBranchLeaf API] \u{1F4CB} Donn\xE9es filtr\xE9es: ${filteredEntries.length}/${rawEntries.length}`);
+    console.log(`[TreeBranchLeaf API] \u{1F527} Cr\xE9ation Prisma de la soumission`);
     try {
       let safeUserId = null;
       if (userId) {
@@ -38906,10 +39143,10 @@ router56.post("/submissions", async (req2, res) => {
           if (existingUser) {
             safeUserId = userId;
           } else {
-            console.warn("[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F userId fourni mais introuvable en base \xE2\u20AC\u201C cr\xC3\xA9ation avec userId NULL");
+            console.warn("[TreeBranchLeaf API] \u26A0\uFE0F userId fourni mais introuvable en base \u2013 cr\xE9ation avec userId NULL");
           }
         } catch (checkErr) {
-          console.warn("[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F \xC3\u2030chec de v\xC3\xA9rification userId \xE2\u20AC\u201C cr\xC3\xA9ation avec userId NULL:", checkErr?.message);
+          console.warn("[TreeBranchLeaf API] \u26A0\uFE0F \xC9chec de v\xE9rification userId \u2013 cr\xE9ation avec userId NULL:", checkErr?.message);
         }
       }
       const now = /* @__PURE__ */ new Date();
@@ -38923,7 +39160,7 @@ router56.post("/submissions", async (req2, res) => {
           updatedAt: now
         }
       });
-      console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Soumission cr\xC3\xA9\xC3\xA9e: ${created.id}`);
+      console.log(`[TreeBranchLeaf API] \u2705 Soumission cr\xE9\xE9e: ${created.id}`);
       if (filteredEntries.length > 0) {
         const keys = filteredEntries.map(({ nodeId }) => nodeId);
         const nodesForLabels = await prisma47.treeBranchLeafNode.findMany({
@@ -38967,9 +39204,9 @@ router56.post("/submissions", async (req2, res) => {
             }
           }
         });
-        console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Champs persist\xC3\xA9s: create=${toCreate.length}, update=${toUpdate.length}`);
+        console.log(`[TreeBranchLeaf API] \u2705 Champs persist\xE9s: create=${toCreate.length}, update=${toUpdate.length}`);
       } else {
-        console.log("[TreeBranchLeaf API] \xE2\u201E\xB9\xEF\xB8\x8F Aucun champ utilisateur \xC3\xA0 persister (payload data vide apr\xC3\xA8s filtrage)");
+        console.log("[TreeBranchLeaf API] \u2139\uFE0F Aucun champ utilisateur \xE0 persister (payload data vide apr\xE8s filtrage)");
       }
       try {
         const treeIdForBackfill = created.treeId;
@@ -39039,7 +39276,7 @@ router56.post("/submissions", async (req2, res) => {
           });
         }
       } catch (enrichErr) {
-        console.warn("[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Backfill post-cr\xC3\xA9ation des op\xC3\xA9rations non critique a \xC3\xA9chou\xC3\xA9:", enrichErr?.message);
+        console.warn("[TreeBranchLeaf API] \u26A0\uFE0F Backfill post-cr\xE9ation des op\xE9rations non critique a \xE9chou\xE9:", enrichErr?.message);
       }
       const full = await prisma47.treeBranchLeafSubmission.findUnique({
         where: { id: created.id },
@@ -39054,7 +39291,7 @@ router56.post("/submissions", async (req2, res) => {
         }
       });
       if (!full) {
-        throw new Error("Soumission non trouv\xC3\xA9e apr\xC3\xA8s cr\xC3\xA9ation");
+        throw new Error("Soumission non trouv\xE9e apr\xE8s cr\xE9ation");
       }
       const responsePayload = {
         id: full.id,
@@ -39068,30 +39305,30 @@ router56.post("/submissions", async (req2, res) => {
         Lead: full.Lead || null,
         TreeBranchLeafSubmissionData: full.TreeBranchLeafSubmissionData
       };
-      console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Devis cr\xC3\xA9\xC3\xA9 et recharg\xC3\xA9: ${full.id}`);
+      console.log(`[TreeBranchLeaf API] \u2705 Devis cr\xE9\xE9 et recharg\xE9: ${full.id}`);
       res.status(201).json(responsePayload);
     } catch (error) {
       const err = error;
-      console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 ERREUR D\xC3\u2030TAILL\xC3\u2030E lors de la cr\xC3\xA9ation:", {
+      console.error("[TreeBranchLeaf API] \u274C ERREUR D\xC9TAILL\xC9E lors de la cr\xE9ation:", {
         message: err?.message,
         code: err?.code,
         meta: err?.meta
       });
       if (err?.stack) console.error(err.stack);
       if (err && err.code) {
-        console.error("[TreeBranchLeaf API] \xF0\u0178\u201D\x8D Code erreur Prisma:", err.code);
+        console.error("[TreeBranchLeaf API] \u{1F50D} Code erreur Prisma:", err.code);
         if (err.meta) {
-          console.error("[TreeBranchLeaf API] \xF0\u0178\u201D\x8D M\xC3\xA9tadonn\xC3\xA9es:", err.meta);
+          console.error("[TreeBranchLeaf API] \u{1F50D} M\xE9tadonn\xE9es:", err.meta);
         }
       }
       return res.status(500).json({
-        error: "Erreur lors de la cr\xC3\xA9ation de la soumission",
+        error: "Erreur lors de la cr\xE9ation de la soumission",
         details: process.env.NODE_ENV === "development" ? err?.message : void 0
       });
     }
   } catch (outerErr) {
     const e = outerErr;
-    console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 Erreur inattendue en entr\xC3\xA9e de route /submissions:", e?.message);
+    console.error("[TreeBranchLeaf API] \u274C Erreur inattendue en entr\xE9e de route /submissions:", e?.message);
     return res.status(500).json({ error: "Erreur interne inattendue" });
   }
 });
@@ -39099,7 +39336,7 @@ router56.delete("/submissions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u2014\u2018\xEF\xB8\x8F DELETE submission ${id}`);
+    console.log(`[TreeBranchLeaf API] \u{1F5D1}\uFE0F DELETE submission ${id}`);
     const submission = await prisma47.treeBranchLeafSubmission.findFirst({
       where: {
         id,
@@ -39112,8 +39349,8 @@ router56.delete("/submissions/:id", async (req2, res) => {
       }
     });
     if (!submission) {
-      console.log(`[TreeBranchLeaf API] \xE2\x9D\u0152 Submission ${id} non trouv\xC3\xA9e ou acc\xC3\xA8s refus\xC3\xA9`);
-      return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e ou acc\xC3\xA8s refus\xC3\xA9" });
+      console.log(`[TreeBranchLeaf API] \u274C Submission ${id} non trouv\xE9e ou acc\xE8s refus\xE9`);
+      return res.status(404).json({ error: "Soumission non trouv\xE9e ou acc\xE8s refus\xE9" });
     }
     await prisma47.treeBranchLeafSubmissionData.deleteMany({
       where: { submissionId: id }
@@ -39121,8 +39358,8 @@ router56.delete("/submissions/:id", async (req2, res) => {
     await prisma47.treeBranchLeafSubmission.delete({
       where: { id }
     });
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Submission ${id} supprim\xC3\xA9e avec succ\xC3\xA8s`);
-    res.json({ success: true, message: "Soumission supprim\xC3\xA9e avec succ\xC3\xA8s" });
+    console.log(`[TreeBranchLeaf API] \u2705 Submission ${id} supprim\xE9e avec succ\xE8s`);
+    res.json({ success: true, message: "Soumission supprim\xE9e avec succ\xE8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting submission:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la soumission" });
@@ -39132,7 +39369,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET select-config for field: ${fieldId}`);
+    console.log(`[TreeBranchLeaf API] \u{1F50D} GET select-config for field: ${fieldId}`);
     const access = await ensureNodeOrgAccess(prisma47, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -39141,7 +39378,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
       where: { nodeId: fieldId }
     });
     if (!selectConfig) {
-      console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Pas de configuration SELECT pour le champ ${fieldId}`);
+      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Pas de configuration SELECT pour le champ ${fieldId}`);
       const node = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: fieldId },
         select: {
@@ -39157,7 +39394,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
         const isRowBased = activeInstance?.rowBased === true;
         const isColumnBased = activeInstance?.columnBased === true;
         if (isRowBased || isColumnBased) {
-          console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\xA7 Cr\xC3\xA9ation dynamique de la config SELECT pour lookup ${isRowBased ? "LIGNE" : "COLONNE"}`);
+          console.log(`[TreeBranchLeaf API] \u{1F527} Cr\xE9ation dynamique de la config SELECT pour lookup ${isRowBased ? "LIGNE" : "COLONNE"}`);
           selectConfig = await prisma47.treeBranchLeafSelectConfig.create({
             data: {
               id: (0, import_crypto10.randomUUID)(),
@@ -39176,18 +39413,18 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Configuration SELECT cr\xC3\xA9\xC3\xA9e dynamiquement:`, selectConfig.id);
+          console.log(`[TreeBranchLeaf API] \u2705 Configuration SELECT cr\xE9\xE9e dynamiquement:`, selectConfig.id);
         }
       }
       if (!selectConfig) {
         return res.status(404).json({ error: "Configuration SELECT introuvable" });
       }
     }
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Configuration SELECT trouv\xC3\xA9e:`, selectConfig);
+    console.log(`[TreeBranchLeaf API] \u2705 Configuration SELECT trouv\xE9e:`, selectConfig);
     return res.json(selectConfig);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching select config:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de la configuration SELECT" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la configuration SELECT" });
   }
 });
 router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
@@ -39205,7 +39442,7 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
       displayRow,
       dependsOnNodeId
     } = req2.body;
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\x9D POST select-config for field: ${fieldId}`, {
+    console.log(`[TreeBranchLeaf API] \u{1F4DD} POST select-config for field: ${fieldId}`, {
       keyColumn,
       keyRow,
       valueColumn,
@@ -39251,18 +39488,18 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Configuration SELECT cr\xC3\xA9\xC3\xA9e/mise \xC3\xA0 jour:`, selectConfig);
+    console.log(`[TreeBranchLeaf API] \u2705 Configuration SELECT cr\xE9\xE9e/mise \xE0 jour:`, selectConfig);
     return res.json(selectConfig);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating select config:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xC3\xA9ation de la configuration SELECT" });
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la configuration SELECT" });
   }
 });
 router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\x8D GET active table/lookup for node: ${nodeId}`);
+    console.log(`[TreeBranchLeaf API] \u{1F50D} GET active table/lookup for node: ${nodeId}`);
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -39279,9 +39516,9 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         displayRow: true
       }
     });
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201C\u2039 Configuration SELECT:`, selectConfig);
+    console.log(`[TreeBranchLeaf API] \u{1F4CB} Configuration SELECT:`, selectConfig);
     if (!selectConfig?.tableReference) {
-      console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Pas de tableReference dans la config SELECT \xE2\u2020\u2019 tentative de fallback via capabilities.table`);
+      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Pas de tableReference dans la config SELECT \u2192 tentative de fallback via capabilities.table`);
       const node = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { hasTable: true, table_activeId: true, table_instances: true }
@@ -39326,12 +39563,12 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             displayRow: true
           }
         });
-        console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Fallback SELECT config cr\xC3\xA9\xC3\xA9 depuis capabilities.table:`, selectConfig);
+        console.log(`[TreeBranchLeaf API] \u2705 Fallback SELECT config cr\xE9\xE9 depuis capabilities.table:`, selectConfig);
       }
     }
     if (!selectConfig?.tableReference) {
-      console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Pas de tableReference dans la config SELECT (apr\xC3\xA8s fallback)`);
-      return res.status(404).json({ error: "Pas de tableau r\xC3\xA9f\xC3\xA9renc\xC3\xA9 pour ce lookup" });
+      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Pas de tableReference dans la config SELECT (apr\xE8s fallback)`);
+      return res.status(404).json({ error: "Pas de tableau r\xE9f\xE9renc\xE9 pour ce lookup" });
     }
     const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id: selectConfig.tableReference },
@@ -39352,7 +39589,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       }
     });
     if (!table) {
-      console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Tableau introuvable: ${selectConfig.tableReference}`);
+      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Tableau introuvable: ${selectConfig.tableReference}`);
       return res.status(404).json({ error: "Tableau introuvable" });
     }
     const columns = table.tableColumns.map((col) => col.name);
@@ -39383,7 +39620,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         data.push([]);
       }
     });
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Tableau charg\xC3\xA9 (normalis\xC3\xA9):`, {
+    console.log(`[TreeBranchLeaf API] \u2705 Tableau charg\xE9 (normalis\xE9):`, {
       id: table.id,
       name: table.name,
       type: table.type,
@@ -39396,7 +39633,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       if (selectConfig?.keyRow) {
         const rowIndex = rows.indexOf(selectConfig.keyRow);
         if (rowIndex === -1) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
+          console.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
           return res.json({ options: [] });
         }
         let options;
@@ -39418,7 +39655,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             };
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         }
-        console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Options extraites depuis ligne "${selectConfig.keyRow}":`, {
+        console.log(`[TreeBranchLeaf API] \u2705 Options extraites depuis ligne "${selectConfig.keyRow}":`, {
           rowIndex,
           isRowA1: rowIndex === 0,
           optionsCount: options.length,
@@ -39429,7 +39666,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       if (selectConfig?.keyColumn) {
         const colIndex = columns.indexOf(selectConfig.keyColumn);
         if (colIndex === -1) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
+          console.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
           return res.json({ options: [] });
         }
         let options;
@@ -39451,7 +39688,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             };
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         }
-        console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 Options extraites depuis colonne "${selectConfig.keyColumn}" (index ${colIndex}):`, {
+        console.log(`[TreeBranchLeaf API] \u2705 Options extraites depuis colonne "${selectConfig.keyColumn}" (index ${colIndex}):`, {
           colIndex,
           isColumnA: colIndex === 0,
           optionsCount: options.length,
@@ -39466,7 +39703,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       const firstColHeader = columns[0];
       if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
         const autoOptions = rows.slice(1).filter((r) => r && r !== "undefined" && r !== "null").map((r) => ({ value: r, label: r }));
-        console.log(`[TreeBranchLeaf API] \u2699\uFE0F AUTO-DEFAULT lookup (matrix, colonne A) g\xE9n\xE9r\xE9`, {
+        console.log(`[TreeBranchLeaf API] ?? AUTO-DEFAULT lookup (matrix, colonne A) g\uFFFDn\uFFFDr\uFFFD`, {
           nodeId,
           autoCount: autoOptions.length,
           sample: autoOptions.slice(0, 5)
@@ -39505,25 +39742,25 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`[TreeBranchLeaf API] \u2705 AUTO-UPSERT select-config: nodeId=${nodeId}, table=${table.id}, keyColumn=${firstColHeader}`);
+          console.log(`[TreeBranchLeaf API] ? AUTO-UPSERT select-config: nodeId=${nodeId}, table=${table.id}, keyColumn=${firstColHeader}`);
         } catch (e) {
-          console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Auto-upsert select-config a \xE9chou\xE9 (non bloquant):`, e);
+          console.warn(`[TreeBranchLeaf API] ?? Auto-upsert select-config a \uFFFDchou\uFFFD (non bloquant):`, e);
         }
         return res.json({ options: autoOptions, autoDefault: { source: "columnA", keyColumnCandidate: firstColHeader } });
       }
     }
-    console.log(`[TreeBranchLeaf API] \xE2\u0161\xA0\xEF\xB8\x8F Aucun keyRow/keyColumn configur\xC3\xA9, retour tableau brut (pas d'auto-default applicable)`);
+    console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Aucun keyRow/keyColumn configur\xE9, retour tableau brut (pas d'auto-default applicable)`);
     return res.json(table);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching table for lookup:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration du tableau" });
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du tableau" });
   }
 });
 router56.patch("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \xF0\u0178\u201D\xA7 PATCH node: ${nodeId}`, req2.body);
+    console.log(`[TreeBranchLeaf API] \u{1F527} PATCH node: ${nodeId}`, req2.body);
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -39535,18 +39772,18 @@ router56.patch("/nodes/:nodeId", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] \xE2\u0153\u2026 N\xC5\u201Cud mis \xC3\xA0 jour:`, updatedNode.id);
+    console.log(`[TreeBranchLeaf API] \u2705 N\u0153ud mis \xE0 jour:`, updatedNode.id);
     return res.json(updatedNode);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour du n\xC5\u201Cud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour du n\u0153ud" });
   }
 });
 router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { enabled, activeId, currentTable } = req2.body;
-    console.log(`\xF0\u0178\u017D\xAF [TablePanel API] PUT /nodes/${nodeId}/capabilities/table`, { enabled, activeId, currentTable });
+    console.log(`\u{1F3AF} [TablePanel API] PUT /nodes/${nodeId}/capabilities/table`, { enabled, activeId, currentTable });
     const node = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
@@ -39556,7 +39793,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud non trouv\xC3\xA9" });
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
     }
     const oldMetadata = node.metadata || {};
     const oldCapabilities = oldMetadata.capabilities || {};
@@ -39576,7 +39813,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       ...oldMetadata,
       capabilities: newCapabilities
     };
-    console.log(`\xE2\u0153\u2026 [TablePanel API] Nouvelle metadata.capabilities.table:`, newCapabilities.table);
+    console.log(`\u2705 [TablePanel API] Nouvelle metadata.capabilities.table:`, newCapabilities.table);
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
@@ -39588,7 +39825,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`\xE2\u0153\u2026 [TablePanel API] Capacit\xC3\xA9 Table mise \xC3\xA0 jour pour n\xC5\u201Cud ${nodeId}`);
+    console.log(`\u2705 [TablePanel API] Capacit\xE9 Table mise \xE0 jour pour n\u0153ud ${nodeId}`);
     if (enabled && activeId) {
       const keyColumn = currentTable?.keyColumn || null;
       const keyRow = currentTable?.keyRow || null;
@@ -39596,7 +39833,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       const valueRow = currentTable?.valueRow || null;
       const displayColumn = currentTable?.displayColumn || null;
       const displayRow = currentTable?.displayRow || null;
-      console.log(`\xF0\u0178\u201D\xA7 [TablePanel API] Upsert configuration SELECT`, {
+      console.log(`\u{1F527} [TablePanel API] Upsert configuration SELECT`, {
         nodeId,
         activeId,
         keyColumn,
@@ -39639,31 +39876,31 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        console.log(`\xE2\u0153\u2026 [TablePanel API] Configuration SELECT upsert\xC3\xA9e pour ${nodeId}`, {
+        console.log(`\u2705 [TablePanel API] Configuration SELECT upsert\xE9e pour ${nodeId}`, {
           keyColumn,
           keyRow,
           displayColumn,
           displayRow
         });
       } catch (selectConfigError) {
-        console.error(`\xE2\u0161\xA0\xEF\xB8\x8F [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
+        console.error(`\u26A0\uFE0F [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
       }
     } else if (!enabled) {
-      console.log(`\xF0\u0178\u201D\xB4 [TablePanel API] Suppression configuration SELECT pour ${nodeId}`);
+      console.log(`\u{1F534} [TablePanel API] Suppression configuration SELECT pour ${nodeId}`);
       try {
         await prisma47.treeBranchLeafSelectConfig.deleteMany({
           where: { nodeId }
         });
-        console.log(`\xE2\u0153\u2026 [TablePanel API] Configuration SELECT supprim\xC3\xA9e pour ${nodeId}`);
+        console.log(`\u2705 [TablePanel API] Configuration SELECT supprim\xE9e pour ${nodeId}`);
       } catch (deleteError) {
-        console.error(`\xE2\u0161\xA0\xEF\xB8\x8F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
+        console.error(`\u26A0\uFE0F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
       }
     }
     const verifyNode = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true, hasTable: true }
     });
-    console.log(`\xF0\u0178\u201D\x8D [TablePanel API] V\xC3\u2030RIFICATION apr\xC3\xA8s UPDATE:`, {
+    console.log(`\u{1F50D} [TablePanel API] V\xC9RIFICATION apr\xE8s UPDATE:`, {
       nodeId,
       hasTable: verifyNode?.hasTable,
       metadataCapabilitiesTable: verifyNode?.metadata?.capabilities?.table
@@ -39676,8 +39913,8 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[TablePanel API] \xE2\x9D\u0152 Erreur PUT /nodes/:nodeId/capabilities/table:", error);
-    return res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour de la capacit\xC3\xA9 Table" });
+    console.error("[TablePanel API] \u274C Erreur PUT /nodes/:nodeId/capabilities/table:", error);
+    return res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la capacit\xE9 Table" });
   }
 });
 router56.put("/submissions/:id", async (req2, res) => {
@@ -39690,12 +39927,12 @@ router56.put("/submissions/:id", async (req2, res) => {
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xC3\xA9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
     }
     const treeId = submission.treeId;
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
     }
     const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const validNodeIds = new Set(nodes.map((n) => n.id));
@@ -39803,7 +40040,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                 valuesMapTx.set(nodeId, valueStr);
                 const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                 const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
-                const expr = "\xF0\u0178\u201D\u201E Condition \xC3\xA9valu\xC3\xA9e via TBL Prisma (ligne 5456)";
+                const expr = "\u{1F504} Condition \xE9valu\xE9e via TBL Prisma (ligne 5456)";
                 opRes = { type: "condition", label: display, value: valueStr, unit: meta?.unit || null, refs, text: expr };
               } else if (parsed?.type === "formula") {
                 const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
@@ -39883,7 +40120,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                       const ids = extractNodeIdsFromConditionSet2(rec?.conditionSet);
                       const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                       const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
-                      const expr = "\xF0\u0178\u201D\u201E Condition \xC3\xA9valu\xC3\xA9e via TBL Prisma (ligne 5545)";
+                      const expr = "\u{1F504} Condition \xE9valu\xE9e via TBL Prisma (ligne 5545)";
                       return { type: "condition", label: display, value: valueStr, unit: meta?.unit || null, refs, text: expr };
                     })();
                   }
@@ -40073,7 +40310,7 @@ router56.put("/submissions/:id", async (req2, res) => {
         const opDetail = isVar ? await resolveOperationDetail(row.sourceRef || null) : label;
         if (isVar && (row.sourceRef || meta?.sourceRef)) {
           try {
-            console.log(`[UNIVERSAL] \xF0\u0178\u201D\u201E \xC3\u2030valuation de la variable: ${row.nodeId} (${display})`);
+            console.log(`[UNIVERSAL] \u{1F504} \xC9valuation de la variable: ${row.nodeId} (${display})`);
             const evaluation = await evaluateVariableOperation(
               row.nodeId,
               id,
@@ -40081,14 +40318,14 @@ router56.put("/submissions/:id", async (req2, res) => {
               tx
               // Utiliser la transaction Prisma
             );
-            console.log(`[UNIVERSAL] \xE2\u0153\u2026 R\xC3\xA9sultat: ${evaluation.value}`);
+            console.log(`[UNIVERSAL] \u2705 R\xE9sultat: ${evaluation.value}`);
             opRes = evaluation.operationResult;
             await tx.treeBranchLeafSubmissionData.updateMany({
               where: { submissionId: id, nodeId: row.nodeId },
               data: { value: evaluation.value }
             });
           } catch (error) {
-            console.error(`[UNIVERSAL] \xE2\x9D\u0152 Erreur \xC3\xA9valuation variable ${row.nodeId}:`, error);
+            console.error(`[UNIVERSAL] \u274C Erreur \xE9valuation variable ${row.nodeId}:`, error);
             const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
             if (parsed?.type === "condition") {
               const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
@@ -40143,8 +40380,8 @@ router56.put("/submissions/:id", async (req2, res) => {
     });
     return res.json(full);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xE2\x9D\u0152 Erreur PUT /submissions/:id:", error);
-    return res.status(500).json({ error: "Erreur lors de la mise \xC3\xA0 jour de la soumission" });
+    console.error("[TreeBranchLeaf API] \u274C Erreur PUT /submissions/:id:", error);
+    return res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la soumission" });
   }
 });
 router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
@@ -40152,24 +40389,24 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     const { variableNodeId } = req2.params;
     const { submissionId } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\n" + "\xE2\u2022\x90".repeat(80));
-    console.log("\xF0\u0178\u017D\xAF [V2 API] \xC3\u2030VALUATION VARIABLE UNIVERSELLE");
-    console.log("\xE2\u2022\x90".repeat(80));
-    console.log("\xF0\u0178\u201C\u2039 Param\xC3\xA8tres:");
+    console.log("\n" + "\u2550".repeat(80));
+    console.log("\u{1F3AF} [V2 API] \xC9VALUATION VARIABLE UNIVERSELLE");
+    console.log("\u2550".repeat(80));
+    console.log("\u{1F4CB} Param\xE8tres:");
     console.log("   - variableNodeId:", variableNodeId);
     console.log("   - submissionId:", submissionId);
     console.log("   - organizationId:", organizationId);
     console.log("   - isSuperAdmin:", isSuperAdmin2);
-    console.log("\xE2\u2022\x90".repeat(80) + "\n");
+    console.log("\u2550".repeat(80) + "\n");
     if (!variableNodeId) {
-      console.error("\xE2\x9D\u0152 [V2 API] variableNodeId manquant");
+      console.error("\u274C [V2 API] variableNodeId manquant");
       return res.status(400).json({
         success: false,
         error: "variableNodeId requis"
       });
     }
     if (!submissionId) {
-      console.error("\xE2\x9D\u0152 [V2 API] submissionId manquant");
+      console.error("\u274C [V2 API] submissionId manquant");
       return res.status(400).json({
         success: false,
         error: "submissionId requis dans le body"
@@ -40200,30 +40437,30 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       }
     });
     if (!node) {
-      console.error("\xE2\x9D\u0152 [V2 API] N\xC5\u201Cud introuvable:", variableNodeId);
+      console.error("\u274C [V2 API] N\u0153ud introuvable:", variableNodeId);
       return res.status(404).json({
         success: false,
-        error: "N\xC5\u201Cud introuvable"
+        error: "N\u0153ud introuvable"
       });
     }
-    console.log("\xE2\u0153\u2026 [V2 API] N\xC5\u201Cud trouv\xC3\xA9:", node.label);
+    console.log("\u2705 [V2 API] N\u0153ud trouv\xE9:", node.label);
     if (!isSuperAdmin2 && node.TreeBranchLeafTree?.organizationId !== organizationId) {
-      console.error("\xE2\x9D\u0152 [V2 API] Acc\xC3\xA8s refus\xC3\xA9 - mauvaise organisation");
+      console.error("\u274C [V2 API] Acc\xE8s refus\xE9 - mauvaise organisation");
       return res.status(403).json({
         success: false,
-        error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 ce n\xC5\u201Cud"
+        error: "Acc\xE8s refus\xE9 \xE0 ce n\u0153ud"
       });
     }
-    console.log("\xE2\u0153\u2026 [V2 API] Permissions valid\xC3\xA9es");
+    console.log("\u2705 [V2 API] Permissions valid\xE9es");
     const variable = node.TreeBranchLeafNodeVariable?.[0];
     if (!variable) {
-      console.error("\xE2\x9D\u0152 [V2 API] Pas de variable associ\xC3\xA9e \xC3\xA0 ce n\xC5\u201Cud");
+      console.error("\u274C [V2 API] Pas de variable associ\xE9e \xE0 ce n\u0153ud");
       return res.status(400).json({
         success: false,
-        error: "Ce n\xC5\u201Cud ne contient pas de variable"
+        error: "Ce n\u0153ud ne contient pas de variable"
       });
     }
-    console.log("\xE2\u0153\u2026 [V2 API] Variable trouv\xC3\xA9e:", variable.displayName);
+    console.log("\u2705 [V2 API] Variable trouv\xE9e:", variable.displayName);
     console.log("   - sourceType:", variable.sourceType);
     console.log("   - sourceRef:", variable.sourceRef);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
@@ -40236,16 +40473,16 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       }
     });
     if (!submission) {
-      console.error("\xE2\x9D\u0152 [V2 API] Soumission introuvable:", submissionId);
+      console.error("\u274C [V2 API] Soumission introuvable:", submissionId);
       return res.status(404).json({
         success: false,
         error: "Soumission introuvable"
       });
     }
-    console.log("\xE2\u0153\u2026 [V2 API] Soumission trouv\xC3\xA9e:", submissionId);
-    console.log("\n" + "\xE2\u201D\u20AC".repeat(80));
-    console.log("\xF0\u0178\u0161\u20AC [V2 API] D\xC3\xA9marrage \xC3\xA9valuation universelle...");
-    console.log("\xE2\u201D\u20AC".repeat(80) + "\n");
+    console.log("\u2705 [V2 API] Soumission trouv\xE9e:", submissionId);
+    console.log("\n" + "\u2500".repeat(80));
+    console.log("\u{1F680} [V2 API] D\xE9marrage \xE9valuation universelle...");
+    console.log("\u2500".repeat(80) + "\n");
     const startTime = Date.now();
     const evaluationResult = await evaluateVariableOperation(
       variableNodeId,
@@ -40253,13 +40490,13 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       prisma47
     );
     const duration = Date.now() - startTime;
-    console.log("\n" + "\xE2\u201D\u20AC".repeat(80));
-    console.log("\xE2\u0153\u2026 [V2 API] \xC3\u2030valuation termin\xC3\xA9e avec succ\xC3\xA8s !");
-    console.log("   - Dur\xC3\xA9e:", duration, "ms");
-    console.log("   - R\xC3\xA9sultat:", evaluationResult.value);
+    console.log("\n" + "\u2500".repeat(80));
+    console.log("\u2705 [V2 API] \xC9valuation termin\xE9e avec succ\xE8s !");
+    console.log("   - Dur\xE9e:", duration, "ms");
+    console.log("   - R\xE9sultat:", evaluationResult.value);
     console.log("   - OperationSource:", evaluationResult.operationSource);
-    console.log("\xE2\u201D\u20AC".repeat(80) + "\n");
-    console.log("\xF0\u0178\u2019\xBE [V2 API] Sauvegarde dans SubmissionData...");
+    console.log("\u2500".repeat(80) + "\n");
+    console.log("\u{1F4BE} [V2 API] Sauvegarde dans SubmissionData...");
     await prisma47.treeBranchLeafSubmissionData.upsert({
       where: {
         submissionId_nodeId: {
@@ -40287,7 +40524,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("\xE2\u0153\u2026 [V2 API] Sauvegarde effectu\xC3\xA9e\n");
+    console.log("\u2705 [V2 API] Sauvegarde effectu\xE9e\n");
     const response = {
       success: true,
       variable: {
@@ -40313,19 +40550,19 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
         nodeLabel: node.label
       }
     };
-    console.log("\xE2\u2022\x90".repeat(80));
-    console.log("\xF0\u0178\u201C\xA4 [V2 API] R\xC3\xA9ponse envoy\xC3\xA9e avec succ\xC3\xA8s");
-    console.log("\xE2\u2022\x90".repeat(80) + "\n");
+    console.log("\u2550".repeat(80));
+    console.log("\u{1F4E4} [V2 API] R\xE9ponse envoy\xE9e avec succ\xE8s");
+    console.log("\u2550".repeat(80) + "\n");
     return res.json(response);
   } catch (error) {
-    console.error("\n" + "\xE2\u2022\x90".repeat(80));
-    console.error("\xE2\x9D\u0152 [V2 API] ERREUR CRITIQUE");
-    console.error("\xE2\u2022\x90".repeat(80));
+    console.error("\n" + "\u2550".repeat(80));
+    console.error("\u274C [V2 API] ERREUR CRITIQUE");
+    console.error("\u2550".repeat(80));
     console.error(error);
-    console.error("\xE2\u2022\x90".repeat(80) + "\n");
+    console.error("\u2550".repeat(80) + "\n");
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de l'\xC3\xA9valuation de la variable",
+      error: "Erreur lors de l'\xE9valuation de la variable",
       details: error instanceof Error ? error.message : "Erreur inconnue",
       stack: process.env.NODE_ENV === "development" && error instanceof Error ? error.stack : void 0
     });
@@ -40335,7 +40572,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\n\xF0\u0178\u201D\x8D [V2 API] R\xC3\u2030CUP\xC3\u2030RATION VARIABLES:", submissionId);
+    console.log("\n\u{1F50D} [V2 API] R\xC9CUP\xC9RATION VARIABLES:", submissionId);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: {
@@ -40357,7 +40594,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
     if (!isSuperAdmin2 && submission.TreeBranchLeafTree?.organizationId !== organizationId) {
       return res.status(403).json({
         success: false,
-        error: "Acc\xC3\xA8s refus\xC3\xA9 \xC3\xA0 cette soumission"
+        error: "Acc\xE8s refus\xE9 \xE0 cette soumission"
       });
     }
     const variables = await prisma47.treeBranchLeafNodeVariable.findMany({
@@ -40376,7 +40613,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
         }
       }
     });
-    console.log("\xE2\u0153\u2026 [V2 API] Variables trouv\xC3\xA9es:", variables.length);
+    console.log("\u2705 [V2 API] Variables trouv\xE9es:", variables.length);
     const submissionData = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
@@ -40405,7 +40642,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
         nodeType: variable.TreeBranchLeafNode?.type || "unknown"
       };
     });
-    console.log("\xE2\u0153\u2026 [V2 API] R\xC3\xA9ponse construite\n");
+    console.log("\u2705 [V2 API] R\xE9ponse construite\n");
     return res.json({
       success: true,
       submissionId,
@@ -40420,10 +40657,10 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [V2 API] Erreur r\xC3\xA9cup\xC3\xA9ration variables:", error);
+    console.error("\u274C [V2 API] Erreur r\xE9cup\xE9ration variables:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des variables",
+      error: "Erreur lors de la r\xE9cup\xE9ration des variables",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -40432,7 +40669,7 @@ router56.post("/submissions/stage", async (req2, res) => {
   try {
     const { stageId, treeId, submissionId, leadId, formData, baseVersion } = req2.body;
     const userId = req2.user?.id || "system";
-    console.log("\xF0\u0178\u201C\x9D [STAGE] Cr\xC3\xA9ation/Update brouillon:", { stageId, treeId, submissionId, leadId, userId });
+    console.log("\u{1F4DD} [STAGE] Cr\xE9ation/Update brouillon:", { stageId, treeId, submissionId, leadId, userId });
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     let stage;
     if (stageId) {
@@ -40445,12 +40682,12 @@ router56.post("/submissions/stage", async (req2, res) => {
           // Renouvelle l'expiration
         }
       });
-      console.log("\xE2\u0153\u2026 [STAGE] Brouillon mis \xC3\xA0 jour:", stage.id);
+      console.log("\u2705 [STAGE] Brouillon mis \xE0 jour:", stage.id);
     } else {
       if (!treeId || !leadId) {
         return res.status(400).json({
           success: false,
-          error: "treeId et leadId sont requis pour cr\xC3\xA9er un stage"
+          error: "treeId et leadId sont requis pour cr\xE9er un stage"
         });
       }
       let currentBaseVersion = baseVersion || 1;
@@ -40473,7 +40710,7 @@ router56.post("/submissions/stage", async (req2, res) => {
           expiresAt
         }
       });
-      console.log("\xE2\u0153\u2026 [STAGE] Nouveau brouillon cr\xC3\xA9\xC3\xA9:", stage.id);
+      console.log("\u2705 [STAGE] Nouveau brouillon cr\xE9\xE9:", stage.id);
     }
     return res.json({
       success: true,
@@ -40484,7 +40721,7 @@ router56.post("/submissions/stage", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [STAGE] Erreur:", error);
+    console.error("\u274C [STAGE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la gestion du brouillon",
@@ -40501,14 +40738,14 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    console.log("\xF0\u0178\u201D\x8D [STAGE PREVIEW] Pr\xC3\xA9visualisation pour:", stageId);
+    console.log("\u{1F50D} [STAGE PREVIEW] Pr\xE9visualisation pour:", stageId);
     const stage = await prisma47.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
       return res.status(404).json({
         success: false,
-        error: "Stage non trouv\xC3\xA9"
+        error: "Stage non trouv\xE9"
       });
     }
     const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
@@ -40541,7 +40778,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
             operationDetail: evalResult.operationDetail
           };
         } catch (error) {
-          console.error(`\xE2\x9D\u0152 Erreur \xC3\xA9valuation ${node.id}:`, error);
+          console.error(`\u274C Erreur \xE9valuation ${node.id}:`, error);
           return {
             nodeId: node.id,
             nodeLabel: node.label,
@@ -40553,7 +40790,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
         }
       })
     );
-    console.log("\xE2\u0153\u2026 [STAGE PREVIEW] R\xC3\xA9sultats:", results.length, "noeuds \xC3\xA9valu\xC3\xA9s");
+    console.log("\u2705 [STAGE PREVIEW] R\xE9sultats:", results.length, "noeuds \xE9valu\xE9s");
     return res.json({
       success: true,
       stageId: stage.id,
@@ -40567,10 +40804,10 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [STAGE PREVIEW] Erreur:", error);
+    console.error("\u274C [STAGE PREVIEW] Erreur:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la pr\xC3\xA9visualisation",
+      error: "Erreur lors de la pr\xE9visualisation",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -40585,27 +40822,27 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    console.log("\xF0\u0178\u2019\xBE [STAGE COMMIT] Commit brouillon:", { stageId, asNew, userId });
+    console.log("\u{1F4BE} [STAGE COMMIT] Commit brouillon:", { stageId, asNew, userId });
     const stage = await prisma47.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
       return res.status(404).json({
         success: false,
-        error: "Stage non trouv\xC3\xA9"
+        error: "Stage non trouv\xE9"
       });
     }
     if (stage.expiresAt < /* @__PURE__ */ new Date()) {
       return res.status(410).json({
         success: false,
-        error: "Ce brouillon a expir\xC3\xA9",
+        error: "Ce brouillon a expir\xE9",
         expired: true
       });
     }
     let submissionId;
     let newVersion = 1;
     if (asNew || !stage.submissionId) {
-      console.log("\xF0\u0178\u2020\u2022 [STAGE COMMIT] Cr\xC3\xA9ation nouvelle submission");
+      console.log("\u{1F195} [STAGE COMMIT] Cr\xE9ation nouvelle submission");
       const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
       const variableNodes = await prisma47.treeBranchLeafNode.findMany({
         where: {
@@ -40636,7 +40873,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
               operationDetail: evalResult.operationDetail
             };
           } catch (error) {
-            console.error(`\xE2\x9D\u0152 Erreur \xC3\xA9valuation ${node.id}:`, error);
+            console.error(`\u274C Erreur \xE9valuation ${node.id}:`, error);
             return null;
           }
         })
@@ -40688,9 +40925,9 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       });
       submissionId = result.id;
       newVersion = 1;
-      console.log("\xE2\u0153\u2026 [STAGE COMMIT] Nouvelle submission cr\xC3\xA9\xC3\xA9e:", submissionId);
+      console.log("\u2705 [STAGE COMMIT] Nouvelle submission cr\xE9\xE9e:", submissionId);
     } else {
-      console.log("\xF0\u0178\u201D\u201E [STAGE COMMIT] Mise \xC3\xA0 jour submission existante:", stage.submissionId);
+      console.log("\u{1F504} [STAGE COMMIT] Mise \xE0 jour submission existante:", stage.submissionId);
       const currentSubmission = await prisma47.treeBranchLeafSubmission.findUnique({
         where: { id: stage.submissionId },
         select: {
@@ -40705,11 +40942,11 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       if (!currentSubmission) {
         return res.status(404).json({
           success: false,
-          error: "Submission originale non trouv\xC3\xA9e"
+          error: "Submission originale non trouv\xE9e"
         });
       }
       if (currentSubmission.currentVersion > stage.baseVersion) {
-        console.log("\xE2\u0161\xA0\xEF\xB8\x8F [STAGE COMMIT] Conflit d\xC3\xA9tect\xC3\xA9!", {
+        console.log("\u26A0\uFE0F [STAGE COMMIT] Conflit d\xE9tect\xE9!", {
           baseVersion: stage.baseVersion,
           currentVersion: currentSubmission.currentVersion
         });
@@ -40731,17 +40968,17 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           }
         }
         if (conflicts.length > 0) {
-          console.log("\xE2\x9D\u0152 [STAGE COMMIT] Conflits \xC3\xA0 r\xC3\xA9soudre:", conflicts.length);
+          console.log("\u274C [STAGE COMMIT] Conflits \xE0 r\xE9soudre:", conflicts.length);
           return res.status(409).json({
             success: false,
             conflict: true,
             conflicts,
             lastEditedBy: currentSubmission.lastEditedBy,
             lastEditedAt: currentSubmission.updatedAt,
-            message: "Des modifications ont \xC3\xA9t\xC3\xA9 faites par un autre utilisateur"
+            message: "Des modifications ont \xE9t\xE9 faites par un autre utilisateur"
           });
         }
-        console.log("\xE2\u0153\u2026 [STAGE COMMIT] Pas de conflit r\xC3\xA9el - merge automatique");
+        console.log("\u2705 [STAGE COMMIT] Pas de conflit r\xE9el - merge automatique");
       }
       if (currentSubmission.lockedBy && currentSubmission.lockedBy !== userId) {
         const lockAge = currentSubmission.lockedAt ? Date.now() - new Date(currentSubmission.lockedAt).getTime() : 0;
@@ -40750,7 +40987,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
             success: false,
             locked: true,
             lockedBy: currentSubmission.lockedBy,
-            message: "Ce devis est en cours d'\xC3\xA9dition par un autre utilisateur"
+            message: "Ce devis est en cours d'\xE9dition par un autre utilisateur"
           });
         }
       }
@@ -40785,7 +41022,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
                 operationDetail: evalResult.operationDetail
               };
             } catch (error) {
-              console.error(`\xE2\x9D\u0152 Erreur \xC3\xA9valuation ${node.id}:`, error);
+              console.error(`\u274C Erreur \xE9valuation ${node.id}:`, error);
               return null;
             }
           })
@@ -40797,7 +41034,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
             currentVersion: nextVersion,
             lastEditedBy: userId,
             lockedBy: null,
-            // LibÃ©rer le lock
+            // Libérer le lock
             lockedAt: null,
             updatedAt: /* @__PURE__ */ new Date()
           }
@@ -40840,7 +41077,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           await tx.treeBranchLeafSubmissionVersion.deleteMany({
             where: { id: { in: versions.map((v) => v.id) } }
           });
-          console.log(`\xF0\u0178\u2014\u2018\xEF\xB8\x8F [STAGE COMMIT] ${versions.length} anciennes versions supprim\xC3\xA9es`);
+          console.log(`\u{1F5D1}\uFE0F [STAGE COMMIT] ${versions.length} anciennes versions supprim\xE9es`);
         }
         await tx.treeBranchLeafStage.delete({
           where: { id: stageId }
@@ -40849,16 +41086,16 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       });
       submissionId = result.submission.id;
       newVersion = result.version;
-      console.log("\xE2\u0153\u2026 [STAGE COMMIT] Submission mise \xC3\xA0 jour:", submissionId, "v" + newVersion);
+      console.log("\u2705 [STAGE COMMIT] Submission mise \xE0 jour:", submissionId, "v" + newVersion);
     }
     return res.json({
       success: true,
       submissionId,
       version: newVersion,
-      message: "Devis enregistr\xC3\xA9 avec succ\xC3\xA8s"
+      message: "Devis enregistr\xE9 avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [STAGE COMMIT] Erreur:", error);
+    console.error("\u274C [STAGE COMMIT] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la sauvegarde",
@@ -40875,17 +41112,17 @@ router56.post("/submissions/stage/discard", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    console.log("\xF0\u0178\u2014\u2018\xEF\xB8\x8F [STAGE DISCARD] Suppression brouillon:", stageId);
+    console.log("\u{1F5D1}\uFE0F [STAGE DISCARD] Suppression brouillon:", stageId);
     await prisma47.treeBranchLeafStage.delete({
       where: { id: stageId }
     });
-    console.log("\xE2\u0153\u2026 [STAGE DISCARD] Brouillon supprim\xC3\xA9");
+    console.log("\u2705 [STAGE DISCARD] Brouillon supprim\xE9");
     return res.json({
       success: true,
-      message: "Brouillon supprim\xC3\xA9"
+      message: "Brouillon supprim\xE9"
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [STAGE DISCARD] Erreur:", error);
+    console.error("\u274C [STAGE DISCARD] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la suppression du brouillon",
@@ -40897,11 +41134,11 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
   try {
     const userId = req2.user?.id || "system";
     const { leadId, treeId } = req2.query;
-    console.log("\xF0\u0178\u201C\u2039 [MY DRAFTS] R\xC3\xA9cup\xC3\xA9ration brouillons:", { userId, leadId, treeId });
+    console.log("\u{1F4CB} [MY DRAFTS] R\xE9cup\xE9ration brouillons:", { userId, leadId, treeId });
     const where = {
       userId,
       expiresAt: { gt: /* @__PURE__ */ new Date() }
-      // Seulement les non-expirÃ©s
+      // Seulement les non-expirés
     };
     if (leadId) where.leadId = leadId;
     if (treeId) where.treeId = treeId;
@@ -40919,7 +41156,7 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
         }
       }
     });
-    console.log("\xE2\u0153\u2026 [MY DRAFTS] Trouv\xC3\xA9:", drafts.length, "brouillons");
+    console.log("\u2705 [MY DRAFTS] Trouv\xE9:", drafts.length, "brouillons");
     return res.json({
       success: true,
       drafts: drafts.map((d) => ({
@@ -40934,10 +41171,10 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [MY DRAFTS] Erreur:", error);
+    console.error("\u274C [MY DRAFTS] Erreur:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration des brouillons",
+      error: "Erreur lors de la r\xE9cup\xE9ration des brouillons",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -40945,7 +41182,7 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
 router56.get("/submissions/:id/versions", async (req2, res) => {
   try {
     const { id } = req2.params;
-    console.log("\xF0\u0178\u201C\u0153 [VERSIONS] R\xC3\xA9cup\xC3\xA9ration historique:", id);
+    console.log("\u{1F4DC} [VERSIONS] R\xE9cup\xE9ration historique:", id);
     const versions = await prisma47.treeBranchLeafSubmissionVersion.findMany({
       where: { submissionId: id },
       orderBy: { version: "desc" },
@@ -40960,7 +41197,7 @@ router56.get("/submissions/:id/versions", async (req2, res) => {
         }
       }
     });
-    console.log("\xE2\u0153\u2026 [VERSIONS] Trouv\xC3\xA9:", versions.length, "versions");
+    console.log("\u2705 [VERSIONS] Trouv\xE9:", versions.length, "versions");
     return res.json({
       success: true,
       submissionId: id,
@@ -40976,10 +41213,10 @@ router56.get("/submissions/:id/versions", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [VERSIONS] Erreur:", error);
+    console.error("\u274C [VERSIONS] Erreur:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xC3\xA9cup\xC3\xA9ration de l'historique",
+      error: "Erreur lors de la r\xE9cup\xE9ration de l'historique",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -40988,7 +41225,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
   try {
     const { id, version } = req2.params;
     const userId = req2.user?.id || "system";
-    console.log("\xF0\u0178\u201D\u2122 [RESTORE] Restauration version:", { id, version, userId });
+    console.log("\u{1F519} [RESTORE] Restauration version:", { id, version, userId });
     const versionToRestore = await prisma47.treeBranchLeafSubmissionVersion.findUnique({
       where: {
         submissionId_version: {
@@ -41000,7 +41237,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     if (!versionToRestore) {
       return res.status(404).json({
         success: false,
-        error: "Version non trouv\xC3\xA9e"
+        error: "Version non trouv\xE9e"
       });
     }
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
@@ -41010,7 +41247,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     if (!submission) {
       return res.status(404).json({
         success: false,
-        error: "Submission non trouv\xC3\xA9e"
+        error: "Submission non trouv\xE9e"
       });
     }
     const stage = await prisma47.treeBranchLeafStage.create({
@@ -41025,14 +41262,14 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1e3)
       }
     });
-    console.log("\xE2\u0153\u2026 [RESTORE] Stage cr\xC3\xA9\xC3\xA9 pour restauration:", stage.id);
+    console.log("\u2705 [RESTORE] Stage cr\xE9\xE9 pour restauration:", stage.id);
     return res.json({
       success: true,
       stageId: stage.id,
-      message: `Version ${version} charg\xC3\xA9e en brouillon. Enregistrez pour confirmer la restauration.`
+      message: `Version ${version} charg\xE9e en brouillon. Enregistrez pour confirmer la restauration.`
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [RESTORE] Erreur:", error);
+    console.error("\u274C [RESTORE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la restauration",
@@ -41047,10 +41284,10 @@ router56.get("/shared-references", async (req2, res) => {
       where: {
         isSharedReference: true,
         sharedReferenceId: null,
-        // C'est une source, pas une rÃ©fÃ©rence
+        // C'est une source, pas une référence
         type: {
           not: "leaf_option"
-          // âŒ Exclure les options de SELECT
+          // ❌ Exclure les options de SELECT
         },
         TreeBranchLeafTree: {
           organizationId
@@ -41060,7 +41297,7 @@ router56.get("/shared-references", async (req2, res) => {
         id: true,
         label: true,
         sharedReferenceName: true,
-        // âœ… sharedReferenceCategory SUPPRIMÃ‰
+        // ✅ sharedReferenceCategory SUPPRIMÉ
         sharedReferenceDescription: true,
         referenceUsages: {
           select: {
@@ -41075,14 +41312,14 @@ router56.get("/shared-references", async (req2, res) => {
         }
       }
     });
-    console.log(`\xF0\u0178\u201C\u0160 [SHARED REF] ${templates.length} r\xC3\xA9f\xC3\xA9rences trouv\xC3\xA9es en base`);
+    console.log(`\u{1F4CA} [SHARED REF] ${templates.length} r\xE9f\xE9rences trouv\xE9es en base`);
     templates.forEach((t, i) => {
       console.log(`  ${i + 1}. ID: ${t.id}, Nom: ${t.sharedReferenceName}, Label: ${t.label}`);
     });
     const formatted = templates.map((template) => ({
       id: template.id,
       label: template.sharedReferenceName || template.label,
-      // âœ… category SUPPRIMÃ‰
+      // ✅ category SUPPRIMÉ
       description: template.sharedReferenceDescription,
       usageCount: template.referenceUsages.length,
       usages: template.referenceUsages.map((usage) => ({
@@ -41090,10 +41327,10 @@ router56.get("/shared-references", async (req2, res) => {
         path: `${usage.TreeBranchLeafTree.name}`
       }))
     }));
-    console.log(`\xF0\u0178\u201C\xA4 [SHARED REF] Retour au frontend: ${JSON.stringify(formatted, null, 2)}`);
+    console.log(`\u{1F4E4} [SHARED REF] Retour au frontend: ${JSON.stringify(formatted, null, 2)}`);
     res.json(formatted);
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [SHARED REF] Erreur liste:", error);
+    console.error("\u274C [SHARED REF] Erreur liste:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41114,7 +41351,7 @@ router56.get("/shared-references/:refId", async (req2, res) => {
         id: true,
         label: true,
         sharedReferenceName: true,
-        // âœ… sharedReferenceCategory SUPPRIMÃ‰
+        // ✅ sharedReferenceCategory SUPPRIMÉ
         sharedReferenceDescription: true,
         referenceUsages: {
           select: {
@@ -41130,12 +41367,12 @@ router56.get("/shared-references/:refId", async (req2, res) => {
       }
     });
     if (!template) {
-      return res.status(404).json({ error: "R\xC3\xA9f\xC3\xA9rence introuvable" });
+      return res.status(404).json({ error: "R\xE9f\xE9rence introuvable" });
     }
     res.json({
       id: template.id,
       label: template.sharedReferenceName || template.label,
-      // âœ… category SUPPRIMÃ‰
+      // ✅ category SUPPRIMÉ
       description: template.sharedReferenceDescription,
       usageCount: template.referenceUsages.length,
       usages: template.referenceUsages.map((usage) => ({
@@ -41144,7 +41381,7 @@ router56.get("/shared-references/:refId", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [SHARED REF] Erreur d\xC3\xA9tails:", error);
+    console.error("\u274C [SHARED REF] Erreur d\xE9tails:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41164,7 +41401,7 @@ router56.put("/shared-references/:refId", async (req2, res) => {
       }
     });
     if (!template) {
-      return res.status(404).json({ error: "R\xC3\xA9f\xC3\xA9rence introuvable" });
+      return res.status(404).json({ error: "R\xE9f\xE9rence introuvable" });
     }
     const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: refId },
@@ -41181,10 +41418,10 @@ router56.put("/shared-references/:refId", async (req2, res) => {
         sharedReferenceDescription: true
       }
     });
-    console.log(`\xE2\u0153\u2026 [SHARED REF] R\xC3\xA9f\xC3\xA9rence ${refId} modifi\xC3\xA9e:`, updated);
+    console.log(`\u2705 [SHARED REF] R\xE9f\xE9rence ${refId} modifi\xE9e:`, updated);
     res.json({ success: true, reference: updated });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [SHARED REF] Erreur modification:", error);
+    console.error("\u274C [SHARED REF] Erreur modification:", error);
     res.status(500).json({ error: "Erreur lors de la modification" });
   }
 });
@@ -41206,10 +41443,10 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
       }
     });
     if (!template) {
-      return res.status(404).json({ error: "R\xC3\xA9f\xC3\xA9rence introuvable" });
+      return res.status(404).json({ error: "R\xE9f\xE9rence introuvable" });
     }
     if (template.referenceUsages.length > 0) {
-      console.log(`\xE2\u0161\xA0\xEF\xB8\x8F [SHARED REF] D\xC3\xA9tachement de ${template.referenceUsages.length} usage(s) avant suppression`);
+      console.log(`\u26A0\uFE0F [SHARED REF] D\xE9tachement de ${template.referenceUsages.length} usage(s) avant suppression`);
       await prisma47.treeBranchLeafNode.updateMany({
         where: {
           sharedReferenceId: refId
@@ -41225,10 +41462,10 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
     await prisma47.treeBranchLeafNode.delete({
       where: { id: refId }
     });
-    console.log(`\xF0\u0178\u2014\u2018\xEF\xB8\x8F [SHARED REF] R\xC3\xA9f\xC3\xA9rence ${refId} supprim\xC3\xA9e`);
-    res.json({ success: true, message: "R\xC3\xA9f\xC3\xA9rence supprim\xC3\xA9e avec succ\xC3\xA8s" });
+    console.log(`\u{1F5D1}\uFE0F [SHARED REF] R\xE9f\xE9rence ${refId} supprim\xE9e`);
+    res.json({ success: true, message: "R\xE9f\xE9rence supprim\xE9e avec succ\xE8s" });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [SHARED REF] Erreur suppression:", error);
+    console.error("\u274C [SHARED REF] Erreur suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -41237,7 +41474,7 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
     const { treeId } = req2.params;
     const { name, description, fieldType, label } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    console.log("\xF0\u0178\u201C\x9D [SHARED REF] Cr\xC3\xA9ation nouveau n\xC5\u201Cud r\xC3\xA9f\xC3\xA9rence:", { treeId, name, description, fieldType, label });
+    console.log("\u{1F4DD} [SHARED REF] Cr\xE9ation nouveau n\u0153ud r\xE9f\xE9rence:", { treeId, name, description, fieldType, label });
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: {
         id: treeId,
@@ -41253,23 +41490,23 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
         id: newNodeId,
         treeId,
         type: "leaf_field",
-        // âœ… OBLIGATOIRE : type du nÅ“ud
+        // ✅ OBLIGATOIRE : type du nœud
         label: label || name,
         fieldType: fieldType || "TEXT",
         parentId: null,
-        // âœ… CORRECTION: null au lieu de 'ROOT' (contrainte de clÃ© Ã©trangÃ¨re)
+        // ✅ CORRECTION: null au lieu de 'ROOT' (contrainte de clé étrangère)
         order: 9999,
-        // Ordre Ã©levÃ© pour les mettre Ã  la fin
+        // Ordre élevé pour les mettre à la fin
         isSharedReference: true,
         sharedReferenceId: null,
         // C'est une source
         sharedReferenceName: name,
         sharedReferenceDescription: description,
         updatedAt: /* @__PURE__ */ new Date()
-        // âœ… OBLIGATOIRE : timestamp de mise Ã  jour
+        // ✅ OBLIGATOIRE : timestamp de mise à jour
       }
     });
-    console.log("\xE2\u0153\u2026 [SHARED REF] Nouveau n\xC5\u201Cud r\xC3\xA9f\xC3\xA9rence cr\xC3\xA9\xC3\xA9:", newNode.id);
+    console.log("\u2705 [SHARED REF] Nouveau n\u0153ud r\xE9f\xE9rence cr\xE9\xE9:", newNode.id);
     res.json({
       success: true,
       id: newNode.id,
@@ -41280,10 +41517,10 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
         sharedReferenceName: newNode.sharedReferenceName,
         sharedReferenceDescription: newNode.sharedReferenceDescription
       },
-      message: "R\xC3\xA9f\xC3\xA9rence partag\xC3\xA9e cr\xC3\xA9\xC3\xA9e avec succ\xC3\xA8s"
+      message: "R\xE9f\xE9rence partag\xE9e cr\xE9\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [SHARED REF] Erreur cr\xC3\xA9ation:", error);
+    console.error("\u274C [SHARED REF] Erreur cr\xE9ation:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41292,7 +41529,7 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
     const { nodeId } = req2.params;
     const { referenceIds } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    console.log("\xF0\u0178\u201D\u2014 [SHARED REF] Liaison r\xC3\xA9f\xC3\xA9rences:", { nodeId, referenceIds });
+    console.log("\u{1F517} [SHARED REF] Liaison r\xE9f\xE9rences:", { nodeId, referenceIds });
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -41302,7 +41539,7 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud introuvable" });
+      return res.status(404).json({ error: "N\u0153ud introuvable" });
     }
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -41310,13 +41547,13 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
         sharedReferenceIds: referenceIds
       }
     });
-    console.log("\xE2\u0153\u2026 [SHARED REF] R\xC3\xA9f\xC3\xA9rences li\xC3\xA9es avec succ\xC3\xA8s:", nodeId);
+    console.log("\u2705 [SHARED REF] R\xE9f\xE9rences li\xE9es avec succ\xE8s:", nodeId);
     res.json({
       success: true,
-      message: `${referenceIds.length} r\xC3\xA9f\xC3\xA9rence(s) li\xC3\xA9e(s) avec succ\xC3\xA8s`
+      message: `${referenceIds.length} r\xE9f\xE9rence(s) li\xE9e(s) avec succ\xE8s`
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [SHARED REF] Erreur liaison:", error);
+    console.error("\u274C [SHARED REF] Erreur liaison:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41325,7 +41562,7 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
     const { nodeId } = req2.params;
     const { name, description } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    console.log("\xF0\u0178\u201C\x9D [SHARED REF] Conversion n\xC5\u201Cud en r\xC3\xA9f\xC3\xA9rence:", { nodeId, name, description });
+    console.log("\u{1F4DD} [SHARED REF] Conversion n\u0153ud en r\xE9f\xE9rence:", { nodeId, name, description });
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -41335,7 +41572,7 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\xC5\u201Cud introuvable" });
+      return res.status(404).json({ error: "N\u0153ud introuvable" });
     }
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -41344,18 +41581,18 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
         sharedReferenceId: null,
         // C'est une source
         sharedReferenceName: name,
-        // âœ… sharedReferenceCategory SUPPRIMÃ‰
+        // ✅ sharedReferenceCategory SUPPRIMÉ
         sharedReferenceDescription: description
       }
     });
-    console.log("\xE2\u0153\u2026 [SHARED REF] R\xC3\xA9f\xC3\xA9rence cr\xC3\xA9\xC3\xA9e avec succ\xC3\xA8s:", nodeId);
+    console.log("\u2705 [SHARED REF] R\xE9f\xE9rence cr\xE9\xE9e avec succ\xE8s:", nodeId);
     res.json({
       success: true,
       id: nodeId,
-      message: "R\xC3\xA9f\xC3\xA9rence cr\xC3\xA9\xC3\xA9e avec succ\xC3\xA8s"
+      message: "R\xE9f\xE9rence cr\xE9\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [SHARED REF] Erreur conversion:", error);
+    console.error("\u274C [SHARED REF] Erreur conversion:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41363,17 +41600,17 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { variableId, newSuffix, duplicateNode, targetNodeId: bodyTargetNodeId } = req2.body;
-    console.warn("\u26A0\uFE0F [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.");
+    console.warn("?? [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.");
     res.set("X-Deprecated-API", "/api/repeat");
-    console.log("\xF0\u0178\u201D\u201E [COPY-LINKED-VAR] D\xC3\xA9but - nodeId:", nodeId, "variableId:", variableId, "newSuffix:", newSuffix);
+    console.log("\u{1F504} [COPY-LINKED-VAR] D\xE9but - nodeId:", nodeId, "variableId:", variableId, "newSuffix:", newSuffix);
     if (!variableId || newSuffix === void 0) {
       return res.status(400).json({
-        error: "variableId et newSuffix requis dans le corps de la requ\xC3\xAAte"
+        error: "variableId et newSuffix requis dans le corps de la requ\xEAte"
       });
     }
     if (!Number.isInteger(newSuffix) || newSuffix < 1) {
       return res.status(400).json({
-        error: "newSuffix doit \xC3\xAAtre un nombre entier positif"
+        error: "newSuffix doit \xEAtre un nombre entier positif"
       });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
@@ -41388,7 +41625,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     if (!node) {
       return res.status(404).json({ error: "Noeud introuvable" });
     }
-    console.log("\u2705 Noeud trouv\xE9:", node.label || nodeId);
+    console.log("? Noeud trouv\uFFFD:", node.label || nodeId);
     let targetNodeId = nodeId;
     const shouldDuplicateNode = duplicateNode === void 0 ? true : Boolean(duplicateNode);
     let ownerNodeIdForMap = null;
@@ -41398,10 +41635,10 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
         return res.status(404).json({ error: "targetNodeId introuvable" });
       }
       if (targetNode.treeId !== node.treeId) {
-        return res.status(400).json({ error: "targetNodeId doit appartenir au m\xEAme arbre" });
+        return res.status(400).json({ error: "targetNodeId doit appartenir au m\uFFFDme arbre" });
       }
       targetNodeId = targetNode.id;
-      console.log(`\u{1F3AF} [COPY-LINKED-VAR] Cible explicite fournie: ${targetNodeId}`);
+      console.log(`?? [COPY-LINKED-VAR] Cible explicite fournie: ${targetNodeId}`);
       if (variableId) {
         const originalVarForMap = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
         if (originalVarForMap) ownerNodeIdForMap = originalVarForMap.nodeId;
@@ -41413,7 +41650,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       }
       const ownerNode = await prisma47.treeBranchLeafNode.findUnique({ where: { id: originalVar.nodeId } });
       if (!ownerNode) {
-        return res.status(404).json({ error: "N\u0153ud propri\xE9taire introuvable" });
+        return res.status(404).json({ error: "N\uFFFDud propri\uFFFDtaire introuvable" });
       }
       ownerNodeIdForMap = ownerNode.id;
       const candidateId = `${ownerNode.id}-${newSuffix}`;
@@ -41440,7 +41677,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      console.log(`\u{1F4C4} [COPY-LINKED-VAR] N\u0153ud dupliqu\xE9: ${ownerNode.id} -> ${targetNodeId}`);
+      console.log(`?? [COPY-LINKED-VAR] N\uFFFDud dupliqu\uFFFD: ${ownerNode.id} -> ${targetNodeId}`);
     }
     const nodeIdMap = /* @__PURE__ */ new Map();
     if (ownerNodeIdForMap) nodeIdMap.set(ownerNodeIdForMap, targetNodeId);
@@ -41466,12 +41703,12 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     try {
       await addToNodeLinkedField7(prisma47, targetNodeId, "linkedVariableIds", [result.variableId]);
     } catch (e) {
-      console.warn("\u26A0\uFE0F [COPY-LINKED-VAR] \xC9chec MAJ linkedVariableIds:", e.message);
+      console.warn("?? [COPY-LINKED-VAR] \uFFFDchec MAJ linkedVariableIds:", e.message);
     }
-    console.log("\u2705 [COPY-LINKED-VAR] Copie r\xE9ussie:", { ...result, targetNodeId });
+    console.log("? [COPY-LINKED-VAR] Copie r\uFFFDussie:", { ...result, targetNodeId });
     res.status(201).json({ ...result, targetNodeId });
   } catch (error) {
-    console.error("\xE2\x9D\u0152 [COPY-LINKED-VAR] Erreur:", error);
+    console.error("\u274C [COPY-LINKED-VAR] Erreur:", error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: msg });
   }
@@ -41484,7 +41721,7 @@ router56.post("/variables/:variableId/create-display", async (req2, res) => {
     res.status(201).json(result);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error("\u274C [/variables/:variableId/create-display] Erreur:", msg);
+    console.error("? [/variables/:variableId/create-display] Erreur:", msg);
     res.status(400).json({ error: msg });
   }
 });
@@ -41504,7 +41741,7 @@ router56.get("/variables/search", async (req2, res) => {
 });
 router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
-    console.log("\u{1F4CA} [TBL-ROUTES] GET /trees/:treeId/calculated-values - D\xC9BUT");
+    console.log("?? [TBL-ROUTES] GET /trees/:treeId/calculated-values - D\uFFFDBUT");
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
@@ -41512,7 +41749,7 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
       where: treeWhereFilter
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\uFFFD" });
     }
     const nodesWithCalculatedValue = await prisma47.treeBranchLeafNode.findMany({
       where: {
@@ -41530,7 +41767,7 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
         parentId: true
       }
     });
-    console.log(`\u{1F4CA} [TBL-ROUTES] ${nodesWithCalculatedValue.length} champs avec calculatedValue trouv\xE9s`);
+    console.log(`?? [TBL-ROUTES] ${nodesWithCalculatedValue.length} champs avec calculatedValue trouv\uFFFDs`);
     const parentIds = nodesWithCalculatedValue.map((n) => n.parentId).filter((id) => !!id);
     const parentNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { id: { in: parentIds } },
@@ -41545,7 +41782,7 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
       type: node.type,
       parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : void 0
     }));
-    console.log(`\u{1F4CA} [TBL-ROUTES] Valeurs calcul\xE9es format\xE9es:`, calculatedValues.map((cv) => ({
+    console.log(`?? [TBL-ROUTES] Valeurs calcul\uFFFDes format\uFFFDes:`, calculatedValues.map((cv) => ({
       id: cv.id,
       label: cv.label,
       value: cv.calculatedValue,
@@ -41554,7 +41791,7 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.json(calculatedValues);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching calculated values:", error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les valeurs calcul\xE9es" });
+    res.status(500).json({ error: "Impossible de r\uFFFDcup\uFFFDrer les valeurs calcul\uFFFDes" });
   }
 });
 var treebranchleaf_routes_default = router56;
@@ -50112,7 +50349,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         });
         results.created++;
       }
-      const rawValue = capacityResult.value;
+      const rawValue = capacityResult.value ?? capacityResult.calculatedValue ?? capacityResult.result;
       const stringified = rawValue === null || rawValue === void 0 ? null : String(rawValue).trim();
       if (rawValue !== null && rawValue !== void 0 && stringified !== "" && stringified !== "\u2205") {
         let normalizedValue;
@@ -50793,14 +51030,17 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
       console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value="${r.value}" (calculatedValue="${r.calculatedValue}")`);
     });
     try {
-      const calculatedValues = results.filter((r) => {
-        if (r.value === null || r.value === void 0) return false;
-        const strValue = String(r.value).trim();
+      const calculatedValues = results.map((r) => {
+        const candidate = r.value ?? r.calculatedValue;
+        return { ...r, candidate };
+      }).filter((r) => {
+        if (r.candidate === null || r.candidate === void 0) return false;
+        const strValue = String(r.candidate).trim();
         if (strValue === "" || strValue === "\u2205") return false;
         return true;
       }).map((r) => ({
         nodeId: r.nodeId,
-        calculatedValue: String(r.value),
+        calculatedValue: String(r.candidate),
         calculatedBy: `preview-${userId}`
       }));
       if (calculatedValues.length > 0) {
@@ -51261,33 +51501,45 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
       where: { nodeId },
       select: { sourceType: true, sourceRef: true }
     });
-    const hasFormulaVariable = variableMeta2?.sourceType === "formula" && variableMeta2?.sourceRef?.startsWith("node-formula:");
-    if ((hasTableLookup || hasFormulaVariable) && node.treeId) {
-      const now = /* @__PURE__ */ new Date();
-      const calculatedAt = node.calculatedAt ? new Date(node.calculatedAt) : null;
-      const isStale = !calculatedAt || now.getTime() - calculatedAt.getTime() > 1e4;
-      const hasNoValue = !node.calculatedValue || node.calculatedValue === "" || node.calculatedValue === "[]" || node.calculatedValue === "0";
-      if (isStale || hasNoValue || hasFormulaVariable) {
-        console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" n\xE9cessite recalcul:`, {
+    const hasFormulaVariable = variableMeta2?.sourceRef?.startsWith("node-formula:");
+    const hasConditionVariable = variableMeta2?.sourceRef?.startsWith("condition:");
+    const hasTreeSourceVariable = variableMeta2?.sourceType === "tree" && (hasFormulaVariable || hasConditionVariable);
+    const existingValue = node.calculatedValue;
+    const hasValidExistingValue = existingValue && existingValue !== "" && existingValue !== "0" && existingValue !== "[]" && existingValue !== "null" && existingValue !== "undefined";
+    if (hasValidExistingValue) {
+      return res.json({
+        success: true,
+        nodeId: node.id,
+        label: node.label,
+        value: parseStoredStringValue(existingValue),
+        calculatedAt: toIsoString(node.calculatedAt),
+        calculatedBy: node.calculatedBy,
+        type: node.type,
+        fieldType: node.fieldType,
+        fromStoredValue: true
+      });
+    }
+    if ((hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable) && node.treeId) {
+      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" n\xE9cessite recalcul (pas de valeur valide):`, {
+        nodeId,
+        hasTableLookup,
+        hasFormulaVariable,
+        hasConditionVariable,
+        sourceRef: variableMeta2?.sourceRef,
+        existingValue,
+        submissionId
+      });
+      try {
+        const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
+        const result = await evaluateVariableOperation2(
           nodeId,
-          hasTableLookup,
-          hasFormulaVariable,
-          sourceRef: variableMeta2?.sourceRef,
-          isStale,
-          hasNoValue,
-          calculatedAt,
-          submissionId
-        });
-        try {
-          const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-          const result = await evaluateVariableOperation2(
-            nodeId,
-            submissionId || "preview-calculated-value-request",
-            prisma
-          );
-          console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
-          if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
-            const stringValue = String(result.value ?? result.operationResult);
+          submissionId || "preview-calculated-value-request",
+          prisma
+        );
+        console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
+        if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
+          const stringValue = String(result.value ?? result.operationResult);
+          if (stringValue && stringValue !== "0" && stringValue !== "") {
             await prisma.treeBranchLeafNode.update({
               where: { id: nodeId },
               data: {
@@ -51296,22 +51548,21 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
                 calculatedBy: "operation-interpreter-auto"
               }
             });
-            return res.json({
-              success: true,
-              nodeId: node.id,
-              label: node.label,
-              value: stringValue,
-              calculatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-              calculatedBy: "operation-interpreter-auto",
-              type: node.type,
-              fieldType: node.fieldType,
-              freshCalculation: true
-              // 🔥 Marquer comme nouveau calcul
-            });
           }
-        } catch (operationErr) {
-          console.error("\u274C [CalculatedValueController] Erreur operation-interpreter:", operationErr);
+          return res.json({
+            success: true,
+            nodeId: node.id,
+            label: node.label,
+            value: stringValue,
+            calculatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            calculatedBy: "operation-interpreter-auto",
+            type: node.type,
+            fieldType: node.fieldType,
+            freshCalculation: true
+          });
         }
+      } catch (operationErr) {
+        console.error("\u274C [CalculatedValueController] Erreur operation-interpreter:", operationErr);
       }
     }
     return res.json({
@@ -55063,6 +55314,44 @@ ${"=".repeat(80)}`);
             await prisma69.treeBranchLeafNode.create({ data: displayNodeData });
             console.log("[CREATE DISPLAY] N\u0153ud d'affichage cr\xE9\xE9:", { id: displayNodeId2, parentId: displayParentId, metadata: displayNodeData.metadata });
           }
+          if (originalOwnerNode.hasTable && Array.isArray(originalOwnerNode.linkedTableIds) && originalOwnerNode.linkedTableIds.length > 0) {
+            console.log(`
+\u{1F4CA} [COPY-TABLES] N\u0153ud original a ${originalOwnerNode.linkedTableIds.length} tables \xE0 copier`);
+            for (const originalTableId of originalOwnerNode.linkedTableIds) {
+              const newTableId = `${originalTableId}-${suffix}`;
+              const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+                where: { id: newTableId }
+              });
+              if (existingTable) {
+                console.log(`\u{1F4CA} [COPY-TABLES] Table ${newTableId} existe d\xE9j\xE0, skip`);
+                tableIdMap2.set(originalTableId, newTableId);
+                continue;
+              }
+              try {
+                const tableResult = await copyTableCapacity2(
+                  originalTableId,
+                  displayNodeId2,
+                  // La nouvelle table appartient au display node copié
+                  Number(suffix),
+                  prisma69,
+                  { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
+                );
+                if (tableResult.success) {
+                  tableIdMap2.set(originalTableId, tableResult.newTableId);
+                  console.log(`\u2705 [COPY-TABLES] Table copi\xE9e: ${originalTableId} \u2192 ${tableResult.newTableId} (${tableResult.columnsCount} cols, ${tableResult.rowsCount} rows)`);
+                } else {
+                  console.warn(`\u26A0\uFE0F [COPY-TABLES] \xC9chec copie table ${originalTableId}: ${tableResult.error}`);
+                }
+              } catch (e) {
+                console.error(`\u274C [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
+              }
+            }
+            await prisma69.treeBranchLeafNode.update({
+              where: { id: displayNodeId2 },
+              data: { hasTable: true }
+            });
+            console.log(`\u2705 [COPY-TABLES] hasTable mis \xE0 true sur ${displayNodeId2}`);
+          }
         } else {
           console.warn(`\u26A0\uFE0F Impossible de r\xE9cup\xE9rer le n\u0153ud propri\xE9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
         }
@@ -55973,6 +56262,42 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
                 const val = metaObj.lookup.columnSourceOption.comparisonColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
                   metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+              if (metaObj?.lookup?.displayColumn) {
+                if (Array.isArray(metaObj.lookup.displayColumn)) {
+                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                    if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                      console.log(`[table.meta] displayColumn[]: ${col} -> ${col}${suffix}`);
+                      return `${col}${suffix}`;
+                    }
+                    return col;
+                  });
+                } else if (typeof metaObj.lookup.displayColumn === 'string') {
+                  const val = metaObj.lookup.displayColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    console.log(`[table.meta] displayColumn: ${val} -> ${val}${suffix}`);
+                    metaObj.lookup.displayColumn = `${val}${suffix}`;
+                  }
+                }
+              }
+              // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+              if (metaObj?.lookup?.displayRow) {
+                if (Array.isArray(metaObj.lookup.displayRow)) {
+                  metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
+                    if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
+                      console.log(`[table.meta] displayRow[]: ${row} -> ${row}${suffix}`);
+                      return `${row}${suffix}`;
+                    }
+                    return row;
+                  });
+                } else if (typeof metaObj.lookup.displayRow === 'string') {
+                  const val = metaObj.lookup.displayRow;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    console.log(`[table.meta] displayRow: ${val} -> ${val}${suffix}`);
+                    metaObj.lookup.displayRow = `${val}${suffix}`;
+                  }
                 }
               }
               return metaObj;

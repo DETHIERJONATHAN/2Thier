@@ -569,6 +569,36 @@ export async function copyConditionCapacity(
     console.log(`📝 Nouvel ID condition: ${newConditionId}`);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // 🔧 FIX CRITIQUE: Déterminer le VRAI propriétaire de la condition copiée
+    // ═══════════════════════════════════════════════════════════════════════
+    // Le nodeId passé en paramètre peut être un nœud qui RÉFÉRENCE la condition,
+    // pas le PROPRIÉTAIRE. Le propriétaire de la copie doit être le propriétaire
+    // ORIGINAL avec le suffixe appliqué.
+    //
+    // EXEMPLE:
+    // - Condition "Position" appartient à "Panneaux max" (nodeId original)
+    // - On copie via "Longueur-1" (newNodeId passé) qui RÉFÉRENCE la condition
+    // - Le VRAI propriétaire doit être "Panneaux max-1" (nodeId original + suffix)
+    //
+    // SOLUTION: Utiliser le nodeId ORIGINAL de la condition + suffix
+    const originalOwnerNodeId = originalCondition.nodeId;
+    const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
+    
+    // Vérifier si le nœud propriétaire copié existe
+    const ownerNodeExists = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: correctOwnerNodeId },
+      select: { id: true, label: true }
+    });
+    
+    // Si le propriétaire suffixé existe, l'utiliser. Sinon fallback sur newNodeId.
+    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    
+    console.log(`🔧 [OWNER FIX] NodeId original propriétaire: ${originalOwnerNodeId}`);
+    console.log(`🔧 [OWNER FIX] NodeId propriétaire suffixé: ${correctOwnerNodeId}`);
+    console.log(`🔧 [OWNER FIX] Propriétaire suffixé existe: ${ownerNodeExists ? 'OUI (' + ownerNodeExists.label + ')' : 'NON'}`);
+    console.log(`🔧 [OWNER FIX] NodeId FINAL utilisé: ${finalOwnerNodeId}`);
+
+    // ═══════════════════════════════════════════════════════════════════════
     // 🔄 ÉTAPE 4 : Réécrire le conditionSet
     // ═══════════════════════════════════════════════════════════════════════
     console.log(`\n🔄 Réécriture du conditionSet...`);
@@ -614,9 +644,9 @@ export async function copyConditionCapacity(
       // ⭐ CRÉER UN NOUVEL nodeIdMap enrichi pour les formules de cette condition
       // Car les shared-ref du conditionSet référencent le nœud ORIGINAL de la condition
       const enrichedNodeIdMap = new Map(nodeIdMap);
-      if (originalCondition.nodeId && newNodeId) {
-        enrichedNodeIdMap.set(originalCondition.nodeId, newNodeId);
-        console.log(`   📍 NodeIdMap enrichie: ${originalCondition.nodeId} → ${newNodeId}`);
+      if (originalCondition.nodeId && finalOwnerNodeId) {
+        enrichedNodeIdMap.set(originalCondition.nodeId, finalOwnerNodeId);
+        console.log(`   📍 NodeIdMap enrichie: ${originalCondition.nodeId} → ${finalOwnerNodeId}`);
       }
       
       for (const linkedFormId of linkedFormulaIdsFromSet) {
@@ -629,7 +659,7 @@ export async function copyConditionCapacity(
             console.log(`   🔀 Copie formule liée: ${linkedFormId}...`);
             const linkedFormResult = await copyFormulaCapacity(
               linkedFormId,
-              newNodeId, // Même nœud propriétaire
+              finalOwnerNodeId, // Même nœud propriétaire (corrigé)
               suffix,
               prisma,
               { nodeIdMap: enrichedNodeIdMap, formulaIdMap }
@@ -692,7 +722,7 @@ export async function copyConditionCapacity(
     // Car les formules du conditionSet peuvent référencer le nœud de la condition
     // et elles auraient déjà été copiées via la variable sans le nodeIdMap enrichi
     const enrichedRewriteMaps: RewriteMaps = {
-      nodeIdMap: new Map([...nodeIdMap, [originalCondition.nodeId, newNodeId]]),  // Enrichi
+      nodeIdMap: new Map([...nodeIdMap, [originalCondition.nodeId, finalOwnerNodeId]]),  // Enrichi avec le bon propriétaire
       formulaIdMap: formulaIdMap,
       conditionIdMap: conditionCopyCache || new Map(),
       tableIdMap: new Map()
@@ -747,7 +777,7 @@ export async function copyConditionCapacity(
             console.log(`   🔀 Copie condition liée: ${linkedCondId}...`);
             const linkedCondResult = await copyConditionCapacity(
               linkedCondId,
-              newNodeId, // Même nœud propriétaire
+              finalOwnerNodeId, // Même nœud propriétaire (corrigé)
               suffix,
               prisma,
               { nodeIdMap, formulaIdMap, conditionCopyCache }
@@ -804,7 +834,7 @@ export async function copyConditionCapacity(
             console.log(`   🔀 Copie table liée: ${linkedTableId}...`);
             const linkedTableResult = await copyTableCapacity(
               linkedTableId,
-              newNodeId, // Même nœud propriétaire
+              finalOwnerNodeId, // Même nœud propriétaire (corrigé)
               suffix,
               prisma,
               { nodeIdMap, tableIdMap }
@@ -843,7 +873,7 @@ export async function copyConditionCapacity(
       newCondition = await prisma.treeBranchLeafNodeCondition.update({
         where: { id: newConditionId },
         data: {
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           name: originalCondition.name ? `${originalCondition.name}-${suffix}` : null,
           description: originalCondition.description,
           conditionSet: rewrittenConditionSet,
@@ -855,7 +885,7 @@ export async function copyConditionCapacity(
       newCondition = await prisma.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           organizationId: originalCondition.organizationId,
           name: originalCondition.name ? `${originalCondition.name}-${suffix}` : null,
           description: originalCondition.description,
@@ -884,8 +914,8 @@ export async function copyConditionCapacity(
     // 🔗 ÉTAPE 6B : Mettre à jour linkedConditionIds du nœud propriétaire
     // ═══════════════════════════════════════════════════════════════════════
     try {
-      await addToNodeLinkedField(prisma, newNodeId, 'linkedConditionIds', [newConditionId]);
-      console.log(`✅ linkedConditionIds mis à jour pour nœud propriétaire ${newNodeId}`);
+      await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedConditionIds', [newConditionId]);
+      console.log(`✅ linkedConditionIds mis à jour pour nœud propriétaire ${finalOwnerNodeId}`);
     } catch (e) {
       console.warn(`⚠️ Erreur MAJ linkedConditionIds du propriétaire:`, (e as Error).message);
     }
@@ -895,7 +925,7 @@ export async function copyConditionCapacity(
     // ═══════════════════════════════════════════════════════════════════════
     try {
       await prisma.treeBranchLeafNode.update({
-        where: { id: newNodeId },
+        where: { id: finalOwnerNodeId },
         data: {
           hasCondition: true,
           condition_activeId: newConditionId,
@@ -903,7 +933,7 @@ export async function copyConditionCapacity(
           condition_description: newCondition.description
         }
       });
-      console.log(`✅ Paramètres capacité (condition) mis à jour pour nœud ${newNodeId}`);
+      console.log(`✅ Paramètres capacité (condition) mis à jour pour nœud ${finalOwnerNodeId}`);
       console.log(`   - condition_activeId: ${newConditionId}`);
       console.log(`   - condition_name: ${newCondition.name || 'null'}`);
     } catch (e) {
@@ -921,7 +951,7 @@ export async function copyConditionCapacity(
 
     return {
       newConditionId,
-      nodeId: newNodeId,
+      nodeId: finalOwnerNodeId,
       conditionSet: rewrittenConditionSet,
       success: true
     };

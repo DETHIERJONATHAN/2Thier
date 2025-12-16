@@ -288,15 +288,16 @@ async function enrichDataFromSubmission(
     }
     
     if (treeId) {
-      // 3. Récupérer TOUS les labels de l'arbre avec les champs supplémentaires pour cohérence
-      // 🔥 COHÉRENCE: Récupérer sharedReferenceName et field_label pour utiliser le même libellé que l'original
+      // 3. Récupérer TOUS les labels ET calculatedValue de l'arbre
+      // 🔥 AJOUT: calculatedValue pour les variables calculées (ex: Rampant toiture-1)
       const allNodes = await prisma.treeBranchLeafNode.findMany({
         where: { treeId },
         select: { 
           id: true, 
           label: true,
           sharedReferenceName: true,
-          field_label: true
+          field_label: true,
+          calculatedValue: true  // 🆕 Récupérer les valeurs calculées
         }
       });
       
@@ -309,24 +310,30 @@ async function enrichDataFromSubmission(
           const canonicalLabel = node.sharedReferenceName || node.field_label || node.label;
           labelMap.set(node.id, canonicalLabel);
         }
+        
+        // 🆕 ENRICHIR VALUEMAP avec calculatedValue si présent et pas déjà dans valueMap
+        // Ceci permet aux formules copiées (ex: MAX paysage-1) d'accéder aux valeurs 
+        // des variables calculées (ex: Rampant toiture-1)
+        if (!valueMap.has(node.id) && node.calculatedValue !== null && node.calculatedValue !== undefined && node.calculatedValue !== '') {
+          valueMap.set(node.id, node.calculatedValue);
+          console.log(`[ENRICHMENT] 🧮 calculatedValue enrichi: ${node.id} (${node.label}) = ${node.calculatedValue}`);
+        }
       }
     } else {
       console.warn(`[ENRICHMENT] ⚠️ Impossible de trouver l'arbre pour la soumission ${submissionId}`);
     }
     
-    // 5. ENRICHIR VALUEMAP
+    // 5. ENRICHIR VALUEMAP avec SubmissionData (priorité sur calculatedValue)
     for (const data of submissionData) {
       if (data.nodeId && data.value !== null) {
-        // Ne pas écraser si déjà présent (priorité au valueMap initial pour mode preview)
-        if (!valueMap.has(data.nodeId)) {
-          let parsedValue: unknown;
-          try {
-            parsedValue = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-          } catch {
-            parsedValue = data.value;
-          }
-          valueMap.set(data.nodeId, parsedValue);
+        // Écraser calculatedValue avec la valeur soumise si présente
+        let parsedValue: unknown;
+        try {
+          parsedValue = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        } catch {
+          parsedValue = data.value;
         }
+        valueMap.set(data.nodeId, parsedValue);
       }
     }
     
@@ -2869,13 +2876,22 @@ export async function evaluateVariableOperation(
   console.log(`${'═'.repeat(80)}\n`);
   
   // ═══════════════════════════════════════════════════════════════════════
-  // 📥 ÉTAPE 0 : Initialiser et enrichir les Maps (NOUVEAU)
+  // 📥 ÉTAPE 0 : Récupérer d'abord le nœud pour avoir le treeId
+  // ═══════════════════════════════════════════════════════════════════════
+  const variableNode = await prisma.treeBranchLeafNode.findUnique({
+    where: { id: variableNodeId },
+    select: { treeId: true }
+  });
+  const treeId = variableNode?.treeId;
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // 📥 ÉTAPE 0b : Initialiser et enrichir les Maps avec le treeId
   // ═══════════════════════════════════════════════════════════════════════
   const localValueMap = valueMap || new Map<string, unknown>();
   const labelMap = new Map<string, string>();
   
-  // Enrichir automatiquement les données depuis la base
-  await enrichDataFromSubmission(submissionId, prisma, localValueMap, labelMap);
+  // Enrichir automatiquement les données depuis la base AVEC le treeId
+  await enrichDataFromSubmission(submissionId, prisma, localValueMap, labelMap, treeId);
   
   console.log(`✅ Maps enrichies: ${localValueMap.size} valeurs, ${labelMap.size} labels`);
   

@@ -10,7 +10,7 @@
  */
 
 import { Router, Request } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -141,67 +141,79 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
       };
 
+      // 🎯 UNIFIÉ: Structure identique à M² toiture - Total qui fonctionne
+      // - fieldType: null (pas NUMBER)
+      // - data_visibleToUser: false
+      // - Pas de capabilities.datas dans metadata
+      const sumNodeData = {
+        label: sumDisplayName,
+        field_label: sumDisplayName,
+        fieldType: null,  // 🔧 UNIFIÉ: null comme M² toiture - Total
+        subType: null,
+        fieldSubType: null,
+        hasData: true,
+        hasFormula: true,
+        data_visibleToUser: false,  // 🔧 UNIFIÉ: false comme M² toiture - Total
+        formula_activeId: sumFormulaId,
+        formula_instances: { [sumFormulaId]: formulaInstance },
+        formula_tokens: sumTokens,
+        linkedFormulaIds: [sumFormulaId],
+        data_activeId: sumFieldVariableId,
+        data_displayFormat: mainVariable.displayFormat,
+        data_unit: mainVariable.unit,
+        data_precision: mainVariable.precision,
+        metadata: {
+          ...(existingSumNode?.metadata as Record<string, unknown> || {}),
+          isSumDisplayField: true,
+          sourceVariableId: mainVariable.id,
+          sourceNodeId: nodeId,
+          sumTokens,
+          copiesCount: allCopies.length,
+          // 🚫 PAS de capabilities.datas ici - le frontend utilise formula_instances directement
+          // C'est le chemin qui fonctionne pour M² toiture - Total
+          updatedAt: now.toISOString()
+        },
+        updatedAt: now
+      } as const;
+
       if (existingSumNode) {
-        // Mettre à jour le nœud existant
         await prisma.treeBranchLeafNode.update({
           where: { id: sumFieldNodeId },
-          data: {
-            label: sumDisplayName,
-            field_label: sumDisplayName,
-            formula_activeId: sumFormulaId,
-            formula_instances: { [sumFormulaId]: formulaInstance },
-            formula_tokens: sumTokens,
-            linkedFormulaIds: [sumFormulaId],
-            updatedAt: now,
-            metadata: {
-              ...(existingSumNode.metadata as Record<string, unknown> || {}),
-              isSumDisplayField: true,
-              sourceVariableId: mainVariable.id,
-              sourceNodeId: nodeId,
-              sumTokens,
-              copiesCount: allCopies.length,
-              updatedAt: now.toISOString()
-            }
-          }
+          data: sumNodeData
         });
         console.log(`📊 [SUM DISPLAY] Nœud Total mis à jour: ${sumFieldNodeId}`);
       } else {
-        // Créer le nœud d'affichage Total
-        await prisma.treeBranchLeafNode.create({
-          data: {
-            id: sumFieldNodeId,
-            treeId,
-            parentId: node.parentId, // Même section que le nœud original
-            type: 'leaf_field',
-            label: sumDisplayName,
-            field_label: sumDisplayName,
-            order: maxCopyOrder + 1, // 🔥 APRÈS le dernier nœud copié (Mur-1, Mur-2, etc.)
-            isVisible: true,
-            isActive: true,
-            subtab: node.subtab as Record<string, unknown> | null,
-            hasData: true,
-            hasFormula: true,
-            formula_activeId: sumFormulaId,
-            formula_instances: { [sumFormulaId]: formulaInstance },
-            formula_tokens: sumTokens,
-            linkedFormulaIds: [sumFormulaId],
-            data_activeId: sumFieldVariableId,
-            data_displayFormat: mainVariable.displayFormat,
-            data_unit: mainVariable.unit,
-            data_precision: mainVariable.precision,
-            metadata: {
-              isSumDisplayField: true,
-              sourceVariableId: mainVariable.id,
-              sourceNodeId: nodeId,
-              sumTokens,
-              copiesCount: allCopies.length,
-              createdAt: now.toISOString()
-            },
-            createdAt: now,
-            updatedAt: now
+        try {
+          await prisma.treeBranchLeafNode.create({
+            data: {
+              id: sumFieldNodeId,
+              treeId,
+              parentId: node.parentId, // Même section que le nœud original
+              type: 'leaf_field',
+              label: sumDisplayName,
+              field_label: sumDisplayName,
+              order: maxCopyOrder + 1, // 🔥 APRÈS le dernier nœud copié (Mur-1, Mur-2, etc.)
+              isVisible: true,
+              isActive: true,
+              subtab: node.subtab as Record<string, unknown> | null,
+              hasData: true,
+              hasFormula: true,
+              data_activeId: sumFieldVariableId,
+              createdAt: now,
+              updatedAt: now,
+              ...sumNodeData
+            }
+          });
+          console.log(`📊 [SUM DISPLAY] Nœud Total créé: ${sumFieldNodeId}`);
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            // Conflit d'unicité: le nœud existe déjà, on le met simplement à jour
+            await prisma.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
+            console.warn(`⚠️ [SUM DISPLAY] Nœud Total déjà existant, mise à jour forcée: ${sumFieldNodeId}`);
+          } else {
+            throw err;
           }
-        });
-        console.log(`📊 [SUM DISPLAY] Nœud Total créé: ${sumFieldNodeId}`);
+        }
       }
 
       // Créer/mettre à jour la variable Total
@@ -209,52 +221,50 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         where: { nodeId: sumFieldNodeId }
       });
 
+      const sumVariableData = {
+        displayName: sumDisplayName,
+        displayFormat: mainVariable.displayFormat,
+        unit: mainVariable.unit,
+        precision: mainVariable.precision,
+        visibleToUser: true,
+        sourceType: 'formula',
+        sourceRef: `node-formula:${sumFormulaId}`,
+        metadata: {
+          isSumVariable: true,
+          sumTokens,
+          copiesCount: allCopies.length,
+          sourceVariableId: mainVariable.id
+        },
+        updatedAt: now
+      } as const;
+
       if (existingSumVariable) {
         await prisma.treeBranchLeafNodeVariable.update({
           where: { nodeId: sumFieldNodeId },
-          data: {
-            displayName: sumDisplayName,
-            sourceType: 'formula',
-            sourceRef: `node-formula:${sumFormulaId}`, // 🔑 CRITIQUE pour preview-evaluate
-            updatedAt: now,
-            metadata: {
-              isSumVariable: true,
-              sumTokens,
-              copiesCount: allCopies.length,
-              sourceVariableId: mainVariable.id
-            }
-          }
+          data: sumVariableData
         });
       } else {
-        // Vérifier si exposedKey existe déjà
-        const existingKey = await prisma.treeBranchLeafNodeVariable.findUnique({
-          where: { exposedKey: sumExposedKey }
-        });
-        
+        const existingKey = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: sumExposedKey } });
         const finalExposedKey = existingKey ? `${sumExposedKey}_${Date.now()}` : sumExposedKey;
-        
-        await prisma.treeBranchLeafNodeVariable.create({
-          data: {
-            id: sumFieldVariableId,
-            nodeId: sumFieldNodeId,
-            exposedKey: finalExposedKey,
-            displayName: sumDisplayName,
-            displayFormat: mainVariable.displayFormat,
-            unit: mainVariable.unit,
-            precision: mainVariable.precision,
-            visibleToUser: true,
-            sourceType: 'formula',
-            sourceRef: `node-formula:${sumFormulaId}`, // 🔑 CRITIQUE pour preview-evaluate
-            metadata: {
-              isSumVariable: true,
-              sumTokens,
-              copiesCount: allCopies.length,
-              sourceVariableId: mainVariable.id
-            },
-            createdAt: now,
-            updatedAt: now
+
+        try {
+          await prisma.treeBranchLeafNodeVariable.create({
+            data: {
+              id: sumFieldVariableId,
+              nodeId: sumFieldNodeId,
+              exposedKey: finalExposedKey,
+              createdAt: now,
+              ...sumVariableData
+            }
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            await prisma.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
+            console.warn(`⚠️ [SUM DISPLAY] Variable Total déjà existante, mise à jour forcée: ${sumFieldNodeId}`);
+          } else {
+            throw err;
           }
-        });
+        }
       }
 
       // Créer/mettre à jour la formule de somme dans la table dédiée
@@ -265,28 +275,35 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       // 🔥 OrganizationId pour la formule (depuis tree ou request)
       const formulaOrgId = tree.organizationId || organizationId;
 
+      const sumFormulaData = {
+        tokens: sumTokens,
+        organizationId: formulaOrgId,
+        updatedAt: now
+      } as const;
+
       if (existingSumFormula) {
-        await prisma.treeBranchLeafNodeFormula.update({
-          where: { id: sumFormulaId },
-          data: {
-            tokens: sumTokens,
-            organizationId: formulaOrgId, // 🔥 Mise à jour de l'organizationId
-            updatedAt: now
-          }
-        });
+        await prisma.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
       } else {
-        await prisma.treeBranchLeafNodeFormula.create({
-          data: {
-            id: sumFormulaId,
-            nodeId: sumFieldNodeId,
-            organizationId: formulaOrgId, // 🔥 AJOUT de l'organizationId
-            name: `Somme ${mainVariable.displayName}`,
-            description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`,
-            tokens: sumTokens,
-            createdAt: now,
-            updatedAt: now
+        try {
+          await prisma.treeBranchLeafNodeFormula.create({
+            data: {
+              id: sumFormulaId,
+              nodeId: sumFieldNodeId,
+              organizationId: formulaOrgId,
+              name: `Somme ${mainVariable.displayName}`,
+              description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`,
+              createdAt: now,
+              ...sumFormulaData
+            }
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            await prisma.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
+            console.warn(`⚠️ [SUM DISPLAY] Formule Total déjà existante, mise à jour forcée: ${sumFormulaId}`);
+          } else {
+            throw err;
           }
-        });
+        }
       }
 
       // Sauvegarder l'option dans la metadata du nœud original

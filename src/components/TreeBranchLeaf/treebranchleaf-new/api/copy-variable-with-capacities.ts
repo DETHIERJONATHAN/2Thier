@@ -703,6 +703,57 @@ export async function copyVariableWithCapacities(
             await prisma.treeBranchLeafNode.create({ data: displayNodeData as any });
             console.log('[CREATE DISPLAY] Nœud d\'affichage créé:', { id: displayNodeId, parentId: displayParentId, metadata: displayNodeData.metadata });
           }
+
+          // ═══════════════════════════════════════════════════════════════════════
+          // 📊 ÉTAPE CRITIQUE: COPIER LES TABLES LIÉES AU NŒUD ORIGINAL
+          // ═══════════════════════════════════════════════════════════════════════
+          // Si le nœud original a des tables (hasTable=true et linkedTableIds non vide),
+          // on doit copier ces tables pour que la copie fonctionne correctement
+          if (originalOwnerNode.hasTable && Array.isArray(originalOwnerNode.linkedTableIds) && originalOwnerNode.linkedTableIds.length > 0) {
+            console.log(`\n📊 [COPY-TABLES] Nœud original a ${originalOwnerNode.linkedTableIds.length} tables à copier`);
+            
+            for (const originalTableId of originalOwnerNode.linkedTableIds) {
+              const newTableId = `${originalTableId}-${suffix}`;
+              
+              // Vérifier si la table existe déjà
+              const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({
+                where: { id: newTableId }
+              });
+              
+              if (existingTable) {
+                console.log(`📊 [COPY-TABLES] Table ${newTableId} existe déjà, skip`);
+                tableIdMap.set(originalTableId, newTableId);
+                continue;
+              }
+              
+              // Copier la table via copyTableCapacity
+              try {
+                const tableResult = await copyTableCapacity(
+                  originalTableId,
+                  displayNodeId,  // La nouvelle table appartient au display node copié
+                  Number(suffix),
+                  prisma,
+                  { nodeIdMap, tableCopyCache: tableIdMap, tableIdMap }
+                );
+                
+                if (tableResult.success) {
+                  tableIdMap.set(originalTableId, tableResult.newTableId);
+                  console.log(`✅ [COPY-TABLES] Table copiée: ${originalTableId} → ${tableResult.newTableId} (${tableResult.columnsCount} cols, ${tableResult.rowsCount} rows)`);
+                } else {
+                  console.warn(`⚠️ [COPY-TABLES] Échec copie table ${originalTableId}: ${tableResult.error}`);
+                }
+              } catch (e) {
+                console.error(`❌ [COPY-TABLES] Exception copie table ${originalTableId}:`, (e as Error).message);
+              }
+            }
+            
+            // Mettre à jour hasTable sur le display node créé
+            await prisma.treeBranchLeafNode.update({
+              where: { id: displayNodeId },
+              data: { hasTable: true }
+            });
+            console.log(`✅ [COPY-TABLES] hasTable mis à true sur ${displayNodeId}`);
+          }
         } else {
           console.warn(`⚠️ Impossible de récupérer le nœud propriétaire original ${originalVar.nodeId}. Fallback newNodeId.`);
         }

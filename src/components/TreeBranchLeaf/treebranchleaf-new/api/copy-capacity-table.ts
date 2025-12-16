@@ -223,6 +223,26 @@ export async function copyTableCapacity(
     const newTableId = `${originalTable.id}-${suffix}`;
     console.log(`📝 Nouvel ID table: ${newTableId}`);
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔧 FIX CRITIQUE: Déterminer le VRAI propriétaire de la table copiée
+    // ═══════════════════════════════════════════════════════════════════════
+    const originalOwnerNodeId = originalTable.nodeId;
+    const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
+    
+    // Vérifier si le nœud propriétaire copié existe
+    const ownerNodeExists = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: correctOwnerNodeId },
+      select: { id: true, label: true }
+    });
+    
+    // Si le propriétaire suffixé existe, l'utiliser. Sinon fallback sur newNodeId.
+    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    
+    console.log(`🔧 [OWNER FIX] NodeId original propriétaire: ${originalOwnerNodeId}`);
+    console.log(`🔧 [OWNER FIX] NodeId propriétaire suffixé: ${correctOwnerNodeId}`);
+    console.log(`🔧 [OWNER FIX] Propriétaire suffixé existe: ${ownerNodeExists ? 'OUI (' + ownerNodeExists.label + ')' : 'NON'}`);
+    console.log(`🔧 [OWNER FIX] NodeId FINAL utilisé: ${finalOwnerNodeId}`);
+
     // Maps pour les sous-entités (colonne/ligne/cellule)
     const columnIdMap = new Map<string, string>();
     const rowIdMap = new Map<string, string>();
@@ -235,7 +255,7 @@ export async function copyTableCapacity(
       newTable = await prisma.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
@@ -271,6 +291,42 @@ export async function copyTableCapacity(
                 rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
               }
             }
+            // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+            if (rewritten?.lookup?.displayColumn) {
+              if (Array.isArray(rewritten.lookup.displayColumn)) {
+                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col: string) => {
+                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayColumn[]: ${col} → ${col}-${suffix}`);
+                    return `${col}-${suffix}`;
+                  }
+                  return col;
+                });
+              } else if (typeof rewritten.lookup.displayColumn === 'string') {
+                const val = rewritten.lookup.displayColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayColumn: ${val} → ${val}-${suffix}`);
+                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
+                }
+              }
+            }
+            // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+            if (rewritten?.lookup?.displayRow) {
+              if (Array.isArray(rewritten.lookup.displayRow)) {
+                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row: string) => {
+                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayRow[]: ${row} → ${row}-${suffix}`);
+                    return `${row}-${suffix}`;
+                  }
+                  return row;
+                });
+              } else if (typeof rewritten.lookup.displayRow === 'string') {
+                const val = rewritten.lookup.displayRow;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayRow: ${val} → ${val}-${suffix}`);
+                  rewritten.lookup.displayRow = `${val}-${suffix}`;
+                }
+              }
+            }
             return rewritten;
           })(),
           updatedAt: new Date()
@@ -280,7 +336,7 @@ export async function copyTableCapacity(
       newTable = await prisma.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
-          nodeId: newNodeId,
+          nodeId: finalOwnerNodeId,
           organizationId: originalTable.organizationId,
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
@@ -315,6 +371,42 @@ export async function copyTableCapacity(
               const val = rewritten.lookup.columnSourceOption.comparisonColumn;
               if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
                 rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+            if (rewritten?.lookup?.displayColumn) {
+              if (Array.isArray(rewritten.lookup.displayColumn)) {
+                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col: string) => {
+                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayColumn[]: ${col} → ${col}-${suffix}`);
+                    return `${col}-${suffix}`;
+                  }
+                  return col;
+                });
+              } else if (typeof rewritten.lookup.displayColumn === 'string') {
+                const val = rewritten.lookup.displayColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayColumn: ${val} → ${val}-${suffix}`);
+                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
+                }
+              }
+            }
+            // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+            if (rewritten?.lookup?.displayRow) {
+              if (Array.isArray(rewritten.lookup.displayRow)) {
+                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row: string) => {
+                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayRow[]: ${row} → ${row}-${suffix}`);
+                    return `${row}-${suffix}`;
+                  }
+                  return row;
+                });
+              } else if (typeof rewritten.lookup.displayRow === 'string') {
+                const val = rewritten.lookup.displayRow;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayRow: ${val} → ${val}-${suffix}`);
+                  rewritten.lookup.displayRow = `${val}-${suffix}`;
+                }
               }
             }
             return rewritten;
@@ -489,8 +581,8 @@ export async function copyTableCapacity(
     // 🔗 ÉTAPE 4B : Mettre à jour linkedTableIds du nœud propriétaire
     // ═══════════════════════════════════════════════════════════════════════
     try {
-      await addToNodeLinkedField(prisma, newNodeId, 'linkedTableIds', [newTableId]);
-      console.log(`✅ linkedTableIds mis à jour pour nœud propriétaire ${newNodeId}`);
+      await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedTableIds', [newTableId]);
+      console.log(`✅ linkedTableIds mis à jour pour nœud propriétaire ${finalOwnerNodeId}`);
     } catch (e) {
       console.warn(`⚠️ Erreur MAJ linkedTableIds du propriétaire:`, (e as Error).message);
     }
@@ -548,7 +640,7 @@ export async function copyTableCapacity(
 
       // Mettre à jour le nœud copié avec tous les paramètres
       await prisma.treeBranchLeafNode.update({
-        where: { id: newNodeId },
+        where: { id: finalOwnerNodeId },
         data: {
           hasTable: true,
           table_activeId: newTableId,  // ✅ La nouvelle table est l'active
@@ -558,7 +650,7 @@ export async function copyTableCapacity(
           table_type: newTable.type
         }
       });
-      console.log(`✅ Paramètres capacité (table) mis à jour pour nœud ${newNodeId}`);
+      console.log(`✅ Paramètres capacité (table) mis à jour pour nœud ${finalOwnerNodeId}`);
       console.log(`   - table_activeId: ${newTableId}`);
       console.log(`   - table_instances: ${Object.keys(newTableInstances).length} clé(s) copiée(s)`);
       console.log(`   - table_name: ${newTable.name || 'null'}`);
@@ -591,7 +683,7 @@ export async function copyTableCapacity(
 
     return {
       newTableId,
-      nodeId: newNodeId,
+      nodeId: finalOwnerNodeId,
       columnsCount: originalTable.tableColumns.length,
       rowsCount: originalTable.tableRows.length,
       cellsCount: cellsCopied,

@@ -104,8 +104,8 @@ export function extractNodeIdsFromCondition(conditionSet: unknown): Set<string> 
   
   const str = JSON.stringify(conditionSet);
   
-  // Pattern 1: @value.<uuid>
-  const uuidRegex = /@value\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  // Pattern 1: @value.<uuid> ou @calculated.<uuid> ou @select.<uuid> AVEC suffixe optionnel
+  const uuidRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   let match;
   while ((match = uuidRegex.exec(str)) !== null) {
     ids.add(match[1]);
@@ -117,8 +117,8 @@ export function extractNodeIdsFromCondition(conditionSet: unknown): Set<string> 
     ids.add(match[1]);
   }
   
-  // Pattern 3: @value.shared-ref-xxx
-  const sharedRefRegex = /@value\.(shared-ref-[a-z0-9-]+)/gi;
+  // Pattern 3: @value.shared-ref-xxx avec suffixe optionnel
+  const sharedRefRegex = /@(?:value|calculated|select)\.(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
@@ -162,15 +162,16 @@ export function extractNodeIdsFromCondition(conditionSet: unknown): Set<string> 
   }
 
   // Fallback: scanner tout le JSON pour des UUID/node_/shared-ref nus (au cas où le @value. est absent)
-  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  // 🔧 FIX: Capturer les suffixes numériques (-1, -2, etc.)
+  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((match = genericUuid.exec(str)) !== null) {
     ids.add(match[1]);
   }
-  const genericNode = /(node_[a-z0-9_-]+)/gi;
+  const genericNode = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = genericNode.exec(str)) !== null) {
     ids.add(match[1]);
   }
-  const genericShared = /(shared-ref-[a-z0-9-]+)/gi;
+  const genericShared = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = genericShared.exec(str)) !== null) {
     ids.add(match[1]);
   }
@@ -185,15 +186,15 @@ function extractNodeAndCapacityRefsFromCondition(conditionSet: unknown): { nodeI
 
   const str = JSON.stringify(conditionSet);
 
-  // Patterns @value.*
-  const uuidRegex = /@value\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  // Patterns @value.* @calculated.* @select.* AVEC suffixes
+  const uuidRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   let match;
   while ((match = uuidRegex.exec(str)) !== null) nodeIds.add(match[1]);
 
-  const nodeRegex = /@value\.(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /@(?:value|calculated|select)\.(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = nodeRegex.exec(str)) !== null) nodeIds.add(match[1]);
 
-  const sharedRefRegex = /@value\.(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRefRegex = /@(?:value|calculated|select)\.(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) nodeIds.add(match[1]);
 
   const obj = conditionSet as any;
@@ -224,12 +225,12 @@ function extractNodeAndCapacityRefsFromCondition(conditionSet: unknown): { nodeI
     extractFromActions(obj.fallback.actions);
   }
 
-  // Generic scans (UUID/node/shared) for stray refs
-  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  // Generic scans (UUID/node/shared) for stray refs - AVEC suffixes
+  const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((match = genericUuid.exec(str)) !== null) nodeIds.add(match[1]);
-  const genericNode = /(node_[a-z0-9_-]+)/gi;
+  const genericNode = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = genericNode.exec(str)) !== null) nodeIds.add(match[1]);
-  const genericShared = /(shared-ref-[a-z0-9-]+)/gi;
+  const genericShared = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = genericShared.exec(str)) !== null) nodeIds.add(match[1]);
 
   // Capacity refs anywhere in JSON
@@ -279,11 +280,19 @@ export function extractNodeIdsFromFormula(tokens: unknown): Set<string> {
   // Fallback: scan global JSON for UUID/node_/shared-ref nus
   const str = JSON.stringify(tokensArray);
   let m;
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  
+  // 🔧 FIX: Capturer les UUIDs AVEC leurs suffixes numériques (-1, -2, etc.)
+  // Pattern: @value.UUID-suffix ou @calculated.UUID-suffix ou @select.UUID-suffix
+  const refWithSuffixRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
+  while ((m = refWithSuffixRegex.exec(str)) !== null) ids.add(m[1]);
+  
+  // Pattern pour UUID simple (fallback, mais essayer d'abord avec suffixe)
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((m = uuidRegex.exec(str)) !== null) ids.add(m[1]);
+  
   const nodeRegex = /(node_[a-z0-9_-]+)/gi;
   while ((m = nodeRegex.exec(str)) !== null) ids.add(m[1]);
-  const sharedRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((m = sharedRegex.exec(str)) !== null) ids.add(m[1]);
   
   return ids;
@@ -319,11 +328,12 @@ function extractNodeAndCapacityRefsFromFormula(tokens: unknown): { nodeIds: Set<
 
   const str = JSON.stringify(tokensArray);
   let m;
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  // 🔧 FIX: Capturer les UUIDs AVEC suffixes numériques
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((m = uuidRegex.exec(str)) !== null) nodeIds.add(m[1]);
-  const nodeRegex = /(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((m = nodeRegex.exec(str)) !== null) nodeIds.add(m[1]);
-  const sharedRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((m = sharedRegex.exec(str)) !== null) nodeIds.add(m[1]);
 
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
@@ -340,19 +350,19 @@ export function extractNodeIdsFromTable(tableData: unknown): Set<string> {
   
   const str = JSON.stringify(tableData);
   
-  // Extraire tous les patterns possibles
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  // Extraire tous les patterns possibles AVEC suffixes
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   let match;
   while ((match = uuidRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
   
-  const nodeRegex = /(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = nodeRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
   
-  const sharedRefRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRefRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) {
     ids.add(match[1]);
   }
@@ -368,13 +378,14 @@ function extractNodeAndCapacityRefsFromTable(tableData: unknown): { nodeIds: Set
   const str = JSON.stringify(tableData);
 
   let match;
-  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  // AVEC suffixes
+  const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((match = uuidRegex.exec(str)) !== null) nodeIds.add(match[1]);
 
-  const nodeRegex = /(node_[a-z0-9_-]+)/gi;
+  const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
   while ((match = nodeRegex.exec(str)) !== null) nodeIds.add(match[1]);
 
-  const sharedRefRegex = /(shared-ref-[a-z0-9-]+)/gi;
+  const sharedRefRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) nodeIds.add(match[1]);
 
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);

@@ -262,6 +262,29 @@ export async function copyFormulaCapacity(
     console.log(`📝 Nouvel ID formule: ${newFormulaId}`);
 
     // ═══════════════════════════════════════════════════════════════════════
+    // 🔧 FIX CRITIQUE: Déterminer le VRAI propriétaire de la formule copiée
+    // ═══════════════════════════════════════════════════════════════════════
+    // Le nodeId passé en paramètre peut être un nœud qui RÉFÉRENCE la formule,
+    // pas le PROPRIÉTAIRE. Le propriétaire de la copie doit être le propriétaire
+    // ORIGINAL avec le suffixe appliqué.
+    const originalOwnerNodeId = originalFormula.nodeId;
+    const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
+    
+    // Vérifier si le nœud propriétaire copié existe
+    const ownerNodeExists = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: correctOwnerNodeId },
+      select: { id: true, label: true }
+    });
+    
+    // Si le propriétaire suffixé existe, l'utiliser. Sinon fallback sur newNodeId.
+    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    
+    console.log(`🔧 [OWNER FIX] NodeId original propriétaire: ${originalOwnerNodeId}`);
+    console.log(`🔧 [OWNER FIX] NodeId propriétaire suffixé: ${correctOwnerNodeId}`);
+    console.log(`🔧 [OWNER FIX] Propriétaire suffixé existe: ${ownerNodeExists ? 'OUI (' + ownerNodeExists.label + ')' : 'NON'}`);
+    console.log(`🔧 [OWNER FIX] NodeId FINAL utilisé: ${finalOwnerNodeId}`);
+
+    // ═══════════════════════════════════════════════════════════════════════
     // 🔄 ÉTAPE 4 : Réécrire les tokens
     // ═══════════════════════════════════════════════════════════════════════
     console.log(`\n🔄 Réécriture des tokens...`);
@@ -325,7 +348,7 @@ export async function copyFormulaCapacity(
     const newFormula = await prisma.treeBranchLeafNodeFormula.create({
       data: {
         id: newFormulaId,
-        nodeId: newNodeId,
+        nodeId: finalOwnerNodeId,
         organizationId: originalFormula.organizationId,
         name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
         description: originalFormula.description,
@@ -379,8 +402,8 @@ export async function copyFormulaCapacity(
     // 🔗 ÉTAPE 5B : Mettre à jour linkedFormulaIds du nœud propriétaire
     // ═══════════════════════════════════════════════════════════════════════
     try {
-      await addToNodeLinkedField(prisma, newNodeId, 'linkedFormulaIds', [newFormulaId]);
-      console.log(`✅ linkedFormulaIds mis à jour pour nœud propriétaire ${newNodeId}`);
+      await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedFormulaIds', [newFormulaId]);
+      console.log(`✅ linkedFormulaIds mis à jour pour nœud propriétaire ${finalOwnerNodeId}`);
     } catch (e) {
       console.warn(`⚠️ Erreur MAJ linkedFormulaIds du propriétaire:`, (e as Error).message);
     }
@@ -390,7 +413,7 @@ export async function copyFormulaCapacity(
     // ═══════════════════════════════════════════════════════════════════════
     try {
       await prisma.treeBranchLeafNode.update({
-        where: { id: newNodeId },
+        where: { id: finalOwnerNodeId },
         data: {
           hasFormula: true,
           formula_activeId: newFormulaId,
@@ -398,7 +421,7 @@ export async function copyFormulaCapacity(
           formula_description: newFormula.description
         }
       });
-      console.log(`✅ Paramètres capacité (formula) mis à jour pour nœud ${newNodeId}`);
+      console.log(`✅ Paramètres capacité (formula) mis à jour pour nœud ${finalOwnerNodeId}`);
       console.log(`   - formula_activeId: ${newFormulaId}`);
       console.log(`   - formula_name: ${newFormula.name || 'null'}`);
     } catch (e) {
@@ -416,7 +439,7 @@ export async function copyFormulaCapacity(
 
     return {
       newFormulaId,
-      nodeId: newNodeId,
+      nodeId: finalOwnerNodeId,
       tokens: rewrittenTokens,
       success: true
     };

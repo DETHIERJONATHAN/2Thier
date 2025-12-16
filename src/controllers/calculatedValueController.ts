@@ -280,52 +280,78 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       (node.metadata as any)?.lookup?.enabled === true && 
       (node.metadata as any)?.lookup?.tableReference;
 
-    // 🆕 Vérifier si le node a une variable avec formule (pour les sum-total, etc.)
+    // 🆕 Vérifier si le node a une variable avec formule ou condition (pour les sum-total, etc.)
     const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId },
       select: { sourceType: true, sourceRef: true }
     });
-    const hasFormulaVariable = variableMeta2?.sourceType === 'formula' && variableMeta2?.sourceRef?.startsWith('node-formula:');
+    // 🔥 FIX: Inclure aussi sourceType="tree" avec condition: ou node-formula:
+    const hasFormulaVariable = variableMeta2?.sourceRef?.startsWith('node-formula:');
+    const hasConditionVariable = variableMeta2?.sourceRef?.startsWith('condition:');
+    const hasTreeSourceVariable = variableMeta2?.sourceType === 'tree' && (hasFormulaVariable || hasConditionVariable);
 
-    // Invoquer operation-interpreter si:
-    // 1. C'est un champ TBL avec table lookup OU a une variable formule ET
-    // 2. (Pas de valeur calculée OU valeur trop ancienne > 10s)
-    if ((hasTableLookup || hasFormulaVariable) && node.treeId) {
-      const now = new Date();
-      const calculatedAt = node.calculatedAt ? new Date(node.calculatedAt) : null;
-      const isStale = !calculatedAt || (now.getTime() - calculatedAt.getTime()) > 10000; // 10s
-      const hasNoValue = !node.calculatedValue || node.calculatedValue === '' || node.calculatedValue === '[]' || node.calculatedValue === '0';
+    // 🔥 IMPORTANT: Ne PAS recalculer si une valeur calculée VALIDE existe déjà
+    // Une valeur est "valide" si elle n'est pas vide, "0", ou "[]"
+    const existingValue = node.calculatedValue;
+    const hasValidExistingValue = existingValue && 
+      existingValue !== '' && 
+      existingValue !== '0' && 
+      existingValue !== '[]' &&
+      existingValue !== 'null' &&
+      existingValue !== 'undefined';
+    
+    // Si on a déjà une valeur valide, la retourner directement sans recalculer
+    if (hasValidExistingValue) {
+      return res.json({
+        success: true,
+        nodeId: node.id,
+        label: node.label,
+        value: parseStoredStringValue(existingValue),
+        calculatedAt: toIsoString(node.calculatedAt),
+        calculatedBy: node.calculatedBy,
+        type: node.type,
+        fieldType: node.fieldType,
+        fromStoredValue: true
+      });
+    }
+
+    // Invoquer operation-interpreter SEULEMENT si:
+    // 1. C'est un champ TBL avec table lookup (PAS les conditions/formules qui dépendent de valeurs preview)
+    // 2. PAS de valeur calculée valide existante
+    // 3. On a une VRAIE soumission (pas preview)
+    // 
+    // ⚠️ IMPORTANT: Ne PAS recalculer les conditions/formules ici car on n'a pas accès aux
+    // formValues du frontend. Le frontend doit utiliser /preview-evaluate pour ça.
+    // Seuls les champs TBL avec table lookup peuvent être recalculés ici car ils
+    // n'ont pas de dépendances sur des valeurs de formulaire.
+    const isRealSubmission = submissionId && !submissionId.startsWith('preview-');
+    const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
+    
+    if (canRecalculateHere && node.treeId && isRealSubmission) {
+      console.log(`🔥 [CalculatedValueController] Node "${node.label}" - recalcul table lookup:`, {
+        nodeId, 
+        hasTableLookup,
+        submissionId
+      });
       
-      if (isStale || hasNoValue || hasFormulaVariable) {
-        console.log(`🔥 [CalculatedValueController] Node "${node.label}" nécessite recalcul:`, {
-          nodeId, 
-          hasTableLookup,
-          hasFormulaVariable,
-          sourceRef: variableMeta2?.sourceRef,
-          isStale, 
-          hasNoValue,
-          calculatedAt,
-          submissionId
-        });
+      try {
+        // 🚀 INVOQUER OPERATION-INTERPRETER pour les lookups uniquement
+        const { evaluateVariableOperation } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
         
-        try {
-          // 🚀 INVOQUER OPERATION-INTERPRETER
-          const { evaluateVariableOperation } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
+        const result = await evaluateVariableOperation(
+          nodeId,
+          submissionId,
+          prisma
+        );
+        
+        console.log('🎯 [CalculatedValueController] Résultat operation-interpreter:', result);
+        
+        // Si on a un résultat VALIDE (pas 0, pas vide), le stocker ET le retourner
+        if (result && (result.value !== undefined || result.operationResult !== undefined)) {
+          const stringValue = String(result.value ?? result.operationResult);
           
-          const result = await evaluateVariableOperation(
-            nodeId,
-            submissionId || 'preview-calculated-value-request',
-            prisma
-          );
-          
-          console.log('🎯 [CalculatedValueController] Résultat operation-interpreter:', result);
-          
-          // Si on a un résultat, le stocker ET le retourner
-          // 🔥 Utiliser result.value (le nombre) et non result.operationResult (le humanText)
-          if (result && (result.value !== undefined || result.operationResult !== undefined)) {
-            const stringValue = String(result.value ?? result.operationResult);
-            
-            // Stocker dans la base
+          // Ne stocker que si la valeur est non-nulle et non-zéro
+          if (stringValue && stringValue !== '0' && stringValue !== '') {
             await prisma.treeBranchLeafNode.update({
               where: { id: nodeId },
               data: {
@@ -334,23 +360,23 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
                 calculatedBy: 'operation-interpreter-auto'
               }
             });
-
-            return res.json({
-              success: true,
-              nodeId: node.id,
-              label: node.label,
-              value: stringValue,
-              calculatedAt: new Date().toISOString(),
-              calculatedBy: 'operation-interpreter-auto',
-              type: node.type,
-              fieldType: node.fieldType,
-              freshCalculation: true // 🔥 Marquer comme nouveau calcul
-            });
           }
-        } catch (operationErr) {
-          console.error('❌ [CalculatedValueController] Erreur operation-interpreter:', operationErr);
-          // Continue avec la valeur existante si échec du calcul
+
+          return res.json({
+            success: true,
+            nodeId: node.id,
+            label: node.label,
+            value: stringValue,
+            calculatedAt: new Date().toISOString(),
+            calculatedBy: 'operation-interpreter-auto',
+            type: node.type,
+            fieldType: node.fieldType,
+            freshCalculation: true
+          });
         }
+      } catch (operationErr) {
+        console.error('❌ [CalculatedValueController] Erreur operation-interpreter:', operationErr);
+        // Continue avec la valeur existante si échec du calcul
       }
     }
 
