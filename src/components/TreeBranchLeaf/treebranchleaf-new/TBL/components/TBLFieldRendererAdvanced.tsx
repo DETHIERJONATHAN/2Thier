@@ -9,7 +9,7 @@
  * - Capacités (condition, formula, table, api, etc.)
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Form, 
   Input, 
@@ -41,6 +41,10 @@ import { HelpTooltip } from '../../../../common/HelpTooltip';
 import { useTBLTooltip } from '../../../../../hooks/useTBLTooltip';
 import { useTBLValidationContext } from '../contexts/TBLValidationContext';
 import { useTBLTableLookup } from '../hooks/useTBLTableLookup';
+import { type DynamicConstraints } from '../hooks/useDynamicConstraints';
+import { useNodeFormulas, getConstraintFormulas, extractSourceNodeIdFromTokens } from '../hooks/useNodeFormulas';
+import { useNodeCalculatedValue } from '../../../../../hooks/useNodeCalculatedValue';
+import { generateMirrorVariants } from '../utils/mirrorNormalization';
 
 import type { RawTreeNode } from '../types';
 
@@ -931,9 +935,25 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     };
   }, [allNodes, field]);
   
-  // Synchronisation avec la valeur externe
+  // 🔥 Ref pour tracker si le changement vient de l'intérieur (éviter l'écrasement pendant la frappe)
+  const isInternalChangeRef = useRef(false);
+  const previousValueRef = useRef(value);
+  
+  // Synchronisation avec la valeur externe - SEULEMENT si le changement vient de l'extérieur
   useEffect(() => {
-    setLocalValue(value);
+    // Si c'est un changement interne qu'on vient de faire, ignorer
+    if (isInternalChangeRef.current) {
+      isInternalChangeRef.current = false;
+      previousValueRef.current = value;
+      return;
+    }
+    
+    // Seulement synchroniser si la valeur a vraiment changé de l'extérieur
+    // (par exemple initialisation, reset, ou changement depuis un autre composant)
+    if (value !== previousValueRef.current) {
+      setLocalValue(value);
+      previousValueRef.current = value;
+    }
   }, [value]);
 
   // Configuration complète du champ depuis TreeBranchLeaf
@@ -1373,6 +1393,177 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     };
   }, [field, treeMetadata, templateAppearanceOverrides]);
 
+  // 🎯 NOUVEAU: Charger les formules depuis l'API pour avoir accès au targetProperty
+  // On charge pour tous les champs qui peuvent avoir des contraintes dynamiques
+  // DEBUG: Afficher le type pour diagnostic
+  const fieldTypeLower = (field.type || '').toLowerCase();
+  const shouldLoadFormulas = ['number', 'text', 'select', 'checkbox', 'date'].includes(fieldTypeLower);
+  
+  // 🔍 DEBUG: Voir pourquoi le champ pourrait ne pas charger ses formules
+  useEffect(() => {
+    if (field.id === '63358d05-4ae7-4a88-8ee5-29e280424919') {
+      console.log(`🔍 [DEBUG] Champ "N° de panneau" - type="${field.type}", fieldTypeLower="${fieldTypeLower}", shouldLoadFormulas=${shouldLoadFormulas}`);
+    }
+  }, [field.type, field.id, fieldTypeLower, shouldLoadFormulas]);
+  
+  const { formulas: nodeFormulas, loading: formulasLoading } = useNodeFormulas({
+    nodeId: field.id,
+    enabled: shouldLoadFormulas
+  });
+  
+  // Debug: afficher quand les formules sont chargées pour les champs NUMBER
+  useEffect(() => {
+    if (shouldLoadFormulas) {
+      console.log(`🔢 [NUMBER FIELD] "${field.label}" (${field.id}) - Chargement formules: ${formulasLoading ? 'en cours...' : `${nodeFormulas.length} trouvée(s)`}`);
+    }
+    if (nodeFormulas.length > 0) {
+      console.log(`📋 [NodeFormulas] "${field.label}" (${field.id}) - ${nodeFormulas.length} formule(s) chargée(s):`, 
+        nodeFormulas.map(f => ({ id: f.id, targetProperty: f.targetProperty, tokens: f.tokens }))
+      );
+    }
+  }, [nodeFormulas, field.label, field.id, formulasLoading, shouldLoadFormulas]);
+
+  // 🎯 NOUVEAU: Extraction des formules de contrainte (number_max, number_min, etc.)
+  const constraintFormulas = useMemo(() => {
+    const formulas = getConstraintFormulas(nodeFormulas);
+    if (formulas.length > 0) {
+      console.log(`🎯 [ConstraintFormulas] "${field.label}" a ${formulas.length} formule(s) de contrainte:`, formulas);
+    }
+    return formulas;
+  }, [nodeFormulas, field.label]);
+
+  // 🎯 NOUVEAU: Récupérer le premier nodeId source des formules de contrainte
+  const constraintSourceNodeId = useMemo(() => {
+    if (constraintFormulas.length === 0) return null;
+    // Prendre le premier sourceNodeId trouvé dans les tokens
+    for (const formula of constraintFormulas) {
+      const sourceId = extractSourceNodeIdFromTokens(formula.tokens);
+      if (sourceId) {
+        console.log(`🎯 [ConstraintSource] "${field.label}" - Source nodeId extrait: ${sourceId} depuis tokens:`, formula.tokens);
+        return sourceId;
+      }
+    }
+    console.log(`⚠️ [ConstraintSource] "${field.label}" - Aucun sourceId trouvé dans les tokens`);
+    return null;
+  }, [constraintFormulas, field.label]);
+
+  const constraintSourceNodeLabel = useMemo(() => {
+    if (!constraintSourceNodeId || !allNodes || allNodes.length === 0) return null;
+    const match = allNodes.find((node) => node.id === constraintSourceNodeId);
+    return match?.label || null;
+  }, [allNodes, constraintSourceNodeId]);
+
+  const constraintMirrorVariants = useMemo(() => {
+    const variants = new Set<string>();
+    if (constraintSourceNodeId) {
+      generateMirrorVariants(constraintSourceNodeId).forEach((v) => variants.add(v));
+    }
+    if (constraintSourceNodeLabel) {
+      generateMirrorVariants(constraintSourceNodeLabel).forEach((v) => variants.add(v));
+    }
+    return Array.from(variants);
+  }, [constraintSourceNodeId, constraintSourceNodeLabel]);
+
+  const { value: constraintBackendValue } = useNodeCalculatedValue(
+    constraintSourceNodeId || '',
+    treeId || ''
+  );
+
+  // 🎯 NOUVEAU: Récupérer la valeur du champ source depuis formData OU via useBackendValue
+  // D'abord on cherche dans formData (plus rapide et plus fiable)
+  const constraintSourceValue = useMemo(() => {
+    if (!constraintSourceNodeId) return undefined;
+    
+    // Chercher la valeur dans formData avec différentes clés possibles
+    const possibleKeys = new Set<string>([
+      constraintSourceNodeId,
+      `${constraintSourceNodeId}-1`, // Avec suffix
+      constraintSourceNodeId.replace(/-1$/, ''), // Sans suffix
+      `${constraintSourceNodeId}-sum-total`,
+      `__mirror_formula_${constraintSourceNodeId}`, // Valeur calculée miroir
+      `__mirror_formula_${constraintSourceNodeId}-1`,
+      `__mirror_formula_${constraintSourceNodeId}-sum-total`
+    ]);
+
+    constraintMirrorVariants.forEach((variant) => {
+      possibleKeys.add(`__mirror_formula_${variant}`);
+      possibleKeys.add(`__mirror_formula_${variant}-sum-total`);
+    });
+
+    let foundValue: unknown;
+    let foundKey: string | null = null;
+
+    for (const key of possibleKeys) {
+      if (!key) continue;
+      const value = formData[key];
+      if (value !== undefined && value !== null && value !== '') {
+        foundValue = value;
+        foundKey = key;
+        console.log(`✅ [ConstraintValue] "${field.label}" - Valeur trouvée dans formData[${key}]: ${value}`);
+        break;
+      }
+    }
+
+    const hasBackendValue = constraintBackendValue !== undefined && constraintBackendValue !== null && constraintBackendValue !== '';
+
+    if (foundKey) {
+      if (hasBackendValue && typeof foundValue === 'number' && foundValue === 0 && constraintBackendValue !== foundValue) {
+        console.log(`♻️ [ConstraintValue] "${field.label}" - Remplacement valeur miroir 0 par backend: ${constraintBackendValue}`);
+        return constraintBackendValue;
+      }
+      return foundValue;
+    }
+
+    if (hasBackendValue) {
+      console.log(`✅ [ConstraintValue] "${field.label}" - Valeur trouvée via backend:`, constraintBackendValue);
+      return constraintBackendValue;
+    }
+    
+    console.log(`⚠️ [ConstraintValue] "${field.label}" - Aucune valeur dans formData pour nodeId: ${constraintSourceNodeId}`);
+    console.log(`📋 [ConstraintValue] formData keys:`, Object.keys(formData).filter(k => k.includes(constraintSourceNodeId.slice(0, 8))));
+    return undefined;
+  }, [constraintSourceNodeId, formData, field.label, constraintMirrorVariants, constraintBackendValue]);
+
+  // 🎯 NOUVEAU: Construire les contraintes dynamiques à partir de la valeur calculée
+  const dynamicConstraints = useMemo<DynamicConstraints>(() => {
+    const constraints: DynamicConstraints = {};
+    
+    if (constraintFormulas.length === 0 || constraintSourceValue === undefined) {
+      return constraints;
+    }
+
+    console.log(`🎯 [DynamicConstraints] Pour "${field.label}":`, {
+      constraintFormulas,
+      constraintSourceNodeId,
+      constraintSourceValue
+    });
+
+    for (const formula of constraintFormulas) {
+      const targetProp = formula.targetProperty;
+      if (!targetProp) continue;
+      
+      const value = constraintSourceValue;
+      if (value === undefined || value === null) continue;
+
+      // Convertir selon le type de contrainte
+      if (['number_max', 'number_min', 'step'].includes(targetProp)) {
+        const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+        if (!isNaN(numValue)) {
+          (constraints as Record<string, number>)[targetProp] = numValue;
+          console.log(`✅ [DynamicConstraints] ${targetProp} = ${numValue} pour "${field.label}"`);
+        }
+        // 🆕 Récupérer le message de contrainte depuis la formule
+        if (formula.constraintMessage) {
+          constraints.constraintMessage = formula.constraintMessage;
+        }
+      } else if (['visible', 'required', 'disabled'].includes(targetProp)) {
+        (constraints as Record<string, boolean>)[targetProp] = Boolean(value);
+      }
+    }
+
+    return constraints;
+  }, [constraintFormulas, constraintSourceValue, constraintSourceNodeId, field.label]);
+
   // Gestion des conditions du champ (système useTBLData)
   useEffect(() => {
     if (!field.conditions || field.conditions.length === 0) {
@@ -1480,8 +1671,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           if (isNaN(numVal)) {
             error = 'Veuillez saisir un nombre valide';
           } else {
-            const min = fieldConfig.numberConfig?.min;
-            const max = fieldConfig.numberConfig?.max;
+            // 🎯 NOUVEAU: Utiliser les contraintes dynamiques en priorité
+            const min = dynamicConstraints.number_min ?? fieldConfig.numberConfig?.min;
+            const max = dynamicConstraints.number_max ?? fieldConfig.numberConfig?.max;
             if (min !== undefined && numVal < min) {
               error = `La valeur doit être supérieure ou égale à ${min}`;
             }
@@ -1531,7 +1723,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
 
     setValidationError(error);
-  }, [fieldConfig, calculatedValue, localValue, isValidation, field.text_maxLength]);
+  }, [fieldConfig, calculatedValue, localValue, isValidation, field.text_maxLength, dynamicConstraints]);
 
   // 🎯 Auto-sélection intelligente pour les champs SELECT avec table lookup
   // Quand les filtres changent (via formData), gérer automatiquement la sélection :
@@ -1578,6 +1770,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       console.error(`💡 SOLUTION : Déplacez "${field.label}" dans une section normale (pas isDataSection) pour permettre l'édition.`);
       return;
     }
+    
+    // 🔥 Marquer ce changement comme interne pour éviter que le useEffect ne l'écrase
+    isInternalChangeRef.current = true;
     
     setLocalValue(newValue);
     onChange(newValue);
@@ -1968,8 +2163,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
     
     // ✨ FALLBACK: Logique traditionnelle pour les champs sans capacités TreeBranchLeaf
-    const finalValue = fieldConfig.hasFormula ? calculatedValue : localValue;
-    const isReadOnly = fieldConfig.hasFormula && !fieldConfig.formulaConfig?.allowManualOverride;
+    const useCalculatedValue = fieldConfig.hasFormula && !manualOverrideAllowed && !formulaIsConstraint;
+    const finalValue = useCalculatedValue ? calculatedValue : localValue;
+    const isReadOnly = useCalculatedValue;
     const isDisabled = disabled || isReadOnly;
 
     // 🎨 Construction du style avec largeur configurée
@@ -2075,16 +2271,21 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       case 'NUMBER':
         // 🔥 VARIANT DYNAMIQUE PRISMA NUMBER avec fallback
         if ((fieldConfig.appearance?.variant || fieldConfig.variant) === 'slider' || fieldConfig.numberConfig?.ui === 'slider') {
+          // 🎯 NOUVEAU: Appliquer les contraintes dynamiques au slider
+          const sliderMin = dynamicConstraints.number_min ?? fieldConfig.numberConfig?.min ?? fieldConfig.min;
+          const sliderMax = dynamicConstraints.number_max ?? fieldConfig.numberConfig?.max ?? fieldConfig.max;
+          const sliderStep = dynamicConstraints.step ?? fieldConfig.numberConfig?.step ?? fieldConfig.step ?? 1;
+          
           return (
             <div>
               <Slider
                 disabled={isDisabled}
                 value={Number(finalValue) || fieldConfig.numberConfig?.defaultValue || fieldConfig.defaultValue || 0}
                 onChange={handleChange}
-                // 🔥 PARAMÈTRES DYNAMIQUES PRISMA SLIDER avec fallback
-                min={fieldConfig.numberConfig?.min || fieldConfig.min}
-                max={fieldConfig.numberConfig?.max || fieldConfig.max}
-                step={fieldConfig.numberConfig?.step || fieldConfig.step || 1}
+                // 🔥 PARAMÈTRES DYNAMIQUES PRISMA SLIDER avec contraintes dynamiques
+                min={sliderMin}
+                max={sliderMax}
+                step={sliderStep}
                 marks={fieldConfig.numberConfig?.marks || fieldConfig.marks}
                 tooltip={{ 
                   formatter: (value) => `${fieldConfig.numberConfig?.prefix || fieldConfig.prefix || ''}${value}${fieldConfig.numberConfig?.suffix || fieldConfig.suffix || fieldConfig.numberConfig?.unit || fieldConfig.unit || ''}` 
@@ -2092,21 +2293,89 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               />
               <div className="text-center text-sm text-gray-500 mt-1">
                 {fieldConfig.numberConfig?.prefix || fieldConfig.prefix || ''}{finalValue || fieldConfig.numberConfig?.defaultValue || fieldConfig.defaultValue || 0}{fieldConfig.numberConfig?.suffix || fieldConfig.suffix || fieldConfig.numberConfig?.unit || fieldConfig.unit || ''}
+                {sliderMax !== undefined && <span className="ml-2 text-xs text-gray-400">(max: {sliderMax})</span>}
               </div>
             </div>
           );
         }
         
+        // 🎯 NOUVEAU: Calculer min/max/step avec priorité aux contraintes dynamiques
+        const numberMin = dynamicConstraints.number_min ?? fieldConfig.numberConfig?.min ?? fieldConfig.min;
+        const numberMax = dynamicConstraints.number_max ?? fieldConfig.numberConfig?.max ?? fieldConfig.max;
+        const numberStep = dynamicConstraints.step ?? fieldConfig.numberConfig?.step ?? fieldConfig.step ?? 1;
+        const constraintMsg = dynamicConstraints.constraintMessage;
+        
+        // 🎯 DEBUG: Afficher les contraintes appliquées
+        if (dynamicConstraints.number_max !== undefined || dynamicConstraints.number_min !== undefined) {
+          console.log(`🎯 [InputNumber] "${field.label}" contraintes dynamiques appliquées:`, {
+            min: numberMin,
+            max: numberMax,
+            step: numberStep,
+            constraintMessage: constraintMsg,
+            dynamicConstraints
+          });
+        }
+        
+        // 🆕 Handler pour onChange - ne pas clamper, laisser l'utilisateur saisir librement
+        const handleNumberChange = (val: number | null) => {
+          // Simplement propager la valeur, sans clamper pendant la frappe
+          handleChange(val);
+        };
+        
+        // 🆕 Handler pour onBlur - valider et clamper au moment de quitter le champ
+        const handleNumberBlur = () => {
+          const val = Number(finalValue);
+          if (isNaN(val)) return;
+          
+          let clampedVal = val;
+          let wasConstrained = false;
+          let constraintType: 'max' | 'min' | null = null;
+          
+          // Vérifier max dynamique
+          if (numberMax !== undefined && val > numberMax) {
+            clampedVal = numberMax;
+            wasConstrained = true;
+            constraintType = 'max';
+          }
+          
+          // Vérifier min dynamique  
+          if (numberMin !== undefined && val < numberMin) {
+            clampedVal = numberMin;
+            wasConstrained = true;
+            constraintType = 'min';
+          }
+          
+          // Si contrainte dépassée, afficher le message et clamper
+          if (wasConstrained) {
+            // Afficher le message
+            if (constraintMsg) {
+              // Remplacer les variables dans le message
+              const formattedMsg = constraintMsg
+                .replace(/\{max\}/g, String(numberMax ?? ''))
+                .replace(/\{min\}/g, String(numberMin ?? ''))
+                .replace(/\{value\}/g, String(val));
+              message.warning(formattedMsg);
+            } else {
+              // Message par défaut
+              if (constraintType === 'max') {
+                message.warning(`La valeur maximale est ${numberMax}`);
+              } else if (constraintType === 'min') {
+                message.warning(`La valeur minimale est ${numberMin}`);
+              }
+            }
+            
+            // Appliquer la valeur clampée
+            handleChange(clampedVal);
+          }
+        };
+        
         return (
           <InputNumber
             {...commonProps}
             value={finalValue}
-            onChange={(val)=>{
-              handleChange(val);
-            }}
-            min={fieldConfig.numberConfig?.min || fieldConfig.min}
-            max={fieldConfig.numberConfig?.max || fieldConfig.max}
-            step={fieldConfig.numberConfig?.step || fieldConfig.step || 1}
+            onChange={handleNumberChange}
+            onBlur={handleNumberBlur}
+            step={numberStep}
             style={commonProps.style}
             formatter={fieldConfig.numberConfig?.formatter || fieldConfig.formatter}
             parser={fieldConfig.numberConfig?.parser || fieldConfig.parser}

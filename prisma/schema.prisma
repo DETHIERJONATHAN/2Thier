@@ -1502,6 +1502,8 @@ model TreeBranchLeafNodeFormula {
   name               String
   tokens             Json               @default("[]")
   description        String?
+  targetProperty     String?            // Cible de la formule: null=valeur, 'number_max', 'number_min', 'visible', etc.
+  constraintMessage  String?            // Message affiché quand la contrainte n'est pas respectée
   isDefault          Boolean            @default(false)
   order              Int                @default(0)
   createdAt          DateTime           @default(now())

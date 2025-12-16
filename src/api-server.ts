@@ -515,6 +515,40 @@ app.get('/api/treebranchleaf/conditions/:conditionId', async (req, res) => {
   }
 });
 
+// 🎯 NOUVEAU: Récupération des formules d'un nœud spécifique (avec targetProperty!)
+app.get('/api/treebranchleaf/nodes/:nodeId/formulas', async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    
+    console.log('🔍 [API] GET formulas for node:', nodeId);
+
+    // Récupérer toutes les formules de ce nœud
+    const formulas = await prisma.treeBranchLeafNodeFormula.findMany({
+      where: { nodeId },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    console.log(`✅ [API] ${formulas.length} formule(s) trouvée(s) pour node ${nodeId}`);
+    
+    // Log les formules avec targetProperty pour debug
+    const constraintFormulas = formulas.filter(f => f.targetProperty);
+    if (constraintFormulas.length > 0) {
+      console.log(`🎯 [API] Formules de contrainte:`, constraintFormulas.map(f => ({
+        id: f.id,
+        name: f.name,
+        targetProperty: f.targetProperty,
+        tokens: f.tokens
+      })));
+    }
+
+    res.json({ formulas });
+
+  } catch (error) {
+    console.error('❌ [API] Erreur récupération formules du nœud:', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des formules' });
+  }
+});
+
 // Récupération des formules TreeBranchLeaf
 app.get('/api/treebranchleaf/formulas/:formulaId', async (req, res) => {
   try {
@@ -549,9 +583,9 @@ app.get('/api/treebranchleaf/formulas/:formulaId', async (req, res) => {
 app.post('/api/treebranchleaf/nodes/:nodeId/formulas', async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const { name, description, tokens } = req.body;
+    const { name, description, tokens, targetProperty } = req.body;
     
-    console.log('➕ [API] POST nouvelle formule:', { nodeId, name, tokensCount: tokens?.length || 0 });
+    console.log('➕ [API] POST nouvelle formule:', { nodeId, name, tokensCount: tokens?.length || 0, targetProperty });
 
     // Vérifier que le nœud existe
     const node = await prisma.treeBranchLeafNode.findUnique({
@@ -569,7 +603,8 @@ app.post('/api/treebranchleaf/nodes/:nodeId/formulas', async (req, res) => {
         organizationId: node.organizationId,
         name: name || 'Nouvelle formule',
         description: description || '',
-        tokens: tokens || []
+        tokens: tokens || [],
+        targetProperty: targetProperty ? String(targetProperty) : null
       }
     });
 
@@ -599,9 +634,9 @@ app.post('/api/treebranchleaf/nodes/:nodeId/formulas', async (req, res) => {
 app.put('/api/treebranchleaf/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
   try {
     const { nodeId, formulaId } = req.params;
-    const { name, description, tokens } = req.body;
+    const { name, description, tokens, targetProperty } = req.body;
     
-    console.log('✏️ [API] PUT mise à jour formule:', { nodeId, formulaId, name, tokensCount: tokens?.length || 0 });
+    console.log('✏️ [API] PUT mise à jour formule:', { nodeId, formulaId, name, tokensCount: tokens?.length || 0, targetProperty });
 
     // Vérifier que la formule existe
     const existingFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
@@ -622,7 +657,8 @@ app.put('/api/treebranchleaf/nodes/:nodeId/formulas/:formulaId', async (req, res
       data: {
         name: name !== undefined ? name : existingFormula.name,
         description: description !== undefined ? description : existingFormula.description,
-        tokens: tokens !== undefined ? tokens : existingFormula.tokens
+        tokens: tokens !== undefined ? tokens : existingFormula.tokens,
+        targetProperty: targetProperty !== undefined ? (targetProperty ? String(targetProperty) : null) : existingFormula.targetProperty
       }
     });
 

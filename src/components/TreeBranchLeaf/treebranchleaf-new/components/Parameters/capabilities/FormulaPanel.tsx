@@ -15,7 +15,18 @@ interface FormulaPanelProps {
   readOnly?: boolean;
 }
 
-type FormulaInstance = { id: string; name: string; tokens: string[]; enabled?: boolean };
+type FormulaInstance = { id: string; name: string; tokens: string[]; enabled?: boolean; targetProperty?: string; constraintMessage?: string };
+
+// Options pour le sélecteur targetProperty
+const TARGET_PROPERTY_OPTIONS = [
+  { value: '', label: '📊 Valeur du champ (calcul direct)' },
+  { value: 'number_max', label: '⬆️ Maximum dynamique' },
+  { value: 'number_min', label: '⬇️ Minimum dynamique' },
+  { value: 'step', label: '📐 Pas/Incrément dynamique' },
+  { value: 'visible', label: '👁️ Visibilité conditionnelle' },
+  { value: 'required', label: '⚠️ Obligatoire conditionnel' },
+  { value: 'disabled', label: '🚫 Désactivé conditionnel' },
+];
 
 const NODE_FORMULA_REGEX = /node-formula:[a-z0-9-]+/i;
 const LEGACY_FORMULA_REGEX = /formula:[a-z0-9-]+/i;
@@ -43,10 +54,14 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
   const lastSavedTokens = useRef<string>('');
   const lastSavedName = useRef<string>('');
+  const lastSavedTargetProperty = useRef<string>('');
+  const lastSavedConstraintMessage = useRef<string>('');
   
   // État local stable
   const [localTokens, setLocalTokens] = useState<string[]>([]);
   const [localName, setLocalName] = useState<string>('');
+  const [localTargetProperty, setLocalTargetProperty] = useState<string>('');
+  const [localConstraintMessage, setLocalConstraintMessage] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -94,8 +109,12 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
           setActiveId(firstFormula.id);
           setLocalTokens(firstFormula.tokens || []);
           setLocalName(firstFormula.name || '');
+          setLocalTargetProperty(firstFormula.targetProperty || '');
+          setLocalConstraintMessage(firstFormula.constraintMessage || '');
           lastSavedTokens.current = JSON.stringify(firstFormula.tokens || []);
           lastSavedName.current = firstFormula.name || '';
+          lastSavedTargetProperty.current = firstFormula.targetProperty || '';
+          lastSavedConstraintMessage.current = firstFormula.constraintMessage || '';
           
           console.log('✅ FormulaPanel: Formules chargées:', existingFormulas.length, existingFormulas);
         } else {
@@ -104,6 +123,8 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
           setActiveId(null);
           setLocalTokens([]);
           setLocalName('');
+          setLocalTargetProperty('');
+          setLocalConstraintMessage('');
           console.log('ℹ️ FormulaPanel: Aucune formule existante pour ce nœud');
         }
       } catch (err) {
@@ -113,18 +134,26 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
         setActiveId(null);
         setLocalTokens([]);
         setLocalName('');
+        setLocalTargetProperty('');
       }
     };
 
     loadFormulas();
   }, [nodeId, api]);
 
-  // Fonction de sauvegarde avec debounce
-  const saveFormula = useCallback(async (nextTokens: string[], nextName: string) => {
+  // Fonction de sauvegarde avec debounce (inclut targetProperty et constraintMessage)
+  const saveFormula = useCallback(async (nextTokens: string[], nextName: string, nextTargetProperty?: string, nextConstraintMessage?: string) => {
     if (!mountedRef.current || isSaving) return;
 
     const tokensStr = JSON.stringify(nextTokens);
-    if (tokensStr === lastSavedTokens.current && nextName === lastSavedName.current) {
+    const targetProp = nextTargetProperty ?? localTargetProperty;
+    const constraintMsg = nextConstraintMessage ?? localConstraintMessage;
+    
+    // Vérifier s'il y a un changement
+    if (tokensStr === lastSavedTokens.current && 
+        nextName === lastSavedName.current && 
+        targetProp === lastSavedTargetProperty.current &&
+        constraintMsg === lastSavedConstraintMessage.current) {
       return; // Pas de changement
     }
 
@@ -140,30 +169,44 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
 
         if (activeId) {
           // PUT mise à jour distante + synchro locale
-            await api.put(`/api/treebranchleaf/nodes/${nodeId}/formulas/${activeId}`, {
-              tokens: nextTokens,
-              name: finalName
-            });
-            setInstances(prev => prev.map(inst => inst.id === activeId ? { ...inst, tokens: nextTokens, name: finalName } : inst));
+          await api.put(`/api/treebranchleaf/nodes/${nodeId}/formulas/${activeId}`, {
+            tokens: nextTokens,
+            name: finalName,
+            targetProperty: targetProp || null,
+            constraintMessage: constraintMsg || null
+          });
+          setInstances(prev => prev.map(inst => inst.id === activeId 
+            ? { ...inst, tokens: nextTokens, name: finalName, targetProperty: targetProp, constraintMessage: constraintMsg } 
+            : inst));
         } else {
           // POST création distante
           resultFormula = await api.post(`/api/treebranchleaf/nodes/${nodeId}/formulas`, {
             tokens: nextTokens,
-            name: finalName
+            name: finalName,
+            targetProperty: targetProp || null,
+            constraintMessage: constraintMsg || null
           }) as FormulaInstance;
           if (resultFormula?.id) {
             setActiveId(resultFormula.id);
-            setInstances(prev => [...prev, { id: resultFormula.id, name: finalName, tokens: nextTokens }]);
+            setInstances(prev => [...prev, { 
+              id: resultFormula.id, 
+              name: finalName, 
+              tokens: nextTokens,
+              targetProperty: targetProp,
+              constraintMessage: constraintMsg
+            }]);
           }
         }
 
         // Mettre à jour les références pour éviter les re-saves
         lastSavedTokens.current = tokensStr;
-  lastSavedName.current = finalName;
+        lastSavedName.current = finalName;
+        lastSavedTargetProperty.current = targetProp;
+        lastSavedConstraintMessage.current = constraintMsg;
 
         // Notifier le parent
         if (mountedRef.current) {
-          onChange?.({ tokens: nextTokens, name: finalName });
+          onChange?.({ tokens: nextTokens, name: finalName, targetProperty: targetProp, constraintMessage: constraintMsg });
         }
 
         // console.log('✅ FormulaPanel: Sauvegarde réussie dans la table'); // ✨ Log réduit
@@ -180,7 +223,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
     }, 300); // Debounce réduit à 300ms
 
     saveTimeoutRef.current = timeoutId;
-  }, [api, nodeId, activeId, onChange, isSaving]);
+  }, [api, nodeId, activeId, onChange, isSaving, localTargetProperty, localConstraintMessage]);
 
   // Gestion des changements de tokens SANS déclencher de boucles
   const handleTokensChange = useCallback((nextTokens: string[]) => {
@@ -197,6 +240,22 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
     setLocalName(nextName);
     saveFormula(localTokens, nextName);
   }, [saveFormula, localTokens]);
+
+  // 🆕 Gestion des changements de targetProperty (propriété cible)
+  const handleTargetPropertyChange = useCallback((nextTargetProperty: string) => {
+    if (!mountedRef.current) return;
+    
+    setLocalTargetProperty(nextTargetProperty);
+    saveFormula(localTokens, localName, nextTargetProperty, localConstraintMessage);
+  }, [saveFormula, localTokens, localName, localConstraintMessage]);
+
+  // 🆕 Gestion des changements de constraintMessage (message de contrainte)
+  const handleConstraintMessageChange = useCallback((nextMessage: string) => {
+    if (!mountedRef.current) return;
+    
+    setLocalConstraintMessage(nextMessage);
+    saveFormula(localTokens, localName, localTargetProperty, nextMessage);
+  }, [saveFormula, localTokens, localName, localTargetProperty]);
 
   // Placeholder mémorisé
   const placeholder = useMemo(() => 'Glissez ici des références (@value.*, @key, #marker)…', []);
@@ -322,16 +381,20 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
       if (nextActive) {
         setLocalTokens(nextActive.tokens || []);
         setLocalName(nextActive.name || '');
+        setLocalTargetProperty(nextActive.targetProperty || '');
         lastSavedTokens.current = JSON.stringify(nextActive.tokens || []);
         lastSavedName.current = nextActive.name || '';
+        lastSavedTargetProperty.current = nextActive.targetProperty || '';
       } else {
         setLocalTokens([]);
         setLocalName('');
+        setLocalTargetProperty('');
         lastSavedTokens.current = '[]';
         lastSavedName.current = '';
+        lastSavedTargetProperty.current = '';
       }
       
-      onChange?.({ tokens: nextActive?.tokens || [], name: nextActive?.name || '' });
+      onChange?.({ tokens: nextActive?.tokens || [], name: nextActive?.name || '', targetProperty: nextActive?.targetProperty || '' });
       message.success('Formule supprimée');
     } catch (err) {
       console.error('🗑️ FormulaPanel: Erreur suppression:', err);
@@ -845,8 +908,10 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
             if (it) { 
               setLocalTokens(it.tokens || []); 
               setLocalName(it.name || '');
+              setLocalTargetProperty(it.targetProperty || '');
               lastSavedTokens.current = JSON.stringify(it.tokens || []);
               lastSavedName.current = it.name || '';
+              lastSavedTargetProperty.current = it.targetProperty || '';
               // console.log('✅ FormulaPanel: Instance sélectionnée:', { name: it.name, tokensCount: (it.tokens || []).length }); // ✨ Log réduit
             }
           }}
@@ -905,6 +970,45 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, onChange, readOnly 
           onChange={(e) => handleNameChange(e.target.value)}
         />
       </div>
+      
+      {/* 🆕 Sélecteur de propriété cible (targetProperty) */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        <Text type="secondary">Cible:</Text>
+        <Tooltip title="Définit ce que la formule calcule : la valeur du champ ou une de ses propriétés (max, min, visibilité...)">
+          <Select
+            size="small"
+            style={{ minWidth: 240 }}
+            value={localTargetProperty || ''}
+            options={TARGET_PROPERTY_OPTIONS}
+            onChange={handleTargetPropertyChange}
+            placeholder="Sélectionner la cible"
+          />
+        </Tooltip>
+        {localTargetProperty && (
+          <Text type="warning" style={{ fontSize: 11 }}>
+            ⚡ Formule de contrainte : le champ reste éditable
+          </Text>
+        )}
+      </div>
+      
+      {/* 🆕 Message de contrainte (visible uniquement si une contrainte est définie) */}
+      {localTargetProperty && ['number_max', 'number_min', 'step'].includes(localTargetProperty) && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+          <Tooltip title="Message affiché à l'utilisateur quand la contrainte n'est pas respectée (ex: valeur supérieure au maximum)">
+            <Text type="secondary">Message:</Text>
+          </Tooltip>
+          <Input
+            size="small"
+            style={{ flex: 1, maxWidth: 400 }}
+            placeholder="Message quand la contrainte est dépassée (ex: Maximum {max} panneaux)"
+            value={localConstraintMessage}
+            onChange={(e) => handleConstraintMessageChange(e.target.value)}
+          />
+          <Text type="secondary" style={{ fontSize: 10 }}>
+            Utilisez {'{max}'}, {'{min}'}, {'{value}'} comme variables
+          </Text>
+        </div>
+      )}
       
       {/* Résumé test */}
       <div style={{ marginBottom: 8, padding: '6px 8px', background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6 }}>

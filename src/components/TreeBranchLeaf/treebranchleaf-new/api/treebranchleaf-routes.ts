@@ -1,8 +1,8 @@
-﻿/**
- * ðŸŒ TreeBranchLeaf API Service - Backend centralisÃ©
+/**
+ * 🌐 TreeBranchLeaf API Service - Backend centralisé
  * 
  * Service backend complet pour TreeBranchLeaf
- * Tout est centralisÃ© dans treebranchleaf-new/
+ * Tout est centralisé dans treebranchleaf-new/
  */
 
 import { Router } from 'express';
@@ -18,42 +18,42 @@ import {
 import { evaluateFormulaOrchestrated } from './evaluation/orchestrator.js';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { linkVariableToAllCapacityNodes } from './universal-linking-system.js';
-// import { authenticateToken } from '../../../../middleware/auth'; // Temporairement dÃ©sactivÃ©
+// import { authenticateToken } from '../../../../middleware/auth'; // Temporairement désactivé
 import { 
   validateParentChildRelation, 
   getValidationErrorMessage,
   NodeSubType
 } from '../shared/hierarchyRules';
 import { randomUUID, createHash } from 'crypto';
-// import { gzipSync, gunzipSync } from 'zlib'; // Plus utilisÃ© - architecture normalisÃ©e
-import { gunzipSync } from 'zlib'; // GardÃ© uniquement pour decompressIfNeeded (lecture anciennes donnÃ©es)
+// import { gzipSync, gunzipSync } from 'zlib'; // Plus utilisé - architecture normalisée
+import { gunzipSync } from 'zlib'; // Gardé uniquement pour decompressIfNeeded (lecture anciennes données)
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸŽ¯ NOUVEAU SYSTÃˆME UNIVERSEL D'INTERPRÃ‰TATION TBL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎯 NOUVEAU SYSTÈME UNIVERSEL D'INTERPRÉTATION TBL
+// ═══════════════════════════════════════════════════════════════════════════
 import { evaluateVariableOperation } from './operation-interpreter.js';
-// Use the repeat service implementation — central source of truth for variable copying
+// Use the repeat service implementation � central source of truth for variable copying
 import { copyVariableWithCapacities, copyLinkedVariablesFromNode, createDisplayNodeForExistingVariable } from './repeat/services/variable-copy-engine.js';
 import { copySelectorTablesAfterNodeCopy } from './copy-selector-tables.js';
 import { copyFormulaCapacity } from './copy-capacity-formula.js';
 import { getNodeIdForLookup } from '../../../../utils/node-helpers.js';
-// 🔄 Import de la fonction de copie profonde centralisée
+// ?? Import de la fonction de copie profonde centralis�e
 import { deepCopyNodeInternal as deepCopyNodeInternalService } from './repeat/services/deep-copy-service.js';
 
-// 📊 Import des routes pour les champs Total (somme des copies)
+// ?? Import des routes pour les champs Total (somme des copies)
 import { registerSumDisplayFieldRoutes, updateSumDisplayFieldAfterCopyChange } from './sum-display-field-routes.js';
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸ—‚ï¸ ROUTES NORMALISÃ‰ES POUR LES TABLES (ARCHITECTURE OPTION B)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 🗂️ ROUTES NORMALISÉES POUR LES TABLES (ARCHITECTURE OPTION B)
+// ═══════════════════════════════════════════════════════════════════════════
 import tableRoutesNew from './table-routes-new.js';
 
 const router = Router();
 
-// Monter les nouvelles routes de tables en premier pour qu'elles aient la prioritÃ©
+// Monter les nouvelles routes de tables en premier pour qu'elles aient la priorité
 router.use('/', tableRoutesNew);
 
-// 📊 Enregistrer les routes pour les champs Total (somme des copies)
+// ?? Enregistrer les routes pour les champs Total (somme des copies)
 registerSumDisplayFieldRoutes(router);
 
 const prisma = new PrismaClient();
@@ -127,7 +127,7 @@ const computeLogicVersion = () => {
   return { version, metrics, stats };
 };
 
-// Helper pour unifier le contexte d'auth (org/superadmin) mÃªme si req.user est partiel
+// Helper pour unifier le contexte d'auth (org/superadmin) même si req.user est partiel
 type MinimalReqUser = { organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };
 type MinimalReq = { user?: MinimalReqUser; headers?: Record<string, unknown> };
 function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAdmin: boolean } {
@@ -143,7 +143,7 @@ function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAd
 
 // =============================================================================
 // =============================================================================
-// �🔢 NODE DATA (VARIABLE EXPOSÉE) - Donnée d'un nœud
+// ??? NODE DATA (VARIABLE EXPOS�E) - Donn�e d'un n�ud
 // =============================================================================
 
 type VariableResolutionResult = {
@@ -187,7 +187,7 @@ type LabelMap = Map<string, string | null>;
 type ValuesMap = Map<string, string | null>;
 
 function normalizeRefId(ref: string): string {
-  // Nettoie les prÃ©fixes type "node-formula:" et renvoie l'ID de nÅ“ud brut si possible
+  // Nettoie les préfixes type "node-formula:" et renvoie l'ID de nœud brut si possible
   if (!ref) return ref;
   if (ref.startsWith('node-formula:')) return ref.replace(/^node-formula:/, '');
   return ref;
@@ -197,7 +197,7 @@ function extractNodeIdsFromConditionSet(conditionSet: unknown): Set<string> {
   const ids = new Set<string>();
   if (!conditionSet || typeof conditionSet !== 'object') return ids;
   const obj = conditionSet as Record<string, unknown>;
-  // 1) tokens Ã©ventuels (peuvent contenir des refs sous forme de chaÃ®nes)
+  // 1) tokens éventuels (peuvent contenir des refs sous forme de chaînes)
   if (Array.isArray(obj.tokens)) {
     for (const t of obj.tokens as unknown[]) {
       const asStr = typeof t === 'string' ? t : JSON.stringify(t);
@@ -220,12 +220,12 @@ function extractNodeIdsFromConditionSet(conditionSet: unknown): Set<string> {
           const m = /@value\.([a-f0-9-]{36})/i.exec(ref);
           if (m && m[1]) ids.add(m[1]);
         }
-        // Ã©ventuellement arbres binaires left/right
+        // éventuellement arbres binaires left/right
         if (node.left && typeof node.left === 'object') scanWhen(node.left as Record<string, unknown>);
         if (node.right && typeof node.right === 'object') scanWhen(node.right as Record<string, unknown>);
       };
       scanWhen(when);
-      // actions[].nodeIds â†’ ajout des ids (strip prefix)
+      // actions[].nodeIds → ajout des ids (strip prefix)
       const actions = b.actions as unknown[] | undefined;
       if (Array.isArray(actions)) {
         for (const a of actions) {
@@ -238,7 +238,7 @@ function extractNodeIdsFromConditionSet(conditionSet: unknown): Set<string> {
       }
     }
   }
-  // 2bis) fallback.actions.nodeIds â†’ aussi ajout des ids
+  // 2bis) fallback.actions.nodeIds → aussi ajout des ids
   if (obj.fallback && typeof obj.fallback === 'object') {
     const fb = obj.fallback as Record<string, unknown>;
     const actions = fb.actions as unknown[] | undefined;
@@ -267,7 +267,7 @@ function extractNodeIdsFromTokens(tokens: unknown): Set<string> {
   if (!tokens) return ids;
   const addFromString = (s: string) => {
     let m: RegExpExecArray | null;
-    // ðŸŽ¯ CORRECTION CRUCIALE: Utiliser la mÃªme regex que buildTextFromTokens pour capturer TOUS les IDs
+    // 🎯 CORRECTION CRUCIALE: Utiliser la même regex que buildTextFromTokens pour capturer TOUS les IDs
     const re = /@value\.([A-Za-z0-9_:-]+)/gi;
     while ((m = re.exec(s)) !== null) ids.add(m[1]);
   };
@@ -306,7 +306,7 @@ function resolveActionsLabels(actions: unknown, labels: LabelMap) {
 }
 
 // =============================================================================
-// ðŸ”— Helpers de maintenance automatique des colonnes linked*Ids
+// 🔗 Helpers de maintenance automatique des colonnes linked*Ids
 // =============================================================================
 type LinkedField = 'linkedFormulaIds' | 'linkedConditionIds' | 'linkedTableIds' | 'linkedVariableIds';
 
@@ -367,33 +367,33 @@ async function removeFromNodeLinkedField(
 }
 
 // =============================================================================
-// ðŸ§¾ Rendu texte humain des opÃ©rations (ex: a(1)+b(2)=3)
+// 🧾 Rendu texte humain des opérations (ex: a(1)+b(2)=3)
 // =============================================================================
 function fmtLV(label: string | null | undefined, value: string | null | undefined): string {
-  return `${label ?? 'â€”'}(${value ?? 'âˆ…'})`;
+  return `${label ?? '—'}(${value ?? '∅'})`;
 }
 
-// ðŸš§ TEMPORAIRE: Fonction pour obtenir des valeurs de test basÃ©es sur les IDs observÃ©s dans les logs
+// 🚧 TEMPORAIRE: Fonction pour obtenir des valeurs de test basées sur les IDs observés dans les logs
 function getTestValueForNode(nodeId: string, fixedValue: string | null, defaultValue: string | null): string | null {
   // D'abord essayer les vraies valeurs
   if (fixedValue && fixedValue.trim() !== '') return fixedValue;
   if (defaultValue && defaultValue.trim() !== '') return defaultValue;
   
-  // Valeurs de test basÃ©es sur l'expression attendue de l'utilisateur
+  // Valeurs de test basées sur l'expression attendue de l'utilisateur
   const testValues: Record<string, string> = {
     // Prix Kw/h (devrait avoir 0.35)
     '702d1b09-abc9-4096-9aaa-77155ac5294f': '0.35',
     // Calcul du prix Kw/h (devrait avoir 4000)
     'd6212e5e-3fe9-4cce-b380-e6745524d011': '4000',
-    // Consommation annuelle Ã©lectricitÃ© (devrait avoir 1000)
+    // Consommation annuelle électricité (devrait avoir 1000)
     'node_1757366229534_x6jxzmvmu': '1000',
     // Consommation annuelle (valeur test)
     'node_1757366229561_dyfsa3p7n': '2500',
     // Cout Annuelle chauffage (valeur test)  
     'node_1757366229564_z28kl0eb4': '1200',
-    // Longueur faÃ§ade avant (valeur test)
+    // Longueur façade avant (valeur test)
     'node_1757366229578_c9yf18eho': '12',
-    // Hauteur faÃ§ade avant (valeur test)
+    // Hauteur façade avant (valeur test)
     '4fd0bb1d-836b-4cd0-9c2d-2f48808732eb': '3',
   };
   
@@ -405,11 +405,11 @@ function buildTextFromTokens(tokens: unknown, labels: LabelMap, values: ValuesMa
   const operatorSet = new Set(['+', '-', '*', '/', '=']);
   const mapToken = (t: unknown): string => {
     if (typeof t === 'string') {
-      // Si le token est un opÃ©rateur isolÃ©, le rendre sous la forme "(+)"/"(-)"/"(*)"/"(/)"/"(=)"
+      // Si le token est un opérateur isolé, le rendre sous la forme "(+)"/"(-)"/"(*)"/"(/)"/"(=)"
       if (operatorSet.has(t.trim())) {
         return `(${t.trim()})`;
       }
-      // Supporter @value.<UUID> et @value.node_... (fallback gÃ©nÃ©rique)
+      // Supporter @value.<UUID> et @value.node_... (fallback générique)
       const re = /@value\.([A-Za-z0-9_:-]+)/g;
       let out = '';
       let lastIndex = 0;
@@ -417,7 +417,7 @@ function buildTextFromTokens(tokens: unknown, labels: LabelMap, values: ValuesMa
       while ((m = re.exec(t)) !== null) {
         out += t.slice(lastIndex, m.index);
         const raw = m[1];
-        // ðŸŽ¯ CORRECTION CRUCIALE: Traiter TOUS les IDs, pas seulement les UUIDs
+        // 🎯 CORRECTION CRUCIALE: Traiter TOUS les IDs, pas seulement les UUIDs
         const label = labels.get(raw) ?? null;
         const value = values.get(raw) ?? null;
         out += fmtLV(label, value);
@@ -433,7 +433,7 @@ function buildTextFromTokens(tokens: unknown, labels: LabelMap, values: ValuesMa
   return mapToken(tokens);
 }
 
-// (ancienne buildTextFromConditionSet supprimÃ©e â€” remplacÃ©e par buildConditionExpressionReadable)
+// (ancienne buildTextFromConditionSet supprimée — remplacée par buildConditionExpressionReadable)
 
 function buildTextFromTableRecord(rec: unknown, labels: LabelMap, values: ValuesMap): string {
   const str = JSON.stringify(rec);
@@ -456,7 +456,7 @@ function buildResultText(prefixExpr: string, resultValue: string | null, unit?: 
 }
 
 // =============================================================================
-// ðŸ§  Enrichissement du texte des conditions avec formules dÃ©taillÃ©es
+// 🧠 Enrichissement du texte des conditions avec formules détaillées
 // =============================================================================
 function extractFormulaIdsFromConditionSet(conditionSet: unknown): Set<string> {
   const ids = new Set<string>();
@@ -472,7 +472,7 @@ function extractFormulaIdsFromConditionSet(conditionSet: unknown): Set<string> {
 }
 
 // =============================================================================
-// ðŸ§® CALCUL DE RÃ‰SULTAT NUMÃ‰RIQUE POUR CONDITIONS
+// 🧮 CALCUL DE RÉSULTAT NUMÉRIQUE POUR CONDITIONS
 // =============================================================================
 
 async function calculateConditionResult(
@@ -483,10 +483,10 @@ async function calculateConditionResult(
 ): Promise<string> {
   const setObj = (conditionSet && typeof conditionSet === 'object') ? (conditionSet as Record<string, unknown>) : {};
   
-  let finalResult = 'âˆ…';
+  let finalResult = '∅';
   let conditionResult = false;
   
-  // PremiÃ¨re branche pour le WHEN
+  // Première branche pour le WHEN
   let firstWhen: Record<string, unknown> | undefined = undefined;
   if (Array.isArray(setObj.branches) && setObj.branches.length > 0) {
     const br0 = setObj.branches[0] as Record<string, unknown>;
@@ -498,15 +498,15 @@ async function calculateConditionResult(
   if (firstWhen) {
     conditionResult = evaluateCondition(firstWhen, values);
   }
-  console.log(`[CALC-CONDITION-RESULT] ===== DÃ‰BUT Ã‰VALUATION =====`);
-  console.log(`[CALC-CONDITION-RESULT] Condition Ã©valuÃ©e:`, conditionResult);
+  console.log(`[CALC-CONDITION-RESULT] ===== DÉBUT ÉVALUATION =====`);
+  console.log(`[CALC-CONDITION-RESULT] Condition évaluée:`, conditionResult);
   console.log(`[CALC-CONDITION-RESULT] ValuesMap contient:`, Array.from(values.entries()));
   
-  // DÃ©terminer quelle branche utiliser
+  // Déterminer quelle branche utiliser
   const branches = Array.isArray(setObj.branches) ? setObj.branches : [];
   
   if (conditionResult && branches.length > 0) {
-    // Condition vraie â†’ utiliser la premiÃ¨re branche (ALORS)
+    // Condition vraie → utiliser la première branche (ALORS)
     const selectedBranch = branches[0] as Record<string, unknown>;
     console.log(`[CALC-CONDITION-RESULT] Utilisation branche ALORS`);
     
@@ -519,10 +519,10 @@ async function calculateConditionResult(
           
           console.log(`[CALC-CONDITION-RESULT] Node ALORS "${nid}", normalizedId:`, normalizedId);
           
-          // IMPORTANT: VÃ©rifier si c'est une FORMULE (commence par "node-formula:")
+          // IMPORTANT: Vérifier si c'est une FORMULE (commence par "node-formula:")
           if (nid.startsWith('node-formula:')) {
-            // C'est une formule â†’ la calculer
-            console.log(`[CALC-CONDITION-RESULT] ðŸ§® DÃ©tection FORMULE dans ALORS`);
+            // C'est une formule → la calculer
+            console.log(`[CALC-CONDITION-RESULT] 🧮 Détection FORMULE dans ALORS`);
             
             const formula = await dbClient.treeBranchLeafNodeFormula.findUnique({
               where: { id: normalizedId },
@@ -530,7 +530,7 @@ async function calculateConditionResult(
             });
             
             if (formula) {
-              // CrÃ©er un labelMap pour cette formule
+              // Créer un labelMap pour cette formule
               const tempLabelMap = new Map<string, string | null>();
               const tokenIds = extractNodeIdsFromTokens(formula.tokens);
               
@@ -547,34 +547,34 @@ async function calculateConditionResult(
               
               if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
                 finalResult = String(calculatedResult);
-                console.log(`[CALC-CONDITION-RESULT] âœ“ Formule ALORS calculÃ©e:`, finalResult, 'depuis expression:', expr);
+                console.log(`[CALC-CONDITION-RESULT] ✓ Formule ALORS calculée:`, finalResult, 'depuis expression:', expr);
                 break;
               }
             }
           } else {
-            // C'est un champ normal â†’ chercher sa valeur
+            // C'est un champ normal → chercher sa valeur
             const directValue = values.get(normalizedId);
             
-            console.log(`[CALC-CONDITION-RESULT] ðŸ“ Champ normal ALORS, valeur:`, directValue);
+            console.log(`[CALC-CONDITION-RESULT] 📝 Champ normal ALORS, valeur:`, directValue);
             
             if (directValue !== null && directValue !== undefined && directValue !== '') {
               finalResult = String(directValue);
-              console.log(`[CALC-CONDITION-RESULT] âœ“ Valeur directe ALORS:`, finalResult);
+              console.log(`[CALC-CONDITION-RESULT] ✓ Valeur directe ALORS:`, finalResult);
             } else {
               const node = await dbClient.treeBranchLeafNode.findUnique({
                 where: { id: normalizedId },
                 select: { label: true }
               });
-              finalResult = `${node?.label || normalizedId} (aucune donnÃ©e)`;
-              console.log(`[CALC-CONDITION-RESULT] âœ— Aucune valeur ALORS:`, finalResult);
+              finalResult = `${node?.label || normalizedId} (aucune donnée)`;
+              console.log(`[CALC-CONDITION-RESULT] ✗ Aucune valeur ALORS:`, finalResult);
             }
           }
-          break; // On sort aprÃ¨s le premier nodeId traitÃ©
+          break; // On sort après le premier nodeId traité
         }
       }
     }
   } else if (!conditionResult) {
-    // Condition fausse â†’ utiliser le fallback (SINON)
+    // Condition fausse → utiliser le fallback (SINON)
     console.log(`[CALC-CONDITION-RESULT] Utilisation branche SINON (fallback)`);
     
     const fallbackObj = (setObj.fallback && typeof setObj.fallback === 'object') 
@@ -590,32 +590,32 @@ async function calculateConditionResult(
         for (const nid of aa.nodeIds as string[]) {
           const normalizedId = normalizeRefId(nid);
           
-          // Si c'est un nÅ“ud normal (pas une formule)
+          // Si c'est un nœud normal (pas une formule)
           if (!nid.startsWith('node-formula:')) {
             const directValue = values.get(normalizedId);
             console.log(`[CALC-CONDITION-RESULT] Node SINON "${normalizedId}", valeur:`, directValue);
             
             if (directValue !== null && directValue !== undefined && directValue !== '') {
               finalResult = String(directValue);
-              console.log(`[CALC-CONDITION-RESULT] âœ“ Valeur directe SINON:`, finalResult);
+              console.log(`[CALC-CONDITION-RESULT] ✓ Valeur directe SINON:`, finalResult);
               break;
             } else {
               const node = await dbClient.treeBranchLeafNode.findUnique({
                 where: { id: normalizedId },
                 select: { label: true }
               });
-              finalResult = `${node?.label || normalizedId} (aucune donnÃ©e)`;
-              console.log(`[CALC-CONDITION-RESULT] âœ— Aucune valeur SINON:`, finalResult);
+              finalResult = `${node?.label || normalizedId} (aucune donnée)`;
+              console.log(`[CALC-CONDITION-RESULT] ✗ Aucune valeur SINON:`, finalResult);
               break;
             }
           }
         }
-        if (finalResult !== 'âˆ…') break;
+        if (finalResult !== '∅') break;
       }
     }
     
-    // Si pas de valeur directe trouvÃ©e, chercher les formules
-    if (finalResult === 'âˆ…') {
+    // Si pas de valeur directe trouvée, chercher les formules
+    if (finalResult === '∅') {
       const fIds = extractFormulaIdsFromConditionSet(conditionSet);
       console.log(`[CALC-CONDITION-RESULT] Formula IDs extraits:`, Array.from(fIds));
       
@@ -624,14 +624,14 @@ async function calculateConditionResult(
           where: { id: { in: Array.from(fIds) } },
           select: { id: true, nodeId: true, tokens: true }
         });
-        console.log(`[CALC-CONDITION-RESULT] Formules trouvÃ©es:`, formulas.length);
+        console.log(`[CALC-CONDITION-RESULT] Formules trouvées:`, formulas.length);
         
         for (const f of formulas) {
-          // CrÃ©er un labelMap minimal juste pour cette formule
+          // Créer un labelMap minimal juste pour cette formule
           const tempLabelMap = new Map<string, string | null>();
           const tokenIds = extractNodeIdsFromTokens(f.tokens);
           
-          // RÃ©cupÃ©rer les labels des nodes rÃ©fÃ©rencÃ©s
+          // Récupérer les labels des nodes référencés
           if (tokenIds.size > 0) {
             const nodes = await dbClient.treeBranchLeafNode.findMany({
               where: { id: { in: Array.from(tokenIds) } },
@@ -645,7 +645,7 @@ async function calculateConditionResult(
           
           if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
             finalResult = String(calculatedResult);
-            console.log(`[CALC-CONDITION-RESULT] RÃ©sultat calculÃ© SINON:`, finalResult, 'depuis expression:', expr);
+            console.log(`[CALC-CONDITION-RESULT] Résultat calculé SINON:`, finalResult, 'depuis expression:', expr);
             break;
           }
         }
@@ -657,8 +657,8 @@ async function calculateConditionResult(
 }
 
 // =============================================================================
-// ðŸŽ¯ NOUVELLE FONCTION UNIFIÃ‰E: Construction de detail et result pour stockage
-// Utilise maintenant le systÃ¨me TBL-prisma modulaire pour calculs complets
+// 🎯 NOUVELLE FONCTION UNIFIÉE: Construction de detail et result pour stockage
+// Utilise maintenant le système TBL-prisma modulaire pour calculs complets
 // =============================================================================
 async function buildDetailAndResultForOperation(
   type: 'condition' | 'formula' | 'table',
@@ -673,23 +673,23 @@ async function buildDetailAndResultForOperation(
   organizationId: string,
   userId: string
 ): Promise<{ detail: Prisma.InputJsonValue; result: Prisma.InputJsonValue }> {
-  // ï¿½ DÃ‰SACTIVÃ‰: Cette fonction est remplacÃ©e par TBL Prisma !
-  console.log('ðŸš« [LEGACY DISABLED] buildDetailAndResultForOperation est dÃ©sactivÃ©e - utilisez TBL Prisma !');
-  console.log('ðŸ”„ Redirection vers endpoints TBL Prisma: /api/tbl/submissions/create-and-evaluate');
+  // � DÉSACTIVÉ: Cette fonction est remplacée par TBL Prisma !
+  console.log('🚫 [LEGACY DISABLED] buildDetailAndResultForOperation est désactivée - utilisez TBL Prisma !');
+  console.log('🔄 Redirection vers endpoints TBL Prisma: /api/tbl/submissions/create-and-evaluate');
   
-  // Retour d'une structure minimale pour maintenir la compatibilitÃ©
+  // Retour d'une structure minimale pour maintenir la compatibilité
   return {
     detail: {
       type: 'legacy-disabled',
-      message: 'ðŸ”„ Fonction dÃ©sactivÃ©e - utilisez TBL Prisma exclusivement',
+      message: '🔄 Fonction désactivée - utilisez TBL Prisma exclusivement',
       tblPrismaEndpoint: '/api/tbl/submissions/create-and-evaluate'
     },
-    result: 'ðŸ”„ Ã‰valuation via TBL Prisma uniquement'
+    result: '🔄 Évaluation via TBL Prisma uniquement'
   };
 }
 
 // =============================================================================
-// ðŸ”„ ANCIENNE FONCTION: Version de fallback pour compatibilitÃ©
+// 🔄 ANCIENNE FONCTION: Version de fallback pour compatibilité
 // =============================================================================
 async function buildDetailAndResultForOperationLegacy(
   type: 'condition' | 'formula' | 'table',
@@ -701,7 +701,7 @@ async function buildDetailAndResultForOperationLegacy(
   valuesMap: ValuesMap,
   prisma: PrismaClient
 ): Promise<{ detail: Prisma.InputJsonValue; result: Prisma.InputJsonValue }> {
-  console.log('[buildDetailAndResultForOperationLegacy] ðŸ”„ Fallback pour type:', type);
+  console.log('[buildDetailAndResultForOperationLegacy] 🔄 Fallback pour type:', type);
   
   // Construction du detail (objet technique complet)
   const detail = buildOperationDetail(type, record);
@@ -713,14 +713,14 @@ async function buildDetailAndResultForOperationLegacy(
     if (type === 'condition') {
       const ids = extractNodeIdsFromConditionSet(record?.conditionSet);
       const refsRaw = buildResolvedRefs(ids, labelMap, valuesMap);
-      const expr = 'ðŸ”„ Condition Ã©valuÃ©e via TBL Prisma (ligne 504)';
+      const expr = '🔄 Condition évaluée via TBL Prisma (ligne 504)';
       result = expr || `${display}: ${valueStr ?? ''}`;
     } else if (type === 'formula') {
       const ids = extractNodeIdsFromTokens(record?.tokens);
       const refsRaw = buildResolvedRefs(ids, labelMap, valuesMap);
       let expr = buildTextFromTokens(record?.tokens, labelMap, valuesMap);
       
-      // Calculer le rÃ©sultat de l'expression mathÃ©matique
+      // Calculer le résultat de l'expression mathématique
       const calculatedResult = calculateResult(expr);
       if (calculatedResult !== null) {
         expr += ` = ${calculatedResult}`;
@@ -741,16 +741,16 @@ async function buildDetailAndResultForOperationLegacy(
       result = expr ? `${expr} (=) ${display} (${valueStr ?? ''}${unitSuffix})` : `${display} (${valueStr ?? ''}${unitSuffix})`;
     }
   } catch (error) {
-    console.error('[buildDetailAndResultForOperationLegacy] âŒ Erreur lors de la construction:', error);
+    console.error('[buildDetailAndResultForOperationLegacy] ❌ Erreur lors de la construction:', error);
     result = `${display}: ${valueStr ?? ''}`;
   }
   
   return { detail, result };
 }
 
-// (ancienne buildConditionHumanText supprimÃ©e â€” remplacÃ©e par buildConditionExpressionReadable)
+// (ancienne buildConditionHumanText supprimée — remplacée par buildConditionExpressionReadable)
 
-// ðŸ”¥ NOUVELLE FONCTION: Ã‰valuer dynamiquement une condition
+// 🔥 NOUVELLE FONCTION: Évaluer dynamiquement une condition
 function evaluateCondition(when: Record<string, unknown>, values: ValuesMap): boolean {
   const type = (when.type as string) || 'binary';
   if (type !== 'binary') return false;
@@ -785,7 +785,7 @@ function evaluateCondition(when: Record<string, unknown>, values: ValuesMap): bo
   
   console.log(`[EVALUATE-CONDITION] op: ${op}, leftValue:`, leftValue, 'rightValue:', rightValue);
   
-  // Ã‰valuer selon l'opÃ©rateur
+  // Évaluer selon l'opérateur
   switch (op) {
     case 'isEmpty':
       return leftValue === null || leftValue === undefined || leftValue === '';
@@ -808,18 +808,18 @@ function evaluateCondition(when: Record<string, unknown>, values: ValuesMap): bo
     case 'notContains':
       return !String(leftValue || '').includes(String(rightValue || ''));
     default:
-      console.log(`[EVALUATE-CONDITION] OpÃ©rateur non reconnu: ${op}`);
+      console.log(`[EVALUATE-CONDITION] Opérateur non reconnu: ${op}`);
       return false;
   }
 }
 
-// ðŸ”¥ FONCTION DE CALCUL: Calculer le rÃ©sultat d'une expression mathÃ©matique
+// 🔥 FONCTION DE CALCUL: Calculer le résultat d'une expression mathématique
 function calculateResult(expression: string): number | null {
   try {
-    // Extraire seulement la partie mathÃ©matique (avant le " = " s'il existe)
+    // Extraire seulement la partie mathématique (avant le " = " s'il existe)
     const mathPart = expression.split(' = ')[0];
     
-    // Extraire les valeurs numÃ©riques entre parenthÃ¨ses
+    // Extraire les valeurs numériques entre parenthèses
     const valueMatches = mathPart.match(/\(([0-9.]+)\)/g);
     if (!valueMatches || valueMatches.length < 2) {
       return null;
@@ -827,7 +827,7 @@ function calculateResult(expression: string): number | null {
     
     const values = valueMatches.map(match => parseFloat(match.slice(1, -1)));
     
-    // DÃ©tecter l'opÃ©rateur - supporter les formats avec parenthÃ¨ses et avec espaces
+    // Détecter l'opérateur - supporter les formats avec parenthèses et avec espaces
     if (mathPart.includes('(+)') || mathPart.includes(' + ')) {
       return values.reduce((a, b) => a + b, 0);
     } else if (mathPart.includes('(-)') || mathPart.includes(' - ')) {
@@ -845,9 +845,9 @@ function calculateResult(expression: string): number | null {
   }
 }
 
-// Helper: construit l'expression lisible complÃ¨te demandÃ©e pour une condition
+// Helper: construit l'expression lisible complète demandée pour une condition
 // =============================================================================
-// ðŸ”¨ CONSTRUCTEUR D'EXPRESSIONS HUMAINES COMPLÃˆTES
+// 🔨 CONSTRUCTEUR D'EXPRESSIONS HUMAINES COMPLÈTES
 // =============================================================================
 
 async function buildConditionExpressionReadable(
@@ -860,14 +860,14 @@ async function buildConditionExpressionReadable(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dbClient: any
 ): Promise<string> {
-  // ðŸš« CETTE FONCTION LEGACY EST DÃ‰SACTIVÃ‰E !
+  // 🚫 CETTE FONCTION LEGACY EST DÉSACTIVÉE !
   // TOUT DOIT PASSER PAR TBL PRISMA MAINTENANT !
-  console.log('ðŸš« [LEGACY DISABLED] buildConditionExpressionReadable est dÃ©sactivÃ©e - utilisez TBL Prisma !');
-  return "ðŸ”„ Condition Ã©valuÃ©e via TBL Prisma";
-  // when â†’ texte
-  // Pour la clause WHEN on affiche UNIQUEMENT le libellÃ© (sans valeur entre parenthÃ¨ses)
+  console.log('🚫 [LEGACY DISABLED] buildConditionExpressionReadable est désactivée - utilisez TBL Prisma !');
+  return "🔄 Condition évaluée via TBL Prisma";
+  // when → texte
+  // Pour la clause WHEN on affiche UNIQUEMENT le libellé (sans valeur entre parenthèses)
   const refFmtLabel = (ref: string | undefined): string => {
-    if (!ref) return 'â€”';
+    if (!ref) return '—';
     const m = /@value\.([a-f0-9-]{36})/i.exec(ref);
     const id = m && m[1] ? m[1] : ref;
     return (labels.get(id) ?? id) as string;
@@ -886,15 +886,15 @@ async function buildConditionExpressionReadable(
       ? (typeof right.ref === 'string' ? refFmtLabel(right.ref) : String(right.value ?? ''))
       : '';
     const opMap: Record<string, string> = {
-      // Harmonisation demandÃ©e: inclure "="
+      // Harmonisation demandée: inclure "="
       isEmpty: '= vide',
       isNotEmpty: "= n'est pas vide",
       eq: '=',
-      ne: 'â‰ ',
+      ne: '≠',
       gt: '>',
-      gte: 'â‰¥',
+      gte: '≥',
       lt: '<',
-      lte: 'â‰¤',
+      lte: '≤',
       contains: 'contient',
       notContains: 'ne contient pas'
     };
@@ -902,7 +902,7 @@ async function buildConditionExpressionReadable(
     if (op === 'isEmpty' || op === 'isNotEmpty') return `${leftTxt} ${opTxt}`.trim();
     return `${leftTxt} ${opTxt} ${rightTxt}`.trim();
   };
-  // PremiÃ¨re branche pour le WHEN
+  // Première branche pour le WHEN
   let firstWhen: Record<string, unknown> | undefined = undefined;
   if (Array.isArray(setObj.branches) && setObj.branches.length > 0) {
     const br0 = setObj.branches[0] as Record<string, unknown>;
@@ -912,19 +912,19 @@ async function buildConditionExpressionReadable(
   }
   const whenText = whenToText(firstWhen);
   
-  // ðŸ”¥ Ã‰VALUATION DYNAMIQUE: Calculer le rÃ©sultat final de la condition
-  let finalResult = response ?? 'âˆ…';
+  // 🔥 ÉVALUATION DYNAMIQUE: Calculer le résultat final de la condition
+  let finalResult = response ?? '∅';
   let conditionResult = false;
   if (firstWhen) {
     conditionResult = evaluateCondition(firstWhen, values);
   }
-  console.log(`[BUILD-CONDITION-DEBUG] Condition Ã©valuÃ©e:`, conditionResult, 'pour when:', firstWhen);
+  console.log(`[BUILD-CONDITION-DEBUG] Condition évaluée:`, conditionResult, 'pour when:', firstWhen);
   
-  // DÃ©terminer quelle branche utiliser
+  // Déterminer quelle branche utiliser
   const branches = Array.isArray(setObj.branches) ? setObj.branches : [];
   
   if (conditionResult && branches.length > 0) {
-    // Condition vraie â†’ utiliser la premiÃ¨re branche (ALORS)
+    // Condition vraie → utiliser la première branche (ALORS)
     const selectedBranch = branches[0] as Record<string, unknown>;
     console.log(`[BUILD-CONDITION-DEBUG] Utilisation branche ALORS`);
     
@@ -944,7 +944,7 @@ async function buildConditionExpressionReadable(
       }
     }
   } else if (!conditionResult) {
-    // Condition fausse â†’ utiliser le fallback (SINON) et calculer les formules
+    // Condition fausse → utiliser le fallback (SINON) et calculer les formules
     console.log(`[BUILD-CONDITION-DEBUG] Utilisation branche SINON (fallback)`);
     
     const fIds = extractFormulaIdsFromConditionSet(conditionSet);
@@ -955,7 +955,7 @@ async function buildConditionExpressionReadable(
         where: { id: { in: Array.from(fIds) } },
         select: { id: true, nodeId: true, tokens: true }
       });
-      console.log(`[BUILD-CONDITION-DEBUG] Formules trouvÃ©es:`, formulas.length);
+      console.log(`[BUILD-CONDITION-DEBUG] Formules trouvées:`, formulas.length);
       
       for (const f of formulas) {
         const allTokenIds = new Set<string>();
@@ -978,14 +978,14 @@ async function buildConditionExpressionReadable(
         
         if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
           finalResult = String(calculatedResult);
-          console.log(`[BUILD-CONDITION-DEBUG] RÃ©sultat calculÃ© SINON:`, finalResult, 'depuis expression:', expr);
+          console.log(`[BUILD-CONDITION-DEBUG] Résultat calculé SINON:`, finalResult, 'depuis expression:', expr);
           break;
         }
       }
     }
   }
 
-  // THEN: essayer d'afficher les cibles d'action de la 1Ã¨re branche (labels + valeurs)
+  // THEN: essayer d'afficher les cibles d'action de la 1ère branche (labels + valeurs)
   let thenPart = `${labelForResult} (${finalResult})`;
   if (Array.isArray(setObj.branches) && setObj.branches.length > 0) {
     const b0 = setObj.branches[0] as Record<string, unknown>;
@@ -1003,7 +1003,7 @@ async function buildConditionExpressionReadable(
     }
   }
   
-  // ELSE: extraire les formules rÃ©fÃ©rencÃ©es et rendre leur expression
+  // ELSE: extraire les formules référencées et rendre leur expression
   const fIds = extractFormulaIdsFromConditionSet(conditionSet);
   console.log(`[BUILD-CONDITION-DEBUG] Formula IDs extraits:`, Array.from(fIds));
   let elseExpr = '';
@@ -1017,7 +1017,7 @@ async function buildConditionExpressionReadable(
       const lbl = labels.get(f.nodeId) ?? 'Formule';
       const expr = buildTextFromTokens(f.tokens, labels, values);
       
-      // ðŸ”¥ CALCULER LE RÃ‰SULTAT: Si c'est la condition active, utiliser le rÃ©sultat calculÃ©
+      // 🔥 CALCULER LE RÉSULTAT: Si c'est la condition active, utiliser le résultat calculé
       if (!conditionResult) {
         const calculatedResult = calculateResult(expr);
         if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
@@ -1035,9 +1035,9 @@ async function buildConditionExpressionReadable(
   
   const unitSuffix = unit ? ` ${unit}` : '';
   
-  // ðŸ”¥ REDIRECTION COMPLÃˆTE VERS TBL PRISMA !
-  // Au lieu de gÃ©nÃ©rer des traductions statiques, on utilise le CapacityCalculator
-  console.log('ðŸ”„ [REDIRECT TBL] buildConditionExpressionReadable redirigÃ© vers CapacityCalculator');
+  // 🔥 REDIRECTION COMPLÈTE VERS TBL PRISMA !
+  // Au lieu de générer des traductions statiques, on utilise le CapacityCalculator
+  console.log('🔄 [REDIRECT TBL] buildConditionExpressionReadable redirigé vers CapacityCalculator');
   
   // Si on a un sourceRef dans les labels, on peut l'utiliser pour identifier la condition
   let conditionId = null;
@@ -1050,10 +1050,10 @@ async function buildConditionExpressionReadable(
   
   if (conditionId) {
     try {
-      // ðŸ”¥ UTILISER LE SYSTÃˆME UNIFIÃ‰ operation-interpreter !
-      console.log('ðŸ§® [TBL DYNAMIC] Ã‰valuation condition avec operation-interpreter:', conditionId);
+      // 🔥 UTILISER LE SYSTÈME UNIFIÉ operation-interpreter !
+      console.log('🧮 [TBL DYNAMIC] Évaluation condition avec operation-interpreter:', conditionId);
       
-      // Import du systÃ¨me unifiÃ©
+      // Import du système unifié
       const { evaluateVariableOperation } = await import('./operation-interpreter');
       
       // Trouver le nodeId de la condition
@@ -1063,49 +1063,49 @@ async function buildConditionExpressionReadable(
       });
       
       if (!conditionNode?.nodeId) {
-        return `âš ï¸ Condition ${conditionId}: nodeId introuvable`;
+        return `⚠️ Condition ${conditionId}: nodeId introuvable`;
       }
       
-      // CrÃ©er le calculateur avec Prisma
+      // Créer le calculateur avec Prisma
       const submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182';
       
-      // PrÃ©parer le contexte avec la VRAIE organisation !
+      // Préparer le contexte avec la VRAIE organisation !
       const organizationId = (req as any).user?.organizationId || 'unknown-org';
       const userId = (req as any).user?.userId || 'unknown-user';
       
-      // âœ¨ Calculer avec le systÃ¨me unifiÃ©
+      // ✨ Calculer avec le système unifié
       const calculationResult = await evaluateVariableOperation(
         conditionNode.nodeId,
         submissionId,
         dbClient
       );
       
-      console.log('ðŸ§® [TBL DYNAMIC] RÃ©sultat operation-interpreter:', calculationResult);
+      console.log('🧮 [TBL DYNAMIC] Résultat operation-interpreter:', calculationResult);
       
       // Retourner la traduction intelligente au lieu du message d'attente
       if (calculationResult && calculationResult.operationResult) {
         return calculationResult.operationResult as string;
       } else {
-        return `âš ï¸ Condition ${conditionId}: Aucun rÃ©sultat TBL Prisma`;
+        return `⚠️ Condition ${conditionId}: Aucun résultat TBL Prisma`;
       }
       
     } catch (error) {
-      console.error('âŒ [TBL DYNAMIC] Erreur operation-interpreter:', error);
-      return `âš ï¸ Condition ${conditionId}: Erreur Ã©valuation TBL - ${error instanceof Error ? error.message : 'unknown'}`;
+      console.error('❌ [TBL DYNAMIC] Erreur operation-interpreter:', error);
+      return `⚠️ Condition ${conditionId}: Erreur évaluation TBL - ${error instanceof Error ? error.message : 'unknown'}`;
     }
   }
   
   // Fallback pour les cas sans conditionId identifiable
-  return `ðŸ”„ Condition: Ã‰valuation TBL Prisma (plus de traduction statique "Si...alors...sinon")`;
+  return `🔄 Condition: Évaluation TBL Prisma (plus de traduction statique "Si...alors...sinon")`;
 }
 
 // =============================================================================
-// ðŸ›¡ï¸ MIDDLEWARE - SÃ©curitÃ© et authentification
+// 🛡️ MIDDLEWARE - Sécurité et authentification
 // =============================================================================
-// TEMPORAIREMENT DÃ‰SACTIVÃ‰ pour tester le systÃ¨me automatique
-// TODO: RÃ©activer l'authentification aprÃ¨s tests
+// TEMPORAIREMENT DÉSACTIVÉ pour tester le système automatique
+// TODO: Réactiver l'authentification après tests
 
-// Authentification requise pour toutes les routes - TEMPORAIREMENT DÃ‰SACTIVÃ‰
+// Authentification requise pour toutes les routes - TEMPORAIREMENT DÉSACTIVÉ
 // router.use(authenticateToken);
 
 // Mock user temporaire pour les tests
@@ -1118,28 +1118,28 @@ router.use((req, res, next) => {
     isSuperAdmin: true,
     role: 'super_admin'
   };
-  console.log('[TreeBranchLeaf API] ðŸš© Mock auth user assignÃ© pour tests');
+  console.log('[TreeBranchLeaf API] 🚩 Mock auth user assigné pour tests');
   next();
 });
 
 // =============================================================================
-// ðŸŒ³ TREES - Gestion des arbres
+// 🌳 TREES - Gestion des arbres
 // =============================================================================
 
 // GET /api/treebranchleaf/trees - Liste des arbres
 router.get('/trees', async (req, res) => {
   try {
-    console.log('ðŸ” [TBL-ROUTES] GET /trees - DÃ‰BUT de la route');
+    console.log('🔍 [TBL-ROUTES] GET /trees - DÉBUT de la route');
     
-    // DÃ©terminer l'organisation depuis l'utilisateur/headers
+    // Déterminer l'organisation depuis l'utilisateur/headers
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    console.log('ðŸ” [TBL-ROUTES] Organization ID:', organizationId);
-    console.log('ðŸ” [TBL-ROUTES] Is Super Admin:', isSuperAdmin);
+    console.log('🔍 [TBL-ROUTES] Organization ID:', organizationId);
+    console.log('🔍 [TBL-ROUTES] Is Super Admin:', isSuperAdmin);
     
     const whereFilter = isSuperAdmin || !organizationId ? {} : { organizationId };
-    console.log('ðŸ” [TBL-ROUTES] Where filter:', whereFilter);
+    console.log('🔍 [TBL-ROUTES] Where filter:', whereFilter);
 
-    console.log('ðŸ” [TBL-ROUTES] Recherche des arbres TreeBranchLeaf...');
+    console.log('🔍 [TBL-ROUTES] Recherche des arbres TreeBranchLeaf...');
     const trees = await prisma.treeBranchLeafTree.findMany({
       where: whereFilter,
       include: {
@@ -1153,10 +1153,10 @@ router.get('/trees', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log('ðŸ” [TBL-ROUTES] Arbres trouvÃ©s:', trees.length);
-    console.log('ðŸ” [TBL-ROUTES] Premier arbre:', trees[0] ? `${trees[0].id} - ${trees[0].name}` : 'Aucun');
+    console.log('🔍 [TBL-ROUTES] Arbres trouvés:', trees.length);
+    console.log('🔍 [TBL-ROUTES] Premier arbre:', trees[0] ? `${trees[0].id} - ${trees[0].name}` : 'Aucun');
     if (trees.length > 0) {
-      console.log('ðŸ” [TBL-ROUTES] DÃ©tails premier arbre:', {
+      console.log('🔍 [TBL-ROUTES] Détails premier arbre:', {
         id: trees[0].id,
         name: trees[0].name,
         organizationId: trees[0].organizationId,
@@ -1167,11 +1167,11 @@ router.get('/trees', async (req, res) => {
     res.json(trees);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching trees:', error);
-    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer les arbres' });
+    res.status(500).json({ error: 'Impossible de récupérer les arbres' });
   }
 });
 
-// GET /api/treebranchleaf/trees/:id - DÃ©tails d'un arbre
+// GET /api/treebranchleaf/trees/:id - Détails d'un arbre
 router.get('/trees/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1190,17 +1190,17 @@ router.get('/trees/:id', async (req, res) => {
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
     res.json(tree);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching tree:', error);
-    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer l\'arbre' });
+    res.status(500).json({ error: 'Impossible de récupérer l\'arbre' });
   }
 });
 
-// POST /api/treebranchleaf/trees - CrÃ©er un arbre
+// POST /api/treebranchleaf/trees - Créer un arbre
 router.post('/trees', async (req, res) => {
   try {
     const {
@@ -1221,10 +1221,10 @@ router.post('/trees', async (req, res) => {
       return res.status(400).json({ error: "Le nom de l'arbre est requis" });
     }
 
-  // DÃ©terminer l'organisation cible (header/user d'abord, sinon body)
+  // Déterminer l'organisation cible (header/user d'abord, sinon body)
   const targetOrgId: string | null = (getAuthCtx(req as unknown as MinimalReq).organizationId as string | null) || (typeof bodyOrgId === 'string' ? bodyOrgId : null);
   if (!targetOrgId) {
-      return res.status(400).json({ error: "organizationId requis (en-tÃªte x-organization-id ou dans le corps)" });
+      return res.status(400).json({ error: "organizationId requis (en-tête x-organization-id ou dans le corps)" });
     }
 
     const id = randomUUID();
@@ -1250,11 +1250,11 @@ router.post('/trees', async (req, res) => {
     res.status(201).json(tree);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating tree:', error);
-    res.status(500).json({ error: 'Impossible de crÃ©er l\'arbre' });
+    res.status(500).json({ error: 'Impossible de créer l\'arbre' });
   }
 });
 
-// PUT /api/treebranchleaf/trees/:id - Mettre Ã  jour un arbre
+// PUT /api/treebranchleaf/trees/:id - Mettre à jour un arbre
 router.put('/trees/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1278,10 +1278,10 @@ router.put('/trees/:id', async (req, res) => {
     });
 
     if (tree.count === 0) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // RÃ©cupÃ©rer l'arbre mis Ã  jour
+    // Récupérer l'arbre mis à jour
     const updatedTree = await prisma.treeBranchLeafTree.findFirst({
       where: { id, organizationId }
     });
@@ -1289,7 +1289,7 @@ router.put('/trees/:id', async (req, res) => {
     res.json(updatedTree);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating tree:', error);
-    res.status(500).json({ error: 'Impossible de mettre Ã  jour l\'arbre' });
+    res.status(500).json({ error: 'Impossible de mettre à jour l\'arbre' });
   }
 });
 
@@ -1299,7 +1299,7 @@ router.delete('/trees/:id', async (req, res) => {
     const { id } = req.params;
     const { organizationId } = req.user!;
 
-    // Supprimer d'abord tous les nÅ“uds associÃ©s
+    // Supprimer d'abord tous les nœuds associés
     await prisma.treeBranchLeafNode.deleteMany({
       where: { treeId: id }
     });
@@ -1313,10 +1313,10 @@ router.delete('/trees/:id', async (req, res) => {
     });
 
     if (result.count === 0) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    res.json({ success: true, message: 'Arbre supprimÃ© avec succÃ¨s' });
+    res.json({ success: true, message: 'Arbre supprimé avec succès' });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting tree:', error);
     res.status(500).json({ error: 'Impossible de supprimer l\'arbre' });
@@ -1324,32 +1324,32 @@ router.delete('/trees/:id', async (req, res) => {
 });
 
 // =============================================================================
-// ðŸƒ NODES - Gestion des nÅ“uds
+// 🍃 NODES - Gestion des nœuds
 // =============================================================================
 
-// GET /api/treebranchleaf/trees/:treeId/nodes - Liste des nÅ“uds d'un arbre
+// GET /api/treebranchleaf/trees/:treeId/nodes - Liste des nœuds d'un arbre
 router.get('/trees/:treeId/nodes', async (req, res) => {
   try {
-    console.log('ðŸ” [TBL-ROUTES] GET /trees/:treeId/nodes - DÃ‰BUT');
+    console.log('🔍 [TBL-ROUTES] GET /trees/:treeId/nodes - DÉBUT');
     const { treeId } = req.params;
-    console.log('ðŸ” [TBL-ROUTES] TreeId:', treeId);
+    console.log('🔍 [TBL-ROUTES] TreeId:', treeId);
     
     // Utiliser getAuthCtx au lieu de req.user pour plus de robustesse
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    console.log('ðŸ” [TBL-ROUTES] Organization ID:', organizationId);
-    console.log('ðŸ” [TBL-ROUTES] Is Super Admin:', isSuperAdmin);
+    console.log('🔍 [TBL-ROUTES] Organization ID:', organizationId);
+    console.log('🔍 [TBL-ROUTES] Is Super Admin:', isSuperAdmin);
 
-    // VÃ©rifier que l'arbre appartient Ã  l'organisation (sauf SuperAdmin)
+    // Vérifier que l'arbre appartient à l'organisation (sauf SuperAdmin)
     const treeWhereFilter = isSuperAdmin || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    console.log('ðŸ” [TBL-ROUTES] Tree where filter:', treeWhereFilter);
+    console.log('🔍 [TBL-ROUTES] Tree where filter:', treeWhereFilter);
     
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
-    console.log('ðŸ” [TBL-ROUTES] Arbre trouvÃ©:', tree ? `${tree.id} - ${tree.name}` : 'null');
+    console.log('🔍 [TBL-ROUTES] Arbre trouvé:', tree ? `${tree.id} - ${tree.name}` : 'null');
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
     const nodes = await prisma.treeBranchLeafNode.findMany({
@@ -1376,18 +1376,18 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
         { createdAt: 'asc' }
       ]
     });
-    console.log('ðŸ” [TBL-ROUTES] NÅ“uds trouvÃ©s:', nodes.length);
+    console.log('🔍 [TBL-ROUTES] Nœuds trouvés:', nodes.length);
 
-    // ðŸ”„ MIGRATION : Reconstruire les donnÃ©es JSON depuis les colonnes dÃ©diÃ©es
-    console.log('ðŸ”„ [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour', nodes.length, 'nÅ“uds');
+    // 🔄 MIGRATION : Reconstruire les données JSON depuis les colonnes dédiées
+    console.log('🔄 [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour', nodes.length, 'nœuds');
     const reconstructedNodes = nodes.map(node => buildResponseFromColumns(node));
     
-    // ðŸš¨ DEBUG TOOLTIP FINAL : VÃ©rifier ce qui va Ãªtre envoyÃ© au client
+    // 🚨 DEBUG TOOLTIP FINAL : Vérifier ce qui va être envoyé au client
     const nodesWithTooltips = reconstructedNodes.filter(node => 
       node.text_helpTooltipType && node.text_helpTooltipType !== 'none'
     );
     if (nodesWithTooltips.length > 0) {
-      console.log('ðŸŽ¯ [GET /trees/:treeId/nodes] ENVOI AU CLIENT - NÅ“uds avec tooltips:', 
+      console.log('🎯 [GET /trees/:treeId/nodes] ENVOI AU CLIENT - Nœuds avec tooltips:', 
         nodesWithTooltips.map(node => ({
           id: node.id,
           name: node.name,
@@ -1401,19 +1401,19 @@ router.get('/trees/:treeId/nodes', async (req, res) => {
     res.json(reconstructedNodes);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching nodes:', error);
-    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer les nÅ“uds' });
+    res.status(500).json({ error: 'Impossible de récupérer les nœuds' });
   }
 });
 
-// GET /api/treebranchleaf/trees/:treeId/repeater-fields - Liste des champs rÃ©pÃ©titeurs (instances)
+// GET /api/treebranchleaf/trees/:treeId/repeater-fields - Liste des champs répétiteurs (instances)
 router.get('/trees/:treeId/repeater-fields', async (req, res) => {
   try {
-    console.log('ðŸ” [TBL-ROUTES] GET /trees/:treeId/repeater-fields - DÃ‰BUT');
+    console.log('🔁 [TBL-ROUTES] GET /trees/:treeId/repeater-fields - DÉBUT');
     const { treeId } = req.params;
     
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier que l'arbre appartient Ã  l'organisation (sauf SuperAdmin)
+    // Vérifier que l'arbre appartient à l'organisation (sauf SuperAdmin)
     const treeWhereFilter = isSuperAdmin || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     
     const tree = await prisma.treeBranchLeafTree.findFirst({
@@ -1421,23 +1421,23 @@ router.get('/trees/:treeId/repeater-fields', async (req, res) => {
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // RÃ©cupÃ©rer tous les nÅ“uds de l'arbre (TOUS les champs car buildResponseFromColumns en a besoin)
+    // Récupérer tous les nœuds de l'arbre (TOUS les champs car buildResponseFromColumns en a besoin)
     const allNodesRaw = await prisma.treeBranchLeafNode.findMany({
       where: { treeId }
     });
 
-    console.log(`ðŸ” [TBL-ROUTES] ${allNodesRaw.length} nÅ“uds bruts rÃ©cupÃ©rÃ©s depuis la base`);
+    console.log(`🔁 [TBL-ROUTES] ${allNodesRaw.length} nœuds bruts récupérés depuis la base`);
 
-    // Reconstruire les mÃ©tadonnÃ©es depuis les colonnes pour chaque nÅ“ud
+    // Reconstruire les métadonnées depuis les colonnes pour chaque nœud
     const allNodes = allNodesRaw.map(node => buildResponseFromColumns(node));
 
-    // CrÃ©er un Map pour accÃ¨s rapide par ID (non utilisÃ© dans le nouveau systÃ¨me)
+    // Créer un Map pour accès rapide par ID (non utilisé dans le nouveau système)
     const _nodesById = new Map(allNodes.map(n => [n.id as string, n]));
 
-    // Collecter tous les champs rÃ©pÃ©titeurs
+    // Collecter tous les champs répétiteurs
     const repeaterFields: Array<{
       id: string;
       label: string;
@@ -1447,90 +1447,90 @@ router.get('/trees/:treeId/repeater-fields', async (req, res) => {
       nodeId?: string;
     }> = [];
 
-    // Parcourir tous les nÅ“uds pour trouver ceux avec des repeaters
+    // Parcourir tous les nœuds pour trouver ceux avec des repeaters
     for (const node of allNodes) {
-      // VÃ©rifier si le nÅ“ud a des mÃ©tadonnÃ©es repeater
+      // Vérifier si le nœud a des métadonnées repeater
       const metadata = node.metadata as any;
       if (!metadata?.repeater) continue;
 
       const repeaterMeta = metadata.repeater;
       const templateNodeIds = repeaterMeta.templateNodeIds || [];
-      const _templateNodeLabels = repeaterMeta.templateNodeLabels || {}; // Non utilisÃ© dans le nouveau systÃ¨me
+      const _templateNodeLabels = repeaterMeta.templateNodeLabels || {}; // Non utilisé dans le nouveau système
 
-      console.log(`ðŸ” [TBL-ROUTES] NÅ“ud repeater "${node.label}" a ${templateNodeIds.length} templates configurÃ©s`);
+      console.log(`🔁 [TBL-ROUTES] Nœud repeater "${node.label}" a ${templateNodeIds.length} templates configurés`);
 
       // ========================================================================
-      // ðŸŽ¯ SYSTÃˆME DE CHAMPS RÃ‰PÃ‰TITEURS - ENFANTS PHYSIQUES UNIQUEMENT
+      // 🎯 SYSTÈME DE CHAMPS RÉPÉTITEURS - ENFANTS PHYSIQUES UNIQUEMENT
       // ========================================================================
-      // IMPORTANT: On retourne UNIQUEMENT les enfants physiques RÃ‰ELS crÃ©Ã©s via duplication
+      // IMPORTANT: On retourne UNIQUEMENT les enfants physiques RÉELS créés via duplication
       // 
-      // âŒ PLUS D'IDS VIRTUELS ! On ne gÃ©nÃ¨re PLUS d'IDs composÃ©s comme {repeaterId}_template_{templateId}
+      // ❌ PLUS D'IDS VIRTUELS ! On ne génère PLUS d'IDs composés comme {repeaterId}_template_{templateId}
       //
-      // âœ… ON RETOURNE:
-      //    - Les enfants physiques qui ont metadata.sourceTemplateId (crÃ©Ã©s par POST /duplicate-templates)
-      //    - Ce sont de VRAIS nÅ“uds dans la base avec de VRAIS UUID
-      //    - Ils peuvent Ãªtre utilisÃ©s directement dans les formules/conditions
+      // ✅ ON RETOURNE:
+      //    - Les enfants physiques qui ont metadata.sourceTemplateId (créés par POST /duplicate-templates)
+      //    - Ce sont de VRAIS nœuds dans la base avec de VRAIS UUID
+      //    - Ils peuvent être utilisés directement dans les formules/conditions
       //
-      // ðŸ“Œ Si aucun enfant physique n'existe encore (utilisateur n'a pas cliquÃ© sur "+"):
+      // 📌 Si aucun enfant physique n'existe encore (utilisateur n'a pas cliqué sur "+"):
       //    - On ne retourne RIEN pour ce repeater
-      //    - Les champs apparaÃ®tront aprÃ¨s la premiÃ¨re duplication
+      //    - Les champs apparaîtront après la première duplication
       // ========================================================================
 
-      // RÃ©cupÃ©rer tous les enfants physiques de ce repeater
+      // Récupérer tous les enfants physiques de ce repeater
       const physicalChildren = allNodes.filter(child => {
         if (child.parentId !== node.id) return false;
         
         const childMeta = child.metadata as any;
-        // VÃ©rifier que l'enfant a bien Ã©tÃ© crÃ©Ã© via duplication (a sourceTemplateId)
-        // ET que ce sourceTemplateId correspond Ã  un template configurÃ©
+        // Vérifier que l'enfant a bien été créé via duplication (a sourceTemplateId)
+        // ET que ce sourceTemplateId correspond à un template configuré
         return childMeta?.sourceTemplateId && templateNodeIds.includes(childMeta.sourceTemplateId);
       });
 
-      console.log(`ðŸ” [TBL-ROUTES] â†’ ${physicalChildren.length} enfants physiques avec sourceTemplateId trouvÃ©s`);
+      console.log(`🔁 [TBL-ROUTES] → ${physicalChildren.length} enfants physiques avec sourceTemplateId trouvés`);
 
       if (physicalChildren.length === 0) {
-        console.log(`âš ï¸ [TBL-ROUTES] Aucun enfant physique pour "${node.label}", il faut dupliquer les templates d'abord`);
-        continue; // Passer au nÅ“ud suivant
+        console.log(`⚠️ [TBL-ROUTES] Aucun enfant physique pour "${node.label}", il faut dupliquer les templates d'abord`);
+        continue; // Passer au nœud suivant
       }
 
-      // Ajouter chaque enfant physique Ã  la liste
+      // Ajouter chaque enfant physique à la liste
       for (const child of physicalChildren) {
-        console.log(`âœ… [TBL-ROUTES] Enfant physique ajoutÃ©: "${child.label}" (${child.id})`);
+        console.log(`✅ [TBL-ROUTES] Enfant physique ajouté: "${child.label}" (${child.id})`);
 
         repeaterFields.push({
-          id: child.id as string,                 // âœ… VRAI UUID de l'enfant physique
-          label: `${node.label} / ${child.label}`, // Label complet affichÃ©
+          id: child.id as string,                 // ✅ VRAI UUID de l'enfant physique
+          label: `${node.label} / ${child.label}`, // Label complet affiché
           repeaterLabel: node.label as string,    // Label du repeater parent
-          repeaterParentId: node.id as string,    // ID du nÅ“ud repeater
+          repeaterParentId: node.id as string,    // ID du nœud repeater
           nodeLabel: child.label as string,       // Label de l'enfant
-          nodeId: child.id as string              // âœ… VRAI UUID de l'enfant
+          nodeId: child.id as string              // ✅ VRAI UUID de l'enfant
         });
       }
     }
 
-    console.log(`ðŸ” [TBL-ROUTES] ${repeaterFields.length} champs rÃ©pÃ©titeurs trouvÃ©s`);
+    console.log(`🔁 [TBL-ROUTES] ${repeaterFields.length} champs répétiteurs trouvés`);
     res.json(repeaterFields);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching repeater fields:', error);
-    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer les champs rÃ©pÃ©titeurs' });
+    res.status(500).json({ error: 'Impossible de récupérer les champs répétiteurs' });
   }
 });
 
 // =============================================================================
-// ï¿½ RÃ‰CUPÃ‰RATION DES RÃ‰FÃ‰RENCES PARTAGÃ‰ES
+// � RÉCUPÉRATION DES RÉFÉRENCES PARTAGÉES
 // =============================================================================
 /**
  * GET /trees/:treeId/shared-references
- * RÃ©cupÃ¨re toutes les rÃ©fÃ©rences partagÃ©es d'un arbre
+ * Récupère toutes les références partagées d'un arbre
  */
 router.get('/trees/:treeId/shared-references', async (req, res) => {
   try {
-    console.log('ðŸ”— [TBL-ROUTES] GET /trees/:treeId/shared-references - DÃ‰BUT');
+    console.log('🔗 [TBL-ROUTES] GET /trees/:treeId/shared-references - DÉBUT');
     const { treeId } = req.params;
     
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier que l'arbre appartient Ã  l'organisation (sauf SuperAdmin)
+    // Vérifier que l'arbre appartient à l'organisation (sauf SuperAdmin)
     const treeWhereFilter = isSuperAdmin || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     
     const tree = await prisma.treeBranchLeafTree.findFirst({
@@ -1538,10 +1538,10 @@ router.get('/trees/:treeId/shared-references', async (req, res) => {
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // RÃ©cupÃ©rer tous les nÅ“uds marquÃ©s comme rÃ©fÃ©rences partagÃ©es
+    // Récupérer tous les nœuds marqués comme références partagées
     const sharedReferencesRaw = await prisma.treeBranchLeafNode.findMany({
       where: { 
         treeId,
@@ -1549,15 +1549,15 @@ router.get('/trees/:treeId/shared-references', async (req, res) => {
       }
     });
 
-    console.log(`ðŸ”— [TBL-ROUTES] ${sharedReferencesRaw.length} rÃ©fÃ©rences partagÃ©es trouvÃ©es`);
+    console.log(`🔗 [TBL-ROUTES] ${sharedReferencesRaw.length} références partagées trouvées`);
 
-    // Formater les rÃ©fÃ©rences partagÃ©es pour le frontend
+    // Formater les références partagées pour le frontend
     const sharedReferences = sharedReferencesRaw.map(node => {
       const response = buildResponseFromColumns(node);
       
       return {
         id: response.id as string,
-        label: (response.label || response.sharedReferenceName || 'RÃ©fÃ©rence sans nom') as string,
+        label: (response.label || response.sharedReferenceName || 'Référence sans nom') as string,
         category: response.sharedReferenceCategory as string | undefined,
         description: response.sharedReferenceDescription as string | undefined,
         type: response.type as string,
@@ -1566,71 +1566,71 @@ router.get('/trees/:treeId/shared-references', async (req, res) => {
       };
     });
 
-    console.log(`ðŸ”— [TBL-ROUTES] RÃ©fÃ©rences partagÃ©es formatÃ©es:`, sharedReferences.map(r => ({ id: r.id, label: r.label, category: r.category })));
+    console.log(`🔗 [TBL-ROUTES] Références partagées formatées:`, sharedReferences.map(r => ({ id: r.id, label: r.label, category: r.category })));
     res.json(sharedReferences);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching shared references:', error);
-    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer les rÃ©fÃ©rences partagÃ©es' });
+    res.status(500).json({ error: 'Impossible de récupérer les références partagées' });
   }
 });
 
 // =============================================================================
-// ï¿½ðŸ” DUPLICATION PHYSIQUE DES TEMPLATES REPEATER
+// �🔁 DUPLICATION PHYSIQUE DES TEMPLATES REPEATER
 // =============================================================================
 /**
  * POST /nodes/:nodeId/duplicate-templates
- * Clone physiquement les templates sÃ©lectionnÃ©s comme enfants du nÅ“ud repeater
+ * Clone physiquement les templates sélectionnés comme enfants du nœud repeater
  */
 router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { templateNodeIds } = req.body as { templateNodeIds: string[] };
 
-    console.log('ðŸ” [DUPLICATE-TEMPLATES] Duplication des templates:', { nodeId, templateNodeIds });
+    console.log('🔁 [DUPLICATE-TEMPLATES] Duplication des templates:', { nodeId, templateNodeIds });
 
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
     if (!Array.isArray(templateNodeIds) || templateNodeIds.length === 0) {
-      return res.status(400).json({ error: 'templateNodeIds doit Ãªtre un tableau non vide' });
+      return res.status(400).json({ error: 'templateNodeIds doit être un tableau non vide' });
     }
 
-    // âš ï¸ IMPORTANT: TreeBranchLeafNode n'a PAS de champ organizationId
-    // Il faut passer par l'arbre pour vÃ©rifier l'organisation
+    // ⚠️ IMPORTANT: TreeBranchLeafNode n'a PAS de champ organizationId
+    // Il faut passer par l'arbre pour vérifier l'organisation
     const parentNode = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
 
     if (!parentNode) {
-      return res.status(404).json({ error: 'NÅ“ud parent non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud parent non trouvé' });
     }
 
-    // VÃ©rifier que l'arbre appartient Ã  l'organisation (sauf SuperAdmin)
+    // Vérifier que l'arbre appartient à l'organisation (sauf SuperAdmin)
     if (!isSuperAdmin && organizationId && parentNode.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s non autorisÃ© Ã  cet arbre' });
+      return res.status(403).json({ error: 'Accès non autorisé à cet arbre' });
     }
 
-    // RÃ©cupÃ©rer des candidats existants pour calculer un suffixe global fiable.
-    // ⚠️ Ne pas dÃ©pendre uniquement de parentId=nodeId, car certains flux peuvent
-    // modifier l'emplacement des racines copiÃ©es; on marque aussi les copies avec
+    // Récupérer des candidats existants pour calculer un suffixe global fiable.
+    // ?? Ne pas dépendre uniquement de parentId=nodeId, car certains flux peuvent
+    // modifier l'emplacement des racines copiées; on marque aussi les copies avec
     // metadata.duplicatedFromRepeater = nodeId.
     const existingChildrenByParent = await prisma.treeBranchLeafNode.findMany({
       where: { parentId: nodeId },
       select: { id: true, metadata: true, parentId: true }
     });
 
-    // ðŸ”„ NOUVELLE LOGIQUE: Pour les repeaters, on PEUT crÃ©er plusieurs copies du mÃªme template
+    // 🔄 NOUVELLE LOGIQUE: Pour les repeaters, on PEUT créer plusieurs copies du même template
     // On ne filtre plus les templates - on permet toujours la duplication
-    console.log('ï¿½ [DUPLICATE-TEMPLATES] CrÃ©ation de nouvelles copies autorisÃ©e pour repeater');
+    console.log('� [DUPLICATE-TEMPLATES] Création de nouvelles copies autorisée pour repeater');
     
-    const newTemplateIds = templateNodeIds; // Toujours dupliquer tous les templates demandÃ©s
+    const newTemplateIds = templateNodeIds; // Toujours dupliquer tous les templates demandés
 
-    console.log('ðŸ†• [DUPLICATE-TEMPLATES] Templates Ã  dupliquer:', newTemplateIds);
+    console.log('🆕 [DUPLICATE-TEMPLATES] Templates à dupliquer:', newTemplateIds);
 
-    // RÃ©cupÃ©rer les nÅ“uds demandÃ©s, puis rÃ©soudre vers le TEMPLATE D'ORIGINE.
-    // IMPORTANT: le client peut envoyer accidentellement des IDs suffixÃ©s (-1, -2, ...) ;
+    // Récupérer les nœuds demandés, puis résoudre vers le TEMPLATE D'ORIGINE.
+    // IMPORTANT: le client peut envoyer accidentellement des IDs suffixés (-1, -2, ...) ;
     // dans ce cas, on duplique le template d'origine (metadata.sourceTemplateId) et on calcule
-    // le prochain suffixe Ã  partir des copies existantes.
+    // le prochain suffixe à partir des copies existantes.
     const requestedNodes = await prisma.treeBranchLeafNode.findMany({
       where: {
         id: { in: newTemplateIds },
@@ -1640,7 +1640,7 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
     });
 
     if (requestedNodes.length === 0) {
-      return res.status(404).json({ error: 'Aucun template trouvÃ©' });
+      return res.status(404).json({ error: 'Aucun template trouvé' });
     }
 
     const resolveBaseTemplateId = (n: { id: string; metadata: unknown }): string => {
@@ -1649,7 +1649,7 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       return typeof sourceTemplateId === 'string' && sourceTemplateId.length > 0 ? sourceTemplateId : n.id;
     };
 
-    // Conserver l'ordre de la requÃªte: chaque ID demandÃ© devient une duplication (mÃªme si plusieurs rÃ©solvent au mÃªme template)
+    // Conserver l'ordre de la requête: chaque ID demandé devient une duplication (même si plusieurs résolvent au même template)
     const baseTemplateIdsInOrder = newTemplateIds.map((id) => {
       const found = requestedNodes.find((n) => n.id === id);
       return found ? resolveBaseTemplateId(found) : id;
@@ -1670,17 +1670,17 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       .filter((n): n is NonNullable<typeof n> => Boolean(n));
 
     if (templatesToDuplicateInOrder.length === 0) {
-      return res.status(404).json({ error: 'Aucun template de base trouvÃ©' });
+      return res.status(404).json({ error: 'Aucun template de base trouvé' });
     }
 
-    console.log(`ðŸ” [DUPLICATE-TEMPLATES] ${templatesToDuplicateInOrder.length} duplication(s) demandÃ©e(s) (base templates: ${uniqueBaseTemplateIds.length})`);
+    console.log(`🔁 [DUPLICATE-TEMPLATES] ${templatesToDuplicateInOrder.length} duplication(s) demandée(s) (base templates: ${uniqueBaseTemplateIds.length})`);
 
     // Dupliquer chaque template en COPIE PROFONDE (utilise deepCopyNodeInternal)
     const duplicatedSummaries: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }> = [];
     
-    // 🔥 LOGIQUE DÉFINITIVE (conforme à la règle métier demandée):
+    // ?? LOGIQUE D�FINITIVE (conforme � la r�gle m�tier demand�e):
     // Un clic = un suffixe global unique.
-    // Exemple: si n'importe quel champ a déjà -1, le prochain clic crée -2 pour TOUS.
+    // Exemple: si n'importe quel champ a d�j� -1, le prochain clic cr�e -2 pour TOUS.
     const extractNumericSuffix = (candidate: unknown): number | null => {
       if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate;
       if (typeof candidate === 'string' && /^\d+$/.test(candidate)) return Number(candidate);
@@ -1694,9 +1694,9 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
       return Number.isFinite(parsed) ? parsed : null;
     };
 
-    // Calculer le max Ã  partir des RACINES de copies existantes (IDs `${templateId}-N`).
-    // ✅ Ne dÃ©pend pas des metadata (qui peuvent Ãªtre rÃ©Ã©crites/normalisÃ©es ailleurs).
-    // HypothÃ¨se mÃ©tier: pour un repeater donnÃ©, les templates racines sont uniques dans l'arbre.
+    // Calculer le max à partir des RACINES de copies existantes (IDs `${templateId}-N`).
+    // ? Ne dépend pas des metadata (qui peuvent être réécrites/normalisées ailleurs).
+    // Hypothèse métier: pour un repeater donné, les templates racines sont uniques dans l'arbre.
     const copyRootCandidates = await prisma.treeBranchLeafNode.findMany({
       where: {
         treeId: parentNode.treeId,
@@ -1706,7 +1706,7 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
     });
 
     console.log(
-      `🔎 [DUPLICATE-TEMPLATES] Racines de copies détectées (repeater=${nodeId}) parentChildren=${existingChildrenByParent.length} rootCandidates=${copyRootCandidates.length}`
+      `?? [DUPLICATE-TEMPLATES] Racines de copies d�tect�es (repeater=${nodeId}) parentChildren=${existingChildrenByParent.length} rootCandidates=${copyRootCandidates.length}`
     );
 
     let globalMax = 0;
@@ -1717,19 +1717,19 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
     }
     const nextSuffix = globalMax + 1;
 
-    // Debug: afficher un Ã©chantillon des racines candidates
+    // Debug: afficher un échantillon des racines candidates
     try {
       const sample = copyRootCandidates.slice(0, 10).map((c) => {
         const fromId = extractSuffixFromId(c.id);
         return { id: c.id, parentId: c.parentId, fromId };
       });
-      console.log('🔎 [DUPLICATE-TEMPLATES] Sample racines candidates (id/suffix):', sample);
+      console.log('?? [DUPLICATE-TEMPLATES] Sample racines candidates (id/suffix):', sample);
     } catch {
       // noop
     }
 
-    console.log('🔢 [DUPLICATE-TEMPLATES] Suffixe global calculé (depuis enfants existants):');
-    console.log(`   max global existant: ${globalMax} → prochain suffixe: ${nextSuffix}`);
+    console.log('?? [DUPLICATE-TEMPLATES] Suffixe global calcul� (depuis enfants existants):');
+    console.log(`   max global existant: ${globalMax} ? prochain suffixe: ${nextSuffix}`);
     
     for (const template of templatesToDuplicateInOrder) {
       const baseTemplateId = template.id;
@@ -1743,12 +1743,12 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
         isFromRepeaterDuplication: true
       });
       const newRootId = result.root.newId;
-      console.log(`🎯 [DUPLICATE-TEMPLATES] deepCopyNodeInternalService newRootId:`, newRootId, `(type: ${typeof newRootId})`);
+      console.log(`?? [DUPLICATE-TEMPLATES] deepCopyNodeInternalService newRootId:`, newRootId, `(type: ${typeof newRootId})`);
 
-      // Normaliser le label de la copie sur la base du label du gabarit + suffixe numérique
+      // Normaliser le label de la copie sur la base du label du gabarit + suffixe num�rique
       const normalizedCopyLabel = `${template.label || baseTemplateId}-${copyNumber}`;
 
-      // Ajouter/mettre à jour les métadonnées de traçabilité sur la racine copiée
+      // Ajouter/mettre � jour les m�tadonn�es de tra�abilit� sur la racine copi�e
       await prisma.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
@@ -1768,7 +1768,7 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
         where: { id: newRootId },
         select: { id: true, label: true, type: true, parentId: true }
       });
-      console.log(`🎯 [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : 'NULL');
+      console.log(`?? [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : 'NULL');
       
       if (created) {
         duplicatedSummaries.push({
@@ -1778,23 +1778,23 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
           parentId: created.parentId,
           sourceTemplateId: baseTemplateId
         });
-        console.log(`âœ… [DUPLICATE-TEMPLATES] Template "${template.label}" dupliquÃ© en profondeur â†’ "${created.label}" (${created.id})`);
+        console.log(`✅ [DUPLICATE-TEMPLATES] Template "${template.label}" dupliqué en profondeur → "${created.label}" (${created.id})`);
 
-        // ðŸ”— AprÃ¨s duplication: crÃ©er/mapper automatiquement les rÃ©fÃ©rences partagÃ©es vers leurs COPIES suffixÃ©es "-N" (N incrÃ©mental)
+        // 🔗 Après duplication: créer/mapper automatiquement les références partagées vers leurs COPIES suffixées "-N" (N incrémental)
         try {
           const r = await applySharedReferencesFromOriginalInternal(req as unknown as MinimalReq, newRootId);
-          console.log(`ðŸ”— [DUPLICATE-TEMPLATES] RÃ©fÃ©rences partagÃ©es appliquÃ©es (suffixe -${r.suffix}) pour`, newRootId);
+          console.log(`🔗 [DUPLICATE-TEMPLATES] Références partagées appliquées (suffixe -${r.suffix}) pour`, newRootId);
         } catch (e) {
-          console.warn('âš ï¸ [DUPLICATE-TEMPLATES] Ã‰chec application des rÃ©fÃ©rences partagÃ©es pour', newRootId, e);
+          console.warn('⚠️ [DUPLICATE-TEMPLATES] Échec application des références partagées pour', newRootId, e);
         }
 
 
-        // 🔗 APRÈS duplication: Copier les tables des sélecteurs
+        // ?? APR�S duplication: Copier les tables des s�lecteurs
         try {
           const selectorCopyOptions = {
             nodeIdMap: result.idMap,
             tableCopyCache: new Map(),
-            tableIdMap: new Map(Object.entries(result.tableIdMap))  // ✅ Utiliser le tableIdMap peuplé
+            tableIdMap: new Map(Object.entries(result.tableIdMap))  // ? Utiliser le tableIdMap peupl�
           };
           await copySelectorTablesAfterNodeCopy(
             prisma,
@@ -1803,43 +1803,43 @@ router.post('/nodes/:nodeId/duplicate-templates', async (req, res) => {
             selectorCopyOptions,
             copyNumber
           );
-          console.log(`✅ [DUPLICATE-TEMPLATES] Tables des sélecteurs copiées pour ${newRootId}`);
+          console.log(`? [DUPLICATE-TEMPLATES] Tables des s�lecteurs copi�es pour ${newRootId}`);
         } catch (selectorErr) {
-          console.warn('⚠️  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des sélecteurs pour', newRootId, selectorErr);
+          console.warn('??  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s�lecteurs pour', newRootId, selectorErr);
         }
 
-        // ℹ️ NOTE: Les variables liées (linkedVariableIds) sont DÉJÀ copiées par deepCopyNodeInternal
+        // ?? NOTE: Les variables li�es (linkedVariableIds) sont D�J� copi�es par deepCopyNodeInternal
         // avec autoCreateDisplayNode: true, donc pas besoin d'appeler copyLinkedVariablesFromNode ici
-        console.log(`ℹ️ [DUPLICATE-TEMPLATES] Variables liées déjà copiées par deepCopyNodeInternal pour ${newRootId}`);
+        console.log(`?? [DUPLICATE-TEMPLATES] Variables li�es d�j� copi�es par deepCopyNodeInternal pour ${newRootId}`);
       }
 
     }
-    console.log(`ðŸŽ‰ [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} nÅ“uds dupliquÃ©s (deep) avec succÃ¨s`);
+    console.log(`🎉 [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} nœuds dupliqués (deep) avec succès`);
     res.status(201).json({
       duplicated: duplicatedSummaries.map(n => ({ id: n.id, label: n.label, type: n.type, parentId: n.parentId, sourceTemplateId: n.sourceTemplateId })),
       count: duplicatedSummaries.length
     });
   } catch (error) {
-    console.error('âŒ [DUPLICATE-TEMPLATES] Erreur:', error);
+    console.error('❌ [DUPLICATE-TEMPLATES] Erreur:', error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Erreur lors de la duplication des templates', details: msg });
   }
 });
 
 // =============================================================================
-// ðŸ“¦ COPIE PROFONDE D'UN NÅ’UD (COPIE INDÃ‰PENDANTE COMPLÃˆTE)
+// 📦 COPIE PROFONDE D'UN NŒUD (COPIE INDÉPENDANTE COMPLÈTE)
 // =============================================================================
 /**
  * POST /api/treebranchleaf/nodes/:nodeId/deep-copy
- * CrÃ©e une copie indÃ©pendante complÃ¨te d'un nÅ“ud et de toute sa cascade:
+ * Crée une copie indépendante complète d'un nœud et de toute sa cascade:
  * - Tous les descendants (options SELECT, champs enfants, etc.)
- * - Les rÃ©fÃ©rences partagÃ©es (sharedReferenceId/sharedReferenceIds) NE sont PAS matÃ©rialisÃ©es
- *   dans la structure copiÃ©e. Elles restent vides (copie indÃ©pendante). Une Ã©tape sÃ©parÃ©e
- *   peut ensuite les rÃ©appliquer depuis l'original via l'endpoint dÃ©diÃ©.
- * - Les formules/conditions/tables liÃ©es sont dupliquÃ©es et les IDs sont rÃ©Ã©crits dans les JSON (tokens/conditionSet)
- * - Tous les IDs sont rÃ©gÃ©nÃ©rÃ©s, sans doublons, avec un mappage old->new retournÃ©
+ * - Les références partagées (sharedReferenceId/sharedReferenceIds) NE sont PAS matérialisées
+ *   dans la structure copiée. Elles restent vides (copie indépendante). Une étape séparée
+ *   peut ensuite les réappliquer depuis l'original via l'endpoint dédié.
+ * - Les formules/conditions/tables liées sont dupliquées et les IDs sont réécrits dans les JSON (tokens/conditionSet)
+ * - Tous les IDs sont régénérés, sans doublons, avec un mappage old->new retourné
  */
-// ðŸ”§ Helper rÃ©utilisable pour rÃ©aliser une copie profonde cÃ´tÃ© serveur (utilisÃ© par la route et le duplicateur de templates)
+// 🔧 Helper réutilisable pour réaliser une copie profonde côté serveur (utilisé par la route et le duplicateur de templates)
 async function deepCopyNodeInternal(
   req: MinimalReq,
   nodeId: string,
@@ -1847,7 +1847,7 @@ async function deepCopyNodeInternal(
 ): Promise<{ root: { oldId: string; newId: string }; idMap: Record<string, string>; formulaIdMap: Record<string, string>; conditionIdMap: Record<string, string>; tableIdMap: Record<string, string> }> {
   const { targetParentId, suffixNum, preserveSharedReferences = false } = opts || {};
   
-  // Helpers locaux pour la rÃ©Ã©criture des IDs dans tokens/conditions
+  // Helpers locaux pour la réécriture des IDs dans tokens/conditions
   const replaceIdsInTokens = (tokens: unknown, idMap: Map<string, string>): unknown => {
     if (!tokens) return tokens;
     const mapOne = (s: string) => s.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1: string) => {
@@ -1869,9 +1869,9 @@ async function deepCopyNodeInternal(
     if (!conditionSet) return conditionSet;
     try {
       let str = JSON.stringify(conditionSet);
-      // Remplacer les rÃ©fÃ©rences de valeurs @value.<nodeId>
+      // Remplacer les références de valeurs @value.<nodeId>
       str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1: string) => `@value.${idMap.get(p1) || p1}`);
-      // Remplacer les rÃ©fÃ©rences de formules node-formula:<formulaId>
+      // Remplacer les références de formules node-formula:<formulaId>
       str = str.replace(/node-formula:([a-f0-9-]{36})/gi, (_m, p1: string) => `node-formula:${formulaIdMap.get(p1) || p1}`);
       return JSON.parse(str);
     } catch {
@@ -1879,21 +1879,21 @@ async function deepCopyNodeInternal(
     }
   };
 
-  // Charger le nÅ“ud source (et l'arbre pour contrÃ´le d'accÃ¨s)
+  // Charger le nœud source (et l'arbre pour contrôle d'accès)
   const source = await prisma.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { organizationId: true } } }
   });
   if (!source) {
-    throw new Error('NÅ“ud source introuvable');
+    throw new Error('Nœud source introuvable');
   }
 
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
   if (!isSuperAdmin && organizationId && source.TreeBranchLeafTree!.organizationId !== organizationId) {
-    throw new Error('AccÃ¨s non autorisÃ© Ã  cet arbre');
+    throw new Error('Accès non autorisé à cet arbre');
   }
 
-  // DÃ©terminer le suffixe numÃ©rique (-N) pour cette copie 
+  // Déterminer le suffixe numérique (-N) pour cette copie 
   // Si suffixNum est fourni (depuis template duplication), l'utiliser directement
   // Sinon, calculer en cherchant le max existant
   let __copySuffixNum = suffixNum || 1;
@@ -1916,7 +1916,7 @@ async function deepCopyNodeInternal(
   }
   const __computedLabelSuffix = `-${__copySuffixNum}`;
 
-  // RÃ©cupÃ©rer tous les nÅ“uds de l'arbre pour une construction de sous-arbre en mÃ©moire
+  // Récupérer tous les nœuds de l'arbre pour une construction de sous-arbre en mémoire
   const allNodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
   const byId = new Map(allNodes.map(n => [n.id, n] as const));
   const childrenByParent = new Map<string, string[]>();
@@ -1927,7 +1927,7 @@ async function deepCopyNodeInternal(
     childrenByParent.set(n.parentId, arr);
   }
 
-  // Construire l'ensemble des nÅ“uds Ã  copier (seulement le nÅ“ud et ses descendants directs)
+  // Construire l'ensemble des nœuds à copier (seulement le nœud et ses descendants directs)
   const toCopy = new Set<string>();
   const queue: string[] = [source.id];
   while (queue.length) {
@@ -1939,7 +1939,7 @@ async function deepCopyNodeInternal(
     for (const c of children) queue.push(c);
   }
 
-  // Mappage des IDs (nÅ“uds et formules/conditions seront gÃ©rÃ©s sÃ©parÃ©ment)
+  // Mappage des IDs (nœuds et formules/conditions seront gérés séparément)
   const idMap = new Map<string, string>();
   for (const oldId of toCopy) idMap.set(oldId, `${oldId}-${__copySuffixNum}`);
 
@@ -1948,9 +1948,9 @@ async function deepCopyNodeInternal(
   const conditionIdMap = new Map<string, string>();
   const tableIdMap = new Map<string, string>();
 
-  // Calcul d'un ordre de crÃ©ation parents â†’ enfants
+  // Calcul d'un ordre de création parents → enfants
   const buildCreationOrder = (): string[] => {
-    // Edges: parent -> child (si parent aussi copiÃ©)
+    // Edges: parent -> child (si parent aussi copié)
     const edges = new Map<string, Set<string>>();
     const indegree = new Map<string, number>();
     const ensureNode = (id: string) => { if (!edges.has(id)) edges.set(id, new Set()); if (!indegree.has(id)) indegree.set(id, 0); };
@@ -1980,7 +1980,7 @@ async function deepCopyNodeInternal(
       }
     }
 
-    // Si tout n'est pas ordonnÃ© (cycle improbable), fallback par profondeur parentale
+    // Si tout n'est pas ordonné (cycle improbable), fallback par profondeur parentale
     if (ordered.length !== toCopy.size) {
       const remaining = new Set(Array.from(toCopy).filter(id => !ordered.includes(id)));
       const depth = new Map<string, number>();
@@ -1998,7 +1998,7 @@ async function deepCopyNodeInternal(
 
   const nodesToCreate = buildCreationOrder();
 
-  // CrÃ©er tous les nÅ“uds en base avec rÃ©Ã©criture parentId et nettoyage des shared refs (copie indÃ©pendante)
+  // Créer tous les nœuds en base avec réécriture parentId et nettoyage des shared refs (copie indépendante)
   const createdNodes: Array<{ oldId: string; newId: string }> = [];
   for (const oldId of nodesToCreate) {
     const oldNode = byId.get(oldId)!;
@@ -2006,14 +2006,14 @@ async function deepCopyNodeInternal(
     const isRoot = oldId === source.id;
 
     const newParentId = (() => {
-      // Si le parent est dans lâ€™ensemble copiÃ© â†’ utiliser le nouveau parent
+      // Si le parent est dans l’ensemble copié → utiliser le nouveau parent
       if (oldNode.parentId && toCopy.has(oldNode.parentId)) return idMap.get(oldNode.parentId)!;
-      // Sinon, ancrer sous targetParentId si fourni, sinon reproduire le parent dâ€™origine
+      // Sinon, ancrer sous targetParentId si fourni, sinon reproduire le parent d’origine
       if (isRoot) return targetParentId ?? oldNode.parentId ?? null;
       return oldNode.parentId ?? null;
     })();
 
-    // PrÃ©parer les champs Ã  cloner (sans JSON hÃ©ritÃ©s inutiles)
+    // Préparer les champs à cloner (sans JSON hérités inutiles)
   const cloneData: Prisma.TreeBranchLeafNodeCreateInput = {
     id: newId,
     treeId: oldNode.treeId,
@@ -2028,7 +2028,7 @@ async function deepCopyNodeInternal(
         isActive: oldNode.isActive,
         isRequired: oldNode.isRequired,
         isMultiple: oldNode.isMultiple,
-        // CapacitÃ©s
+        // Capacités
         hasData: oldNode.hasData,
         hasFormula: oldNode.hasFormula,
         hasCondition: oldNode.hasCondition,
@@ -2036,7 +2036,7 @@ async function deepCopyNodeInternal(
         hasAPI: oldNode.hasAPI,
         hasLink: oldNode.hasLink,
         hasMarkers: oldNode.hasMarkers,
-        // 🔧 FIX: Copier les propriétés data_* pour hériter de l'unité et de la précision
+        // ?? FIX: Copier les propri�t�s data_* pour h�riter de l'unit� et de la pr�cision
         data_unit: oldNode.data_unit,
         data_precision: oldNode.data_precision,
         data_displayFormat: oldNode.data_displayFormat,
@@ -2127,11 +2127,11 @@ async function deepCopyNodeInternal(
         })() : oldNode.link_params,
         link_targetNodeId: oldNode.link_targetNodeId && idMap.has(oldNode.link_targetNodeId) ? idMap.get(oldNode.link_targetNodeId)! : oldNode.link_targetNodeId,
         link_targetTreeId: oldNode.link_targetTreeId,
-        // 📊 TABLE: Copier table_activeId, table_instances et table_name du noeud original
-        // ✅ IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiées
+        // ?? TABLE: Copier table_activeId, table_instances et table_name du noeud original
+        // ? IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copi�es
         table_activeId: oldNode.table_activeId ? `${oldNode.table_activeId}-${__copySuffixNum}` : null,
         table_instances: (() => {
-          console.log('\n[DEEP-COPY-TABLE] DÉBUT table_instances');
+          console.log('\n[DEEP-COPY-TABLE] D�BUT table_instances');
           console.log('[DEEP-COPY-TABLE] oldNode.table_instances existe?', !!oldNode.table_instances);
           console.log('[DEEP-COPY-TABLE] typeof:', typeof oldNode.table_instances);
           console.log('[DEEP-COPY-TABLE] Constructor:', oldNode.table_instances?.constructor?.name);
@@ -2163,9 +2163,9 @@ async function deepCopyNodeInternal(
           console.log('[DEEP-COPY-TABLE] Keys:', Object.keys(rawInstances));
           const updatedInstances: Record<string, unknown> = {};
           for (const [key, value] of Object.entries(rawInstances)) {
-            // ✅ FIX: Vérifier si la clé a DÉJÀ un suffixe numérique (-1, -2, etc.)
+            // ? FIX: V�rifier si la cl� a D�J� un suffixe num�rique (-1, -2, etc.)
             // Ne pas utiliser includes('-') car UUIDs contiennent des tirets!
-            const hasSuffixRegex = /-\d+$/;  // Suffixe numérique à la fin
+            const hasSuffixRegex = /-\d+$/;  // Suffixe num�rique � la fin
             const newKey = hasSuffixRegex.test(key) ? key : `${key}-${__copySuffixNum}`;
             console.log(`[DEEP-COPY-TABLE] Key: "${key}" => "${newKey}"`);
             
@@ -2174,9 +2174,9 @@ async function deepCopyNodeInternal(
               const updatedObj = { ...tableInstanceObj };
               if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === 'string') {
                 const oldTableId = tableInstanceObj.tableId;
-                // ✅ FIX: Vérifier si le tableId a DÉJÀ un suffixe numérique (-1, -2, etc.)
+                // ? FIX: V�rifier si le tableId a D�J� un suffixe num�rique (-1, -2, etc.)
                 // Ne pas utiliser includes('-') car UUIDs contiennent des tirets!
-                const hasSuffixRegex = /-\d+$/;  // Suffixe numérique à la fin
+                const hasSuffixRegex = /-\d+$/;  // Suffixe num�rique � la fin
                 updatedObj.tableId = hasSuffixRegex.test(oldTableId)
                   ? oldTableId 
                   : `${oldTableId}-${__copySuffixNum}`;
@@ -2192,7 +2192,7 @@ async function deepCopyNodeInternal(
           return updatedInstances;
         })() as unknown as Prisma.InputJsonValue,
         table_name: oldNode.table_name,
-        // Répéter: recopier la config colonnes repeater telle quelle
+        // R�p�ter: recopier la config colonnes repeater telle quelle
         repeater_templateNodeIds: oldNode.repeater_templateNodeIds,
         repeater_templateNodeLabels: oldNode.repeater_templateNodeLabels,
         repeater_minItems: oldNode.repeater_minItems,
@@ -2201,19 +2201,19 @@ async function deepCopyNodeInternal(
         repeater_buttonSize: oldNode.repeater_buttonSize,
         repeater_buttonWidth: oldNode.repeater_buttonWidth,
         repeater_iconOnly: oldNode.repeater_iconOnly,
-        // METADATA: noter la provenance et supprimer les shared refs (copie indÃ©pendante)
+        // METADATA: noter la provenance et supprimer les shared refs (copie indépendante)
         metadata: {
           ...(typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {}),
           copiedFromNodeId: oldNode.id,
           copySuffix: __copySuffixNum,
         } as Prisma.InputJsonValue,
-        // SHARED REFS â†’ conditionnellement prÃ©servÃ©es ou supprimÃ©es
+        // SHARED REFS → conditionnellement préservées ou supprimées
         isSharedReference: preserveSharedReferences ? oldNode.isSharedReference : false,
         sharedReferenceId: preserveSharedReferences ? oldNode.sharedReferenceId : null,
         sharedReferenceIds: preserveSharedReferences ? oldNode.sharedReferenceIds : [],
         sharedReferenceName: preserveSharedReferences ? oldNode.sharedReferenceName : null,
         sharedReferenceDescription: preserveSharedReferences ? oldNode.sharedReferenceDescription : null,
-        // 🔗 COLONNES LINKED*** : Copier les références existantes, créer les nouvelles après
+        // ?? COLONNES LINKED*** : Copier les r�f�rences existantes, cr�er les nouvelles apr�s
         linkedFormulaIds: Array.isArray(oldNode.linkedFormulaIds) 
           ? oldNode.linkedFormulaIds 
           : [],
@@ -2221,7 +2221,7 @@ async function deepCopyNodeInternal(
           ? oldNode.linkedConditionIds 
           : [],
         linkedTableIds: Array.isArray(oldNode.linkedTableIds)
-          // ✅ AJOUTER LES SUFFIXES aux IDs de table ici aussi!
+          // ? AJOUTER LES SUFFIXES aux IDs de table ici aussi!
           ? oldNode.linkedTableIds.map(id => `${id}-${__copySuffixNum}`)
           : [],
         linkedVariableIds: Array.isArray(oldNode.linkedVariableIds) 
@@ -2230,7 +2230,7 @@ async function deepCopyNodeInternal(
         updatedAt: new Date(),
     };
 
-    console.log(`🚀 [CREATE-NODE] Création nœud ${newId} (${oldNode.label})`);
+    console.log(`?? [CREATE-NODE] Cr�ation n�ud ${newId} (${oldNode.label})`);
     console.log(`   oldNode.linkedVariableIds:`, oldNode.linkedVariableIds);
     console.log(`   cloneData.linkedVariableIds:`, cloneData.linkedVariableIds);
 
@@ -2238,7 +2238,7 @@ async function deepCopyNodeInternal(
     createdNodes.push({ oldId, newId });
   }
 
-  // Dupliquer Formules / Conditions / Tables pour chaque nÅ“ud copiÃ©
+  // Dupliquer Formules / Conditions / Tables pour chaque nœud copié
   for (const { oldId, newId } of createdNodes) {
       // Formules
       const formulas = await prisma.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
@@ -2260,7 +2260,7 @@ async function deepCopyNodeInternal(
             updatedAt: new Date(),
           }
         });
-        // ðŸ”— MAJ linkedFormulaIds (propriÃ©taire + inverses rÃ©fÃ©rencÃ©s)
+        // 🔗 MAJ linkedFormulaIds (propriétaire + inverses référencés)
         try {
           await addToNodeLinkedField(prisma, newId, 'linkedFormulaIds', [newFormulaId]);
           const refs = Array.from(extractNodeIdsFromTokens(newTokens));
@@ -2292,7 +2292,7 @@ async function deepCopyNodeInternal(
             updatedAt: new Date(),
           }
         });
-        // ðŸ”— MAJ linkedConditionIds (propriÃ©taire + inverses rÃ©fÃ©rencÃ©s)
+        // 🔗 MAJ linkedConditionIds (propriétaire + inverses référencés)
         try {
           await addToNodeLinkedField(prisma, newId, 'linkedConditionIds', [newConditionId]);
           const refs = Array.from(extractNodeIdsFromConditionSet(newSet));
@@ -2311,7 +2311,7 @@ async function deepCopyNodeInternal(
       });
       for (const t of tables) {
         const newTableId = `${t.id}-${__copySuffixNum}`;
-        tableIdMap.set(t.id, newTableId); // 🔗 Tracer la copie
+        tableIdMap.set(t.id, newTableId); // ?? Tracer la copie
         await prisma.treeBranchLeafNodeTable.create({
           data: {
             id: newTableId,
@@ -2322,7 +2322,7 @@ async function deepCopyNodeInternal(
             type: t.type,
             rowCount: t.rowCount,
             columnCount: t.columnCount,
-            // 🔢 COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
+            // ?? COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
             meta: (() => {
               if (!t.meta) return t.meta as Prisma.InputJsonValue;
               try {
@@ -2371,7 +2371,7 @@ async function deepCopyNodeInternal(
               create: t.tableColumns.map(col => ({
                 id: `${col.id}-${__copySuffixNum}`,
                 columnIndex: col.columnIndex,
-                // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+                // ?? COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
                 name: col.name 
                   ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${__computedLabelSuffix}`)
                   : col.name,
@@ -2390,7 +2390,7 @@ async function deepCopyNodeInternal(
             }
           }
         });
-        // ðŸ”— MAJ linkedTableIds du nÅ“ud propriÃ©taire (pas d'inverse pour table)
+        // 🔗 MAJ linkedTableIds du nœud propriétaire (pas d'inverse pour table)
         try {
           await addToNodeLinkedField(prisma, newId, 'linkedTableIds', [newTableId]);
         } catch (e) {
@@ -2399,19 +2399,19 @@ async function deepCopyNodeInternal(
       }
     }
 
-    // Cache global pour éviter de copier deux fois la même variable
+    // Cache global pour �viter de copier deux fois la m�me variable
     const variableCopyCache = new Map<string, string>();
 
     for (const oldNodeId of toCopy) {
       const newNodeId = idMap.get(oldNodeId)!;
       const oldNode = byId.get(oldNodeId)!;
 
-      // Mapper les IDs linked du nœud original vers leurs versions suffixées
-      // Les formules et conditions doivent aussi avoir le suffixe appliqué
+      // Mapper les IDs linked du n�ud original vers leurs versions suffix�es
+      // Les formules et conditions doivent aussi avoir le suffixe appliqu�
       const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [])
         .map(id => {
           const mappedId = formulaIdMap.get(id);
-          // ✅ Si déjà mappé (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
+          // ? Si d�j� mapp� (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
           return mappedId ?? `${id}-${__copySuffixNum}`;
         })
         .filter(Boolean);
@@ -2419,7 +2419,7 @@ async function deepCopyNodeInternal(
       const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [])
             .map(id => {
               const mappedId = conditionIdMap.get(id);
-              // ✅ Si déjà mappé (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
+              // ? Si d�j� mapp� (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
               return mappedId ?? `${id}-${__copySuffixNum}`;
             })
             .filter(Boolean);
@@ -2427,44 +2427,44 @@ async function deepCopyNodeInternal(
           const newLinkedTableIds = (Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : [])
             .map(id => {
               const mappedId = tableIdMap.get(id);
-              // ✅ Si déjà mappé (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
+              // ? Si d�j� mapp� (avec suffixe), on le retourne directement. Sinon on ajoute le suffixe.
               return mappedId ?? `${id}-${__copySuffixNum}`;
             })
             .filter(Boolean);
           
           const newLinkedVariableIds: string[] = [];
           
-          // 🔗 COPIE DES VARIABLES DANS TreeBranchLeafNodeVariable
-          console.log(`\n[DEEP-COPY] ⭐ COPIE linkedVariableIds pour nœud ${newNodeId}`);
-          console.log(`[DEEP-COPY] Ancien nœud label: ${oldNode.label}`);
-          console.log(`[DEEP-COPY] Ancien nœud type: ${oldNode.type}, subType: ${oldNode.subType}`);
+          // ?? COPIE DES VARIABLES DANS TreeBranchLeafNodeVariable
+          console.log(`\n[DEEP-COPY] ? COPIE linkedVariableIds pour n�ud ${newNodeId}`);
+          console.log(`[DEEP-COPY] Ancien n�ud label: ${oldNode.label}`);
+          console.log(`[DEEP-COPY] Ancien n�ud type: ${oldNode.type}, subType: ${oldNode.subType}`);
           console.log(`[DEEP-COPY] linkedVariableIds RAW:`, oldNode.linkedVariableIds);
           
-          // 🎯 Création systématique des nœuds d'affichage via copyVariableWithCapacities
+          // ?? Cr�ation syst�matique des n�uds d'affichage via copyVariableWithCapacities
           // (la fonction choisit la bonne section "Nouveau Section" si elle existe)
           const shouldCreateDisplayNodes = true;
           console.log(`[DEEP-COPY] shouldCreateDisplayNodes (forced): ${shouldCreateDisplayNodes}`);
           
           if (Array.isArray(oldNode.linkedVariableIds) && oldNode.linkedVariableIds.length > 0) {
-            console.log(`[DEEP-COPY] ✅ COPIE ${oldNode.linkedVariableIds.length} variable(s)`);
+            console.log(`[DEEP-COPY] ? COPIE ${oldNode.linkedVariableIds.length} variable(s)`);
             
             for (const linkedVarId of oldNode.linkedVariableIds) {
               const isSharedRef = typeof linkedVarId === 'string' && linkedVarId.startsWith('shared-ref-');
               console.log(`[DEEP-COPY] Traitement linkedVarId="${linkedVarId}", isSharedRef=${isSharedRef}`);
               
               if (isSharedRef) {
-                // ✅ Shared Reference : GARDER tel quel
+                // ? Shared Reference : GARDER tel quel
                 console.log(`[DEEP-COPY] PRESERVED SHARED: ${linkedVarId}`);
                 newLinkedVariableIds.push(linkedVarId);
               } else {
-                // 📦 Variable Normale UUID : COPIER avec ou sans nœud d'affichage
+                // ?? Variable Normale UUID : COPIER avec ou sans n�ud d'affichage
                 const newVarId = `${linkedVarId}-${__copySuffixNum}`;
-                console.log(`[DEEP-COPY] COPYING NORMAL VAR: ${linkedVarId} → ${newVarId}`);
+                console.log(`[DEEP-COPY] COPYING NORMAL VAR: ${linkedVarId} ? ${newVarId}`);
                 
                 try {
                   if (shouldCreateDisplayNodes) {
-                    // 🎯 Utiliser copyVariableWithCapacities pour créer le nœud d'affichage
-                    console.log(`[DEEP-COPY] 🎯 Appel copyVariableWithCapacities avec autoCreateDisplayNode=true`);
+                    // ?? Utiliser copyVariableWithCapacities pour cr�er le n�ud d'affichage
+                    console.log(`[DEEP-COPY] ?? Appel copyVariableWithCapacities avec autoCreateDisplayNode=true`);
                     const copyResult = await copyVariableWithCapacities(
                       linkedVarId,
                       __copySuffixNum,
@@ -2482,15 +2482,15 @@ async function deepCopyNodeInternal(
                     );
                     
                     if (copyResult.success) {
-                      console.log(`[DEEP-COPY] ✅ Created with display node: ${copyResult.variableId}`);
+                      console.log(`[DEEP-COPY] ? Created with display node: ${copyResult.variableId}`);
                       newLinkedVariableIds.push(copyResult.variableId);
                     } else {
-                      console.error(`[DEEP-COPY] ❌ Copy failed: ${copyResult.error}`);
+                      console.error(`[DEEP-COPY] ? Copy failed: ${copyResult.error}`);
                       newLinkedVariableIds.push(linkedVarId);
                     }
                   }
                 } catch (e) {
-                  console.error(`[DEEP-COPY] ❌ Exception: ${(e as Error).message}`);
+                  console.error(`[DEEP-COPY] ? Exception: ${(e as Error).message}`);
                   newLinkedVariableIds.push(linkedVarId);
                 }
               }
@@ -2501,7 +2501,7 @@ async function deepCopyNodeInternal(
             console.log(`[DEEP-COPY] NO linked variables`);
           }
 
-          // UPDATE le nœud avec les linked*** correctes
+          // UPDATE le n�ud avec les linked*** correctes
           if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0 || newLinkedVariableIds.length > 0) {
             try {
               await prisma.treeBranchLeafNode.update({
@@ -2513,9 +2513,9 @@ async function deepCopyNodeInternal(
                   linkedVariableIds: newLinkedVariableIds.length > 0 ? { set: newLinkedVariableIds } : { set: [] },
                 }
               });
-              console.log(`✅ [DEEP-COPY] Nœud ${newNodeId} mis à jour - linkedFormulaIds: ${newLinkedFormulaIds.length}, linkedConditionIds: ${newLinkedConditionIds.length}, linkedTableIds: ${newLinkedTableIds.length}, linkedVariableIds: ${newLinkedVariableIds.length}`);
+              console.log(`? [DEEP-COPY] N�ud ${newNodeId} mis � jour - linkedFormulaIds: ${newLinkedFormulaIds.length}, linkedConditionIds: ${newLinkedConditionIds.length}, linkedTableIds: ${newLinkedTableIds.length}, linkedVariableIds: ${newLinkedVariableIds.length}`);
             } catch (e) {
-              console.warn(`⚠️ [DEEP-COPY] Erreur lors du UPDATE des linked*** pour ${newNodeId}:`, (e as Error).message);
+              console.warn(`?? [DEEP-COPY] Erreur lors du UPDATE des linked*** pour ${newNodeId}:`, (e as Error).message);
             }
           }
 
@@ -2539,13 +2539,13 @@ async function deepCopyNodeInternal(
           const result = await deepCopyNodeInternalService(prisma, req as unknown as MinimalReq, nodeId, { targetParentId });
           res.json(result);
         } catch (error) {
-          console.error('âŒ [/nodes/:nodeId/deep-copy] Erreur:', error);
+          console.error('❌ [/nodes/:nodeId/deep-copy] Erreur:', error);
           res.status(500).json({ error: 'Erreur lors de la copie profonde' });
         }
       });
 
 
-// POST /api/treebranchleaf/trees/:treeId/nodes - CrÃ©er un nÅ“ud
+// POST /api/treebranchleaf/trees/:treeId/nodes - Créer un nœud
 router.post('/trees/:treeId/nodes', async (req, res) => {
   try {
     const { treeId } = req.params;
@@ -2554,61 +2554,61 @@ router.post('/trees/:treeId/nodes', async (req, res) => {
 
     console.log('[TreeBranchLeaf API] Creating node:', { treeId, nodeData });
 
-    // VÃ©rifier que l'arbre appartient Ã  l'organisation
+    // Vérifier que l'arbre appartient à l'organisation
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: { id: treeId, organizationId }
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // VÃ©rifier les champs obligatoires
+    // Vérifier les champs obligatoires
     if (!nodeData.type || !nodeData.label) {
       return res.status(400).json({ error: 'Les champs type et label sont obligatoires' });
     }
 
-    // ðŸš¨ VALIDATION DES TYPES AUTORISÃ‰S
+    // 🚨 VALIDATION DES TYPES AUTORISÉS
     const allowedTypes = [
-      'branch',                 // Branche = conteneur hiÃ©rarchique
-      'section',               // Section = groupe de champs calculÃ©s
+      'branch',                 // Branche = conteneur hiérarchique
+      'section',               // Section = groupe de champs calculés
       'leaf_field',            // Champ standard (text, email, etc.)
       'leaf_option',           // Option pour un champ SELECT
-      'leaf_option_field',     // Option + Champ (combinÃ©) â† ajoutÃ© pour dÃ©bloquer O+C
+      'leaf_option_field',     // Option + Champ (combiné) ← ajouté pour débloquer O+C
       'leaf_text',             // Champ texte simple
       'leaf_email',            // Champ email
-      'leaf_phone',            // Champ tÃ©lÃ©phone
+      'leaf_phone',            // Champ téléphone
       'leaf_date',             // Champ date
-      'leaf_number',           // Champ numÃ©rique
-      'leaf_checkbox',         // Case Ã  cocher
-      'leaf_select',           // Liste dÃ©roulante
+      'leaf_number',           // Champ numérique
+      'leaf_checkbox',         // Case à cocher
+      'leaf_select',           // Liste déroulante
       'leaf_radio',            // Boutons radio
-      'leaf_repeater'          // Bloc rÃ©pÃ©table (conteneur de champs rÃ©pÃ©tables)
+      'leaf_repeater'          // Bloc répétable (conteneur de champs répétables)
     ];
 
     if (!allowedTypes.includes(nodeData.type)) {
       return res.status(400).json({ 
-        error: `Type de nÅ“ud non autorisÃ©: ${nodeData.type}. Types autorisÃ©s: ${allowedTypes.join(', ')}` 
+        error: `Type de nœud non autorisé: ${nodeData.type}. Types autorisés: ${allowedTypes.join(', ')}` 
       });
     }
 
-    // ðŸš¨ VALIDATION HIÃ‰RARCHIQUE STRICTE - Utilisation des rÃ¨gles centralisÃ©es
+    // 🚨 VALIDATION HIÉRARCHIQUE STRICTE - Utilisation des règles centralisées
     if (nodeData.parentId) {
       const parentNode = await prisma.treeBranchLeafNode.findFirst({
         where: { id: nodeData.parentId, treeId }
       });
 
       if (!parentNode) {
-        return res.status(400).json({ error: 'NÅ“ud parent non trouvÃ©' });
+        return res.status(400).json({ error: 'Nœud parent non trouvé' });
       }
 
-      // Convertir les types de nÅ“uds pour utiliser les rÃ¨gles centralisÃ©es
+      // Convertir les types de nœuds pour utiliser les règles centralisées
       const parentType = parentNode.type as NodeType;
       const parentSubType = parentNode.subType as NodeSubType;
       const childType = nodeData.type as NodeType;
       const childSubType = (nodeData.subType || nodeData.fieldType || 'data') as NodeSubType;
 
-      // Utiliser la validation centralisÃ©e
+      // Utiliser la validation centralisée
       const validationResult = validateParentChildRelation(
         parentType,
         parentSubType,
@@ -2631,8 +2631,8 @@ router.post('/trees/:treeId/nodes', async (req, res) => {
 
       console.log(`[TreeBranchLeaf API] Validation passed: ${parentType}(${parentSubType}) -> ${childType}(${childSubType})`);
     } else {
-      // Pas de parent = crÃ©ation directement sous l'arbre racine
-      // Utiliser la validation centralisÃ©e pour vÃ©rifier si c'est autorisÃ©
+      // Pas de parent = création directement sous l'arbre racine
+      // Utiliser la validation centralisée pour vérifier si c'est autorisé
       const childType = nodeData.type as NodeType;
       const childSubType = (nodeData.subType || nodeData.fieldType || 'data') as NodeSubType;
 
@@ -2659,7 +2659,7 @@ router.post('/trees/:treeId/nodes', async (req, res) => {
       console.log(`[TreeBranchLeaf API] Root validation passed: tree -> ${childType}(${childSubType})`);
     }
 
-    // GÃ©nÃ©rer un ID unique pour le nÅ“ud
+    // Générer un ID unique pour le nœud
     const { randomUUID } = await import('crypto');
     const nodeId = randomUUID();
 
@@ -2675,7 +2675,7 @@ router.post('/trees/:treeId/nodes', async (req, res) => {
         order: nodeData.order ?? 0,
   isVisible: nodeData.isVisible ?? true,
   isActive: nodeData.isActive ?? true,
-  // Par dÃ©faut, AUCUNE capacitÃ© n'est activÃ©e automatiquement
+  // Par défaut, AUCUNE capacité n'est activée automatiquement
   hasData: nodeData.hasData ?? false,
   hasFormula: nodeData.hasFormula ?? false,
   hasCondition: nodeData.hasCondition ?? false,
@@ -2692,41 +2692,41 @@ router.post('/trees/:treeId/nodes', async (req, res) => {
     res.status(201).json(node);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating node:', error);
-    res.status(500).json({ error: 'Impossible de crÃ©er le nÅ“ud' });
+    res.status(500).json({ error: 'Impossible de créer le nœud' });
   }
 });
 
 // ============================================================================= 
-// ðŸ”„ HELPER : Conversion JSON metadata vers colonnes dÃ©diÃ©es
+// 🔄 HELPER : Conversion JSON metadata vers colonnes dédiées
 // =============================================================================
 
 /**
- * Convertit les donnÃ©es JSON des metadata vers les nouvelles colonnes dÃ©diÃ©es
+ * Convertit les données JSON des metadata vers les nouvelles colonnes dédiées
  */
 // =============================================================================
-// ðŸ”„ MIGRATION JSON â†’ COLONNES DÃ‰DIÃ‰ES
+// 🔄 MIGRATION JSON → COLONNES DÉDIÉES
 // =============================================================================
 
 /**
- * ðŸ”„ STRATÃ‰GIE MIGRATION : JSON â†’ Colonnes dÃ©diÃ©es
- * Extraite TOUTES les donnÃ©es depuis metadata et fieldConfig pour les mapper vers les nouvelles colonnes
- * OBJECTIF : Plus jamais de JSON, une seule source de vÃ©ritÃ©
+ * 🔄 STRATÉGIE MIGRATION : JSON → Colonnes dédiées
+ * Extraite TOUTES les données depuis metadata et fieldConfig pour les mapper vers les nouvelles colonnes
+ * OBJECTIF : Plus jamais de JSON, une seule source de vérité
  */
 function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, unknown> {
   const columnData: Record<string, unknown> = {};
   
-  // âœ… PROTECTION DÃ‰FENSIVE - VÃ©rifier la structure des donnÃ©es
+  // ✅ PROTECTION DÉFENSIVE - Vérifier la structure des données
   if (!updateData || typeof updateData !== 'object') {
-    console.log('ðŸ”„ [mapJSONToColumns] âŒ updateData invalide:', updateData);
+    console.log('🔄 [mapJSONToColumns] ❌ updateData invalide:', updateData);
     return columnData;
   }
   
-  // Extraire les metadata et fieldConfig si prÃ©sentes avec protection
+  // Extraire les metadata et fieldConfig si présentes avec protection
   const metadata = (updateData.metadata && typeof updateData.metadata === 'object' ? updateData.metadata as Record<string, unknown> : {});
   const fieldConfig = (updateData.fieldConfig && typeof updateData.fieldConfig === 'object' ? updateData.fieldConfig as Record<string, unknown> : {});
   const appearanceConfig = (updateData.appearanceConfig && typeof updateData.appearanceConfig === 'object' ? updateData.appearanceConfig as Record<string, unknown> : {});
   
-  console.log('ðŸ”„ [mapJSONToColumns] EntrÃ©es dÃ©tectÃ©es:', {
+  console.log('🔄 [mapJSONToColumns] Entrées détectées:', {
     hasMetadata: Object.keys(metadata).length > 0,
     hasFieldConfig: Object.keys(fieldConfig).length > 0,
     hasAppearanceConfig: Object.keys(appearanceConfig).length > 0,
@@ -2735,9 +2735,9 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     appearanceConfigKeys: Object.keys(appearanceConfig)
   });
   
-  // âœ… Ã‰TAPE 1 : Migration depuis appearanceConfig (NOUVEAU systÃ¨me prioritaire)
+  // ✅ ÉTAPE 1 : Migration depuis appearanceConfig (NOUVEAU système prioritaire)
   if (Object.keys(appearanceConfig).length > 0) {
-    console.log('ðŸ”„ [mapJSONToColumns] Traitement appearanceConfig:', appearanceConfig);
+    console.log('🔄 [mapJSONToColumns] Traitement appearanceConfig:', appearanceConfig);
     if (appearanceConfig.size) columnData.appearance_size = appearanceConfig.size;
     if (appearanceConfig.width) columnData.appearance_width = appearanceConfig.width;
     if (appearanceConfig.variant) columnData.appearance_variant = appearanceConfig.variant;
@@ -2746,12 +2746,12 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (appearanceConfig.fieldWidth) columnData.appearance_width = appearanceConfig.fieldWidth;
     if (appearanceConfig.fieldVariant) columnData.appearance_variant = appearanceConfig.fieldVariant;
     
-    // 💡 Configuration tooltip d'aide (pour TOUS les champs)
+    // ?? Configuration tooltip d'aide (pour TOUS les champs)
     if (appearanceConfig.helpTooltipType) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
     if (appearanceConfig.helpTooltipText) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
     if (appearanceConfig.helpTooltipImage) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
     
-    // 📂 Configuration sections/branches (COLONNES DESKTOP/MOBILE)
+    // ?? Configuration sections/branches (COLONNES DESKTOP/MOBILE)
     if (appearanceConfig.collapsible !== undefined) columnData.section_collapsible = appearanceConfig.collapsible;
     if (appearanceConfig.defaultCollapsed !== undefined) columnData.section_defaultCollapsed = appearanceConfig.defaultCollapsed;
     if (appearanceConfig.showChildrenCount !== undefined) columnData.section_showChildrenCount = appearanceConfig.showChildrenCount;
@@ -2759,17 +2759,17 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (appearanceConfig.columnsMobile !== undefined) columnData.section_columnsMobile = appearanceConfig.columnsMobile;
     if (appearanceConfig.gutter !== undefined) columnData.section_gutter = appearanceConfig.gutter;
     
-    // 📎 Configuration fichiers
+    // ?? Configuration fichiers
     if (appearanceConfig.maxFileSize !== undefined) columnData.file_maxSize = appearanceConfig.maxFileSize;
     if (appearanceConfig.allowedTypes) columnData.file_allowedTypes = appearanceConfig.allowedTypes;
     if (appearanceConfig.multiple !== undefined) columnData.file_multiple = appearanceConfig.multiple;
     if (appearanceConfig.showPreview !== undefined) columnData.file_showPreview = appearanceConfig.showPreview;
     
-    // 🔧 Propriétés avancées universelles
+    // ?? Propri�t�s avanc�es universelles
     if (appearanceConfig.visibleToUser !== undefined) columnData.data_visibleToUser = appearanceConfig.visibleToUser;
     if (appearanceConfig.isRequired !== undefined) columnData.isRequired = appearanceConfig.isRequired;
     
-    // 🔥 NOUVEAU: Mapping direct prefix/suffix/unit/decimals depuis appearanceConfig
+    // ?? NOUVEAU: Mapping direct prefix/suffix/unit/decimals depuis appearanceConfig
     // Ces valeurs viennent directement du UniversalPanel
     if (appearanceConfig.prefix !== undefined) columnData.number_prefix = appearanceConfig.prefix || null;
     if (appearanceConfig.suffix !== undefined) columnData.number_suffix = appearanceConfig.suffix || null;
@@ -2780,37 +2780,37 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (appearanceConfig.step !== undefined) columnData.number_step = appearanceConfig.step;
   }
   
-  // âœ… Ã‰TAPE 1bis : Migration depuis metadata.appearance (fallback)
+  // ✅ ÉTAPE 1bis : Migration depuis metadata.appearance (fallback)
   if (metadata.appearance && typeof metadata.appearance === 'object') {
     const metaAppearance = metadata.appearance as Record<string, unknown>;
-    console.log('ðŸ”„ [mapJSONToColumns] Traitement metadata.appearance:', metaAppearance);
+    console.log('🔄 [mapJSONToColumns] Traitement metadata.appearance:', metaAppearance);
     if (metaAppearance.size && !columnData.appearance_size) columnData.appearance_size = metaAppearance.size;
     if (metaAppearance.width && !columnData.appearance_width) columnData.appearance_width = metaAppearance.width;
     if (metaAppearance.variant && !columnData.appearance_variant) columnData.appearance_variant = metaAppearance.variant;
   }
 
-  // âœ… Ã‰TAPE 1ter : Migration depuis metadata.repeater (NOUVEAU)
+  // ✅ ÉTAPE 1ter : Migration depuis metadata.repeater (NOUVEAU)
   if (metadata.repeater && typeof metadata.repeater === 'object') {
     const repeaterMeta = metadata.repeater as Record<string, unknown>;
-    console.log('ðŸ”„ [mapJSONToColumns] ðŸ”¥ Traitement metadata.repeater:', repeaterMeta);
+    console.log('🔄 [mapJSONToColumns] 🔥 Traitement metadata.repeater:', repeaterMeta);
     
-    // Sauvegarder templateNodeIds en JSON dans la colonne dÃ©diÃ©e
+    // Sauvegarder templateNodeIds en JSON dans la colonne dédiée
     if ('templateNodeIds' in repeaterMeta) {
       if (Array.isArray(repeaterMeta.templateNodeIds)) {
         columnData.repeater_templateNodeIds = repeaterMeta.templateNodeIds.length > 0
           ? JSON.stringify(repeaterMeta.templateNodeIds)
           : null;
-        console.log('âœ… [mapJSONToColumns] repeater_templateNodeIds sauvegardÃ©:', repeaterMeta.templateNodeIds);
+        console.log('✅ [mapJSONToColumns] repeater_templateNodeIds sauvegardé:', repeaterMeta.templateNodeIds);
       } else {
         columnData.repeater_templateNodeIds = null;
-        console.log('âœ… [mapJSONToColumns] repeater_templateNodeIds remis Ã  NULL (valeur non-array)');
+        console.log('✅ [mapJSONToColumns] repeater_templateNodeIds remis à NULL (valeur non-array)');
       }
     }
     
-    // ðŸ·ï¸ SAUVEGARDER templateNodeLabels en JSON dans la colonne dÃ©diÃ©e
+    // 🏷️ SAUVEGARDER templateNodeLabels en JSON dans la colonne dédiée
     if (repeaterMeta.templateNodeLabels && typeof repeaterMeta.templateNodeLabels === 'object') {
       columnData.repeater_templateNodeLabels = JSON.stringify(repeaterMeta.templateNodeLabels);
-      console.log('âœ… [mapJSONToColumns] ðŸ·ï¸ repeater_templateNodeLabels sauvegardÃ©:', repeaterMeta.templateNodeLabels);
+      console.log('✅ [mapJSONToColumns] 🏷️ repeater_templateNodeLabels sauvegardé:', repeaterMeta.templateNodeLabels);
     } else if ('templateNodeLabels' in repeaterMeta) {
       columnData.repeater_templateNodeLabels = null;
     }
@@ -2823,35 +2823,35 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (repeaterMeta.iconOnly !== undefined) columnData.repeater_iconOnly = repeaterMeta.iconOnly;
   }
   
-  // ✅ ÉTAPE 1quater : Migration depuis metadata.subTabs (CRUCIAL!)
-  // 🎯 Les sous-onglets (array) DOIVENT être sauvegardés dans la colonne 'subtabs'
+  // ? �TAPE 1quater : Migration depuis metadata.subTabs (CRUCIAL!)
+  // ?? Les sous-onglets (array) DOIVENT �tre sauvegard�s dans la colonne 'subtabs'
   if ('subTabs' in metadata) {
     if (Array.isArray(metadata.subTabs) && metadata.subTabs.length > 0) {
       columnData.subtabs = JSON.stringify(metadata.subTabs);
-      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTabs sauvegardé en colonne subtabs:', metadata.subTabs);
+      console.log('?? [mapJSONToColumns] ? metadata.subTabs sauvegard� en colonne subtabs:', metadata.subTabs);
     } else {
       columnData.subtabs = null;
-      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTabs vidé : colonne subtabs remise à NULL');
+      console.log('?? [mapJSONToColumns] ? metadata.subTabs vid� : colonne subtabs remise � NULL');
     }
   }
   
-  // ✅ ÉTAPE 1quinquies : Migration metadata.subTab (assignment champ individuel)
-  // 🎯 L'assignment d'un champ à un sous-onglet (string ou array) va dans la colonne 'subtab'
+  // ? �TAPE 1quinquies : Migration metadata.subTab (assignment champ individuel)
+  // ?? L'assignment d'un champ � un sous-onglet (string ou array) va dans la colonne 'subtab'
   if ('subTab' in metadata) {
     const subTabValue = metadata.subTab;
     if (typeof subTabValue === 'string' && subTabValue.trim().length > 0) {
       columnData.subtab = subTabValue;
-      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTab (string assignment) sauvegardé en colonne subtab:', subTabValue);
+      console.log('?? [mapJSONToColumns] ? metadata.subTab (string assignment) sauvegard� en colonne subtab:', subTabValue);
     } else if (Array.isArray(subTabValue) && subTabValue.length > 0) {
       columnData.subtab = JSON.stringify(subTabValue);
-      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTab (array assignment) sauvegardé en colonne subtab:', subTabValue);
+      console.log('?? [mapJSONToColumns] ? metadata.subTab (array assignment) sauvegard� en colonne subtab:', subTabValue);
     } else {
       columnData.subtab = null;
-      console.log('🎯 [mapJSONToColumns] ✅ metadata.subTab vidé : colonne subtab remise à NULL');
+      console.log('?? [mapJSONToColumns] ? metadata.subTab vid� : colonne subtab remise � NULL');
     }
   }
   
-  // ✅ ÉTAPE 2 : Migration configuration champs texte
+  // ? �TAPE 2 : Migration configuration champs texte
   const textConfig = metadata.textConfig || fieldConfig.text || fieldConfig.textConfig || {};
   if (Object.keys(textConfig).length > 0) {
     if (textConfig.placeholder) columnData.text_placeholder = textConfig.placeholder;
@@ -2862,21 +2862,21 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (textConfig.rows) columnData.text_rows = textConfig.rows;
   }
   
-  // ✅ ÉTAPE 3 : Migration configuration champs nombre
+  // ? �TAPE 3 : Migration configuration champs nombre
   const numberConfig = metadata.numberConfig || fieldConfig.number || fieldConfig.numberConfig || {};
   if (Object.keys(numberConfig).length > 0) {
     if (numberConfig.min !== undefined) columnData.number_min = numberConfig.min;
     if (numberConfig.max !== undefined) columnData.number_max = numberConfig.max;
     if (numberConfig.step !== undefined) columnData.number_step = numberConfig.step;
     if (numberConfig.decimals !== undefined) columnData.number_decimals = numberConfig.decimals;
-    // 🔥 FIX: Permettre de supprimer prefix/suffix/unit en les mettant à vide
+    // ?? FIX: Permettre de supprimer prefix/suffix/unit en les mettant � vide
     if (numberConfig.prefix !== undefined) columnData.number_prefix = numberConfig.prefix || null;
     if (numberConfig.suffix !== undefined) columnData.number_suffix = numberConfig.suffix || null;
     if (numberConfig.unit !== undefined) columnData.number_unit = numberConfig.unit || null;
     if (numberConfig.defaultValue !== undefined) columnData.number_defaultValue = numberConfig.defaultValue;
   }
   
-  // âœ… Ã‰TAPE 4 : Migration configuration champs sÃ©lection
+  // ✅ ÉTAPE 4 : Migration configuration champs sélection
   const selectConfig = metadata.selectConfig || fieldConfig.select || fieldConfig.selectConfig || {};
   if (Object.keys(selectConfig).length > 0) {
     if (selectConfig.multiple !== undefined) columnData.select_multiple = selectConfig.multiple;
@@ -2886,7 +2886,7 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (selectConfig.options) columnData.select_options = selectConfig.options;
   }
   
-  // âœ… Ã‰TAPE 5 : Migration configuration champs boolÃ©en
+  // ✅ ÉTAPE 5 : Migration configuration champs booléen
   const boolConfig = metadata.boolConfig || fieldConfig.bool || fieldConfig.boolConfig || {};
   if (Object.keys(boolConfig).length > 0) {
     if (boolConfig.trueLabel) columnData.bool_trueLabel = boolConfig.trueLabel;
@@ -2894,7 +2894,7 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (boolConfig.defaultValue !== undefined) columnData.bool_defaultValue = boolConfig.defaultValue;
   }
   
-  // âœ… Ã‰TAPE 6 : Migration configuration champs date
+  // ✅ ÉTAPE 6 : Migration configuration champs date
   const dateConfig = metadata.dateConfig || fieldConfig.date || fieldConfig.dateConfig || {};
   if (Object.keys(dateConfig).length > 0) {
     if (dateConfig.format) columnData.date_format = dateConfig.format;
@@ -2903,7 +2903,7 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (dateConfig.maxDate) columnData.date_maxDate = new Date(dateConfig.maxDate);
   }
   
-  // âœ… Ã‰TAPE 7 : Migration configuration champs image
+  // ✅ ÉTAPE 7 : Migration configuration champs image
   const imageConfig = metadata.imageConfig || fieldConfig.image || fieldConfig.imageConfig || {};
   if (Object.keys(imageConfig).length > 0) {
     if (imageConfig.maxSize) columnData.image_maxSize = imageConfig.maxSize;
@@ -2912,20 +2912,20 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
     if (imageConfig.thumbnails) columnData.image_thumbnails = imageConfig.thumbnails;
   }
   
-  // âœ… Ã‰TAPE 8 : Migration configuration tooltips d'aide
+  // ✅ ÉTAPE 8 : Migration configuration tooltips d'aide
   if (Object.keys(appearanceConfig).length > 0) {
     if (appearanceConfig.helpTooltipType !== undefined) columnData.text_helpTooltipType = appearanceConfig.helpTooltipType;
     if (appearanceConfig.helpTooltipText !== undefined) columnData.text_helpTooltipText = appearanceConfig.helpTooltipText;
     if (appearanceConfig.helpTooltipImage !== undefined) columnData.text_helpTooltipImage = appearanceConfig.helpTooltipImage;
   }
   
-  // âœ… Ã‰TAPE 9 : Types de champs spÃ©cifiques
+  // ✅ ÉTAPE 9 : Types de champs spécifiques
   if (updateData.fieldType) columnData.fieldType = updateData.fieldType;
   if (updateData.fieldSubType) columnData.fieldSubType = updateData.fieldSubType;
   if (updateData.subType) columnData.fieldSubType = updateData.subType;
   if (updateData.type) columnData.fieldType = updateData.type;
   
-  console.log('ðŸ”„ [mapJSONToColumns] Migration JSON vers colonnes:', {
+  console.log('🔄 [mapJSONToColumns] Migration JSON vers colonnes:', {
     input: { metadata: !!metadata, fieldConfig: !!fieldConfig },
     output: Object.keys(columnData),
     columnDataPreview: columnData
@@ -2935,8 +2935,8 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
 }
 
 /**
- * ðŸ“¤ NETTOYER LA RÃ‰PONSE : Colonnes dÃ©diÃ©es â†’ Interface frontend
- * Reconstruit les objets JSON pour la compatibilitÃ© frontend MAIS depuis les colonnes
+ * 📤 NETTOYER LA RÉPONSE : Colonnes dédiées → Interface frontend
+ * Reconstruit les objets JSON pour la compatibilité frontend MAIS depuis les colonnes
  */
 function buildResponseFromColumns(node: any): Record<string, unknown> {
   type LegacyRepeaterMeta = {
@@ -2951,13 +2951,13 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     size: node.appearance_size || 'md',
     width: node.appearance_width || null,
     variant: node.appearance_variant || null,
-    // ðŸ”¥ TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
+    // 🔥 TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
     helpTooltipType: node.text_helpTooltipType || 'none',
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null
   };
 
-  // ðŸ”¥ NOUVEAU : Construire l'objet repeater depuis les colonnes dÃ©diÃ©es
+  // 🔥 NOUVEAU : Construire l'objet repeater depuis les colonnes dédiées
   const legacyRepeater: LegacyRepeaterMeta | null = (() => {
     if (node.metadata && typeof node.metadata === 'object' && (node.metadata as Record<string, unknown>).repeater) {
       const legacy = (node.metadata as Record<string, unknown>).repeater;
@@ -2971,10 +2971,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
       if (node.repeater_templateNodeIds) {
         try {
           const parsed = JSON.parse(node.repeater_templateNodeIds);
-          console.log('âœ… [buildResponseFromColumns] repeater_templateNodeIds reconstruit:', parsed);
+          console.log('✅ [buildResponseFromColumns] repeater_templateNodeIds reconstruit:', parsed);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error('âŒ [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:', e);
+          console.error('❌ [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:', e);
           return [];
         }
       }
@@ -2990,7 +2990,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === 'object' ? parsedLabels : null;
         } catch (e) {
-          console.error('âŒ [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:', e);
+          console.error('❌ [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:', e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -3007,7 +3007,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     iconOnly: node.repeater_iconOnly ?? legacyRepeater?.iconOnly ?? false
   };
   
-  // ðŸŽ¯ CORRECTION CRITIQUE : Construire aussi appearanceConfig pour l'interface Parameters
+  // 🎯 CORRECTION CRITIQUE : Construire aussi appearanceConfig pour l'interface Parameters
   const appearanceConfig = {
     size: node.appearance_size || 'md',
     variant: node.appearance_variant || 'singleline',
@@ -3020,7 +3020,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     helpTooltipImage: node.text_helpTooltipImage || null
   };
   
-  // Construire fieldConfig depuis les colonnes dÃ©diÃ©es
+  // Construire fieldConfig depuis les colonnes dédiées
   const fieldConfig = {
     text: {
       placeholder: node.text_placeholder || null,
@@ -3034,7 +3034,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
       min: node.number_min || null,
       max: node.number_max || null,
       step: node.number_step || 1,
-      // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      // ?? FIX: Priorit� � data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
       decimals: node.data_precision ?? node.number_decimals ?? 0,
       prefix: node.number_prefix || null,
       suffix: node.number_suffix || null,
@@ -3043,8 +3043,8 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     },
     select: {
       multiple: node.select_multiple || false,
-      searchable: node.select_searchable !== false, // true par dÃ©faut
-      allowClear: node.select_allowClear !== false, // true par dÃ©faut
+      searchable: node.select_searchable !== false, // true par défaut
+      allowClear: node.select_allowClear !== false, // true par défaut
       defaultValue: node.select_defaultValue || null,
       options: node.select_options || []
     },
@@ -3074,28 +3074,28 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     if (!hasValues) delete fieldConfig[key];
   });
   
-  // Mettre Ã  jour les mÃ©tadonnÃ©es avec les nouvelles donnÃ©es
+  // Mettre à jour les métadonnées avec les nouvelles données
   const cleanedMetadata = {
     ...(node.metadata || {}),
     appearance
   };
   
-  // ðŸ” DEBUG: Log metadata pour "Test - liste"
+  // 🔍 DEBUG: Log metadata pour "Test - liste"
   if (node.id === '131a7b51-97d5-4f40-8a5a-9359f38939e8') {
-    console.log('ðŸ” [buildResponseFromColumns][Test - liste] node.metadata BRUT:', node.metadata);
-    console.log('ðŸ” [buildResponseFromColumns][Test - liste] cleanedMetadata:', cleanedMetadata);
-    console.log('ðŸ” [buildResponseFromColumns][Test - liste] metadata.capabilities:', 
+    console.log('🔍 [buildResponseFromColumns][Test - liste] node.metadata BRUT:', node.metadata);
+    console.log('🔍 [buildResponseFromColumns][Test - liste] cleanedMetadata:', cleanedMetadata);
+    console.log('🔍 [buildResponseFromColumns][Test - liste] metadata.capabilities:', 
       (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : 'N/A');
   }
   
-  // ðŸ”¥ INJECTER repeater dans cleanedMetadata
+  // 🔥 INJECTER repeater dans cleanedMetadata
   const metadataWithRepeater = repeater.templateNodeIds && repeater.templateNodeIds.length > 0
     ? { ...cleanedMetadata, repeater: repeater }
     : cleanedMetadata;
 
-  // ðŸ” LOG SPÃ‰CIAL POUR LES RÃ‰PÃ‰TABLES
+  // 🔍 LOG SPÉCIAL POUR LES RÉPÉTABLES
   if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
-    console.log('ðŸ”ðŸ”ðŸ” [REPEATER NODE FOUND]', {
+    console.log('🔁🔁🔁 [REPEATER NODE FOUND]', {
       nodeId: node.id,
       nodeName: node.name,
       nodeLabel: (node as any).label,
@@ -3140,28 +3140,28 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     ...node,
     metadata: metadataWithRepeater,
     fieldConfig,
-    // Ajouter les champs d'interface pour compatibilitÃ©
+    // Ajouter les champs d'interface pour compatibilité
     appearance,
-    appearanceConfig, // ðŸŽ¯ CORRECTION : Ajouter appearanceConfig pour l'interface Parameters
-    // âš ï¸ IMPORTANT : fieldType depuis les colonnes dÃ©diÃ©es
+    appearanceConfig, // 🎯 CORRECTION : Ajouter appearanceConfig pour l'interface Parameters
+    // ⚠️ IMPORTANT : fieldType depuis les colonnes dédiées
     fieldType: node.fieldType || node.type,
     fieldSubType: node.fieldSubType || node.subType,
-    // ðŸ”¥ TOOLTIP FIX : Ajouter les propriÃ©tÃ©s tooltip au niveau racine pour TBL
+    // 🔥 TOOLTIP FIX : Ajouter les propriétés tooltip au niveau racine pour TBL
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
-    // ðŸ”¥ TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
+    // 🔥 TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
     tables: node.TreeBranchLeafNodeTable || [],
-    // ðŸ”— SHARED REFERENCES : Inclure les rÃ©fÃ©rences partagÃ©es pour les cascades
+    // 🔗 SHARED REFERENCES : Inclure les références partagées pour les cascades
     sharedReferenceIds: node.sharedReferenceIds || undefined
   };
 
   // =====================================================================
-  // 🧱 ADAPTATEUR LEGACY CAPABILITIES (Reconstruit l'ancien objet attendu)
+  // ?? ADAPTATEUR LEGACY CAPABILITIES (Reconstruit l'ancien objet attendu)
   // =====================================================================
-  // Objectif: Fournir à nouveau result.capabilities sans modifier le modèle Prisma.
-  // On s'appuie UNIQUEMENT sur les colonnes dÃ©diÃ©es (hasFormula, formula_activeId, etc.).
-  // Si metadata.capabilities existe déjà (anciennes données), on la préserve et on fusionne.
+  // Objectif: Fournir � nouveau result.capabilities sans modifier le mod�le Prisma.
+  // On s'appuie UNIQUEMENT sur les colonnes dédiées (hasFormula, formula_activeId, etc.).
+  // Si metadata.capabilities existe d�j� (anciennes donn�es), on la pr�serve et on fusionne.
 
   try {
     const legacyMetaCaps = (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : undefined;
@@ -3173,7 +3173,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     };
 
     const capabilities: Record<string, unknown> = {
-      // Données dynamiques / variables
+      // Donn�es dynamiques / variables
       data: (node.hasData || node.data_activeId || node.data_instances) ? {
         enabled: !!node.hasData,
         activeId: node.data_activeId || null,
@@ -3205,7 +3205,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
         columns: Array.isArray(node.table_columns) ? node.table_columns : null,
         rows: Array.isArray(node.table_rows) ? node.table_rows : null
       } : undefined,
-      // Select (options statiques ou dynamiques déjà résolues)
+      // Select (options statiques ou dynamiques d�j� r�solues)
       select: (node.select_options || node.select_defaultValue) ? {
         options: Array.isArray(node.select_options) ? node.select_options : [],
         allowClear: node.select_allowClear !== false,
@@ -3218,14 +3218,14 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
         min: node.number_min ?? null,
         max: node.number_max ?? null,
         step: node.number_step ?? 1,
-        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage
+        // ?? FIX: Priorit� � data_precision pour les champs d'affichage
         decimals: node.data_precision ?? node.number_decimals ?? 0,
         unit: node.number_unit ?? node.data_unit ?? null,
         prefix: node.number_prefix || null,
         suffix: node.number_suffix || null,
         defaultValue: node.number_defaultValue || null
       } : undefined,
-      // Booléen
+      // Bool�en
       bool: (node.bool_trueLabel || node.bool_falseLabel || node.bool_defaultValue !== undefined) ? {
         trueLabel: node.bool_trueLabel || null,
         falseLabel: node.bool_falseLabel || null,
@@ -3245,7 +3245,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
         crop: node.image_crop === true,
         thumbnails: node.image_thumbnails || null
       } : undefined,
-      // Linking / navigation (simplifié)
+      // Linking / navigation (simplifi�)
       link: (node.link_activeId || node.link_instances) ? {
         enabled: !!node.hasLink,
         activeId: node.link_activeId || null,
@@ -3275,12 +3275,12 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
       } : undefined
     };
 
-    // Nettoyer les clés undefined
+    // Nettoyer les cl�s undefined
     Object.keys(capabilities).forEach(key => {
       if (capabilities[key] === undefined) delete capabilities[key];
     });
 
-    // Fusion avec legacy metadata.capabilities si présent
+    // Fusion avec legacy metadata.capabilities si pr�sent
     let mergedCaps: Record<string, unknown> = capabilities;
     if (legacyMetaCaps && typeof legacyMetaCaps === 'object') {
       mergedCaps = { ...legacyMetaCaps, ...capabilities };
@@ -3289,12 +3289,12 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     // Injection dans result
     (result as any).capabilities = mergedCaps;
   } catch (e) {
-    console.error('❌ [buildResponseFromColumns] Erreur adaptation legacy capabilities:', e);
+    console.error('? [buildResponseFromColumns] Erreur adaptation legacy capabilities:', e);
   }
   
-  // ðŸ” DEBUG SHARED REFERENCES : Log pour les options avec rÃ©fÃ©rences
+  // 🔍 DEBUG SHARED REFERENCES : Log pour les options avec références
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
-    console.log('ðŸ”— [buildResponseFromColumns] OPTION AVEC SHARED REFS:', {
+    console.log('🔗 [buildResponseFromColumns] OPTION AVEC SHARED REFS:', {
       nodeId: node.id,
       label: node.label || node.option_label,
       type: node.type,
@@ -3302,9 +3302,9 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     });
   }
   
-  // ðŸš¨ DEBUG TOOLTIP : Log si des tooltips sont trouvÃ©s
+  // 🚨 DEBUG TOOLTIP : Log si des tooltips sont trouvés
   if (node.text_helpTooltipType && node.text_helpTooltipType !== 'none') {
-    console.log('ðŸ”¥ [buildResponseFromColumns] TOOLTIP TROUVÃ‰:', {
+    console.log('🔥 [buildResponseFromColumns] TOOLTIP TROUVÉ:', {
       id: node.id,
       name: node.name,
       tooltipType: node.text_helpTooltipType,
@@ -3319,17 +3319,17 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
 }
 
 // =============================================================================
-// ðŸ”„ FONCTIONS UTILITAIRES POUR COLONNES
+// 🔄 FONCTIONS UTILITAIRES POUR COLONNES
 // =============================================================================
 
 /**
- * âš¡ PRÃ‰SERVER LES CAPABILITIES : Ã‰criture hybride colonnes + metadata
- * PrÃ©serve metadata.capabilities (formules multiples, etc.) tout en migrant le reste vers les colonnes
+ * ⚡ PRÉSERVER LES CAPABILITIES : Écriture hybride colonnes + metadata
+ * Préserve metadata.capabilities (formules multiples, etc.) tout en migrant le reste vers les colonnes
  */
 function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<string, unknown> {
   const { metadata, fieldConfig: _fieldConfig, appearanceConfig: _appearanceConfig, ...cleanData } = updateData;
   
-  // ðŸ”¥ CORRECTION : PrÃ©server metadata.capabilities pour les formules multiples
+  // 🔥 CORRECTION : Préserver metadata.capabilities pour les formules multiples
   if (metadata && typeof metadata === 'object') {
     const metaObj = metadata as Record<string, unknown>;
     const preservedMeta: Record<string, unknown> = {};
@@ -3339,11 +3339,11 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
     }
     if ('subTabs' in metaObj) {
       preservedMeta.subTabs = metaObj.subTabs;
-      console.log('🎯 [removeJSONFromUpdate] Préservation de metadata.subTabs:', metaObj.subTabs);
+      console.log('?? [removeJSONFromUpdate] Pr�servation de metadata.subTabs:', metaObj.subTabs);
     }
     if ('subTab' in metaObj) {
       preservedMeta.subTab = metaObj.subTab;
-      console.log('🎯 [removeJSONFromUpdate] Préservation de metadata.subTab:', metaObj.subTab);
+      console.log('?? [removeJSONFromUpdate] Pr�servation de metadata.subTab:', metaObj.subTab);
     }
     
     if (Object.keys(preservedMeta).length > 0) {
@@ -3358,13 +3358,13 @@ function removeJSONFromUpdate(updateData: Record<string, unknown>): Record<strin
 }
 
 /**
- * ðŸ§© EXTRA: Normalisation des rÃ©fÃ©rences partagÃ©es pour les COPIES
- * RÃ¨gle mÃ©tier (confirmÃ©e par l'utilisateur): lorsqu'un nÅ“ud est une copie dont l'id
- * se termine par un suffixe numÃ©rique "-N" (ex: "...-1", "...-2"), alors toute
- * rÃ©fÃ©rence partagÃ©e stockÃ©e dans les colonnes shared* doit pointer vers l'ID de la
- * COPIE correspondante (mÃªme suffixe), pas vers l'original.
+ * 🧩 EXTRA: Normalisation des références partagées pour les COPIES
+ * Règle métier (confirmée par l'utilisateur): lorsqu'un nœud est une copie dont l'id
+ * se termine par un suffixe numérique "-N" (ex: "...-1", "...-2"), alors toute
+ * référence partagée stockée dans les colonnes shared* doit pointer vers l'ID de la
+ * COPIE correspondante (même suffixe), pas vers l'original.
  *
- * Exemple: si ce nÅ“ud (nodeId) = "shared-ref-ABC-1" et que l'utilisateur envoie
+ * Exemple: si ce nœud (nodeId) = "shared-ref-ABC-1" et que l'utilisateur envoie
  * sharedReferenceId = "shared-ref-XYZ", on doit persister "shared-ref-XYZ-1".
  */
 function extractCopySuffixFromId(id: string | null | undefined): string | null {
@@ -3374,41 +3374,41 @@ function extractCopySuffixFromId(id: string | null | undefined): string | null {
 }
 
 function applyCopySuffix(id: string, suffix: string): string {
-  // Retirer tout suffixe numÃ©rique existant et appliquer le suffixe souhaitÃ©
+  // Retirer tout suffixe numérique existant et appliquer le suffixe souhaité
   const base = id.replace(/-(\d+)$/, '');
   return `${base}${suffix}`;
 }
 
 function normalizeSharedRefsForCopy(nodeId: string, updateObj: Record<string, unknown>) {
   const suffix = extractCopySuffixFromId(nodeId);
-  if (!suffix) return; // pas une copie â†’ ne rien faire
+  if (!suffix) return; // pas une copie → ne rien faire
 
-  // GÃ©rer single
+  // Gérer single
   if (typeof updateObj.sharedReferenceId === 'string' && updateObj.sharedReferenceId.length > 0) {
     updateObj.sharedReferenceId = applyCopySuffix(updateObj.sharedReferenceId, suffix);
   }
 
-  // GÃ©rer array
+  // Gérer array
   if (Array.isArray(updateObj.sharedReferenceIds)) {
     const out: string[] = [];
     for (const raw of updateObj.sharedReferenceIds as unknown[]) {
       if (typeof raw !== 'string' || raw.length === 0) continue;
       out.push(applyCopySuffix(raw, suffix));
     }
-    // DÃ©dupliquer en conservant l'ordre
+    // Dédupliquer en conservant l'ordre
     const seen = new Set<string>();
     updateObj.sharedReferenceIds = out.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
   }
 }
 
-// Handler commun pour UPDATE/PATCH d'un nÅ“ud (incluant le dÃ©placement avec rÃ©indexation)
+// Handler commun pour UPDATE/PATCH d'un nœud (incluant le déplacement avec réindexation)
 const updateOrMoveNode = async (req, res) => {
   try {
     const { treeId, nodeId } = req.params;
     const { organizationId } = req.user!;
     const updateData = req.body || {};
     
-    console.log('ðŸ”„ [updateOrMoveNode] AVANT migration - donnÃ©es reÃ§ues:', {
+    console.log('🔄 [updateOrMoveNode] AVANT migration - données reçues:', {
       hasMetadata: !!updateData.metadata,
       hasFieldConfig: !!updateData.fieldConfig,
       hasAppearanceConfig: !!updateData.appearanceConfig,
@@ -3418,16 +3418,16 @@ const updateOrMoveNode = async (req, res) => {
       'metadata complet': JSON.stringify(updateData.metadata, null, 2)
     });
     
-    // ðŸ”„ Ã‰TAPE 1 : Convertir JSON vers colonnes dÃ©diÃ©es
+    // 🔄 ÉTAPE 1 : Convertir JSON vers colonnes dédiées
     const columnData = mapJSONToColumns(updateData);
     
-    // ðŸš€ Ã‰TAPE 2 : Ã‰LIMINER le JSON et utiliser UNIQUEMENT les colonnes dÃ©diÃ©es
+    // 🚀 ÉTAPE 2 : ÉLIMINER le JSON et utiliser UNIQUEMENT les colonnes dédiées
     const cleanUpdateData = removeJSONFromUpdate(updateData);
     
-    // ðŸŽ¯ Ã‰TAPE 3 : Fusionner donnÃ©es nettoyÃ©es + colonnes dÃ©diÃ©es
+    // 🎯 ÉTAPE 3 : Fusionner données nettoyées + colonnes dédiées
     const updateObj: Record<string, unknown> = { ...cleanUpdateData, ...columnData };
     
-    console.log('ðŸ”„ [updateOrMoveNode] APRÃˆS migration - donnÃ©es finales:', {
+    console.log('🔄 [updateOrMoveNode] APRÈS migration - données finales:', {
       originalKeys: Object.keys(updateData),
       cleanedKeys: Object.keys(cleanUpdateData),
       columnKeys: Object.keys(columnData),
@@ -3437,23 +3437,23 @@ const updateOrMoveNode = async (req, res) => {
       columnData: columnData
     });
 
-  // ðŸ§© IMPORTANT: Normaliser les rÃ©fÃ©rences partagÃ©es si le nÅ“ud est une COPIE (ID avec suffixe "-N")
-  // Concerne les Ã©critures directes envoyÃ©es par le frontend (single/array)
+  // 🧩 IMPORTANT: Normaliser les références partagées si le nœud est une COPIE (ID avec suffixe "-N")
+  // Concerne les écritures directes envoyées par le frontend (single/array)
   normalizeSharedRefsForCopy(nodeId, updateObj);
     
-  // Nettoyage de champs non supportÃ©s par le modÃ¨le Prisma (Ã©vite les erreurs PrismaClientValidationError)
+  // Nettoyage de champs non supportés par le modèle Prisma (évite les erreurs PrismaClientValidationError)
   // Exemple: certains appels frontend envoient "markers" ou "hasMarkers" qui n'existent pas dans TreeBranchLeafNode
     for (const k of ['markers', 'hasMarkers']) {
       if (k in updateObj) delete updateObj[k];
     }
 
-    // VÃ©rifier que l'arbre appartient Ã  l'organisation
+    // Vérifier que l'arbre appartient à l'organisation
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: { id: treeId, organizationId }
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
   // Supprimer les champs non modifiables
@@ -3461,20 +3461,20 @@ const updateOrMoveNode = async (req, res) => {
   delete updateObj.treeId;
   delete updateObj.createdAt;
 
-    // Charger le nÅ“ud existant (sera nÃ©cessaire pour la validation et la logique de dÃ©placement)
-    console.log('ðŸ” [updateOrMoveNode] Recherche nÅ“ud:', { nodeId, treeId, organizationId });
+    // Charger le nœud existant (sera nécessaire pour la validation et la logique de déplacement)
+    console.log('🔍 [updateOrMoveNode] Recherche nœud:', { nodeId, treeId, organizationId });
     
     const existingNode = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId }
     });
 
     if (!existingNode) {
-      // 🔍 DEBUG: Chercher le nœud sans contrainte de treeId pour voir s'il existe ailleurs
+      // ?? DEBUG: Chercher le n�ud sans contrainte de treeId pour voir s'il existe ailleurs
       const nodeAnyTree = await prisma.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
       });
 
-      console.error('❌ [updateOrMoveNode] Nœud non trouvé - DEBUG:', {
+      console.error('? [updateOrMoveNode] N�ud non trouv� - DEBUG:', {
         nodeId,
         treeId,
         organizationId,
@@ -3484,7 +3484,7 @@ const updateOrMoveNode = async (req, res) => {
       });
 
       return res.status(404).json({
-        error: 'Nœud non trouvé',
+        error: 'N�ud non trouv�',
         debug: {
           nodeId,
           treeId,
@@ -3494,51 +3494,51 @@ const updateOrMoveNode = async (req, res) => {
       });
     }
 
-    // Extraire paramètres potentiels de déplacement
+    // Extraire param�tres potentiels de d�placement
     const targetId: string | undefined = updateData.targetId;
     const position: 'before' | 'after' | 'child' | undefined = updateData.position;
 
-    // Si targetId/position sont fournis, on calcule parentId/insertIndex à partir de ceux-ci
+    // Si targetId/position sont fournis, on calcule parentId/insertIndex � partir de ceux-ci
     let newParentId: string | null | undefined = updateData.parentId; // undefined = pas de changement
     let desiredIndex: number | undefined = undefined; // index parmi les siblings (entier)
 
     if (targetId) {
       const targetNode = await prisma.treeBranchLeafNode.findFirst({ where: { id: targetId, treeId } });
       if (!targetNode) {
-        return res.status(400).json({ error: 'Cible de dÃ©placement non trouvÃ©e' });
+        return res.status(400).json({ error: 'Cible de déplacement non trouvée' });
       }
       if (position === 'child') {
         newParentId = targetNode.id; // enfant direct
-        // on met Ã  la fin par dÃ©faut (sera calculÃ© plus bas)
+        // on met à la fin par défaut (sera calculé plus bas)
         desiredIndex = undefined;
       } else {
-        // before/after -> mÃªme parent que la cible
+        // before/after -> même parent que la cible
         newParentId = targetNode.parentId || null;
-        // index dÃ©sirÃ© relatif Ã  la cible (sera calculÃ© plus bas)
-        // on signalera via un flag spÃ©cial pour ajuster aprÃ¨s
+        // index désiré relatif à la cible (sera calculé plus bas)
+        // on signalera via un flag spécial pour ajuster après
         desiredIndex = -1; // marqueur: calculer en fonction de la cible
       }
     }
 
-  // ðŸš¨ VALIDATION HIÃ‰RARCHIQUE si on change le parentId (dÃ©placement)
+  // 🚨 VALIDATION HIÉRARCHIQUE si on change le parentId (déplacement)
     if (newParentId !== undefined) {
-      // RÃ©cupÃ©rer le nÅ“ud existant pour connaÃ®tre son type
-      // existingNode dÃ©jÃ  chargÃ© ci-dessus
+      // Récupérer le nœud existant pour connaître son type
+      // existingNode déjà chargé ci-dessus
 
-      // Si on change le parent, appliquer les mÃªmes rÃ¨gles hiÃ©rarchiques que pour la crÃ©ation
+      // Si on change le parent, appliquer les mêmes règles hiérarchiques que pour la création
       if (newParentId) {
-        // RÃ©cupÃ©rer le nouveau parent
+        // Récupérer le nouveau parent
         const newParentNode = await prisma.treeBranchLeafNode.findFirst({
           where: { id: newParentId, treeId }
         });
 
         if (!newParentNode) {
-          return res.status(400).json({ error: 'Parent non trouvÃ©' });
+          return res.status(400).json({ error: 'Parent non trouvé' });
         }
 
-        // Appliquer les rÃ¨gles hiÃ©rarchiques actualisÃ©es
+        // Appliquer les règles hiérarchiques actualisées
         if (existingNode.type === 'leaf_option') {
-          // Les options peuvent Ãªtre sous :
+          // Les options peuvent être sous :
           // 1. Des champs SELECT (leaf_ avec subType='SELECT')
           // 2. Des branches de niveau 2+ (branches sous branches = SELECT)
           const isSelectField = newParentNode.type.startsWith('leaf_') && newParentNode.subType === 'SELECT';
@@ -3546,43 +3546,43 @@ const updateOrMoveNode = async (req, res) => {
           
           if (!isSelectField && !isSelectBranch) {
             return res.status(400).json({ 
-              error: 'Les options ne peuvent Ãªtre dÃ©placÃ©es que sous des champs SELECT ou des branches de niveau 2+' 
+              error: 'Les options ne peuvent être déplacées que sous des champs SELECT ou des branches de niveau 2+' 
             });
           }
         } else if (existingNode.type.startsWith('leaf_')) {
-          // Les champs peuvent Ãªtre sous des branches ou d'autres champs
+          // Les champs peuvent être sous des branches ou d'autres champs
           if (newParentNode.type !== 'branch' && !newParentNode.type.startsWith('leaf_')) {
             return res.status(400).json({ 
-              error: 'Les champs ne peuvent Ãªtre dÃ©placÃ©s que sous des branches ou d\'autres champs' 
+              error: 'Les champs ne peuvent être déplacés que sous des branches ou d\'autres champs' 
             });
           }
         } else if (existingNode.type === 'branch') {
-          // Les branches peuvent Ãªtre sous l'arbre ou sous une autre branche
+          // Les branches peuvent être sous l'arbre ou sous une autre branche
           if (!(newParentNode.type === 'tree' || newParentNode.type === 'branch')) {
             return res.status(400).json({ 
-              error: 'Les branches doivent Ãªtre sous l\'arbre ou sous une autre branche' 
+              error: 'Les branches doivent être sous l\'arbre ou sous une autre branche' 
             });
           }
         }
       } else {
-        // parentId null = dÃ©placement vers la racine
-        // Seules les branches peuvent Ãªtre directement sous l'arbre racine
+        // parentId null = déplacement vers la racine
+        // Seules les branches peuvent être directement sous l'arbre racine
         if (existingNode.type !== 'branch') {
           return res.status(400).json({ 
-            error: 'Seules les branches peuvent Ãªtre dÃ©placÃ©es directement sous l\'arbre racine (niveau 2)' 
+            error: 'Seules les branches peuvent être déplacées directement sous l\'arbre racine (niveau 2)' 
           });
         }
       }
     }
 
-    // DÃ©terminer si on doit effectuer une opÃ©ration de dÃ©placement avec rÃ©indexation
+    // Déterminer si on doit effectuer une opération de déplacement avec réindexation
   const isMoveOperation = (targetId && position) || (newParentId !== undefined) || (typeof updateObj.order === 'number');
 
     if (isMoveOperation) {
       // Calculer le parent cible final et la position d'insertion (index entier)
       const destinationParentId = newParentId !== undefined ? newParentId : existingNode.parentId;
 
-      // RÃ©cupÃ©rer tous les siblings de la destination (exclure le nÅ“ud en mouvement)
+      // Récupérer tous les siblings de la destination (exclure le nœud en mouvement)
       const siblings = await prisma.treeBranchLeafNode.findMany({
         where: { treeId, parentId: destinationParentId || null, NOT: { id: nodeId } },
         orderBy: [{ order: 'asc' }, { createdAt: 'asc' }]
@@ -3598,23 +3598,23 @@ const updateOrMoveNode = async (req, res) => {
           insertIndex = siblings.length;
         }
       } else if (position === 'child') {
-        insertIndex = siblings.length; // Ã  la fin sous ce parent
+        insertIndex = siblings.length; // à la fin sous ce parent
       } else if (typeof updateObj.order === 'number') {
-        // Si on reÃ§oit un order numÃ©rique, on tente d'insÃ©rer au plus proche (bornÃ© entre 0 et len)
+        // Si on reçoit un order numérique, on tente d'insérer au plus proche (borné entre 0 et len)
         insertIndex = Math.min(Math.max(Math.round(updateObj.order as number), 0), siblings.length);
       } else if (desiredIndex !== undefined && desiredIndex >= 0) {
         insertIndex = Math.min(Math.max(desiredIndex, 0), siblings.length);
       } else {
-        insertIndex = siblings.length; // dÃ©faut = fin
+        insertIndex = siblings.length; // défaut = fin
       }
 
-      // Construire l'ordre final des IDs (siblings + nodeId insÃ©rÃ©)
+      // Construire l'ordre final des IDs (siblings + nodeId inséré)
       const finalOrder = [...siblings.map(s => s.id)];
       finalOrder.splice(insertIndex, 0, nodeId);
 
-      // Effectuer la transaction: mettre Ã  jour parentId du nÅ“ud + rÃ©indexer les orders entiers
+      // Effectuer la transaction: mettre à jour parentId du nœud + réindexer les orders entiers
       await prisma.$transaction(async (tx) => {
-        // Mettre Ã  jour parentId si nÃ©cessaire
+        // Mettre à jour parentId si nécessaire
         if (destinationParentId !== existingNode.parentId) {
           await tx.treeBranchLeafNode.update({
             where: { id: nodeId },
@@ -3622,7 +3622,7 @@ const updateOrMoveNode = async (req, res) => {
           });
         }
 
-        // RÃ©indexer: donner des valeurs entiÃ¨res 0..N
+        // Réindexer: donner des valeurs entières 0..N
         for (let i = 0; i < finalOrder.length; i++) {
           const id = finalOrder[i];
           await tx.treeBranchLeafNode.update({
@@ -3634,14 +3634,14 @@ const updateOrMoveNode = async (req, res) => {
 
       const updatedNode = await prisma.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
       
-      console.log('ðŸ”„ [updateOrMoveNode] APRÃˆS dÃ©placement - reconstruction depuis colonnes');
+      console.log('🔄 [updateOrMoveNode] APRÈS déplacement - reconstruction depuis colonnes');
       const responseData = updatedNode ? buildResponseFromColumns(updatedNode) : updatedNode;
       
       return res.json(responseData);
     }
 
-    // Cas simple: pas de dÃ©placement â†’ mise Ã  jour directe
-    // ðŸ”¥ FIX : Reconstruire metadata.repeater depuis les colonnes pour synchroniser le JSON Prisma
+    // Cas simple: pas de déplacement → mise à jour directe
+    // 🔥 FIX : Reconstruire metadata.repeater depuis les colonnes pour synchroniser le JSON Prisma
     if (updateObj.repeater_buttonSize || updateObj.repeater_maxItems !== undefined || updateObj.repeater_minItems !== undefined) {
       const currentMetadata = existingNode.metadata as any || {};
       const updatedRepeaterMetadata = {
@@ -3659,7 +3659,7 @@ const updateOrMoveNode = async (req, res) => {
         repeater: updatedRepeaterMetadata
       };
       
-      console.warn('ðŸ”¥ [updateOrMoveNode] Synchronisation metadata.repeater:', updatedRepeaterMetadata);
+      console.warn('🔥 [updateOrMoveNode] Synchronisation metadata.repeater:', updatedRepeaterMetadata);
     }
     
     // CRITIQUE : Si repeater_templateNodeIds est explicitement NULL, supprimer metadata.repeater
@@ -3679,22 +3679,22 @@ const updateOrMoveNode = async (req, res) => {
 
     const updatedNode = await prisma.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
     
-    console.log('ðŸ”„ [updateOrMoveNode] APRÃˆS mise Ã  jour - nÅ“ud brut Prisma:', {
+    console.log('🔄 [updateOrMoveNode] APRÈS mise à jour - nœud brut Prisma:', {
       'updatedNode.metadata': updatedNode?.metadata,
       'updatedNode.metadata typeof': typeof updatedNode?.metadata
     });
     
-    console.log('ðŸ”„ [updateOrMoveNode] APRÃˆS mise Ã  jour - reconstruction depuis colonnes');
+    console.log('🔄 [updateOrMoveNode] APRÈS mise à jour - reconstruction depuis colonnes');
     const responseData = updatedNode ? buildResponseFromColumns(updatedNode) : updatedNode;
     
-    console.log('ðŸ”„ [updateOrMoveNode] APRÃˆS buildResponseFromColumns:', {
+    console.log('🔄 [updateOrMoveNode] APRÈS buildResponseFromColumns:', {
       'responseData.metadata': responseData?.metadata,
       'responseData.metadata.repeater': responseData?.metadata?.repeater
     });
     
     return res.json(responseData);
   } catch (error) {
-    console.error('[TreeBranchLeaf API] âŒ ERREUR DÃ‰TAILLÃ‰E lors de updateOrMoveNode:', {
+    console.error('[TreeBranchLeaf API] ❌ ERREUR DÉTAILLÉE lors de updateOrMoveNode:', {
       error: error,
       message: error.message,
       stack: error.stack,
@@ -3703,36 +3703,36 @@ const updateOrMoveNode = async (req, res) => {
       updateDataKeys: Object.keys(req.body || {}),
       organizationId: req.user?.organizationId
     });
-    res.status(500).json({ error: 'Impossible de mettre Ã  jour le nÅ“ud', details: error.message });
+    res.status(500).json({ error: 'Impossible de mettre à jour le nœud', details: error.message });
   }
 };
 
-// PUT /api/treebranchleaf/trees/:treeId/nodes/:nodeId - Mettre Ã  jour un nÅ“ud
+// PUT /api/treebranchleaf/trees/:treeId/nodes/:nodeId - Mettre à jour un nœud
 router.put('/trees/:treeId/nodes/:nodeId', updateOrMoveNode);
-// PATCH (alias) pour compatibilitÃ© cÃ´tÃ© client
+// PATCH (alias) pour compatibilité côté client
 router.patch('/trees/:treeId/nodes/:nodeId', updateOrMoveNode);
 
-// DELETE /api/treebranchleaf/trees/:treeId/nodes/:nodeId - Supprimer un nÅ“ud
+// DELETE /api/treebranchleaf/trees/:treeId/nodes/:nodeId - Supprimer un nœud
 router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
   try {
     const { treeId, nodeId } = req.params;
     const { organizationId, isSuperAdmin } = req.user! as { organizationId?: string; isSuperAdmin?: boolean };
 
-    // VÃ©rifier que l'arbre appartient Ã  l'organisation
+    // Vérifier que l'arbre appartient à l'organisation
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: { id: treeId }
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // SÃ©curitÃ© organisation
+    // Sécurité organisation
     if (!isSuperAdmin && organizationId && tree.organizationId && tree.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+      return res.status(403).json({ error: 'Accès refusé' });
     }
 
-    // Charger tous les nÅ“uds de l'arbre pour calculer la sous-arborescence Ã  supprimer
+    // Charger tous les nœuds de l'arbre pour calculer la sous-arborescence à supprimer
     const allNodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId } });
     const childrenByParent = new Map<string, string[]>();
     for (const n of allNodes) {
@@ -3742,10 +3742,10 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       childrenByParent.set(n.parentId, arr);
     }
 
-    // VÃ©rifier l'existence du nÅ“ud cible
+    // Vérifier l'existence du nœud cible
     const exists = allNodes.find(n => n.id === nodeId);
     if (!exists) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
     // Collecter tous les descendants (BFS)
@@ -3763,7 +3763,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       }
     }
 
-    // Avant suppression: collecter les rÃ©fÃ©rences partagÃ©es pointÃ©es par cette sous-arborescence
+    // Avant suppression: collecter les références partagées pointées par cette sous-arborescence
     const referencedIds = new Set<string>();
     for (const id of toDelete) {
       const n = allNodes.find(x => x.id === id);
@@ -3772,10 +3772,10 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       if (Array.isArray(n.sharedReferenceIds)) n.sharedReferenceIds.forEach(rid => rid && referencedIds.add(rid));
     }
 
-    // Supprimer en partant des feuilles (profondeur dÃ©croissante) pour Ã©viter les contraintes FK parentId
+    // Supprimer en partant des feuilles (profondeur décroissante) pour éviter les contraintes FK parentId
     toDelete.sort((a, b) => (depth.get(b)! - depth.get(a)!));
 
-    // Suppression transactionnelle (tentative par élément - ignorer les erreurs individuelles)
+    // Suppression transactionnelle (tentative par �l�ment - ignorer les erreurs individuelles)
     const deletedSubtreeIds: string[] = [];
     await prisma.$transaction(async (tx) => {
       for (const id of toDelete) {
@@ -3783,13 +3783,13 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           await tx.treeBranchLeafNode.delete({ where: { id } });
           deletedSubtreeIds.push(id);
         } catch (err) {
-          // Ignorer les erreurs individuelles (ex: id dÃ©jÃ  supprimÃ©) et logger
+          // Ignorer les erreurs individuelles (ex: id déjà supprimé) et logger
           console.warn('[DELETE SUBTREE] Failed to delete node', id, (err as Error).message);
         }
       }
     });
 
-    // Post-suppression: supprimer les rÃ©fÃ©rences suffixÃ©es orphelines (copies "-1") si elles ne sont plus rÃ©fÃ©rencÃ©es ailleurs
+    // Post-suppression: supprimer les références suffixées orphelines (copies "-1") si elles ne sont plus référencées ailleurs
   let deletedOrphans = 0;
   const deletedOrphansIds: string[] = [];
   // Declare deletedExtra variables in outer scope to ensure they are always defined for the final response
@@ -3804,7 +3804,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         if (Array.isArray(n.sharedReferenceIds)) for (const rid of n.sharedReferenceIds) if (referencedIds.has(rid)) stillRef.add(rid);
       }
 
-      // Helper: vÃ©rifier suffixe de copie (ex: "-1", "-2")
+      // Helper: vérifier suffixe de copie (ex: "-1", "-2")
       const isCopySuffixed = (id: string) => /-\d+$/.test(id);
       const orphanRoots = Array.from(referencedIds).filter(id => !stillRef.has(id) && remaining.some(n => n.id === id) && isCopySuffixed(id));
 
@@ -3842,10 +3842,10 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
     }
 
     // ------------------------------------------------------------------
-    // EXTRA CLEANUP: Supprimer les nœuds d'affichage qui rÃ©fÃ©rencent les nœuds supprimés
+    // EXTRA CLEANUP: Supprimer les n�uds d'affichage qui référencent les n�uds supprim�s
     // ------------------------------------------------------------------
     try {
-      // Recharger l'arbre pour trouver d'eventuels nodes qui rÃ©fÃ©rencent les deleted IDs
+      // Recharger l'arbre pour trouver d'eventuels nodes qui référencent les deleted IDs
       const remainingNodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId } });
       const nodesToScan = remainingNodes;
       const removedSet = new Set(toDelete);
@@ -3861,7 +3861,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           const l = String(label);
           const m1 = /\(Copie\s*([0-9]+)\)$/i.exec(l);
           if (m1 && m1[1]) return m1[1];
-          const m2 = /[-–—]\s*(\d+)$/i.exec(l);
+          const m2 = /[-��]\s*(\d+)$/i.exec(l);
           if (m2 && m2[1]) return m2[1];
           return null;
         };
@@ -3884,13 +3884,13 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
           }
         }
 
-      // Trouver candidats additionnels qui ressemblent Ã  des nÃ¸uds d'affichage
+      // Trouver candidats additionnels qui ressemblent à des nøuds d'affichage
   const debugDelete = typeof process !== 'undefined' && process.env && process.env.DEBUG_TBL_DELETE === '1';
   const extraCandidates = nodesToScan.filter(n => {
         const meta: any = n.metadata || {};
-        // 🛡️ PROTECTION: Ne JAMAIS supprimer les nœuds Total (sum-display-field)
+        // ??? PROTECTION: Ne JAMAIS supprimer les n�uds Total (sum-display-field)
         if (meta?.isSumDisplayField === true || n.id.endsWith('-sum-total')) {
-          if (debugDelete) console.log('[DELETE DEBUG] 🛡️ Nœud Total PROTÉGÉ (extraCandidates):', n.id);
+          if (debugDelete) console.log('[DELETE DEBUG] ??? N�ud Total PROT�G� (extraCandidates):', n.id);
           return false;
         }
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
@@ -4079,7 +4079,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
               deletedExtra++;
               deletedExtraIds.push(id);
             } catch (e) {
-              // Ignorer les erreurs individuelles (ex: id dÃ©jÃ  supprimÃ©), mais logger
+              // Ignorer les erreurs individuelles (ex: id déjà supprimé), mais logger
               console.warn('[DELETE EXTRA] Failed to delete node', id, (e as Error).message);
             }
           }
@@ -4094,57 +4094,57 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
     const allDeletedSet = new Set<string>([...deletedSubtreeIds, ...deletedOrphansIds, ...deletedExtraIds]);
     const allDeletedIds = Array.from(allDeletedSet);
 
-    // 🧹 **CRITICAL FIX**: Nettoyage des variables orphelines après suppression
-    // Quand on supprime une copie de repeater, les variables SUFFIXÉES doivent être supprimées
-    // MAIS les variables ORIGINALES (sans suffixe) doivent être PRÉSERVÉES!
-    // Sinon, à la 2ème création, les templates ne retrouvent pas leurs variables originales!
+    // ?? **CRITICAL FIX**: Nettoyage des variables orphelines apr�s suppression
+    // Quand on supprime une copie de repeater, les variables SUFFIX�ES doivent �tre supprim�es
+    // MAIS les variables ORIGINALES (sans suffixe) doivent �tre PR�SERV�ES!
+    // Sinon, � la 2�me cr�ation, les templates ne retrouvent pas leurs variables originales!
     try {
-      // 🔍 Étape 1: Trouver les variables attachées aux nœuds supprimés
+      // ?? �tape 1: Trouver les variables attach�es aux n�uds supprim�s
       const variablesToCheck = await prisma.treeBranchLeafNodeVariable.findMany({
         where: {
           OR: [
-            { nodeId: { in: allDeletedIds } }, // Variables attachées aux nodes supprimés
-            { sourceNodeId: { in: allDeletedIds } } // Variables pointant depuis les nodes supprimés
+            { nodeId: { in: allDeletedIds } }, // Variables attach�es aux nodes supprim�s
+            { sourceNodeId: { in: allDeletedIds } } // Variables pointant depuis les nodes supprim�s
           ]
         },
         select: { id: true, name: true, nodeId: true }
       });
 
-      console.log(`[DELETE] Trouvé ${variablesToCheck.length} variable(s) potentiellement orpheline(s)`);
+      console.log(`[DELETE] Trouv� ${variablesToCheck.length} variable(s) potentiellement orpheline(s)`);
 
-      // 🎯 Étape 2: Filtrer - Ne supprimer QUE les variables SUFFIXÉES
+      // ?? �tape 2: Filtrer - Ne supprimer QUE les variables SUFFIX�ES
       // Les variables originales (sans suffixe) doivent rester intactes
       const varIdsToDelete: string[] = [];
-      const suffixPattern = /-\d+$/; // Détecte un suffixe numérique à la fin
+      const suffixPattern = /-\d+$/; // D�tecte un suffixe num�rique � la fin
 
       for (const variable of variablesToCheck) {
-        // ✅ Ne supprimer que si c'est une variable SUFFIXÉE (copie)
+        // ? Ne supprimer que si c'est une variable SUFFIX�E (copie)
         if (suffixPattern.test(variable.id)) {
-          console.log(`[DELETE] 🗑️ Variable suffixée sera supprimée: ${variable.name} (${variable.id})`);
+          console.log(`[DELETE] ??? Variable suffix�e sera supprim�e: ${variable.name} (${variable.id})`);
           varIdsToDelete.push(variable.id);
         } else {
-          console.log(`[DELETE] 🛡️ Variable ORIGINALE sera PRÉSERVÉE: ${variable.name} (${variable.id})`);
+          console.log(`[DELETE] ??? Variable ORIGINALE sera PR�SERV�E: ${variable.name} (${variable.id})`);
         }
       }
 
-      // 🗑️ Étape 3: Supprimer SEULEMENT les variables suffixées
+      // ??? �tape 3: Supprimer SEULEMENT les variables suffix�es
       if (varIdsToDelete.length > 0) {
         const deletedVarCount = await prisma.treeBranchLeafNodeVariable.deleteMany({
           where: { id: { in: varIdsToDelete } }
         });
-        console.log(`[DELETE] ✅ ${deletedVarCount.count} variable(s) suffixée(s) supprimée(s)`);
+        console.log(`[DELETE] ? ${deletedVarCount.count} variable(s) suffix�e(s) supprim�e(s)`);
       } else {
-        console.log(`[DELETE] ℹ️ Aucune variable suffixée à supprimer (variables originales préservées)`);
+        console.log(`[DELETE] ?? Aucune variable suffix�e � supprimer (variables originales pr�serv�es)`);
       }
     } catch (varCleanError) {
       console.warn('[DELETE] Impossible de nettoyer les variables orphelines:', (varCleanError as Error).message);
       // Ne pas bloquer la suppression sur cette erreur
     }
 
-    // 📊 Mise à jour des champs Total après suppression de copies
-    // Les nœuds Total doivent mettre à jour leur formule pour exclure les copies supprimées
+    // ?? Mise � jour des champs Total apr�s suppression de copies
+    // Les n�uds Total doivent mettre � jour leur formule pour exclure les copies supprim�es
     try {
-      // Chercher tous les nœuds Total (sum-display-field) qui référencent les nœuds supprimés
+      // Chercher tous les n�uds Total (sum-display-field) qui r�f�rencent les n�uds supprim�s
       const remainingNodes = await prisma.treeBranchLeafNode.findMany({
         where: { treeId },
         select: { id: true, metadata: true }
@@ -4153,20 +4153,20 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       for (const node of remainingNodes) {
         const meta = node.metadata as Record<string, unknown> | null;
         if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
-          // Ce nœud Total doit mettre à jour sa formule
-          console.log(`[DELETE] 📊 Mise à jour du champ Total: ${node.id}`);
+          // Ce n�ud Total doit mettre � jour sa formule
+          console.log(`[DELETE] ?? Mise � jour du champ Total: ${node.id}`);
           updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma).catch(err => {
-            console.warn(`[DELETE] ⚠️ Erreur mise à jour champ Total ${node.id}:`, err);
+            console.warn(`[DELETE] ?? Erreur mise � jour champ Total ${node.id}:`, err);
           });
         }
       }
     } catch (sumUpdateError) {
-      console.warn('[DELETE] Erreur lors de la mise à jour des champs Total:', (sumUpdateError as Error).message);
+      console.warn('[DELETE] Erreur lors de la mise � jour des champs Total:', (sumUpdateError as Error).message);
     }
 
     res.json({
       success: true,
-      message: `Sous-arbre supprimé (${deletedSubtreeIds.length} nœud(s)), orphelines supprimées: ${deletedOrphans}`,
+      message: `Sous-arbre supprim� (${deletedSubtreeIds.length} n�ud(s)), orphelines supprim�es: ${deletedOrphans}`,
       deletedCount: deletedSubtreeIds.length,
       deletedIds: allDeletedIds, // merged: subtree + orphan + extra display nodes
       deletedOrphansCount: deletedOrphans,
@@ -4202,16 +4202,16 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       };
       const extraToDelete = remainingAfterFirstPass.filter(n => {
         if (!n.metadata) return false;
-        // 🛡️ PROTECTION: Ne JAMAIS supprimer les nœuds Total (sum-display-field)
-        // Ces nœuds contiennent des références aux copies dans sumTokens mais doivent persister
+        // ??? PROTECTION: Ne JAMAIS supprimer les n�uds Total (sum-display-field)
+        // Ces n�uds contiennent des r�f�rences aux copies dans sumTokens mais doivent persister
         const meta = n.metadata as Record<string, unknown>;
         if (meta?.isSumDisplayField === true) {
-          console.log(`[AGGRESSIVE CLEANUP] 🛡️ Nœud Total PROTÉGÉ: ${n.id} (${n.label})`);
+          console.log(`[AGGRESSIVE CLEANUP] ??? N�ud Total PROT�G�: ${n.id} (${n.label})`);
           return false;
         }
-        // 🛡️ PROTECTION: Ne JAMAIS supprimer les nœuds avec ID finissant par -sum-total
+        // ??? PROTECTION: Ne JAMAIS supprimer les n�uds avec ID finissant par -sum-total
         if (n.id.endsWith('-sum-total')) {
-          console.log(`[AGGRESSIVE CLEANUP] 🛡️ Nœud Total PROTÉGÉ (par ID): ${n.id}`);
+          console.log(`[AGGRESSIVE CLEANUP] ??? N�ud Total PROT�G� (par ID): ${n.id}`);
           return false;
         }
         try { return containsRemovedId(n.metadata); } catch { return false; }
@@ -4237,16 +4237,16 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
     }
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting node subtree:', error);
-    res.status(500).json({ error: 'Impossible de supprimer le nÅ“ud et ses descendants' });
+    res.status(500).json({ error: 'Impossible de supprimer le nœud et ses descendants' });
   }
 });
 
 // =============================================================================
-// ï¿½ NODE INFO - Infos d'un nÅ“ud par ID
+// � NODE INFO - Infos d'un nœud par ID
 // =============================================================================
 
 // GET /api/treebranchleaf/nodes/:nodeId
-// Retourne des infos minimales du nÅ“ud (pour rÃ©cupÃ©rer le treeId depuis nodeId)
+// Retourne des infos minimales du nœud (pour récupérer le treeId depuis nodeId)
 router.get('/nodes/:nodeId', async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -4265,44 +4265,44 @@ router.get('/nodes/:nodeId', async (req, res) => {
       }
     });
 
-    if (!node) return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+    if (!node) return res.status(404).json({ error: 'Nœud non trouvé' });
     // Autoriser si super admin ou si aucune organisation n'est fournie (mode dev),
-    // sinon vÃ©rifier la correspondance des organisations
+    // sinon vérifier la correspondance des organisations
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === 'string' && organizationId.length > 0;
     if (!isSuperAdmin && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+      return res.status(403).json({ error: 'Accès refusé' });
     }
 
     return res.json({ id: node.id, treeId: node.treeId, parentId: node.parentId, type: node.type, subType: node.subType, label: node.label });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node info:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la récupération du nœud' });
   }
 });
 
 // =============================================================================
-// ðŸ”Ž ANALYSE COMPLÃˆTE D'UNE BRANCHE (CASCADE + RÃ‰FÃ‰RENCES)
+// 🔎 ANALYSE COMPLÈTE D'UNE BRANCHE (CASCADE + RÉFÉRENCES)
 // =============================================================================
 // GET /api/treebranchleaf/nodes/:nodeId/full
-// Retourne la branche complÃ¨te Ã  partir d'un nÅ“ud: tous les descendants, les options,
-// et les rÃ©fÃ©rences partagÃ©es RÃ‰SOLUES (objets complets) sans doublons
+// Retourne la branche complète à partir d'un nœud: tous les descendants, les options,
+// et les références partagées RÉSOLUES (objets complets) sans doublons
 router.get('/nodes/:nodeId/full', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // Charger le nÅ“ud et contrÃ´ler l'accÃ¨s via l'arbre parent
+    // Charger le nœud et contrôler l'accès via l'arbre parent
     const root = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!root) return res.status(404).json({ error: 'NÅ“ud introuvable' });
+    if (!root) return res.status(404).json({ error: 'Nœud introuvable' });
     if (!isSuperAdmin && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s non autorisÃ©' });
+      return res.status(403).json({ error: 'Accès non autorisé' });
     }
 
-    // RÃ©cupÃ©rer tous les nÅ“uds de l'arbre pour construire les relations parent/enfants
+    // Récupérer tous les nœuds de l'arbre pour construire les relations parent/enfants
     const all = await prisma.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map(n => [n.id, n] as const));
     const childrenByParent = new Map<string, string[]>();
@@ -4324,7 +4324,7 @@ router.get('/nodes/:nodeId/full', async (req, res) => {
       for (const c of children) queue.push(c);
     }
 
-    // Collecter les rÃ©fÃ©rences partagÃ©es liÃ©es Ã  la branche et les rÃ©soudre (objets complets)
+    // Collecter les références partagées liées à la branche et les résoudre (objets complets)
     const sharedIds = new Set<string>();
     for (const id of collected) {
       const n = byId.get(id);
@@ -4338,14 +4338,14 @@ router.get('/nodes/:nodeId/full', async (req, res) => {
       : [];
     const sharedById = new Map(sharedNodes.map(n => [n.id, n] as const));
 
-    // Construire la rÃ©ponse enrichie pour chaque nÅ“ud de la branche
+    // Construire la réponse enrichie pour chaque nœud de la branche
     const nodes = Array.from(collected).map(id => {
       const node = byId.get(id)!;
       const response = buildResponseFromColumns(node);
       const childIds = childrenByParent.get(id) || [];
       const optionChildrenIds = childIds.filter(cid => (byId.get(cid)?.type || '').toLowerCase() === 'leaf_option'.toLowerCase());
 
-      // RÃ©solution des rÃ©fÃ©rences partagÃ©es de ce nÅ“ud
+      // Résolution des références partagées de ce nœud
       const resolvedShared = [] as Array<Record<string, unknown>>;
       if (node.sharedReferenceId && sharedById.has(node.sharedReferenceId)) {
         resolvedShared.push(buildResponseFromColumns(sharedById.get(node.sharedReferenceId)!));
@@ -4372,33 +4372,33 @@ router.get('/nodes/:nodeId/full', async (req, res) => {
       nodes
     });
   } catch (error) {
-    console.error('âŒ [/nodes/:nodeId/full] Erreur:', error);
-    res.status(500).json({ error: 'Erreur lors de lâ€™analyse complÃ¨te de la branche' });
+    console.error('❌ [/nodes/:nodeId/full] Erreur:', error);
+    res.status(500).json({ error: 'Erreur lors de l’analyse complète de la branche' });
   }
 });
 
 // =============================================================================
-// ðŸ”Ž ANALYSE CIBLÃ‰E DES RÃ‰FÃ‰RENCES PARTAGÃ‰ES D'UN NÅ’UD
+// 🔎 ANALYSE CIBLÉE DES RÉFÉRENCES PARTAGÉES D'UN NŒUD
 // =============================================================================
 // GET /api/treebranchleaf/nodes/:nodeId/shared-references
-// Inspecte uniquement les colonnes sharedReferenceId + sharedReferenceIds du nÅ“ud ciblÃ©
-// et retourne les nÅ“uds rÃ©fÃ©rencÃ©s (rÃ©solus), avec un indicateur de "champ conditionnel".
+// Inspecte uniquement les colonnes sharedReferenceId + sharedReferenceIds du nœud ciblé
+// et retourne les nœuds référencés (résolus), avec un indicateur de "champ conditionnel".
 router.get('/nodes/:nodeId/shared-references', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // 1) Charger le nÅ“ud et contrÃ´ler l'accÃ¨s via l'arbre parent
+    // 1) Charger le nœud et contrôler l'accès via l'arbre parent
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!node) return res.status(404).json({ error: 'NÅ“ud introuvable' });
+    if (!node) return res.status(404).json({ error: 'Nœud introuvable' });
     if (!isSuperAdmin && organizationId && node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s non autorisÃ©' });
+      return res.status(403).json({ error: 'Accès non autorisé' });
     }
 
-    // 2) Extraire les IDs des rÃ©fÃ©rences partagÃ©es Ã  partir du nÅ“ud
+    // 2) Extraire les IDs des références partagées à partir du nœud
     const ids = new Set<string>();
     if (node.sharedReferenceId) ids.add(node.sharedReferenceId);
     if (Array.isArray(node.sharedReferenceIds)) for (const rid of node.sharedReferenceIds) ids.add(rid);
@@ -4407,7 +4407,7 @@ router.get('/nodes/:nodeId/shared-references', async (req, res) => {
       return res.json({ nodeId, count: 0, shared: { ids: { single: node.sharedReferenceId ?? null, multiple: [] }, resolved: [] } });
     }
 
-    // 3) Charger les nÅ“uds rÃ©fÃ©rencÃ©s et dÃ©terminer s'ils sont "conditionnels"
+    // 3) Charger les nœuds référencés et déterminer s'ils sont "conditionnels"
     const refs = await prisma.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(ids) } } });
     const refIds = refs.map(r => r.id);
     const conditionCounts = await prisma.treeBranchLeafNodeCondition.groupBy({
@@ -4423,7 +4423,7 @@ router.get('/nodes/:nodeId/shared-references', async (req, res) => {
       return { ...enriched, isConditional: hasCondFlag, conditionCount: condCountByNode.get(ref.id) || 0 };
     });
 
-    // 4) RÃ©ponse structurÃ©e
+    // 4) Réponse structurée
     res.json({
       nodeId,
       count: resolved.length,
@@ -4436,32 +4436,32 @@ router.get('/nodes/:nodeId/shared-references', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('âŒ [/nodes/:nodeId/shared-references] Erreur:', error);
-    res.status(500).json({ error: 'Erreur lors de lâ€™analyse des rÃ©fÃ©rences partagÃ©es' });
+    console.error('❌ [/nodes/:nodeId/shared-references] Erreur:', error);
+    res.status(500).json({ error: 'Erreur lors de l’analyse des références partagées' });
   }
 });
 
 // =============================================================================
-// ðŸ” APPLIQUER LES RÃ‰FÃ‰RENCES PARTAGÃ‰ES DU GABARIT ORIGINAL Ã€ LA COPIE
+// 🔁 APPLIQUER LES RÉFÉRENCES PARTAGÉES DU GABARIT ORIGINAL À LA COPIE
 // =============================================================================
 // POST /api/treebranchleaf/nodes/:nodeId/apply-shared-references-from-original
-// Pour un nÅ“ud copiÃ© (ayant metadata.copiedFromNodeId), propage les colonnes
-// sharedReferenceId/sharedReferenceIds de CHAQUE nÅ“ud original vers le nÅ“ud copiÃ©
-// correspondant (reconnu par metadata.copiedFromNodeId), sans crÃ©er d'enfants.
+// Pour un nœud copié (ayant metadata.copiedFromNodeId), propage les colonnes
+// sharedReferenceId/sharedReferenceIds de CHAQUE nœud original vers le nœud copié
+// correspondant (reconnu par metadata.copiedFromNodeId), sans créer d'enfants.
 async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId: string): Promise<{ success: true; applied: number; suffix: number }> {
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-  // 1) Charger la copie et l'arbre pour contrÃ´le d'accÃ¨s
+  // 1) Charger la copie et l'arbre pour contrôle d'accès
   const copyRoot = await prisma.treeBranchLeafNode.findFirst({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
-  if (!copyRoot) throw new Error('NÅ“ud introuvable');
+  if (!copyRoot) throw new Error('Nœud introuvable');
   if (!isSuperAdmin && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
-    throw new Error('AccÃ¨s non autorisÃ©');
+    throw new Error('Accès non autorisé');
   }
 
-  // 2) RÃ©cupÃ©rer tous les nÅ“uds de l'arbre et construire la sous-arborescence de la copie
+  // 2) Récupérer tous les nœuds de l'arbre et construire la sous-arborescence de la copie
   const all = await prisma.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const byId = new Map(all.map(n => [n.id, n] as const));
   const childrenByParent = new Map<string, string[]>();
@@ -4492,23 +4492,23 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
   }
   if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
 
-  // 4) Charger les originaux concernÃ©s et prÃ©parer les mises Ã  jour
+  // 4) Charger les originaux concernés et préparer les mises à jour
   const originalIds = Array.from(originalToCopy.keys());
   const originals = await prisma.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
 
-  // 4bis) Collecter toutes les rÃ©fÃ©rences partagÃ©es pointÃ©es par ces originaux
+  // 4bis) Collecter toutes les références partagées pointées par ces originaux
   const allRefIds = new Set<string>();
   for (const orig of originals) {
     if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
     if (Array.isArray(orig.sharedReferenceIds)) orig.sharedReferenceIds.forEach(id => id && allRefIds.add(id));
   }
 
-  // 4ter) DÃ©terminer le suffixe Ã  utiliser pour CETTE copie, puis construire/assurer les copies des rÃ©fÃ©rences (ID suffixÃ© "-N")
-  // a) DÃ©terminer/attribuer le suffixe
+  // 4ter) Déterminer le suffixe à utiliser pour CETTE copie, puis construire/assurer les copies des références (ID suffixé "-N")
+  // a) Déterminer/attribuer le suffixe
   const metaRoot = (copyRoot.metadata as any) || {};
   let chosenSuffix: number | null = typeof metaRoot.copySuffix === 'number' ? metaRoot.copySuffix : null;
   if (!chosenSuffix) {
-    // Chercher le prochain suffixe disponible en scannant les IDs de rÃ©fÃ©rences partagÃ©es existantes
+    // Chercher le prochain suffixe disponible en scannant les IDs de références partagées existantes
     let maxSuffix = 0;
     const SUFFIX_RE = /^(shared-ref-[A-Za-z0-9_\-]+)-(\d+)$/;
     for (const n of all) {
@@ -4519,11 +4519,11 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
       }
     }
     chosenSuffix = maxSuffix + 1 || 1;
-    // Persister ce suffixe sur la racine de la copie pour qu'il soit rÃ©utilisÃ© ensuite
+    // Persister ce suffixe sur la racine de la copie pour qu'il soit réutilisé ensuite
     await prisma.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } as any } });
   }
 
-  // b) Construire/assurer les copies des rÃ©fÃ©rences avec ce suffixe
+  // b) Construire/assurer les copies des références avec ce suffixe
   const refCopyIdByOriginal = new Map<string, string>();
   const desiredIds = Array.from(allRefIds).map(id => `${id}-${chosenSuffix}`);
   const existingRefCopies = desiredIds.length > 0
@@ -4538,7 +4538,7 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
       return desiredRootId;
     }
 
-    // Construire le sous-arbre Ã  copier (IDs originaux)
+    // Construire le sous-arbre à copier (IDs originaux)
     const subtreeIds: string[] = [];
     const q: string[] = [origRefId];
     const seen = new Set<string>();
@@ -4591,7 +4591,7 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
         sharedReferenceIds: [],
         sharedReferenceName: orig.sharedReferenceName ?? orig.label ?? null,
         sharedReferenceDescription: orig.sharedReferenceDescription ?? orig.description ?? null,
-        // 🔗 COLONNES LINKED*** : Copier les références depuis le nœud original avec IDs suffixés
+        // ?? COLONNES LINKED*** : Copier les r�f�rences depuis le n�ud original avec IDs suffix�s
         linkedFormulaIds: Array.isArray((orig as any).linkedFormulaIds)
           ? (orig as any).linkedFormulaIds.map((id: string) => `${id}-${chosenSuffix}`).filter(Boolean)
           : [],
@@ -4609,24 +4609,24 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
       };
       await prisma.treeBranchLeafNode.create({ data: toCreate });
       
-      // 🔗 COPIER LES VARIABLES référencées par ce nœud
+      // ?? COPIER LES VARIABLES r�f�renc�es par ce n�ud
       if (Array.isArray((orig as any).linkedVariableIds) && (orig as any).linkedVariableIds.length > 0) {
-        console.log(`🔗 [SHARED-REF] Copie de ${(orig as any).linkedVariableIds.length} variable(s) pour ${newId}`);
+        console.log(`?? [SHARED-REF] Copie de ${(orig as any).linkedVariableIds.length} variable(s) pour ${newId}`);
         
         const variableCopyCache = new Map<string, string>();
         const formulaIdMap = new Map<string, string>();
         const conditionIdMap = new Map<string, string>();
         const tableIdMap = new Map<string, string>();
-        // 🔑 IMPORTANT : Utiliser originalToCopy qui contient TOUS les nœuds copiés (pas juste le shared-ref)
+        // ?? IMPORTANT : Utiliser originalToCopy qui contient TOUS les n�uds copi�s (pas juste le shared-ref)
         const globalNodeIdMap = new Map<string, string>([...originalToCopy, ...idMap]);
         
         for (const originalVarId of (orig as any).linkedVariableIds) {
           try {
-            // Appeler copyVariableWithCapacities pour créer la variable
+            // Appeler copyVariableWithCapacities pour cr�er la variable
             const copyResult = await copyVariableWithCapacities(
               originalVarId,
               chosenSuffix!,
-              newId, // Le nouveau nœud qui possède cette variable
+              newId, // Le nouveau n�ud qui poss�de cette variable
               prisma,
               {
                 formulaIdMap,
@@ -4639,12 +4639,12 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
             );
             
             if (copyResult.success) {
-              console.log(`  ✅ [SHARED-REF] Variable copiée: ${copyResult.variableId}`);
+              console.log(`  ? [SHARED-REF] Variable copi�e: ${copyResult.variableId}`);
             } else {
-              console.warn(`  ⚠️ [SHARED-REF] Échec copie variable ${originalVarId}: ${copyResult.error}`);
+              console.warn(`  ?? [SHARED-REF] �chec copie variable ${originalVarId}: ${copyResult.error}`);
             }
           } catch (e) {
-            console.warn(`  ⚠️ [SHARED-REF] Erreur copie variable ${originalVarId}:`, (e as Error).message);
+            console.warn(`  ?? [SHARED-REF] Erreur copie variable ${originalVarId}:`, (e as Error).message);
           }
         }
       }
@@ -4692,34 +4692,34 @@ router.post('/nodes/:nodeId/apply-shared-references-from-original', async (req, 
     const result = await applySharedReferencesFromOriginalInternal(req as unknown as MinimalReq, nodeId);
     return res.json(result);
   } catch (error) {
-    console.error('âŒ [/nodes/:nodeId/apply-shared-references-from-original] Erreur:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'application des rÃ©fÃ©rences partagÃ©es' });
+    console.error('❌ [/nodes/:nodeId/apply-shared-references-from-original] Erreur:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'application des références partagées' });
   }
 });
 
 // =============================================================================
-// ðŸ§¹ DÃ‰LIER (ET OPTIONNELLEMENT SUPPRIMER) LES RÃ‰FÃ‰RENCES PARTAGÃ‰ES D'UNE COPIE
+// 🧹 DÉLIER (ET OPTIONNELLEMENT SUPPRIMER) LES RÉFÉRENCES PARTAGÉES D'UNE COPIE
 // =============================================================================
 // POST /api/treebranchleaf/nodes/:nodeId/unlink-shared-references
-// - DÃ©lie toutes les rÃ©fÃ©rences partagÃ©es (sharedReferenceId/sharedReferenceIds) dans la sous-arborescence du nÅ“ud
-// - Optionnel: supprime les sous-arbres de rÃ©fÃ©rences copiÃ©es (suffixÃ©es) devenues orphelines
+// - Délie toutes les références partagées (sharedReferenceId/sharedReferenceIds) dans la sous-arborescence du nœud
+// - Optionnel: supprime les sous-arbres de références copiées (suffixées) devenues orphelines
 router.post('/nodes/:nodeId/unlink-shared-references', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { deleteOrphans } = (req.body || {}) as { deleteOrphans?: boolean };
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // 1) Charger le nÅ“ud et contrÃ´ler l'accÃ¨s via l'arbre parent
+    // 1) Charger le nœud et contrôler l'accès via l'arbre parent
     const root = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!root) return res.status(404).json({ error: 'NÅ“ud introuvable' });
+    if (!root) return res.status(404).json({ error: 'Nœud introuvable' });
     if (!isSuperAdmin && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s non autorisÃ©' });
+      return res.status(403).json({ error: 'Accès non autorisé' });
     }
 
-    // 2) RÃ©cupÃ©rer tous les nÅ“uds de l'arbre pour relations parent/enfant
+    // 2) Récupérer tous les nœuds de l'arbre pour relations parent/enfant
     const all = await prisma.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map(n => [n.id, n] as const));
     const childrenByParent = new Map<string, string[]>();
@@ -4730,7 +4730,7 @@ router.post('/nodes/:nodeId/unlink-shared-references', async (req, res) => {
       childrenByParent.set(n.parentId, arr);
     }
 
-    // 3) Collecter la sous-arborescence du nÅ“ud
+    // 3) Collecter la sous-arborescence du nœud
     const collected = new Set<string>();
     const queue: string[] = [root.id];
     while (queue.length) {
@@ -4740,7 +4740,7 @@ router.post('/nodes/:nodeId/unlink-shared-references', async (req, res) => {
       for (const c of (childrenByParent.get(cur) || [])) queue.push(c);
     }
 
-    // 4) Collecter toutes les rÃ©fÃ©rences partagÃ©es pointÃ©es par cette sous-arborescence
+    // 4) Collecter toutes les références partagées pointées par cette sous-arborescence
     const referencedIds = new Set<string>();
     for (const id of collected) {
       const n = byId.get(id);
@@ -4749,7 +4749,7 @@ router.post('/nodes/:nodeId/unlink-shared-references', async (req, res) => {
       if (Array.isArray(n.sharedReferenceIds)) n.sharedReferenceIds.forEach(rid => rid && referencedIds.add(rid));
     }
 
-    // 5) DÃ©lier: mettre sharedReferenceId=null et sharedReferenceIds=[] sur TOUTE la sous-arborescence
+    // 5) Délier: mettre sharedReferenceId=null et sharedReferenceIds=[] sur TOUTE la sous-arborescence
     const updates: Array<Promise<unknown>> = [];
     for (const id of collected) {
       updates.push(prisma.treeBranchLeafNode.update({ where: { id }, data: { sharedReferenceId: null, sharedReferenceIds: [] as string[] } }));
@@ -4759,20 +4759,20 @@ router.post('/nodes/:nodeId/unlink-shared-references', async (req, res) => {
     let deletedCount = 0;
     let orphanCandidates: string[] = [];
 
-    // 6) Optionnel: supprimer les rÃ©fÃ©rences suffixÃ©es devenues orphelines
+    // 6) Optionnel: supprimer les références suffixées devenues orphelines
     if (deleteOrphans && referencedIds.size > 0) {
-      // Candidats = rÃ©fÃ©rences existantes dont l'ID existe dans l'arbre
+      // Candidats = références existantes dont l'ID existe dans l'arbre
       orphanCandidates = Array.from(referencedIds).filter(id => byId.has(id));
 
-      // VÃ©rifier si elles sont encore rÃ©fÃ©rencÃ©es ailleurs dans l'arbre (hors sous-arborescence)
+      // Vérifier si elles sont encore référencées ailleurs dans l'arbre (hors sous-arborescence)
       const elsewhereRefers = new Set<string>();
       for (const n of all) {
-        if (collected.has(n.id)) continue; // on ignore la sous-arborescence dÃ©jÃ  dÃ©lier
+        if (collected.has(n.id)) continue; // on ignore la sous-arborescence déjà délier
         if (n.sharedReferenceId && referencedIds.has(n.sharedReferenceId)) elsewhereRefers.add(n.sharedReferenceId);
         if (Array.isArray(n.sharedReferenceIds)) for (const rid of n.sharedReferenceIds) if (referencedIds.has(rid)) elsewhereRefers.add(rid);
       }
 
-      // Supprimer uniquement celles qui ne sont plus rÃ©fÃ©rencÃ©es
+      // Supprimer uniquement celles qui ne sont plus référencées
       const toDeleteRoots = orphanCandidates.filter(id => !elsewhereRefers.has(id));
 
       if (toDeleteRoots.length > 0) {
@@ -4804,24 +4804,24 @@ router.post('/nodes/:nodeId/unlink-shared-references', async (req, res) => {
 
     return res.json({ success: true, unlinked: collected.size, orphanCandidates, deletedOrphans: deletedCount });
   } catch (error) {
-    console.error('âŒ [/nodes/:nodeId/unlink-shared-references] Erreur:', error);
-    res.status(500).json({ error: 'Erreur lors du dÃ©lier/suppression des rÃ©fÃ©rences partagÃ©es' });
+    console.error('❌ [/nodes/:nodeId/unlink-shared-references] Erreur:', error);
+    res.status(500).json({ error: 'Erreur lors du délier/suppression des références partagées' });
   }
 });
 
-// GET /api/treebranchleaf/nodes/:tableNodeId/table/lookup - RÃ©cupÃ¨re les donnÃ©es pour un select basÃ© sur une table
-// âš ï¸ ANCIEN ENDPOINT - DÃ‰SACTIVÃ‰ CAR DOUBLON AVEC L'ENDPOINT LIGNE 6339 (NOUVELLE VERSION AVEC keyRow/keyColumn)
+// GET /api/treebranchleaf/nodes/:tableNodeId/table/lookup - Récupère les données pour un select basé sur une table
+// ⚠️ ANCIEN ENDPOINT - DÉSACTIVÉ CAR DOUBLON AVEC L'ENDPOINT LIGNE 6339 (NOUVELLE VERSION AVEC keyRow/keyColumn)
 /*
 router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
-  const { tableNodeId } = req.params; // âœ… DÃ‰PLACÃ‰ AVANT LE TRY pour Ãªtre accessible dans le catch
+  const { tableNodeId } = req.params; // ✅ DÉPLACÉ AVANT LE TRY pour être accessible dans le catch
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[table/lookup] DÃ©but pour tableNodeId: ${tableNodeId}`);
+    console.log(`[table/lookup] Début pour tableNodeId: ${tableNodeId}`);
     
-    // ðŸ” DIAGNOSTIC: VÃ©rifier si Prisma est disponible
+    // 🔍 DIAGNOSTIC: Vérifier si Prisma est disponible
     if (!prisma) {
-      console.error(`[table/lookup] âŒ ERREUR CRITIQUE: prisma est undefined !`);
+      console.error(`[table/lookup] ❌ ERREUR CRITIQUE: prisma est undefined !`);
       console.error(`[table/lookup] Type de prisma:`, typeof prisma);
       return res.status(500).json({ 
         error: 'Database connection not available',
@@ -4829,9 +4829,9 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
       });
     }
     
-    console.log(`[table/lookup] âœ… Prisma client disponible, type:`, typeof prisma);
+    console.log(`[table/lookup] ✅ Prisma client disponible, type:`, typeof prisma);
 
-    // 1. RÃ©cupÃ©rer la configuration SELECT du champ pour savoir quelle table rÃ©fÃ©rencer
+    // 1. Récupérer la configuration SELECT du champ pour savoir quelle table référencer
     const selectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
       where: { nodeId: tableNodeId },
       select: {
@@ -4842,19 +4842,19 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
     });
 
     if (!selectConfig || !selectConfig.tableReference) {
-      console.log(`[table/lookup] 404 - Aucune configuration de table rÃ©fÃ©rencÃ©e pour le nÅ“ud ${tableNodeId}`);
-      return res.status(404).json({ error: 'Configuration de la table de rÃ©fÃ©rence non trouvÃ©e.' });
+      console.log(`[table/lookup] 404 - Aucune configuration de table référencée pour le nœud ${tableNodeId}`);
+      return res.status(404).json({ error: 'Configuration de la table de référence non trouvée.' });
     }
 
     const { tableReference } = selectConfig;
-    const _valueColumn = selectConfig.valueColumn; // Pour info (non utilisÃ© en mode dynamique)
-    const _displayColumn = selectConfig.displayColumn; // Pour info (non utilisÃ© en mode dynamique)
+    const _valueColumn = selectConfig.valueColumn; // Pour info (non utilisé en mode dynamique)
+    const _displayColumn = selectConfig.displayColumn; // Pour info (non utilisé en mode dynamique)
 
-    // 2. RÃ©cupÃ©rer les donnÃ©es de la table rÃ©fÃ©rencÃ©e
+    // 2. Récupérer les données de la table référencée
     const tableData = await prisma.treeBranchLeafNodeTable.findFirst({
       where: { id: tableReference },
       select: {
-        data: true,      // âœ… CORRECT: DonnÃ©es 2D du tableau
+        data: true,      // ✅ CORRECT: Données 2D du tableau
         columns: true,   // Noms des colonnes
         rows: true,      // Noms des lignes (pour info)
         nodeId: true,
@@ -4868,19 +4868,19 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
 
     const nodeOrg = parentNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && organizationId && nodeOrg && nodeOrg !== organizationId) {
-      console.log(`[table/lookup] 403 - AccÃ¨s non autorisÃ©. Org user: ${organizationId}, Org node: ${nodeOrg}`);
-      return res.status(403).json({ error: 'AccÃ¨s non autorisÃ© Ã  cette ressource.' });
+      console.log(`[table/lookup] 403 - Accès non autorisé. Org user: ${organizationId}, Org node: ${nodeOrg}`);
+      return res.status(403).json({ error: 'Accès non autorisé à cette ressource.' });
     }
 
-    // 3. Extraire les colonnes et les donnÃ©es
-    const _tableDataArray = Array.isArray(tableData.data) ? tableData.data : []; // Pour info (non utilisÃ© en mode dynamique)
+    // 3. Extraire les colonnes et les données
+    const _tableDataArray = Array.isArray(tableData.data) ? tableData.data : []; // Pour info (non utilisé en mode dynamique)
     const dataColumns = Array.isArray(tableData.columns) ? tableData.columns : [];
     const rowNames = Array.isArray(tableData.rows) ? tableData.rows : [];
 
-    console.log(`[table/lookup] ðŸ” DEBUG - Colonnes:`, dataColumns);
-    console.log(`[table/lookup] ðŸ” DEBUG - Noms des lignes:`, rowNames);
+    console.log(`[table/lookup] 🔍 DEBUG - Colonnes:`, dataColumns);
+    console.log(`[table/lookup] 🔍 DEBUG - Noms des lignes:`, rowNames);
 
-    // ðŸŽ¯ RÃ©cupÃ©rer le mode et la configuration depuis le champ SELECT
+    // 🎯 Récupérer le mode et la configuration depuis le champ SELECT
     const selectFieldNode = await prisma.treeBranchLeafNode.findUnique({
       where: { id: tableNodeId },
       select: {
@@ -4903,10 +4903,10 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
         isColumnBased = activeInstance.columnBased === true;
         tableMode = activeInstance.mode || 'columns';
         
-        // ðŸŽ¯ CRITIQUE: Lire keyColumn depuis l'instance active
+        // 🎯 CRITIQUE: Lire keyColumn depuis l'instance active
         keyColumnFromLookup = activeInstance.keyColumn || activeInstance.valueColumn || activeInstance.displayColumn;
         
-        console.log(`[table/lookup] ðŸ” Configuration complÃ¨te:`, { 
+        console.log(`[table/lookup] 🔍 Configuration complète:`, { 
           isRowBased, 
           isColumnBased,
           tableMode,
@@ -4922,18 +4922,18 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
 
     if (isRowBased) {
       // Mode LIGNE: Retourner les noms des lignes
-      console.log(`[table/lookup] ðŸŽ¯ Mode LIGNE activÃ© - GÃ©nÃ©ration des options depuis les lignes`);
+      console.log(`[table/lookup] 🎯 Mode LIGNE activé - Génération des options depuis les lignes`);
       options = rowNames.map((rowName: string) => ({
         label: String(rowName),
         value: String(rowName)
       }));
     } else if (tableMode === 'columns' && keyColumnFromLookup) {
-      // âœ… Mode COLONNE avec keyColumn: Retourner les VALEURS de la colonne choisie
-      console.log(`[table/lookup] ðŸŽ¯ Mode COLONNE activÃ© - GÃ©nÃ©ration des options depuis la colonne "${keyColumnFromLookup}"`);
+      // ✅ Mode COLONNE avec keyColumn: Retourner les VALEURS de la colonne choisie
+      console.log(`[table/lookup] 🎯 Mode COLONNE activé - Génération des options depuis la colonne "${keyColumnFromLookup}"`);
       
       const columnIndex = dataColumns.indexOf(keyColumnFromLookup);
       if (columnIndex === -1) {
-        console.warn(`[table/lookup] âš ï¸ Colonne "${keyColumnFromLookup}" introuvable dans:`, dataColumns);
+        console.warn(`[table/lookup] ⚠️ Colonne "${keyColumnFromLookup}" introuvable dans:`, dataColumns);
         options = [];
       } else {
         // Extraire les valeurs de la colonne
@@ -4950,22 +4950,22 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
           })
           .filter((opt): opt is { label: string; value: string } => opt !== null);
         
-        console.log(`[table/lookup] âœ… ${options.length} valeurs extraites de la colonne "${keyColumnFromLookup}":`, options);
+        console.log(`[table/lookup] ✅ ${options.length} valeurs extraites de la colonne "${keyColumnFromLookup}":`, options);
       }
     } else {
-      // Mode COLONNE par dÃ©faut (ancien comportement): Retourner les noms des colonnes
-      console.log(`[table/lookup] ðŸŽ¯ Mode COLONNE (legacy) activÃ© - GÃ©nÃ©ration des options depuis les noms de colonnes`);
+      // Mode COLONNE par défaut (ancien comportement): Retourner les noms des colonnes
+      console.log(`[table/lookup] 🎯 Mode COLONNE (legacy) activé - Génération des options depuis les noms de colonnes`);
       options = dataColumns.map((columnName: string) => ({
         label: String(columnName),
         value: String(columnName)
       }));
     }
 
-    console.log(`[table/lookup] SuccÃ¨s - ${options.length} options ${isRowBased ? 'LIGNES' : 'COLONNES'} gÃ©nÃ©rÃ©es pour ${tableNodeId}`);
+    console.log(`[table/lookup] Succès - ${options.length} options ${isRowBased ? 'LIGNES' : 'COLONNES'} générées pour ${tableNodeId}`);
     res.json({ options });
 
   } catch (error) {
-    console.error(`[API] ðŸ’¥ Critical error in /table/lookup for tableNodeId: ${tableNodeId}`, error);
+    console.error(`[API] 💥 Critical error in /table/lookup for tableNodeId: ${tableNodeId}`, error);
     if (error instanceof Error) {
         console.error(`[API] Error Name: ${error.name}`);
         console.error(`[API] Error Message: ${error.message}`);
@@ -4978,27 +4978,27 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
   }
 });
 */
-// âš ï¸ FIN DE L'ANCIEN ENDPOINT /table/lookup - Utiliser maintenant l'endpoint moderne ligne ~6339
+// ⚠️ FIN DE L'ANCIEN ENDPOINT /table/lookup - Utiliser maintenant l'endpoint moderne ligne ~6339
 
 
 // =============================================================================
-// ï¿½ðŸ”¢ NODE DATA (VARIABLE EXPOSÃ‰E) - DonnÃ©e d'un nÅ“ud
+// �🔢 NODE DATA (VARIABLE EXPOSÉE) - Donnée d'un nœud
 // =============================================================================
 
 // GET /api/treebranchleaf/trees/:treeId/nodes/:nodeId/data
-// RÃ©cupÃ¨re la configuration "donnÃ©e" (variable exposÃ©e) d'un nÅ“ud
+// Récupère la configuration "donnée" (variable exposée) d'un nœud
 router.get('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
   try {
     const { treeId, nodeId } = req.params;
     const { organizationId } = req.user!;
-    console.log('🛠️ [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s', treeId, nodeId);
+    console.log('??? [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s', treeId, nodeId);
 
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvé' });
+      return res.status(404).json({ error: 'Arbre non trouv�' });
     }
 
     const node = await prisma.treeBranchLeafNode.findFirst({
@@ -5014,13 +5014,13 @@ router.get('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 
     if (variable) {
       const { sourceType, sourceRef, fixedValue, selectedNodeId, exposedKey } = variable;
-      console.log('🧰 [TBL NEW ROUTE][GET /data] payload keys=%s hasSource=%s ref=%s fixed=%s selNode=%s (owner=%s proxied=%s)',
+      console.log('?? [TBL NEW ROUTE][GET /data] payload keys=%s hasSource=%s ref=%s fixed=%s selNode=%s (owner=%s proxied=%s)',
         Object.keys(variable).join(','), !!sourceType, sourceRef, fixedValue, selectedNodeId, ownerNodeId, proxiedFromNodeId);
       if (!sourceType && !sourceRef) {
-        console.log('⚠️ [TBL NEW ROUTE][GET /data] Aucune sourceType/sourceRef retournee pour nodeId=%s (exposedKey=%s)', nodeId, exposedKey);
+        console.log('?? [TBL NEW ROUTE][GET /data] Aucune sourceType/sourceRef retournee pour nodeId=%s (exposedKey=%s)', nodeId, exposedKey);
       }
     } else {
-      console.log('ℹ️ [TBL NEW ROUTE][GET /data] variable inexistante nodeId=%s -> {} (owner=%s proxied=%s)', nodeId, ownerNodeId, proxiedFromNodeId);
+      console.log('?? [TBL NEW ROUTE][GET /data] variable inexistante nodeId=%s -> {} (owner=%s proxied=%s)', nodeId, ownerNodeId, proxiedFromNodeId);
     }
 
     const usedVariableId = node.data_activeId || variable?.id || null;
@@ -5035,36 +5035,36 @@ router.get('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 });
 
 // =============================================================================
-// âš–ï¸ NODE CONDITIONS - Conditions IF/ELSE d'un nÅ“ud
+// ⚖️ NODE CONDITIONS - Conditions IF/ELSE d'un nœud
 // =============================================================================
 
 // GET /api/treebranchleaf/nodes/:nodeId/conditions
-// RÃ©cupÃ¨re la configuration des conditions d'un nÅ“ud (JSON libre pour l'instant)
+// Récupère la configuration des conditions d'un nœud (JSON libre pour l'instant)
 // (Moved export to bottom so routes below are mounted)
 
 // PUT /api/treebranchleaf/trees/:treeId/nodes/:nodeId/data
-// CrÃ©e/met Ã  jour la configuration "donnÃ©e" (variable exposÃ©e) d'un nÅ“ud
+// Crée/met à jour la configuration "donnée" (variable exposée) d'un nœud
 router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
   try {
     const { treeId, nodeId } = req.params;
     const { organizationId } = req.user!;
     const { 
       exposedKey, displayFormat, unit, precision, visibleToUser, isReadonly, defaultValue, metadata,
-      // ðŸŽ¯ NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
+      // 🎯 NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
       sourceType, sourceRef, fixedValue, selectedNodeId 
     } = req.body || {};
-    console.log('ðŸ›°ï¸ [TBL NEW ROUTE][PUT /data] nodeId=%s body=%o', nodeId, { exposedKey, sourceType, sourceRef, fixedValue, selectedNodeId });
+    console.log('🛰️ [TBL NEW ROUTE][PUT /data] nodeId=%s body=%o', nodeId, { exposedKey, sourceType, sourceRef, fixedValue, selectedNodeId });
 
-    // VÃ©rifier l'appartenance de l'arbre Ã  l'organisation (ou accÃ¨s super admin)
+    // Vérifier l'appartenance de l'arbre à l'organisation (ou accès super admin)
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // VÃ©rifier que le nÅ“ud existe dans cet arbre
+    // Vérifier que le nœud existe dans cet arbre
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -5074,7 +5074,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
     // Normalisation des valeurs
@@ -5088,7 +5088,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
     const targetNodeId = ownerNodeId ?? nodeId;
     const proxiedTargetNodeId = nodeId === targetNodeId ? null : nodeId;
     if (proxiedTargetNodeId) {
-      console.log('📎 [TBL NEW ROUTE][PUT /data] node %s proxied vers variable du noeud %s', nodeId, targetNodeId);
+      console.log('?? [TBL NEW ROUTE][PUT /data] node %s proxied vers variable du noeud %s', nodeId, targetNodeId);
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -5104,7 +5104,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           isReadonly: typeof isReadonly === 'boolean' ? isReadonly : undefined,
           defaultValue: typeof defaultValue === 'string' ? defaultValue : undefined,
           metadata: metadata && typeof metadata === 'object' ? metadata : undefined,
-          // ðŸŽ¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: typeof sourceType === 'string' ? sourceType : undefined,
           sourceRef: typeof sourceRef === 'string' ? sourceRef : undefined,
           fixedValue: typeof fixedValue === 'string' ? fixedValue : undefined,
@@ -5123,7 +5123,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           isReadonly: typeof isReadonly === 'boolean' ? isReadonly : false,
           defaultValue: typeof defaultValue === 'string' ? defaultValue : null,
           metadata: metadata && typeof metadata === 'object' ? metadata : {},
-          // ðŸŽ¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: typeof sourceType === 'string' ? sourceType : 'fixed',
           sourceRef: typeof sourceRef === 'string' ? sourceRef : null,
           fixedValue: typeof fixedValue === 'string' ? fixedValue : null,
@@ -5140,7 +5140,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           isReadonly: true,
           defaultValue: true,
           metadata: true,
-          // ðŸŽ¯ NOUVEAUX CHAMPS source
+          // 🎯 NOUVEAUX CHAMPS source
           sourceType: true,
           sourceRef: true,
           fixedValue: true,
@@ -5148,13 +5148,13 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         },
       });
 
-      // Marquer le nÅ"ud comme ayant des donnÃ©es configurÃ©es (capacitÃ© "DonnÃ©e" active)
-      // 🎯 NOUVEAU: Si sourceRef pointe vers une table, mettre à jour table_activeId et table_instances
-      // 🔧 FIX: Synchroniser data_unit et data_precision depuis la variable vers le nœud
+      // Marquer le n�"ud comme ayant des données configurées (capacité "Donnée" active)
+      // ?? NOUVEAU: Si sourceRef pointe vers une table, mettre � jour table_activeId et table_instances
+      // ?? FIX: Synchroniser data_unit et data_precision depuis la variable vers le n�ud
       const nodeUpdateData: any = { 
         hasData: true, 
         updatedAt: new Date(),
-        // 🔧 FIX: Toujours synchroniser unit et precision de la variable vers le nœud
+        // ?? FIX: Toujours synchroniser unit et precision de la variable vers le n�ud
         data_unit: variable.unit ?? null,
         data_precision: variable.precision ?? null,
         data_displayFormat: variable.displayFormat ?? null,
@@ -5165,7 +5165,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
       
       if (variable.sourceRef && variable.sourceRef.startsWith('@table.')) {
         const tableId = variable.sourceRef.replace('@table.', '');
-        console.log(`[TBL] 🔧 Configuration lookup pour table ${tableId}`);
+        console.log(`[TBL] ?? Configuration lookup pour table ${tableId}`);
 
         const instanceConfig = {
           sourceType: variable.sourceType || 'tree',
@@ -5190,7 +5190,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         nodeUpdateData.table_instances = { [tableId]: instanceConfig };
         nodeUpdateData.hasTable = true;
 
-        console.log(`[TBL] ✅ data_activeId/table_activeId="${tableId}" configurés`);
+        console.log(`[TBL] ? data_activeId/table_activeId="${tableId}" configur�s`);
       }
       
       const nodesToUpdate = new Set<string>([targetNodeId]);
@@ -5205,7 +5205,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         });
       }
 
-      // ðŸ”— MAJ linkedVariableIds du nÅ“ud propriÃ©taire
+      // 🔗 MAJ linkedVariableIds du nœud propriétaire
       try {
         await addToNodeLinkedField(tx, targetNodeId, 'linkedVariableIds', [variable.id]);
         if (nodeId !== targetNodeId) {
@@ -5215,16 +5215,16 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
         console.warn('[TreeBranchLeaf API] Warning updating owner linkedVariableIds:', (e as Error).message);
       }
 
-      // 🔗 Système universel: lier la variable à TOUS les nœuds référencés par sa capacité (table/formule/condition/champ)
+      // ?? Syst�me universel: lier la variable � TOUS les n�uds r�f�renc�s par sa capacit� (table/formule/condition/champ)
       if (variable.sourceRef) {
         try {
           await linkVariableToAllCapacityNodes(tx, variable.id, variable.sourceRef);
         } catch (e) {
-          console.warn(`⚠️ [TreeBranchLeaf API] Échec liaison automatique linkedVariableIds pour ${variable.id}:`, (e as Error).message);
+          console.warn(`?? [TreeBranchLeaf API] �chec liaison automatique linkedVariableIds pour ${variable.id}:`, (e as Error).message);
         }
       }
 
-      // ðŸ”— NOUVEAU: MAJ des rÃ©fÃ©rences inverses (linkedVariableIds sur les nÅ“uds rÃ©fÃ©rencÃ©s)
+      // 🔗 NOUVEAU: MAJ des références inverses (linkedVariableIds sur les nœuds référencés)
       try {
         const getReferencedIds = async (varData: { sourceRef?: string | null, metadata?: any }): Promise<Set<string>> => {
           const ids = new Set<string>();
@@ -5232,12 +5232,12 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
 
           const { sourceRef, metadata } = varData;
 
-          // 1. RÃ©fÃ©rence directe dans metadata.selectedNodeId
+          // 1. Référence directe dans metadata.selectedNodeId
           if (metadata?.selectedNodeId) {
             ids.add(normalizeRefId(metadata.selectedNodeId));
           }
 
-          // 2. RÃ©fÃ©rence dans sourceRef
+          // 2. Référence dans sourceRef
           const parsedRef = parseSourceRef(sourceRef);
           if (parsedRef) {
             if (parsedRef.type === 'formula') {
@@ -5251,11 +5251,11 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
                 extractNodeIdsFromConditionSet(condition.conditionSet).forEach(id => ids.add(normalizeRefId(id)));
               }
             } else {
-              // GÃ©rer les cas comme "table:id" ou "node:id"
+              // Gérer les cas comme "table:id" ou "node:id"
               ids.add(normalizeRefId(parsedRef.id));
             }
           } else if (sourceRef) {
-            // Si ce n'est pas un format "type:id", Ã§a peut Ãªtre un nodeId direct
+            // Si ce n'est pas un format "type:id", ça peut être un nodeId direct
             ids.add(normalizeRefId(sourceRef));
           }
           
@@ -5281,14 +5281,14 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           }
         }
 
-        // ðŸ†• NOUVEAU: GÃ©rer aussi les rÃ©fÃ©rences vers les variables des nÅ“uds rÃ©fÃ©rencÃ©s
+        // 🆕 NOUVEAU: Gérer aussi les références vers les variables des nœuds référencés
         const getNodeReferencedVariableIds = async (varData: { sourceRef?: string | null, metadata?: any }): Promise<Set<string>> => {
           const variableIds = new Set<string>();
           
-          // Extraire les nÅ“uds rÃ©fÃ©rencÃ©s par cette variable
+          // Extraire les nœuds référencés par cette variable
           const referencedNodeIds = await getReferencedIds(varData);
           
-          // Pour chaque nÅ“ud rÃ©fÃ©rencÃ©, rÃ©cupÃ©rer sa variable (si elle existe)
+          // Pour chaque nœud référencé, récupérer sa variable (si elle existe)
           for (const refNodeId of referencedNodeIds) {
             const refVariable = await tx.treeBranchLeafNodeVariable.findUnique({
               where: { nodeId: refNodeId },
@@ -5317,18 +5317,18 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
           await removeFromNodeLinkedField(tx, targetNodeId, 'linkedVariableIds', variableIdsToRemove);
         }
 
-        // 🔗 NOUVEAU: Backfill linkedVariableIds pour tous les lookups de la table associée
+        // ?? NOUVEAU: Backfill linkedVariableIds pour tous les lookups de la table associ�e
         try {
-          // Récupérer le nœud propriétaire pour accéder à ses tables
+          // R�cup�rer le n�ud propri�taire pour acc�der � ses tables
           const nodeData = await tx.treeBranchLeafNode.findUnique({
             where: { id: targetNodeId },
             select: { linkedTableIds: true }
           });
 
           if (nodeData && nodeData.linkedTableIds && nodeData.linkedTableIds.length > 0) {
-            console.log(`[TBL] 🔍 Traitement des lookups pour ${nodeData.linkedTableIds.length} table(s)...`);
+            console.log(`[TBL] ?? Traitement des lookups pour ${nodeData.linkedTableIds.length} table(s)...`);
             
-            // Pour chaque table associée à ce nœud
+            // Pour chaque table associ�e � ce n�ud
             for (const tableId of nodeData.linkedTableIds) {
               const table = await tx.treeBranchLeafNodeTable.findUnique({
                 where: { id: tableId },
@@ -5342,9 +5342,9 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
               });
 
               if (table) {
-                console.log(`[TBL] 📊 Table trouvée: "${table.name}" (ID: ${table.id})`);
+                console.log(`[TBL] ?? Table trouv�e: "${table.name}" (ID: ${table.id})`);
                 
-                // Chercher tous les nœuds Select/Cascader qui utilisent cette table
+                // Chercher tous les n�uds Select/Cascader qui utilisent cette table
                 // Via la relation TreeBranchLeafSelectConfig.tableReference
                 const selectConfigsUsingTable = await tx.treeBranchLeafSelectConfig.findMany({
                   where: { tableReference: table.id },
@@ -5352,7 +5352,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
                 });
 
                 if (selectConfigsUsingTable.length > 0) {
-                  console.log(`[TBL] ✨ ${selectConfigsUsingTable.length} champ(s) Select/Cascader utilise(nt) cette table`);
+                  console.log(`[TBL] ? ${selectConfigsUsingTable.length} champ(s) Select/Cascader utilise(nt) cette table`);
                   
                   for (const config of selectConfigsUsingTable) {
                     const selectNode = await tx.treeBranchLeafNode.findUnique({
@@ -5367,7 +5367,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
                     if (selectNode) {
                       const currentLinkedIds = selectNode.linkedVariableIds || [];
                       
-                      // Ajouter l'ID de la variable si pas déjà présent
+                      // Ajouter l'ID de la variable si pas d�j� pr�sent
                       if (!currentLinkedIds.includes(variable.id)) {
                         const updatedLinkedIds = [...currentLinkedIds, variable.id];
                         
@@ -5379,9 +5379,9 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
                           }
                         });
                         
-                        console.log(`[TBL] ✅ linkedVariableIds mis à jour pour "${selectNode.label}" (${selectNode.id})`);
+                        console.log(`[TBL] ? linkedVariableIds mis � jour pour "${selectNode.label}" (${selectNode.id})`);
                       } else {
-                        console.log(`[TBL] ℹ️ linkedVariableIds déjà à jour pour "${selectNode.label}"`);
+                        console.log(`[TBL] ?? linkedVariableIds d�j� � jour pour "${selectNode.label}"`);
                       }
                     }
                   }
@@ -5415,65 +5415,65 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
   } catch (error) {
     const err = error as unknown as { code?: string };
     if (err && err.code === 'P2002') {
-      return res.status(409).json({ error: 'La variable exposÃ©e (exposedKey) existe dÃ©jÃ ' });
+      return res.status(409).json({ error: 'La variable exposée (exposedKey) existe déjà' });
     }
     console.error('[TreeBranchLeaf API] Error updating node data:', error);
-    res.status(500).json({ error: 'Erreur lors de la mise Ã  jour de la donnÃ©e du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la donnée du nœud' });
   }
 });
 
 // =============================================================================
-// ðŸ—‘ï¸ DELETE VARIABLE - Suppression d'une variable avec cascade
+// 🗑️ DELETE VARIABLE - Suppression d'une variable avec cascade
 // =============================================================================
 
 // DELETE /api/treebranchleaf/trees/:treeId/nodes/:nodeId/data
-// Supprime une variable ET la capacitÃ© (formule/condition/table) qu'elle rÃ©fÃ©rence
+// Supprime une variable ET la capacité (formule/condition/table) qu'elle référence
 router.delete('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
   try {
     const { treeId, nodeId } = req.params;
     const { organizationId } = req.user!;
 
-    console.log(`ðŸ—‘ï¸ [DELETE Variable] DÃ©but suppression pour nodeId=${nodeId}`);
+    console.log(`🗑️ [DELETE Variable] Début suppression pour nodeId=${nodeId}`);
 
-    // VÃ©rifier l'appartenance de l'arbre Ã  l'organisation
+    // Vérifier l'appartenance de l'arbre à l'organisation
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvÃ©' });
+      return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    // VÃ©rifier que le nÅ“ud existe
+    // Vérifier que le nœud existe
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
       select: { id: true, linkedVariableIds: true }
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
-    // RÃ©soudre la variable (support des nÅ“uds proxys/display)
+    // Résoudre la variable (support des nœuds proxys/display)
     const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
 
     if (!variable || !ownerNodeId) {
-      return res.status(404).json({ error: 'Variable non trouvÃ©e' });
+      return res.status(404).json({ error: 'Variable non trouvée' });
     }
 
-    console.log(`ðŸ” [DELETE Variable] Variable trouvÃ©e avec sourceRef: ${variable.sourceRef}`);
+    console.log(`🔍 [DELETE Variable] Variable trouvée avec sourceRef: ${variable.sourceRef}`);
 
-    // âŒ PAS de suppression en cascade : on garde les capacitÃ©s (formule/condition/table)
-    // On supprime uniquement la variable, la capacitÃ© reste accessible directement
-    console.log(`ðŸ” [DELETE Variable] Variable trouvÃ©e avec sourceRef: ${variable.sourceRef}`);
-    console.log(`ðŸ“Œ [DELETE Variable] La capacitÃ© rÃ©fÃ©rencÃ©e sera conservÃ©e`);
+    // ❌ PAS de suppression en cascade : on garde les capacités (formule/condition/table)
+    // On supprime uniquement la variable, la capacité reste accessible directement
+    console.log(`🔍 [DELETE Variable] Variable trouvée avec sourceRef: ${variable.sourceRef}`);
+    console.log(`📌 [DELETE Variable] La capacité référencée sera conservée`);
 
-    // Supprimer la variable elle-mÃªme
+    // Supprimer la variable elle-même
     await prisma.treeBranchLeafNodeVariable.delete({
       where: { nodeId: ownerNodeId }
     });
 
-    // DÃ©sactiver la capacitÃ© "DonnÃ©es" sur le nÅ“ud propriÃ©taire et les proxys impactÃ©s
+    // Désactiver la capacité "Données" sur le nœud propriétaire et les proxys impactés
     const nodesToDisable = Array.from(new Set([ownerNodeId, proxiedFromNodeId].filter(Boolean))) as string[];
     if (nodesToDisable.length > 0) {
       await prisma.treeBranchLeafNode.updateMany({
@@ -5482,46 +5482,46 @@ router.delete('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
       });
     }
 
-    // Nettoyer les rÃ©fÃ©rences Ã  cette variable dans tout l'arbre
+    // Nettoyer les références à cette variable dans tout l'arbre
     try {
-      // 1. Trouver tous les nÅ“uds qui rÃ©fÃ©rencent la variable en cours de suppression
+      // 1. Trouver tous les nœuds qui référencent la variable en cours de suppression
       const dependentNodes = await prisma.treeBranchLeafNode.findMany({
         where: {
           treeId,
-          linkedVariableIds: { has: variable.id }, // On cherche les nÅ“uds qui ont l'ID de notre variable
+          linkedVariableIds: { has: variable.id }, // On cherche les nœuds qui ont l'ID de notre variable
         },
         select: { id: true, linkedVariableIds: true },
       });
 
-      console.log(`ðŸ§¹ [DELETE Variable] ${dependentNodes.length} nÅ“ud(s) dÃ©pendant(s) trouvÃ©(s) Ã  nettoyer.`);
+      console.log(`🧹 [DELETE Variable] ${dependentNodes.length} nœud(s) dépendant(s) trouvé(s) à nettoyer.`);
 
-      // 2. Pour chaque nÅ“ud dÃ©pendant, retirer la rÃ©fÃ©rence Ã  la variable supprimÃ©e
+      // 2. Pour chaque nœud dépendant, retirer la référence à la variable supprimée
       for (const nodeToClean of dependentNodes) {
         const updatedLinkedIds = nodeToClean.linkedVariableIds.filter(id => id !== variable.id);
         await prisma.treeBranchLeafNode.update({
           where: { id: nodeToClean.id },
           data: { linkedVariableIds: updatedLinkedIds },
         });
-        console.log(`âœ… [DELETE Variable] Nettoyage de linkedVariableIds terminÃ© pour le nÅ“ud ${nodeToClean.id}`);
+        console.log(`✅ [DELETE Variable] Nettoyage de linkedVariableIds terminé pour le nœud ${nodeToClean.id}`);
       }
     } catch (e) {
       console.warn('[DELETE Variable] Avertissement lors du nettoyage des linkedVariableIds:', (e as Error).message);
     }
 
-    console.log(`âœ… [DELETE Variable] Variable ${variable.id} supprimÃ©e avec succÃ¨s (+ capacitÃ© associÃ©e si existante)`);
-    return res.json({ success: true, message: 'Variable supprimÃ©e avec succÃ¨s' });
+    console.log(`✅ [DELETE Variable] Variable ${variable.id} supprimée avec succès (+ capacité associée si existante)`);
+    return res.json({ success: true, message: 'Variable supprimée avec succès' });
   } catch (error) {
-    console.error('âŒ [DELETE Variable] Erreur lors de la suppression:', error);
+    console.error('❌ [DELETE Variable] Erreur lors de la suppression:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de la variable' });
   }
 });
 
 // =============================================================================
-// âš–ï¸ NODE CONDITIONS - Conditions d'un nÅ“ud
+// ⚖️ NODE CONDITIONS - Conditions d'un nœud
 // =============================================================================
 
 // GET /api/treebranchleaf/nodes/:nodeId/conditions
-// ANCIENNE ROUTE COMMENTÃ‰E - Utilisait conditionConfig du nÅ“ud directement
+// ANCIENNE ROUTE COMMENTÉE - Utilisait conditionConfig du nœud directement
 // Maintenant nous utilisons la table TreeBranchLeafNodeCondition (voir ligne ~1554)
 /*
 router.get('/nodes/:nodeId/conditions', async (req, res) => {
@@ -5529,7 +5529,7 @@ router.get('/nodes/:nodeId/conditions', async (req, res) => {
     const { nodeId } = req.params;
   const { organizationId, isSuperAdmin } = req.user! as { organizationId?: string; isSuperAdmin?: boolean };
 
-    // Charger le nÅ“ud et vÃ©rifier l'organisation via l'arbre
+    // Charger le nœud et vérifier l'organisation via l'arbre
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: {
@@ -5539,51 +5539,51 @@ router.get('/nodes/:nodeId/conditions', async (req, res) => {
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === 'string' && organizationId.length > 0;
     if (!isSuperAdmin && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+      return res.status(403).json({ error: 'Accès refusé' });
     }
 
     return res.json(node.conditionConfig || {});
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node conditions:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des conditions du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des conditions du nœud' });
   }
 });
 */
 
 // PUT /api/treebranchleaf/nodes/:nodeId/conditions
-// Met Ã  jour (ou crÃ©e) la configuration de conditions d'un nÅ“ud
+// Met à jour (ou crée) la configuration de conditions d'un nœud
 router.put('/nodes/:nodeId/conditions', async (req, res) => {
   try {
     const { nodeId } = req.params;
   const { organizationId, isSuperAdmin } = req.user! as { organizationId?: string; isSuperAdmin?: boolean };
     const payload = req.body ?? {};
 
-    // Valider grossiÃ¨rement le payload (doit Ãªtre un objet JSON)
+    // Valider grossièrement le payload (doit être un objet JSON)
     const isObject = payload && typeof payload === 'object' && !Array.isArray(payload);
     if (!isObject) {
       return res.status(400).json({ error: 'Payload de conditions invalide' });
     }
 
-    // Charger le nÅ“ud et vÃ©rifier l'organisation via l'arbre
+    // Charger le nœud et vérifier l'organisation via l'arbre
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === 'string' && organizationId.length > 0;
     if (!isSuperAdmin && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+      return res.status(403).json({ error: 'Accès refusé' });
     }
 
     const updated = await prisma.treeBranchLeafNode.update({
@@ -5599,22 +5599,22 @@ router.put('/nodes/:nodeId/conditions', async (req, res) => {
     return res.json(updated.conditionConfig || {});
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node conditions:', error);
-    res.status(500).json({ error: 'Erreur lors de la mise Ã  jour des conditions du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour des conditions du nœud' });
   }
 });
 
 // =============================================================================
-// ðŸ§® NODE FORMULA - Formule d'un nÅ“ud
+// 🧮 NODE FORMULA - Formule d'un nœud
 // =============================================================================
 
 // GET /api/treebranchleaf/nodes/:nodeId/formula
-// RÃ©cupÃ¨re la configuration de formule d'un nÅ“ud (formulaConfig)
+// Récupère la configuration de formule d'un nœud (formulaConfig)
 router.get('/nodes/:nodeId/formula', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = req.user! as { organizationId?: string; isSuperAdmin?: boolean };
 
-    // Charger le nÅ“ud et vÃ©rifier l'organisation via l'arbre
+    // Charger le nœud et vérifier l'organisation via l'arbre
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: {
@@ -5624,50 +5624,50 @@ router.get('/nodes/:nodeId/formula', async (req, res) => {
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === 'string' && organizationId.length > 0;
     if (!isSuperAdmin && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+      return res.status(403).json({ error: 'Accès refusé' });
     }
 
     return res.json(node.formulaConfig || {});
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node formula:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la formule du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la formule du nœud' });
   }
 });
 
 // PUT /nodes/:nodeId/formula
-// Met Ã  jour (ou crÃ©e) la configuration de formule d'un nÅ“ud
+// Met à jour (ou crée) la configuration de formule d'un nœud
 router.put('/nodes/:nodeId/formula', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = req.user! as { organizationId?: string; isSuperAdmin?: boolean };
     const payload = req.body ?? {};
 
-    // Valider grossiÃ¨rement le payload (doit Ãªtre un objet JSON)
+    // Valider grossièrement le payload (doit être un objet JSON)
     const isObject = payload && typeof payload === 'object' && !Array.isArray(payload);
     if (!isObject) {
       return res.status(400).json({ error: 'Payload de formule invalide' });
     }
 
-    // Charger le nÅ“ud et vÃ©rifier l'organisation via l'arbre
+    // Charger le nœud et vérifier l'organisation via l'arbre
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === 'string' && organizationId.length > 0;
     if (!isSuperAdmin && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+      return res.status(403).json({ error: 'Accès refusé' });
     }
 
     const updated = await prisma.treeBranchLeafNode.update({
@@ -5683,26 +5683,26 @@ router.put('/nodes/:nodeId/formula', async (req, res) => {
     return res.json(updated.formulaConfig || {});
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node formula:', error);
-    res.status(500).json({ error: 'Erreur lors de la mise Ã  jour de la formule du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la formule du nœud' });
   }
 });
 
 // =============================================================================
-// ðŸ§® NODE FORMULAS - Formules spÃ©cifiques Ã  un nÅ“ud (nouvelle table dÃ©diÃ©e)
+// 🧮 NODE FORMULAS - Formules spécifiques à un nœud (nouvelle table dédiée)
 // =============================================================================
 
 // GET /api/treebranchleaf/nodes/:nodeId/formulas
-// Liste les formules spÃ©cifiques Ã  un nÅ“ud
+// Liste les formules spécifiques à un nœud
 router.get('/nodes/:nodeId/formulas', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // RÃ©cupÃ©rer les formules de ce nÅ“ud
+    // Récupérer les formules de ce nœud
     const formulas = await prisma.treeBranchLeafNodeFormula.findMany({
       where: { nodeId },
       orderBy: { createdAt: 'asc' }
@@ -5712,20 +5712,20 @@ router.get('/nodes/:nodeId/formulas', async (req, res) => {
     return res.json({ formulas });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node formulas:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des formules du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des formules du nœud' });
   }
 });
 
 // POST /nodes/:nodeId/formulas
-// CrÃ©e une nouvelle formule pour un nÅ“ud
+// Crée une nouvelle formule pour un nœud
 router.post('/nodes/:nodeId/formulas', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    const { name, tokens, description } = req.body || {};
+    const { name, tokens, description, targetProperty, constraintMessage } = req.body || {};
 
     // Debug: log des infos d'authentification
-    console.log('ðŸ” Formula creation auth debug:', {
+    console.log('🔍 Formula creation auth debug:', {
       nodeId,
       organizationId,
       isSuperAdmin,
@@ -5733,7 +5733,7 @@ router.post('/nodes/:nodeId/formulas', async (req, res) => {
       headers: req.headers['x-organization-id']
     });
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
@@ -5741,7 +5741,7 @@ router.post('/nodes/:nodeId/formulas', async (req, res) => {
       return res.status(400).json({ error: 'Name et tokens requis' });
     }
 
-    // GÃ©nÃ©rer un nom unique en cas de conflit
+    // Générer un nom unique en cas de conflit
     let uniqueName = String(name);
     let counter = 1;
     
@@ -5758,12 +5758,12 @@ router.post('/nodes/:nodeId/formulas', async (req, res) => {
           break; // Le nom est disponible
         }
         
-        // Si le nom existe, ajouter un suffixe numÃ©rique
+        // Si le nom existe, ajouter un suffixe numérique
         uniqueName = `${name} (${counter})`;
         counter++;
         
       } catch (error) {
-        console.error('Erreur lors de la vÃ©rification du nom de formule:', error);
+        console.error('Erreur lors de la vérification du nom de formule:', error);
         break;
       }
     }
@@ -5776,21 +5776,23 @@ router.post('/nodes/:nodeId/formulas', async (req, res) => {
         name: uniqueName,
         tokens: tokens as unknown as Prisma.InputJsonValue,
         description: description ? String(description) : null,
+        targetProperty: targetProperty ? String(targetProperty) : null, // 🆕 Propriété cible
+        constraintMessage: constraintMessage ? String(constraintMessage) : null, // 🆕 Message de contrainte
         updatedAt: new Date()
       }
     });
 
-    // ðŸŽ¯ ACTIVATION AUTOMATIQUE : Configurer hasFormula ET formula_activeId
-    console.log(`[TreeBranchLeaf API] Activation automatique de la formule crÃ©Ã©e pour le nÅ“ud ${nodeId}`);
+    // 🎯 ACTIVATION AUTOMATIQUE : Configurer hasFormula ET formula_activeId
+    console.log(`[TreeBranchLeaf API] Activation automatique de la formule créée pour le nœud ${nodeId}`);
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { 
         hasFormula: true,
-        formula_activeId: formula.id  // ðŸŽ¯ NOUVEAU : Activer automatiquement la formule
+        formula_activeId: formula.id  // 🎯 NOUVEAU : Activer automatiquement la formule
       }
     });
 
-    // ðŸ”— MAJ linkedFormulaIds du nÅ“ud propriÃ©taire + des nÅ“uds rÃ©fÃ©rencÃ©s
+    // 🔗 MAJ linkedFormulaIds du nœud propriétaire + des nœuds référencés
     try {
       await addToNodeLinkedField(prisma, nodeId, 'linkedFormulaIds', [formula.id]);
       const refIds = Array.from(extractNodeIdsFromTokens(tokens));
@@ -5805,29 +5807,29 @@ router.post('/nodes/:nodeId/formulas', async (req, res) => {
     return res.status(201).json(formula);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating node formula:', error);
-    res.status(500).json({ error: 'Erreur lors de la crÃ©ation de la formule' });
+    res.status(500).json({ error: 'Erreur lors de la création de la formule' });
   }
 });
 
 // PUT /api/treebranchleaf/nodes/:nodeId/formulas/:formulaId
-// Met Ã  jour une formule spÃ©cifique
+// Met à jour une formule spécifique
 router.put('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
   try {
     const { nodeId, formulaId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
-    const { name, tokens, description } = req.body || {};
+    const { name, tokens, description, targetProperty, constraintMessage } = req.body || {};
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // VÃ©rifier que la formule appartient bien Ã  ce nÅ“ud
+    // Vérifier que la formule appartient bien à ce nœud
     const existingFormula = await prisma.treeBranchLeafNodeFormula.findFirst({
       where: { id: formulaId, nodeId }
     });
 
     if (!existingFormula) {
-      return res.status(404).json({ error: 'Formule non trouvÃ©e' });
+      return res.status(404).json({ error: 'Formule non trouvée' });
     }
 
     const updated = await prisma.treeBranchLeafNodeFormula.update({
@@ -5836,12 +5838,14 @@ router.put('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
         name: name ? String(name) : undefined,
         tokens: Array.isArray(tokens) ? (tokens as unknown as Prisma.InputJsonValue) : undefined,
         description: description !== undefined ? (description ? String(description) : null) : undefined,
+        targetProperty: targetProperty !== undefined ? (targetProperty ? String(targetProperty) : null) : undefined, // 🆕 Propriété cible
+        constraintMessage: constraintMessage !== undefined ? (constraintMessage ? String(constraintMessage) : null) : undefined, // 🆕 Message de contrainte
         updatedAt: new Date()
       }
     });
 
     console.log(`[TreeBranchLeaf API] Updated formula ${formulaId} for node ${nodeId}`);
-    // ðŸ”„ MAJ des rÃ©fÃ©rences inverses si tokens ont changÃ©
+    // 🔄 MAJ des références inverses si tokens ont changé
     try {
       const oldRefs = extractNodeIdsFromTokens(existingFormula.tokens);
       const newRefs = extractNodeIdsFromTokens(Array.isArray(tokens) ? tokens : existingFormula.tokens);
@@ -5855,7 +5859,7 @@ router.put('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
       if (toRemove.length) {
         for (const refId of toRemove) await removeFromNodeLinkedField(prisma, refId, 'linkedFormulaIds', [formulaId]);
       }
-      // S'assurer que le nÅ“ud propriÃ©taire contient bien la formule
+      // S'assurer que le nœud propriétaire contient bien la formule
       await addToNodeLinkedField(prisma, nodeId, 'linkedFormulaIds', [formulaId]);
     } catch (e) {
       console.warn('[TreeBranchLeaf API] Warning updating inverse linkedFormulaIds after update:', (e as Error).message);
@@ -5864,28 +5868,28 @@ router.put('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
     return res.json(updated);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node formula:', error);
-    res.status(500).json({ error: 'Erreur lors de la mise Ã  jour de la formule' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la formule' });
   }
 });
 
 // DELETE /api/treebranchleaf/nodes/:nodeId/formulas/:formulaId
-// Supprime une formule spÃ©cifique
+// Supprime une formule spécifique
 router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
   try {
     const { nodeId, formulaId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // VÃ©rifier que la formule appartient bien Ã  ce nÅ“ud
+    // Vérifier que la formule appartient bien à ce nœud
     const existingFormula = await prisma.treeBranchLeafNodeFormula.findFirst({
       where: { id: formulaId, nodeId }
     });
 
     if (!existingFormula) {
-      return res.status(404).json({ error: 'Formule non trouvÃ©e' });
+      return res.status(404).json({ error: 'Formule non trouvée' });
     }
 
     await prisma.treeBranchLeafNodeFormula.delete({
@@ -5894,7 +5898,7 @@ router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
 
     console.log(`[TreeBranchLeaf API] Deleted formula ${formulaId} for node ${nodeId}`);
     
-    // ðŸ”¥ NOUVEAU : Supprimer la variable qui rÃ©fÃ©rence cette formule
+    // 🔥 NOUVEAU : Supprimer la variable qui référence cette formule
     try {
       const variableWithFormula = await prisma.treeBranchLeafNodeVariable.findFirst({
         where: { 
@@ -5907,13 +5911,13 @@ router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
         await prisma.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
-        console.log(`âœ… [TreeBranchLeaf API] Variable associÃ©e supprimÃ©e pour formule ${formulaId}`);
+        console.log(`✅ [TreeBranchLeaf API] Variable associée supprimée pour formule ${formulaId}`);
       }
     } catch (e) {
       console.warn('[TreeBranchLeaf API] Warning deleting associated variable:', (e as Error).message);
     }
     
-    // ðŸ”„ Nettoyage linkedFormulaIds du nÅ“ud propriÃ©taire et des nÅ“uds rÃ©fÃ©rencÃ©s
+    // 🔄 Nettoyage linkedFormulaIds du nœud propriétaire et des nœuds référencés
     try {
       await removeFromNodeLinkedField(prisma, nodeId, 'linkedFormulaIds', [formulaId]);
       const refIds = Array.from(extractNodeIdsFromTokens(existingFormula.tokens));
@@ -5924,7 +5928,7 @@ router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
       console.warn('[TreeBranchLeaf API] Warning cleaning linkedFormulaIds after delete:', (e as Error).message);
     }
 
-    // ðŸŽ¯ CORRECTION : Mettre Ã  jour hasFormula en fonction des formules restantes
+    // 🎯 CORRECTION : Mettre à jour hasFormula en fonction des formules restantes
     const remainingFormulas = await prisma.treeBranchLeafNodeFormula.count({ where: { nodeId } });
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -5932,7 +5936,7 @@ router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
     });
     console.log(`[TreeBranchLeaf API] Updated hasFormula to ${remainingFormulas > 0} for node ${nodeId}`);
 
-    return res.json({ success: true, message: 'Formule supprimÃ©e avec succÃ¨s' });
+    return res.json({ success: true, message: 'Formule supprimée avec succès' });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting node formula:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de la formule' });
@@ -5940,17 +5944,17 @@ router.delete('/nodes/:nodeId/formulas/:formulaId', async (req, res) => {
 });
 
 // =============================================================================
-// ðŸ“š REUSABLE FORMULAS - Formules rÃ©utilisables (persistance Prisma)
+// 📚 REUSABLE FORMULAS - Formules réutilisables (persistance Prisma)
 // =============================================================================
 
 // GET /api/treebranchleaf/reusables/formulas
-// Liste TOUTES les formules de TreeBranchLeafNodeFormula (toutes sont rÃ©utilisables !)
+// Liste TOUTES les formules de TreeBranchLeafNodeFormula (toutes sont réutilisables !)
 router.get('/reusables/formulas', async (req, res) => {
   try {
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const hasOrg = typeof organizationId === 'string' && organizationId.length > 0;
 
-    // Formules de nÅ“uds (toutes sont rÃ©utilisables)
+    // Formules de nœuds (toutes sont réutilisables)
     const whereFilter = isSuperAdmin
       ? {}
       : {
@@ -5973,11 +5977,11 @@ router.get('/reusables/formulas', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Ajouter les mÃ©tadonnÃ©es pour le frontend
+    // Ajouter les métadonnées pour le frontend
     const items = allFormulas.map(f => ({
       ...f,
       type: 'node',
-      nodeLabel: f.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+      nodeLabel: f.TreeBranchLeafNode?.label || 'Nœud inconnu',
       treeId: f.TreeBranchLeafNode?.treeId || null
     }));
 
@@ -5989,12 +5993,12 @@ router.get('/reusables/formulas', async (req, res) => {
     return res.json({ items });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error listing all formulas:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des formules' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des formules' });
   }
 });
 
 // GET /api/treebranchleaf/reusables/formulas/:id
-// RÃ©cupÃ¨re une formule spÃ©cifique par son ID depuis TreeBranchLeafNodeFormula
+// Récupère une formule spécifique par son ID depuis TreeBranchLeafNodeFormula
 router.get('/reusables/formulas/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -6012,39 +6016,39 @@ router.get('/reusables/formulas/:id', async (req, res) => {
       }
     });
     
-    if (!item) return res.status(404).json({ error: 'Formule non trouvÃ©e' });
+    if (!item) return res.status(404).json({ error: 'Formule non trouvée' });
 
     if (!isSuperAdmin) {
-      // AutorisÃ© si globale ou mÃªme organisation
+      // Autorisé si globale ou même organisation
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+        return res.status(403).json({ error: 'Accès refusé' });
       }
     }
 
     return res.json({
       ...item,
       type: 'node',
-      nodeLabel: item.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+      nodeLabel: item.TreeBranchLeafNode?.label || 'Nœud inconnu',
       treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting formula:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la formule' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la formule' });
   }
 });
 
 // =============================================================================
-// ðŸ”„ REUSABLE CONDITIONS - Conditions rÃ©utilisables globales
+// 🔄 REUSABLE CONDITIONS - Conditions réutilisables globales
 // =============================================================================
 
 // GET /api/treebranchleaf/reusables/conditions
-// Liste toutes les conditions rÃ©utilisables (Ã©quivalent aux formules rÃ©utilisables)
+// Liste toutes les conditions réutilisables (équivalent aux formules réutilisables)
 router.get('/reusables/conditions', async (req, res) => {
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const hasOrg = typeof organizationId === 'string' && organizationId.length > 0;
 
-    // Conditions de nÅ“uds (toutes sont rÃ©utilisables)
+    // Conditions de nœuds (toutes sont réutilisables)
     const whereFilter = isSuperAdmin
       ? {}
       : {
@@ -6067,11 +6071,11 @@ router.get('/reusables/conditions', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Ajouter les mÃ©tadonnÃ©es pour le frontend
+    // Ajouter les métadonnées pour le frontend
     const items = allConditions.map(c => ({
       ...c,
       type: 'node',
-      nodeLabel: c.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+      nodeLabel: c.TreeBranchLeafNode?.label || 'Nœud inconnu',
       treeId: c.TreeBranchLeafNode?.treeId || null,
       nodeId: c.nodeId
     }));
@@ -6085,12 +6089,12 @@ router.get('/reusables/conditions', async (req, res) => {
     return res.json({ items });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error listing reusable conditions:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des conditions rÃ©utilisables' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des conditions réutilisables' });
   }
 });
 
 // GET /api/treebranchleaf/reusables/conditions/:id
-// RÃ©cupÃ¨re une condition spÃ©cifique par son ID depuis TreeBranchLeafNodeCondition
+// Récupère une condition spécifique par son ID depuis TreeBranchLeafNodeCondition
 router.get('/reusables/conditions/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -6108,35 +6112,35 @@ router.get('/reusables/conditions/:id', async (req, res) => {
       }
     });
     
-    if (!item) return res.status(404).json({ error: 'Condition non trouvÃ©e' });
+    if (!item) return res.status(404).json({ error: 'Condition non trouvée' });
 
     if (!isSuperAdmin) {
-      // AutorisÃ© si globale ou mÃªme organisation
+      // Autorisé si globale ou même organisation
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+        return res.status(403).json({ error: 'Accès refusé' });
       }
     }
 
     return res.json({
       ...item,
       type: 'node',
-      nodeLabel: item.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+      nodeLabel: item.TreeBranchLeafNode?.label || 'Nœud inconnu',
       treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting condition:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la condition' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la condition' });
   }
 });
 
 // GET /api/treebranchleaf/reusables/tables
-// Liste TOUTES les tables rÃ©utilisables de TOUS les nÅ“uds (avec filtrage organisation)
+// Liste TOUTES les tables réutilisables de TOUS les nœuds (avec filtrage organisation)
 router.get('/reusables/tables', async (req, res) => {
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const hasOrg = typeof organizationId === 'string' && organizationId.length > 0;
 
-    // Tables de nÅ“uds (toutes sont rÃ©utilisables)
+    // Tables de nœuds (toutes sont réutilisables)
     const whereFilter = isSuperAdmin
       ? {}
       : {
@@ -6159,13 +6163,13 @@ router.get('/reusables/tables', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Ajouter les mÃ©tadonnÃ©es pour le frontend
+    // Ajouter les métadonnées pour le frontend
     const items = allTables.map(t => ({
       id: t.id,
       name: t.name,
       type: t.type,
       description: t.description,
-      nodeLabel: t.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+      nodeLabel: t.TreeBranchLeafNode?.label || 'Nœud inconnu',
       treeId: t.TreeBranchLeafNode?.treeId || null,
       nodeId: t.nodeId,
       createdAt: t.createdAt,
@@ -6181,30 +6185,30 @@ router.get('/reusables/tables', async (req, res) => {
     return res.json({ items });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error listing reusable tables:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des tables rÃ©utilisables' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des tables réutilisables' });
   }
 });
 
 // =============================================================================
-// âš–ï¸ NODE CONDITIONS - Conditions spÃ©cifiques Ã  un nÅ“ud (nouvelle table dÃ©diÃ©e)
+// ⚖️ NODE CONDITIONS - Conditions spécifiques à un nœud (nouvelle table dédiée)
 // =============================================================================
 
 // GET /api/treebranchleaf/nodes/:nodeId/conditions
-// Liste les conditions spÃ©cifiques Ã  un nÅ“ud
+// Liste les conditions spécifiques à un nœud
 router.get('/nodes/:nodeId/conditions', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ” GET conditions for node ${nodeId}:`);
+    console.log(`[TreeBranchLeaf API] 🔍 GET conditions for node ${nodeId}:`);
     console.log(`[TreeBranchLeaf API] - organizationId: ${organizationId}`);
     console.log(`[TreeBranchLeaf API] - isSuperAdmin: ${isSuperAdmin}`);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // RÃ©cupÃ©rer les conditions de ce nÅ“ud avec filtre d'organisation
+    // Récupérer les conditions de ce nœud avec filtre d'organisation
     const whereClause: { nodeId: string; organizationId?: string } = { nodeId };
     
     // Ajouter le filtre d'organisation si ce n'est pas un super admin
@@ -6225,23 +6229,23 @@ router.get('/nodes/:nodeId/conditions', async (req, res) => {
     return res.json({ conditions });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node conditions:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des conditions du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des conditions du nœud' });
   }
 });
 
 // POST /api/treebranchleaf/evaluate/condition/:conditionId
-// Ã‰value une condition spÃ©cifique et retourne le rÃ©sultat
+// Évalue une condition spécifique et retourne le résultat
 router.post('/evaluate/condition/:conditionId', async (req, res) => {
   try {
     const { conditionId } = req.params;
     const { fieldValues = {}, values = {}, submissionId, testMode = true } = req.body;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // Fusionner fieldValues et values pour compatibilitÃ©
+    // Fusionner fieldValues et values pour compatibilité
     const allValues = { ...fieldValues, ...values };
-    console.log(`[TreeBranchLeaf API] ðŸ§® Ã‰valuation condition ${conditionId}:`, { allValues, submissionId, testMode });
+    console.log(`[TreeBranchLeaf API] 🧮 Évaluation condition ${conditionId}:`, { allValues, submissionId, testMode });
 
-    // RÃ©cupÃ©rer la condition
+    // Récupérer la condition
     const condition = await prisma.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
@@ -6255,15 +6259,15 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
     });
 
     if (!condition) {
-      return res.status(404).json({ error: 'Condition non trouvÃ©e' });
+      return res.status(404).json({ error: 'Condition non trouvée' });
     }
 
-    // VÃ©rifier l'accÃ¨s organisation
+    // Vérifier l'accès organisation
     if (!isSuperAdmin && condition.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette condition' });
+      return res.status(403).json({ error: 'Accès refusé à cette condition' });
     }
 
-    // ðŸš€ UTILISATION DU SYSTÃˆME UNIFIÃ‰ operation-interpreter
+    // 🚀 UTILISATION DU SYSTÈME UNIFIÉ operation-interpreter
     try {
       const { evaluateVariableOperation } = await import('./operation-interpreter');
       
@@ -6273,9 +6277,9 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
         valueMapLocal.set(nodeId, value);
       });
       
-      console.log('[TBL-PRISMA] ðŸ§® Ã‰valuation avec operation-interpreter:', { conditionId, values: Object.fromEntries(valueMapLocal) });
+      console.log('[TBL-PRISMA] 🧮 Évaluation avec operation-interpreter:', { conditionId, values: Object.fromEntries(valueMapLocal) });
       
-      // âœ¨ Calculer avec le systÃ¨me unifiÃ© (passe valueMapLocal pour mode preview)
+      // ✨ Calculer avec le système unifié (passe valueMapLocal pour mode preview)
       const calculationResult = await evaluateVariableOperation(
         condition.nodeId,
         submissionId || conditionId,
@@ -6283,13 +6287,13 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
         valueMapLocal
       );
       
-      console.log('[TBL-PRISMA] âœ… RÃ©sultat Ã©valuation:', calculationResult);
+      console.log('[TBL-PRISMA] ✅ Résultat évaluation:', calculationResult);
       
-      // Construire la rÃ©ponse UNIQUEMENT avec TBL-prisma (pas de fallback !)
+      // Construire la réponse UNIQUEMENT avec TBL-prisma (pas de fallback !)
       const result = {
         conditionId: condition.id,
         conditionName: condition.name,
-        nodeLabel: condition.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+        nodeLabel: condition.TreeBranchLeafNode?.label || 'Nœud inconnu',
         operationSource: calculationResult.operationSource,
         operationDetail: calculationResult.operationDetail,
         operationResult: calculationResult.operationResult,
@@ -6304,21 +6308,21 @@ router.post('/evaluate/condition/:conditionId', async (req, res) => {
       return res.json(result);
       
     } catch (error) {
-      console.error('[TBL-PRISMA] âŒ Erreur Ã©valuation TBL-prisma:', error);
+      console.error('[TBL-PRISMA] ❌ Erreur évaluation TBL-prisma:', error);
       
       return res.status(500).json({
-        error: 'Erreur lors de l\'Ã©valuation TBL-prisma',
+        error: 'Erreur lors de l\'évaluation TBL-prisma',
         details: error instanceof Error ? error.message : 'Erreur inconnue'
       });
     }
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error evaluating condition:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'Ã©valuation de la condition' });
+    res.status(500).json({ error: 'Erreur lors de l\'évaluation de la condition' });
   }
 });
 
 // POST /api/treebranchleaf/nodes/:nodeId/conditions
-// CrÃ©e une nouvelle condition pour un nÅ“ud
+// Crée une nouvelle condition pour un nœud
 router.post('/nodes/:nodeId/conditions', async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -6326,7 +6330,7 @@ router.post('/nodes/:nodeId/conditions', async (req, res) => {
     const { name, conditionSet, description } = req.body || {};
 
     // Debug: log des infos d'authentification
-    console.log('ðŸ” Condition creation auth debug:', {
+    console.log('🔍 Condition creation auth debug:', {
       nodeId,
       organizationId,
       isSuperAdmin,
@@ -6334,7 +6338,7 @@ router.post('/nodes/:nodeId/conditions', async (req, res) => {
       headers: req.headers['x-organization-id']
     });
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
@@ -6342,7 +6346,7 @@ router.post('/nodes/:nodeId/conditions', async (req, res) => {
       return res.status(400).json({ error: 'Name et conditionSet requis' });
     }
 
-    // GÃ©nÃ©rer un nom unique si le nom existe dÃ©jÃ 
+    // Générer un nom unique si le nom existe déjà
     let uniqueName = String(name);
     let counter = 1;
     
@@ -6359,18 +6363,18 @@ router.post('/nodes/:nodeId/conditions', async (req, res) => {
         break; // Le nom est unique
       }
       
-      // Le nom existe, ajouter un numÃ©ro
+      // Le nom existe, ajouter un numéro
       uniqueName = `${name} (${counter})`;
       counter++;
       
-      // SÃ©curitÃ©: Ã©viter une boucle infinie
+      // Sécurité: éviter une boucle infinie
       if (counter > 100) {
         uniqueName = `${name} (${Date.now()})`;
         break;
       }
     }
 
-    console.log(`[TreeBranchLeaf API] Nom unique gÃ©nÃ©rÃ©: "${uniqueName}" (original: "${name}")`);
+    console.log(`[TreeBranchLeaf API] Nom unique généré: "${uniqueName}" (original: "${name}")`);
 
     const condition = await prisma.treeBranchLeafNodeCondition.create({
       data: {
@@ -6384,18 +6388,18 @@ router.post('/nodes/:nodeId/conditions', async (req, res) => {
       }
     });
 
-    // ðŸŽ¯ ACTIVATION AUTOMATIQUE : Configurer hasCondition ET condition_activeId
-    console.log(`[TreeBranchLeaf API] Activation automatique de la condition crÃ©Ã©e pour le nÅ“ud ${nodeId}`);
+    // 🎯 ACTIVATION AUTOMATIQUE : Configurer hasCondition ET condition_activeId
+    console.log(`[TreeBranchLeaf API] Activation automatique de la condition créée pour le nœud ${nodeId}`);
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { 
         hasCondition: true,
-        condition_activeId: condition.id  // ðŸŽ¯ NOUVEAU : Activer automatiquement la condition
+        condition_activeId: condition.id  // 🎯 NOUVEAU : Activer automatiquement la condition
       }
     });
 
     console.log(`[TreeBranchLeaf API] Created condition for node ${nodeId}:`, condition.name);
-    // ðŸ”— MAJ linkedConditionIds du nÅ“ud propriÃ©taire + des nÅ“uds rÃ©fÃ©rencÃ©s
+    // 🔗 MAJ linkedConditionIds du nœud propriétaire + des nœuds référencés
     try {
       await addToNodeLinkedField(prisma, nodeId, 'linkedConditionIds', [condition.id]);
       const refIds = Array.from(extractNodeIdsFromConditionSet(conditionSet));
@@ -6409,29 +6413,29 @@ router.post('/nodes/:nodeId/conditions', async (req, res) => {
     return res.status(201).json(condition);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating node condition:', error);
-    res.status(500).json({ error: 'Erreur lors de la crÃ©ation de la condition' });
+    res.status(500).json({ error: 'Erreur lors de la création de la condition' });
   }
 });
 
 // PUT /api/treebranchleaf/nodes/:nodeId/conditions/:conditionId
-// Met Ã  jour une condition spÃ©cifique
+// Met à jour une condition spécifique
 router.put('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
   try {
     const { nodeId, conditionId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { name, conditionSet, description } = req.body || {};
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // VÃ©rifier que la condition appartient bien Ã  ce nÅ“ud
+    // Vérifier que la condition appartient bien à ce nœud
     const existingCondition = await prisma.treeBranchLeafNodeCondition.findFirst({
       where: { id: conditionId, nodeId }
     });
 
     if (!existingCondition) {
-      return res.status(404).json({ error: 'Condition non trouvÃ©e' });
+      return res.status(404).json({ error: 'Condition non trouvée' });
     }
 
     const updated = await prisma.treeBranchLeafNodeCondition.update({
@@ -6445,7 +6449,7 @@ router.put('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
     });
 
     console.log(`[TreeBranchLeaf API] Updated condition ${conditionId} for node ${nodeId}`);
-    // ðŸ”„ MAJ des rÃ©fÃ©rences inverses si conditionSet a changÃ©
+    // 🔄 MAJ des références inverses si conditionSet a changé
     try {
       const oldRefs = extractNodeIdsFromConditionSet(existingCondition.conditionSet);
       const newRefs = extractNodeIdsFromConditionSet(conditionSet ?? existingCondition.conditionSet);
@@ -6459,7 +6463,7 @@ router.put('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
       if (toRemove.length) {
         for (const refId of toRemove) await removeFromNodeLinkedField(prisma, refId, 'linkedConditionIds', [conditionId]);
       }
-      // S'assurer que le nÅ“ud propriÃ©taire contient bien la condition
+      // S'assurer que le nœud propriétaire contient bien la condition
       await addToNodeLinkedField(prisma, nodeId, 'linkedConditionIds', [conditionId]);
     } catch (e) {
       console.warn('[TreeBranchLeaf API] Warning updating inverse linkedConditionIds after update:', (e as Error).message);
@@ -6468,28 +6472,28 @@ router.put('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
     return res.json(updated);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node condition:', error);
-    res.status(500).json({ error: 'Erreur lors de la mise Ã  jour de la condition' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la condition' });
   }
 });
 
 // DELETE /api/treebranchleaf/nodes/:nodeId/conditions/:conditionId
-// Supprime une condition spÃ©cifique
+// Supprime une condition spécifique
 router.delete('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
   try {
     const { nodeId, conditionId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // VÃ©rifier que la condition appartient bien Ã  ce nÅ“ud
+    // Vérifier que la condition appartient bien à ce nœud
     const existingCondition = await prisma.treeBranchLeafNodeCondition.findFirst({
       where: { id: conditionId, nodeId }
     });
 
     if (!existingCondition) {
-      return res.status(404).json({ error: 'Condition non trouvÃ©e' });
+      return res.status(404).json({ error: 'Condition non trouvée' });
     }
 
     await prisma.treeBranchLeafNodeCondition.delete({
@@ -6498,7 +6502,7 @@ router.delete('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
 
     console.log(`[TreeBranchLeaf API] Deleted condition ${conditionId} for node ${nodeId}`);
     
-    // ðŸ”¥ NOUVEAU : Supprimer la variable qui rÃ©fÃ©rence cette condition
+    // 🔥 NOUVEAU : Supprimer la variable qui référence cette condition
     try {
       const variableWithCondition = await prisma.treeBranchLeafNodeVariable.findFirst({
         where: { 
@@ -6511,13 +6515,13 @@ router.delete('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
         await prisma.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
-        console.log(`âœ… [TreeBranchLeaf API] Variable associÃ©e supprimÃ©e pour condition ${conditionId}`);
+        console.log(`✅ [TreeBranchLeaf API] Variable associée supprimée pour condition ${conditionId}`);
       }
     } catch (e) {
       console.warn('[TreeBranchLeaf API] Warning deleting associated variable:', (e as Error).message);
     }
     
-    // ðŸ”„ Nettoyage linkedConditionIds du nÅ“ud propriÃ©taire et des nÅ“uds rÃ©fÃ©rencÃ©s
+    // 🔄 Nettoyage linkedConditionIds du nœud propriétaire et des nœuds référencés
     try {
       await removeFromNodeLinkedField(prisma, nodeId, 'linkedConditionIds', [conditionId]);
       const refIds = Array.from(extractNodeIdsFromConditionSet(existingCondition.conditionSet));
@@ -6528,7 +6532,7 @@ router.delete('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
       console.warn('[TreeBranchLeaf API] Warning cleaning linkedConditionIds after delete:', (e as Error).message);
     }
 
-    // ðŸŽ¯ CORRECTION : Mettre Ã  jour hasCondition en fonction des conditions restantes
+    // 🎯 CORRECTION : Mettre à jour hasCondition en fonction des conditions restantes
     const remainingConditions = await prisma.treeBranchLeafNodeCondition.count({ where: { nodeId } });
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -6536,7 +6540,7 @@ router.delete('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
     });
     console.log(`[TreeBranchLeaf API] Updated hasCondition to ${remainingConditions > 0} for node ${nodeId}`);
 
-    return res.json({ success: true, message: 'Condition supprimÃ©e avec succÃ¨s' });
+    return res.json({ success: true, message: 'Condition supprimée avec succès' });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting node condition:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de la condition' });
@@ -6544,20 +6548,20 @@ router.delete('/nodes/:nodeId/conditions/:conditionId', async (req, res) => {
 });
 
 // =============================================================================
-// ðŸ—‚ï¸ NODE TABLES - Gestion des instances de tableaux dÃ©diÃ©es
+// 🗂️ NODE TABLES - Gestion des instances de tableaux dédiées
 // =============================================================================
 
-// GET /api/treebranchleaf/tables/:id - DÃ©tails d'une table avec lignes paginÃ©es
+// GET /api/treebranchleaf/tables/:id - Détails d'une table avec lignes paginées
 router.get('/tables/:id', async (req, res) => {
   const { id } = req.params;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
   
   // Pagination
   const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 100; // Par dÃ©faut, 100 lignes
+  const limit = parseInt(req.query.limit as string) || 100; // Par défaut, 100 lignes
   const offset = (page - 1) * limit;
 
-  console.log(`[GET /tables/:id] RÃ©cupÃ©ration de la table ${id} avec pagination (page: ${page}, limit: ${limit})`);
+  console.log(`[GET /tables/:id] Récupération de la table ${id} avec pagination (page: ${page}, limit: ${limit})`);
 
   try {
     const table = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -6577,16 +6581,16 @@ router.get('/tables/:id', async (req, res) => {
     });
 
     if (!table) {
-      return res.status(404).json({ error: 'Table non trouvÃ©e' });
+      return res.status(404).json({ error: 'Table non trouvée' });
     }
 
-    // VÃ©rification de l'organisation
+    // Vérification de l'organisation
     const tableOrgId = table.node?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s non autorisÃ© Ã  cette table' });
+      return res.status(403).json({ error: 'Accès non autorisé à cette table' });
     }
 
-    // RÃ©cupÃ©rer les lignes paginÃ©es
+    // Récupérer les lignes paginées
     const rows = await prisma.treeBranchLeafNodeTableRow.findMany({
       where: { tableId: id },
       orderBy: { rowIndex: 'asc' },
@@ -6594,12 +6598,12 @@ router.get('/tables/:id', async (req, res) => {
       skip: offset,
     });
 
-    console.log(`[GET /tables/:id] ${rows.length} lignes rÃ©cupÃ©rÃ©es pour la table ${id}.`);
+    console.log(`[GET /tables/:id] ${rows.length} lignes récupérées pour la table ${id}.`);
 
-    // Renvoyer la rÃ©ponse
+    // Renvoyer la réponse
     res.json({
       ...table,
-      rows: rows.map(r => r.cells), // Renvoyer uniquement les donnÃ©es des cellules
+      rows: rows.map(r => r.cells), // Renvoyer uniquement les données des cellules
       page,
       limit,
       totalRows: table.rowCount,
@@ -6607,8 +6611,8 @@ router.get('/tables/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`âŒ [GET /tables/:id] Erreur lors de la rÃ©cupÃ©ration de la table ${id}:`, error);
-    res.status(500).json({ error: 'Impossible de rÃ©cupÃ©rer la table' });
+    console.error(`❌ [GET /tables/:id] Erreur lors de la récupération de la table ${id}:`, error);
+    res.status(500).json({ error: 'Impossible de récupérer la table' });
   }
 });
 
@@ -6621,7 +6625,7 @@ const isJsonObject = (value: TableJsonValue | null | undefined): value is TableJ
 const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value ?? null)) as T;
 
 // ==================================================================================
-// 🔎 FONCTION DE FILTRAGE D'OPTIONS DE TABLE PAR FILTRE SIMPLE
+// ?? FONCTION DE FILTRAGE D'OPTIONS DE TABLE PAR FILTRE SIMPLE
 // ==================================================================================
 function applySingleFilter(
   filter: any,
@@ -6631,29 +6635,29 @@ function applySingleFilter(
 ): Array<{ value: string; label: string }> {
   const { columnName, operator, value: filterValue } = filter;
 
-  console.log(`[applySingleFilter] 📌 Filtre: colonne="${columnName}", op="${operator}"`);
+  console.log(`[applySingleFilter] ?? Filtre: colonne="${columnName}", op="${operator}"`);
 
-  // Résoudre la valeur du filtre si c'est une référence @select
+  // R�soudre la valeur du filtre si c'est une r�f�rence @select
   let resolvedValue = filterValue;
   let nodeId: string | undefined = undefined;
   if (typeof filterValue === 'string' && filterValue.startsWith('@select.')) {
     nodeId = filterValue.replace('@select.', '');
     resolvedValue = formValues[nodeId];
-    console.log(`[applySingleFilter] 🔗 Résolution @select: ${filterValue} -> ${resolvedValue}`);
+    console.log(`[applySingleFilter] ?? R�solution @select: ${filterValue} -> ${resolvedValue}`);
   } else {
-    console.log(`[applySingleFilter] ✅ Valeur statique: ${filterValue}`);
+    console.log(`[applySingleFilter] ? Valeur statique: ${filterValue}`);
   }
 
-  // Si pas de valeur résolue, on garde toutes les options
+  // Si pas de valeur r�solue, on garde toutes les options
   if (resolvedValue === undefined || resolvedValue === null || resolvedValue === '') {
-    console.log(`[applySingleFilter] ⚠️ Valeur du nœud "${nodeId}" non trouvée dans formValues`);
+    console.log(`[applySingleFilter] ?? Valeur du n�ud "${nodeId}" non trouv�e dans formValues`);
     return options;
   }
 
   // Trouver l'index de la colonne
   const colIndex = tableData.columns.indexOf(columnName);
   if (colIndex === -1) {
-    console.warn(`[applySingleFilter] ⚠️ Colonne "${columnName}" introuvable`);
+    console.warn(`[applySingleFilter] ?? Colonne "${columnName}" introuvable`);
     return options;
   }
 
@@ -6666,20 +6670,20 @@ function applySingleFilter(
     const result = compareValues(cellValue, resolvedValue, operator);
     
     if (!result) {
-      console.log(`[applySingleFilter] ❌ "${option.value}" rejeté: ${cellValue} ${operator} ${resolvedValue}`);
+      console.log(`[applySingleFilter] ? "${option.value}" rejet�: ${cellValue} ${operator} ${resolvedValue}`);
     }
     
     return result;
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸ—œï¸ COMPRESSION POUR GROS TABLEAUX
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 🗜️ COMPRESSION POUR GROS TABLEAUX
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * âš ï¸ FONCTION DÃ‰PRÃ‰CIÃ‰E - Utilisait l'ancienne architecture avec colonnes JSON
- * Maintenant que les tables sont normalisÃ©es (table-routes-new.ts), cette fonction n'est plus utilisÃ©e
+ * ⚠️ FONCTION DÉPRÉCIÉE - Utilisait l'ancienne architecture avec colonnes JSON
+ * Maintenant que les tables sont normalisées (table-routes-new.ts), cette fonction n'est plus utilisée
  */
 /*
 const compressIfNeeded = (data: TableJsonValue): TableJsonValue => {
@@ -6688,17 +6692,17 @@ const compressIfNeeded = (data: TableJsonValue): TableJsonValue => {
   const jsonString = JSON.stringify(data);
   const sizeKB = jsonString.length / 1024;
   
-  console.log('[compressIfNeeded] Taille non compressÃ©e:', Math.round(sizeKB), 'KB');
+  console.log('[compressIfNeeded] Taille non compressée:', Math.round(sizeKB), 'KB');
   
   // Si > 1MB, on compresse
   if (sizeKB > 1024) {
-    console.log('[compressIfNeeded] ðŸ—œï¸ Compression activÃ©e (taille > 1MB)');
+    console.log('[compressIfNeeded] 🗜️ Compression activée (taille > 1MB)');
     const compressed = gzipSync(jsonString);
     const compressedB64 = compressed.toString('base64');
     const compressedSizeKB = compressedB64.length / 1024;
     const ratio = Math.round((1 - compressedSizeKB / sizeKB) * 100);
     
-    console.log('[compressIfNeeded] âœ… Taille compressÃ©e:', Math.round(compressedSizeKB), 'KB (rÃ©duction:', ratio + '%)');
+    console.log('[compressIfNeeded] ✅ Taille compressée:', Math.round(compressedSizeKB), 'KB (réduction:', ratio + '%)');
     
     return {
       _compressed: true,
@@ -6706,13 +6710,13 @@ const compressIfNeeded = (data: TableJsonValue): TableJsonValue => {
     } as TableJsonValue;
   }
   
-  console.log('[compressIfNeeded] Pas de compression nÃ©cessaire');
+  console.log('[compressIfNeeded] Pas de compression nécessaire');
   return data;
 };
 */
 
 /**
- * DÃ©compresse les donnÃ©es si elles Ã©taient compressÃ©es
+ * Décompresse les données si elles étaient compressées
  */
 const _decompressIfNeeded = (value: TableJsonValue | null | undefined): TableJsonValue => {
   if (!value || typeof value !== 'object') return value;
@@ -6720,16 +6724,16 @@ const _decompressIfNeeded = (value: TableJsonValue | null | undefined): TableJso
   const obj = value as TableJsonObject;
   
   if (obj._compressed && typeof obj._data === 'string') {
-  console.log('[decompressIfNeeded] ðŸ”“ DÃ©compression des donnÃ©es...');
+  console.log('[decompressIfNeeded] 🔓 Décompression des données...');
     try {
       const buffer = Buffer.from(obj._data, 'base64');
       const decompressed = gunzipSync(buffer);
       const jsonString = decompressed.toString('utf-8');
       const result = JSON.parse(jsonString);
-  console.log('[decompressIfNeeded] âœ… DÃ©compression rÃ©ussie');
+  console.log('[decompressIfNeeded] ✅ Décompression réussie');
       return result;
     } catch (error) {
-  console.error('[decompressIfNeeded] âŒ Erreur dÃ©compression:', error);
+  console.error('[decompressIfNeeded] ❌ Erreur décompression:', error);
       return value;
     }
   }
@@ -6737,9 +6741,9 @@ const _decompressIfNeeded = (value: TableJsonValue | null | undefined): TableJso
   return value;
 };
 
-// âš ï¸ OBSOLÃˆTE : readStringArray supprimÃ©e - Architecture normalisÃ©e utilise tableColumns
+// ⚠️ OBSOLÈTE : readStringArray supprimée - Architecture normalisée utilise tableColumns
 
-// âš ï¸ OBSOLÃˆTE : readMatrix et readStringArray supprimÃ©es - Architecture normalisÃ©e utilise tableRows/tableColumns
+// ⚠️ OBSOLÈTE : readMatrix et readStringArray supprimées - Architecture normalisée utilise tableRows/tableColumns
 
 const readMeta = (value: TableJsonValue | null | undefined): Record<string, unknown> => {
   if (!value) return {};
@@ -6751,7 +6755,7 @@ const buildRecordRows = (
   columns: string[],
   matrix: (string | number | boolean | null)[][]
 ): Record<string, string | number | boolean | null>[] => {
-  console.log('[buildRecordRows] ðŸ” ENTRÃ‰E:');
+  console.log('[buildRecordRows] 🔍 ENTRÉE:');
   console.log('[buildRecordRows] columns:', columns.length);
   console.log('[buildRecordRows] matrix:', matrix.length, 'lignes');
   
@@ -6763,7 +6767,7 @@ const buildRecordRows = (
     return obj;
   });
   
-  console.log('[buildRecordRows] ðŸŽ¯ SORTIE:', result.length, 'records');
+  console.log('[buildRecordRows] 🎯 SORTIE:', result.length, 'records');
   return result;
 };
 
@@ -6783,15 +6787,15 @@ type NormalizedTableInstance = {
 };
 
 const normalizeTableInstance = (
-  table: any // TableColumns et TableRows chargÃ©s via include
+  table: any // TableColumns et TableRows chargés via include
 ): NormalizedTableInstance => {
   try {
-    console.log('[normalizeTableInstance] ðŸ”„ ARCHITECTURE NORMALISÃ‰E');
+    console.log('[normalizeTableInstance] 🔄 ARCHITECTURE NORMALISÉE');
     console.log('[normalizeTableInstance] table.id:', table.id);
     console.log('[normalizeTableInstance] tableColumns:', table.tableColumns?.length || 0);
     console.log('[normalizeTableInstance] tableRows:', table.tableRows?.length || 0);
     
-    // ðŸ“Š ARCHITECTURE NORMALISÃ‰E : tableColumns et tableRows
+    // 📊 ARCHITECTURE NORMALISÉE : tableColumns et tableRows
     const columns = (table.tableColumns || [])
       .sort((a: any, b: any) => a.columnIndex - b.columnIndex)
       .map((col: any) => col.name);
@@ -6799,11 +6803,11 @@ const normalizeTableInstance = (
     const rows = (table.tableRows || [])
       .sort((a: any, b: any) => a.rowIndex - b.rowIndex)
       .map((row: any) => {
-        // âœ… NOUVEAU: Prisma Json type retourne directement l'objet
+        // ✅ NOUVEAU: Prisma Json type retourne directement l'objet
         let cells: any;
         
         if (Array.isArray(row.cells)) {
-          // Format actuel: cells est dÃ©jÃ  un array d'objets JS
+          // Format actuel: cells est déjà un array d'objets JS
           cells = row.cells;
         } else if (typeof row.cells === 'string') {
           // Ancien format string BRUTE (pas JSON): "Nord", "Sud-Est"...
@@ -6816,34 +6820,34 @@ const normalizeTableInstance = (
           cells = [];
         }
         
-        // Extraire le label (premier Ã©lÃ©ment de l'array)
+        // Extraire le label (premier élément de l'array)
         return Array.isArray(cells) && cells.length > 0 ? String(cells[0]) : '';
       });
     
     const matrix = (table.tableRows || [])
       .sort((a: any, b: any) => a.rowIndex - b.rowIndex)
       .map((row: any) => {
-        // âœ… NOUVEAU: Prisma Json type retourne directement l'objet
+        // ✅ NOUVEAU: Prisma Json type retourne directement l'objet
         let cells: any;
         
         if (Array.isArray(row.cells)) {
-          // Format actuel: cells est dÃ©jÃ  un array d'objets JS
+          // Format actuel: cells est déjà un array d'objets JS
           cells = row.cells;
         } else if (typeof row.cells === 'string') {
-          // Ancien format string BRUTE: juste le label, pas de donnÃ©es
+          // Ancien format string BRUTE: juste le label, pas de données
           // Retourner array vide car pas de data numeric
           return [];
         } else {
           cells = [];
         }
         
-        // Les donnÃ©es commencent Ã  partir de l'index 1 (index 0 = label)
+        // Les données commencent à partir de l'index 1 (index 0 = label)
         return Array.isArray(cells) ? cells.slice(1) : [];
       });
     
-    console.log('[normalizeTableInstance] âœ… columns:', columns.length, columns);
-    console.log('[normalizeTableInstance] âœ… rows:', rows.length, rows);
-    console.log('[normalizeTableInstance] âœ… matrix:', matrix.length);
+    console.log('[normalizeTableInstance] ✅ columns:', columns.length, columns);
+    console.log('[normalizeTableInstance] ✅ rows:', rows.length, rows);
+    console.log('[normalizeTableInstance] ✅ matrix:', matrix.length);
     
     const meta = readMeta(table.meta);
 
@@ -6862,7 +6866,7 @@ const normalizeTableInstance = (
       isDefault: Boolean(table.isDefault),
     };
 
-    console.log('[normalizeTableInstance] ðŸŽ¯ SORTIE:');
+    console.log('[normalizeTableInstance] 🎯 SORTIE:');
     console.log('[normalizeTableInstance] result.columns:', result.columns.length);
     console.log('[normalizeTableInstance] result.rows:', result.rows.length);
     console.log('[normalizeTableInstance] result.matrix:', result.matrix.length);
@@ -6870,7 +6874,7 @@ const normalizeTableInstance = (
 
     return result;
   } catch (error) {
-    console.error('[normalizeTableInstance] âŒ ERREUR FATALE:', error);
+    console.error('[normalizeTableInstance] ❌ ERREUR FATALE:', error);
     console.error('[normalizeTableInstance] table.id:', table?.id);
     console.error('[normalizeTableInstance] table structure:', JSON.stringify(table, null, 2));
     throw error;
@@ -6999,13 +7003,13 @@ const fetchNormalizedTable = async (
   return { table, tables };
 };
 
-// RÃ©cupÃ©rer toutes les instances de tableaux d'un nÅ“ud
+// Récupérer toutes les instances de tableaux d'un nœud
 router.get('/nodes/:nodeId/tables', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
@@ -7028,14 +7032,14 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
     return res.json(normalized);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching node tables:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des tableaux' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des tableaux' });
   }
 });
 
-// âš ï¸ ANCIENNE ROUTE DÃ‰SACTIVÃ‰E - Utilise maintenant table-routes-new.ts
-// La nouvelle architecture normalisÃ©e gÃ¨re POST /nodes/:nodeId/tables
+// ⚠️ ANCIENNE ROUTE DÉSACTIVÉE - Utilise maintenant table-routes-new.ts
+// La nouvelle architecture normalisée gère POST /nodes/:nodeId/tables
 /*
-// CrÃ©er une nouvelle instance de tableau
+// Créer une nouvelle instance de tableau
 router.post('/nodes/:nodeId/tables', async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -7043,19 +7047,19 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     const { name, description, type = 'basic', columns = [], rows = [], data = {}, meta = {} } = req.body;
 
     console.log('========================================');
-    console.log('[TreeBranchLeaf API] ðŸ“¥ POST /nodes/:nodeId/tables REÃ‡U');
+    console.log('[TreeBranchLeaf API] 📥 POST /nodes/:nodeId/tables REÇU');
     console.log('[TreeBranchLeaf API] nodeId:', nodeId);
     console.log('[TreeBranchLeaf API] name:', name);
     console.log('[TreeBranchLeaf API] type:', type);
-    console.log('[TreeBranchLeaf API] ðŸ“Š DONNÃ‰ES REÃ‡UES:');
+    console.log('[TreeBranchLeaf API] 📊 DONNÉES REÇUES:');
     console.log('[TreeBranchLeaf API] columns:', Array.isArray(columns) ? columns.length : typeof columns, columns);
     console.log('[TreeBranchLeaf API] rows:', Array.isArray(rows) ? rows.length : typeof rows);
-    console.log('[TreeBranchLeaf API] rows (10 premiÃ¨res):', Array.isArray(rows) ? rows.slice(0, 10) : 'N/A');
-    console.log('[TreeBranchLeaf API] rows (10 derniÃ¨res):', Array.isArray(rows) ? rows.slice(-10) : 'N/A');
+    console.log('[TreeBranchLeaf API] rows (10 premières):', Array.isArray(rows) ? rows.slice(0, 10) : 'N/A');
+    console.log('[TreeBranchLeaf API] rows (10 dernières):', Array.isArray(rows) ? rows.slice(-10) : 'N/A');
     console.log('[TreeBranchLeaf API] data type:', typeof data, Array.isArray(data) ? `array[${data.length}]` : 'object');
     if (Array.isArray(data)) {
       console.log('[TreeBranchLeaf API] data[0]:', data[0]);
-      console.log('[TreeBranchLeaf API] data[derniÃ¨re]:', data[data.length - 1]);
+      console.log('[TreeBranchLeaf API] data[dernière]:', data[data.length - 1]);
     } else if (data && typeof data === 'object') {
       console.log('[TreeBranchLeaf API] data keys:', Object.keys(data));
       if (data.matrix) {
@@ -7064,53 +7068,53 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     }
     console.log('========================================');
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // VÃ©rifier que le nom n'existe pas dÃ©jÃ 
+    // Vérifier que le nom n'existe pas déjà
     const existing = await prisma.treeBranchLeafNodeTable.findFirst({
       where: { nodeId, name }
     });
 
     if (existing) {
-      console.log('[TreeBranchLeaf API] âŒ Tableau avec ce nom existe dÃ©jÃ ');
-      return res.status(400).json({ error: 'Un tableau avec ce nom existe dÃ©jÃ ' });
+      console.log('[TreeBranchLeaf API] ❌ Tableau avec ce nom existe déjà');
+      return res.status(400).json({ error: 'Un tableau avec ce nom existe déjà' });
     }
 
-    // DÃ©terminer l'ordre
+    // Déterminer l'ordre
     const lastTable = await prisma.treeBranchLeafNodeTable.findFirst({
       where: { nodeId },
       orderBy: { order: 'desc' }
     });
     const order = (lastTable?.order || 0) + 1;
 
-    // GÃ©nÃ©rer un ID unique pour le tableau
+    // Générer un ID unique pour le tableau
     const tableId = randomUUID();
 
-    console.log('[TreeBranchLeaf API] ðŸ’¾ AVANT PRISMA.CREATE:');
+    console.log('[TreeBranchLeaf API] 💾 AVANT PRISMA.CREATE:');
     console.log('[TreeBranchLeaf API] tableId:', tableId);
-    console.log('[TreeBranchLeaf API] columns Ã  sauver:', Array.isArray(columns) ? columns.length : typeof columns);
-    console.log('[TreeBranchLeaf API] rows Ã  sauver:', Array.isArray(rows) ? rows.length : typeof rows);
-    console.log('[TreeBranchLeaf API] data Ã  sauver:', Array.isArray(data) ? `array[${data.length}]` : typeof data);
+    console.log('[TreeBranchLeaf API] columns à sauver:', Array.isArray(columns) ? columns.length : typeof columns);
+    console.log('[TreeBranchLeaf API] rows à sauver:', Array.isArray(rows) ? rows.length : typeof rows);
+    console.log('[TreeBranchLeaf API] data à sauver:', Array.isArray(data) ? `array[${data.length}]` : typeof data);
     
     // Calculer la taille approximative du JSON
     const jsonSize = JSON.stringify({ columns, rows, data }).length;
-    console.log('[TreeBranchLeaf API] ðŸ“ Taille JSON totale:', jsonSize, 'caractÃ¨res (' + Math.round(jsonSize / 1024) + ' KB)');
+    console.log('[TreeBranchLeaf API] 📏 Taille JSON totale:', jsonSize, 'caractères (' + Math.round(jsonSize / 1024) + ' KB)');
     
     if (jsonSize > 10 * 1024 * 1024) {
-      console.log('[TreeBranchLeaf API] âš ï¸ ATTENTION: Taille > 10MB, risque de problÃ¨me PostgreSQL');
+      console.log('[TreeBranchLeaf API] ⚠️ ATTENTION: Taille > 10MB, risque de problème PostgreSQL');
     }
 
-    // ðŸ—œï¸ Compresser les donnÃ©es volumineuses avant sauvegarde
+    // 🗜️ Compresser les données volumineuses avant sauvegarde
     const compressedColumns = compressIfNeeded(columns);
     const compressedRows = compressIfNeeded(rows);
     const compressedData = compressIfNeeded(data);
     
-    console.log('[TreeBranchLeaf API] ðŸ’¾ DonnÃ©es aprÃ¨s compression:');
-    console.log('[TreeBranchLeaf API] columns compressÃ©:', typeof compressedColumns === 'object' && (compressedColumns as any)._compressed ? 'OUI' : 'NON');
-    console.log('[TreeBranchLeaf API] rows compressÃ©:', typeof compressedRows === 'object' && (compressedRows as any)._compressed ? 'OUI' : 'NON');
-    console.log('[TreeBranchLeaf API] data compressÃ©:', typeof compressedData === 'object' && (compressedData as any)._compressed ? 'OUI' : 'NON');
+    console.log('[TreeBranchLeaf API] 💾 Données après compression:');
+    console.log('[TreeBranchLeaf API] columns compressé:', typeof compressedColumns === 'object' && (compressedColumns as any)._compressed ? 'OUI' : 'NON');
+    console.log('[TreeBranchLeaf API] rows compressé:', typeof compressedRows === 'object' && (compressedRows as any)._compressed ? 'OUI' : 'NON');
+    console.log('[TreeBranchLeaf API] data compressé:', typeof compressedData === 'object' && (compressedData as any)._compressed ? 'OUI' : 'NON');
 
     const newTable = await prisma.treeBranchLeafNodeTable.create({
       data: {
@@ -7129,34 +7133,34 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       }
     });
 
-    console.log('[TreeBranchLeaf API] âœ… PRISMA.CREATE TERMINÃ‰');
-    console.log('[TreeBranchLeaf API] Tableau crÃ©Ã© ID:', newTable.id);
-    console.log('[TreeBranchLeaf API] Colonnes sauvÃ©es:', Array.isArray(newTable.columns) ? newTable.columns.length : typeof newTable.columns);
-    console.log('[TreeBranchLeaf API] Rows sauvÃ©es:', Array.isArray(newTable.rows) ? newTable.rows.length : typeof newTable.rows);
-    console.log('[TreeBranchLeaf API] Data sauvÃ©es:', Array.isArray(newTable.data) ? newTable.data.length : typeof newTable.data);
+    console.log('[TreeBranchLeaf API] ✅ PRISMA.CREATE TERMINÉ');
+    console.log('[TreeBranchLeaf API] Tableau créé ID:', newTable.id);
+    console.log('[TreeBranchLeaf API] Colonnes sauvées:', Array.isArray(newTable.columns) ? newTable.columns.length : typeof newTable.columns);
+    console.log('[TreeBranchLeaf API] Rows sauvées:', Array.isArray(newTable.rows) ? newTable.rows.length : typeof newTable.rows);
+    console.log('[TreeBranchLeaf API] Data sauvées:', Array.isArray(newTable.data) ? newTable.data.length : typeof newTable.data);
 
     await syncNodeTableCapability(nodeId);
 
     const normalized = normalizeTableInstance(newTable);
 
-    console.log('[TreeBranchLeaf API] ðŸ”„ APRÃˆS NORMALISATION:');
+    console.log('[TreeBranchLeaf API] 🔄 APRÈS NORMALISATION:');
     console.log('[TreeBranchLeaf API] normalized.columns:', normalized.columns?.length);
     console.log('[TreeBranchLeaf API] normalized.rows:', normalized.rows?.length);
     console.log('[TreeBranchLeaf API] normalized.matrix:', normalized.matrix?.length);
     console.log('========================================');
 
-    console.log(`[TreeBranchLeaf API] âœ… Created table ${newTable.id} for node ${nodeId}`);
+    console.log(`[TreeBranchLeaf API] ✅ Created table ${newTable.id} for node ${nodeId}`);
     return res.status(201).json(normalized);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating node table:', error);
-    res.status(500).json({ error: 'Erreur lors de la crÃ©ation du tableau' });
+    res.status(500).json({ error: 'Erreur lors de la création du tableau' });
   }
 });
 */
 // FIN DE L'ANCIENNE ROUTE - Utilise table-routes-new.ts maintenant
 
-// âš ï¸ ANCIENNE ROUTE PUT DÃ‰SACTIVÃ‰E - Utilise maintenant table-routes-new.ts
-// Cette route utilisait les anciens champs columns/rows/data qui n'existent plus dans le schÃ©ma normalisÃ©
+// ⚠️ ANCIENNE ROUTE PUT DÉSACTIVÉE - Utilise maintenant table-routes-new.ts
+// Cette route utilisait les anciens champs columns/rows/data qui n'existent plus dans le schéma normalisé
 /*
 router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
   try {
@@ -7164,31 +7168,31 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { name, description, type, columns, rows, data, meta } = req.body;
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
 
-    // VÃ©rifier que le tableau appartient bien Ã  ce nÅ“ud
+    // Vérifier que le tableau appartient bien à ce nœud
     const existingTable = await prisma.treeBranchLeafNodeTable.findFirst({
       where: { id: tableId, nodeId }
     });
 
     if (!existingTable) {
-      return res.status(404).json({ error: 'Tableau non trouvÃ©' });
+      return res.status(404).json({ error: 'Tableau non trouvé' });
     }
 
-    // VÃ©rifier l'unicitÃ© du nom si changÃ©
+    // Vérifier l'unicité du nom si changé
     if (name && name !== existingTable.name) {
       const nameConflict = await prisma.treeBranchLeafNodeTable.findFirst({
         where: { nodeId, name, id: { not: tableId } }
       });
 
       if (nameConflict) {
-        return res.status(400).json({ error: 'Un tableau avec ce nom existe dÃ©jÃ ' });
+        return res.status(400).json({ error: 'Un tableau avec ce nom existe déjà' });
       }
     }
 
-    // ðŸ—œï¸ Compresser les donnÃ©es volumineuses si fournies
+    // 🗜️ Compresser les données volumineuses si fournies
     const updateData: any = {
       ...(name !== undefined && { name }),
       ...(description !== undefined && { description }),
@@ -7211,7 +7215,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
     return res.json(normalizeTableInstance(updatedTable));
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node table:', error);
-    res.status(500).json({ error: 'Erreur lors de la mise Ã  jour du tableau' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du tableau' });
   }
 });
 */
@@ -7220,12 +7224,12 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
 // Supprimer une instance de tableau
 router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
   const { tableId } = req.params;
-  console.log(`[DELETE /nodes/:nodeId/tables/:tableId] 🗑️ Suppression table ${tableId} avec nettoyage complet`);
+  console.log(`[DELETE /nodes/:nodeId/tables/:tableId] ??? Suppression table ${tableId} avec nettoyage complet`);
   
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // 1️⃣ Vérifier l'existence et les permissions
+    // 1?? V�rifier l'existence et les permissions
     const table = await prisma.treeBranchLeafNodeTable.findUnique({
       where: { id: tableId },
       include: {
@@ -7236,20 +7240,20 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
     });
 
     if (!table) {
-      return res.status(404).json({ error: 'Table non trouvée' });
+      return res.status(404).json({ error: 'Table non trouv�e' });
     }
 
     const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: 'Accès non autorisé' });
+      return res.status(403).json({ error: 'Acc�s non autoris�' });
     }
 
-    // 2️⃣ Supprimer la table (colonnes et lignes supprimées en cascade par Prisma)
+    // 2?? Supprimer la table (colonnes et lignes supprim�es en cascade par Prisma)
     await prisma.treeBranchLeafNodeTable.delete({ where: { id: tableId } });
-    console.log(`[DELETE Table] ✅ Table ${tableId} supprimée (+ colonnes/lignes en cascade)`);
+    console.log(`[DELETE Table] ? Table ${tableId} supprim�e (+ colonnes/lignes en cascade)`);
 
-    // 🔍 Nettoyer les champs Select/Cascader qui utilisent cette table comme lookup
-    // 💡 UTILISER LA MÊME LOGIQUE QUE LE BOUTON "DÉSACTIVER LOOKUP" QUI FONCTIONNE PARFAITEMENT
+    // ?? Nettoyer les champs Select/Cascader qui utilisent cette table comme lookup
+    // ?? UTILISER LA M�ME LOGIQUE QUE LE BOUTON "D�SACTIVER LOOKUP" QUI FONCTIONNE PARFAITEMENT
     try {
       const selectConfigsUsingTable = await prisma.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: tableId },
@@ -7257,9 +7261,9 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       });
 
       if (selectConfigsUsingTable.length > 0) {
-        console.log(`[DELETE Table] 🧹 ${selectConfigsUsingTable.length} champ(s) Select/Cascader référencent cette table - DÉSACTIVATION LOOKUP`);
+        console.log(`[DELETE Table] ?? ${selectConfigsUsingTable.length} champ(s) Select/Cascader r�f�rencent cette table - D�SACTIVATION LOOKUP`);
         
-        // Pour chaque champ, appliquer la MÊME logique que le bouton "Désactiver lookup"
+        // Pour chaque champ, appliquer la M�ME logique que le bouton "D�sactiver lookup"
         for (const config of selectConfigsUsingTable) {
           const selectNode = await prisma.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
@@ -7270,9 +7274,9 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
           });
 
           if (selectNode) {
-            console.log(`[DELETE Table] 🔧 Désactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
+            console.log(`[DELETE Table] ?? D�sactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
             
-            // 1️⃣ Nettoyer metadata.capabilities.table (comme le fait le bouton Désactiver)
+            // 1?? Nettoyer metadata.capabilities.table (comme le fait le bouton D�sactiver)
             const oldMetadata = (selectNode.metadata || {}) as Record<string, unknown>;
             const oldCapabilities = (oldMetadata.capabilities || {}) as Record<string, unknown>;
             const newCapabilities = {
@@ -7289,7 +7293,7 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
               capabilities: newCapabilities
             };
 
-            // 2️⃣ Mettre à jour le nœud (même logique que PUT /capabilities/table avec enabled: false)
+            // 2?? Mettre � jour le n�ud (m�me logique que PUT /capabilities/table avec enabled: false)
             await prisma.treeBranchLeafNode.update({
               where: { id: config.nodeId },
               data: {
@@ -7308,23 +7312,23 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
               }
             });
 
-            // 3️⃣ Supprimer la configuration SELECT (comme le fait le bouton Désactiver)
+            // 3?? Supprimer la configuration SELECT (comme le fait le bouton D�sactiver)
             await prisma.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
             
-            console.log(`[DELETE Table] ✅ Lookup désactivé pour "${selectNode.label}" - champ débloqué`);
+            console.log(`[DELETE Table] ? Lookup d�sactiv� pour "${selectNode.label}" - champ d�bloqu�`);
           }
         }
 
-        console.log(`[DELETE Table] ✅ ${selectConfigsUsingTable.length} champ(s) Select DÉBLOQUÉS (lookup désactivé)`);
+        console.log(`[DELETE Table] ? ${selectConfigsUsingTable.length} champ(s) Select D�BLOQU�S (lookup d�sactiv�)`);
       }
     } catch (selectConfigError) {
-      console.error(`[DELETE Table] ⚠️ Erreur désactivation lookups:`, selectConfigError);
-      // On continue quand même
+      console.error(`[DELETE Table] ?? Erreur d�sactivation lookups:`, selectConfigError);
+      // On continue quand m�me
     }
 
-    // 3️⃣ Nettoyer TOUS les champs liés aux tables dans le nœud
+    // 3?? Nettoyer TOUS les champs li�s aux tables dans le n�ud
     if (table.nodeId) {
       const node = await prisma.treeBranchLeafNode.findUnique({ 
         where: { id: table.nodeId }, 
@@ -7372,7 +7376,7 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         }
       });
 
-      console.log(`[DELETE Table] ✅ Nœud ${table.nodeId} entièrement nettoyé`, {
+      console.log(`[DELETE Table] ? N�ud ${table.nodeId} enti�rement nettoy�`, {
         hasTable: remainingTables > 0,
         linkedTableIds: nextLinkedIds.length,
         table_activeId_reset: wasActiveTable,
@@ -7381,9 +7385,9 @@ router.delete('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       });
     }
 
-    return res.json({ success: true, message: 'Tableau supprimé avec succès' });
+    return res.json({ success: true, message: 'Tableau supprim� avec succ�s' });
   } catch (error) {
-    console.error('[DELETE Table] ❌ Erreur lors de la suppression:', error);
+    console.error('[DELETE Table] ? Erreur lors de la suppression:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du tableau' });
   }
 });
@@ -7423,12 +7427,12 @@ router.get('/nodes/:nodeId/tables/options', async (req, res) => {
       });
     }
 
-    // Par dÃ©faut: colonnes
+    // Par défaut: colonnes
     const items = table.columns.map((label, index) => ({ value: label, label, index }));
     return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching table options:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des options du tableau' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des options du tableau' });
   }
 });
 
@@ -7455,7 +7459,7 @@ router.get('/nodes/:nodeId/tables/lookup', async (req, res) => {
     });
 
     if (!normalized) {
-      return res.status(404).json({ error: 'Aucun tableau disponible pour ce nÅ“ud' });
+      return res.status(404).json({ error: 'Aucun tableau disponible pour ce nœud' });
     }
 
     const { table } = normalized;
@@ -7468,7 +7472,7 @@ router.get('/nodes/:nodeId/tables/lookup', async (req, res) => {
       const rowLabel = row;
 
       if (!colLabel || !rowLabel) {
-        return res.status(400).json({ error: 'ParamÃ¨tres column et row requis pour un tableau croisÃ©' });
+        return res.status(400).json({ error: 'Paramètres column et row requis pour un tableau croisé' });
       }
 
       const columnIndex = table.columns.findIndex((c) => c === colLabel);
@@ -7499,7 +7503,7 @@ router.get('/nodes/:nodeId/tables/lookup', async (req, res) => {
       (rawLookup && typeof rawLookup.keyColumn === 'string' ? (rawLookup.keyColumn as string) : undefined);
 
     if (!resolvedKeyColumn) {
-      return res.status(400).json({ error: 'Colonne clÃ© non dÃ©finie pour ce tableau' });
+      return res.status(400).json({ error: 'Colonne clé non définie pour ce tableau' });
     }
 
     const lookupValue =
@@ -7508,12 +7512,12 @@ router.get('/nodes/:nodeId/tables/lookup', async (req, res) => {
       (column && !table.columns.includes(column) ? column : undefined);
 
     if (lookupValue === undefined) {
-      return res.status(400).json({ error: 'Valeur de clÃ© requise' });
+      return res.status(400).json({ error: 'Valeur de clé requise' });
     }
 
     const keyIndex = table.columns.findIndex((colName) => colName === resolvedKeyColumn);
     if (keyIndex === -1) {
-      return res.status(404).json({ error: `Colonne clÃ© "${resolvedKeyColumn}" introuvable` });
+      return res.status(404).json({ error: `Colonne clé "${resolvedKeyColumn}" introuvable` });
     }
 
     let matchedIndex = -1;
@@ -7526,7 +7530,7 @@ router.get('/nodes/:nodeId/tables/lookup', async (req, res) => {
     }
 
     if (matchedIndex === -1) {
-      return res.status(404).json({ error: 'Aucune ligne correspondant Ã  cette clÃ©' });
+      return res.status(404).json({ error: 'Aucune ligne correspondant à cette clé' });
     }
 
     const matchedRow = table.matrix[matchedIndex] ?? [];
@@ -7566,7 +7570,7 @@ router.get('/nodes/:nodeId/tables/lookup', async (req, res) => {
   }
 });
 
-// GÃ©nÃ©rer automatiquement des champs SELECT dÃ©pendants d'un tableau
+// Générer automatiquement des champs SELECT dépendants d'un tableau
 router.post('/nodes/:nodeId/table/generate-selects', async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -7592,7 +7596,7 @@ router.post('/nodes/:nodeId/table/generate-selects', async (req, res) => {
     });
 
     if (!normalized) {
-      return res.status(404).json({ error: 'Aucun tableau disponible pour ce nÅ“ud' });
+      return res.status(404).json({ error: 'Aucun tableau disponible pour ce nœud' });
     }
 
     const { table } = normalized;
@@ -7607,7 +7611,7 @@ router.post('/nodes/:nodeId/table/generate-selects', async (req, res) => {
     });
 
     if (!baseNode) {
-      return res.status(404).json({ error: 'NÅ“ud de base introuvable' });
+      return res.status(404).json({ error: 'Nœud de base introuvable' });
     }
 
     const parentId = baseNode.parentId ?? null;
@@ -7637,7 +7641,7 @@ router.post('/nodes/:nodeId/table/generate-selects', async (req, res) => {
     }
 
     if (!toCreate.length) {
-      return res.status(400).json({ error: 'Aucune dimension exploitable pour gÃ©nÃ©rer des champs SELECT' });
+      return res.status(400).json({ error: 'Aucune dimension exploitable pour générer des champs SELECT' });
     }
 
     const created: Array<{ id: string; label: string; dimension: 'columns' | 'rows' }> = [];
@@ -7711,12 +7715,12 @@ router.post('/nodes/:nodeId/table/generate-selects', async (req, res) => {
     });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error generating selects from table:', error);
-    res.status(500).json({ error: 'Erreur lors de la gÃ©nÃ©ration des champs dÃ©pendants' });
+    res.status(500).json({ error: 'Erreur lors de la génération des champs dépendants' });
   }
 });
 
 // -------------------------------------------------------------
-// âœ… Endpoint valeurs effectives (prise en compte override manuel)
+// ✅ Endpoint valeurs effectives (prise en compte override manuel)
 // GET /api/treebranchleaf/effective-values?ids=a,b,c
 router.get('/effective-values', async (req, res) => {
   try {
@@ -7742,16 +7746,16 @@ router.get('/effective-values', async (req, res) => {
     return res.json({ success: true, data: result });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting effective values:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des valeurs effectives' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des valeurs effectives' });
   }
 });
 
 // =============================================================================
-// ðŸ§ª FORMULA ENGINE DEBUG - Endpoints de dÃ©bogage
+// 🧪 FORMULA ENGINE DEBUG - Endpoints de débogage
 // =============================================================================
 
 // GET /api/treebranchleaf/debug/formula-vars
-// Liste toutes les variables de formule pour dÃ©bogage
+// Liste toutes les variables de formule pour débogage
 router.get('/debug/formula-vars', async (req, res) => {
   try {
     const vars = await prisma.treeBranchLeafNodeVariable.findMany({
@@ -7773,12 +7777,12 @@ router.get('/debug/formula-vars', async (req, res) => {
     return res.json(vars);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching formula variables:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des variables de formule' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des variables de formule' });
   }
 });
 
 // GET /api/treebranchleaf/debug/formula-eval
-// Ã‰value une formule spÃ©cifique (pour dÃ©bogage)
+// Évalue une formule spécifique (pour débogage)
 router.get('/debug/formula-eval', async (req, res) => {
   try {
     const { formulaId, nodeId } = req.query;
@@ -7792,17 +7796,17 @@ router.get('/debug/formula-eval', async (req, res) => {
     });
 
     if (!formula) {
-      return res.status(404).json({ error: 'Formule non trouvÃ©e' });
+      return res.status(404).json({ error: 'Formule non trouvée' });
     }
 
-    // Simuler des fieldValues basiques pour l'Ã©valuation
+    // Simuler des fieldValues basiques pour l'évaluation
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId as string },
       include: { TreeBranchLeafNodeVariable: true }
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
     const fieldValues: Record<string, unknown> = {
@@ -7812,12 +7816,12 @@ router.get('/debug/formula-eval', async (req, res) => {
         }
         return acc;
       }, {} as Record<string, unknown>),
-      // Ajouter des valeurs de test supplÃ©mentaires si nÃ©cessaire
+      // Ajouter des valeurs de test supplémentaires si nécessaire
     };
 
-    console.log('ðŸ§ª [DEBUG] Ã‰valuation de la formule avec les fieldValues suivants:', fieldValues);
+    console.log('🧪 [DEBUG] Évaluation de la formule avec les fieldValues suivants:', fieldValues);
 
-    // Ã‰valuer la formule
+    // Évaluer la formule
     const { value, errors } = await evalFormulaTokens(formula.tokens as unknown as FormulaToken[], {
       resolveVariable: async (nodeId: string) => {
         const found = Object.values(fieldValues).find(v => v.nodeId === nodeId);
@@ -7829,21 +7833,21 @@ router.get('/debug/formula-eval', async (req, res) => {
     return res.json({ value, errors });
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error evaluating formula in debug:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'Ã©valuation de la formule en mode dÃ©bogage' });
+    res.status(500).json({ error: 'Erreur lors de l\'évaluation de la formule en mode débogage' });
   }
 });
 
 // =============================================================================
-// ðŸ“ˆ FORMULA VERSION - Version des formules (pour cache frontend)
+// 📈 FORMULA VERSION - Version des formules (pour cache frontend)
 // =============================================================================
 
 // GET /api/treebranchleaf/formulas-version
-// Retourne une version/timestamp pour permettre au frontend de gÃ©rer le cache
+// Retourne une version/timestamp pour permettre au frontend de gérer le cache
 router.get('/formulas-version', async (req, res) => {
   try {
     res.setHeader('X-TBL-Legacy-Deprecated', 'true');
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('[TBL LEGACY] /api/treebranchleaf/formulas-version appelÃ© (dÃ©prÃ©ciÃ©). Utiliser /api/tbl/evaluate avec futur cache dÃ©pendances.');
+      console.warn('[TBL LEGACY] /api/treebranchleaf/formulas-version appelé (déprécié). Utiliser /api/tbl/evaluate avec futur cache dépendances.');
     }
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     
@@ -7859,7 +7863,7 @@ router.get('/formulas-version', async (req, res) => {
     return res.json(version);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting formulas version:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la version des formules' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la version des formules' });
   }
 });
 
@@ -7938,29 +7942,29 @@ router.post('/evaluate/formula', async (req, res) => {
       return res.status(400).json({ error: 'Parse error', details: error.message });
     }
     console.error('[TreeBranchLeaf API] Error evaluating inline formula:', error);
-    return res.status(500).json({ error: 'Erreur Ã©valuation inline' });
+    return res.status(500).json({ error: 'Erreur évaluation inline' });
   }
 });
 
 // =============================================================================
-// ðŸ§® FORMULA EVALUATION - Ã‰valuation de formules
+// 🧮 FORMULA EVALUATION - Évaluation de formules
 // =============================================================================
 
 // POST /api/treebranchleaf/evaluate/formula/:formulaId
-// Ã‰value une formule spÃ©cifique et retourne le rÃ©sultat calculÃ©
+// Évalue une formule spécifique et retourne le résultat calculé
 router.post('/evaluate/formula/:formulaId', async (req, res) => {
   try {
     res.setHeader('X-TBL-Legacy-Deprecated', 'true');
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appelÃ© (dÃ©prÃ©ciÃ©). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.');
+      console.warn('[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appelé (déprécié). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.');
     }
     const { formulaId } = req.params;
     const { fieldValues = {}, testMode = true } = req.body;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ§® Ã‰valuation formule ${formulaId}:`, { fieldValues, testMode });
+    console.log(`[TreeBranchLeaf API] 🧮 Évaluation formule ${formulaId}:`, { fieldValues, testMode });
 
-    // RÃ©cupÃ©rer la formule
+    // Récupérer la formule
     const formula = await prisma.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
@@ -7977,37 +7981,37 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
     });
 
     if (!formula) {
-      return res.status(404).json({ error: 'Formule non trouvÃ©e' });
+      return res.status(404).json({ error: 'Formule non trouvée' });
     }
 
-    // VÃ©rifier l'accÃ¨s organisation
+    // Vérifier l'accès organisation
     const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette formule' });
+      return res.status(403).json({ error: 'Accès refusé à cette formule' });
     }
 
-    // Ã‰valuer la formule avec le moteur d'expressions
+    // Évaluer la formule avec le moteur d'expressions
     try {
-      console.log(`[TreeBranchLeaf API] ðŸ§® Ã‰VALUATION FORMULE ULTRA-DÃ‰TAILLÃ‰E:`, {
+      console.log(`[TreeBranchLeaf API] 🧮 ÉVALUATION FORMULE ULTRA-DÉTAILLÉE:`, {
         formulaId: formula.id,
         formulaName: formula.name,
         tokens: formula.tokens,
         fieldValues: fieldValues
       });
       
-      console.log(`[TreeBranchLeaf API] ðŸ” FIELDVALUES REÃ‡UES:`, Object.entries(fieldValues));
+      console.log(`[TreeBranchLeaf API] 🔍 FIELDVALUES REÇUES:`, Object.entries(fieldValues));
 
-      // ðŸŽ¯ DEBUG GÃ‰NÃ‰RIQUE pour toutes les formules (sans ID hardcodÃ©)
+      // 🎯 DEBUG GÉNÉRIQUE pour toutes les formules (sans ID hardcodé)
       const isDebugMode = process.env.NODE_ENV === 'development';
       if (isDebugMode && formula) {
-        console.log(`[TreeBranchLeaf API] ï¿½ === FORMULE EN COURS D'ANALYSE ===`);
-        console.log(`[TreeBranchLeaf API] ï¿½ ID:`, formula.id);
-        console.log(`[TreeBranchLeaf API] ðŸ” Expression:`, formula.expression || 'undefined');
-        console.log(`[TreeBranchLeaf API] ï¿½ Tokens BRUTS:`, JSON.stringify(formula.tokens, null, 2));
+        console.log(`[TreeBranchLeaf API] � === FORMULE EN COURS D'ANALYSE ===`);
+        console.log(`[TreeBranchLeaf API] � ID:`, formula.id);
+        console.log(`[TreeBranchLeaf API] 🔍 Expression:`, formula.expression || 'undefined');
+        console.log(`[TreeBranchLeaf API] � Tokens BRUTS:`, JSON.stringify(formula.tokens, null, 2));
         
         if (Array.isArray(formula.tokens)) {
           formula.tokens.forEach((token, index) => {
-            console.log(`[TreeBranchLeaf API] ï¿½ Token ${index}:`, {
+            console.log(`[TreeBranchLeaf API] � Token ${index}:`, {
               type: token.type,
               value: token.value,
               name: token.name,
@@ -8017,9 +8021,9 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
           });
         }
         
-        console.log(`[TreeBranchLeaf API] ï¿½ FieldValues pour cette formule:`);
+        console.log(`[TreeBranchLeaf API] � FieldValues pour cette formule:`);
         Object.entries(fieldValues).forEach(([k, v]) => {
-          console.log(`[TreeBranchLeaf API] ï¿½   ${k}: "${v}" (${typeof v})`);
+          console.log(`[TreeBranchLeaf API] �   ${k}: "${v}" (${typeof v})`);
         });
       }
 
@@ -8041,8 +8045,8 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
 
       console.log('[TreeBranchLeaf API] Variables dans les tokens:', tokenVariables);
 
-      // ðŸ§  NOUVEL ORCHESTRATEUR â€“ remplace l'ancienne rÃ©solution ad-hoc
-      // Expression brute Ã©ventuellement stockÃ©e dans la formule
+      // 🧠 NOUVEL ORCHESTRATEUR – remplace l'ancienne résolution ad-hoc
+      // Expression brute éventuellement stockée dans la formule
       const rawExpression = (formula as { expression?: string; rawExpression?: string } | null)?.expression 
         || (formula as { expression?: string; rawExpression?: string } | null)?.rawExpression 
         || '';
@@ -8056,28 +8060,28 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
           hasOperatorsOverride: req.body?.hasOperators
         });
         
-        // ðŸŽ¯ DEBUG MODE pour l'orchestrateur en dÃ©veloppement
+        // 🎯 DEBUG MODE pour l'orchestrateur en développement
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[TreeBranchLeaf API] ðŸš¨ === RÃ‰SULTAT ORCHESTRATEUR ===`);
-          console.log(`[TreeBranchLeaf API] ðŸš¨ resolvedVariables:`, orchestrated.resolvedVariables);
-          console.log(`[TreeBranchLeaf API] ðŸš¨ strategy:`, orchestrated.strategy);
-          console.log(`[TreeBranchLeaf API] ðŸš¨ operatorsDetected:`, orchestrated.operatorsDetected);
+          console.log(`[TreeBranchLeaf API] 🚨 === RÉSULTAT ORCHESTRATEUR ===`);
+          console.log(`[TreeBranchLeaf API] 🚨 resolvedVariables:`, orchestrated.resolvedVariables);
+          console.log(`[TreeBranchLeaf API] 🚨 strategy:`, orchestrated.strategy);
+          console.log(`[TreeBranchLeaf API] 🚨 operatorsDetected:`, orchestrated.operatorsDetected);
           
           const variableCount = Object.keys(orchestrated.resolvedVariables).filter(k => orchestrated.resolvedVariables[k] !== 0).length;
-          console.log(`[TreeBranchLeaf API] ðŸš¨ Variable count (non-zero):`, variableCount);
+          console.log(`[TreeBranchLeaf API] 🚨 Variable count (non-zero):`, variableCount);
           
           if (variableCount === 1) {
             const singleValue = Object.values(orchestrated.resolvedVariables).find(v => v !== 0);
-            console.log(`[TreeBranchLeaf API] ðŸš¨ âŒ UNE SEULE VARIABLE â†’ RETOUR DIRECT: ${singleValue}`);
+            console.log(`[TreeBranchLeaf API] 🚨 ❌ UNE SEULE VARIABLE → RETOUR DIRECT: ${singleValue}`);
           } else if (variableCount >= 2) {
             const values = Object.values(orchestrated.resolvedVariables);
-            console.log(`[TreeBranchLeaf API] ðŸš¨ âœ… PLUSIEURS VARIABLES â†’ CALCUL: ${values[0]} / ${values[1]} = ${values[0] / values[1]}`);
+            console.log(`[TreeBranchLeaf API] 🚨 ✅ PLUSIEURS VARIABLES → CALCUL: ${values[0]} / ${values[1]} = ${values[0] / values[1]}`);
           }
           
-          console.log(`[TreeBranchLeaf API] ðŸš¨ Trace orchestrateur:`, orchestrated.trace);
+          console.log(`[TreeBranchLeaf API] 🚨 Trace orchestrateur:`, orchestrated.trace);
         }
       } catch (orchestratorError) {
-        console.error('[TreeBranchLeaf API] âŒ Erreur orchestrateur:', orchestratorError);
+        console.error('[TreeBranchLeaf API] ❌ Erreur orchestrateur:', orchestratorError);
         return res.status(500).json({
           error: 'Erreur orchestrateur formule',
           details: (orchestratorError as Error).message || 'unknown',
@@ -8090,17 +8094,17 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
         });
       }
       const resolvedVariables = orchestrated.resolvedVariables;
-      console.log('[TreeBranchLeaf API] ðŸŽ¯ Variables finales rÃ©solues (orchestrateur):', resolvedVariables);
-      console.log('[TreeBranchLeaf API] ðŸŽ¯ StratÃ©gie orchestrateur:', orchestrated.strategy, 'operatorsDetected=', orchestrated.operatorsDetected);
-      console.log('[TreeBranchLeaf API] ðŸ“‹ FieldValues disponibles:', Object.keys(fieldValues));
-      console.log('[TreeBranchLeaf API] ðŸ“‹ Valeurs FieldValues:', fieldValues);
+      console.log('[TreeBranchLeaf API] 🎯 Variables finales résolues (orchestrateur):', resolvedVariables);
+      console.log('[TreeBranchLeaf API] 🎯 Stratégie orchestrateur:', orchestrated.strategy, 'operatorsDetected=', orchestrated.operatorsDetected);
+      console.log('[TreeBranchLeaf API] 📋 FieldValues disponibles:', Object.keys(fieldValues));
+      console.log('[TreeBranchLeaf API] 📋 Valeurs FieldValues:', fieldValues);
 
-      // ðŸ§  ANALYSEUR INTELLIGENT UNIVERSEL - SYSTÃˆME DYNAMIQUE COMPLET
+      // 🧠 ANALYSEUR INTELLIGENT UNIVERSEL - SYSTÈME DYNAMIQUE COMPLET
       const universalAnalyzer = (fieldValues: Record<string, string | number | null | undefined>) => {
-        console.log(`[TreeBranchLeaf API] ðŸ§  === ANALYSE INTELLIGENTE UNIVERSELLE ===`);
-        console.log(`[TreeBranchLeaf API] ðŸ§  DonnÃ©es reÃ§ues:`, fieldValues);
+        console.log(`[TreeBranchLeaf API] 🧠 === ANALYSE INTELLIGENTE UNIVERSELLE ===`);
+        console.log(`[TreeBranchLeaf API] 🧠 Données reçues:`, fieldValues);
         
-        // 1. CLASSIFICATION AUTOMATIQUE DES DONNÃ‰ES
+        // 1. CLASSIFICATION AUTOMATIQUE DES DONNÉES
         interface ClassifiedBuckets {
           userInputs: Record<string, unknown>;
           systemRefs: Record<string, unknown>;
@@ -8116,86 +8120,86 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
           metadata: {}
         };
         
-        // 2. ANALYSE DE CHAQUE DONNÃ‰E
+        // 2. ANALYSE DE CHAQUE DONNÉE
         Object.entries(fieldValues).forEach(([key, value]) => {
           if (value == null || value === '') return;
           
           const strValue = String(value);
-          console.log(`[TreeBranchLeaf API] ðŸ” Analyse "${key}": "${strValue}"`);
+          console.log(`[TreeBranchLeaf API] 🔍 Analyse "${key}": "${strValue}"`);
           
           // Valeurs utilisateur directes (champs de saisie)
           if (key.includes('_field')) {
             classified.userInputs[key] = value;
-            console.log(`[TreeBranchLeaf API] ðŸ‘¤ INPUT UTILISATEUR: "${key}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] 👤 INPUT UTILISATEUR: "${key}" = "${value}"`);
           }
-          // RÃ©fÃ©rences systÃ¨me (IDs, nÅ“uds)
+          // Références système (IDs, nœuds)
           else if (key.startsWith('node_') || key.includes('-') && key.length > 10) {
             classified.systemRefs[key] = value;
-            console.log(`[TreeBranchLeaf API] ðŸ”— RÃ‰FÃ‰RENCE SYSTÃˆME: "${key}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] 🔗 RÉFÉRENCE SYSTÈME: "${key}" = "${value}"`);
           }
-          // DonnÃ©es miroir (pour sync)
+          // Données miroir (pour sync)
           else if (key.startsWith('__mirror_')) {
             classified.metadata[key] = value;
-            console.log(`[TreeBranchLeaf API] ðŸªž MÃ‰TADONNÃ‰E: "${key}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] 🪞 MÉTADONNÉE: "${key}" = "${value}"`);
           }
           // Tout le reste = calculs/conditions
           else {
             classified.calculations[key] = value;
-            console.log(`[TreeBranchLeaf API] ðŸ§® CALCUL/CONDITION: "${key}" = "${value}"`);
+            console.log(`[TreeBranchLeaf API] 🧮 CALCUL/CONDITION: "${key}" = "${value}"`);
           }
         });
         
         return classified;
       };
       
-      // ðŸŽ¯ STRATÃˆGE INTELLIGENT - DÃ‰CISION AUTOMATIQUE
+      // 🎯 STRATÈGE INTELLIGENT - DÉCISION AUTOMATIQUE
       const intelligentStrategy = (
         classified: { userInputs: Record<string, unknown>; systemRefs: Record<string, unknown>; calculations: Record<string, unknown> },
         resolvedVariables: Record<string, number>,
         context: { tokenVariablesCount: number; tokensCount: number }
       ) => {
-        console.log(`[TreeBranchLeaf API] ðŸŽ¯ === STRATÃ‰GIE INTELLIGENTE ===`);
+        console.log(`[TreeBranchLeaf API] 🎯 === STRATÉGIE INTELLIGENTE ===`);
         
         const userInputCount = Object.keys(classified.userInputs).length;
         const systemRefCount = Object.keys(classified.systemRefs).length;
         const calculationCount = Object.keys(classified.calculations).length;
-        // ðŸ”§ CORRECTION CRITIQUE: Compter toutes les variables des tokens, pas seulement celles rÃ©solues Ã  non-zero
-        // Le problÃ¨me Ã©tait qu'une variable non-rÃ©solue (mise Ã  0) n'Ã©tait pas comptÃ©e, 
-        // faisant passer de 2 variables Ã  1 variable â†’ SINGLE_VALUE au lieu d'AUTO_CALCULATION
+        // 🔧 CORRECTION CRITIQUE: Compter toutes les variables des tokens, pas seulement celles résolues à non-zero
+        // Le problème était qu'une variable non-résolue (mise à 0) n'était pas comptée, 
+        // faisant passer de 2 variables à 1 variable → SINGLE_VALUE au lieu d'AUTO_CALCULATION
         const tokenVariableCount = context.tokenVariablesCount;
         const variableCount = Object.keys(resolvedVariables).filter(k => resolvedVariables[k] !== 0).length;
         
-        console.log(`[TreeBranchLeaf API] ðŸ“Š COMPTAGE:`, {
+        console.log(`[TreeBranchLeaf API] 📊 COMPTAGE:`, {
           userInputs: userInputCount,
           systemRefs: systemRefCount,
           calculations: calculationCount,
           variables: variableCount,
-          tokenVariables: tokenVariableCount, // ðŸ”§ UTILISER CETTE VALEUR
+          tokenVariables: tokenVariableCount, // 🔧 UTILISER CETTE VALEUR
           tokens: context.tokensCount
         });
         
-        // RÃˆGLE 1 (ADAPTÃ‰E): PrioritÃ© utilisateur UNIQUEMENT si la formule n'a pas de variables (tokenVariablesCount=0)
-        // Avant: on retournait systÃ©matiquement la premiÃ¨re saisie (problÃ¨me: figeait la formule sur le premier chiffre tapÃ©)
+        // RÈGLE 1 (ADAPTÉE): Priorité utilisateur UNIQUEMENT si la formule n'a pas de variables (tokenVariablesCount=0)
+        // Avant: on retournait systématiquement la première saisie (problème: figeait la formule sur le premier chiffre tapé)
         if (userInputCount > 0 && context.tokenVariablesCount === 0) {
           const userValue = Object.values(classified.userInputs)[0];
-          console.log(`[TreeBranchLeaf API] âœ… STRATÃ‰GIE: PRIORITÃ‰ UTILISATEUR`);
-          console.log(`[TreeBranchLeaf API] ðŸ” DÃ‰TAIL VALEUR UTILISATEUR:`);
-          console.log(`[TreeBranchLeaf API] ðŸ” - Type: ${typeof userValue}`);
-          console.log(`[TreeBranchLeaf API] ðŸ” - Valeur brute: "${userValue}"`);
-          console.log(`[TreeBranchLeaf API] ðŸ” - String conversion: "${String(userValue)}"`);
-          console.log(`[TreeBranchLeaf API] ðŸ” - Longueur: ${String(userValue).length}`);
+          console.log(`[TreeBranchLeaf API] ✅ STRATÉGIE: PRIORITÉ UTILISATEUR`);
+          console.log(`[TreeBranchLeaf API] 🔍 DÉTAIL VALEUR UTILISATEUR:`);
+          console.log(`[TreeBranchLeaf API] 🔍 - Type: ${typeof userValue}`);
+          console.log(`[TreeBranchLeaf API] 🔍 - Valeur brute: "${userValue}"`);
+          console.log(`[TreeBranchLeaf API] 🔍 - String conversion: "${String(userValue)}"`);
+          console.log(`[TreeBranchLeaf API] 🔍 - Longueur: ${String(userValue).length}`);
           
           return {
             strategy: 'USER_PRIORITY',
             value: userValue,
-            reason: 'L\'utilisateur a entrÃ© une valeur directe'
+            reason: 'L\'utilisateur a entré une valeur directe'
           };
         }
         
-        // ðŸ”§ CORRECTION CRITIQUE: Utiliser tokenVariableCount au lieu de variableCount
-        // RÃˆGLE 2: Si on a des variables pour calculer dans les tokens, on calcule
+        // 🔧 CORRECTION CRITIQUE: Utiliser tokenVariableCount au lieu de variableCount
+        // RÈGLE 2: Si on a des variables pour calculer dans les tokens, on calcule
         if (tokenVariableCount >= 2) {
-          console.log(`[TreeBranchLeaf API] âœ… STRATÃ‰GIE: CALCUL AUTOMATIQUE (${tokenVariableCount} variables dans les tokens, ${variableCount} rÃ©solues non-nulles)`);
+          console.log(`[TreeBranchLeaf API] ✅ STRATÉGIE: CALCUL AUTOMATIQUE (${tokenVariableCount} variables dans les tokens, ${variableCount} résolues non-nulles)`);
           return {
             strategy: 'AUTO_CALCULATION',
             value: null,
@@ -8203,10 +8207,10 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
           };
         }
         
-        // RÃˆGLE 3: Une seule variable = retour direct (mais seulement si vraiment une seule variable dans les tokens)
+        // RÈGLE 3: Une seule variable = retour direct (mais seulement si vraiment une seule variable dans les tokens)
         if (tokenVariableCount === 1) {
           const singleValue = Object.values(resolvedVariables).find(v => v !== 0);
-          console.log(`[TreeBranchLeaf API] âœ… STRATÃ‰GIE: VALEUR UNIQUE (valeur: ${singleValue})`);
+          console.log(`[TreeBranchLeaf API] ✅ STRATÉGIE: VALEUR UNIQUE (valeur: ${singleValue})`);
           return {
             strategy: 'SINGLE_VALUE',
             value: singleValue,
@@ -8214,42 +8218,42 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
           };
         }
         
-        // RÃˆGLE 4: Pas de donnÃ©es = neutre
-        console.log(`[TreeBranchLeaf API] âš ï¸ STRATÃ‰GIE: NEUTRE (aucune donnÃ©e significative)`);
+        // RÈGLE 4: Pas de données = neutre
+        console.log(`[TreeBranchLeaf API] ⚠️ STRATÉGIE: NEUTRE (aucune donnée significative)`);
         return {
           strategy: 'NEUTRAL',
           value: 0,
-          reason: 'Aucune donnÃ©e disponible'
+          reason: 'Aucune donnée disponible'
         };
       };
       
-      // EXÃ‰CUTION DU SYSTÃˆME INTELLIGENT
+      // EXÉCUTION DU SYSTÈME INTELLIGENT
   const classified = universalAnalyzer(fieldValues);
   const strategy = intelligentStrategy(classified, resolvedVariables, { tokenVariablesCount: tokenVariables.length, tokensCount: tokens.length });
       
-      console.log(`[TreeBranchLeaf API] ðŸš€ === EXÃ‰CUTION INTELLIGENTE ===`);
-      console.log(`[TreeBranchLeaf API] ðŸš€ StratÃ©gie choisie: ${strategy.strategy}`);
-      console.log(`[TreeBranchLeaf API] ðŸš€ Raison: ${strategy.reason}`);
+      console.log(`[TreeBranchLeaf API] 🚀 === EXÉCUTION INTELLIGENTE ===`);
+      console.log(`[TreeBranchLeaf API] 🚀 Stratégie choisie: ${strategy.strategy}`);
+      console.log(`[TreeBranchLeaf API] 🚀 Raison: ${strategy.reason}`);
       
-      // EXÃ‰CUTION SELON LA STRATÃ‰GIE
+      // EXÉCUTION SELON LA STRATÉGIE
   if (strategy.strategy === 'USER_PRIORITY' || strategy.strategy === 'SINGLE_VALUE') {
         // Retourner la valeur directement
         const rawValue = strategy.value;
-        console.log(`[TreeBranchLeaf API] âœ… === RETOUR DIRECT ===`);
-        console.log(`[TreeBranchLeaf API] ðŸ” ANALYSE CONVERSION:`);
-        console.log(`[TreeBranchLeaf API] ðŸ” - Valeur strategy.value: "${rawValue}"`);
-        console.log(`[TreeBranchLeaf API] ðŸ” - Type de strategy.value: ${typeof rawValue}`);
-        console.log(`[TreeBranchLeaf API] ðŸ” - String(rawValue): "${String(rawValue)}"`);
+        console.log(`[TreeBranchLeaf API] ✅ === RETOUR DIRECT ===`);
+        console.log(`[TreeBranchLeaf API] 🔍 ANALYSE CONVERSION:`);
+        console.log(`[TreeBranchLeaf API] 🔍 - Valeur strategy.value: "${rawValue}"`);
+        console.log(`[TreeBranchLeaf API] 🔍 - Type de strategy.value: ${typeof rawValue}`);
+        console.log(`[TreeBranchLeaf API] 🔍 - String(rawValue): "${String(rawValue)}"`);
         
         const cleanedString = String(rawValue).replace(/\s+/g, '').replace(/,/g, '.');
-        console.log(`[TreeBranchLeaf API] ðŸ” - AprÃ¨s nettoyage: "${cleanedString}"`);
+        console.log(`[TreeBranchLeaf API] 🔍 - Après nettoyage: "${cleanedString}"`);
         
         const numValue = parseFloat(cleanedString);
-        console.log(`[TreeBranchLeaf API] ðŸ” - parseFloat rÃ©sultat: ${numValue}`);
-        console.log(`[TreeBranchLeaf API] ðŸ” - isNaN(numValue): ${isNaN(numValue)}`);
+        console.log(`[TreeBranchLeaf API] 🔍 - parseFloat résultat: ${numValue}`);
+        console.log(`[TreeBranchLeaf API] 🔍 - isNaN(numValue): ${isNaN(numValue)}`);
         
         const finalValue = isNaN(numValue) ? 0 : numValue;
-        console.log(`[TreeBranchLeaf API] âœ… Valeur finale: ${finalValue}`);
+        console.log(`[TreeBranchLeaf API] ✅ Valeur finale: ${finalValue}`);
         
         return res.json({
           success: true,
@@ -8268,7 +8272,7 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
       }
       
       if (strategy.strategy === 'NEUTRAL') {
-        console.log(`[TreeBranchLeaf API] âš ï¸ === RETOUR NEUTRE ===`);
+        console.log(`[TreeBranchLeaf API] ⚠️ === RETOUR NEUTRE ===`);
         return res.json({
           success: true,
           result: 0,
@@ -8284,37 +8288,37 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
         });
       }
       
-      // MODE CALCUL AUTOMATIQUE - Le systÃ¨me dÃ©tecte et calcule intelligemment
+      // MODE CALCUL AUTOMATIQUE - Le système détecte et calcule intelligemment
       if (strategy.strategy === 'AUTO_CALCULATION') {
-        console.log(`[TreeBranchLeaf API] ðŸ§® === MODE CALCUL AUTOMATIQUE ===`);
-        console.log(`[TreeBranchLeaf API] ðŸ§® Variables pour calcul:`, resolvedVariables);
+        console.log(`[TreeBranchLeaf API] 🧮 === MODE CALCUL AUTOMATIQUE ===`);
+        console.log(`[TreeBranchLeaf API] 🧮 Variables pour calcul:`, resolvedVariables);
         
-        // Le systÃ¨me continue avec l'Ã©valuation mathÃ©matique de la formule
-        console.log(`[TreeBranchLeaf API] ðŸ§® ProcÃ©dure automatique de calcul activÃ©e`);
+        // Le système continue avec l'évaluation mathématique de la formule
+        console.log(`[TreeBranchLeaf API] 🧮 Procédure automatique de calcul activée`);
       }
 
-      // MODE CALCUL: Ã‰valuation de la formule mathÃ©matique
-  console.log(`[TreeBranchLeaf API] ðŸ§® === MODE CALCUL ===`);
-      console.log(`[TreeBranchLeaf API] ðŸ§® Formule Ã  Ã©valuer avec variables:`, resolvedVariables);
+      // MODE CALCUL: Évaluation de la formule mathématique
+  console.log(`[TreeBranchLeaf API] 🧮 === MODE CALCUL ===`);
+      console.log(`[TreeBranchLeaf API] 🧮 Formule à évaluer avec variables:`, resolvedVariables);
 
-      // ðŸ§® Ã‰VALUATION ULTRA-ROBUSTE PAR PILE - Moteur Intelligent
+      // 🧮 ÉVALUATION ULTRA-ROBUSTE PAR PILE - Moteur Intelligent
       const evaluateTokens = (tokens: FormulaToken[]): number => {
-        console.log(`[TreeBranchLeaf API] ðŸ§® === DÃ‰BUT Ã‰VALUATION COMPLÃˆTE ===`);
-        console.log(`[TreeBranchLeaf API] ðŸ§® Tokens Ã  Ã©valuer:`, tokens);
-        console.log(`[TreeBranchLeaf API] ðŸ§® Variables disponibles:`, resolvedVariables);
+        console.log(`[TreeBranchLeaf API] 🧮 === DÉBUT ÉVALUATION COMPLÈTE ===`);
+        console.log(`[TreeBranchLeaf API] 🧮 Tokens à évaluer:`, tokens);
+        console.log(`[TreeBranchLeaf API] 🧮 Variables disponibles:`, resolvedVariables);
         const stack: number[] = [];
         const operations: string[] = [];
         
-        console.log(`[TreeBranchLeaf API] ðŸ§® DÃ©but Ã©valuation avec ${tokens.length} tokens:`, 
+        console.log(`[TreeBranchLeaf API] 🧮 Début évaluation avec ${tokens.length} tokens:`, 
           tokens.map(t => `${t.type}:${t.value || t.name}`).join(' '));
         
-        // ðŸš€ CONVERSION INFIX â†’ POSTFIX pour expressions mathÃ©matiques correctes
+        // 🚀 CONVERSION INFIX → POSTFIX pour expressions mathématiques correctes
         const convertToPostfix = (tokens: Array<{ type: string; value?: string; name?: string }>) => {
           const outputQueue: Array<{ type: string; value?: string; name?: string }> = [];
           const operatorStack: Array<{ type: string; value?: string; name?: string }> = [];
           const precedence: { [key: string]: number } = { '+': 1, '-': 1, '*': 2, '/': 2 };
           
-          console.log(`[TreeBranchLeaf API] ðŸ”„ Conversion infix â†’ postfix pour:`, tokens.map(t => t.value || t.name).join(' '));
+          console.log(`[TreeBranchLeaf API] 🔄 Conversion infix → postfix pour:`, tokens.map(t => t.value || t.name).join(' '));
           
           for (const token of tokens) {
             if (token.type === 'value' || token.type === 'variable') {
@@ -8336,13 +8340,13 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
             outputQueue.push(operatorStack.pop()!);
           }
           
-          console.log(`[TreeBranchLeaf API] âœ… Postfix converti:`, outputQueue.map(t => t.value || t.variableId || t.name || 'unknown').join(' '));
+          console.log(`[TreeBranchLeaf API] ✅ Postfix converti:`, outputQueue.map(t => t.value || t.variableId || t.name || 'unknown').join(' '));
           return outputQueue;
         };
         
         const postfixTokens = convertToPostfix(tokens);
         
-        // ðŸ§® Ã‰VALUATION des tokens en notation postfix
+        // 🧮 ÉVALUATION des tokens en notation postfix
         for (let i = 0; i < postfixTokens.length; i++) {
           const token = postfixTokens[i];
           if (!token) continue;
@@ -8352,18 +8356,18 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
             const finalValue = isNaN(value) ? 0 : value;
             stack.push(finalValue);
             operations.push(`PUSH(${finalValue})`);
-            console.log(`[TreeBranchLeaf API] ðŸ“Š Valeur: ${finalValue}`);
+            console.log(`[TreeBranchLeaf API] 📊 Valeur: ${finalValue}`);
             
           } else if (token.type === 'variable') {
-            // ðŸš€ DYNAMIQUE: Support des deux formats de tokens (name ET variableId)
+            // 🚀 DYNAMIQUE: Support des deux formats de tokens (name ET variableId)
             const varName = token.variableId || token.name || '';
             const value = resolvedVariables[varName] || 0;
             stack.push(value);
             operations.push(`PUSH(${varName}=${value})`);
-            console.log(`[TreeBranchLeaf API] ðŸ”¢ Variable: ${varName} = ${value} (propriÃ©tÃ©: ${token.variableId ? 'variableId' : 'name'})`);
+            console.log(`[TreeBranchLeaf API] 🔢 Variable: ${varName} = ${value} (propriété: ${token.variableId ? 'variableId' : 'name'})`);
             
           } else if (token.type === 'operator' && ['+', '-', '*', '/'].includes(String(token.value))) {
-            // Ã‰valuation en notation postfix - l'opÃ©rateur vient aprÃ¨s les opÃ©randes
+            // Évaluation en notation postfix - l'opérateur vient après les opérandes
             if (stack.length >= 2) {
               const b = stack.pop()!;
               const a = stack.pop()!;
@@ -8389,27 +8393,27 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
                     operations.push(`${a} / ${b} = ${result}`);
                   } else {
                     result = 0;
-                    operations.push(`${a} / ${b} = 0 (division par zÃ©ro Ã©vitÃ©e)`);
-                    console.log(`[TreeBranchLeaf API] âš ï¸ Division par zÃ©ro Ã©vitÃ©e: ${a} / ${b}`);
+                    operations.push(`${a} / ${b} = 0 (division par zéro évitée)`);
+                    console.log(`[TreeBranchLeaf API] ⚠️ Division par zéro évitée: ${a} / ${b}`);
                   }
                   break;
               }
               
               stack.push(result);
-              console.log(`[TreeBranchLeaf API] âš¡ OpÃ©ration: ${a} ${operator} ${b} = ${result}`);
+              console.log(`[TreeBranchLeaf API] ⚡ Opération: ${a} ${operator} ${b} = ${result}`);
               
             } else {
-              console.log(`[TreeBranchLeaf API] âŒ Pile insuffisante pour l'opÃ©rateur ${token.value}, pile actuelle:`, stack);
+              console.log(`[TreeBranchLeaf API] ❌ Pile insuffisante pour l'opérateur ${token.value}, pile actuelle:`, stack);
               operations.push(`ERREUR: Pile insuffisante pour ${token.value}`);
             }
           } else {
-            console.log(`[TreeBranchLeaf API] âš ï¸ Token ignorÃ©:`, token);
+            console.log(`[TreeBranchLeaf API] ⚠️ Token ignoré:`, token);
           }
         }
         
         const finalResult = stack.length > 0 ? stack[0] : 0;
-        console.log(`[TreeBranchLeaf API] ðŸŽ¯ RÃ©sultat final: ${finalResult}`);
-        console.log(`[TreeBranchLeaf API] ðŸ“ OpÃ©rations effectuÃ©es:`, operations);
+        console.log(`[TreeBranchLeaf API] 🎯 Résultat final: ${finalResult}`);
+        console.log(`[TreeBranchLeaf API] 📝 Opérations effectuées:`, operations);
         
         return finalResult;
       };
@@ -8422,12 +8426,12 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
         result = 0;
       }
 
-      console.log(`[TreeBranchLeaf API] ðŸ§® RÃ©sultat du calcul:`, result);
+      console.log(`[TreeBranchLeaf API] 🧮 Résultat du calcul:`, result);
 
       const responseData = {
         formulaId: formula.id,
         formulaName: formula.name,
-        nodeLabel: formula.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+        nodeLabel: formula.TreeBranchLeafNode?.label || 'Nœud inconnu',
         evaluation: {
           success: result !== null,
           result: result,
@@ -8451,9 +8455,9 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
 
       return res.json(responseData);
     } catch (evaluationError) {
-      console.error(`[TreeBranchLeaf API] Erreur lors de l'Ã©valuation:`, evaluationError);
+      console.error(`[TreeBranchLeaf API] Erreur lors de l'évaluation:`, evaluationError);
       return res.status(500).json({ 
-        error: 'Erreur lors de l\'Ã©valuation de la formule',
+        error: 'Erreur lors de l\'évaluation de la formule',
         details: (evaluationError as Error).message,
         debug: {
           formulaId,
@@ -8469,18 +8473,18 @@ router.post('/evaluate/formula/:formulaId', async (req, res) => {
     }
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error evaluating formula:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'Ã©valuation de la formule' });
+    res.status(500).json({ error: 'Erreur lors de l\'évaluation de la formule' });
   }
 });
 
 // POST /api/treebranchleaf/evaluate/batch
-// Ã‰value plusieurs formules en une seule requÃªte
+// Évalue plusieurs formules en une seule requête
 router.post('/evaluate/batch', async (req, res) => {
   try {
     const { requests = [], nodeIds = [], fieldValues = {} } = req.body;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ§® Ã‰valuation batch - requests: ${requests.length}, nodeIds: ${nodeIds.length}`);
+    console.log(`[TreeBranchLeaf API] 🧮 Évaluation batch - requests: ${requests.length}, nodeIds: ${nodeIds.length}`);
 
     // Support de deux formats :
     // 1. Format classique : { requests: [{ formulaId, fieldValues }] }
@@ -8492,11 +8496,11 @@ router.post('/evaluate/batch', async (req, res) => {
       // Format classique
       finalRequests = requests;
     } else if (Array.isArray(nodeIds) && nodeIds.length > 0) {
-      // Format nodeIds - on doit rÃ©cupÃ©rer les formules des nÅ“uds
-      console.log(`[TreeBranchLeaf API] ðŸ” RÃ©cupÃ©ration formules pour nodeIds:`, nodeIds);
+      // Format nodeIds - on doit récupérer les formules des nœuds
+      console.log(`[TreeBranchLeaf API] 🔍 Récupération formules pour nodeIds:`, nodeIds);
       
       for (const nodeId of nodeIds) {
-        // RÃ©cupÃ©rer les formules du nÅ“ud
+        // Récupérer les formules du nœud
         const nodeFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
           where: { nodeId },
           select: { id: true, name: true }
@@ -8511,11 +8515,11 @@ router.post('/evaluate/batch', async (req, res) => {
         }
       }
       
-      console.log(`[TreeBranchLeaf API] ðŸ” Formules trouvÃ©es: ${finalRequests.length} pour ${nodeIds.length} nÅ“uds`);
+      console.log(`[TreeBranchLeaf API] 🔍 Formules trouvées: ${finalRequests.length} pour ${nodeIds.length} nœuds`);
     }
 
     if (finalRequests.length === 0) {
-      return res.status(400).json({ error: 'Aucune formule Ã  Ã©valuer dans la requÃªte batch' });
+      return res.status(400).json({ error: 'Aucune formule à évaluer dans la requête batch' });
     }
 
     const results = [];
@@ -8533,7 +8537,7 @@ router.post('/evaluate/batch', async (req, res) => {
       }
 
       try {
-        // RÃ©cupÃ©rer la formule
+        // Récupérer la formule
         const formula = await prisma.treeBranchLeafNodeFormula.findUnique({
           where: { id: formulaId },
           include: {
@@ -8552,24 +8556,24 @@ router.post('/evaluate/batch', async (req, res) => {
         if (!formula) {
           results.push({
             formulaId,
-            error: 'Formule non trouvÃ©e',
+            error: 'Formule non trouvée',
             success: false
           });
           continue;
         }
 
-        // VÃ©rifier l'accÃ¨s organisation
+        // Vérifier l'accès organisation
         const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
         if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
           results.push({
             formulaId,
-            error: 'AccÃ¨s refusÃ© Ã  cette formule',
+            error: 'Accès refusé à cette formule',
             success: false
           });
           continue;
         }
 
-        // Ã‰valuer la formule (mÃªme logique que l'endpoint individuel)
+        // Évaluer la formule (même logique que l'endpoint individuel)
         interface FormulaToken {
           type: 'value' | 'variable' | 'operator' | 'lparen' | 'rparen';
           value?: string | number;
@@ -8602,7 +8606,7 @@ router.post('/evaluate/batch', async (req, res) => {
               const value = parseFloat(String(token.value));
               stack.push(isNaN(value) ? 0 : value);
             } else if (token.type === 'variable') {
-              // ðŸš€ DYNAMIQUE: Support des deux formats de tokens (variableId ET name)
+              // 🚀 DYNAMIQUE: Support des deux formats de tokens (variableId ET name)
               const varName = token.variableId || token.name || '';
               const value = resolvedVariables[varName] || 0;
               stack.push(value);
@@ -8638,7 +8642,7 @@ router.post('/evaluate/batch', async (req, res) => {
         results.push({
           formulaId: formula.id,
           formulaName: formula.name,
-          nodeLabel: formula.TreeBranchLeafNode?.label || 'NÅ“ud inconnu',
+          nodeLabel: formula.TreeBranchLeafNode?.label || 'Nœud inconnu',
           success: true,
           evaluation: {
             success: result !== null,
@@ -8656,16 +8660,16 @@ router.post('/evaluate/batch', async (req, res) => {
         });
 
       } catch (evaluationError) {
-        console.error(`[TreeBranchLeaf API] Erreur Ã©valuation batch formule ${formulaId}:`, evaluationError);
+        console.error(`[TreeBranchLeaf API] Erreur évaluation batch formule ${formulaId}:`, evaluationError);
         results.push({
           formulaId,
-          error: `Erreur d'Ã©valuation: ${(evaluationError as Error).message}`,
+          error: `Erreur d'évaluation: ${(evaluationError as Error).message}`,
           success: false
         });
       }
     }
 
-    console.log(`[TreeBranchLeaf API] ðŸ§® Batch terminÃ©: ${results.filter(r => r.success).length}/${results.length} succÃ¨s`);
+    console.log(`[TreeBranchLeaf API] 🧮 Batch terminé: ${results.filter(r => r.success).length}/${results.length} succès`);
 
     return res.json({
       success: true,
@@ -8676,72 +8680,72 @@ router.post('/evaluate/batch', async (req, res) => {
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error in batch evaluation:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'Ã©valuation batch' });
+    res.status(500).json({ error: 'Erreur lors de l\'évaluation batch' });
   }
 });
 
 // =============================================================================
-// ðŸ”§ HELPER FUNCTIONS
+// 🔧 HELPER FUNCTIONS
 // =============================================================================
 
-// Fonction helper pour vÃ©rifier l'accÃ¨s Ã  un nÅ“ud par organisation
+// Fonction helper pour vérifier l'accès à un nœud par organisation
 async function ensureNodeOrgAccess(
   prisma: PrismaClient, 
   nodeId: string, 
   auth: { organizationId: string | null; isSuperAdmin: boolean }
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
   try {
-    // RÃ©cupÃ©rer le node avec son treeId
+    // Récupérer le node avec son treeId
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { treeId: true }
     });
 
     if (!node) {
-      return { ok: false, status: 404, error: 'NÅ“ud non trouvÃ©' };
+      return { ok: false, status: 404, error: 'Nœud non trouvé' };
     }
 
-    // Super admin a accÃ¨s Ã  tout
+    // Super admin a accès à tout
     if (auth.isSuperAdmin) {
       return { ok: true };
     }
 
-    // RÃ©cupÃ©rer l'arbre pour vÃ©rifier l'organizationId
+    // Récupérer l'arbre pour vérifier l'organizationId
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: { id: node.treeId },
       select: { organizationId: true }
     });
 
     if (!tree) {
-      return { ok: false, status: 404, error: 'Arbre non trouvÃ©' };
+      return { ok: false, status: 404, error: 'Arbre non trouvé' };
     }
 
-    // VÃ©rifier correspondance organisation
+    // Vérifier correspondance organisation
     if (tree.organizationId && tree.organizationId !== auth.organizationId) {
-      return { ok: false, status: 403, error: 'AccÃ¨s refusÃ©' };
+      return { ok: false, status: 403, error: 'Accès refusé' };
     }
 
     return { ok: true };
   } catch (error) {
     console.error('Error checking node org access:', error);
-    return { ok: false, status: 500, error: 'Erreur de vÃ©rification d\'accÃ¨s' };
+    return { ok: false, status: 500, error: 'Erreur de vérification d\'accès' };
   }
 }
 
 // =============================================================================
-// ðŸ†” ENDPOINTS DIRECTS PAR ID - Pour rÃ©cupÃ©ration dynamique
+// 🆔 ENDPOINTS DIRECTS PAR ID - Pour récupération dynamique
 // =============================================================================
 
 // GET /api/treebranchleaf/conditions/:conditionId
-// RÃ©cupÃ¨re une condition spÃ©cifique par son ID
+// Récupère une condition spécifique par son ID
 router.get('/conditions/:conditionId', async (req, res) => {
   try {
     const { conditionId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ” GET condition par ID: ${conditionId}`);
+    console.log(`[TreeBranchLeaf API] 🔍 GET condition par ID: ${conditionId}`);
 
-    // RÃ©cupÃ©rer la condition avec informations d'organisation
+    // Récupérer la condition avec informations d'organisation
     const condition = await prisma.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
@@ -8758,35 +8762,35 @@ router.get('/conditions/:conditionId', async (req, res) => {
     });
 
     if (!condition) {
-      console.log(`[TreeBranchLeaf API] âŒ Condition ${conditionId} non trouvÃ©e`);
-      return res.status(404).json({ error: 'Condition non trouvÃ©e' });
+      console.log(`[TreeBranchLeaf API] ❌ Condition ${conditionId} non trouvée`);
+      return res.status(404).json({ error: 'Condition non trouvée' });
     }
 
-    // VÃ©rifier l'accÃ¨s organisation
+    // Vérifier l'accès organisation
     const nodeOrg = condition.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] âŒ AccÃ¨s refusÃ© Ã  condition ${conditionId} (org: ${nodeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette condition' });
+      console.log(`[TreeBranchLeaf API] ❌ Accès refusé à condition ${conditionId} (org: ${nodeOrg} vs ${organizationId})`);
+      return res.status(403).json({ error: 'Accès refusé à cette condition' });
     }
 
-    console.log(`[TreeBranchLeaf API] âœ… Condition ${conditionId} trouvÃ©e et autorisÃ©e`);
+    console.log(`[TreeBranchLeaf API] ✅ Condition ${conditionId} trouvée et autorisée`);
     return res.json(condition);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting condition by ID:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la condition' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la condition' });
   }
 });
 
 // GET /api/treebranchleaf/formulas/:formulaId
-// RÃ©cupÃ¨re une formule spÃ©cifique par son ID
+// Récupère une formule spécifique par son ID
 router.get('/formulas/:formulaId', async (req, res) => {
   try {
     const { formulaId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ” GET formule par ID: ${formulaId}`);
+    console.log(`[TreeBranchLeaf API] 🔍 GET formule par ID: ${formulaId}`);
 
-    // RÃ©cupÃ©rer la formule avec informations d'organisation
+    // Récupérer la formule avec informations d'organisation
     const formula = await prisma.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
@@ -8803,27 +8807,27 @@ router.get('/formulas/:formulaId', async (req, res) => {
     });
 
     if (!formula) {
-      console.log(`[TreeBranchLeaf API] âŒ Formule ${formulaId} non trouvÃ©e`);
-      return res.status(404).json({ error: 'Formule non trouvÃ©e' });
+      console.log(`[TreeBranchLeaf API] ❌ Formule ${formulaId} non trouvée`);
+      return res.status(404).json({ error: 'Formule non trouvée' });
     }
 
-    // VÃ©rifier l'accÃ¨s organisation
+    // Vérifier l'accès organisation
     const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && nodeOrg && nodeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] âŒ AccÃ¨s refusÃ© Ã  formule ${formulaId} (org: ${nodeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette formule' });
+      console.log(`[TreeBranchLeaf API] ❌ Accès refusé à formule ${formulaId} (org: ${nodeOrg} vs ${organizationId})`);
+      return res.status(403).json({ error: 'Accès refusé à cette formule' });
     }
 
-    console.log(`[TreeBranchLeaf API] âœ… Formule ${formulaId} trouvÃ©e et autorisÃ©e`);
+    console.log(`[TreeBranchLeaf API] ✅ Formule ${formulaId} trouvée et autorisée`);
     return res.json(formula);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting formula by ID:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la formule' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la formule' });
   }
 });
 
 // =============================================================================
-// ðŸ“‹ SUBMISSIONS - Gestion des soumissions TreeBranchLeaf
+// 📋 SUBMISSIONS - Gestion des soumissions TreeBranchLeaf
 // =============================================================================
 
 // GET /api/treebranchleaf/submissions - Lister les soumissions avec filtres
@@ -8832,7 +8836,7 @@ router.get('/submissions', async (req, res) => {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { treeId, leadId, userId } = req.query;
 
-    console.log(`[TreeBranchLeaf API] ðŸ“‹ GET submissions avec filtres:`, { treeId, leadId, userId });
+    console.log(`[TreeBranchLeaf API] 📋 GET submissions avec filtres:`, { treeId, leadId, userId });
 
     // Construire les conditions de filtrage
     interface SubmissionWhereClause {
@@ -8899,22 +8903,22 @@ router.get('/submissions', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log(`[TreeBranchLeaf API] âœ… ${submissions.length} soumissions trouvÃ©es`);
+    console.log(`[TreeBranchLeaf API] ✅ ${submissions.length} soumissions trouvées`);
     res.json(submissions);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching submissions:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des soumissions' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des soumissions' });
   }
 });
 
-// GET /submissions/by-leads - RÃ©cupÃ©rer les devis groupÃ©s par lead
+// GET /submissions/by-leads - Récupérer les devis groupés par lead
 router.get('/submissions/by-leads', async (req, res) => {
   try {
     const authCtx = getAuthCtx(req);
     const { organizationId, isSuperAdmin } = authCtx;
     const { treeId, search, leadId } = req.query;
 
-    console.log(`[TreeBranchLeaf API] ðŸ“‹ GET devis par leads - TreeId: ${treeId}, Search: ${search}, LeadId: ${leadId}`);
+    console.log(`[TreeBranchLeaf API] 📋 GET devis par leads - TreeId: ${treeId}, Search: ${search}, LeadId: ${leadId}`);
 
     // Construire les filtres pour les soumissions
     const submissionWhere: {
@@ -8958,7 +8962,7 @@ router.get('/submissions/by-leads', async (req, res) => {
       ];
     }
 
-    // RÃ©cupÃ©rer les leads avec leurs devis
+    // Récupérer les leads avec leurs devis
     const leadsWithSubmissions = await prisma.lead.findMany({
       where: {
         ...leadWhere,
@@ -8988,9 +8992,9 @@ router.get('/submissions/by-leads', async (req, res) => {
       ]
     });
 
-    console.log(`[TreeBranchLeaf API] ðŸ“Š TrouvÃ© ${leadsWithSubmissions.length} leads avec devis`);
+    console.log(`[TreeBranchLeaf API] 📊 Trouvé ${leadsWithSubmissions.length} leads avec devis`);
 
-    // Formater les donnÃ©es pour l'interface
+    // Formater les données pour l'interface
     const formattedData = leadsWithSubmissions.map(lead => ({
       id: lead.id,
       firstName: lead.firstName,
@@ -9011,17 +9015,17 @@ router.get('/submissions/by-leads', async (req, res) => {
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error getting submissions by leads:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des devis par leads' });
+    res.status(500).json({ error: 'Erreur lors de la récupération des devis par leads' });
   }
 });
 
-// GET /api/treebranchleaf/submissions/:id - RÃ©cupÃ©rer une soumission spÃ©cifique
+// GET /api/treebranchleaf/submissions/:id - Récupérer une soumission spécifique
 router.get('/submissions/:id', async (req, res) => {
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { id } = req.params;
 
-    console.log(`[TreeBranchLeaf API] ðŸ“‹ GET submission par ID: ${id}`);
+    console.log(`[TreeBranchLeaf API] 📋 GET submission par ID: ${id}`);
 
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
@@ -9065,34 +9069,34 @@ router.get('/submissions/:id', async (req, res) => {
     });
 
     if (!submission) {
-      console.log(`[TreeBranchLeaf API] âŒ Soumission ${id} non trouvÃ©e`);
-      return res.status(404).json({ error: 'Soumission non trouvÃ©e' });
+      console.log(`[TreeBranchLeaf API] ❌ Soumission ${id} non trouvée`);
+      return res.status(404).json({ error: 'Soumission non trouvée' });
     }
 
-    // VÃ©rifier l'accÃ¨s organisation
+    // Vérifier l'accès organisation
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && treeOrg && treeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] âŒ AccÃ¨s refusÃ© Ã  soumission ${id} (org: ${treeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette soumission' });
+      console.log(`[TreeBranchLeaf API] ❌ Accès refusé à soumission ${id} (org: ${treeOrg} vs ${organizationId})`);
+      return res.status(403).json({ error: 'Accès refusé à cette soumission' });
     }
 
-    console.log(`[TreeBranchLeaf API] âœ… Soumission ${id} trouvÃ©e et autorisÃ©e`);
+    console.log(`[TreeBranchLeaf API] ✅ Soumission ${id} trouvée et autorisée`);
     res.json(submission);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching submission:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la soumission' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la soumission' });
   }
 });
 
-// ðŸ—‚ï¸ GET /api/treebranchleaf/submissions/:id/fields - RÃ©cupÃ©rer TOUS les champs d'une soumission
+// 🗂️ GET /api/treebranchleaf/submissions/:id/fields - Récupérer TOUS les champs d'une soumission
 router.get('/submissions/:id/fields', async (req, res) => {
   try {
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
     const { id } = req.params;
 
-    console.log(`[TreeBranchLeaf API] ðŸ—‚ï¸ GET /submissions/${id}/fields - RÃ©cupÃ©ration de tous les champs`);
+    console.log(`[TreeBranchLeaf API] 🗂️ GET /submissions/${id}/fields - Récupération de tous les champs`);
 
-    // Charger la soumission avec contrÃ´le d'accÃ¨s
+    // Charger la soumission avec contrôle d'accès
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { 
@@ -9115,15 +9119,15 @@ router.get('/submissions/:id/fields', async (req, res) => {
     });
 
     if (!submission) {
-      return res.status(404).json({ error: 'Soumission non trouvÃ©e' });
+      return res.status(404).json({ error: 'Soumission non trouvée' });
     }
 
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ©' });
+      return res.status(403).json({ error: 'Accès refusé' });
     }
 
-    // RÃ©cupÃ©rer toutes les donnÃ©es de la soumission avec labels des nÅ“uds
+    // Récupérer toutes les données de la soumission avec labels des nœuds
     const dataRows = await prisma.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
@@ -9141,7 +9145,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
       orderBy: { createdAt: 'asc' }
     });
 
-    // Construire un objet avec tous les champs mappÃ©s
+    // Construire un objet avec tous les champs mappés
     const fieldsMap: Record<string, {
       nodeId: string;
       label: string;
@@ -9157,7 +9161,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
       const node = row.TreeBranchLeafNode;
       if (!node) continue;
 
-      // DÃ©terminer la clÃ© (utiliser name si disponible, sinon label, sinon nodeId)
+      // Déterminer la clé (utiliser name si disponible, sinon label, sinon nodeId)
       const key = node.name || node.label || node.id;
 
       fieldsMap[key] = {
@@ -9167,12 +9171,12 @@ router.get('/submissions/:id/fields', async (req, res) => {
         type: node.type || 'unknown',
         fieldType: node.fieldType,
         fieldSubType: node.fieldSubType,
-        value: row.value, // Valeur parsÃ©e (JSON)
+        value: row.value, // Valeur parsée (JSON)
         rawValue: row.rawValue // Valeur brute (string)
       };
     }
 
-    // Retourner les donnÃ©es structurÃ©es
+    // Retourner les données structurées
     const response = {
       submissionId: submission.id,
       treeId: submission.treeId,
@@ -9204,36 +9208,36 @@ router.get('/submissions/:id/fields', async (req, res) => {
       totalFields: Object.keys(fieldsMap).length
     };
 
-    console.log(`[TreeBranchLeaf API] âœ… ${response.totalFields} champs rÃ©cupÃ©rÃ©s pour soumission ${id}`);
+    console.log(`[TreeBranchLeaf API] ✅ ${response.totalFields} champs récupérés pour soumission ${id}`);
     res.json(response);
 
   } catch (error) {
-    console.error('[TreeBranchLeaf API] âŒ Erreur GET /submissions/:id/fields:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des champs' });
+    console.error('[TreeBranchLeaf API] ❌ Erreur GET /submissions/:id/fields:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des champs' });
   }
 });
 
-// GET /api/treebranchleaf/submissions/:id/summary - RÃ©sumÃ© des donnÃ©es d'une soumission
+// GET /api/treebranchleaf/submissions/:id/summary - Résumé des données d'une soumission
 router.get('/submissions/:id/summary', async (req, res) => {
   try {
     const { id } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // Charger la soumission pour contrÃ´le d'accÃ¨s
+    // Charger la soumission pour contrôle d'accès
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
 
     if (!submission) {
-      return res.status(404).json({ error: 'Soumission non trouvÃ©e' });
+      return res.status(404).json({ error: 'Soumission non trouvée' });
     }
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette soumission' });
+      return res.status(403).json({ error: 'Accès refusé à cette soumission' });
     }
 
-    // RÃ©cupÃ©rer toutes les lignes de donnÃ©es avec type du nÅ“ud
+    // Récupérer toutes les lignes de données avec type du nœud
     const dataRows = await prisma.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
@@ -9258,7 +9262,7 @@ router.get('/submissions/:id/summary', async (req, res) => {
 
     const variablesTotal = dataRows.filter(r => r.isVariable === true).length;
 
-    // Ratio complÃ©tion simple
+    // Ratio complétion simple
     const completion = total > 0 ? Math.round((filled / total) * 100) : 0;
 
     return res.json({
@@ -9276,18 +9280,18 @@ router.get('/submissions/:id/summary', async (req, res) => {
       completion
     });
   } catch (error) {
-    console.error('[TreeBranchLeaf API] âŒ Erreur GET /submissions/:id/summary:', error);
-    return res.status(500).json({ error: 'Erreur lors du calcul du rÃ©sumÃ© de la soumission' });
+    console.error('[TreeBranchLeaf API] ❌ Erreur GET /submissions/:id/summary:', error);
+    return res.status(500).json({ error: 'Erreur lors du calcul du résumé de la soumission' });
   }
 });
 
-// GET /api/treebranchleaf/submissions/:id/operations - Timeline dÃ©taillÃ©e des opÃ©rations/data
+// GET /api/treebranchleaf/submissions/:id/operations - Timeline détaillée des opérations/data
 router.get('/submissions/:id/operations', async (req, res) => {
   try {
     const { id } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // Charger la soumission pour contrÃ´le d'accÃ¨s
+    // Charger la soumission pour contrôle d'accès
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
       select: { 
@@ -9296,13 +9300,13 @@ router.get('/submissions/:id/operations', async (req, res) => {
         TreeBranchLeafTree: { select: { id: true, organizationId: true } } 
       }
     });
-    if (!submission) return res.status(404).json({ error: 'Soumission non trouvÃ©e' });
+    if (!submission) return res.status(404).json({ error: 'Soumission non trouvée' });
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette soumission' });
+      return res.status(403).json({ error: 'Accès refusé à cette soumission' });
     }
 
-    // RÃ©cupÃ©rer toutes les data rows enrichies
+    // Récupérer toutes les data rows enrichies
     const rows = await prisma.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
@@ -9315,9 +9319,9 @@ router.get('/submissions/:id/operations', async (req, res) => {
       ]
     });
 
-    // ðŸŽ¯ AJOUT CRUCIAL: Si pas de donnÃ©es de soumission, rÃ©cupÃ©rer les variables configurÃ©es pour l'arbre
+    // 🎯 AJOUT CRUCIAL: Si pas de données de soumission, récupérer les variables configurées pour l'arbre
     if (rows.length === 0) {
-      console.log(`[TBL Operations] Aucune donnÃ©e de soumission trouvÃ©e pour ${id}, rÃ©cupÃ©ration des variables configurÃ©es...`);
+      console.log(`[TBL Operations] Aucune donnée de soumission trouvée pour ${id}, récupération des variables configurées...`);
       
       if (submission?.treeId) {
         const treeVariables = await prisma.treeBranchLeafNodeVariable.findMany({
@@ -9335,7 +9339,7 @@ router.get('/submissions/:id/operations', async (req, res) => {
           }
         });
         
-        // CrÃ©er des pseudo-rows pour les variables configurÃ©es
+        // Créer des pseudo-rows pour les variables configurées
         const pseudoRows = treeVariables.map(v => ({
           nodeId: v.nodeId,
           submissionId: id,
@@ -9345,8 +9349,8 @@ router.get('/submissions/:id/operations', async (req, res) => {
         variableKey: v.exposedKey,
         variableUnit: v.unit,
         sourceRef: v.sourceRef,
-        // ðŸŽ¯ CORRECTION: Utiliser fixedValue ou defaultValue comme valeur
-        // ðŸš§ TEMPORAIRE: Valeurs de test hardcodÃ©es pour validation
+        // 🎯 CORRECTION: Utiliser fixedValue ou defaultValue comme valeur
+        // 🚧 TEMPORAIRE: Valeurs de test hardcodées pour validation
         value: getTestValueForNode(v.nodeId, v.fixedValue, v.defaultValue),
         operationSource: null,
         operationDetail: null,
@@ -9356,7 +9360,7 @@ router.get('/submissions/:id/operations', async (req, res) => {
         TreeBranchLeafNode: v.TreeBranchLeafNode
       }));
       
-      console.log(`[TBL Operations] ${pseudoRows.length} variables configurÃ©es trouvÃ©es`);
+      console.log(`[TBL Operations] ${pseudoRows.length} variables configurées trouvées`);
       console.log(`[TBL Operations] Variables avec valeurs:`, pseudoRows.map(r => ({ nodeId: r.nodeId, label: r.fieldLabel, value: r.value })));
       console.log(`[TBL Operations] Variables brutes:`, treeVariables.map(v => ({ nodeId: v.nodeId, displayName: v.displayName, fixedValue: v.fixedValue, defaultValue: v.defaultValue })));
       rows.push(...pseudoRows);
@@ -9371,10 +9375,10 @@ router.get('/submissions/:id/operations', async (req, res) => {
       return 'neutral';
     };
 
-    // ðŸŽ¯ CORRECTION MAJEURE: RÃ©cupÃ©rer TOUS les labels de l'arbre d'abord
+    // 🎯 CORRECTION MAJEURE: Récupérer TOUS les labels de l'arbre d'abord
     const treeId = submission?.treeId;
     if (!treeId) {
-      return res.status(404).json({ error: 'Soumission non trouvÃ©e' });
+      return res.status(404).json({ error: 'Soumission non trouvée' });
     }
     
     const allTreeNodes = await prisma.treeBranchLeafNode.findMany({
@@ -9382,12 +9386,12 @@ router.get('/submissions/:id/operations', async (req, res) => {
       select: { id: true, label: true }
     });
     
-    // PrÃ©parer des maps pour labels et valeurs de la soumission
+    // Préparer des maps pour labels et valeurs de la soumission
     // Commencer avec TOUS les labels de l'arbre
     const labelMap: LabelMap = new Map(allTreeNodes.map(n => [n.id, n.label || null]));
     const valuesMap: ValuesMap = new Map(rows.map(r => [r.nodeId, r.value == null ? null : String(r.value)]));
     
-    // ComplÃ©ter avec les labels spÃ©cifiques de la soumission si prÃ©sents
+    // Compléter avec les labels spécifiques de la soumission si présents
     for (const r of rows) {
       const nodeLabel = r.TreeBranchLeafNode?.label || r.fieldLabel;
       if (nodeLabel && nodeLabel !== labelMap.get(r.nodeId)) {
@@ -9395,7 +9399,7 @@ router.get('/submissions/:id/operations', async (req, res) => {
       }
     }
 
-    // Helper: assurer que labelMap contient les labels pour une liste d'IDs de nÅ“uds
+    // Helper: assurer que labelMap contient les labels pour une liste d'IDs de nœuds
     const ensureNodeLabels = async (ids: Set<string> | string[]) => {
       const list = Array.isArray(ids) ? ids : Array.from(ids);
       const missing = list.filter(id => !!id && !labelMap.has(id));
@@ -9404,10 +9408,10 @@ router.get('/submissions/:id/operations', async (req, res) => {
       for (const n of extra) labelMap.set(n.id, n.label || null);
     };
 
-    // Helper de normalisation de l'opÃ©ration dÃ©taillÃ©e par ligne
+    // Helper de normalisation de l'opération détaillée par ligne
     const resolveDetailForRow = async (r: typeof rows[number]) => {
       const det = r.operationDetail as unknown as { type?: string; conditionSet?: unknown; tokens?: unknown; id?: string; name?: string; nodeId?: string } | null;
-      // Si c'est un objet avec type mais payload potentiellement incomplet (ou stringifiÃ© depuis .NET), recharger depuis la sourceRef
+      // Si c'est un objet avec type mais payload potentiellement incomplet (ou stringifié depuis .NET), recharger depuis la sourceRef
       if (det && det.type) {
         const parsed = parseSourceRef(r.sourceRef);
         if (parsed?.type === 'condition') {
@@ -9450,14 +9454,14 @@ router.get('/submissions/:id/operations', async (req, res) => {
       const response = val;
 
       const source: 'formula' | 'condition' | 'table' | 'neutral' = r.isVariable ? inferSource(r.sourceRef) : 'neutral';
-      // PrÃ©fÃ©rer l'objet dÃ©taillÃ© stockÃ© si prÃ©sent, sinon fallback
+      // Préférer l'objet détaillé stocké si présent, sinon fallback
       const operationDetail = (r.operationDetail as unknown) ?? (r.isVariable ? (r.sourceRef || undefined) : (nodeLabel || undefined));
-      const labelForResult = displayName || nodeLabel || labelMap.get(r.nodeId) || r.TreeBranchLeafNode?.id || 'â€”';
+      const labelForResult = displayName || nodeLabel || labelMap.get(r.nodeId) || r.TreeBranchLeafNode?.id || '—';
       const operationResult = unit && response ? `${labelForResult}: ${response} ${unit}` : `${labelForResult}: ${response ?? ''}`;
 
-      // RÃ©soudre lâ€™objet dÃ©taillÃ© si absent/incomplet
+      // Résoudre l’objet détaillé si absent/incomplet
       const detNormalized = await resolveDetailForRow(r);
-      // RÃ©solution dÃ©taillÃ©e pour lâ€™affichage (labels + valeurs)
+      // Résolution détaillée pour l’affichage (labels + valeurs)
   let operationDetailResolved: Prisma.InputJsonValue | undefined = undefined;
   let operationResultResolved: Prisma.InputJsonValue | undefined = undefined;
   let operationHumanText: string | undefined = undefined;
@@ -9468,7 +9472,7 @@ router.get('/submissions/:id/operations', async (req, res) => {
           const refIds = extractNodeIdsFromConditionSet(set);
           await ensureNodeLabels(refIds);
           const _resolvedRefs = buildResolvedRefs(refIds, labelMap, valuesMap);
-          // ðŸ§  AmÃ©lioration: certaines actions rÃ©fÃ©rencent node-formula:<id> â†’ retrouver le label du nÅ“ud de cette formule
+          // 🧠 Amélioration: certaines actions référencent node-formula:<id> → retrouver le label du nœud de cette formule
           const extendLabelsWithFormulas = async (conditionSet: unknown, baseLabels: LabelMap): Promise<LabelMap> => {
             const extended = new Map(baseLabels);
             try {
@@ -9490,7 +9494,7 @@ router.get('/submissions/:id/operations', async (req, res) => {
             return extended;
           };
           const labelsForText = await extendLabelsWithFormulas(set, labelMap);
-          // Essayer aussi de rÃ©soudre les actions -> labels
+          // Essayer aussi de résoudre les actions -> labels
           const setObj = (set && typeof set === 'object') ? (set as Record<string, unknown>) : {};
           const branches = Array.isArray(setObj.branches) ? (setObj.branches as unknown[]) : [];
           const _branchesResolved = branches.map(b => {
@@ -9502,10 +9506,10 @@ router.get('/submissions/:id/operations', async (req, res) => {
               actions: resolveActionsLabels(actions, labelsForText)
             };
           });
-          // ðŸš« DÃ©sactivÃ©: buildConditionExpressionReadable - tout passe par TBL Prisma !
-          operationHumanText = 'ðŸ”„ Condition Ã©valuÃ©e via TBL Prisma (ligne 4755)';
+          // 🚫 Désactivé: buildConditionExpressionReadable - tout passe par TBL Prisma !
+          operationHumanText = '🔄 Condition évaluée via TBL Prisma (ligne 4755)';
           
-          // ðŸŽ¯ NOUVELLE LOGIQUE: Utiliser buildDetailAndResultForOperation pour persister en base
+          // 🎯 NOUVELLE LOGIQUE: Utiliser buildDetailAndResultForOperation pour persister en base
           const { detail, result } = buildDetailAndResultForOperation(det, operationHumanText, unit, labelForResult, response);
           operationDetailResolved = detail;
           operationResultResolved = result;
@@ -9518,12 +9522,12 @@ router.get('/submissions/:id/operations', async (req, res) => {
             operationHumanText = expr;
           }
           
-          // ðŸŽ¯ NOUVELLE LOGIQUE: Utiliser buildDetailAndResultForOperation pour persister en base
+          // 🎯 NOUVELLE LOGIQUE: Utiliser buildDetailAndResultForOperation pour persister en base
           const { detail, result } = buildDetailAndResultForOperation(det, operationHumanText, unit, labelForResult, response);
           operationDetailResolved = detail;
           operationResultResolved = result;
         } else if (det.type === 'table') {
-          // Tables: on peut juste renvoyer la structure et les ids concernÃ©s si prÃ©sents dans type/description
+          // Tables: on peut juste renvoyer la structure et les ids concernés si présents dans type/description
           const refIds = new Set<string>();
           const str = JSON.stringify(det);
           if (str) {
@@ -9538,7 +9542,7 @@ router.get('/submissions/:id/operations', async (req, res) => {
             operationHumanText = expr ? `${expr} (=) ${labelForResult} (${response ?? ''}${unitSuffix})` : `${labelForResult} (${response ?? ''}${unitSuffix})`;
           }
           
-          // ðŸŽ¯ NOUVELLE LOGIQUE: Utiliser buildDetailAndResultForOperation pour persister en base
+          // 🎯 NOUVELLE LOGIQUE: Utiliser buildDetailAndResultForOperation pour persister en base
           const { detail, result } = buildDetailAndResultForOperation(det, operationHumanText, unit, labelForResult, response);
           operationDetailResolved = detail;
           operationResultResolved = result;
@@ -9556,7 +9560,7 @@ router.get('/submissions/:id/operations', async (req, res) => {
     operationSource: source,
     operationDetail: operationDetailResolved || detNormalized || operationDetail,
   operationResult: operationResultResolved || operationResult,
-  // Pour les conditions, operationHumanText contient dÃ©jÃ  l'expression complÃ¨te souhaitÃ©e
+  // Pour les conditions, operationHumanText contient déjà l'expression complète souhaitée
   operationResultText: operationHumanText ? operationHumanText : null,
         operationResultResolved,
         operationDetailResolved,
@@ -9567,8 +9571,8 @@ router.get('/submissions/:id/operations', async (req, res) => {
 
     return res.json({ submissionId: id, items });
   } catch (error) {
-    console.error('[TreeBranchLeaf API] âŒ Erreur GET /submissions/:id/operations:', error);
-    return res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration des opÃ©rations' });
+    console.error('[TreeBranchLeaf API] ❌ Erreur GET /submissions/:id/operations:', error);
+    return res.status(500).json({ error: 'Erreur lors de la récupération des opérations' });
   }
 });
 
@@ -9578,19 +9582,19 @@ router.post('/submissions/:id/repair-ops', async (req, res) => {
     const { id } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // Charger la soumission pour contrÃ´le d'accÃ¨s
+    // Charger la soumission pour contrôle d'accès
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!submission) return res.status(404).json({ error: 'Soumission non trouvÃ©e' });
+    if (!submission) return res.status(404).json({ error: 'Soumission non trouvée' });
     const treeId = submission.treeId;
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette soumission' });
+      return res.status(403).json({ error: 'Accès refusé à cette soumission' });
     }
 
-    // PrÃ©parer les mÃ©tadonnÃ©es nÃ©cessaires
+    // Préparer les métadonnées nécessaires
     const nodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const labelMap = new Map(nodes.map(n => [n.id, n.label]));
     const variables = await prisma.treeBranchLeafNodeVariable.findMany({
@@ -9620,7 +9624,7 @@ router.post('/submissions/:id/repair-ops', async (req, res) => {
       where: { submissionId: id },
       select: { nodeId: true, isVariable: true, value: true, sourceRef: true }
     });
-    // Carte de toutes les valeurs prÃ©sentes dans la soumission (pour rÃ©solution des refs)
+    // Carte de toutes les valeurs présentes dans la soumission (pour résolution des refs)
     const submissionValues = await prisma.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       select: { nodeId: true, value: true }
@@ -9634,9 +9638,9 @@ router.post('/submissions/:id/repair-ops', async (req, res) => {
       const valueStr = row.value == null ? null : String(row.value);
       const opSrc = isVar ? inferSource(meta?.sourceRef || null) : 'neutral';
       const display = isVar ? (meta?.displayName || label || row.nodeId) : (label || row.nodeId);
-      // Par dÃ©faut, rÃ©sultat lisible
+      // Par défaut, résultat lisible
       let opRes: Prisma.InputJsonValue = meta?.unit && valueStr ? `${display}: ${valueStr} ${meta.unit}` : `${display}: ${valueStr ?? ''}`;
-      // RÃ©soudre operationDetail si variable et sourceRef
+      // Résoudre operationDetail si variable et sourceRef
       let opDetail: Prisma.InputJsonValue | undefined = undefined;
       const parsed = parseSourceRef(row.sourceRef);
       if (isVar && parsed) {
@@ -9661,7 +9665,7 @@ router.post('/submissions/:id/repair-ops', async (req, res) => {
         where: { submissionId: id, nodeId: row.nodeId },
         data: {
           operationSource: opSrc,
-          // Fallback prioritaire: row.sourceRef (prÃ©sent cÃ´tÃ© submissionData), puis meta.sourceRef, sinon label
+          // Fallback prioritaire: row.sourceRef (présent côté submissionData), puis meta.sourceRef, sinon label
           operationDetail: isVar ? (opDetail ?? (row.sourceRef || meta?.sourceRef || undefined)) : (label || undefined),
           operationResult: opRes,
           lastResolved: now
@@ -9671,18 +9675,18 @@ router.post('/submissions/:id/repair-ops', async (req, res) => {
 
     return res.json({ success: true, updated: rows.length });
   } catch (error) {
-    console.error('[TreeBranchLeaf API] âŒ Erreur POST /submissions/:id/repair-ops:', error);
-    return res.status(500).json({ error: 'Erreur lors du backfill des opÃ©rations' });
+    console.error('[TreeBranchLeaf API] ❌ Erreur POST /submissions/:id/repair-ops:', error);
+    return res.status(500).json({ error: 'Erreur lors du backfill des opérations' });
   }
 });
 
-// POST /api/treebranchleaf/submissions - CrÃ©er une nouvelle soumission
+// POST /api/treebranchleaf/submissions - Créer une nouvelle soumission
 router.post('/submissions', async (req, res) => {
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
   const userId = (req.user as { id?: string })?.id;
   const { treeId, leadId, name, data } = req.body as { treeId?: string; leadId?: string | null; name?: string; data?: unknown };
 
-  // Normalisation des types attendus cÃ´tÃ© DB (ids sous forme de chaÃ®nes)
+  // Normalisation des types attendus côté DB (ids sous forme de chaînes)
   const normalizedTreeId: string = treeId != null ? String(treeId) : '';
   const normalizedLeadId: string | null = leadId != null && leadId !== '' ? String(leadId) : null;
 
@@ -9690,7 +9694,7 @@ router.post('/submissions', async (req, res) => {
     const approxBytes = (() => {
       try { return JSON.stringify(data)?.length ?? 0; } catch { return 0; }
     })();
-    console.log(`[TreeBranchLeaf API] ðŸ“‹ POST nouvelle soumission (entrÃ©e)`, {
+    console.log(`[TreeBranchLeaf API] 📋 POST nouvelle soumission (entrée)`, {
       treeId: normalizedTreeId,
       leadId: normalizedLeadId,
       providedName: name,
@@ -9701,20 +9705,20 @@ router.post('/submissions', async (req, res) => {
       isSuperAdmin
     });
 
-    // Validation des paramÃ¨tres requis
+    // Validation des paramètres requis
     if (!normalizedTreeId) {
       return res.status(400).json({ error: 'treeId est requis' });
     }
-    // L'utilisateur peut Ãªtre mockÃ© et ne pas exister en DB; on ne bloque pas la crÃ©ation
+    // L'utilisateur peut être mocké et ne pas exister en DB; on ne bloque pas la création
     if (!userId) {
-      console.warn('[TreeBranchLeaf API] âš ï¸ Aucun userId dans la requÃªte (mode anonyme/mock) â€“ poursuite sans liaison utilisateur');
+      console.warn('[TreeBranchLeaf API] ⚠️ Aucun userId dans la requête (mode anonyme/mock) – poursuite sans liaison utilisateur');
     }
-    // LeadId est optionnel - peut Ãªtre undefined pour des devis sans lead associÃ©
+    // LeadId est optionnel - peut être undefined pour des devis sans lead associé
     if (!name || typeof name !== 'string') {
-      return res.status(400).json({ error: 'name est requis et doit Ãªtre une chaÃ®ne' });
+      return res.status(400).json({ error: 'name est requis et doit être une chaîne' });
     }
 
-    // VÃ©rifier que l'arbre existe et appartient Ã  l'organisation
+    // Vérifier que l'arbre existe et appartient à l'organisation
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: { 
         id: normalizedTreeId,
@@ -9723,11 +9727,11 @@ router.post('/submissions', async (req, res) => {
     });
 
     if (!tree) {
-      console.log(`[TreeBranchLeaf API] âŒ Arbre ${treeId} non trouvÃ© ou accÃ¨s refusÃ©`);
-      return res.status(404).json({ error: 'Arbre non trouvÃ© ou accÃ¨s refusÃ©' });
+      console.log(`[TreeBranchLeaf API] ❌ Arbre ${treeId} non trouvé ou accès refusé`);
+      return res.status(404).json({ error: 'Arbre non trouvé ou accès refusé' });
     }
 
-    // VÃ©rifier que le lead existe et appartient Ã  l'organisation (seulement si leadId fourni)
+    // Vérifier que le lead existe et appartient à l'organisation (seulement si leadId fourni)
     let lead = null;
     if (normalizedLeadId) {
       lead = await prisma.lead.findFirst({
@@ -9738,20 +9742,20 @@ router.post('/submissions', async (req, res) => {
       });
 
       if (!lead) {
-        console.log(`[TreeBranchLeaf API] âŒ Lead ${leadId} non trouvÃ© ou accÃ¨s refusÃ©`);
-        return res.status(404).json({ error: 'Lead non trouvÃ© ou accÃ¨s refusÃ©' });
+        console.log(`[TreeBranchLeaf API] ❌ Lead ${leadId} non trouvé ou accès refusé`);
+        return res.status(404).json({ error: 'Lead non trouvé ou accès refusé' });
       }
     } else {
-      console.log(`[TreeBranchLeaf API] â„¹ï¸ CrÃ©ation de soumission sans lead associÃ©`);
+      console.log(`[TreeBranchLeaf API] ℹ️ Création de soumission sans lead associé`);
     }
 
-    // RÃ©cupÃ©rer les nÅ“uds valides pour ce tree pour valider les nodeIds
+    // Récupérer les nœuds valides pour ce tree pour valider les nodeIds
     const validNodes = await prisma.treeBranchLeafNode.findMany({
       where: { treeId: normalizedTreeId },
       select: { id: true }
     });
     const validNodeIds = new Set(validNodes.map(node => node.id));
-    console.log(`[TreeBranchLeaf API] ðŸ“‹ NÅ“uds valides trouvÃ©s: ${validNodeIds.size}`);
+    console.log(`[TreeBranchLeaf API] 📋 Nœuds valides trouvés: ${validNodeIds.size}`);
 
     // Normaliser le payload data (accepte objet { nodeId: value } OU tableau [{ nodeId, value, calculatedValue }])
     type DataItem = { nodeId: string; value?: unknown; calculatedValue?: unknown };
@@ -9776,16 +9780,16 @@ router.post('/submissions', async (req, res) => {
     // Filtrer par nodeIds valides
     const filteredEntries = rawEntries.filter(({ nodeId }) => {
       const isValid = validNodeIds.has(nodeId);
-      if (!isValid) console.log(`[TreeBranchLeaf API] âš ï¸ NodeId invalide ignorÃ©: ${nodeId}`);
+      if (!isValid) console.log(`[TreeBranchLeaf API] ⚠️ NodeId invalide ignoré: ${nodeId}`);
       return isValid;
     });
-    console.log(`[TreeBranchLeaf API] ðŸ“‹ DonnÃ©es filtrÃ©es: ${filteredEntries.length}/${rawEntries.length}`);
+    console.log(`[TreeBranchLeaf API] 📋 Données filtrées: ${filteredEntries.length}/${rawEntries.length}`);
 
-    // CrÃ©er la soumission avec Prisma (fiable pour les JSON et enums)
-    console.log(`[TreeBranchLeaf API] ðŸ”§ CrÃ©ation Prisma de la soumission`);
+    // Créer la soumission avec Prisma (fiable pour les JSON et enums)
+    console.log(`[TreeBranchLeaf API] 🔧 Création Prisma de la soumission`);
 
     try {
-      // VÃ©rifier l'existence de l'utilisateur en base pour Ã©viter une violation de FK
+      // Vérifier l'existence de l'utilisateur en base pour éviter une violation de FK
       let safeUserId: string | null = null;
       if (userId) {
         try {
@@ -9793,10 +9797,10 @@ router.post('/submissions', async (req, res) => {
           if (existingUser) {
             safeUserId = userId;
           } else {
-            console.warn('[TreeBranchLeaf API] âš ï¸ userId fourni mais introuvable en base â€“ crÃ©ation avec userId NULL');
+            console.warn('[TreeBranchLeaf API] ⚠️ userId fourni mais introuvable en base – création avec userId NULL');
           }
         } catch (checkErr) {
-          console.warn('[TreeBranchLeaf API] âš ï¸ Ã‰chec de vÃ©rification userId â€“ crÃ©ation avec userId NULL:', (checkErr as Error)?.message);
+          console.warn('[TreeBranchLeaf API] ⚠️ Échec de vérification userId – création avec userId NULL:', (checkErr as Error)?.message);
         }
       }
 
@@ -9812,11 +9816,11 @@ router.post('/submissions', async (req, res) => {
         }
       });
 
-      console.log(`[TreeBranchLeaf API] âœ… Soumission crÃ©Ã©e: ${created.id}`);
+      console.log(`[TreeBranchLeaf API] ✅ Soumission créée: ${created.id}`);
 
-      // 2. Persister toutes les valeurs de champs reÃ§ues (y compris champs conditionnels)
+      // 2. Persister toutes les valeurs de champs reçues (y compris champs conditionnels)
       if (filteredEntries.length > 0) {
-        // RÃ©cupÃ©rer les Ã©tiquettes des nÅ“uds pour les enregistrements crÃ©Ã©s
+        // Récupérer les étiquettes des nœuds pour les enregistrements créés
         const keys = filteredEntries.map(({ nodeId }) => nodeId);
         const nodesForLabels = await prisma.treeBranchLeafNode.findMany({
           where: { id: { in: keys as string[] } },
@@ -9824,7 +9828,7 @@ router.post('/submissions', async (req, res) => {
         });
         const labelMap = new Map(nodesForLabels.map(n => [n.id, n.label]));
 
-        // Charger les enregistrements existants (par ex. variables auto-crÃ©Ã©es par trigger)
+        // Charger les enregistrements existants (par ex. variables auto-créées par trigger)
         const existing = await prisma.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: created.id, nodeId: { in: keys as string[] } },
           select: { nodeId: true }
@@ -9848,7 +9852,7 @@ router.post('/submissions', async (req, res) => {
             });
           }
           if (toUpdate.length > 0) {
-            // Mettre Ã  jour la valeur existante (une requÃªte par nodeId)
+            // Mettre à jour la valeur existante (une requête par nodeId)
             for (const { nodeId, value: raw } of toUpdate) {
               try {
                 await tx.treeBranchLeafSubmissionData.update({
@@ -9856,7 +9860,7 @@ router.post('/submissions', async (req, res) => {
                   data: { value: raw == null ? null : String(raw), fieldLabel: labelMap.get(nodeId) || undefined }
                 });
               } catch {
-                // Si le client Prisma n'expose pas la clÃ© composÃ©e, fallback en updateMany
+                // Si le client Prisma n'expose pas la clé composée, fallback en updateMany
                 await tx.treeBranchLeafSubmissionData.updateMany({
                   where: { submissionId: created.id, nodeId },
                   data: { value: raw == null ? null : String(raw), fieldLabel: labelMap.get(nodeId) || undefined }
@@ -9865,12 +9869,12 @@ router.post('/submissions', async (req, res) => {
             }
           }
         });
-        console.log(`[TreeBranchLeaf API] âœ… Champs persistÃ©s: create=${toCreate.length}, update=${toUpdate.length}`);
+        console.log(`[TreeBranchLeaf API] ✅ Champs persistés: create=${toCreate.length}, update=${toUpdate.length}`);
       } else {
-        console.log('[TreeBranchLeaf API] â„¹ï¸ Aucun champ utilisateur Ã  persister (payload data vide aprÃ¨s filtrage)');
+        console.log('[TreeBranchLeaf API] ℹ️ Aucun champ utilisateur à persister (payload data vide après filtrage)');
       }
 
-      // 3. Enrichir immÃ©diatement les mÃ©tadonnÃ©es d'opÃ©ration pour cette soumission (backfill rapide post-crÃ©ation)
+      // 3. Enrichir immédiatement les métadonnées d'opération pour cette soumission (backfill rapide post-création)
       try {
         const treeIdForBackfill = created.treeId;
         const [nodesForBackfill, varsForBackfill] = await Promise.all([
@@ -9892,7 +9896,7 @@ router.post('/submissions', async (req, res) => {
           where: { submissionId: created.id },
           select: { nodeId: true, isVariable: true, value: true, sourceRef: true }
         });
-        // Construire une map de toutes les valeurs pour rÃ©solution des rÃ©fÃ©rences
+        // Construire une map de toutes les valeurs pour résolution des références
         const valuesMapBF: ValuesMap = new Map(rowsBF.map(r => [r.nodeId, r.value == null ? null : String(r.value)]));
         const nowBF = new Date();
         for (const row of rowsBF) {
@@ -9908,9 +9912,9 @@ router.post('/submissions', async (req, res) => {
             return 'neutral' as const;
           })();
           const display = meta?.displayName || label || row.nodeId;
-          // Par dÃ©faut chaÃ®ne lisible, remplacÃ©e par JSON si on peut rÃ©soudre la source
+          // Par défaut chaîne lisible, remplacée par JSON si on peut résoudre la source
           let opRes: Prisma.InputJsonValue = meta?.unit && valueStr ? `${display}: ${valueStr} ${meta.unit}` : `${display}: ${valueStr ?? ''}`;
-          // RÃ©soudre operationDetail
+          // Résoudre operationDetail
           let opDetail: Prisma.InputJsonValue | undefined = undefined;
           const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
           if (parsed) {
@@ -9942,10 +9946,10 @@ router.post('/submissions', async (req, res) => {
           });
         }
       } catch (enrichErr) {
-        console.warn('[TreeBranchLeaf API] âš ï¸ Backfill post-crÃ©ation des opÃ©rations non critique a Ã©chouÃ©:', (enrichErr as Error)?.message);
+        console.warn('[TreeBranchLeaf API] ⚠️ Backfill post-création des opérations non critique a échoué:', (enrichErr as Error)?.message);
       }
 
-      // 4. Recharger la soumission complÃ¨te pour la rÃ©ponse
+      // 4. Recharger la soumission complète pour la réponse
       const full = await prisma.treeBranchLeafSubmission.findUnique({
         where: { id: created.id },
         include: {
@@ -9960,7 +9964,7 @@ router.post('/submissions', async (req, res) => {
       });
 
       if (!full) {
-        throw new Error('Soumission non trouvÃ©e aprÃ¨s crÃ©ation');
+        throw new Error('Soumission non trouvée après création');
       }
 
       const responsePayload = {
@@ -9976,35 +9980,35 @@ router.post('/submissions', async (req, res) => {
         TreeBranchLeafSubmissionData: full.TreeBranchLeafSubmissionData
       };
 
-      console.log(`[TreeBranchLeaf API] âœ… Devis crÃ©Ã© et rechargÃ©: ${full.id}`);
+      console.log(`[TreeBranchLeaf API] ✅ Devis créé et rechargé: ${full.id}`);
       res.status(201).json(responsePayload);
 
     } catch (error) {
       const err = error as unknown as { message?: string; stack?: string; code?: string; meta?: unknown };
-      console.error('[TreeBranchLeaf API] âŒ ERREUR DÃ‰TAILLÃ‰E lors de la crÃ©ation:', {
+      console.error('[TreeBranchLeaf API] ❌ ERREUR DÉTAILLÉE lors de la création:', {
         message: err?.message,
         code: err?.code,
         meta: err?.meta
       });
       if (err?.stack) console.error(err.stack);
 
-      // Log spÃ©cifique pour erreurs Prisma
+      // Log spécifique pour erreurs Prisma
       if (err && err.code) {
-        console.error('[TreeBranchLeaf API] ðŸ” Code erreur Prisma:', err.code);
+        console.error('[TreeBranchLeaf API] 🔍 Code erreur Prisma:', err.code);
         if (err.meta) {
-          console.error('[TreeBranchLeaf API] ðŸ” MÃ©tadonnÃ©es:', err.meta);
+          console.error('[TreeBranchLeaf API] 🔍 Métadonnées:', err.meta);
         }
       }
 
       return res.status(500).json({ 
-        error: 'Erreur lors de la crÃ©ation de la soumission',
+        error: 'Erreur lors de la création de la soumission',
         details: process.env.NODE_ENV === 'development' ? err?.message : undefined
       });
     }
   } catch (outerErr) {
     // Garde-fou si une erreur se produit AVANT le bloc try interne
     const e = outerErr as unknown as { message?: string };
-    console.error('[TreeBranchLeaf API] âŒ Erreur inattendue en entrÃ©e de route /submissions:', e?.message);
+    console.error('[TreeBranchLeaf API] ❌ Erreur inattendue en entrée de route /submissions:', e?.message);
     return res.status(500).json({ error: 'Erreur interne inattendue' });
   }
 });
@@ -10015,9 +10019,9 @@ router.delete('/submissions/:id', async (req, res) => {
     const { id } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ—‘ï¸ DELETE submission ${id}`);
+    console.log(`[TreeBranchLeaf API] 🗑️ DELETE submission ${id}`);
 
-    // VÃ©rifier que la soumission existe et appartient Ã  l'organisation
+    // Vérifier que la soumission existe et appartient à l'organisation
     const submission = await prisma.treeBranchLeafSubmission.findFirst({
       where: { 
         id,
@@ -10031,11 +10035,11 @@ router.delete('/submissions/:id', async (req, res) => {
     });
 
     if (!submission) {
-      console.log(`[TreeBranchLeaf API] âŒ Submission ${id} non trouvÃ©e ou accÃ¨s refusÃ©`);
-      return res.status(404).json({ error: 'Soumission non trouvÃ©e ou accÃ¨s refusÃ©' });
+      console.log(`[TreeBranchLeaf API] ❌ Submission ${id} non trouvée ou accès refusé`);
+      return res.status(404).json({ error: 'Soumission non trouvée ou accès refusé' });
     }
 
-    // Supprimer les donnÃ©es associÃ©es d'abord
+    // Supprimer les données associées d'abord
     await prisma.treeBranchLeafSubmissionData.deleteMany({
       where: { submissionId: id }
     });
@@ -10045,8 +10049,8 @@ router.delete('/submissions/:id', async (req, res) => {
       where: { id }
     });
 
-    console.log(`[TreeBranchLeaf API] âœ… Submission ${id} supprimÃ©e avec succÃ¨s`);
-    res.json({ success: true, message: 'Soumission supprimÃ©e avec succÃ¨s' });
+    console.log(`[TreeBranchLeaf API] ✅ Submission ${id} supprimée avec succès`);
+    res.json({ success: true, message: 'Soumission supprimée avec succès' });
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error deleting submission:', error);
@@ -10055,33 +10059,33 @@ router.delete('/submissions/:id', async (req, res) => {
 });
 
 // =============================================================================
-// ðŸ”— TABLE LOOKUP - RÃ©cupÃ©ration de la configuration SELECT pour les champs
+// 🔗 TABLE LOOKUP - Récupération de la configuration SELECT pour les champs
 // =============================================================================
 
 // GET /api/treebranchleaf/nodes/:fieldId/select-config
-// RÃ©cupÃ¨re la configuration TreeBranchLeafSelectConfig d'un champ
+// Récupère la configuration TreeBranchLeafSelectConfig d'un champ
 router.get('/nodes/:fieldId/select-config', async (req, res) => {
   try {
     const { fieldId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ” GET select-config for field: ${fieldId}`);
+    console.log(`[TreeBranchLeaf API] 🔍 GET select-config for field: ${fieldId}`);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, fieldId, { organizationId, isSuperAdmin });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
 
-    // RÃ©cupÃ©rer la configuration SELECT
+    // Récupérer la configuration SELECT
     let selectConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
       where: { nodeId: fieldId },
     });
 
     if (!selectConfig) {
-      console.log(`[TreeBranchLeaf API] âš ï¸ Pas de configuration SELECT pour le champ ${fieldId}`);
+      console.log(`[TreeBranchLeaf API] ⚠️ Pas de configuration SELECT pour le champ ${fieldId}`);
       
-      // ðŸŽ¯ CRÃ‰ATION DYNAMIQUE : VÃ©rifier si le champ a une capacitÃ© Table avec lookup
+      // 🎯 CRÉATION DYNAMIQUE : Vérifier si le champ a une capacité Table avec lookup
       const node = await prisma.treeBranchLeafNode.findUnique({
         where: { id: fieldId },
         select: { 
@@ -10100,9 +10104,9 @@ router.get('/nodes/:fieldId/select-config', async (req, res) => {
         const isColumnBased = activeInstance?.columnBased === true;
         
         if (isRowBased || isColumnBased) {
-          console.log(`[TreeBranchLeaf API] ðŸ”§ CrÃ©ation dynamique de la config SELECT pour lookup ${isRowBased ? 'LIGNE' : 'COLONNE'}`);
+          console.log(`[TreeBranchLeaf API] 🔧 Création dynamique de la config SELECT pour lookup ${isRowBased ? 'LIGNE' : 'COLONNE'}`);
           
-          // CrÃ©er automatiquement la configuration SELECT
+          // Créer automatiquement la configuration SELECT
           selectConfig = await prisma.treeBranchLeafSelectConfig.create({
             data: {
               id: randomUUID(),
@@ -10122,7 +10126,7 @@ router.get('/nodes/:fieldId/select-config', async (req, res) => {
             }
           });
           
-          console.log(`[TreeBranchLeaf API] âœ… Configuration SELECT crÃ©Ã©e dynamiquement:`, selectConfig.id);
+          console.log(`[TreeBranchLeaf API] ✅ Configuration SELECT créée dynamiquement:`, selectConfig.id);
         }
       }
       
@@ -10131,17 +10135,17 @@ router.get('/nodes/:fieldId/select-config', async (req, res) => {
       }
     }
 
-    console.log(`[TreeBranchLeaf API] âœ… Configuration SELECT trouvÃ©e:`, selectConfig);
+    console.log(`[TreeBranchLeaf API] ✅ Configuration SELECT trouvée:`, selectConfig);
     return res.json(selectConfig);
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching select config:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration de la configuration SELECT' });
+    res.status(500).json({ error: 'Erreur lors de la récupération de la configuration SELECT' });
   }
 });
 
 // POST /api/treebranchleaf/nodes/:fieldId/select-config
-// CrÃ©e ou met Ã  jour la configuration TreeBranchLeafSelectConfig d'un champ
+// Crée ou met à jour la configuration TreeBranchLeafSelectConfig d'un champ
 router.post('/nodes/:fieldId/select-config', async (req, res) => {
   try {
     const { fieldId } = req.params;
@@ -10158,7 +10162,7 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
       dependsOnNodeId,
     } = req.body;
 
-    console.log(`[TreeBranchLeaf API] ðŸ“ POST select-config for field: ${fieldId}`, {
+    console.log(`[TreeBranchLeaf API] 📝 POST select-config for field: ${fieldId}`, {
       keyColumn,
       keyRow,
       valueColumn,
@@ -10167,7 +10171,7 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
       displayRow,
     });
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, fieldId, { organizationId, isSuperAdmin });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -10209,31 +10213,31 @@ router.post('/nodes/:fieldId/select-config', async (req, res) => {
       },
     });
 
-    console.log(`[TreeBranchLeaf API] âœ… Configuration SELECT crÃ©Ã©e/mise Ã  jour:`, selectConfig);
+    console.log(`[TreeBranchLeaf API] ✅ Configuration SELECT créée/mise à jour:`, selectConfig);
     return res.json(selectConfig);
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error creating select config:', error);
-    res.status(500).json({ error: 'Erreur lors de la crÃ©ation de la configuration SELECT' });
+    res.status(500).json({ error: 'Erreur lors de la création de la configuration SELECT' });
   }
 });
 
 // GET /api/treebranchleaf/nodes/:nodeId/table/lookup
-// RÃ©cupÃ¨re le tableau ACTIF d'un noeud pour lookup (utilisÃ© par useTBLTableLookup)
+// Récupère le tableau ACTIF d'un noeud pour lookup (utilisé par useTBLTableLookup)
 router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ” GET active table/lookup for node: ${nodeId}`);
+    console.log(`[TreeBranchLeaf API] 🔍 GET active table/lookup for node: ${nodeId}`);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
 
-    // ðŸŽ¯ Ã‰TAPE 1: RÃ©cupÃ©rer la configuration SELECT pour savoir QUEL tableau charger
+    // 🎯 ÉTAPE 1: Récupérer la configuration SELECT pour savoir QUEL tableau charger
     let selectConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
       where: { nodeId },
       select: {
@@ -10247,11 +10251,11 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
       }
     });
 
-    console.log(`[TreeBranchLeaf API] ðŸ“‹ Configuration SELECT:`, selectConfig);
+    console.log(`[TreeBranchLeaf API] 📋 Configuration SELECT:`, selectConfig);
 
-    // ðŸ”§ Fallback automatique: si pas de config, essayer de la crÃ©er depuis capabilities.table
+    // 🔧 Fallback automatique: si pas de config, essayer de la créer depuis capabilities.table
     if (!selectConfig?.tableReference) {
-      console.log(`[TreeBranchLeaf API] âš ï¸ Pas de tableReference dans la config SELECT â†’ tentative de fallback via capabilities.table`);
+      console.log(`[TreeBranchLeaf API] ⚠️ Pas de tableReference dans la config SELECT → tentative de fallback via capabilities.table`);
 
       const node = await prisma.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
@@ -10259,7 +10263,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
       });
 
       if (node?.hasTable && node.table_activeId) {
-        // CrÃ©er Ã  la volÃ©e une configuration minimale basÃ©e sur l'instance active
+        // Créer à la volée une configuration minimale basée sur l'instance active
         await prisma.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
@@ -10301,16 +10305,16 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
             displayRow: true,
           }
         });
-        console.log(`[TreeBranchLeaf API] âœ… Fallback SELECT config crÃ©Ã© depuis capabilities.table:`, selectConfig);
+        console.log(`[TreeBranchLeaf API] ✅ Fallback SELECT config créé depuis capabilities.table:`, selectConfig);
       }
     }
 
     if (!selectConfig?.tableReference) {
-      console.log(`[TreeBranchLeaf API] âš ï¸ Pas de tableReference dans la config SELECT (aprÃ¨s fallback)`);
-      return res.status(404).json({ error: 'Pas de tableau rÃ©fÃ©rencÃ© pour ce lookup' });
+      console.log(`[TreeBranchLeaf API] ⚠️ Pas de tableReference dans la config SELECT (après fallback)`);
+      return res.status(404).json({ error: 'Pas de tableau référencé pour ce lookup' });
     }
 
-    // ðŸŽ¯ Ã‰TAPE 2: Charger le TABLEAU rÃ©fÃ©rencÃ© avec l'architecture NORMALISÃ‰E
+    // 🎯 ÉTAPE 2: Charger le TABLEAU référencé avec l'architecture NORMALISÉE
     const table = await prisma.treeBranchLeafNodeTable.findUnique({
       where: { id: selectConfig.tableReference },
       select: {
@@ -10331,14 +10335,14 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     });
 
     if (!table) {
-      console.log(`[TreeBranchLeaf API] âš ï¸ Tableau introuvable: ${selectConfig.tableReference}`);
+      console.log(`[TreeBranchLeaf API] ⚠️ Tableau introuvable: ${selectConfig.tableReference}`);
       return res.status(404).json({ error: 'Tableau introuvable' });
     }
 
-    // ðŸ”„ Reconstituer les colonnes/rows/data depuis l'architecture normalisÃ©e
+    // 🔄 Reconstituer les colonnes/rows/data depuis l'architecture normalisée
     const columns = table.tableColumns.map(col => col.name);
     
-    // ðŸŽ¯ Extraire rows[] et data[] depuis cells
+    // 🎯 Extraire rows[] et data[] depuis cells
     const rows: string[] = [];
     const data: any[][] = [];
     
@@ -10346,13 +10350,13 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
       try {
         let cellsData: any;
         
-        // ðŸ” Tentative 1: Parse JSON si c'est une string
+        // 🔍 Tentative 1: Parse JSON si c'est une string
         if (typeof row.cells === 'string') {
           try {
             cellsData = JSON.parse(row.cells);
           } catch {
-            // ðŸ”§ Fallback: Si ce n'est PAS du JSON, c'est juste une valeur simple (premiÃ¨re colonne uniquement)
-            // Cela arrive pour les anciennes donnÃ©es oÃ¹ cells = "Orientation" au lieu de ["Orientation", ...]
+            // 🔧 Fallback: Si ce n'est PAS du JSON, c'est juste une valeur simple (première colonne uniquement)
+            // Cela arrive pour les anciennes données où cells = "Orientation" au lieu de ["Orientation", ...]
             cellsData = [row.cells]; // Envelopper dans un array
           }
         } else {
@@ -10360,10 +10364,10 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
         }
         
         if (Array.isArray(cellsData) && cellsData.length > 0) {
-          // ðŸ”‘ cellsData[0] = label de ligne (colonne A)
-          // ðŸ“Š cellsData[1...] = donnÃ©es (colonnes B, C, D...)
+          // 🔑 cellsData[0] = label de ligne (colonne A)
+          // 📊 cellsData[1...] = données (colonnes B, C, D...)
           rows.push(String(cellsData[0] || ''));
-          data.push(cellsData.slice(1)); // DonnÃ©es sans le label
+          data.push(cellsData.slice(1)); // Données sans le label
         } else {
           rows.push('');
           data.push([]);
@@ -10375,7 +10379,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
       }
     });
 
-    console.log(`[TreeBranchLeaf API] âœ… Tableau chargÃ© (normalisÃ©):`, {
+    console.log(`[TreeBranchLeaf API] ✅ Tableau chargé (normalisé):`, {
       id: table.id,
       name: table.name,
       type: table.type,
@@ -10385,25 +10389,25 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
       firstRows: rows.slice(0, 3),
     });
 
-    // ðŸŽ¯ Ã‰TAPE 3: GÃ©nÃ©rer les options selon la configuration
+    // 🎯 ÉTAPE 3: Générer les options selon la configuration
     if (table.type === 'matrix') {
 
-      // CAS 1: keyRow dÃ©fini â†’ Extraire les VALEURS de cette ligne
+      // CAS 1: keyRow défini → Extraire les VALEURS de cette ligne
       if (selectConfig?.keyRow) {
         const rowIndex = rows.indexOf(selectConfig.keyRow);
         
         if (rowIndex === -1) {
-          console.warn(`âš ï¸ [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
+          console.warn(`⚠️ [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
           return res.json({ options: [] });
         }
 
-        // ðŸŽ¯ RÃˆGLE A1: rows[0] = A1 ("Orientation"), rows[1] = "Nord", etc.
-        // data[0] correspond Ã  rows[1], donc il faut dÃ©caler : dataRowIndex = rowIndex - 1
-        // Si rowIndex === 0 (A1), on doit extraire les en-tÃªtes de colonnes (columns[]), pas data[]
+        // 🎯 RÈGLE A1: rows[0] = A1 ("Orientation"), rows[1] = "Nord", etc.
+        // data[0] correspond à rows[1], donc il faut décaler : dataRowIndex = rowIndex - 1
+        // Si rowIndex === 0 (A1), on doit extraire les en-têtes de colonnes (columns[]), pas data[]
         let options;
         
         if (rowIndex === 0) {
-          // Ligne A1 sÃ©lectionnÃ©e â†’ Extraire les en-tÃªtes de colonnes (SANS A1 lui-mÃªme)
+          // Ligne A1 sélectionnée → Extraire les en-têtes de colonnes (SANS A1 lui-même)
           options = columns.slice(1).map((colName) => {
             return {
               value: colName,
@@ -10411,7 +10415,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
             };
           }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         } else {
-          // Autre ligne â†’ Extraire depuis data[rowIndex - 1]
+          // Autre ligne → Extraire depuis data[rowIndex - 1]
           const dataRowIndex = rowIndex - 1;
           const rowData = data[dataRowIndex] || [];
           options = columns.slice(1).map((colName, colIdx) => {
@@ -10423,7 +10427,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         }
 
-        console.log(`[TreeBranchLeaf API] âœ… Options extraites depuis ligne "${selectConfig.keyRow}":`, {
+        console.log(`[TreeBranchLeaf API] ✅ Options extraites depuis ligne "${selectConfig.keyRow}":`, {
           rowIndex,
           isRowA1: rowIndex === 0,
           optionsCount: options.length,
@@ -10433,21 +10437,21 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
         return res.json({ options });
       }
 
-      // CAS 2: keyColumn dÃ©fini â†’ Extraire les VALEURS de cette colonne
+      // CAS 2: keyColumn défini → Extraire les VALEURS de cette colonne
       if (selectConfig?.keyColumn) {
         const colIndex = columns.indexOf(selectConfig.keyColumn);
         
         if (colIndex === -1) {
-          console.warn(`âš ï¸ [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
+          console.warn(`⚠️ [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
           return res.json({ options: [] });
         }
 
-        // ðŸŽ¯ RÃˆGLE A1 EXCEL: Si colIndex = 0, c'est la colonne A (labels des lignes)
+        // 🎯 RÈGLE A1 EXCEL: Si colIndex = 0, c'est la colonne A (labels des lignes)
         // Ces labels sont dans rows[], PAS dans data[][0] !
-        // âš ï¸ IMPORTANT: rows[0] = A1 (ex: "Orientation"), rows[1...] = labels de lignes rÃ©els
+        // ⚠️ IMPORTANT: rows[0] = A1 (ex: "Orientation"), rows[1...] = labels de lignes réels
         let options;
         if (colIndex === 0) {
-          // Colonne A = labels des lignes â†’ Extraire depuis rows[] SAUF rows[0] (qui est A1)
+          // Colonne A = labels des lignes → Extraire depuis rows[] SAUF rows[0] (qui est A1)
           options = rows.slice(1).map((rowLabel) => {
             return {
               value: rowLabel,
@@ -10455,8 +10459,8 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
             };
           }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         } else {
-          // Autre colonne â†’ Extraire depuis data[][colIndex - 1]
-          // âš ï¸ ATTENTION: data ne contient PAS la colonne 0, donc colIndex doit Ãªtre dÃ©calÃ© de -1
+          // Autre colonne → Extraire depuis data[][colIndex - 1]
+          // ⚠️ ATTENTION: data ne contient PAS la colonne 0, donc colIndex doit être décalé de -1
           const dataColIndex = colIndex - 1;
           options = data.map((row, rowIdx) => {
             const value = row[dataColIndex];
@@ -10468,7 +10472,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         }
 
-        console.log(`[TreeBranchLeaf API] âœ… Options extraites depuis colonne "${selectConfig.keyColumn}" (index ${colIndex}):`, {
+        console.log(`[TreeBranchLeaf API] ✅ Options extraites depuis colonne "${selectConfig.keyColumn}" (index ${colIndex}):`, {
           colIndex,
           isColumnA: colIndex === 0,
           optionsCount: options.length,
@@ -10480,22 +10484,22 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     }
 
     // Fallback: Si pas de keyRow/keyColumn, retourner le tableau complet
-    // ðŸ”¥ AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : Générer options dynamiques si structure A1 détectée
+    // 🔥 AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : G�n�rer options dynamiques si structure A1 d�tect�e
     if (table.type === 'matrix') {
       const hasNoConfig = !selectConfig?.keyRow && !selectConfig?.keyColumn;
       const a1 = rows[0];
       const firstColHeader = columns[0];
-      // Heuristique : si A1 est identique au header de la première colonne, on suppose colonne A = labels (Orientation, Nord, ...)
+      // Heuristique : si A1 est identique au header de la premi�re colonne, on suppose colonne A = labels (Orientation, Nord, ...)
       if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
         const autoOptions = rows.slice(1)
           .filter(r => r && r !== 'undefined' && r !== 'null')
           .map(r => ({ value: r, label: r }));
-        console.log(`[TreeBranchLeaf API] ⚙️ AUTO-DEFAULT lookup (matrix, colonne A) généré`, {
+        console.log(`[TreeBranchLeaf API] ?? AUTO-DEFAULT lookup (matrix, colonne A) g�n�r�`, {
           nodeId,
           autoCount: autoOptions.length,
           sample: autoOptions.slice(0, 5)
         });
-        // Upsert automatique d'une configuration SELECT minimale basée sur la colonne A (A1)
+        // Upsert automatique d'une configuration SELECT minimale bas�e sur la colonne A (A1)
         try {
           await prisma.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
@@ -10530,39 +10534,39 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
               updatedAt: new Date(),
             }
           });
-          console.log(`[TreeBranchLeaf API] ✅ AUTO-UPSERT select-config: nodeId=${nodeId}, table=${table.id}, keyColumn=${firstColHeader}`);
+          console.log(`[TreeBranchLeaf API] ? AUTO-UPSERT select-config: nodeId=${nodeId}, table=${table.id}, keyColumn=${firstColHeader}`);
         } catch (e) {
-          console.warn(`[TreeBranchLeaf API] ⚠️ Auto-upsert select-config a échoué (non bloquant):`, e);
+          console.warn(`[TreeBranchLeaf API] ?? Auto-upsert select-config a �chou� (non bloquant):`, e);
         }
         return res.json({ options: autoOptions, autoDefault: { source: 'columnA', keyColumnCandidate: firstColHeader } });
       }
     }
 
-    console.log(`[TreeBranchLeaf API] âš ï¸ Aucun keyRow/keyColumn configurÃ©, retour tableau brut (pas d'auto-default applicable)`);
+    console.log(`[TreeBranchLeaf API] ⚠️ Aucun keyRow/keyColumn configuré, retour tableau brut (pas d'auto-default applicable)`);
     return res.json(table);
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching table for lookup:', error);
-    res.status(500).json({ error: 'Erreur lors de la rÃ©cupÃ©ration du tableau' });
+    res.status(500).json({ error: 'Erreur lors de la récupération du tableau' });
   }
 });
 
 // PATCH /api/treebranchleaf/nodes/:nodeId
-// Met Ã  jour les propriÃ©tÃ©s d'un nÅ“ud (type, fieldType, etc.)
+// Met à jour les propriétés d'un nœud (type, fieldType, etc.)
 router.patch('/nodes/:nodeId', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log(`[TreeBranchLeaf API] ðŸ”§ PATCH node: ${nodeId}`, req.body);
+    console.log(`[TreeBranchLeaf API] 🔧 PATCH node: ${nodeId}`, req.body);
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const access = await ensureNodeOrgAccess(prisma, nodeId, { organizationId, isSuperAdmin });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
 
-    // Mettre Ã  jour le nÅ“ud
+    // Mettre à jour le nœud
     const updatedNode = await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
@@ -10571,28 +10575,28 @@ router.patch('/nodes/:nodeId', async (req, res) => {
       },
     });
 
-    console.log(`[TreeBranchLeaf API] âœ… NÅ“ud mis Ã  jour:`, updatedNode.id);
+    console.log(`[TreeBranchLeaf API] ✅ Nœud mis à jour:`, updatedNode.id);
     return res.json(updatedNode);
 
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error updating node:', error);
-    res.status(500).json({ error: 'Erreur lors de la mise Ã  jour du nÅ“ud' });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du nœud' });
   }
 });
 
 /**
- * ðŸŽ¯ PUT /nodes/:nodeId/capabilities/table
- * Active/dÃ©sactive la capacitÃ© Table sur un champ
- * AppelÃ© depuis TablePanel quand on sÃ©lectionne un champ dans le lookup
+ * 🎯 PUT /nodes/:nodeId/capabilities/table
+ * Active/désactive la capacité Table sur un champ
+ * Appelé depuis TablePanel quand on sélectionne un champ dans le lookup
  */
 router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { enabled, activeId, currentTable } = req.body;
 
-    console.log(`ðŸŽ¯ [TablePanel API] PUT /nodes/${nodeId}/capabilities/table`, { enabled, activeId, currentTable });
+    console.log(`🎯 [TablePanel API] PUT /nodes/${nodeId}/capabilities/table`, { enabled, activeId, currentTable });
 
-    // RÃ©cupÃ©rer le nÅ“ud existant
+    // Récupérer le nœud existant
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { 
@@ -10603,14 +10607,14 @@ router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud non trouvÃ©' });
+      return res.status(404).json({ error: 'Nœud non trouvé' });
     }
 
-    // Construire le nouvel objet metadata avec capabilities.table mis Ã  jour
+    // Construire le nouvel objet metadata avec capabilities.table mis à jour
     const oldMetadata = (node.metadata || {}) as Record<string, unknown>;
     const oldCapabilities = (oldMetadata.capabilities || {}) as Record<string, unknown>;
     
-    // ðŸŽ¯ CRITICAL FIX: CrÃ©er une instance dans table_instances pour que le hook dÃ©tecte enabled=true
+    // 🎯 CRITICAL FIX: Créer une instance dans table_instances pour que le hook détecte enabled=true
     const tableInstances = enabled && activeId ? {
       [activeId]: currentTable || { mode: 'matrix', tableId: activeId }
     } : null;
@@ -10630,9 +10634,9 @@ router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
       capabilities: newCapabilities
     };
 
-    console.log(`âœ… [TablePanel API] Nouvelle metadata.capabilities.table:`, newCapabilities.table);
+    console.log(`✅ [TablePanel API] Nouvelle metadata.capabilities.table:`, newCapabilities.table);
 
-    // Mettre Ã  jour le nÅ“ud avec metadata seulement - FORCE JSON serialization
+    // Mettre à jour le nœud avec metadata seulement - FORCE JSON serialization
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
@@ -10644,9 +10648,9 @@ router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
       }
     });
 
-    console.log(`âœ… [TablePanel API] CapacitÃ© Table mise Ã  jour pour nÅ“ud ${nodeId}`);
+    console.log(`✅ [TablePanel API] Capacité Table mise à jour pour nœud ${nodeId}`);
     
-    // ðŸŽ¯ CRÃ‰ATION/UPDATE AUTOMATIQUE DE LA CONFIGURATION SELECT pour le lookup dynamique
+    // 🎯 CRÉATION/UPDATE AUTOMATIQUE DE LA CONFIGURATION SELECT pour le lookup dynamique
     if (enabled && activeId) {
       const keyColumn = currentTable?.keyColumn || null;
       const keyRow = currentTable?.keyRow || null;
@@ -10655,7 +10659,7 @@ router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
       const displayColumn = currentTable?.displayColumn || null;
       const displayRow = currentTable?.displayRow || null;
       
-      console.log(`ðŸ”§ [TablePanel API] Upsert configuration SELECT`, {
+      console.log(`🔧 [TablePanel API] Upsert configuration SELECT`, {
         nodeId,
         activeId,
         keyColumn,
@@ -10700,36 +10704,36 @@ router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
             updatedAt: new Date(),
           },
         });
-        console.log(`âœ… [TablePanel API] Configuration SELECT upsertÃ©e pour ${nodeId}`, {
+        console.log(`✅ [TablePanel API] Configuration SELECT upsertée pour ${nodeId}`, {
           keyColumn,
           keyRow,
           displayColumn,
           displayRow,
         });
       } catch (selectConfigError) {
-        console.error(`âš ï¸ [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
-        // Non-bloquant : on continue mÃªme si la crÃ©ation Ã©choue
+        console.error(`⚠️ [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
+        // Non-bloquant : on continue même si la création échoue
       }
     } else if (!enabled) {
-      // ðŸ”´ DÃ‰SACTIVATION : Supprimer la configuration SELECT
-      console.log(`ðŸ”´ [TablePanel API] Suppression configuration SELECT pour ${nodeId}`);
+      // 🔴 DÉSACTIVATION : Supprimer la configuration SELECT
+      console.log(`🔴 [TablePanel API] Suppression configuration SELECT pour ${nodeId}`);
       try {
         await prisma.treeBranchLeafSelectConfig.deleteMany({
           where: { nodeId }
         });
-        console.log(`âœ… [TablePanel API] Configuration SELECT supprimÃ©e pour ${nodeId}`);
+        console.log(`✅ [TablePanel API] Configuration SELECT supprimée pour ${nodeId}`);
       } catch (deleteError) {
-        console.error(`âš ï¸ [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
+        console.error(`⚠️ [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
       }
     }
     
-    // ðŸ” VÃ‰RIFICATION IMMÃ‰DIATE : Relire depuis la DB pour confirmer persistance
+    // 🔍 VÉRIFICATION IMMÉDIATE : Relire depuis la DB pour confirmer persistance
     const verifyNode = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true, hasTable: true }
     });
     
-    console.log(`ðŸ” [TablePanel API] VÃ‰RIFICATION aprÃ¨s UPDATE:`, {
+    console.log(`🔍 [TablePanel API] VÉRIFICATION après UPDATE:`, {
       nodeId,
       hasTable: verifyNode?.hasTable,
       metadataCapabilitiesTable: (verifyNode?.metadata as any)?.capabilities?.table
@@ -10744,37 +10748,37 @@ router.put('/nodes/:nodeId/capabilities/table', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[TablePanel API] âŒ Erreur PUT /nodes/:nodeId/capabilities/table:', error);
-    return res.status(500).json({ error: 'Erreur lors de la mise Ã  jour de la capacitÃ© Table' });
+    console.error('[TablePanel API] ❌ Erreur PUT /nodes/:nodeId/capabilities/table:', error);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour de la capacité Table' });
   }
 });
 
-// PUT /api/treebranchleaf/submissions/:id - Mettre Ã  jour les donnÃ©es d'une soumission (upsert champs + backfill variables)
+// PUT /api/treebranchleaf/submissions/:id - Mettre à jour les données d'une soumission (upsert champs + backfill variables)
 router.put('/submissions/:id', async (req, res) => {
   const { id } = req.params;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
   const { data, status } = req.body as { data?: unknown; status?: string };
 
   try {
-    // Charger la soumission avec l'arbre pour contrÃ´le d'accÃ¨s
+    // Charger la soumission avec l'arbre pour contrôle d'accès
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
     if (!submission) {
-      return res.status(404).json({ error: 'Soumission non trouvÃ©e' });
+      return res.status(404).json({ error: 'Soumission non trouvée' });
     }
     const treeId = submission.treeId;
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: 'AccÃ¨s refusÃ© Ã  cette soumission' });
+      return res.status(403).json({ error: 'Accès refusé à cette soumission' });
     }
 
-    // NÅ“uds valides pour l'arbre
+    // Nœuds valides pour l'arbre
     const nodes = await prisma.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const validNodeIds = new Set(nodes.map(n => n.id));
     const labelMap = new Map(nodes.map(n => [n.id, n.label]));
-    // Variables connues (pour faire la correspondance exposedKey -> nodeId et rÃ©cupÃ©rer unit/source)
+    // Variables connues (pour faire la correspondance exposedKey -> nodeId et récupérer unit/source)
     const variablesMeta = await prisma.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       include: { TreeBranchLeafNode: { select: { label: true } } }
@@ -10823,7 +10827,7 @@ router.put('/submissions/:id', async (req, res) => {
       return [];
     })();
 
-    // Remap: si nodeId n'est pas un node rÃ©el mais est un exposedKey de variable, le remapper vers le nodeId de la variable
+    // Remap: si nodeId n'est pas un node réel mais est un exposedKey de variable, le remapper vers le nodeId de la variable
     const mappedEntries = rawEntries.map(e => {
       if (!validNodeIds.has(e.nodeId) && varByExposedKey.has(e.nodeId)) {
         const vm = varByExposedKey.get(e.nodeId)!;
@@ -10876,7 +10880,7 @@ router.put('/submissions/:id', async (req, res) => {
         const toUpdate = entries.filter(({ nodeId }) => existingSet.has(nodeId));
 
         if (toCreate.length > 0) {
-          // Construire une map des valeurs actuelles connues pour rÃ©solution des refs
+          // Construire une map des valeurs actuelles connues pour résolution des refs
           const existingAll = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
           const valuesMapTx: ValuesMap = new Map(existingAll.map(r => [r.nodeId, r.value == null ? null : String(r.value)]));
           const createRows = await Promise.all(toCreate.map(async ({ nodeId, effectiveValue }) => {
@@ -10886,7 +10890,7 @@ router.put('/submissions/:id', async (req, res) => {
             const valueStr = effectiveValue == null ? null : String(effectiveValue);
             const opSrc = isVar ? inferSource(meta?.sourceRef || null) : 'neutral';
             const display = isVar ? (meta?.displayName || label || nodeId) : (label || nodeId);
-            // Par dÃ©faut une chaÃ®ne lisible; si variable et source, produire un JSON dÃ©taillÃ©
+            // Par défaut une chaîne lisible; si variable et source, produire un JSON détaillé
             let opRes: Prisma.InputJsonValue = meta?.unit && valueStr ? `${display}: ${valueStr} ${meta.unit}` : `${display}: ${valueStr ?? ''}`;
             const opDetail = isVar ? (await resolveOperationDetail(meta?.sourceRef || null)) : (label as Prisma.InputJsonValue | null);
             if (isVar && meta?.sourceRef) {
@@ -10894,11 +10898,11 @@ router.put('/submissions/:id', async (req, res) => {
               if (parsed?.type === 'condition') {
                 const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
                 const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
-                // inclure la valeur qu'on est en train d'Ã©crire
+                // inclure la valeur qu'on est en train d'écrire
                 valuesMapTx.set(nodeId, valueStr);
                 const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                 const refs = refsRaw.map(r => ({ label: r.label ?? null, value: r.value ?? null }));
-                const expr = 'ðŸ”„ Condition Ã©valuÃ©e via TBL Prisma (ligne 5456)'; // DÃ©sactivÃ©: await buildConditionExpressionReadable(...)
+                const expr = '🔄 Condition évaluée via TBL Prisma (ligne 5456)'; // Désactivé: await buildConditionExpressionReadable(...)
                 opRes = { type: 'condition', label: display, value: valueStr, unit: meta?.unit || null, refs, text: expr } as const;
               } else if (parsed?.type === 'formula') {
                 const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
@@ -10908,7 +10912,7 @@ router.put('/submissions/:id', async (req, res) => {
                 const refs = refsRaw.map(r => ({ label: r.label ?? null, value: r.value ?? null }));
                 let expr = buildTextFromTokens(rec?.tokens, labelMap, valuesMapTx);
                 
-                // Calculer le rÃ©sultat de l'expression mathÃ©matique
+                // Calculer le résultat de l'expression mathématique
                 const calculatedResult = calculateResult(expr);
                 if (calculatedResult !== null) {
                   expr += ` = ${calculatedResult}`;
@@ -10954,7 +10958,7 @@ router.put('/submissions/:id', async (req, res) => {
           const meta = isVar ? varMetaByNodeId.get(nodeId)! : undefined;
           const label = labelMap.get(nodeId) || existingLabelMap.get(nodeId) || undefined;
           const valueStr = effectiveValue == null ? null : String(effectiveValue);
-          // reconstruire une petite map des valeurs (inclure la valeur mise Ã  jour) pour les refs
+          // reconstruire une petite map des valeurs (inclure la valeur mise à jour) pour les refs
           const existingAll = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
           const valuesMapTx: ValuesMap = new Map(existingAll.map(r => [r.nodeId, r.value == null ? null : String(r.value)]));
           valuesMapTx.set(nodeId, valueStr);
@@ -10978,7 +10982,7 @@ router.put('/submissions/:id', async (req, res) => {
                       const ids = extractNodeIdsFromConditionSet(rec?.conditionSet);
                       const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                       const refs = refsRaw.map(r => ({ label: r.label ?? null, value: r.value ?? null }));
-                      const expr = 'ðŸ”„ Condition Ã©valuÃ©e via TBL Prisma (ligne 5545)';
+                      const expr = '🔄 Condition évaluée via TBL Prisma (ligne 5545)';
                       return { type: 'condition', label: display, value: valueStr, unit: meta?.unit || null, refs, text: expr } as const;
                     })();
                   }
@@ -10990,7 +10994,7 @@ router.put('/submissions/:id', async (req, res) => {
                       const refs = refsRaw.map(r => ({ label: r.label ?? null, value: r.value ?? null }));
                       let expr = buildTextFromTokens(rec?.tokens, labelMap, valuesMapTx);
                       
-                      // Calculer le rÃ©sultat de l'expression mathÃ©matique
+                      // Calculer le résultat de l'expression mathématique
                       const calculatedResult = calculateResult(expr);
                       if (calculatedResult !== null) {
                         expr += ` = ${calculatedResult}`;
@@ -11067,7 +11071,7 @@ router.put('/submissions/:id', async (req, res) => {
         }
       }
 
-      // Backfill des variables manquantes (au cas oÃ¹ de nouvelles variables ont Ã©tÃ© ajoutÃ©es au tree depuis la crÃ©ation)
+      // Backfill des variables manquantes (au cas où de nouvelles variables ont été ajoutées au tree depuis la création)
       const variables = await tx.treeBranchLeafNodeVariable.findMany({
         where: { TreeBranchLeafNode: { treeId } },
         include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
@@ -11076,7 +11080,7 @@ router.put('/submissions/:id', async (req, res) => {
       const existingVarSet = new Set(existingVarRows.map(r => r.nodeId));
       const missingVars = variables.filter(v => !existingVarSet.has(v.nodeId));
       if (missingVars.length > 0) {
-        // Construire valuesMap pour rÃ©solution (actuel en BD)
+        // Construire valuesMap pour résolution (actuel en BD)
         const allRows = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll: ValuesMap = new Map(allRows.map(r => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async v => ({
@@ -11132,7 +11136,7 @@ router.put('/submissions/:id', async (req, res) => {
         await tx.treeBranchLeafSubmissionData.createMany({ data: missingRows });
       }
 
-      // Backfill des champs d'opÃ©ration manquants sur les lignes existantes (variables et non-variables)
+      // Backfill des champs d'opération manquants sur les lignes existantes (variables et non-variables)
       const allRows = await tx.treeBranchLeafSubmissionData.findMany({
         where: {
           submissionId: id
@@ -11148,7 +11152,7 @@ router.put('/submissions/:id', async (req, res) => {
         }
       });
       
-      // Filtrer en mÃ©moire les lignes qui ont besoin d'un backfill
+      // Filtrer en mémoire les lignes qui ont besoin d'un backfill
       const rowsNeeding = allRows.filter(row => 
         row.operationDetail === null || 
         row.operationResult === null || 
@@ -11169,34 +11173,34 @@ router.put('/submissions/:id', async (req, res) => {
         const opDetail = isVar ? (await resolveOperationDetail(row.sourceRef || null)) : (label as Prisma.InputJsonValue | undefined);
         
         if (isVar && (row.sourceRef || meta?.sourceRef)) {
-          // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-          // ðŸŽ¯ NOUVEAU : Utiliser le systÃ¨me universel d'interprÃ©tation
-          // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+          // ═══════════════════════════════════════════════════════════════════
+          // 🎯 NOUVEAU : Utiliser le système universel d'interprétation
+          // ═══════════════════════════════════════════════════════════════════
           try {
-            console.log(`[UNIVERSAL] ðŸ”„ Ã‰valuation de la variable: ${row.nodeId} (${display})`);
+            console.log(`[UNIVERSAL] 🔄 Évaluation de la variable: ${row.nodeId} (${display})`);
             
-            // Appeler le systÃ¨me universel
+            // Appeler le système universel
             const evaluation = await evaluateVariableOperation(
               row.nodeId,
               id, // submissionId
               tx as any // Utiliser la transaction Prisma
             );
             
-            console.log(`[UNIVERSAL] âœ… RÃ©sultat: ${evaluation.value}`);
+            console.log(`[UNIVERSAL] ✅ Résultat: ${evaluation.value}`);
             
-            // Utiliser le rÃ©sultat du systÃ¨me universel
+            // Utiliser le résultat du système universel
             opRes = evaluation.operationResult;
             
-            // Mettre Ã  jour la valeur calculÃ©e dans la base
+            // Mettre à jour la valeur calculée dans la base
             await tx.treeBranchLeafSubmissionData.updateMany({
               where: { submissionId: id, nodeId: row.nodeId },
               data: { value: evaluation.value }
             });
             
           } catch (error) {
-            console.error(`[UNIVERSAL] âŒ Erreur Ã©valuation variable ${row.nodeId}:`, error);
+            console.error(`[UNIVERSAL] ❌ Erreur évaluation variable ${row.nodeId}:`, error);
             
-            // Fallback vers l'ancien systÃ¨me en cas d'erreur
+            // Fallback vers l'ancien système en cas d'erreur
             const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
             if (parsed?.type === 'condition') {
               const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
@@ -11232,7 +11236,7 @@ router.put('/submissions/:id', async (req, res) => {
         });
       }
 
-      // Mettre Ã  jour le statut si fourni
+      // Mettre à jour le statut si fourni
       if (status && typeof status === 'string') {
         await tx.treeBranchLeafSubmission.update({ where: { id }, data: { status, updatedAt: new Date() } });
       } else {
@@ -11251,29 +11255,29 @@ router.put('/submissions/:id', async (req, res) => {
     });
     return res.json(full);
   } catch (error) {
-    console.error('[TreeBranchLeaf API] âŒ Erreur PUT /submissions/:id:', error);
-    return res.status(500).json({ error: 'Erreur lors de la mise Ã  jour de la soumission' });
+    console.error('[TreeBranchLeaf API] ❌ Erreur PUT /submissions/:id:', error);
+    return res.status(500).json({ error: 'Erreur lors de la mise à jour de la soumission' });
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸŽ¯ NOUVELLES ROUTES - SYSTÃˆME UNIVERSEL D'INTERPRÃ‰TATION TBL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Ces routes utilisent le systÃ¨me moderne operation-interpreter.ts
-// Elles sont INDÃ‰PENDANTES des anciens systÃ¨mes (CapacityCalculator, etc.)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎯 NOUVELLES ROUTES - SYSTÈME UNIVERSEL D'INTERPRÉTATION TBL
+// ═══════════════════════════════════════════════════════════════════════════
+// Ces routes utilisent le système moderne operation-interpreter.ts
+// Elles sont INDÉPENDANTES des anciens systèmes (CapacityCalculator, etc.)
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * ðŸŽ¯ POST /api/treebranchleaf/v2/variables/:variableNodeId/evaluate
+ * 🎯 POST /api/treebranchleaf/v2/variables/:variableNodeId/evaluate
  * 
- * Ã‰VALUE UNE VARIABLE avec le systÃ¨me universel d'interprÃ©tation
+ * ÉVALUE UNE VARIABLE avec le système universel d'interprétation
  * 
- * Cette route est le POINT D'ENTRÃ‰E PRINCIPAL pour Ã©valuer n'importe quelle
- * variable (condition, formule, table) de maniÃ¨re rÃ©cursive et complÃ¨te.
+ * Cette route est le POINT D'ENTRÉE PRINCIPAL pour évaluer n'importe quelle
+ * variable (condition, formule, table) de manière récursive et complète.
  * 
- * PARAMÃˆTRES :
+ * PARAMÈTRES :
  * ------------
- * - variableNodeId : ID du nÅ“ud TreeBranchLeafNode qui contient la Variable
+ * - variableNodeId : ID du nœud TreeBranchLeafNode qui contient la Variable
  * - submissionId (body) : ID de la soumission en cours
  * 
  * RETOUR :
@@ -11282,10 +11286,10 @@ router.put('/submissions/:id', async (req, res) => {
  *   success: true,
  *   variable: { nodeId, displayName, exposedKey },
  *   result: {
- *     value: "73",              // Valeur calculÃ©e finale
- *     operationDetail: {...},    // Structure dÃ©taillÃ©e complÃ¨te
- *     operationResult: "Si...",  // Texte explicatif en franÃ§ais
- *     operationSource: "table"   // Type d'opÃ©ration source
+ *     value: "73",              // Valeur calculée finale
+ *     operationDetail: {...},    // Structure détaillée complète
+ *     operationResult: "Si...",  // Texte explicatif en français
+ *     operationSource: "table"   // Type d'opération source
  *   },
  *   evaluation: {
  *     mode: 'universal-interpreter',
@@ -11299,17 +11303,17 @@ router.put('/submissions/:id', async (req, res) => {
  * 1. Variable qui pointe vers une condition :
  *    POST /api/treebranchleaf/v2/variables/10bfb6d2.../evaluate
  *    Body: { submissionId: "tbl-1759750447813-xxx" }
- *    â†’ Ã‰value rÃ©cursivement la condition et retourne le rÃ©sultat
+ *    → Évalue récursivement la condition et retourne le résultat
  * 
  * 2. Variable qui pointe vers une table :
  *    POST /api/treebranchleaf/v2/variables/abc123.../evaluate
  *    Body: { submissionId: "tbl-xxx" }
- *    â†’ Effectue le lookup dans la table et retourne la valeur
+ *    → Effectue le lookup dans la table et retourne la valeur
  * 
  * 3. Variable qui pointe vers une formule :
  *    POST /api/treebranchleaf/v2/variables/def456.../evaluate
  *    Body: { submissionId: "tbl-xxx" }
- *    â†’ Calcule la formule et retourne le rÃ©sultat
+ *    → Calcule la formule et retourne le résultat
  */
 router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
   try {
@@ -11317,21 +11321,21 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
     const { submissionId } = req.body;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log('\n' + 'â•'.repeat(80));
-    console.log('ðŸŽ¯ [V2 API] Ã‰VALUATION VARIABLE UNIVERSELLE');
-    console.log('â•'.repeat(80));
-    console.log('ðŸ“‹ ParamÃ¨tres:');
+    console.log('\n' + '═'.repeat(80));
+    console.log('🎯 [V2 API] ÉVALUATION VARIABLE UNIVERSELLE');
+    console.log('═'.repeat(80));
+    console.log('📋 Paramètres:');
     console.log('   - variableNodeId:', variableNodeId);
     console.log('   - submissionId:', submissionId);
     console.log('   - organizationId:', organizationId);
     console.log('   - isSuperAdmin:', isSuperAdmin);
-    console.log('â•'.repeat(80) + '\n');
+    console.log('═'.repeat(80) + '\n');
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // âœ… Ã‰TAPE 1 : Validation des paramÃ¨tres
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // ✅ ÉTAPE 1 : Validation des paramètres
+    // ═══════════════════════════════════════════════════════════════════════
     if (!variableNodeId) {
-      console.error('âŒ [V2 API] variableNodeId manquant');
+      console.error('❌ [V2 API] variableNodeId manquant');
       return res.status(400).json({
         success: false,
         error: 'variableNodeId requis'
@@ -11339,16 +11343,16 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
     }
 
     if (!submissionId) {
-      console.error('âŒ [V2 API] submissionId manquant');
+      console.error('❌ [V2 API] submissionId manquant');
       return res.status(400).json({
         success: false,
         error: 'submissionId requis dans le body'
       });
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ” Ã‰TAPE 2 : VÃ©rifier que le nÅ“ud existe et est accessible
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔍 ÉTAPE 2 : Vérifier que le nœud existe et est accessible
+    // ═══════════════════════════════════════════════════════════════════════
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: variableNodeId },
       include: {
@@ -11375,48 +11379,48 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
     });
 
     if (!node) {
-      console.error('âŒ [V2 API] NÅ“ud introuvable:', variableNodeId);
+      console.error('❌ [V2 API] Nœud introuvable:', variableNodeId);
       return res.status(404).json({
         success: false,
-        error: 'NÅ“ud introuvable'
+        error: 'Nœud introuvable'
       });
     }
 
-    console.log('âœ… [V2 API] NÅ“ud trouvÃ©:', node.label);
+    console.log('✅ [V2 API] Nœud trouvé:', node.label);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ”’ Ã‰TAPE 3 : VÃ©rifier les permissions d'organisation
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔒 ÉTAPE 3 : Vérifier les permissions d'organisation
+    // ═══════════════════════════════════════════════════════════════════════
     if (!isSuperAdmin && node.TreeBranchLeafTree?.organizationId !== organizationId) {
-      console.error('âŒ [V2 API] AccÃ¨s refusÃ© - mauvaise organisation');
+      console.error('❌ [V2 API] Accès refusé - mauvaise organisation');
       return res.status(403).json({
         success: false,
-        error: 'AccÃ¨s refusÃ© Ã  ce nÅ“ud'
+        error: 'Accès refusé à ce nœud'
       });
     }
 
-    console.log('âœ… [V2 API] Permissions validÃ©es');
+    console.log('✅ [V2 API] Permissions validées');
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ“Š Ã‰TAPE 4 : VÃ©rifier qu'il y a bien une Variable associÃ©e
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📊 ÉTAPE 4 : Vérifier qu'il y a bien une Variable associée
+    // ═══════════════════════════════════════════════════════════════════════
     const variable = node.TreeBranchLeafNodeVariable?.[0];
 
     if (!variable) {
-      console.error('âŒ [V2 API] Pas de variable associÃ©e Ã  ce nÅ“ud');
+      console.error('❌ [V2 API] Pas de variable associée à ce nœud');
       return res.status(400).json({
         success: false,
-        error: 'Ce nÅ“ud ne contient pas de variable'
+        error: 'Ce nœud ne contient pas de variable'
       });
     }
 
-    console.log('âœ… [V2 API] Variable trouvÃ©e:', variable.displayName);
+    console.log('✅ [V2 API] Variable trouvée:', variable.displayName);
     console.log('   - sourceType:', variable.sourceType);
     console.log('   - sourceRef:', variable.sourceRef);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ” Ã‰TAPE 5 : VÃ©rifier que la soumission existe et est accessible
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔍 ÉTAPE 5 : Vérifier que la soumission existe et est accessible
+    // ═══════════════════════════════════════════════════════════════════════
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       select: {
@@ -11428,25 +11432,25 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
     });
 
     if (!submission) {
-      console.error('âŒ [V2 API] Soumission introuvable:', submissionId);
+      console.error('❌ [V2 API] Soumission introuvable:', submissionId);
       return res.status(404).json({
         success: false,
         error: 'Soumission introuvable'
       });
     }
 
-    console.log('âœ… [V2 API] Soumission trouvÃ©e:', submissionId);
+    console.log('✅ [V2 API] Soumission trouvée:', submissionId);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸš€ Ã‰TAPE 6 : Ã‰VALUATION UNIVERSELLE avec operation-interpreter
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    console.log('\n' + 'â”€'.repeat(80));
-    console.log('ðŸš€ [V2 API] DÃ©marrage Ã©valuation universelle...');
-    console.log('â”€'.repeat(80) + '\n');
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🚀 ÉTAPE 6 : ÉVALUATION UNIVERSELLE avec operation-interpreter
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log('\n' + '─'.repeat(80));
+    console.log('🚀 [V2 API] Démarrage évaluation universelle...');
+    console.log('─'.repeat(80) + '\n');
 
     const startTime = Date.now();
 
-    // Appel de la fonction principale du systÃ¨me universel
+    // Appel de la fonction principale du système universel
     const evaluationResult = await evaluateVariableOperation(
       variableNodeId,
       submissionId,
@@ -11455,17 +11459,17 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
 
     const duration = Date.now() - startTime;
 
-    console.log('\n' + 'â”€'.repeat(80));
-    console.log('âœ… [V2 API] Ã‰valuation terminÃ©e avec succÃ¨s !');
-    console.log('   - DurÃ©e:', duration, 'ms');
-    console.log('   - RÃ©sultat:', evaluationResult.value);
+    console.log('\n' + '─'.repeat(80));
+    console.log('✅ [V2 API] Évaluation terminée avec succès !');
+    console.log('   - Durée:', duration, 'ms');
+    console.log('   - Résultat:', evaluationResult.value);
     console.log('   - OperationSource:', evaluationResult.operationSource);
-    console.log('â”€'.repeat(80) + '\n');
+    console.log('─'.repeat(80) + '\n');
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ’¾ Ã‰TAPE 7 : Sauvegarder le rÃ©sultat dans SubmissionData
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    console.log('ðŸ’¾ [V2 API] Sauvegarde dans SubmissionData...');
+    // ═══════════════════════════════════════════════════════════════════════
+    // 💾 ÉTAPE 7 : Sauvegarder le résultat dans SubmissionData
+    // ═══════════════════════════════════════════════════════════════════════
+    console.log('💾 [V2 API] Sauvegarde dans SubmissionData...');
 
     await prisma.treeBranchLeafSubmissionData.upsert({
       where: {
@@ -11495,11 +11499,11 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
       }
     });
 
-    console.log('âœ… [V2 API] Sauvegarde effectuÃ©e\n');
+    console.log('✅ [V2 API] Sauvegarde effectuée\n');
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ“¤ Ã‰TAPE 8 : Retourner la rÃ©ponse complÃ¨te
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📤 ÉTAPE 8 : Retourner la réponse complète
+    // ═══════════════════════════════════════════════════════════════════════
     const response = {
       success: true,
       variable: {
@@ -11526,22 +11530,22 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
       }
     };
 
-    console.log('â•'.repeat(80));
-    console.log('ðŸ“¤ [V2 API] RÃ©ponse envoyÃ©e avec succÃ¨s');
-    console.log('â•'.repeat(80) + '\n');
+    console.log('═'.repeat(80));
+    console.log('📤 [V2 API] Réponse envoyée avec succès');
+    console.log('═'.repeat(80) + '\n');
 
     return res.json(response);
 
   } catch (error) {
-    console.error('\n' + 'â•'.repeat(80));
-    console.error('âŒ [V2 API] ERREUR CRITIQUE');
-    console.error('â•'.repeat(80));
+    console.error('\n' + '═'.repeat(80));
+    console.error('❌ [V2 API] ERREUR CRITIQUE');
+    console.error('═'.repeat(80));
     console.error(error);
-    console.error('â•'.repeat(80) + '\n');
+    console.error('═'.repeat(80) + '\n');
 
     return res.status(500).json({
       success: false,
-      error: 'Erreur lors de l\'Ã©valuation de la variable',
+      error: 'Erreur lors de l\'évaluation de la variable',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
       stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
     });
@@ -11549,12 +11553,12 @@ router.post('/v2/variables/:variableNodeId/evaluate', async (req, res) => {
 });
 
 /**
- * ðŸ” GET /api/treebranchleaf/v2/submissions/:submissionId/variables
+ * 🔍 GET /api/treebranchleaf/v2/submissions/:submissionId/variables
  * 
- * RÃ‰CUPÃˆRE TOUTES LES VARIABLES d'une soumission avec leurs valeurs Ã©valuÃ©es
+ * RÉCUPÈRE TOUTES LES VARIABLES d'une soumission avec leurs valeurs évaluées
  * 
- * Cette route permet d'obtenir un aperÃ§u complet de toutes les variables
- * d'une soumission, avec leurs valeurs calculÃ©es et leurs textes explicatifs.
+ * Cette route permet d'obtenir un aperçu complet de toutes les variables
+ * d'une soumission, avec leurs valeurs calculées et leurs textes explicatifs.
  * 
  * RETOUR :
  * --------
@@ -11581,11 +11585,11 @@ router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
     const { submissionId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log('\nðŸ” [V2 API] RÃ‰CUPÃ‰RATION VARIABLES:', submissionId);
+    console.log('\n🔍 [V2 API] RÉCUPÉRATION VARIABLES:', submissionId);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ” Ã‰TAPE 1 : RÃ©cupÃ©rer la soumission avec son tree
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🔍 ÉTAPE 1 : Récupérer la soumission avec son tree
+    // ═══════════════════════════════════════════════════════════════════════
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: {
@@ -11606,17 +11610,17 @@ router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
       });
     }
 
-    // VÃ©rifier les permissions
+    // Vérifier les permissions
     if (!isSuperAdmin && submission.TreeBranchLeafTree?.organizationId !== organizationId) {
       return res.status(403).json({
         success: false,
-        error: 'AccÃ¨s refusÃ© Ã  cette soumission'
+        error: 'Accès refusé à cette soumission'
       });
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ“Š Ã‰TAPE 2 : RÃ©cupÃ©rer toutes les variables du tree
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📊 ÉTAPE 2 : Récupérer toutes les variables du tree
+    // ═══════════════════════════════════════════════════════════════════════
     const variables = await prisma.treeBranchLeafNodeVariable.findMany({
       where: {
         TreeBranchLeafNode: {
@@ -11634,11 +11638,11 @@ router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
       }
     });
 
-    console.log('âœ… [V2 API] Variables trouvÃ©es:', variables.length);
+    console.log('✅ [V2 API] Variables trouvées:', variables.length);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ’¾ Ã‰TAPE 3 : RÃ©cupÃ©rer les valeurs depuis SubmissionData
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 💾 ÉTAPE 3 : Récupérer les valeurs depuis SubmissionData
+    // ═══════════════════════════════════════════════════════════════════════
     const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
@@ -11648,14 +11652,14 @@ router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
       }
     });
 
-    // CrÃ©er un Map pour lookup rapide
+    // Créer un Map pour lookup rapide
     const dataMap = new Map(
       submissionData.map(d => [d.nodeId, d])
     );
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // ðŸ“‹ Ã‰TAPE 4 : Construire la rÃ©ponse
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📋 ÉTAPE 4 : Construire la réponse
+    // ═══════════════════════════════════════════════════════════════════════
     const variablesResponse = variables.map(variable => {
       const data = dataMap.get(variable.nodeId);
 
@@ -11675,7 +11679,7 @@ router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
       };
     });
 
-    console.log('âœ… [V2 API] RÃ©ponse construite\n');
+    console.log('✅ [V2 API] Réponse construite\n');
 
     return res.json({
       success: true,
@@ -11692,34 +11696,34 @@ router.get('/v2/submissions/:submissionId/variables', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('âŒ [V2 API] Erreur rÃ©cupÃ©ration variables:', error);
+    console.error('❌ [V2 API] Erreur récupération variables:', error);
     return res.status(500).json({
       success: false,
-      error: 'Erreur lors de la rÃ©cupÃ©ration des variables',
+      error: 'Erreur lors de la récupération des variables',
       details: error instanceof Error ? error.message : 'Erreur inconnue'
     });
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸ“¤ FIN DU SYSTÃˆME UNIVERSEL V2
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 📤 FIN DU SYSTÈME UNIVERSEL V2
+// ═══════════════════════════════════════════════════════════════════════════
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸ’¾ SYSTÃˆME DE SAUVEGARDE TBL AVANCÃ‰ - Brouillons & Versioning
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 💾 SYSTÈME DE SAUVEGARDE TBL AVANCÉ - Brouillons & Versioning
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * ðŸŽ¯ POST /api/tbl/submissions/stage
- * CrÃ©e ou met Ã  jour un brouillon temporaire (stage)
- * TTL: 24h - Auto-renouvelÃ© lors des modifications
+ * 🎯 POST /api/tbl/submissions/stage
+ * Crée ou met à jour un brouillon temporaire (stage)
+ * TTL: 24h - Auto-renouvelé lors des modifications
  */
 router.post('/submissions/stage', async (req, res) => {
   try {
     const { stageId, treeId, submissionId, leadId, formData, baseVersion } = req.body;
     const userId = (req as any).user?.id || 'system';
 
-    console.log('ðŸ“ [STAGE] CrÃ©ation/Update brouillon:', { stageId, treeId, submissionId, leadId, userId });
+    console.log('📝 [STAGE] Création/Update brouillon:', { stageId, treeId, submissionId, leadId, userId });
 
     // Calculer expiration (+24h)
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -11727,7 +11731,7 @@ router.post('/submissions/stage', async (req, res) => {
     let stage;
 
     if (stageId) {
-      // Mise Ã  jour d'un stage existant
+      // Mise à jour d'un stage existant
       stage = await prisma.treeBranchLeafStage.update({
         where: { id: stageId },
         data: {
@@ -11736,17 +11740,17 @@ router.post('/submissions/stage', async (req, res) => {
           expiresAt, // Renouvelle l'expiration
         }
       });
-      console.log('âœ… [STAGE] Brouillon mis Ã  jour:', stage.id);
+      console.log('✅ [STAGE] Brouillon mis à jour:', stage.id);
     } else {
-      // CrÃ©ation d'un nouveau stage
+      // Création d'un nouveau stage
       if (!treeId || !leadId) {
         return res.status(400).json({
           success: false,
-          error: 'treeId et leadId sont requis pour crÃ©er un stage'
+          error: 'treeId et leadId sont requis pour créer un stage'
         });
       }
 
-      // RÃ©cupÃ©rer la version de base si submissionId fourni
+      // Récupérer la version de base si submissionId fourni
       let currentBaseVersion = baseVersion || 1;
       if (submissionId && !baseVersion) {
         const submission = await prisma.treeBranchLeafSubmission.findUnique({
@@ -11768,7 +11772,7 @@ router.post('/submissions/stage', async (req, res) => {
           expiresAt
         }
       });
-      console.log('âœ… [STAGE] Nouveau brouillon crÃ©Ã©:', stage.id);
+      console.log('✅ [STAGE] Nouveau brouillon créé:', stage.id);
     }
 
     return res.json({
@@ -11781,7 +11785,7 @@ router.post('/submissions/stage', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('âŒ [STAGE] Erreur:', error);
+    console.error('❌ [STAGE] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur lors de la gestion du brouillon',
@@ -11791,9 +11795,9 @@ router.post('/submissions/stage', async (req, res) => {
 });
 
 /**
- * ðŸ” POST /api/tbl/submissions/stage/preview
- * PrÃ©visualise les calculs d'un stage sans sauvegarder
- * Utilise operation-interpreter pour Ã©valuer toutes les formules
+ * 🔍 POST /api/tbl/submissions/stage/preview
+ * Prévisualise les calculs d'un stage sans sauvegarder
+ * Utilise operation-interpreter pour évaluer toutes les formules
  */
 router.post('/submissions/stage/preview', async (req, res) => {
   try {
@@ -11806,9 +11810,9 @@ router.post('/submissions/stage/preview', async (req, res) => {
       });
     }
 
-    console.log('ðŸ” [STAGE PREVIEW] PrÃ©visualisation pour:', stageId);
+    console.log('🔍 [STAGE PREVIEW] Prévisualisation pour:', stageId);
 
-    // RÃ©cupÃ©rer le stage
+    // Récupérer le stage
     const stage = await prisma.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
@@ -11816,14 +11820,14 @@ router.post('/submissions/stage/preview', async (req, res) => {
     if (!stage) {
       return res.status(404).json({
         success: false,
-        error: 'Stage non trouvÃ©'
+        error: 'Stage non trouvé'
       });
     }
 
-    // âœ¨ Ã‰valuer tous les nÅ“uds variables avec operation-interpreter
+    // ✨ Évaluer tous les nœuds variables avec operation-interpreter
     const { evaluateVariableOperation } = await import('./operation-interpreter');
     
-    // RÃ©cupÃ©rer tous les nÅ“uds variables de l'arbre
+    // Récupérer tous les nœuds variables de l'arbre
     const variableNodes = await prisma.treeBranchLeafNode.findMany({
       where: { 
         treeId: stage.treeId,
@@ -11832,13 +11836,13 @@ router.post('/submissions/stage/preview', async (req, res) => {
       select: { id: true, label: true }
     });
 
-    // CrÃ©er une valueMap Ã  partir du formData du stage
+    // Créer une valueMap à partir du formData du stage
     const valueMapLocal = new Map<string, unknown>();
     Object.entries(stage.formData as Record<string, unknown>).forEach(([nodeId, value]) => {
       valueMapLocal.set(nodeId, value);
     });
 
-    // Ã‰valuer chaque variable
+    // Évaluer chaque variable
     const results = await Promise.all(
       variableNodes.map(async (node) => {
         try {
@@ -11857,7 +11861,7 @@ router.post('/submissions/stage/preview', async (req, res) => {
             operationDetail: evalResult.operationDetail
           };
         } catch (error) {
-          console.error(`âŒ Erreur Ã©valuation ${node.id}:`, error);
+          console.error(`❌ Erreur évaluation ${node.id}:`, error);
           return {
             nodeId: node.id,
             nodeLabel: node.label,
@@ -11870,7 +11874,7 @@ router.post('/submissions/stage/preview', async (req, res) => {
       })
     );
 
-    console.log('âœ… [STAGE PREVIEW] RÃ©sultats:', results.length, 'noeuds Ã©valuÃ©s');
+    console.log('✅ [STAGE PREVIEW] Résultats:', results.length, 'noeuds évalués');
 
     return res.json({
       success: true,
@@ -11886,19 +11890,19 @@ router.post('/submissions/stage/preview', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('âŒ [STAGE PREVIEW] Erreur:', error);
+    console.error('❌ [STAGE PREVIEW] Erreur:', error);
     return res.status(500).json({
       success: false,
-      error: 'Erreur lors de la prÃ©visualisation',
+      error: 'Erreur lors de la prévisualisation',
       details: error instanceof Error ? error.message : 'Erreur inconnue'
     });
   }
 });
 
 /**
- * ðŸ’¾ POST /api/tbl/submissions/stage/commit
- * Commit un stage vers une submission dÃ©finitive
- * GÃ¨re les conflits multi-utilisateurs et le versioning
+ * 💾 POST /api/tbl/submissions/stage/commit
+ * Commit un stage vers une submission définitive
+ * Gère les conflits multi-utilisateurs et le versioning
  */
 router.post('/submissions/stage/commit', async (req, res) => {
   try {
@@ -11912,9 +11916,9 @@ router.post('/submissions/stage/commit', async (req, res) => {
       });
     }
 
-    console.log('ðŸ’¾ [STAGE COMMIT] Commit brouillon:', { stageId, asNew, userId });
+    console.log('💾 [STAGE COMMIT] Commit brouillon:', { stageId, asNew, userId });
 
-    // RÃ©cupÃ©rer le stage
+    // Récupérer le stage
     const stage = await prisma.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
@@ -11922,15 +11926,15 @@ router.post('/submissions/stage/commit', async (req, res) => {
     if (!stage) {
       return res.status(404).json({
         success: false,
-        error: 'Stage non trouvÃ©'
+        error: 'Stage non trouvé'
       });
     }
 
-    // VÃ©rifier si le stage n'a pas expirÃ©
+    // Vérifier si le stage n'a pas expiré
     if (stage.expiresAt < new Date()) {
       return res.status(410).json({
         success: false,
-        error: 'Ce brouillon a expirÃ©',
+        error: 'Ce brouillon a expiré',
         expired: true
       });
     }
@@ -11939,13 +11943,13 @@ router.post('/submissions/stage/commit', async (req, res) => {
     let newVersion = 1;
 
     if (asNew || !stage.submissionId) {
-      // â•â•â• CRÃ‰ATION NOUVELLE SUBMISSION â•â•â•
-      console.log('ðŸ†• [STAGE COMMIT] CrÃ©ation nouvelle submission');
+      // ═══ CRÉATION NOUVELLE SUBMISSION ═══
+      console.log('🆕 [STAGE COMMIT] Création nouvelle submission');
 
-      // âœ¨ Ã‰valuer avec operation-interpreter
+      // ✨ Évaluer avec operation-interpreter
       const { evaluateVariableOperation } = await import('./operation-interpreter');
       
-      // RÃ©cupÃ©rer tous les nÅ“uds variables de l'arbre
+      // Récupérer tous les nœuds variables de l'arbre
       const variableNodes = await prisma.treeBranchLeafNode.findMany({
         where: { 
           treeId: stage.treeId,
@@ -11954,13 +11958,13 @@ router.post('/submissions/stage/commit', async (req, res) => {
         select: { id: true, label: true }
       });
 
-      // CrÃ©er une valueMap Ã  partir du formData du stage
+      // Créer une valueMap à partir du formData du stage
       const valueMapLocal = new Map<string, unknown>();
       Object.entries(stage.formData as Record<string, unknown>).forEach(([nodeId, value]) => {
         valueMapLocal.set(nodeId, value);
       });
 
-      // Ã‰valuer chaque variable
+      // Évaluer chaque variable
       const results = await Promise.all(
         variableNodes.map(async (node) => {
           try {
@@ -11979,15 +11983,15 @@ router.post('/submissions/stage/commit', async (req, res) => {
               operationDetail: evalResult.operationDetail
             };
           } catch (error) {
-            console.error(`âŒ Erreur Ã©valuation ${node.id}:`, error);
+            console.error(`❌ Erreur évaluation ${node.id}:`, error);
             return null;
           }
         })
       ).then(res => res.filter(r => r !== null));
 
-      // CrÃ©er la submission dans une transaction
+      // Créer la submission dans une transaction
       const result = await prisma.$transaction(async (tx) => {
-        // CrÃ©er la submission
+        // Créer la submission
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
             id: randomUUID(),
@@ -12002,7 +12006,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
           }
         });
 
-        // CrÃ©er les donnÃ©es de soumission
+        // Créer les données de soumission
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map(r => ({
@@ -12020,7 +12024,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
           });
         }
 
-        // CrÃ©er la premiÃ¨re version
+        // Créer la première version
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
             id: randomUUID(),
@@ -12043,13 +12047,13 @@ router.post('/submissions/stage/commit', async (req, res) => {
       submissionId = result.id;
       newVersion = 1;
 
-      console.log('âœ… [STAGE COMMIT] Nouvelle submission crÃ©Ã©e:', submissionId);
+      console.log('✅ [STAGE COMMIT] Nouvelle submission créée:', submissionId);
 
     } else {
-      // â•â•â• MISE Ã€ JOUR SUBMISSION EXISTANTE â•â•â•
-      console.log('ðŸ”„ [STAGE COMMIT] Mise Ã  jour submission existante:', stage.submissionId);
+      // ═══ MISE À JOUR SUBMISSION EXISTANTE ═══
+      console.log('🔄 [STAGE COMMIT] Mise à jour submission existante:', stage.submissionId);
 
-      // RÃ©cupÃ©rer la submission actuelle
+      // Récupérer la submission actuelle
       const currentSubmission = await prisma.treeBranchLeafSubmission.findUnique({
         where: { id: stage.submissionId },
         select: {
@@ -12065,18 +12069,18 @@ router.post('/submissions/stage/commit', async (req, res) => {
       if (!currentSubmission) {
         return res.status(404).json({
           success: false,
-          error: 'Submission originale non trouvÃ©e'
+          error: 'Submission originale non trouvée'
         });
       }
 
-      // â•â•â• DÃ‰TECTION CONFLITS â•â•â•
+      // ═══ DÉTECTION CONFLITS ═══
       if (currentSubmission.currentVersion > stage.baseVersion) {
-        console.log('âš ï¸ [STAGE COMMIT] Conflit dÃ©tectÃ©!', {
+        console.log('⚠️ [STAGE COMMIT] Conflit détecté!', {
           baseVersion: stage.baseVersion,
           currentVersion: currentSubmission.currentVersion
         });
 
-        // RÃ©cupÃ©rer les donnÃ©es actuelles pour comparaison
+        // Récupérer les données actuelles pour comparaison
         const currentData = await prisma.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: stage.submissionId },
           select: { nodeId: true, value: true }
@@ -12085,11 +12089,11 @@ router.post('/submissions/stage/commit', async (req, res) => {
         const currentDataMap = new Map(currentData.map(d => [d.nodeId, d.value]));
         const stageFormData = stage.formData as Record<string, unknown>;
 
-        // DÃ©tecter les conflits champ par champ
+        // Détecter les conflits champ par champ
         const conflicts = [];
         for (const [nodeId, stageValue] of Object.entries(stageFormData)) {
           const currentValue = currentDataMap.get(nodeId);
-          // Conflit si la valeur a changÃ© des deux cÃ´tÃ©s
+          // Conflit si la valeur a changé des deux côtés
           if (currentValue !== undefined && String(stageValue) !== currentValue) {
             conflicts.push({
               nodeId,
@@ -12100,42 +12104,42 @@ router.post('/submissions/stage/commit', async (req, res) => {
         }
 
         if (conflicts.length > 0) {
-          console.log('âŒ [STAGE COMMIT] Conflits Ã  rÃ©soudre:', conflicts.length);
+          console.log('❌ [STAGE COMMIT] Conflits à résoudre:', conflicts.length);
           return res.status(409).json({
             success: false,
             conflict: true,
             conflicts,
             lastEditedBy: currentSubmission.lastEditedBy,
             lastEditedAt: currentSubmission.updatedAt,
-            message: 'Des modifications ont Ã©tÃ© faites par un autre utilisateur'
+            message: 'Des modifications ont été faites par un autre utilisateur'
           });
         }
 
-        console.log('âœ… [STAGE COMMIT] Pas de conflit rÃ©el - merge automatique');
+        console.log('✅ [STAGE COMMIT] Pas de conflit réel - merge automatique');
       }
 
-      // VÃ©rifier le verrouillage
+      // Vérifier le verrouillage
       if (currentSubmission.lockedBy && currentSubmission.lockedBy !== userId) {
         const lockAge = currentSubmission.lockedAt ? 
           Date.now() - new Date(currentSubmission.lockedAt).getTime() : 0;
         
-        // Lock expire aprÃ¨s 1h
+        // Lock expire après 1h
         if (lockAge < 60 * 60 * 1000) {
           return res.status(423).json({
             success: false,
             locked: true,
             lockedBy: currentSubmission.lockedBy,
-            message: 'Ce devis est en cours d\'Ã©dition par un autre utilisateur'
+            message: 'Ce devis est en cours d\'édition par un autre utilisateur'
           });
         }
       }
 
-      // â•â•â• COMMIT AVEC VERSIONING â•â•â•
+      // ═══ COMMIT AVEC VERSIONING ═══
       const result = await prisma.$transaction(async (tx) => {
-        // âœ¨ Ã‰valuer avec operation-interpreter
+        // ✨ Évaluer avec operation-interpreter
         const { evaluateVariableOperation } = await import('./operation-interpreter');
         
-        // RÃ©cupÃ©rer tous les nÅ“uds variables de l'arbre
+        // Récupérer tous les nœuds variables de l'arbre
         const variableNodes = await tx.treeBranchLeafNode.findMany({
           where: { 
             treeId: stage.treeId,
@@ -12144,13 +12148,13 @@ router.post('/submissions/stage/commit', async (req, res) => {
           select: { id: true, label: true }
         });
 
-        // CrÃ©er une valueMap Ã  partir du formData du stage
+        // Créer une valueMap à partir du formData du stage
         const valueMapLocal = new Map<string, unknown>();
         Object.entries(stage.formData as Record<string, unknown>).forEach(([nodeId, value]) => {
           valueMapLocal.set(nodeId, value);
         });
 
-        // Ã‰valuer chaque variable
+        // Évaluer chaque variable
         const results = await Promise.all(
           variableNodes.map(async (node) => {
             try {
@@ -12169,7 +12173,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
                 operationDetail: evalResult.operationDetail
               };
             } catch (error) {
-              console.error(`âŒ Erreur Ã©valuation ${node.id}:`, error);
+              console.error(`❌ Erreur évaluation ${node.id}:`, error);
               return null;
             }
           })
@@ -12177,24 +12181,24 @@ router.post('/submissions/stage/commit', async (req, res) => {
 
         const nextVersion = currentSubmission.currentVersion + 1;
 
-        // Mettre Ã  jour la submission
+        // Mettre à jour la submission
         const updated = await tx.treeBranchLeafSubmission.update({
           where: { id: stage.submissionId },
           data: {
             currentVersion: nextVersion,
             lastEditedBy: userId,
-            lockedBy: null, // LibÃ©rer le lock
+            lockedBy: null, // Libérer le lock
             lockedAt: null,
             updatedAt: new Date()
           }
         });
 
-        // Supprimer les anciennes donnÃ©es
+        // Supprimer les anciennes données
         await tx.treeBranchLeafSubmissionData.deleteMany({
           where: { submissionId: stage.submissionId }
         });
 
-        // CrÃ©er les nouvelles donnÃ©es
+        // Créer les nouvelles données
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map(r => ({
@@ -12212,7 +12216,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
           });
         }
 
-        // CrÃ©er la nouvelle version
+        // Créer la nouvelle version
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
             id: randomUUID(),
@@ -12223,7 +12227,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
           }
         });
 
-        // Nettoyer les vieilles versions (garder 20 derniÃ¨res)
+        // Nettoyer les vieilles versions (garder 20 dernières)
         const versions = await tx.treeBranchLeafSubmissionVersion.findMany({
           where: { submissionId: updated.id },
           orderBy: { version: 'desc' },
@@ -12235,7 +12239,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
           await tx.treeBranchLeafSubmissionVersion.deleteMany({
             where: { id: { in: versions.map(v => v.id) } }
           });
-          console.log(`ðŸ—‘ï¸ [STAGE COMMIT] ${versions.length} anciennes versions supprimÃ©es`);
+          console.log(`🗑️ [STAGE COMMIT] ${versions.length} anciennes versions supprimées`);
         }
 
         // Supprimer le stage
@@ -12249,18 +12253,18 @@ router.post('/submissions/stage/commit', async (req, res) => {
       submissionId = result.submission.id;
       newVersion = result.version;
 
-      console.log('âœ… [STAGE COMMIT] Submission mise Ã  jour:', submissionId, 'v' + newVersion);
+      console.log('✅ [STAGE COMMIT] Submission mise à jour:', submissionId, 'v' + newVersion);
     }
 
     return res.json({
       success: true,
       submissionId,
       version: newVersion,
-      message: 'Devis enregistrÃ© avec succÃ¨s'
+      message: 'Devis enregistré avec succès'
     });
 
   } catch (error) {
-    console.error('âŒ [STAGE COMMIT] Erreur:', error);
+    console.error('❌ [STAGE COMMIT] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur lors de la sauvegarde',
@@ -12270,7 +12274,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
 });
 
 /**
- * ðŸ—‘ï¸ POST /api/tbl/submissions/stage/discard
+ * 🗑️ POST /api/tbl/submissions/stage/discard
  * Supprime un brouillon (annulation)
  */
 router.post('/submissions/stage/discard', async (req, res) => {
@@ -12284,21 +12288,21 @@ router.post('/submissions/stage/discard', async (req, res) => {
       });
     }
 
-    console.log('ðŸ—‘ï¸ [STAGE DISCARD] Suppression brouillon:', stageId);
+    console.log('🗑️ [STAGE DISCARD] Suppression brouillon:', stageId);
 
     await prisma.treeBranchLeafStage.delete({
       where: { id: stageId }
     });
 
-    console.log('âœ… [STAGE DISCARD] Brouillon supprimÃ©');
+    console.log('✅ [STAGE DISCARD] Brouillon supprimé');
 
     return res.json({
       success: true,
-      message: 'Brouillon supprimÃ©'
+      message: 'Brouillon supprimé'
     });
 
   } catch (error) {
-    console.error('âŒ [STAGE DISCARD] Erreur:', error);
+    console.error('❌ [STAGE DISCARD] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur lors de la suppression du brouillon',
@@ -12308,20 +12312,20 @@ router.post('/submissions/stage/discard', async (req, res) => {
 });
 
 /**
- * ðŸ“‹ GET /api/tbl/submissions/my-drafts
- * RÃ©cupÃ¨re les brouillons non sauvegardÃ©s de l'utilisateur
- * Pour rÃ©cupÃ©ration automatique au retour
+ * 📋 GET /api/tbl/submissions/my-drafts
+ * Récupère les brouillons non sauvegardés de l'utilisateur
+ * Pour récupération automatique au retour
  */
 router.get('/submissions/my-drafts', async (req, res) => {
   try {
     const userId = (req as any).user?.id || 'system';
     const { leadId, treeId } = req.query;
 
-    console.log('ðŸ“‹ [MY DRAFTS] RÃ©cupÃ©ration brouillons:', { userId, leadId, treeId });
+    console.log('📋 [MY DRAFTS] Récupération brouillons:', { userId, leadId, treeId });
 
     const where: any = {
       userId,
-      expiresAt: { gt: new Date() } // Seulement les non-expirÃ©s
+      expiresAt: { gt: new Date() } // Seulement les non-expirés
     };
 
     if (leadId) where.leadId = leadId;
@@ -12342,7 +12346,7 @@ router.get('/submissions/my-drafts', async (req, res) => {
       }
     });
 
-    console.log('âœ… [MY DRAFTS] TrouvÃ©:', drafts.length, 'brouillons');
+    console.log('✅ [MY DRAFTS] Trouvé:', drafts.length, 'brouillons');
 
     return res.json({
       success: true,
@@ -12361,24 +12365,24 @@ router.get('/submissions/my-drafts', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('âŒ [MY DRAFTS] Erreur:', error);
+    console.error('❌ [MY DRAFTS] Erreur:', error);
     return res.status(500).json({
       success: false,
-      error: 'Erreur lors de la rÃ©cupÃ©ration des brouillons',
+      error: 'Erreur lors de la récupération des brouillons',
       details: error instanceof Error ? error.message : 'Erreur inconnue'
     });
   }
 });
 
 /**
- * ðŸ“œ GET /api/tbl/submissions/:id/versions
- * RÃ©cupÃ¨re l'historique des versions d'une submission
+ * 📜 GET /api/tbl/submissions/:id/versions
+ * Récupère l'historique des versions d'une submission
  */
 router.get('/submissions/:id/versions', async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log('ðŸ“œ [VERSIONS] RÃ©cupÃ©ration historique:', id);
+    console.log('📜 [VERSIONS] Récupération historique:', id);
 
     const versions = await prisma.treeBranchLeafSubmissionVersion.findMany({
       where: { submissionId: id },
@@ -12395,7 +12399,7 @@ router.get('/submissions/:id/versions', async (req, res) => {
       }
     });
 
-    console.log('âœ… [VERSIONS] TrouvÃ©:', versions.length, 'versions');
+    console.log('✅ [VERSIONS] Trouvé:', versions.length, 'versions');
 
     return res.json({
       success: true,
@@ -12413,27 +12417,27 @@ router.get('/submissions/:id/versions', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('âŒ [VERSIONS] Erreur:', error);
+    console.error('❌ [VERSIONS] Erreur:', error);
     return res.status(500).json({
       success: false,
-      error: 'Erreur lors de la rÃ©cupÃ©ration de l\'historique',
+      error: 'Erreur lors de la récupération de l\'historique',
       details: error instanceof Error ? error.message : 'Erreur inconnue'
     });
   }
 });
 
 /**
- * ðŸ”™ POST /api/tbl/submissions/:id/restore/:version
- * Restaure une version antÃ©rieure d'une submission
+ * 🔙 POST /api/tbl/submissions/:id/restore/:version
+ * Restaure une version antérieure d'une submission
  */
 router.post('/submissions/:id/restore/:version', async (req, res) => {
   try {
     const { id, version } = req.params;
     const userId = (req as any).user?.id || 'system';
 
-    console.log('ðŸ”™ [RESTORE] Restauration version:', { id, version, userId });
+    console.log('🔙 [RESTORE] Restauration version:', { id, version, userId });
 
-    // RÃ©cupÃ©rer la version Ã  restaurer
+    // Récupérer la version à restaurer
     const versionToRestore = await prisma.treeBranchLeafSubmissionVersion.findUnique({
       where: {
         submissionId_version: {
@@ -12446,11 +12450,11 @@ router.post('/submissions/:id/restore/:version', async (req, res) => {
     if (!versionToRestore) {
       return res.status(404).json({
         success: false,
-        error: 'Version non trouvÃ©e'
+        error: 'Version non trouvée'
       });
     }
 
-    // CrÃ©er un stage avec les donnÃ©es de cette version
+    // Créer un stage avec les données de cette version
     const submission = await prisma.treeBranchLeafSubmission.findUnique({
       where: { id },
       select: { treeId: true, leadId: true, currentVersion: true }
@@ -12459,7 +12463,7 @@ router.post('/submissions/:id/restore/:version', async (req, res) => {
     if (!submission) {
       return res.status(404).json({
         success: false,
-        error: 'Submission non trouvÃ©e'
+        error: 'Submission non trouvée'
       });
     }
 
@@ -12476,16 +12480,16 @@ router.post('/submissions/:id/restore/:version', async (req, res) => {
       }
     });
 
-    console.log('âœ… [RESTORE] Stage crÃ©Ã© pour restauration:', stage.id);
+    console.log('✅ [RESTORE] Stage créé pour restauration:', stage.id);
 
     return res.json({
       success: true,
       stageId: stage.id,
-      message: `Version ${version} chargÃ©e en brouillon. Enregistrez pour confirmer la restauration.`
+      message: `Version ${version} chargée en brouillon. Enregistrez pour confirmer la restauration.`
     });
 
   } catch (error) {
-    console.error('âŒ [RESTORE] Erreur:', error);
+    console.error('❌ [RESTORE] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur lors de la restauration',
@@ -12494,27 +12498,27 @@ router.post('/submissions/:id/restore/:version', async (req, res) => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸ’¾ FIN DU SYSTÃˆME DE SAUVEGARDE TBL AVANCÃ‰
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 💾 FIN DU SYSTÈME DE SAUVEGARDE TBL AVANCÉ
+// ═══════════════════════════════════════════════════════════════════════════
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸ”— SYSTÃˆME DE RÃ‰FÃ‰RENCES PARTAGÃ‰ES (SHARED REFERENCES)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔗 SYSTÈME DE RÉFÉRENCES PARTAGÉES (SHARED REFERENCES)
+// ═══════════════════════════════════════════════════════════════════════════
 
-// GET /api/treebranchleaf/shared-references - Liste toutes les rÃ©fÃ©rences partagÃ©es disponibles
+// GET /api/treebranchleaf/shared-references - Liste toutes les références partagées disponibles
 router.get('/shared-references', async (req, res) => {
   try {
     const { organizationId } = getAuthCtx(req as unknown as MinimalReq);
 
-    // RÃ©cupÃ©rer tous les nÅ“uds marquÃ©s comme templates (sources de rÃ©fÃ©rences)
-    // ðŸŽ¯ FILTRER les options SELECT pour qu'elles n'apparaissent pas dans les choix
+    // Récupérer tous les nœuds marqués comme templates (sources de références)
+    // 🎯 FILTRER les options SELECT pour qu'elles n'apparaissent pas dans les choix
     const templates = await prisma.treeBranchLeafNode.findMany({
       where: {
         isSharedReference: true,
-        sharedReferenceId: null, // C'est une source, pas une rÃ©fÃ©rence
+        sharedReferenceId: null, // C'est une source, pas une référence
         type: {
-          not: 'leaf_option' // âŒ Exclure les options de SELECT
+          not: 'leaf_option' // ❌ Exclure les options de SELECT
         },
         TreeBranchLeafTree: {
           organizationId
@@ -12524,7 +12528,7 @@ router.get('/shared-references', async (req, res) => {
         id: true,
         label: true,
         sharedReferenceName: true,
-        // âœ… sharedReferenceCategory SUPPRIMÃ‰
+        // ✅ sharedReferenceCategory SUPPRIMÉ
         sharedReferenceDescription: true,
         referenceUsages: {
           select: {
@@ -12540,7 +12544,7 @@ router.get('/shared-references', async (req, res) => {
       }
     });
 
-    console.log(`ðŸ“Š [SHARED REF] ${templates.length} rÃ©fÃ©rences trouvÃ©es en base`);
+    console.log(`📊 [SHARED REF] ${templates.length} références trouvées en base`);
     templates.forEach((t, i) => {
       console.log(`  ${i + 1}. ID: ${t.id}, Nom: ${t.sharedReferenceName}, Label: ${t.label}`);
     });
@@ -12548,7 +12552,7 @@ router.get('/shared-references', async (req, res) => {
     const formatted = templates.map(template => ({
       id: template.id,
       label: template.sharedReferenceName || template.label,
-      // âœ… category SUPPRIMÃ‰
+      // ✅ category SUPPRIMÉ
       description: template.sharedReferenceDescription,
       usageCount: template.referenceUsages.length,
       usages: template.referenceUsages.map(usage => ({
@@ -12557,15 +12561,15 @@ router.get('/shared-references', async (req, res) => {
       }))
     }));
 
-    console.log(`ðŸ“¤ [SHARED REF] Retour au frontend: ${JSON.stringify(formatted, null, 2)}`);
+    console.log(`📤 [SHARED REF] Retour au frontend: ${JSON.stringify(formatted, null, 2)}`);
     res.json(formatted);
   } catch (error) {
-    console.error('âŒ [SHARED REF] Erreur liste:', error);
+    console.error('❌ [SHARED REF] Erreur liste:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// GET /api/treebranchleaf/shared-references/:refId - DÃ©tails d'une rÃ©fÃ©rence
+// GET /api/treebranchleaf/shared-references/:refId - Détails d'une référence
 router.get('/shared-references/:refId', async (req, res) => {
   try {
     const { refId } = req.params;
@@ -12584,7 +12588,7 @@ router.get('/shared-references/:refId', async (req, res) => {
         id: true,
         label: true,
         sharedReferenceName: true,
-        // âœ… sharedReferenceCategory SUPPRIMÃ‰
+        // ✅ sharedReferenceCategory SUPPRIMÉ
         sharedReferenceDescription: true,
         referenceUsages: {
           select: {
@@ -12601,13 +12605,13 @@ router.get('/shared-references/:refId', async (req, res) => {
     });
 
     if (!template) {
-      return res.status(404).json({ error: 'RÃ©fÃ©rence introuvable' });
+      return res.status(404).json({ error: 'Référence introuvable' });
     }
 
     res.json({
       id: template.id,
       label: template.sharedReferenceName || template.label,
-      // âœ… category SUPPRIMÃ‰
+      // ✅ category SUPPRIMÉ
       description: template.sharedReferenceDescription,
       usageCount: template.referenceUsages.length,
       usages: template.referenceUsages.map(usage => ({
@@ -12616,19 +12620,19 @@ router.get('/shared-references/:refId', async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('âŒ [SHARED REF] Erreur dÃ©tails:', error);
+    console.error('❌ [SHARED REF] Erreur détails:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// PUT /api/treebranchleaf/shared-references/:refId - Modifier une rÃ©fÃ©rence partagÃ©e
+// PUT /api/treebranchleaf/shared-references/:refId - Modifier une référence partagée
 router.put('/shared-references/:refId', async (req, res) => {
   try {
     const { refId } = req.params;
     const { name, description } = req.body;
     const { organizationId } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier que la rÃ©fÃ©rence existe et appartient Ã  l'organisation
+    // Vérifier que la référence existe et appartient à l'organisation
     const template = await prisma.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
@@ -12641,10 +12645,10 @@ router.put('/shared-references/:refId', async (req, res) => {
     });
 
     if (!template) {
-      return res.status(404).json({ error: 'RÃ©fÃ©rence introuvable' });
+      return res.status(404).json({ error: 'Référence introuvable' });
     }
 
-    // Mettre Ã  jour la rÃ©fÃ©rence
+    // Mettre à jour la référence
     const updated = await prisma.treeBranchLeafNode.update({
       where: { id: refId },
       data: {
@@ -12661,21 +12665,21 @@ router.put('/shared-references/:refId', async (req, res) => {
       }
     });
 
-    console.log(`âœ… [SHARED REF] RÃ©fÃ©rence ${refId} modifiÃ©e:`, updated);
+    console.log(`✅ [SHARED REF] Référence ${refId} modifiée:`, updated);
     res.json({ success: true, reference: updated });
   } catch (error) {
-    console.error('âŒ [SHARED REF] Erreur modification:', error);
+    console.error('❌ [SHARED REF] Erreur modification:', error);
     res.status(500).json({ error: 'Erreur lors de la modification' });
   }
 });
 
-// DELETE /api/treebranchleaf/shared-references/:refId - Supprimer une rÃ©fÃ©rence partagÃ©e
+// DELETE /api/treebranchleaf/shared-references/:refId - Supprimer une référence partagée
 router.delete('/shared-references/:refId', async (req, res) => {
   try {
     const { refId } = req.params;
     const { organizationId } = getAuthCtx(req as unknown as MinimalReq);
 
-    // VÃ©rifier que la rÃ©fÃ©rence existe et appartient Ã  l'organisation
+    // Vérifier que la référence existe et appartient à l'organisation
     const template = await prisma.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
@@ -12691,14 +12695,14 @@ router.delete('/shared-references/:refId', async (req, res) => {
     });
 
     if (!template) {
-      return res.status(404).json({ error: 'RÃ©fÃ©rence introuvable' });
+      return res.status(404).json({ error: 'Référence introuvable' });
     }
 
-    // Si la rÃ©fÃ©rence est utilisÃ©e, dÃ©tacher tous les usages avant de supprimer
+    // Si la référence est utilisée, détacher tous les usages avant de supprimer
     if (template.referenceUsages.length > 0) {
-      console.log(`âš ï¸ [SHARED REF] DÃ©tachement de ${template.referenceUsages.length} usage(s) avant suppression`);
+      console.log(`⚠️ [SHARED REF] Détachement de ${template.referenceUsages.length} usage(s) avant suppression`);
       
-      // DÃ©tacher tous les nÅ“uds qui utilisent cette rÃ©fÃ©rence
+      // Détacher tous les nœuds qui utilisent cette référence
       await prisma.treeBranchLeafNode.updateMany({
         where: {
           sharedReferenceId: refId
@@ -12712,29 +12716,29 @@ router.delete('/shared-references/:refId', async (req, res) => {
       });
     }
 
-    // Supprimer la rÃ©fÃ©rence
+    // Supprimer la référence
     await prisma.treeBranchLeafNode.delete({
       where: { id: refId }
     });
 
-    console.log(`ðŸ—‘ï¸ [SHARED REF] RÃ©fÃ©rence ${refId} supprimÃ©e`);
-    res.json({ success: true, message: 'RÃ©fÃ©rence supprimÃ©e avec succÃ¨s' });
+    console.log(`🗑️ [SHARED REF] Référence ${refId} supprimée`);
+    res.json({ success: true, message: 'Référence supprimée avec succès' });
   } catch (error) {
-    console.error('âŒ [SHARED REF] Erreur suppression:', error);
+    console.error('❌ [SHARED REF] Erreur suppression:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
 
-// POST /api/treebranchleaf/trees/:treeId/create-shared-reference - CrÃ©er un nouveau nÅ“ud rÃ©fÃ©rence partagÃ©
+// POST /api/treebranchleaf/trees/:treeId/create-shared-reference - Créer un nouveau nœud référence partagé
 router.post('/trees/:treeId/create-shared-reference', async (req, res) => {
   try {
     const { treeId } = req.params;
     const { name, description, fieldType, label } = req.body;
     const { organizationId } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log('ðŸ“ [SHARED REF] CrÃ©ation nouveau nÅ“ud rÃ©fÃ©rence:', { treeId, name, description, fieldType, label });
+    console.log('📝 [SHARED REF] Création nouveau nœud référence:', { treeId, name, description, fieldType, label });
 
-    // VÃ©rifier l'accÃ¨s Ã  l'arbre
+    // Vérifier l'accès à l'arbre
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: {
         id: treeId,
@@ -12746,28 +12750,28 @@ router.post('/trees/:treeId/create-shared-reference', async (req, res) => {
       return res.status(404).json({ error: 'Arbre introuvable' });
     }
 
-    // GÃ©nÃ©rer un nouvel ID unique
+    // Générer un nouvel ID unique
     const newNodeId = `shared-ref-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // CrÃ©er le nÅ“ud rÃ©fÃ©rence partagÃ©
+    // Créer le nœud référence partagé
     const newNode = await prisma.treeBranchLeafNode.create({
       data: {
         id: newNodeId,
         treeId,
-        type: 'leaf_field', // âœ… OBLIGATOIRE : type du nÅ“ud
+        type: 'leaf_field', // ✅ OBLIGATOIRE : type du nœud
         label: label || name,
         fieldType: fieldType || 'TEXT',
-        parentId: null, // âœ… CORRECTION: null au lieu de 'ROOT' (contrainte de clÃ© Ã©trangÃ¨re)
-        order: 9999, // Ordre Ã©levÃ© pour les mettre Ã  la fin
+        parentId: null, // ✅ CORRECTION: null au lieu de 'ROOT' (contrainte de clé étrangère)
+        order: 9999, // Ordre élevé pour les mettre à la fin
         isSharedReference: true,
         sharedReferenceId: null, // C'est une source
         sharedReferenceName: name,
         sharedReferenceDescription: description,
-        updatedAt: new Date() // âœ… OBLIGATOIRE : timestamp de mise Ã  jour
+        updatedAt: new Date() // ✅ OBLIGATOIRE : timestamp de mise à jour
       }
     });
 
-    console.log('âœ… [SHARED REF] Nouveau nÅ“ud rÃ©fÃ©rence crÃ©Ã©:', newNode.id);
+    console.log('✅ [SHARED REF] Nouveau nœud référence créé:', newNode.id);
     res.json({ 
       success: true,
       id: newNode.id,
@@ -12778,24 +12782,24 @@ router.post('/trees/:treeId/create-shared-reference', async (req, res) => {
         sharedReferenceName: newNode.sharedReferenceName,
         sharedReferenceDescription: newNode.sharedReferenceDescription
       },
-      message: 'RÃ©fÃ©rence partagÃ©e crÃ©Ã©e avec succÃ¨s'
+      message: 'Référence partagée créée avec succès'
     });
   } catch (error) {
-    console.error('âŒ [SHARED REF] Erreur crÃ©ation:', error);
+    console.error('❌ [SHARED REF] Erreur création:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// POST /api/treebranchleaf/nodes/:nodeId/link-shared-references - Lier des rÃ©fÃ©rences partagÃ©es Ã  un nÅ“ud
+// POST /api/treebranchleaf/nodes/:nodeId/link-shared-references - Lier des références partagées à un nœud
 router.post('/nodes/:nodeId/link-shared-references', async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const { referenceIds } = req.body; // Array d'IDs de rÃ©fÃ©rences Ã  lier
+    const { referenceIds } = req.body; // Array d'IDs de références à lier
     const { organizationId } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log('ðŸ”— [SHARED REF] Liaison rÃ©fÃ©rences:', { nodeId, referenceIds });
+    console.log('🔗 [SHARED REF] Liaison références:', { nodeId, referenceIds });
 
-    // VÃ©rifier l'accÃ¨s au nÅ“ud
+    // Vérifier l'accès au nœud
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -12806,10 +12810,10 @@ router.post('/nodes/:nodeId/link-shared-references', async (req, res) => {
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud introuvable' });
+      return res.status(404).json({ error: 'Nœud introuvable' });
     }
 
-    // Mettre Ã  jour le nÅ“ud avec les IDs des rÃ©fÃ©rences
+    // Mettre à jour le nœud avec les IDs des références
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
@@ -12817,27 +12821,27 @@ router.post('/nodes/:nodeId/link-shared-references', async (req, res) => {
       }
     });
 
-    console.log('âœ… [SHARED REF] RÃ©fÃ©rences liÃ©es avec succÃ¨s:', nodeId);
+    console.log('✅ [SHARED REF] Références liées avec succès:', nodeId);
     res.json({ 
       success: true,
-      message: `${referenceIds.length} rÃ©fÃ©rence(s) liÃ©e(s) avec succÃ¨s`
+      message: `${referenceIds.length} référence(s) liée(s) avec succès`
     });
   } catch (error) {
-    console.error('âŒ [SHARED REF] Erreur liaison:', error);
+    console.error('❌ [SHARED REF] Erreur liaison:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// POST /api/treebranchleaf/nodes/:nodeId/convert-to-reference - Convertir un nÅ“ud en rÃ©fÃ©rence partagÃ©e
+// POST /api/treebranchleaf/nodes/:nodeId/convert-to-reference - Convertir un nœud en référence partagée
 router.post('/nodes/:nodeId/convert-to-reference', async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const { name, description } = req.body; // âœ… CATEGORY SUPPRIMÃ‰E
+    const { name, description } = req.body; // ✅ CATEGORY SUPPRIMÉE
     const { organizationId } = getAuthCtx(req as unknown as MinimalReq);
 
-    console.log('ðŸ“ [SHARED REF] Conversion nÅ“ud en rÃ©fÃ©rence:', { nodeId, name, description });
+    console.log('📝 [SHARED REF] Conversion nœud en référence:', { nodeId, name, description });
 
-    // VÃ©rifier l'accÃ¨s
+    // Vérifier l'accès
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -12848,50 +12852,50 @@ router.post('/nodes/:nodeId/convert-to-reference', async (req, res) => {
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'NÅ“ud introuvable' });
+      return res.status(404).json({ error: 'Nœud introuvable' });
     }
 
-    // Convertir en source de rÃ©fÃ©rence
+    // Convertir en source de référence
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         isSharedReference: true,
         sharedReferenceId: null, // C'est une source
         sharedReferenceName: name,
-        // âœ… sharedReferenceCategory SUPPRIMÃ‰
+        // ✅ sharedReferenceCategory SUPPRIMÉ
         sharedReferenceDescription: description
       }
     });
 
-    console.log('âœ… [SHARED REF] RÃ©fÃ©rence crÃ©Ã©e avec succÃ¨s:', nodeId);
+    console.log('✅ [SHARED REF] Référence créée avec succès:', nodeId);
     res.json({ 
       success: true,
       id: nodeId,
-      message: 'RÃ©fÃ©rence crÃ©Ã©e avec succÃ¨s'
+      message: 'Référence créée avec succès'
     });
   } catch (error) {
-    console.error('âŒ [SHARED REF] Erreur conversion:', error);
+    console.error('❌ [SHARED REF] Erreur conversion:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// ðŸ”— FIN DU SYSTÃˆME DE RÃ‰FÃ‰RENCES PARTAGÃ‰ES
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔗 FIN DU SYSTÈME DE RÉFÉRENCES PARTAGÉES
+// ═══════════════════════════════════════════════════════════════════════════
 
 
 
 
 // =============================================================================
-// ðŸ”„ COPIE DE VARIABLE AVEC CAPACITÃ‰S - SystÃ¨me de suffixe -N
+// 🔄 COPIE DE VARIABLE AVEC CAPACITÉS - Système de suffixe -N
 // =============================================================================
 /**
  * POST /api/treebranchleaf/nodes/:nodeId/copy-linked-variable
- * Copie une variable avec toutes ses capacitÃ©s (formules, conditions, tables)
+ * Copie une variable avec toutes ses capacités (formules, conditions, tables)
  * 
  * Body:
- *   - variableId: ID de la variable Ã  copier (peut avoir suffixe -N)
- *   - newSuffix: Nouveau numÃ©ro de suffixe pour la copie (ex: 2)
+ *   - variableId: ID de la variable à copier (peut avoir suffixe -N)
+ *   - newSuffix: Nouveau numéro de suffixe pour la copie (ex: 2)
  * 
  * Retourne:
  * {
@@ -12903,7 +12907,7 @@ router.post('/nodes/:nodeId/convert-to-reference', async (req, res) => {
  *   error?: string
  * }
  */
-// (revert) suppression des routes utilitaires ajoutées au niveau supérieur
+// (revert) suppression des routes utilitaires ajout�es au niveau sup�rieur
 
 router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
   try {
@@ -12915,10 +12919,10 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       targetNodeId?: string;
     };
 
-    console.warn('⚠️ [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.');
+    console.warn('?? [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.');
     // Hint for automated clients
     res.set('X-Deprecated-API', '/api/repeat');
-    console.log('ðŸ”„ [COPY-LINKED-VAR] DÃ©but - nodeId:', nodeId, 'variableId:', variableId, 'newSuffix:', newSuffix);
+    console.log('🔄 [COPY-LINKED-VAR] Début - nodeId:', nodeId, 'variableId:', variableId, 'newSuffix:', newSuffix);
 
     // NOTE: the '/variables/:variableId/create-display' util route was nested
     // under the copy-linked-variable handler historically. That caused
@@ -12928,17 +12932,17 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
 
     if (!variableId || newSuffix === undefined) {
       return res.status(400).json({
-        error: 'variableId et newSuffix requis dans le corps de la requÃªte'
+        error: 'variableId et newSuffix requis dans le corps de la requête'
       });
     }
 
     if (!Number.isInteger(newSuffix) || newSuffix < 1) {
       return res.status(400).json({
-        error: 'newSuffix doit Ãªtre un nombre entier positif'
+        error: 'newSuffix doit être un nombre entier positif'
       });
     }
 
-    // VÃ©rifier l'accÃ¨s au noeud
+    // Vérifier l'accès au noeud
     const node = await prisma.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -12953,12 +12957,12 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       return res.status(404).json({ error: 'Noeud introuvable' });
     }
 
-  console.log('✅ Noeud trouvé:', node.label || nodeId);
+  console.log('? Noeud trouv�:', node.label || nodeId);
 
-    // Déterminer le nœud cible: soit le nodeId fourni, soit une copie du nœud propriétaire de la variable
+    // D�terminer le n�ud cible: soit le nodeId fourni, soit une copie du n�ud propri�taire de la variable
   let targetNodeId = nodeId;
   const shouldDuplicateNode = duplicateNode === undefined ? true : Boolean(duplicateNode);
-  // Mapping minimal pour réécrire les références dans les capacités (ownerNode → targetNode)
+  // Mapping minimal pour r��crire les r�f�rences dans les capacit�s (ownerNode ? targetNode)
   let ownerNodeIdForMap: string | null = null;
 
   // Si un targetNodeId explicite est fourni et qu'on ne duplique pas, l'utiliser comme cible
@@ -12967,26 +12971,26 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       if (!targetNode) {
         return res.status(404).json({ error: 'targetNodeId introuvable' });
       }
-      // Vérifier même arbre
+      // V�rifier m�me arbre
       if (targetNode.treeId !== node.treeId) {
-        return res.status(400).json({ error: 'targetNodeId doit appartenir au même arbre' });
+        return res.status(400).json({ error: 'targetNodeId doit appartenir au m�me arbre' });
       }
       targetNodeId = targetNode.id;
-      console.log(`🎯 [COPY-LINKED-VAR] Cible explicite fournie: ${targetNodeId}`);
-      // Déterminer l'ownerNode d'origine de la variable pour construire le nodeIdMap
+      console.log(`?? [COPY-LINKED-VAR] Cible explicite fournie: ${targetNodeId}`);
+      // D�terminer l'ownerNode d'origine de la variable pour construire le nodeIdMap
       if (variableId) {
         const originalVarForMap = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
         if (originalVarForMap) ownerNodeIdForMap = originalVarForMap.nodeId;
       }
   } else if (shouldDuplicateNode) {
-      // Charger la variable originale pour connaître son nœud propriétaire
+      // Charger la variable originale pour conna�tre son n�ud propri�taire
       const originalVar = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId! } });
       if (!originalVar) {
         return res.status(404).json({ error: 'Variable introuvable' });
       }
       const ownerNode = await prisma.treeBranchLeafNode.findUnique({ where: { id: originalVar.nodeId } });
       if (!ownerNode) {
-        return res.status(404).json({ error: 'Nœud propriétaire introuvable' });
+        return res.status(404).json({ error: 'N�ud propri�taire introuvable' });
       }
       ownerNodeIdForMap = ownerNode.id;
       const candidateId = `${ownerNode.id}-${newSuffix}`;
@@ -13014,11 +13018,11 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
           updatedAt: new Date(),
         }
       });
-      console.log(`📄 [COPY-LINKED-VAR] Nœud dupliqué: ${ownerNode.id} -> ${targetNodeId}`);
+      console.log(`?? [COPY-LINKED-VAR] N�ud dupliqu�: ${ownerNode.id} -> ${targetNodeId}`);
   }
 
-    // Copier la variable avec ses capacités vers le nœud cible
-    // Préparer des maps pour réécrire les références internes
+    // Copier la variable avec ses capacit�s vers le n�ud cible
+    // Pr�parer des maps pour r��crire les r�f�rences internes
     const nodeIdMap = new Map<string, string>();
     if (ownerNodeIdForMap) nodeIdMap.set(ownerNodeIdForMap, targetNodeId);
     const formulaIdMap = new Map<string, string>();
@@ -13043,25 +13047,25 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       return res.status(400).json({ error: result.error || 'Erreur lors de la copie' });
     }
 
-    // Ajouter la variable copiée aux linkedVariableIds du nœud cible
+    // Ajouter la variable copi�e aux linkedVariableIds du n�ud cible
     try {
       await addToNodeLinkedField(prisma, targetNodeId, 'linkedVariableIds', [result.variableId]);
     } catch (e) {
-      console.warn('⚠️ [COPY-LINKED-VAR] Échec MAJ linkedVariableIds:', (e as Error).message);
+      console.warn('?? [COPY-LINKED-VAR] �chec MAJ linkedVariableIds:', (e as Error).message);
     }
 
-    console.log('✅ [COPY-LINKED-VAR] Copie réussie:', { ...result, targetNodeId });
+    console.log('? [COPY-LINKED-VAR] Copie r�ussie:', { ...result, targetNodeId });
     res.status(201).json({ ...result, targetNodeId });
 
   } catch (error) {
-    console.error('âŒ [COPY-LINKED-VAR] Erreur:', error);
+    console.error('❌ [COPY-LINKED-VAR] Erreur:', error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: msg });
   }
 });
 
 // ==================================================================================
-// 🔎 ROUTE UTILITAIRE: créer / mettre à jour le nœud d'affichage pour une variable
+// ?? ROUTE UTILITAIRE: cr�er / mettre � jour le n�ud d'affichage pour une variable
 // ==================================================================================
 router.post('/variables/:variableId/create-display', async (req, res) => {
   try {
@@ -13071,13 +13075,13 @@ router.post('/variables/:variableId/create-display', async (req, res) => {
     res.status(201).json(result);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('❌ [/variables/:variableId/create-display] Erreur:', msg);
+    console.error('? [/variables/:variableId/create-display] Erreur:', msg);
     res.status(400).json({ error: msg });
   }
 });
 
 // ==================================================================================
-// 🔎 ROUTE UTILITAIRE: rechercher des variables par displayName (partiel)
+// ?? ROUTE UTILITAIRE: rechercher des variables par displayName (partiel)
 // ==================================================================================
 // =============================================================================
 
@@ -13097,21 +13101,21 @@ router.get('/variables/search', async (req, res) => {
 });
 
 // =============================================================================
-// 📊 RÉCUPÉRATION DES VALEURS CALCULÉES (calculatedValue)
+// ?? R�CUP�RATION DES VALEURS CALCUL�ES (calculatedValue)
 // =============================================================================
 /**
  * GET /trees/:treeId/calculated-values
- * Récupère tous les champs ayant une calculatedValue non nulle
- * Utile pour référencer les résultats de formules/conditions comme contraintes dynamiques
+ * R�cup�re tous les champs ayant une calculatedValue non nulle
+ * Utile pour r�f�rencer les r�sultats de formules/conditions comme contraintes dynamiques
  */
 router.get('/trees/:treeId/calculated-values', async (req, res) => {
   try {
-    console.log('📊 [TBL-ROUTES] GET /trees/:treeId/calculated-values - DÉBUT');
+    console.log('?? [TBL-ROUTES] GET /trees/:treeId/calculated-values - D�BUT');
     const { treeId } = req.params;
     
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-    // Vérifier que l'arbre appartient à l'organisation (sauf SuperAdmin)
+    // V�rifier que l'arbre appartient � l'organisation (sauf SuperAdmin)
     const treeWhereFilter = isSuperAdmin || !organizationId ? { id: treeId } : { id: treeId, organizationId };
     
     const tree = await prisma.treeBranchLeafTree.findFirst({
@@ -13119,10 +13123,10 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
     });
 
     if (!tree) {
-      return res.status(404).json({ error: 'Arbre non trouvé' });
+      return res.status(404).json({ error: 'Arbre non trouv�' });
     }
 
-    // Récupérer tous les nœuds ayant une calculatedValue non nulle
+    // R�cup�rer tous les n�uds ayant une calculatedValue non nulle
     const nodesWithCalculatedValue = await prisma.treeBranchLeafNode.findMany({
       where: { 
         treeId,
@@ -13140,9 +13144,9 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
       }
     });
 
-    console.log(`📊 [TBL-ROUTES] ${nodesWithCalculatedValue.length} champs avec calculatedValue trouvés`);
+    console.log(`?? [TBL-ROUTES] ${nodesWithCalculatedValue.length} champs avec calculatedValue trouv�s`);
 
-    // Récupérer les labels des parents pour context
+    // R�cup�rer les labels des parents pour context
     const parentIds = nodesWithCalculatedValue
       .map(n => n.parentId)
       .filter((id): id is string => !!id);
@@ -13154,7 +13158,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
     
     const parentLabelsMap = new Map(parentNodes.map(p => [p.id, p.label]));
 
-    // Formater les valeurs calculées pour le frontend
+    // Formater les valeurs calcul�es pour le frontend
     const calculatedValues = nodesWithCalculatedValue.map(node => ({
       id: node.id,
       label: node.label || 'Champ sans nom',
@@ -13164,7 +13168,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
       parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : undefined
     }));
 
-    console.log(`📊 [TBL-ROUTES] Valeurs calculées formatées:`, calculatedValues.map(cv => ({ 
+    console.log(`?? [TBL-ROUTES] Valeurs calcul�es format�es:`, calculatedValues.map(cv => ({ 
       id: cv.id, 
       label: cv.label, 
       value: cv.calculatedValue,
@@ -13174,7 +13178,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
     res.json(calculatedValues);
   } catch (error) {
     console.error('[TreeBranchLeaf API] Error fetching calculated values:', error);
-    res.status(500).json({ error: 'Impossible de récupérer les valeurs calculées' });
+    res.status(500).json({ error: 'Impossible de r�cup�rer les valeurs calcul�es' });
   }
 });
 
