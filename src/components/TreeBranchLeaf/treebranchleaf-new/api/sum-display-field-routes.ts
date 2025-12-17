@@ -507,6 +507,19 @@ export async function updateSumDisplayFieldAfterCopyChange(
       data: { tokens: sumTokens, updatedAt: now }
     });
 
+    // 🔥 NOUVEAU: Recalculer la valeur en récupérant les calculatedValue des nœuds sources
+    const copyNodeIds = allCopies.map(c => c.nodeId);
+    const copyNodes = await db.treeBranchLeafNode.findMany({
+      where: { id: { in: copyNodeIds } },
+      select: { id: true, calculatedValue: true }
+    });
+    
+    let newCalculatedValue = 0;
+    for (const node of copyNodes) {
+      newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
+    }
+    console.log(`📊 [SUM UPDATE] Nouvelle valeur calculée: ${newCalculatedValue} (${copyNodes.length} nœuds)`);
+
     // Mettre à jour le nœud Total avec formula_instances et formula_tokens
     const sumNode = await db.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
@@ -520,6 +533,7 @@ export async function updateSumDisplayFieldAfterCopyChange(
           updatedAt: now,
           formula_instances: { [sumFormulaId]: formulaInstance },
           formula_tokens: sumTokens,
+          calculatedValue: String(newCalculatedValue), // 🔥 NOUVEAU: Mettre à jour la valeur
           metadata: {
             ...(sumNode.metadata as Record<string, unknown> || {}),
             sumTokens,
@@ -530,7 +544,7 @@ export async function updateSumDisplayFieldAfterCopyChange(
       });
     }
 
-    console.log(`✅ [SUM UPDATE] Champ Total mis à jour: ${allCopies.length} copies, formule: ${sumTokens.join(' ')}`);
+    console.log(`✅ [SUM UPDATE] Champ Total mis à jour: ${allCopies.length} copies, valeur: ${newCalculatedValue}, formule: ${sumTokens.join(' ')}`);
 
   } catch (error) {
     console.error('❌ [SUM UPDATE] Erreur mise à jour champ Total:', error);

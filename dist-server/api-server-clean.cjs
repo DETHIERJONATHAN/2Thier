@@ -27746,6 +27746,16 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
       where: { id: sumFormulaId },
       data: { tokens: sumTokens, updatedAt: now }
     });
+    const copyNodeIds = allCopies.map((c) => c.nodeId);
+    const copyNodes = await db.treeBranchLeafNode.findMany({
+      where: { id: { in: copyNodeIds } },
+      select: { id: true, calculatedValue: true }
+    });
+    let newCalculatedValue = 0;
+    for (const node of copyNodes) {
+      newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
+    }
+    console.log(`\u{1F4CA} [SUM UPDATE] Nouvelle valeur calcul\xE9e: ${newCalculatedValue} (${copyNodes.length} n\u0153uds)`);
     const sumNode = await db.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { metadata: true }
@@ -27757,6 +27767,8 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
           updatedAt: now,
           formula_instances: { [sumFormulaId]: formulaInstance },
           formula_tokens: sumTokens,
+          calculatedValue: String(newCalculatedValue),
+          // 🔥 NOUVEAU: Mettre à jour la valeur
           metadata: {
             ...sumNode.metadata || {},
             sumTokens,
@@ -27766,7 +27778,7 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
         }
       });
     }
-    console.log(`\u2705 [SUM UPDATE] Champ Total mis \xE0 jour: ${allCopies.length} copies, formule: ${sumTokens.join(" ")}`);
+    console.log(`\u2705 [SUM UPDATE] Champ Total mis \xE0 jour: ${allCopies.length} copies, valeur: ${newCalculatedValue}, formule: ${sumTokens.join(" ")}`);
   } catch (error) {
     console.error("\u274C [SUM UPDATE] Erreur mise \xE0 jour champ Total:", error);
   }
@@ -28061,8 +28073,6 @@ ${"\u2550".repeat(80)}`);
     console.log(`\u2705 Formule trouv\xE9e: ${originalFormula.name || originalFormula.id}`);
     console.log(`   NodeId original: ${originalFormula.nodeId}`);
     console.log(`   Tokens originaux:`, originalFormula.tokens);
-    console.log(`   \u{1F3AF} targetProperty: ${originalFormula.targetProperty || "(valeur directe)"}`);
-    console.log(`   \u{1F4DD} constraintMessage: ${originalFormula.constraintMessage || "(aucun)"}`);
     const newFormulaId = `${originalFormula.id}-${suffix}`;
     console.log(`\u{1F4DD} Nouvel ID formule: ${newFormulaId}`);
     const originalOwnerNodeId = originalFormula.nodeId;
@@ -28123,16 +28133,23 @@ ${"\u2550".repeat(80)}`);
         name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
         description: originalFormula.description,
         tokens: rewrittenTokens,
-        // 🔧 FIX: Copier targetProperty et constraintMessage (16/12/2024)
-        // Ces champs définissent la CIBLE de la formule (number_max, number_min, visible, etc.)
-        // et le message d'erreur personnalisé pour les contraintes
+        // 🎯 CHAMPS CRITIQUES - Copie de la cible et des propriétés
         targetProperty: originalFormula.targetProperty,
+        // ← CIBLE DE LA FORMULE
         constraintMessage: originalFormula.constraintMessage,
-        metadata: originalFormula.metadata,
+        // ← Message de contrainte
+        isDefault: originalFormula.isDefault,
+        // ← Formule par défaut
+        order: originalFormula.order,
+        // ← Ordre d'affichage
         createdAt: /* @__PURE__ */ new Date(),
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
+    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] targetProperty: ${originalFormula.targetProperty || "null (valeur directe)"}`);
+    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] constraintMessage: ${originalFormula.constraintMessage || "null"}`);
+    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] isDefault: ${originalFormula.isDefault}`);
+    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] order: ${originalFormula.order}`);
     console.log(`\u2705 Formule cr\xE9\xE9e: ${newFormula.id}`);
     console.log(`
 \u{1F50D} V\xC9RIFICATION POST-CR\xC9ATION:`);
@@ -37183,6 +37200,188 @@ var fetchNormalizedTable = async (nodeId, options = {}, client = prisma47) => {
   const table = target ?? tables[0];
   return { table, tables };
 };
+async function applyTableFilters(matrix, columns, filters, formValues) {
+  if (!filters || filters.length === 0) {
+    return matrix.map((_, i) => i);
+  }
+  const validFilters = filters.filter((f) => f.column && f.valueRef && f.operator);
+  if (validFilters.length === 0) {
+    console.log(`[applyTableFilters] \u26A0\uFE0F Aucun filtre valide (${filters.length} filtre(s) incomplet(s))`);
+    return matrix.map((_, i) => i);
+  }
+  console.log(`[applyTableFilters] \u{1F525} Application de ${validFilters.length} filtre(s) valide(s) sur ${filters.length} configur\xE9(s)`);
+  const resolvedFilters = await Promise.all(
+    validFilters.map(async (filter) => {
+      const value = await resolveFilterValueRef(filter.valueRef, formValues);
+      console.log(`[applyTableFilters] Filtre "${filter.column}" ${filter.operator} "${filter.valueRef}" \u2192 valeur r\xE9solue: "${value}"`);
+      return { ...filter, resolvedValue: value };
+    })
+  );
+  const activeFilters = resolvedFilters.filter((f) => f.resolvedValue !== null && f.resolvedValue !== void 0);
+  if (activeFilters.length === 0) {
+    console.log(`[applyTableFilters] \u26A0\uFE0F Toutes les valeurs de r\xE9f\xE9rence sont null/undefined \u2192 pas de filtrage`);
+    return matrix.map((_, i) => i);
+  }
+  if (activeFilters.length < resolvedFilters.length) {
+    console.log(`[applyTableFilters] \u2139\uFE0F ${resolvedFilters.length - activeFilters.length} filtre(s) ignor\xE9(s) (valeur non d\xE9finie)`);
+  }
+  const matchingIndices = [];
+  for (let rowIndex = 0; rowIndex < matrix.length; rowIndex++) {
+    const row = matrix[rowIndex];
+    let passesAllFilters = true;
+    for (const filter of activeFilters) {
+      const columnIndex = columns.indexOf(filter.column);
+      if (columnIndex === -1) {
+        console.warn(`[applyTableFilters] \u26A0\uFE0F Colonne "${filter.column}" introuvable dans:`, columns);
+        passesAllFilters = false;
+        break;
+      }
+      const cellValue = row[columnIndex];
+      const passes = compareFilterValues(cellValue, filter.operator, filter.resolvedValue);
+      console.log(`[applyTableFilters] Ligne ${rowIndex}: cellule[${filter.column}]="${cellValue}" ${filter.operator} "${filter.resolvedValue}" \u2192 ${passes ? "\u2705" : "\u274C"}`);
+      if (!passes) {
+        passesAllFilters = false;
+        break;
+      }
+    }
+    if (passesAllFilters) {
+      matchingIndices.push(rowIndex);
+    }
+  }
+  console.log(`[applyTableFilters] \u2705 ${matchingIndices.length}/${matrix.length} lignes passent les filtres`);
+  return matchingIndices;
+}
+async function resolveFilterValueRef(valueRef, formValues) {
+  if (!valueRef) return null;
+  if (valueRef.startsWith("@calculated.") || valueRef.startsWith("@calculated:")) {
+    const nodeId = valueRef.replace(/^@calculated[.:]/, "");
+    console.log(`[resolveFilterValueRef] \u{1F9EE} R\xE9solution @calculated pour nodeId: ${nodeId}`);
+    if (formValues[nodeId] !== void 0 && formValues[nodeId] !== null) {
+      let value = formValues[nodeId];
+      if (value && typeof value === "object" && "value" in value) {
+        const objValue = value.value;
+        console.log(`[resolveFilterValueRef] \u{1F527} Valeur objet d\xE9tect\xE9e, extraction .value: ${objValue}`);
+        value = objValue;
+      }
+      console.log(`[resolveFilterValueRef] \u2705 Valeur trouv\xE9e dans formValues: ${value}`);
+      return value;
+    }
+    const node = await prisma47.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true, label: true, calculatedValue: true }
+    });
+    if (node) {
+      console.log(`[resolveFilterValueRef] \u2705 Node trouv\xE9: "${node.label}", calculatedValue: ${node.calculatedValue}`);
+      return node.calculatedValue ?? null;
+    }
+    console.log(`[resolveFilterValueRef] \u26A0\uFE0F Node non trouv\xE9 pour ${nodeId}`);
+    return null;
+  }
+  if (valueRef.startsWith("@select.") || valueRef.startsWith("@select:")) {
+    const nodeId = valueRef.replace(/^@select[.:]/, "");
+    console.log(`[resolveFilterValueRef] \u{1F518} R\xE9solution @select pour nodeId: ${nodeId}`);
+    let value = formValues[nodeId] ?? null;
+    if (value && typeof value === "object" && "value" in value) {
+      const objValue = value.value;
+      console.log(`[resolveFilterValueRef] \u{1F527} Valeur objet d\xE9tect\xE9e, extraction .value: ${objValue}`);
+      value = objValue;
+    }
+    if (value && typeof value === "string" && value.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      console.log(`[resolveFilterValueRef] \u{1F50D} La valeur "${value}" est un UUID, recherche du label de l'option...`);
+      const optionNode = await prisma47.treeBranchLeafNode.findUnique({
+        where: { id: value },
+        select: { id: true, label: true, value: true }
+      });
+      if (optionNode) {
+        const labelValue = optionNode.label || optionNode.value || value;
+        console.log(`[resolveFilterValueRef] \u2705 Option trouv\xE9e! UUID "${value}" \u2192 Label "${labelValue}"`);
+        value = labelValue;
+      } else {
+        console.log(`[resolveFilterValueRef] \u26A0\uFE0F Option UUID "${value}" non trouv\xE9e en base, utilisation telle quelle`);
+      }
+    }
+    console.log(`[resolveFilterValueRef] \u2705 Valeur select finale: ${value}`);
+    return value;
+  }
+  if (valueRef.startsWith("@value.") || valueRef.startsWith("@value:")) {
+    const nodeId = valueRef.replace(/^@value[.:]/, "");
+    console.log(`[resolveFilterValueRef] \u{1F4DD} R\xE9solution @value pour nodeId: ${nodeId}`);
+    let value = formValues[nodeId] ?? null;
+    if (value && typeof value === "object" && "value" in value) {
+      const objValue = value.value;
+      console.log(`[resolveFilterValueRef] \u{1F527} Valeur objet d\xE9tect\xE9e, extraction .value: ${objValue}`);
+      value = objValue;
+    }
+    console.log(`[resolveFilterValueRef] \u2705 Valeur field finale: ${value}`);
+    return value;
+  }
+  return valueRef;
+}
+function compareFilterValues(cellValue, operator, compareValue) {
+  const normalizedCell = normalizeForFilterComparison(cellValue);
+  const normalizedCompare = normalizeForFilterComparison(compareValue);
+  switch (operator) {
+    case "equals":
+    case "=":
+      if (normalizedCell === normalizedCompare) {
+        return true;
+      }
+      if (typeof normalizedCell === "string" && typeof normalizedCompare === "string") {
+        const cellLower = normalizedCell.toLowerCase().trim();
+        const compareLower = normalizedCompare.toLowerCase().trim();
+        return cellLower.startsWith(compareLower) || compareLower.startsWith(cellLower);
+      }
+      return false;
+    case "notEquals":
+    case "!=":
+      return normalizedCell !== normalizedCompare;
+    case "greaterThan":
+    case ">":
+      if (typeof normalizedCell === "number" && typeof normalizedCompare === "number") {
+        return normalizedCell > normalizedCompare;
+      }
+      return String(normalizedCell) > String(normalizedCompare);
+    case "greaterOrEqual":
+    case "greaterThanOrEqual":
+    case ">=":
+      if (typeof normalizedCell === "number" && typeof normalizedCompare === "number") {
+        return normalizedCell >= normalizedCompare;
+      }
+      return String(normalizedCell) >= String(normalizedCompare);
+    case "lessThan":
+    case "<":
+      if (typeof normalizedCell === "number" && typeof normalizedCompare === "number") {
+        return normalizedCell < normalizedCompare;
+      }
+      return String(normalizedCell) < String(normalizedCompare);
+    case "lessOrEqual":
+    case "lessThanOrEqual":
+    case "<=":
+      if (typeof normalizedCell === "number" && typeof normalizedCompare === "number") {
+        return normalizedCell <= normalizedCompare;
+      }
+      return String(normalizedCell) <= String(normalizedCompare);
+    case "contains":
+      return String(normalizedCell).toLowerCase().includes(String(normalizedCompare).toLowerCase());
+    case "notContains":
+      return !String(normalizedCell).toLowerCase().includes(String(normalizedCompare).toLowerCase());
+    case "startsWith":
+      return String(normalizedCell).toLowerCase().startsWith(String(normalizedCompare).toLowerCase());
+    case "endsWith":
+      return String(normalizedCell).toLowerCase().endsWith(String(normalizedCompare).toLowerCase());
+    default:
+      console.warn(`[compareFilterValues] \u26A0\uFE0F Op\xE9rateur inconnu: ${operator}`);
+      return false;
+  }
+}
+function normalizeForFilterComparison(value) {
+  if (value === null || value === void 0) return null;
+  if (typeof value === "number") return value;
+  const str = String(value).trim();
+  const num = Number(str);
+  if (!isNaN(num) && isFinite(num)) return num;
+  return str;
+}
 router56.get("/nodes/:nodeId/tables", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
@@ -39572,6 +39771,16 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
+    const { formValues: formValuesParam } = req2.query;
+    let formValues = {};
+    if (formValuesParam) {
+      try {
+        formValues = JSON.parse(formValuesParam);
+        console.log(`[TreeBranchLeaf API] \u{1F4CA} formValues re\xE7ues pour filtrage:`, Object.keys(formValues).length, "cl\xE9s");
+      } catch (e) {
+        console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Erreur parsing formValues:`, e);
+      }
+    }
     console.log(`[TreeBranchLeaf API] \u{1F50D} GET active table/lookup for node: ${nodeId}`);
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
@@ -39702,6 +39911,45 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       firstColumns: columns.slice(0, 3),
       firstRows: rows.slice(0, 3)
     });
+    const rawLookup = table.meta && typeof table.meta === "object" && "lookup" in table.meta ? table.meta.lookup : void 0;
+    const fullMatrix = rows.map((rowLabel, idx) => [rowLabel, ...data[idx] || []]);
+    let filters = [];
+    if (rawLookup) {
+      const columnSourceOption = rawLookup.columnSourceOption;
+      const rowSourceOption = rawLookup.rowSourceOption;
+      if (columnSourceOption?.filters && Array.isArray(columnSourceOption.filters)) {
+        filters = columnSourceOption.filters;
+        console.log(`[TreeBranchLeaf API] \u{1F525} ${filters.length} filtre(s) trouv\xE9(s) dans columnSourceOption`);
+      } else if (rowSourceOption?.filters && Array.isArray(rowSourceOption.filters)) {
+        filters = rowSourceOption.filters;
+        console.log(`[TreeBranchLeaf API] \u{1F525} ${filters.length} filtre(s) trouv\xE9(s) dans rowSourceOption`);
+      }
+    }
+    const fullMatrixForFilters = table.tableRows.map((row) => {
+      try {
+        let cellsData;
+        if (typeof row.cells === "string") {
+          try {
+            cellsData = JSON.parse(row.cells);
+          } catch {
+            cellsData = [row.cells];
+          }
+        } else {
+          cellsData = row.cells || [];
+        }
+        return Array.isArray(cellsData) ? cellsData : [];
+      } catch {
+        return [];
+      }
+    });
+    console.log(`[TreeBranchLeaf API] \u{1F527} Filtrage - columns:`, columns.slice(0, 5), "filters columns:", filters.map((f) => f.column));
+    console.log(`[TreeBranchLeaf API] \u{1F527} Filtrage - fullMatrixForFilters[1] sample:`, fullMatrixForFilters[1]?.slice(0, 4));
+    let filteredRowIndices = fullMatrix.map((_, i) => i);
+    if (filters.length > 0 && Object.keys(formValues).length > 0) {
+      console.log(`[TreeBranchLeaf API] \u{1F525} Application de ${filters.length} filtre(s)...`);
+      filteredRowIndices = await applyTableFilters(fullMatrixForFilters, columns, filters, formValues);
+      console.log(`[TreeBranchLeaf API] \u2705 Filtrage: ${filteredRowIndices.length}/${fullMatrix.length} lignes passent les filtres`);
+    }
     if (table.type === "matrix") {
       if (selectConfig?.keyRow) {
         const rowIndex = rows.indexOf(selectConfig.keyRow);
@@ -39744,7 +39992,8 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         }
         let options;
         if (colIndex === 0) {
-          options = rows.slice(1).map((rowLabel) => {
+          options = filteredRowIndices.filter((idx) => idx > 0).map((rowIdx) => {
+            const rowLabel = rows[rowIdx];
             return {
               value: rowLabel,
               label: selectConfig.displayColumn ? rowLabel : rowLabel
@@ -39752,7 +40001,8 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         } else {
           const dataColIndex = colIndex - 1;
-          options = data.map((row, rowIdx) => {
+          options = filteredRowIndices.map((rowIdx) => {
+            const row = data[rowIdx] || [];
             const value = row[dataColIndex];
             const rowLabel = rows[rowIdx] || "";
             return {
@@ -39765,6 +40015,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
           colIndex,
           isColumnA: colIndex === 0,
           optionsCount: options.length,
+          filteredFromTotal: `${filteredRowIndices.length}/${fullMatrix.length}`,
           sample: options.slice(0, 3)
         });
         return res.json({ options });
@@ -39775,10 +40026,11 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       const a1 = rows[0];
       const firstColHeader = columns[0];
       if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
-        const autoOptions = rows.slice(1).filter((r) => r && r !== "undefined" && r !== "null").map((r) => ({ value: r, label: r }));
-        console.log(`[TreeBranchLeaf API] ?? AUTO-DEFAULT lookup (matrix, colonne A) g\uFFFDn\uFFFDr\uFFFD`, {
+        const autoOptions = filteredRowIndices.filter((idx) => idx > 0).map((idx) => rows[idx]).filter((r) => r && r !== "undefined" && r !== "null").map((r) => ({ value: r, label: r }));
+        console.log(`[TreeBranchLeaf API] \u{1F3AF} AUTO-DEFAULT lookup (matrix, colonne A) g\xE9n\xE9r\xE9`, {
           nodeId,
           autoCount: autoOptions.length,
+          filteredFromTotal: `${filteredRowIndices.length}/${fullMatrix.length}`,
           sample: autoOptions.slice(0, 5)
         });
         try {
