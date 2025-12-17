@@ -1575,12 +1575,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // Debug gating (localStorage.setItem('TBL_SMART_DEBUG','1')) is declared earlier
 
-  // 🎨 HÉRITAGE APPARENCE: parentAppearance permet aux shared references d'hériter l'apparence du champ parent
+  // 🎨 HÉRITAGE APPARENCE + SUBTAB: parentAppearance permet aux shared references d'hériter l'apparence du champ parent
+  // 🔧 FIX DYNAMIQUE: parentSubTabs permet aux enfants d'hériter le subtab du parent
   const buildConditionalFieldFromNode = useCallback((
     node: RawTreeNode,
-    parentAppearance?: { size?: string; variant?: string; width?: string; labelColor?: string; [key: string]: unknown }
+    parentAppearance?: { size?: string; variant?: string; width?: string; labelColor?: string; [key: string]: unknown },
+    parentSubTabs?: string[]
   ): TBLField => {
     const finalFieldType = (node.subType || node.fieldType || node.type || 'TEXT') as string;
+    
+    // 🔧 FIX DYNAMIQUE: Extraire le subtab du nœud, sinon hériter du parent
+    const nodeSubTab = node.subtab as string | null;
+    const nodeSubTabs = nodeSubTab ? [nodeSubTab] : [];
+    const effectiveSubTabs = nodeSubTabs.length > 0 ? nodeSubTabs : (parentSubTabs || []);
 
     const buildBaseCapability = (
       instances?: Record<string, unknown> | null,
@@ -1662,6 +1669,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       sharedReferenceName: node.sharedReferenceName || node.label,
       sharedReferenceId, // 🔗 LIAISON: Inclure la référence partagée unique
       sharedReferenceIds, // 🔗 LIAISON: Inclure les références partagées multiples
+      // 🔧 FIX DYNAMIQUE: Héritage du subtab depuis le parent si le nœud n'en a pas
+      subTabKey: effectiveSubTabs[0] ?? undefined,
+      subTabKeys: effectiveSubTabs.length > 0 ? effectiveSubTabs : undefined,
       options, // 🔥 AJOUT CRITIQUE: Inclure les options construites !
       // 🎨 APPARENCE: Inclure les configurations d'apparence complètes du nœud source
       // 🎨 HÉRITAGE: parentAppearance prend priorité pour les shared references (Rampant, etc.)
@@ -2103,16 +2113,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     width: f.appearanceConfig?.width ?? f.config?.width,
                     labelColor: f.appearanceConfig?.labelColor ?? f.config?.labelColor,
                   };
+                  // 🔧 FIX DYNAMIQUE: Extraire le subtab du parent pour l'héritage aux enfants
+                  const parentSubTabsForChildren = extractSubTabAssignments(f);
+                  
                   const childFields = allNodes.filter(childNode => childNode.parentId === matchingNodeCopy.id && childNode.type === 'leaf_option_field');
                   for (const child of childFields) {
-                    // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
-                    conditionalFieldsToRender.push(buildConditionalFieldFromNode(child, parentFieldAppearance));
+                    // 🎨 HÉRITAGE APPARENCE + SUBTAB: Passer l'apparence et le subtab du parent
+                    conditionalFieldsToRender.push(buildConditionalFieldFromNode(child, parentFieldAppearance, parentSubTabsForChildren));
                   }
                   const sharedReferenceIds = findAllSharedReferencesRecursive(matchingNodeCopy.id, allNodes);
                   for (const refId of sharedReferenceIds) {
                     const refNode = allNodes.find(n => n.id === refId);
-                    // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
-                    if (refNode) conditionalFieldsToRender.push(buildConditionalFieldFromNode(refNode, parentFieldAppearance));
+                    // 🎨 HÉRITAGE APPARENCE + SUBTAB: Passer l'apparence et le subtab du parent
+                    if (refNode) conditionalFieldsToRender.push(buildConditionalFieldFromNode(refNode, parentFieldAppearance, parentSubTabsForChildren));
                   }
                   // Fallback: si selectedValue est vide, utiliser le label du node
                   if (selectedValue === undefined || selectedValue === null) selectedValue = matchingNodeCopy.label;
@@ -2678,6 +2691,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 width: field.appearanceConfig?.width ?? field.config?.width,
                 labelColor: field.appearanceConfig?.labelColor ?? field.config?.labelColor,
               };
+              // 🔧 FIX DYNAMIQUE: Extraire le subtab du parent pour l'héritage aux enfants
+              const parentSubTabsForChildren = extractSubTabAssignments(field);
 
               const childFields = allNodes.filter(childNode =>
                 childNode.parentId === matchingNode.id &&
@@ -2693,8 +2708,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               if (childFields.length > 0) {
                 console.log(`🎯🎯🎯 [SECTION RENDERER] Trouvé ${childFields.length} champs enfants (références partagées)`);
                 childFields.forEach(childNode => {
-                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
-                  const fieldFromChild = buildConditionalFieldFromNode(childNode, parentFieldAppearanceForChildren);
+                  // 🎨 HÉRITAGE APPARENCE + SUBTAB: Passer l'apparence et le subtab du parent
+                  const fieldFromChild = buildConditionalFieldFromNode(childNode, parentFieldAppearanceForChildren, parentSubTabsForChildren);
                   conditionalFields.push(fieldFromChild);
                   existingIds.add(fieldFromChild.id);
                 });
@@ -2740,7 +2755,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   fieldLabel: field.label
                 });
 
-                // 🎨 HÉRITAGE APPARENCE: Réutiliser parentFieldAppearanceForChildren déclaré plus haut
+                // 🎨 HÉRITAGE APPARENCE + SUBTAB: Réutiliser parentFieldAppearanceForChildren et parentSubTabsForChildren déclarés plus haut
 
                 sharedReferenceIds.forEach(refId => {
                   const refNode = allNodes.find(node => node.id === refId);
@@ -2758,11 +2773,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     refLabel: refNode.label,
                     refFieldType: refNode.fieldType,
                     matchingNodeId: matchingNode.id,
-                    parentAppearanceInherited: parentFieldAppearanceForChildren
+                    parentAppearanceInherited: parentFieldAppearanceForChildren,
+                    parentSubTabsInherited: parentSubTabsForChildren
                   });
                   
-                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent pour que le champ Rampant hérite
-                  const refField = buildConditionalFieldFromNode(refNode, parentFieldAppearanceForChildren);
+                  // 🎨 HÉRITAGE APPARENCE + SUBTAB: Passer l'apparence et le subtab du parent
+                  const refField = buildConditionalFieldFromNode(refNode, parentFieldAppearanceForChildren, parentSubTabsForChildren);
                   conditionalFields.push(refField);
                   existingIds.add(refField.id);
                   
@@ -2827,6 +2843,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   width: field.appearanceConfig?.width ?? field.config?.width,
                   labelColor: field.appearanceConfig?.labelColor ?? field.config?.labelColor,
                 };
+                // 🔧 FIX DYNAMIQUE: Extraire le subtab du parent pour l'héritage aux enfants
+                const parentSubTabsForInheritance = extractSubTabAssignments(field);
 
                 // 1) Ajouter les enfants directs de type leaf_option_field
                 const childFields = allNodes.filter(childNode =>
@@ -2834,8 +2852,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   childNode.type === 'leaf_option_field'
                 );
                 childFields.forEach(childNode => {
-                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
-                  const fieldFromChild = buildConditionalFieldFromNode(childNode, parentFieldAppearance);
+                  // 🎨 HÉRITAGE APPARENCE + SUBTAB: Passer l'apparence et le subtab du parent
+                  const fieldFromChild = buildConditionalFieldFromNode(childNode, parentFieldAppearance, parentSubTabsForInheritance);
                   rebuiltConditional.push(fieldFromChild);
                   existingIds.add(fieldFromChild.id);
                 });
@@ -2845,8 +2863,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 sharedReferenceIds.forEach(refId => {
                   const refNode = allNodes.find(node => node.id === refId);
                   if (!refNode || existingIds.has(refNode.id)) return;
-                  // 🎨 HÉRITAGE APPARENCE: Passer l'apparence du parent
-                  const refField = buildConditionalFieldFromNode(refNode, parentFieldAppearance);
+                  // 🎨 HÉRITAGE APPARENCE + SUBTAB: Passer l'apparence et le subtab du parent
+                  const refField = buildConditionalFieldFromNode(refNode, parentFieldAppearance, parentSubTabsForInheritance);
                   rebuiltConditional.push(refField);
                   existingIds.add(refField.id);
                 });
@@ -3147,14 +3165,21 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 existingField.label === conditionalField.label
               );
               
-              if (isAlreadyInFinalFields || isDuplicateBasedOnParent) {
+              // 🔧 FIX CRITIQUE: Vérifier si le champ existe DÉJÀ dans section.fields (pas comme conditionnel)
+              // Cela arrive quand un champ enfant d'option a été ajouté par erreur à la liste de section
+              const existsInSectionFieldsDirectly = section.fields.some(sf => 
+                sf.id === conditionalField.id && !(sf as any).isConditional
+              );
+              
+              if (isAlreadyInFinalFields || isDuplicateBasedOnParent || existsInSectionFieldsDirectly) {
                 console.log('🚫 [CONDITIONAL FIELD] Éviter doublon - champ déjà présent:', {
                   id: conditionalField.id,
                   label: conditionalField.label,
                   parentField: parentIdForInjection,
                   selectedOption: selectedOption.label,
                   reasonByFieldId: isAlreadyInFinalFields,
-                  reasonByParentCombo: isDuplicateBasedOnParent
+                  reasonByParentCombo: isDuplicateBasedOnParent,
+                  reasonInSectionFields: existsInSectionFieldsDirectly
                 });
                 return; // Skip cette injection pour éviter le doublon
               }

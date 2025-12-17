@@ -443,12 +443,20 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       const node = stack.pop()!;
       if (node.children && node.children.length) stack.push(...node.children);
       const type = node.type?.toLowerCase() ?? '';
+      // 🔧 FIX: Inclure TOUS les types leaf (leaf_option, leaf_option_field, leaf_field, etc.)
+      // pour que les options et leurs enfants héritent aussi du subtab
       const isLeaf = type.startsWith('leaf');
       const isBranchOrSection = type === 'branch' || type === 'section';
       if (!isLeaf && !isBranchOrSection) continue;
       if (isBranchOrSection) {
         const hasOwnSubTabs = Array.isArray((node.metadata as any)?.subTabs) && (node.metadata as any).subTabs.length > 0;
         if (hasOwnSubTabs) continue;
+      }
+      // 🔧 FIX: Vérifier si le nœud a DÉJÀ un subTab défini (ne pas écraser)
+      const existingSubTab = (node.metadata as any)?.subTab;
+      if (existingSubTab !== undefined && existingSubTab !== null && existingSubTab !== '') {
+        // Le nœud a déjà son propre subTab, ne pas écraser
+        continue;
       }
       const nextMeta = { ...(node.metadata || {}) } as Record<string, unknown>;
       if (normalizedValue === null) {
@@ -459,6 +467,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       toAssign.push({ id: node.id, meta: nextMeta });
     }
     if (!toAssign.length) return;
+    console.log('🔄 [cascadeSubTabAssignments] Propagation du subtab à', toAssign.length, 'nœuds:', toAssign.map(t => t.id));
     try {
       for (const item of toAssign) {
         if (typeof onNodeUpdate === 'function') {

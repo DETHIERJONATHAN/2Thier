@@ -1069,6 +1069,10 @@ const transformPrismaNodeToField = (
           const optionChildren = childrenMap.get(optionNode.id) || [];
     if (verbose()) dlog(`  🔍 Enfants de l'option "${optionNode.label}": ${optionChildren.length}`);
           
+          // 🔧 FIX DYNAMIQUE: Résoudre le subtab de l'option parente pour l'héritage aux enfants
+          // Si l'option n'a pas de subtab, on remonte la chaîne (branch -> section)
+          const optionSubTabsForChildren = resolveSubTabAssignments(optionNode, optionNode, nodeLookup);
+          
           optionChildren
             .filter(child => child.type.includes('leaf_field'))
             .sort((a, b) => a.order - b.order)
@@ -1078,7 +1082,11 @@ const transformPrismaNodeToField = (
               // 🔥 100% DYNAMIQUE PRISMA: Priorité subType > fieldType > type
               const finalChildFieldType = childField.subType || childField.fieldType || childField.type || 'text';
               
-            dlog(`🔍 [TYPE DETECTION ENFANT] ${childField.label}`, { fieldType: childField.fieldType, subType: childField.subType, type: childField.type, final: finalChildFieldType });
+              // 🔧 FIX DYNAMIQUE: Résoudre le subtab de l'enfant, sinon hériter de l'option parente
+              const childSubTabs = resolveSubTabAssignments(childField, childField, nodeLookup);
+              const effectiveChildSubTabs = childSubTabs.length > 0 ? childSubTabs : optionSubTabsForChildren;
+              
+            dlog(`🔍 [TYPE DETECTION ENFANT] ${childField.label}`, { fieldType: childField.fieldType, subType: childField.subType, type: childField.type, final: finalChildFieldType, inheritedSubTabs: effectiveChildSubTabs });
               
               conditionalFields.push({
                 id: childField.id,
@@ -1089,6 +1097,9 @@ const transformPrismaNodeToField = (
                 visible: childField.isVisible,
                 placeholder: childField.text_placeholder,
                 description: childField.description,
+                // 🔧 FIX DYNAMIQUE: Héritage du subtab - l'enfant hérite de l'option parente si pas de subtab propre
+                subTabKey: effectiveChildSubTabs[0] ?? undefined,
+                subTabKeys: effectiveChildSubTabs.length > 0 ? effectiveChildSubTabs : undefined,
                 order: childField.order,
                 config: {
                   size: childField.appearance_size,
@@ -2096,12 +2107,20 @@ export const transformNodesToTBLComplete = (
           if (verbose()) dlog(`      ⚠️ Option "${child.label}" déjà traitée dans liste déroulante`);
           processedNodeIds.add(child.id); // 🎯 MARQUER COMME TRAITÉ
           
-          // Mais traiter les liens depuis cette option (et marquer les enfants comme traités)
+          // 🔧 FIX DUPLICATION: Les enfants d'options sont des champs CONDITIONNELS uniquement !
+          // Ils sont déjà inclus dans conditionalFields de l'option parente via transformPrismaNodeToField.
+          // NE PAS les ajouter à processedFields pour éviter qu'ils apparaissent deux fois :
+          //   1. Dans section.fields (erroné - c'était le bug)
+          //   2. Comme champ conditionnel injecté quand l'option est sélectionnée (correct)
+          // On marque simplement les enfants comme traités pour éviter tout traitement futur
           const linkedChildren = childrenMap.get(child.id) || [];
           if (linkedChildren.length > 0) {
-            if (verbose()) dlog(`        🔗 LIENS depuis option "${child.label}": ${linkedChildren.length} éléments`);
-            const linkedFields = processNodeRecursively(child.id, currentLevel + 1);
-            processedFields.push(...linkedFields);
+            if (verbose()) dlog(`        🔗 ENFANTS CONDITIONNELS de l'option "${child.label}": ${linkedChildren.length} éléments (non ajoutés à processedFields)`);
+            // Marquer tous les enfants comme traités sans les ajouter aux champs de section
+            linkedChildren.forEach(linkedChild => {
+              processedNodeIds.add(linkedChild.id);
+              if (verbose()) dlog(`          🏷️ Marqué comme traité (conditionnel): "${linkedChild.label}"`);
+            });
           }
         }
       });
