@@ -345,6 +345,11 @@ export async function copyFormulaCapacity(
     // ═══════════════════════════════════════════════════════════════════════
     // 💾 ÉTAPE 5 : Créer la nouvelle formule
     // ═══════════════════════════════════════════════════════════════════════
+    // 🎯 COPIE COMPLÈTE: Tous les champs de la formule originale sont copiés
+    // - targetProperty: Cible de la formule (valeur, number_max, number_min, visible, etc.)
+    // - constraintMessage: Message de contrainte
+    // - isDefault: Formule par défaut
+    // - order: Ordre d'affichage
     const newFormula = await prisma.treeBranchLeafNodeFormula.create({
       data: {
         id: newFormulaId,
@@ -353,11 +358,20 @@ export async function copyFormulaCapacity(
         name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
         description: originalFormula.description,
         tokens: rewrittenTokens,
-        metadata: originalFormula.metadata as Prisma.InputJsonValue,
+        // 🎯 CHAMPS CRITIQUES - Copie de la cible et des propriétés
+        targetProperty: originalFormula.targetProperty,      // ← CIBLE DE LA FORMULE
+        constraintMessage: originalFormula.constraintMessage, // ← Message de contrainte
+        isDefault: originalFormula.isDefault,                 // ← Formule par défaut
+        order: originalFormula.order,                         // ← Ordre d'affichage
         createdAt: new Date(),
         updatedAt: new Date()
       }
     });
+    
+    console.log(`🎯 [COPIE COMPLÈTE] targetProperty: ${originalFormula.targetProperty || 'null (valeur directe)'}`);
+    console.log(`🎯 [COPIE COMPLÈTE] constraintMessage: ${originalFormula.constraintMessage || 'null'}`);
+    console.log(`🎯 [COPIE COMPLÈTE] isDefault: ${originalFormula.isDefault}`);
+    console.log(`🎯 [COPIE COMPLÈTE] order: ${originalFormula.order}`);
 
     console.log(`✅ Formule créée: ${newFormula.id}`);
     

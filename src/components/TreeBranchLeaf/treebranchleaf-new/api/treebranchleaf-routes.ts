@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 🌐 TreeBranchLeaf API Service - Backend centralisé
  * 
  * Service backend complet pour TreeBranchLeaf
@@ -6635,7 +6635,7 @@ const isJsonObject = (value: TableJsonValue | null | undefined): value is TableJ
 const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value ?? null)) as T;
 
 // ==================================================================================
-// ?? FONCTION DE FILTRAGE D'OPTIONS DE TABLE PAR FILTRE SIMPLE
+// 🔍 FONCTION DE FILTRAGE D'OPTIONS DE TABLE PAR FILTRE SIMPLE
 // ==================================================================================
 function applySingleFilter(
   filter: any,
@@ -6645,29 +6645,53 @@ function applySingleFilter(
 ): Array<{ value: string; label: string }> {
   const { columnName, operator, value: filterValue } = filter;
 
-  console.log(`[applySingleFilter] ?? Filtre: colonne="${columnName}", op="${operator}"`);
+  console.log(`[applySingleFilter] 🔍 Filtre: colonne="${columnName}", op="${operator}", valeur="${filterValue}"`);
 
-  // R�soudre la valeur du filtre si c'est une r�f�rence @select
+  // Résoudre la valeur du filtre selon son type de référence
   let resolvedValue = filterValue;
   let nodeId: string | undefined = undefined;
-  if (typeof filterValue === 'string' && filterValue.startsWith('@select.')) {
-    nodeId = filterValue.replace('@select.', '');
-    resolvedValue = formValues[nodeId];
-    console.log(`[applySingleFilter] ?? R�solution @select: ${filterValue} -> ${resolvedValue}`);
-  } else {
-    console.log(`[applySingleFilter] ? Valeur statique: ${filterValue}`);
+  
+  if (typeof filterValue === 'string') {
+    // 🆕 Support pour @calculated.xxx ou @calculated:xxx
+    if (filterValue.startsWith('@calculated.') || filterValue.startsWith('@calculated:')) {
+      nodeId = filterValue.replace(/^@calculated[.:]/, '');
+      resolvedValue = formValues[nodeId];
+      console.log(`[applySingleFilter] 🧮 Résolution @calculated: ${filterValue} -> ${resolvedValue}`);
+    }
+    // Support pour @select.xxx
+    else if (filterValue.startsWith('@select.')) {
+      nodeId = filterValue.replace('@select.', '');
+      resolvedValue = formValues[nodeId];
+      console.log(`[applySingleFilter] 📝 Résolution @select: ${filterValue} -> ${resolvedValue}`);
+    }
+    // Support pour @value.xxx
+    else if (filterValue.startsWith('@value.')) {
+      nodeId = filterValue.replace('@value.', '');
+      resolvedValue = formValues[nodeId];
+      console.log(`[applySingleFilter] 📝 Résolution @value: ${filterValue} -> ${resolvedValue}`);
+    }
+    // Support pour @formula.xxx ou node-formula:xxx
+    else if (filterValue.startsWith('@formula.') || filterValue.startsWith('node-formula:')) {
+      nodeId = filterValue.replace(/^@formula\.|^node-formula:/, '');
+      resolvedValue = formValues[nodeId];
+      console.log(`[applySingleFilter] 📝 Résolution @formula: ${filterValue} -> ${resolvedValue}`);
+    }
+    else {
+      console.log(`[applySingleFilter] ✅ Valeur statique: ${filterValue}`);
+    }
   }
 
-  // Si pas de valeur r�solue, on garde toutes les options
-  if (resolvedValue === undefined || resolvedValue === null || resolvedValue === '') {
-    console.log(`[applySingleFilter] ?? Valeur du n�ud "${nodeId}" non trouv�e dans formValues`);
-    return options;
+  // Si pas de valeur résolue et qu'on avait une référence, utiliser 0 par défaut
+  if ((resolvedValue === undefined || resolvedValue === null || resolvedValue === '') && nodeId) {
+    console.log(`[applySingleFilter] ⚠️ Valeur du nœud "${nodeId}" non trouvée dans formValues - Utilisation de 0 par défaut`);
+    console.log(`[applySingleFilter] 📋 FormValues disponibles: ${Object.keys(formValues || {}).slice(0, 10).join(', ')}`);
+    resolvedValue = 0; // Fallback à 0 pour permettre la comparaison
   }
 
   // Trouver l'index de la colonne
   const colIndex = tableData.columns.indexOf(columnName);
   if (colIndex === -1) {
-    console.warn(`[applySingleFilter] ?? Colonne "${columnName}" introuvable`);
+    console.warn(`[applySingleFilter] ⚠️ Colonne "${columnName}" introuvable`);
     return options;
   }
 
@@ -6680,7 +6704,7 @@ function applySingleFilter(
     const result = compareValues(cellValue, resolvedValue, operator);
     
     if (!result) {
-      console.log(`[applySingleFilter] ? "${option.value}" rejet�: ${cellValue} ${operator} ${resolvedValue}`);
+      console.log(`[applySingleFilter] ❌ "${option.value}" rejeté: ${cellValue} ${operator} ${resolvedValue}`);
     }
     
     return result;
@@ -7012,6 +7036,300 @@ const fetchNormalizedTable = async (
 
   return { table, tables };
 };
+
+// ╔═══════════════════════════════════════════════════════════════════════╗
+// ║ 🔥 FONCTIONS DE FILTRAGE DES TABLES                                   ║
+// ╚═══════════════════════════════════════════════════════════════════════╝
+
+/**
+ * Applique les filtres configurés sur les lignes d'un tableau
+ * @param matrix - La matrice du tableau (lignes)
+ * @param columns - Les colonnes du tableau
+ * @param filters - Les filtres à appliquer { column, operator, valueRef }
+ * @param formValues - Valeurs du formulaire pour résoudre les références
+ * @returns Indices des lignes qui passent TOUS les filtres (logique AND)
+ */
+async function applyTableFilters(
+  matrix: unknown[][],
+  columns: string[],
+  filters: Array<{ column: string; operator: string; valueRef: string }>,
+  formValues: Record<string, unknown>
+): Promise<number[]> {
+  if (!filters || filters.length === 0) {
+    return matrix.map((_, i) => i); // Tous les indices si pas de filtres
+  }
+
+  // 🔧 Filtrer les filtres incomplets (column ou valueRef manquant)
+  const validFilters = filters.filter(f => f.column && f.valueRef && f.operator);
+  
+  if (validFilters.length === 0) {
+    console.log(`[applyTableFilters] ⚠️ Aucun filtre valide (${filters.length} filtre(s) incomplet(s))`);
+    return matrix.map((_, i) => i); // Tous les indices si pas de filtres valides
+  }
+
+  console.log(`[applyTableFilters] 🔥 Application de ${validFilters.length} filtre(s) valide(s) sur ${filters.length} configuré(s)`);
+  
+  // Résoudre toutes les valueRef en valeurs concrètes
+  const resolvedFilters = await Promise.all(
+    validFilters.map(async (filter) => {
+      const value = await resolveFilterValueRef(filter.valueRef, formValues);
+      console.log(`[applyTableFilters] Filtre "${filter.column}" ${filter.operator} "${filter.valueRef}" → valeur résolue: "${value}"`);
+      return { ...filter, resolvedValue: value };
+    })
+  );
+
+  // 🔧 Ignorer les filtres dont la valeur résolue est null/undefined (champ non encore rempli)
+  const activeFilters = resolvedFilters.filter(f => f.resolvedValue !== null && f.resolvedValue !== undefined);
+  
+  if (activeFilters.length === 0) {
+    console.log(`[applyTableFilters] ⚠️ Toutes les valeurs de référence sont null/undefined → pas de filtrage`);
+    return matrix.map((_, i) => i);
+  }
+  
+  if (activeFilters.length < resolvedFilters.length) {
+    console.log(`[applyTableFilters] ℹ️ ${resolvedFilters.length - activeFilters.length} filtre(s) ignoré(s) (valeur non définie)`);
+  }
+
+  // Filtrer les lignes
+  const matchingIndices: number[] = [];
+  
+  for (let rowIndex = 0; rowIndex < matrix.length; rowIndex++) {
+    const row = matrix[rowIndex];
+    let passesAllFilters = true;
+
+    for (const filter of activeFilters) {
+      const columnIndex = columns.indexOf(filter.column);
+      if (columnIndex === -1) {
+        console.warn(`[applyTableFilters] ⚠️ Colonne "${filter.column}" introuvable dans:`, columns);
+        passesAllFilters = false;
+        break;
+      }
+
+      const cellValue = row[columnIndex];
+      const passes = compareFilterValues(cellValue, filter.operator, filter.resolvedValue);
+      
+      console.log(`[applyTableFilters] Ligne ${rowIndex}: cellule[${filter.column}]="${cellValue}" ${filter.operator} "${filter.resolvedValue}" → ${passes ? '✅' : '❌'}`);
+      
+      if (!passes) {
+        passesAllFilters = false;
+        break;
+      }
+    }
+
+    if (passesAllFilters) {
+      matchingIndices.push(rowIndex);
+    }
+  }
+
+  console.log(`[applyTableFilters] ✅ ${matchingIndices.length}/${matrix.length} lignes passent les filtres`);
+  return matchingIndices;
+}
+
+/**
+ * Résout une valueRef en valeur concrète depuis les formValues
+ * Supporte: @calculated.{nodeId}, @calculated:{nodeId}, @select.{nodeId}, @value.{nodeId}, valeur littérale
+ */
+async function resolveFilterValueRef(
+  valueRef: string,
+  formValues: Record<string, unknown>
+): Promise<unknown> {
+  if (!valueRef) return null;
+
+  // 🆕 @calculated.{nodeId} ou @calculated:{nodeId} - Récupérer la calculatedValue
+  if (valueRef.startsWith('@calculated.') || valueRef.startsWith('@calculated:')) {
+    const nodeId = valueRef.replace(/^@calculated[.:]/, '');
+    console.log(`[resolveFilterValueRef] 🧮 Résolution @calculated pour nodeId: ${nodeId}`);
+    
+    // D'abord essayer depuis formValues (qui contient les calculatedValues injectées par le frontend)
+    if (formValues[nodeId] !== undefined && formValues[nodeId] !== null) {
+      let value = formValues[nodeId];
+      
+      // 🔧 FIX: Si la valeur est un objet {value: 'xxx', label: 'yyy'}, extraire .value
+      if (value && typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+        const objValue = (value as Record<string, unknown>).value;
+        console.log(`[resolveFilterValueRef] 🔧 Valeur objet détectée, extraction .value: ${objValue}`);
+        value = objValue;
+      }
+      
+      console.log(`[resolveFilterValueRef] ✅ Valeur trouvée dans formValues: ${value}`);
+      return value;
+    }
+    
+    // Fallback: récupérer depuis la base de données
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true, label: true, calculatedValue: true }
+    });
+    
+    if (node) {
+      console.log(`[resolveFilterValueRef] ✅ Node trouvé: "${node.label}", calculatedValue: ${node.calculatedValue}`);
+      return node.calculatedValue ?? null;
+    }
+    
+    console.log(`[resolveFilterValueRef] ⚠️ Node non trouvé pour ${nodeId}`);
+    return null;
+  }
+
+  // @select.{nodeId} ou @select:{nodeId} - Récupérer la réponse sélectionnée depuis formValues
+  if (valueRef.startsWith('@select.') || valueRef.startsWith('@select:')) {
+    const nodeId = valueRef.replace(/^@select[.:]/, '');
+    console.log(`[resolveFilterValueRef] 🔘 Résolution @select pour nodeId: ${nodeId}`);
+    let value = formValues[nodeId] ?? null;
+    
+    // 🔧 FIX: Si la valeur est un objet {value: 'xxx', label: 'yyy'}, extraire .value
+    if (value && typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+      const objValue = (value as Record<string, unknown>).value;
+      console.log(`[resolveFilterValueRef] 🔧 Valeur objet détectée, extraction .value: ${objValue}`);
+      value = objValue;
+    }
+    
+    // 🔧 FIX CRITIQUE: Si la valeur est un UUID (ID d'option), aller chercher le LABEL de cette option
+    // car les tables contiennent du texte comme "Monophasé 220-240v", pas des UUIDs
+    if (value && typeof value === 'string' && value.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      console.log(`[resolveFilterValueRef] 🔍 La valeur "${value}" est un UUID, recherche du label de l'option...`);
+      
+      // Chercher l'option dans les enfants du nœud SELECT (les options sont des nœuds enfants)
+      const optionNode = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: value },
+        select: { id: true, label: true, value: true }
+      });
+      
+      if (optionNode) {
+        // Utiliser le label de l'option, ou sa value si pas de label
+        const labelValue = optionNode.label || optionNode.value || value;
+        console.log(`[resolveFilterValueRef] ✅ Option trouvée! UUID "${value}" → Label "${labelValue}"`);
+        value = labelValue;
+      } else {
+        console.log(`[resolveFilterValueRef] ⚠️ Option UUID "${value}" non trouvée en base, utilisation telle quelle`);
+      }
+    }
+    
+    console.log(`[resolveFilterValueRef] ✅ Valeur select finale: ${value}`);
+    return value;
+  }
+
+  // @value.{nodeId} ou @value:{nodeId} - Récupérer la valeur du champ depuis formValues
+  if (valueRef.startsWith('@value.') || valueRef.startsWith('@value:')) {
+    const nodeId = valueRef.replace(/^@value[.:]/, '');
+    console.log(`[resolveFilterValueRef] 📝 Résolution @value pour nodeId: ${nodeId}`);
+    let value = formValues[nodeId] ?? null;
+    
+    // 🔧 FIX: Si la valeur est un objet {value: 'xxx', label: 'yyy'}, extraire .value
+    if (value && typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+      const objValue = (value as Record<string, unknown>).value;
+      console.log(`[resolveFilterValueRef] 🔧 Valeur objet détectée, extraction .value: ${objValue}`);
+      value = objValue;
+    }
+    
+    console.log(`[resolveFilterValueRef] ✅ Valeur field finale: ${value}`);
+    return value;
+  }
+
+  // Valeur littérale
+  return valueRef;
+}
+
+/**
+ * Compare deux valeurs selon un opérateur
+ */
+function compareFilterValues(
+  cellValue: unknown,
+  operator: string,
+  compareValue: unknown
+): boolean {
+  // Normaliser les valeurs pour comparaison
+  const normalizedCell = normalizeForFilterComparison(cellValue);
+  const normalizedCompare = normalizeForFilterComparison(compareValue);
+
+  switch (operator) {
+    case 'equals':
+    case '=':
+      // Comparaison exacte d'abord
+      if (normalizedCell === normalizedCompare) {
+        return true;
+      }
+      // Pour les chaînes: vérifier si la cellule COMMENCE PAR la valeur de comparaison
+      // Ex: "Monophasé 220-240v" commence par "Monophasé" → match!
+      // Cela permet de garder les infos de voltage dans la table tout en filtrant par type
+      if (typeof normalizedCell === 'string' && typeof normalizedCompare === 'string') {
+        const cellLower = normalizedCell.toLowerCase().trim();
+        const compareLower = normalizedCompare.toLowerCase().trim();
+        // Match si la cellule commence par la valeur OU si la valeur commence par la cellule
+        return cellLower.startsWith(compareLower) || compareLower.startsWith(cellLower);
+      }
+      return false;
+    
+    case 'notEquals':
+    case '!=':
+      return normalizedCell !== normalizedCompare;
+    
+    case 'greaterThan':
+    case '>':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell > normalizedCompare;
+      }
+      return String(normalizedCell) > String(normalizedCompare);
+    
+    case 'greaterOrEqual':
+    case 'greaterThanOrEqual':
+    case '>=':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell >= normalizedCompare;
+      }
+      return String(normalizedCell) >= String(normalizedCompare);
+    
+    case 'lessThan':
+    case '<':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell < normalizedCompare;
+      }
+      return String(normalizedCell) < String(normalizedCompare);
+    
+    case 'lessOrEqual':
+    case 'lessThanOrEqual':
+    case '<=':
+      if (typeof normalizedCell === 'number' && typeof normalizedCompare === 'number') {
+        return normalizedCell <= normalizedCompare;
+      }
+      return String(normalizedCell) <= String(normalizedCompare);
+    
+    case 'contains':
+      return String(normalizedCell).toLowerCase().includes(String(normalizedCompare).toLowerCase());
+    
+    case 'notContains':
+      return !String(normalizedCell).toLowerCase().includes(String(normalizedCompare).toLowerCase());
+    
+    case 'startsWith':
+      return String(normalizedCell).toLowerCase().startsWith(String(normalizedCompare).toLowerCase());
+    
+    case 'endsWith':
+      return String(normalizedCell).toLowerCase().endsWith(String(normalizedCompare).toLowerCase());
+    
+    default:
+      console.warn(`[compareFilterValues] ⚠️ Opérateur inconnu: ${operator}`);
+      return false;
+  }
+}
+
+/**
+ * Normalise une valeur pour la comparaison de filtres
+ */
+function normalizeForFilterComparison(value: unknown): string | number | null {
+  if (value === null || value === undefined) return null;
+  
+  // Si c'est déjà un nombre, le retourner
+  if (typeof value === 'number') return value;
+  
+  // Convertir en string et nettoyer
+  const str = String(value).trim();
+  
+  // Essayer de parser en nombre
+  const num = Number(str);
+  if (!isNaN(num) && isFinite(num)) return num;
+  
+  // Retourner la string
+  return str;
+}
 
 // Récupérer toutes les instances de tableaux d'un nœud
 router.get('/nodes/:nodeId/tables', async (req, res) => {
@@ -10239,6 +10557,18 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     const { nodeId } = req.params;
     const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
+    // 🆕 ÉTAPE 2.5: Parser les formValues depuis la query string pour le filtrage dynamique
+    const { formValues: formValuesParam } = req.query as { formValues?: string };
+    let formValues: Record<string, unknown> = {};
+    if (formValuesParam) {
+      try {
+        formValues = JSON.parse(formValuesParam);
+        console.log(`[TreeBranchLeaf API] 📊 formValues reçues pour filtrage:`, Object.keys(formValues).length, 'clés');
+      } catch (e) {
+        console.warn(`[TreeBranchLeaf API] ⚠️ Erreur parsing formValues:`, e);
+      }
+    }
+
     console.log(`[TreeBranchLeaf API] 🔍 GET active table/lookup for node: ${nodeId}`);
 
     // Vérifier l'accès au nœud
@@ -10399,7 +10729,81 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
       firstRows: rows.slice(0, 3),
     });
 
-    // 🎯 ÉTAPE 3: Générer les options selon la configuration
+    // � ÉTAPE 2.5: Récupérer et appliquer les filtres depuis table.meta.lookup
+    const rawLookup = (table.meta && typeof table.meta === 'object' && 'lookup' in table.meta)
+      ? (table.meta as Record<string, unknown>).lookup as Record<string, unknown>
+      : undefined;
+
+    // Construire la matrice complète pour le filtrage (colonne A + données)
+    const fullMatrix = rows.map((rowLabel, idx) => [rowLabel, ...(data[idx] || [])]);
+
+    // Récupérer les filtres configurés
+    let filters: Array<{ column: string; operator: string; valueRef: string }> = [];
+    if (rawLookup) {
+      // Les filtres peuvent être dans columnSourceOption.filters ou rowSourceOption.filters
+      const columnSourceOption = rawLookup.columnSourceOption as Record<string, unknown> | undefined;
+      const rowSourceOption = rawLookup.rowSourceOption as Record<string, unknown> | undefined;
+      
+      if (columnSourceOption?.filters && Array.isArray(columnSourceOption.filters)) {
+        filters = columnSourceOption.filters as typeof filters;
+        console.log(`[TreeBranchLeaf API] 🔥 ${filters.length} filtre(s) trouvé(s) dans columnSourceOption`);
+      } else if (rowSourceOption?.filters && Array.isArray(rowSourceOption.filters)) {
+        filters = rowSourceOption.filters as typeof filters;
+        console.log(`[TreeBranchLeaf API] 🔥 ${filters.length} filtre(s) trouvé(s) dans rowSourceOption`);
+      }
+    }
+
+    // 🔧 FIX 17/12/2025: FILTRAGE TABLE LOOKUP - ALIGNEMENT COLONNES
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // STRUCTURE DES DONNÉES:
+    //   - columns[] = ['Onduleur', 'MODELE', 'Alimentation', 'KVA', ...] (depuis tableColumns)
+    //   - cells[] = ['SMA Sunny Boy 1.5', 'Sunny Boy 1.5', 'Monophasé 220-240v', 1500, ...]
+    //   - cells[i] correspond à columns[i] (1:1 mapping)
+    //
+    // IMPORTANT: fullMatrix contient les cells COMPLETS (pas de slice!)
+    //   - fullMatrix[row][0] = cells[0] = valeur pour columns[0] (ex: nom onduleur)
+    //   - fullMatrix[row][1] = cells[1] = valeur pour columns[1] (ex: MODELE)
+    //   - fullMatrix[row][2] = cells[2] = valeur pour columns[2] (ex: Alimentation)
+    //
+    // ERREUR PRÉCÉDENTE: On ajoutait '__ROW_LABEL__' devant columns, créant un décalage!
+    //   - columnsWithA = ['__ROW_LABEL__', 'Onduleur', 'MODELE', 'Alimentation', ...]
+    //   - indexOf('Alimentation') retournait 3, mais fullMatrix[row][3] = KVA (décalé!)
+    //
+    // SOLUTION: Utiliser fullMatrix avec les cells COMPLETS et columns DIRECTEMENT
+    // ═══════════════════════════════════════════════════════════════════════════════
+    
+    // Reconstruire fullMatrix avec cells COMPLETS (sans le slice qui enlève cells[0])
+    const fullMatrixForFilters = table.tableRows.map(row => {
+      try {
+        let cellsData: any;
+        if (typeof row.cells === 'string') {
+          try {
+            cellsData = JSON.parse(row.cells);
+          } catch {
+            cellsData = [row.cells];
+          }
+        } else {
+          cellsData = row.cells || [];
+        }
+        return Array.isArray(cellsData) ? cellsData : [];
+      } catch {
+        return [];
+      }
+    });
+    
+    console.log(`[TreeBranchLeaf API] 🔧 Filtrage - columns:`, columns.slice(0, 5), 'filters columns:', filters.map(f => f.column));
+    console.log(`[TreeBranchLeaf API] 🔧 Filtrage - fullMatrixForFilters[1] sample:`, fullMatrixForFilters[1]?.slice(0, 4));
+
+    // Appliquer les filtres si configurés
+    let filteredRowIndices: number[] = fullMatrix.map((_, i) => i);
+    if (filters.length > 0 && Object.keys(formValues).length > 0) {
+      console.log(`[TreeBranchLeaf API] 🔥 Application de ${filters.length} filtre(s)...`);
+      // Utiliser columns DIRECTEMENT (pas columnsWithA) car cells[i] = valeur pour columns[i]
+      filteredRowIndices = await applyTableFilters(fullMatrixForFilters, columns, filters, formValues);
+      console.log(`[TreeBranchLeaf API] ✅ Filtrage: ${filteredRowIndices.length}/${fullMatrix.length} lignes passent les filtres`);
+    }
+
+    // �🎯 ÉTAPE 3: Générer les options selon la configuration
     if (table.type === 'matrix') {
 
       // CAS 1: keyRow défini → Extraire les VALEURS de cette ligne
@@ -10462,17 +10866,24 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
         let options;
         if (colIndex === 0) {
           // Colonne A = labels des lignes → Extraire depuis rows[] SAUF rows[0] (qui est A1)
-          options = rows.slice(1).map((rowLabel) => {
-            return {
-              value: rowLabel,
-              label: selectConfig.displayColumn ? rowLabel : rowLabel,
-            };
-          }).filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
+          // 🆕 FILTRAGE: N'inclure que les lignes qui passent les filtres
+          options = filteredRowIndices
+            .filter(idx => idx > 0) // Exclure rows[0] (A1)
+            .map((rowIdx) => {
+              const rowLabel = rows[rowIdx];
+              return {
+                value: rowLabel,
+                label: selectConfig.displayColumn ? rowLabel : rowLabel,
+              };
+            })
+            .filter(opt => opt.value !== 'undefined' && opt.value !== 'null' && opt.value !== '');
         } else {
           // Autre colonne → Extraire depuis data[][colIndex - 1]
           // ⚠️ ATTENTION: data ne contient PAS la colonne 0, donc colIndex doit être décalé de -1
+          // 🆕 FILTRAGE: N'inclure que les lignes qui passent les filtres
           const dataColIndex = colIndex - 1;
-          options = data.map((row, rowIdx) => {
+          options = filteredRowIndices.map((rowIdx) => {
+            const row = data[rowIdx] || [];
             const value = row[dataColIndex];
             const rowLabel = rows[rowIdx] || '';
             return {
@@ -10486,6 +10897,7 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
           colIndex,
           isColumnA: colIndex === 0,
           optionsCount: options.length,
+          filteredFromTotal: `${filteredRowIndices.length}/${fullMatrix.length}`,
           sample: options.slice(0, 3)
         });
 
@@ -10494,19 +10906,23 @@ router.get('/nodes/:nodeId/table/lookup', async (req, res) => {
     }
 
     // Fallback: Si pas de keyRow/keyColumn, retourner le tableau complet
-    // 🔥 AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : G�n�rer options dynamiques si structure A1 d�tect�e
+    // 🔥 AUTO-DEFAULT MATRIX (Orientation / Inclinaison) : Générer options dynamiques si structure A1 détectée
     if (table.type === 'matrix') {
       const hasNoConfig = !selectConfig?.keyRow && !selectConfig?.keyColumn;
       const a1 = rows[0];
       const firstColHeader = columns[0];
-      // Heuristique : si A1 est identique au header de la premi�re colonne, on suppose colonne A = labels (Orientation, Nord, ...)
+      // Heuristique : si A1 est identique au header de la première colonne, on suppose colonne A = labels (Orientation, Nord, ...)
       if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
-        const autoOptions = rows.slice(1)
+        // 🆕 FILTRAGE: N'inclure que les lignes qui passent les filtres (sauf rows[0] = A1)
+        const autoOptions = filteredRowIndices
+          .filter(idx => idx > 0) // Exclure rows[0] (A1)
+          .map(idx => rows[idx])
           .filter(r => r && r !== 'undefined' && r !== 'null')
           .map(r => ({ value: r, label: r }));
-        console.log(`[TreeBranchLeaf API] ?? AUTO-DEFAULT lookup (matrix, colonne A) g�n�r�`, {
+        console.log(`[TreeBranchLeaf API] 🎯 AUTO-DEFAULT lookup (matrix, colonne A) généré`, {
           nodeId,
           autoCount: autoOptions.length,
+          filteredFromTotal: `${filteredRowIndices.length}/${fullMatrix.length}`,
           sample: autoOptions.slice(0, 5)
         });
         // Upsert automatique d'une configuration SELECT minimale bas�e sur la colonne A (A1)

@@ -857,7 +857,23 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     return metadata.hasTable || false;
   }, [field.hasTable, field.capabilities, treeMetadata]);
   
-  // 🔗 Hook pour charger les options depuis un tableau lookup (si configuré)
+  // � DEBUG 17/12/2025: Tracer pourquoi Onduleur n'est pas SELECT
+  useEffect(() => {
+    if (field.label?.toLowerCase().includes('onduleur')) {
+      console.log(`🔴 [DEBUG ONDULEUR] "${field.label}" (${field.id}):`, {
+        hasTableCapability,
+        fieldHasTable: field.hasTable,
+        fieldCapabilities: field.capabilities,
+        fieldCapabilitiesTableEnabled: field.capabilities?.table?.enabled,
+        treeMetadataHasTable: treeMetadata?.hasTable,
+        fieldType: field.type,
+        fieldSubType: field.subType,
+        fieldKeys: Object.keys(field)
+      });
+    }
+  }, [field, hasTableCapability, treeMetadata]);
+  
+  // �🔗 Hook pour charger les options depuis un tableau lookup (si configuré)
   // ✅ NOUVEAU: On passe hasTableCapability pour que le hook vide les options quand le lookup est désactivé
   const repeaterTemplateNodeId = (field as Record<string, unknown> | undefined)?.repeaterTemplateNodeId as string | undefined;
   const originalFieldId = (field as Record<string, unknown> | undefined)?.originalFieldId as string | undefined;
@@ -988,7 +1004,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const baseSubType = field.type?.toUpperCase() || metadata.subType || nodeType; // 🎯 Type d'origine depuis Prisma
     
     // ✅ CORRECTION DYNAMIQUE: Si table lookup activé, transformer TEXT en SELECT
-    const hasTableLookup = capabilities.table?.enabled || metadata.hasTable || false;
+    // 🔧 FIX 17/12/2025: Utiliser hasTableCapability (déjà calculé avec field.hasTable prioritaire)
+    // au lieu de recalculer. field.hasTable vient directement de la DB et est la source de vérité.
+    const hasTableLookup = hasTableCapability || capabilities.table?.enabled || metadata.hasTable || false;
     const subType = hasTableLookup ? 'SELECT' : baseSubType; // 🔥 TRANSFORMATION DYNAMIQUE
     
     //  CORRECTION: Lire l'apparence depuis field.config ET metadata.appearance

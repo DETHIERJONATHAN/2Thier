@@ -28061,6 +28061,8 @@ ${"\u2550".repeat(80)}`);
     console.log(`\u2705 Formule trouv\xE9e: ${originalFormula.name || originalFormula.id}`);
     console.log(`   NodeId original: ${originalFormula.nodeId}`);
     console.log(`   Tokens originaux:`, originalFormula.tokens);
+    console.log(`   \u{1F3AF} targetProperty: ${originalFormula.targetProperty || "(valeur directe)"}`);
+    console.log(`   \u{1F4DD} constraintMessage: ${originalFormula.constraintMessage || "(aucun)"}`);
     const newFormulaId = `${originalFormula.id}-${suffix}`;
     console.log(`\u{1F4DD} Nouvel ID formule: ${newFormulaId}`);
     const originalOwnerNodeId = originalFormula.nodeId;
@@ -28121,6 +28123,11 @@ ${"\u2550".repeat(80)}`);
         name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
         description: originalFormula.description,
         tokens: rewrittenTokens,
+        // 🔧 FIX: Copier targetProperty et constraintMessage (16/12/2024)
+        // Ces champs définissent la CIBLE de la formule (number_max, number_min, visible, etc.)
+        // et le message d'erreur personnalisé pour les contraintes
+        targetProperty: originalFormula.targetProperty,
+        constraintMessage: originalFormula.constraintMessage,
         metadata: originalFormula.metadata,
         createdAt: /* @__PURE__ */ new Date(),
         updatedAt: /* @__PURE__ */ new Date()
@@ -28811,6 +28818,40 @@ ${"\u2550".repeat(80)}`);
                 rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
               }
             }
+            if (rewritten?.lookup?.displayColumn) {
+              if (Array.isArray(rewritten.lookup.displayColumn)) {
+                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col) => {
+                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}-${suffix}`);
+                    return `${col}-${suffix}`;
+                  }
+                  return col;
+                });
+              } else if (typeof rewritten.lookup.displayColumn === "string") {
+                const val = rewritten.lookup.displayColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}-${suffix}`);
+                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
+                }
+              }
+            }
+            if (rewritten?.lookup?.displayRow) {
+              if (Array.isArray(rewritten.lookup.displayRow)) {
+                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row) => {
+                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}-${suffix}`);
+                    return `${row}-${suffix}`;
+                  }
+                  return row;
+                });
+              } else if (typeof rewritten.lookup.displayRow === "string") {
+                const val = rewritten.lookup.displayRow;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayRow: ${val} \u2192 ${val}-${suffix}`);
+                  rewritten.lookup.displayRow = `${val}-${suffix}`;
+                }
+              }
+            }
             return rewritten;
           })(),
           updatedAt: /* @__PURE__ */ new Date()
@@ -28852,6 +28893,40 @@ ${"\u2550".repeat(80)}`);
               const val = rewritten.lookup.columnSourceOption.comparisonColumn;
               if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
                 rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
+              }
+            }
+            if (rewritten?.lookup?.displayColumn) {
+              if (Array.isArray(rewritten.lookup.displayColumn)) {
+                rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col) => {
+                  if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}-${suffix}`);
+                    return `${col}-${suffix}`;
+                  }
+                  return col;
+                });
+              } else if (typeof rewritten.lookup.displayColumn === "string") {
+                const val = rewritten.lookup.displayColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}-${suffix}`);
+                  rewritten.lookup.displayColumn = `${val}-${suffix}`;
+                }
+              }
+            }
+            if (rewritten?.lookup?.displayRow) {
+              if (Array.isArray(rewritten.lookup.displayRow)) {
+                rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row) => {
+                  if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
+                    console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}-${suffix}`);
+                    return `${row}-${suffix}`;
+                  }
+                  return row;
+                });
+              } else if (typeof rewritten.lookup.displayRow === "string") {
+                const val = rewritten.lookup.displayRow;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
+                  console.log(`[table.meta] displayRow: ${val} \u2192 ${val}-${suffix}`);
+                  rewritten.lookup.displayRow = `${val}-${suffix}`;
+                }
               }
             }
             return rewritten;
@@ -31954,38 +32029,36 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
                   metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${computedLabelSuffix}`;
                 }
               }
-              // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
               if (metaObj?.lookup?.displayColumn) {
                 if (Array.isArray(metaObj.lookup.displayColumn)) {
                   metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
                     if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(computedLabelSuffix)) {
-                      console.log(`[table.meta] displayColumn[]: ${col} -> ${col}${computedLabelSuffix}`);
+                      console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}${computedLabelSuffix}`);
                       return `${col}${computedLabelSuffix}`;
                     }
                     return col;
                   });
-                } else if (typeof metaObj.lookup.displayColumn === 'string') {
+                } else if (typeof metaObj.lookup.displayColumn === "string") {
                   const val = metaObj.lookup.displayColumn;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    console.log(`[table.meta] displayColumn: ${val} -> ${val}${computedLabelSuffix}`);
+                    console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}${computedLabelSuffix}`);
                     metaObj.lookup.displayColumn = `${val}${computedLabelSuffix}`;
                   }
                 }
               }
-              // 🔥 FIX: Suffixer displayRow (peut être string ou array)
               if (metaObj?.lookup?.displayRow) {
                 if (Array.isArray(metaObj.lookup.displayRow)) {
                   metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
                     if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(computedLabelSuffix)) {
-                      console.log(`[table.meta] displayRow[]: ${row} -> ${row}${computedLabelSuffix}`);
+                      console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}${computedLabelSuffix}`);
                       return `${row}${computedLabelSuffix}`;
                     }
                     return row;
                   });
-                } else if (typeof metaObj.lookup.displayRow === 'string') {
+                } else if (typeof metaObj.lookup.displayRow === "string") {
                   const val = metaObj.lookup.displayRow;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    console.log(`[table.meta] displayRow: ${val} -> ${val}${computedLabelSuffix}`);
+                    console.log(`[table.meta] displayRow: ${val} \u2192 ${val}${computedLabelSuffix}`);
                     metaObj.lookup.displayRow = `${val}${computedLabelSuffix}`;
                   }
                 }
@@ -51519,21 +51592,19 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
         fromStoredValue: true
       });
     }
-    if ((hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable) && node.treeId) {
-      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" n\xE9cessite recalcul (pas de valeur valide):`, {
+    const isRealSubmission = submissionId && !submissionId.startsWith("preview-");
+    const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
+    if (canRecalculateHere && node.treeId && isRealSubmission) {
+      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" - recalcul table lookup:`, {
         nodeId,
         hasTableLookup,
-        hasFormulaVariable,
-        hasConditionVariable,
-        sourceRef: variableMeta2?.sourceRef,
-        existingValue,
         submissionId
       });
       try {
         const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
         const result = await evaluateVariableOperation2(
           nodeId,
-          submissionId || "preview-calculated-value-request",
+          submissionId,
           prisma
         );
         console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
@@ -56264,42 +56335,6 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
                   metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
                 }
               }
-              // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
-              if (metaObj?.lookup?.displayColumn) {
-                if (Array.isArray(metaObj.lookup.displayColumn)) {
-                  metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
-                    if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                      console.log(`[table.meta] displayColumn[]: ${col} -> ${col}${suffix}`);
-                      return `${col}${suffix}`;
-                    }
-                    return col;
-                  });
-                } else if (typeof metaObj.lookup.displayColumn === 'string') {
-                  const val = metaObj.lookup.displayColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    console.log(`[table.meta] displayColumn: ${val} -> ${val}${suffix}`);
-                    metaObj.lookup.displayColumn = `${val}${suffix}`;
-                  }
-                }
-              }
-              // 🔥 FIX: Suffixer displayRow (peut être string ou array)
-              if (metaObj?.lookup?.displayRow) {
-                if (Array.isArray(metaObj.lookup.displayRow)) {
-                  metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
-                    if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                      console.log(`[table.meta] displayRow[]: ${row} -> ${row}${suffix}`);
-                      return `${row}${suffix}`;
-                    }
-                    return row;
-                  });
-                } else if (typeof metaObj.lookup.displayRow === 'string') {
-                  const val = metaObj.lookup.displayRow;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    console.log(`[table.meta] displayRow: ${val} -> ${val}${suffix}`);
-                    metaObj.lookup.displayRow = `${val}${suffix}`;
-                  }
-                }
-              }
               return metaObj;
             } catch {
               return table.meta;
@@ -56823,6 +56858,40 @@ var TableLookupDuplicationService = class {
                   const val = metaObj.lookup.columnSourceOption.comparisonColumn;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
                     metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                  }
+                }
+                if (metaObj?.lookup?.displayColumn) {
+                  if (Array.isArray(metaObj.lookup.displayColumn)) {
+                    metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                      if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                        console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}${suffix}`);
+                        return `${col}${suffix}`;
+                      }
+                      return col;
+                    });
+                  } else if (typeof metaObj.lookup.displayColumn === "string") {
+                    const val = metaObj.lookup.displayColumn;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}${suffix}`);
+                      metaObj.lookup.displayColumn = `${val}${suffix}`;
+                    }
+                  }
+                }
+                if (metaObj?.lookup?.displayRow) {
+                  if (Array.isArray(metaObj.lookup.displayRow)) {
+                    metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
+                      if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
+                        console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}${suffix}`);
+                        return `${row}${suffix}`;
+                      }
+                      return row;
+                    });
+                  } else if (typeof metaObj.lookup.displayRow === "string") {
+                    const val = metaObj.lookup.displayRow;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      console.log(`[table.meta] displayRow: ${val} \u2192 ${val}${suffix}`);
+                      metaObj.lookup.displayRow = `${val}${suffix}`;
+                    }
                   }
                 }
                 return metaObj;

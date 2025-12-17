@@ -118,81 +118,59 @@ const extractFieldSuffix = (field: TBLField): string => {
 };
 
 const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string; fields: TBLField[] }> => {
-  // 🔧 FIX: Séparer les champs "Total" des autres pour les placer à la fin
+  // 🎯 NOUVEL ORDRE PAR SUFFIXE (16/12/2025):
+  // 1. Tous les originaux (sans suffixe) triés par ordre TBL
+  // 2. Toutes les copies -1 triées par ordre TBL
+  // 3. Toutes les copies -2 triées par ordre TBL
+  // ...
+  // N. Tous les Totaux à la FIN triés par ordre TBL
+  
+  // Déterminer si un champ est un Total
   const isTotal = (field: TBLField): boolean => {
     const label = (field.label || '').toLowerCase();
-    return label.includes('total') || label.includes('- total');
+    return label.includes('- total') || label.endsWith(' total');
   };
   
-  // 🔧 FIX: Extraire le nom de base d'un label (sans le suffix -1, -2, etc.)
-  const getBaseName = (label: string): string => {
-    return (label || '').replace(/-\d+$/, '').trim();
-  };
-  
-  const normalFields = fields.filter(f => !isTotal(f));
-  const totalFields = fields.filter(f => isTotal(f));
-  
-  const groups = new Map<string, TBLField[]>();
-  for (const field of normalFields) {
+  // Extraire le suffixe numérique d'un champ (-1, -2, etc.)
+  const getSuffixNumber = (field: TBLField): number => {
+    if (isTotal(field)) return Infinity; // Totaux toujours à la fin
     const suffix = extractFieldSuffix(field);
-    if (!groups.has(suffix)) {
-      groups.set(suffix, []);
-    }
-    groups.get(suffix)!.push(field);
-  }
-  const toNumeric = (value: string): number | null => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
+    if (suffix === BASE_SUFFIX_KEY) return 0; // Originaux = 0
+    const num = parseInt(suffix, 10);
+    return Number.isFinite(num) ? num : 0;
   };
-  const compareSuffix = (left: string, right: string): number => {
-    if (left === right) return 0;
-    if (left === BASE_SUFFIX_KEY) return -1;
-    if (right === BASE_SUFFIX_KEY) return 1;
-    const leftNum = toNumeric(left);
-    const rightNum = toNumeric(right);
-    if (leftNum !== null && rightNum !== null) {
-      return leftNum - rightNum;
-    }
-    if (leftNum !== null) return -1;
-    if (rightNum !== null) return 1;
-    return left.localeCompare(right, 'fr', { numeric: true, sensitivity: 'base' });
-  };
-
-  const entries = Array.from(groups.entries()).sort((a, b) => compareSuffix(a[0], b[0]));
   
-  // Recalculer isLastInCopyGroup pour chaque groupe APRÈS le tri
-  const result = entries.map(([suffix, groupedFields]) => {
-    // 🔧 FIX: Trier les champs STRICTEMENT par leur `order` TBL pour respecter l'ordre de l'arbre
-    const sortedFields = [...groupedFields].sort((a, b) => {
-      // 🎯 PRIORITÉ ABSOLUE: Utiliser l'order défini dans TreeBranchLeaf
-      return (a.order ?? 9999) - (b.order ?? 9999);
-    });
+  // Trier les champs:
+  // 1. Par suffixe (0 = original, 1, 2, ..., Infinity = Total)
+  // 2. À suffixe égal, par ordre TBL
+  const sortedFields = [...fields].sort((a, b) => {
+    const suffixA = getSuffixNumber(a);
+    const suffixB = getSuffixNumber(b);
     
-    const fieldsWithUpdatedFlag = sortedFields.map((field, idx, arr) => {
-      // Seules les copies (suffix !== BASE_SUFFIX_KEY) doivent avoir le bouton de suppression
-      const isCopy = suffix !== BASE_SUFFIX_KEY;
-      const isLast = idx === arr.length - 1;
-      return {
-        ...field,
-        isLastInCopyGroup: isCopy && isLast
-      };
-    });
-    return { suffix, fields: fieldsWithUpdatedFlag };
+    // D'abord trier par suffixe
+    if (suffixA !== suffixB) {
+      return suffixA - suffixB;
+    }
+    
+    // À suffixe égal, trier par ordre TBL
+    return (a.order ?? 9999) - (b.order ?? 9999);
   });
   
-  // 🔧 FIX: Ajouter les champs "Total" à la fin, triés par leur order TBL
-  if (totalFields.length > 0) {
-    const sortedTotals = [...totalFields].sort((a, b) => {
-      // 🎯 Utiliser l'order TBL pour les champs Total aussi
-      return (a.order ?? 9999) - (b.order ?? 9999);
-    });
-    result.push({ 
-      suffix: '__TOTAL__', 
-      fields: sortedTotals.map(f => ({ ...f, isLastInCopyGroup: false }))
-    });
+  // Marquer le dernier de chaque groupe de suffixe
+  const finalFields: TBLField[] = [];
+  for (let i = 0; i < sortedFields.length; i++) {
+    const field = sortedFields[i];
+    const currentSuffix = getSuffixNumber(field);
+    const nextSuffix = i + 1 < sortedFields.length ? getSuffixNumber(sortedFields[i + 1]) : -1;
+    const isLastInGroup = currentSuffix !== nextSuffix;
+    finalFields.push({ ...field, isLastInCopyGroup: isLastInGroup });
   }
   
-  return result;
+  // Retourner un seul groupe avec tous les champs dans le bon ordre
+  return [{
+    suffix: '__SUFFIX_ORDERED__',
+    fields: finalFields
+  }];
 };
 
 interface DisplayAppearanceTokens {
