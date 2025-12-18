@@ -685,7 +685,6 @@ router.post('/trees/:treeId/submissions', async (req, res) => {
               sourceRef: isVar ? (v?.sourceRef || null) : undefined,
               operationSource,
               operationDetail: isVar ? (v?.sourceRef || null) : label,
-              operationResult: unit && valueStr ? `${display}: ${valueStr} ${unit}` : `${display}: ${valueStr ?? ''}`,
               lastResolved: now,
             }
           });
@@ -790,7 +789,6 @@ router.put('/submissions/:submissionId', async (req, res) => {
               sourceRef: isVar ? (v?.sourceRef || null) : undefined,
               operationSource,
               operationDetail: isVar ? (v?.sourceRef || null) : label,
-              operationResult: unit && valueStr ? `${display}: ${valueStr} ${unit}` : `${display}: ${valueStr ?? ''}`,
               lastResolved: now,
             }
           });

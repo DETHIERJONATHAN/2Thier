@@ -201,12 +201,16 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
                 : String(recomputedValue);
             const resolvedAt = new Date();
 
-            await prisma.treeBranchLeafSubmissionData.upsert({
+            // ⚠️ NE PAS persister les display fields dans la submission
+            // Les display fields calculent en temps réel, ils ne doivent jamais être stockés
+            const isDisplayField = node.fieldType === 'DISPLAY' || node.type === 'DISPLAY';
+            
+            if (!isDisplayField) {
+              await prisma.treeBranchLeafSubmissionData.upsert({
               where: { submissionId_nodeId: { submissionId, nodeId } },
               update: {
                 value: persistedValue,
                 operationDetail: evaluation.operationDetail,
-                operationResult: evaluation.operationResult,
                 operationSource: evaluation.operationSource,
                 sourceRef: evaluation.sourceRef,
                 fieldLabel: node.label,
@@ -222,7 +226,6 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
                 nodeId,
                 value: persistedValue,
                 operationDetail: evaluation.operationDetail,
-                operationResult: evaluation.operationResult,
                 operationSource: evaluation.operationSource,
                 sourceRef: evaluation.sourceRef,
                 fieldLabel: node.label,
@@ -232,7 +235,8 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
                 variableUnit: variableMeta.unit,
                 lastResolved: resolvedAt
               }
-            });
+              });
+            }
 
             return res.json({
               success: true,
@@ -246,7 +250,6 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
               submissionId,
               sourceRef: evaluation.sourceRef,
               operationDetail: evaluation.operationDetail,
-              operationResult: evaluation.operationResult,
               freshCalculation: true
             });
           } catch (recomputeErr) {
@@ -268,7 +271,6 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           submissionId,
           sourceRef: submissionDataEntry.sourceRef,
           operationDetail: submissionDataEntry.operationDetail,
-          operationResult: submissionDataEntry.operationResult,
           fromSubmission: true
         });
       }

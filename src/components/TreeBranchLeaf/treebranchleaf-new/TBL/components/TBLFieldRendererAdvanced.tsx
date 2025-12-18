@@ -625,6 +625,7 @@ interface TBLFieldAdvancedProps {
   formData?: Record<string, unknown>;
   treeMetadata?: Record<string, unknown>; // Métadonnées du nœud TreeBranchLeaf
   treeId?: string; // ID de l'arbre TreeBranchLeaf pour les appels backend
+  submissionId?: string; // ID de la soumission pour lire les valeurs sources des calculs
   allNodes?: RawTreeNode[]; // 🔥 NOUVEAU: Tous les nœuds pour hiérarchie Cascader
   // 🎯 Props de validation pour les couleurs dynamiques
   isValidating?: boolean;
@@ -777,6 +778,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   formData = {},
   treeMetadata = {},
   treeId,
+  submissionId,
   allNodes = []
 }) => {
   
@@ -1482,9 +1484,14 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     return Array.from(variants);
   }, [constraintSourceNodeId, constraintSourceNodeLabel]);
 
+  // ⚠️ Ne pas passer submissionId si c'est un champ DISPLAY
+  // Les display fields calculent en temps réel basés sur l'arbre uniquement
+  const isDisplayField = field?.fieldType === 'DISPLAY' || field?.type === 'DISPLAY';
+  
   const { value: constraintBackendValue } = useNodeCalculatedValue(
     constraintSourceNodeId || '',
-    treeId || ''
+    treeId || '',
+    isDisplayField ? undefined : submissionId
   );
 
   // 🎯 NOUVEAU: Récupérer la valeur du champ source depuis formData OU via useBackendValue

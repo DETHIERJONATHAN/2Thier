@@ -1194,11 +1194,11 @@ const transformPrismaNodeToField = (
               // Récupérer le subtab de la sous-option ou remonter la chaîne
               const subOptionSubTabAssignments = resolveSubTabAssignments(subOption, subOption, nodeLookup);
               
-              console.log(`🔍 [SUB-OPTION SHARED REF] Sous-option "${subOption.label}" (${subOption.id}):`, {
-                subOptionSubtab: subOption.subtab,
-                subOptionParentId: subOption.parentId,
-                resolvedSubTabs: subOptionSubTabAssignments
-              });
+              // console.log(`🔍 [SUB-OPTION SHARED REF] Sous-option "${subOption.label}" (${subOption.id}):`, {
+              //   subOptionSubtab: subOption.subtab,
+              //   subOptionParentId: subOption.parentId,
+              //   resolvedSubTabs: subOptionSubTabAssignments
+              // });
               
               subOptionSharedRefIds.forEach(refId => {
                 const refNode = nodeLookup.get(refId);
@@ -1892,11 +1892,11 @@ export const transformNodesToTBLComplete = (
       const uniqueIds = Array.from(new Set(resolvedIds));
       activeSharedReferences.set(node.id, uniqueIds);
       // 🔍 DEBUG: Log quand une option a des shared refs
-      console.log(`🔗 [SHARED REFS STORED] Option "${node.label}" (${node.id}):`, {
-        resolvedIds: uniqueIds,
-        nodeSubtab: node.subtab,
-        nodeParentId: node.parentId
-      });
+      // console.log(`🔗 [SHARED REFS STORED] Option "${node.label}" (${node.id}):`, {
+      //   resolvedIds: uniqueIds,
+      //   nodeSubtab: node.subtab,
+      //   nodeParentId: node.parentId
+      // });
       if (verbose()) {
         dlog(`🔗 [TBL-PRISMA] Option "${node.label}" stockée avec ${uniqueIds.length} références partagées (résolues)`);
       }
@@ -2309,21 +2309,21 @@ export const transformNodesToTBLComplete = (
   });
   
   // 🔍🔍🔍 DIAGNOSTIC GLOBAL - Tous les champs "Panneau"
-  console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Recherche champs Panneau dans fieldsByTab');
-  const allFieldsGlobal = Object.values(fieldsByTab).flat();
-  const panneauFieldsGlobal = allFieldsGlobal.filter(f => 
-    f.label?.includes('Panneau') || f.label?.includes('panneau') ||
-    f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || 
-    f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
-    f.id.startsWith('f117b34a-') || 
-    f.id.startsWith('fb35d781-')
-  );
-  console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Panneau fields trouvés:', panneauFieldsGlobal.length, panneauFieldsGlobal.map(f => ({
-    id: f.id,
-    label: f.label,
-    tabId: Object.entries(fieldsByTab).find(([_, fields]) => fields.includes(f))?.[0],
-    metadata: (f as any).metadata
-  })));
+  // console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Recherche champs Panneau dans fieldsByTab');
+  // const allFieldsGlobal = Object.values(fieldsByTab).flat();
+  // const panneauFieldsGlobal = allFieldsGlobal.filter(f => 
+  //   f.label?.includes('Panneau') || f.label?.includes('panneau') ||
+  //   f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || 
+  //   f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
+  //   f.id.startsWith('f117b34a-') || 
+  //   f.id.startsWith('fb35d781-')
+  // );
+  // console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Panneau fields trouvés:', panneauFieldsGlobal.length, panneauFieldsGlobal.map(f => ({
+  //   id: f.id,
+  //   label: f.label,
+  //   tabId: Object.entries(fieldsByTab).find(([_, fields]) => fields.includes(f))?.[0],
+  //   metadata: (f as any).metadata
+  // })));
   
   return { tree, tabs, fieldsByTab, sectionsByTab };
 };

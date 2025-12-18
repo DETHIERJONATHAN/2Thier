@@ -26,9 +26,11 @@ import {
   Spin,
   Alert,
   Form,
-  Grid
+  Grid,
+  Skeleton,
+  Tooltip
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -94,10 +96,10 @@ const TBL: React.FC<TBLProps> = ({
     () => `mb-6 pb-4 border-b border-gray-200 flex ${isMobile ? 'flex-col gap-4 items-start' : 'items-center justify-between'}`,
     [isMobile]
   );
-  const headerActionsDirection = isMobile ? 'vertical' : 'horizontal';
+  const headerActionsDirection = 'horizontal'; // Toujours horizontal, même sur mobile
   const headerActionsAlign = isMobile ? 'start' : 'center';
   const headerActionsClassName = isMobile ? 'w-full' : undefined;
-  const actionButtonBlock = isMobile;
+  const actionButtonBlock = false; // Désactivé pour garder les boutons compacts
   
   // État pour les données Lead dynamiques
   const [clientData, setClientData] = useState({
@@ -108,7 +110,7 @@ const TBL: React.FC<TBLProps> = ({
     address: ""
   });
   const [leadId, setLeadId] = useState<string | undefined>(urlLeadId); // État local pour leadId
-  const lastLeadFetchRef = useRef<{ leadId: string; api: typeof api } | null>(null);
+  const [isLoadingLead, setIsLoadingLead] = useState<boolean>(!!urlLeadId); // Loading si on a un leadId
   
   // États pour les modals de lead
   const [leadSelectorVisible, setLeadSelectorVisible] = useState(false);
@@ -120,12 +122,14 @@ const TBL: React.FC<TBLProps> = ({
   // États pour le modal de création de devis
   const [devisCreatorVisible, setDevisCreatorVisible] = useState(false);
   const [devisName, setDevisName] = useState('');
+  const [selectedLeadForDevis, setSelectedLeadForDevis] = useState<TBLLead | null>(null);
   const [form] = Form.useForm();
 
   // Autosave (ancienne UI): état local
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [autosaveLast, setAutosaveLast] = useState<Date | null>(null);
+  const [devisCreatedAt, setDevisCreatedAt] = useState<Date | null>(null);
   const debounceRef = useRef<number | null>(null);
   // Garde-fous autosave: éviter les envois identiques
   const lastSavedSignatureRef = useRef<string | null>(null);
@@ -136,51 +140,39 @@ const TBL: React.FC<TBLProps> = ({
   // Charger les données Lead si leadId fourni
   useEffect(() => {
     if (!leadId || !api) {
+      setIsLoadingLead(false);
       return;
     }
 
-    const lastFetch = lastLeadFetchRef.current;
-    if (lastFetch && lastFetch.leadId === leadId && lastFetch.api === api) {
-      return;
-    }
-
-    lastLeadFetchRef.current = { leadId, api };
-    let isCancelled = false;
-
+    setIsLoadingLead(true);
     const loadLead = async () => {
       try {
         const response = await api.get(`/api/leads/${leadId}`);
         const lead = response.success ? response.data : response;
 
-        if (!isCancelled && lead && lead.id) {
+        if (lead && lead.id) {
           const newClientData = {
             id: lead.id,
-            name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
+            name: lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
             email: lead.email || '',
-            phone: lead.phone || '',
-            address: lead.data?.address || ''
+            phone: lead.phone || lead.phoneNumber || lead.phoneHome || '',
+            address: lead.address || lead.data?.address || ''
           };
           setClientData(newClientData);
           setFormData(prev => ({
             ...prev,
             __leadId: lead.id
           }));
-        } else if (!lead || !lead.id) {
-          console.warn('🔍 [TBL] Lead non trouvé ou invalide');
         }
       } catch (error) {
-        if (!isCancelled) {
-          console.error('❌ [TBL] Erreur chargement lead:', error);
-          message.error('Erreur lors du chargement des données du lead');
-        }
+        console.error('❌ [TBL] Erreur chargement lead:', error);
+        message.error('Erreur lors du chargement des données du lead');
+      } finally {
+        setIsLoadingLead(false);
       }
     };
 
     loadLead();
-
-    return () => {
-      isCancelled = true;
-    };
   }, [leadId, api]);
 
   // Fonctions pour gérer les leads
@@ -196,10 +188,17 @@ const TBL: React.FC<TBLProps> = ({
 
   // Gestion de sélection d'un lead existant
   const handleSelectLead = useCallback((selectedLead: TBLLead) => {
-    // Rediriger vers TBL avec le lead sélectionné
-    window.location.href = `/tbl/${selectedLead.id}`;
-    setLeadSelectorVisible(false);
-  }, []);
+    // Si le modal de création de devis est ouvert, on met à jour le lead sélectionné pour le devis
+    if (devisCreatorVisible) {
+      setSelectedLeadForDevis(selectedLead);
+      setLeadSelectorVisible(false);
+      message.success(`Lead sélectionné : ${selectedLead.firstName} ${selectedLead.lastName}`);
+    } else {
+      // Sinon, comportement normal : redirection vers TBL avec le lead sélectionné
+      window.location.href = `/tbl/${selectedLead.id}`;
+      setLeadSelectorVisible(false);
+    }
+  }, [devisCreatorVisible]);
 
   // Orchestrateur post-création (le modal crée déjà le lead via l'API)
   // Ici: pas de re-post API pour éviter les doublons; on peut éventuellement préparer une soumission TBL.
@@ -228,7 +227,7 @@ const TBL: React.FC<TBLProps> = ({
   }, []);
 
   // State pour les onglets et formulaire
-  const [activeTab, setActiveTab] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('client-info');
   const [formData, setFormData] = useState<TBLFormData>({});
   const [autoSaveEnabled] = useState(true);
   const [saveModalVisible, setSaveModalVisible] = useState(false);
@@ -378,6 +377,9 @@ const TBL: React.FC<TBLProps> = ({
   // 🔥 SIGNAL RETRANSFORM: When displayAlways changes, increment counter to trigger hook retransform
   const refetchRef = useRef<(() => void) | undefined>();
   
+  // 🎯 Track if we just created a new devis to trigger refresh after React propagates new submissionId
+  const justCreatedDevisRef = useRef<boolean>(false);
+  
   // Keep refetch reference stable
   useEffect(() => {
     refetchRef.current = useFixed ? newData.refetch : oldData.refetch;
@@ -447,6 +449,19 @@ const TBL: React.FC<TBLProps> = ({
       window.removeEventListener('tbl-force-retransform', handleForceRetransform);
     };
   }, [setRetransformCounter]);
+
+  // ✅ Plus besoin de refresh event après création de devis!
+  // Les calculated values (display fields) ne sont PAS liés au submissionId.
+  // Ils calculent toujours en temps réel basé sur les champs actuels du formulaire.
+  // Le submissionId sert UNIQUEMENT à enregistrer les champs normaux (TreeBranchLeafNode),
+  // PAS les display fields qui restent dynamiques et calculent à la volée.
+  useEffect(() => {
+    if (justCreatedDevisRef.current && submissionId) {
+      console.log('✅ [TBL] Nouveau devis créé avec submissionId:', submissionId);
+      console.log('✅ [TBL] Les display fields continuent à calculer en temps réel (pas de refresh nécessaire)');
+      justCreatedDevisRef.current = false;
+    }
+  }, [submissionId]);
 
   // 🔥 Store the handler for direct metadata updates (bypass event system)
   useEffect(() => {
@@ -529,7 +544,7 @@ const TBL: React.FC<TBLProps> = ({
     saving,
     saveAsDevis
   } = useTBLSave();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user, organization } = useAuth();
   // const { enqueue } = useEvalBridge(); // (actuellement non utilisé dans cette version de l'écran)
 
   // SYNCHRONISATION: Initialiser formData avec les mirrors créés par useTBLDataPrismaComplete
@@ -720,6 +735,7 @@ const TBL: React.FC<TBLProps> = ({
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
           submissionId,
           formData,
+          clientId: leadId,
           status: 'draft'
         });
         lastSavedSignatureRef.current = sig;
@@ -737,7 +753,7 @@ const TBL: React.FC<TBLProps> = ({
       lastQueuedSignatureRef.current = null;
       setIsAutosaving(false);
     }
-  }, [api, tree, normalizePayload, computeSignature, submissionId, previewNoSave, broadcastCalculatedRefresh]);
+  }, [api, tree, normalizePayload, computeSignature, submissionId, leadId, previewNoSave, broadcastCalculatedRefresh]);
 
   // Déclencheur débouncé
   const scheduleAutosave = useCallback((data: TBLFormData) => {
@@ -1133,7 +1149,7 @@ const TBL: React.FC<TBLProps> = ({
   const _dataSize = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
       // console.log('[TBL][SAVE_AS_DEVIS] formData', { keys: Object.keys(formData).length, approxBytes: dataSize });
       const result = await saveAsDevis(formData, tree!.id, {
-        clientId: 'temp-client-id', // TODO: utiliser le vrai client ID
+        clientId: leadId,
         projectName: values.projectName,
         notes: values.notes,
         isDraft: false
@@ -1329,36 +1345,25 @@ const TBL: React.FC<TBLProps> = ({
 
   // Supprimer un devis existant
   const handleDeleteDevis = async (devisId: string, devisName: string) => {
+    // Demander confirmation
+    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer le devis "${devisName}" ?\n\nCette action est irréversible.`);
+    
+    if (!confirmed) return;
+    
     try {
-      // Demander confirmation
-      const confirmed = await new Promise((resolve) => {
-        Modal.confirm({
-          title: 'Supprimer le devis',
-          content: `Êtes-vous sûr de vouloir supprimer le devis "${devisName}" ?`,
-          okText: 'Supprimer',
-          okType: 'danger',
-          cancelText: 'Annuler',
-          onOk: () => resolve(true),
-          onCancel: () => resolve(false),
-        });
-      });
-
-      if (!confirmed) return;
-
-      // console.log('🗑️ [TBL] Suppression du devis:', { devisId, devisName });
+      console.log('🗑️ [TBL][DELETE] Suppression du devis:', devisId);
       
       // Appeler l'API de suppression
       await api.delete(`/api/treebranchleaf/submissions/${devisId}`);
       
+      console.log('✅ [TBL][DELETE] Devis supprimé, rechargement...');
+      
       // Recharger la liste des devis
-      if (leadId) {
-        await loadExistingSubmissions();
-      }
+      await handleLoadDevis();
       
       message.success(`Devis "${devisName}" supprimé avec succès`);
-      // console.log('✅ [TBL] Devis supprimé avec succès');
     } catch (error) {
-      console.error('❌ [TBL] Erreur lors de la suppression du devis:', error);
+      console.error('❌ [TBL][DELETE] Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression du devis');
     }
   };
@@ -1392,13 +1397,21 @@ const TBL: React.FC<TBLProps> = ({
       // console.log('🔍 [TBL] Création devis avec paramètres:', { leadId: leadId || 'aucun', treeId: effectiveTreeId, name: finalDevisName, dataKeys: Object.keys(formData).length, approxBytes });
 
       // Créer le devis via API avec les données actuelles du formulaire
-      const submissionData: { treeId: string; name: string; data: TBLFormData; leadId?: string } = {
+      // 🔥 VALIDATION: Le lead est OBLIGATOIRE
+      const effectiveLeadId = selectedLeadForDevis?.id || leadId;
+      
+      if (!effectiveLeadId) {
+        console.error('❌ [TBL] Aucun lead sélectionné, création impossible');
+        message.error('Vous devez sélectionner un lead pour créer un devis');
+        return;
+      }
+      
+      const submissionData: { treeId: string; name: string; data: TBLFormData; leadId: string } = {
         treeId: effectiveTreeId,
         name: finalDevisName,
-        data: formData
+        data: formData,
+        leadId: effectiveLeadId
       };
-
-      if (leadId) submissionData.leadId = leadId;
 
       // Tentative de création de la submission avec repli automatique si 404 (arbre introuvable ou non autorisé)
       let submission: unknown;
@@ -1479,11 +1492,48 @@ const TBL: React.FC<TBLProps> = ({
       // console.log('✅ [TBL] Devis créé avec succès. Détails (clés):', submission && typeof submission === 'object' ? Object.keys(submission as Record<string, unknown>) : typeof submission);
       message.success(`Nouveau devis "${finalDevisName}" créé avec succès`);
 
+      // Mettre à jour le nom du devis IMMÉDIATEMENT pour l'affichage dans le header
+      setDevisName(finalDevisName);
+      setDevisCreatedAt(new Date());
+
       // Récupérer et mémoriser l'ID de la submission créée (pour activer les mises à jour idempotentes)
       try {
         const created = submission as unknown as { id?: string } | null;
         if (created && typeof created === 'object' && created.id) {
-          setSubmissionId(created.id);
+          const newSubmissionId = created.id;
+          
+          // Mark that we just created a new devis so the useEffect can dispatch refresh
+          // after React propagates the new submissionId to all child components
+          justCreatedDevisRef.current = true;
+          
+          setSubmissionId(newSubmissionId);
+          
+          // Mettre à jour le leadId principal pour synchroniser le header
+          if (effectiveLeadId && effectiveLeadId !== leadId) {
+            setLeadId(effectiveLeadId);
+            
+            // Charger les données du lead pour le header
+            try {
+              const response = await api.get(`/api/leads/${effectiveLeadId}`);
+              const lead = response.success ? response.data : response;
+              
+              if (lead && lead.id) {
+                const newClientData = {
+                  id: lead.id,
+                  name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
+                  email: lead.email || '',
+                  phone: lead.phone || '',
+                  address: lead.data?.address || ''
+                };
+                setClientData(newClientData);
+              }
+            } catch (error) {
+              console.warn('⚠️ [TBL] Impossible de charger les données du lead pour le header:', error);
+            }
+          }
+          
+          console.log('🔄 [TBL] Set new submissionId:', newSubmissionId);
+          console.log('🔄 [TBL] useEffect will dispatch refresh after React updates all components');
         }
       } catch { /* noop */ }
 
@@ -1520,10 +1570,10 @@ const TBL: React.FC<TBLProps> = ({
         console.warn('⚠️ [TBL] Impossible d\'enregistrer le devis dans Documents/History du lead:', linkErr);
       }
 
-      // Réinitialiser les modals
+      // Réinitialiser les modals (mais PAS le devisName car il est affiché dans le header)
       setDevisCreatorVisible(false);
-      setDevisName('');
-      form.resetFields();
+      // ⚠️ NE PAS RÉINITIALISER LE FORMULAIRE - Le système de calcul doit rester actif
+      // form.resetFields();
 
       // handleLoadDevis(); // Pour refresh la liste si nécessaire
 
@@ -1732,6 +1782,13 @@ const TBL: React.FC<TBLProps> = ({
         
         const devisName = submission.summary?.name || submission.name || `Devis ${devisId.slice(0, 8)}`;
         // console.log('🔍 [TBL] Nom du devis:', devisName);
+        
+        // Mettre à jour le nom et la date du devis dans l'état
+        setDevisName(devisName);
+        if (submission.createdAt) {
+          setDevisCreatedAt(new Date(submission.createdAt));
+        }
+        
         message.success(`Devis "${devisName}" chargé avec succès (${Object.keys(formattedData).length} champs)`);
       } else {
         console.warn('🔍 [TBL] Aucune donnée TreeBranchLeafSubmissionData trouvée');
@@ -1822,29 +1879,30 @@ const TBL: React.FC<TBLProps> = ({
     );
   }
 
+  // Afficher un skeleton pendant le chargement initial (Lead OU données de l'arbre)
+  if (isLoadingLead || dataLoading) {
+    return (
+      <Layout className="h-full bg-gray-50">
+        <Content className={contentPaddingClass}>
+          <Row gutter={mainRowGutter} className="h-full">
+            <Col xs={24}>
+              <Card className="h-full shadow-sm" styles={{ body: { padding: isMobile ? 16 : isTablet ? 20 : 24 } }}>
+                <Skeleton active paragraph={{ rows: 8 }} />
+              </Card>
+            </Col>
+          </Row>
+        </Content>
+      </Layout>
+    );
+  }
+
   return (
     <TBLValidationProvider>
       <Layout className={`h-full bg-gray-50 ${isValidation ? 'tbl-validation-mode' : ''}`}>
         <Content className={contentPaddingClass}>
         <Row gutter={mainRowGutter} className="h-full">
-          {/* Sidebar client */}
-          <Col xs={24} lg={8} xl={6} className={isMobile ? 'mb-4' : undefined}>
-            <ClientSidebar 
-              clientData={clientData}
-              projectStats={{
-                completion: Math.round(globalStats.completion),
-                totalTabs: globalStats.totalTabs,
-                totalFields: globalStats.totalFields,
-                requiredFields: globalStats.requiredFields,
-                completedRequired: globalStats.completedRequired,
-                treeName: tree.name,
-                lastSave: autosaveLast?.toLocaleString()
-              }}
-            />
-          </Col>
-
-          {/* Contenu principal */}
-          <Col xs={24} lg={16} xl={18}>
+          {/* Contenu principal pleine largeur */}
+          <Col xs={24}>
             <Card className="h-full shadow-sm" styles={{ body: { padding: isMobile ? 16 : isTablet ? 20 : 24 } }}>
               {/* Dev panel capabilities (diagnostic) */}
               {useFixed && (() => { try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } })() && (
@@ -1854,25 +1912,15 @@ const TBL: React.FC<TBLProps> = ({
                   <TBLDevCapabilitiesPanel preload={devPreload} />
                 </div>
               )}
-              {/* En-tête compact avec Lead */}
+              {/* En-tête compact avec Lead - Devis - Date */}
               <div className={headerContainerClass}>
-                <div>
-                  <Title level={3} className="mb-1 flex items-center gap-3">
-                    <span>TreeBranchLeaf - {leadId ? clientData.name : tree.name}</span>
-                    {leadId && (
-                      <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-300">Lead #{leadId}</span>
-                    )}
-                    {!submissionId && (
-                      <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800 border border-yellow-300">Non sauvegardé</span>
-                    )}
-                    {useFixed && (
-                      <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 border border-emerald-300">Hiérarchie FIXE (Beta)</span>
-                    )}
+                <div className="flex-1">
+                  <Title level={4} className="mb-0 text-gray-800">
+                    {clientData.name || 'Aucun lead'}
+                    {' - '}
+                    {devisName || (tree.name ? `${tree.name} (Nouveau devis)` : 'Nouveau devis')}
+                    {devisCreatedAt && ` - ${devisCreatedAt.toLocaleDateString('fr-FR')}`}
                   </Title>
-                  <Text type="secondary">
-                    Completion: {Math.round(globalStats.completion)}% 
-                    ({globalStats.completedRequired}/{globalStats.requiredFields} requis)
-                  </Text>
                 </div>
                 
                 <Space
@@ -1882,52 +1930,42 @@ const TBL: React.FC<TBLProps> = ({
                   wrap={!isMobile}
                   align={headerActionsAlign}
                 >
-                  <Button 
-                    icon={<UserOutlined />}
-                    onClick={handleLoadLead}
-                    block={actionButtonBlock}
-                  >
-                    Charger Lead
-                  </Button>
-                  <Button 
-                    icon={<PlusOutlined />}
-                    onClick={handleNewLead}
-                    block={actionButtonBlock}
-                  >
-                    Nouveau Lead
-                  </Button>
-                  <Button 
-                    icon={<FolderOpenOutlined />}
-                    onClick={handleLoadDevis}
-                    block={actionButtonBlock}
-                  >
-                    Charger Devis
-                  </Button>
-                  <Button 
-                    icon={<FileAddOutlined />}
-                    onClick={handleNewDevis}
-                    type="primary"
-                    block={actionButtonBlock}
-                  >
-                    Nouveau Devis
-                  </Button>
-                  <Button 
-                    icon={<DownloadOutlined />}
-                    onClick={handleGeneratePDF}
-                    block={actionButtonBlock}
-                  >
-                    PDF
-                  </Button>
-                  {isSuperAdmin && (
-                    <>
-                      <Button onClick={() => { void fillAllFields(false); }} block={actionButtonBlock}>Remplir tout (admin)</Button>
-                      <Button type="primary" onClick={() => { void fillAllFields(true); }} block={actionButtonBlock}>Remplir + Enregistrer</Button>
-                      <Button onClick={() => { try { (window as any).TBL_VERIFY_CONDITIONALS?.(); } catch {/* noop */} }} block={actionButtonBlock}>
-                        Vérifier injections
-                      </Button>
-                    </>
-                  )}
-                  {/* Bouton Actualiser retiré (reload state supprimé) */}
+                  <Tooltip title="Charger Lead" placement="bottom">
+                    <Button 
+                      icon={<UserOutlined />}
+                      onClick={handleLoadLead}
+                      block={actionButtonBlock}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Nouveau Lead" placement="bottom">
+                    <Button 
+                      icon={<PlusOutlined />}
+                      onClick={handleNewLead}
+                      block={actionButtonBlock}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Charger Devis" placement="bottom">
+                    <Button 
+                      icon={<FolderOpenOutlined />}
+                      onClick={handleLoadDevis}
+                      block={actionButtonBlock}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Nouveau Devis" placement="bottom">
+                    <Button 
+                      icon={<FileAddOutlined />}
+                      onClick={handleNewDevis}
+                      type="primary"
+                      block={actionButtonBlock}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Générer PDF" placement="bottom">
+                    <Button 
+                      icon={<DownloadOutlined />}
+                      onClick={handleGeneratePDF}
+                      block={actionButtonBlock}
+                    />
+                  </Tooltip>
                 </Space>
               </div>
 
@@ -1949,6 +1987,7 @@ const TBL: React.FC<TBLProps> = ({
                 onChange={setActiveTab}
                 type="card"
                 size={isMobile ? 'small' : 'large'}
+                centered
                 className={`tbl-tabs ${
                   // 🎯 LOGIQUE 100% DYNAMIQUE pour les onglets
                   tabs?.map(tab => {
@@ -1981,7 +2020,54 @@ const TBL: React.FC<TBLProps> = ({
                   }).join(' ') || ''
                 }`}
                 tabBarGutter={isMobile ? 12 : 24}
-                items={tabs ? tabs.map(tab => {
+                items={[
+                  // Onglet Client en premier
+                  {
+                    key: 'client-info',
+                    label: (
+                      <div className="flex items-center gap-2" style={{ padding: '8px 12px' }}>
+                        <UserOutlined />
+                        <span>Client</span>
+                      </div>
+                    ),
+                    children: (
+                      <Card className="max-w-2xl mx-auto">
+                        <Title level={4}>Informations Client</Title>
+                        <div className="space-y-4 mt-4">
+                          <div className="flex items-center gap-3">
+                            <UserOutlined className="text-blue-500 text-lg" />
+                            <div className="flex items-center gap-2">
+                              <Text type="secondary">Nom :</Text>
+                              <Text strong className="text-base">{clientData.name || 'Non renseigné'}</Text>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <MailOutlined className="text-blue-500 text-lg" />
+                            <div className="flex items-center gap-2">
+                              <Text type="secondary">Email :</Text>
+                              <Text strong className="text-base">{clientData.email || 'Non renseigné'}</Text>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <PhoneOutlined className="text-blue-500 text-lg" />
+                            <div className="flex items-center gap-2">
+                              <Text type="secondary">Téléphone :</Text>
+                              <Text strong className="text-base">{clientData.phone || 'Non renseigné'}</Text>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <HomeOutlined className="text-blue-500 text-lg" />
+                            <div className="flex items-center gap-2">
+                              <Text type="secondary">Adresse :</Text>
+                              <Text strong className="text-base">{clientData.address || 'Non renseigné'}</Text>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  },
+                  // Puis les autres onglets
+                  ...(tabs ? tabs.map(tab => {
                   // 🎯 Calculer l'état de cet onglet spécifique pour le badge seulement
                   // 🎯 NOUVELLE LOGIQUE : Utiliser les sections au lieu de tab.fields
                   const tabSections = tab.sections || [];
@@ -2131,7 +2217,8 @@ const TBL: React.FC<TBLProps> = ({
                     </div>
                   )
                 };
-                }) : []}
+                }) : [])
+                ]}
               />
 
               {/* Indicateur d'auto-sauvegarde */}
@@ -2231,9 +2318,16 @@ const TBL: React.FC<TBLProps> = ({
         onCreateLead={handleCreateLead}
         onLeadCreated={(lead) => {
           // console.log('✅ Lead créé:', lead);
-          // Naviguer immédiatement vers le nouveau lead dans TBL
           setLeadCreatorVisible(false);
-          window.location.href = `/tbl/${lead.id}`;
+          
+          // Si le modal de création de devis est ouvert, on met à jour le lead sélectionné
+          if (devisCreatorVisible) {
+            setSelectedLeadForDevis(lead as TBLLead);
+            message.success(`Lead créé et sélectionné : ${lead.firstName} ${lead.lastName}`);
+          } else {
+            // Sinon, comportement normal : naviguer vers le nouveau lead dans TBL
+            window.location.href = `/tbl/${lead.id}`;
+          }
         }}
       />
 
@@ -2354,7 +2448,10 @@ const TBL: React.FC<TBLProps> = ({
                                   type="text"
                                   size="small"
                                   danger
-                                  onClick={() => handleDeleteDevis(devis.id, devis.displayName)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteDevis(devis.id, devis.displayName);
+                                  }}
                                   className="hover:bg-red-50"
                                   title="Supprimer ce devis"
                                 >
@@ -2422,7 +2519,10 @@ const TBL: React.FC<TBLProps> = ({
                             type="text"
                             size="small"
                             danger
-                            onClick={() => handleDeleteDevis(devis.id, devis.displayName)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDevis(devis.id, devis.displayName);
+                            }}
                             className="hover:bg-red-50"
                             title="Supprimer ce devis"
                           >
@@ -2476,6 +2576,7 @@ const TBL: React.FC<TBLProps> = ({
         onCancel={() => {
           setDevisCreatorVisible(false);
           setDevisName('');
+          setSelectedLeadForDevis(null);
           form.resetFields();
         }}
         footer={null}
@@ -2486,10 +2587,60 @@ const TBL: React.FC<TBLProps> = ({
           layout="vertical"
           onFinish={handleCreateDevis}
         >
-          <div className="mb-4">
-            <p className="text-gray-600">
-              Lead sélectionné : <strong>{clientData.name}</strong>
+          <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200">
+            <p className="text-sm text-gray-600 mb-2">
+              Lead sélectionné :
             </p>
+            {selectedLeadForDevis ? (
+              <div className="flex items-center justify-between">
+                <strong className="text-base">
+                  {selectedLeadForDevis.firstName} {selectedLeadForDevis.lastName}
+                  {selectedLeadForDevis.email && <span className="text-sm text-gray-500 ml-2">({selectedLeadForDevis.email})</span>}
+                </strong>
+                <Button 
+                  size="small" 
+                  onClick={() => setSelectedLeadForDevis(null)}
+                  danger
+                >
+                  Changer
+                </Button>
+              </div>
+            ) : clientData.id && leadId ? (
+              <div className="flex items-center justify-between">
+                <strong className="text-base">{clientData.name}</strong>
+                <Button 
+                  size="small" 
+                  onClick={() => setLeadSelectorVisible(true)}
+                >
+                  Changer
+                </Button>
+              </div>
+            ) : (
+              <Space direction="vertical" className="w-full">
+                <Button 
+                  icon={<SearchOutlined />}
+                  onClick={() => setLeadSelectorVisible(true)}
+                  block
+                >
+                  Sélectionner un lead existant
+                </Button>
+                <Button 
+                  icon={<UserOutlined />}
+                  onClick={() => setLeadCreatorVisible(true)}
+                  type="dashed"
+                  block
+                >
+                  Créer un nouveau lead
+                </Button>
+                <Alert
+                  message="Lead obligatoire"
+                  description="Vous devez sélectionner ou créer un lead pour créer un devis"
+                  type="warning"
+                  showIcon
+                  className="mt-2"
+                />
+              </Space>
+            )}
           </div>
           
           <Form.Item
@@ -2507,11 +2658,17 @@ const TBL: React.FC<TBLProps> = ({
               <Button onClick={() => {
                 setDevisCreatorVisible(false);
                 setDevisName('');
+                setSelectedLeadForDevis(null);
                 form.resetFields();
               }}>
                 Annuler
               </Button>
-              <Button type="primary" htmlType="submit" onClick={() => {}}>
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                disabled={!selectedLeadForDevis && !leadId}
+                onClick={() => {}}
+              >
                 Créer le devis
               </Button>
             </Space>

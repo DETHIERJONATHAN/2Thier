@@ -16,7 +16,7 @@ import { prisma } from './lib/prisma';
 
 // 🔥 ROUTES TBL SPÉCIALISÉES
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
-import tableRoutesNewRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/table-routes-new';
+import tableRoutesNewRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes';
 import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES STOCKÉES
 
 // 🌐 ROUTES GESTION SITES WEB

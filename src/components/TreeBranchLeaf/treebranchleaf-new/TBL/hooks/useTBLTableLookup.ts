@@ -176,9 +176,17 @@ export function useTBLTableLookup(
         // 🆕 ÉTAPE 2.5: Construire les formValues pour le filtrage dynamique
         let queryParams = '';
         if (formData && Object.keys(formData).length > 0) {
-          // 🔥 Filtrer les champs mirror TBL internes (évite les payloads trop volumineux)
+          // 🔥 Filtrer les champs mirror TBL internes + images/fichiers base64 (évite URL trop longue)
           const filteredFormData = Object.entries(formData)
-            .filter(([key]) => !key.startsWith('__mirror_'))
+            .filter(([key, value]) => {
+              // Exclure les champs mirror internes
+              if (key.startsWith('__mirror_')) return false;
+              
+              // Exclure les valeurs base64 (images/fichiers) qui rendent l'URL trop longue
+              if (typeof value === 'string' && value.startsWith('data:')) return false;
+              
+              return true;
+            })
             .reduce((acc, [key, value]) => {
               acc[key] = value;
               return acc;

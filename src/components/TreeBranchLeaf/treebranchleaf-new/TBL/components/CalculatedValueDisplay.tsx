@@ -15,7 +15,7 @@ interface CalculatedValueDisplayProps {
   nodeId: string;
   /** ID de l'arbre */
   treeId: string;
-  /** ID de la soumission (optionnel, pour contextualiser) */
+  /** ID de la soumission (pour lire les valeurs des champs sources) */
   submissionId?: string;
   /** Placeholder si pas de valeur */
   placeholder?: string;
@@ -63,10 +63,11 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
   fallbackValue
   , fallbackNodeIds = []
 }) => {
+  // ⚠️ DISPLAY FIELDS: Ne JAMAIS passer submissionId - calcul uniquement depuis l'arbre
   const { value, loading, error, calculatedAt, calculatedBy, refresh } = useNodeCalculatedValue(
     nodeId,
     treeId,
-    submissionId
+    undefined  // 🚫 submissionId désactivé pour display fields
   );
 
   // Support client-side fallback: try fallbackNodeIds if primary node returns nothing
@@ -94,9 +95,8 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
           // Skip if same as primary
           if (fbId === nodeId) continue;
           try {
-            const resp = await api.get(`/api/tree-nodes/${fbId}/calculated-value`, {
-              params: submissionId ? { submissionId } : undefined
-            });
+            // 🚫 Ne pas passer submissionId pour les display fields
+            const resp = await api.get(`/api/tree-nodes/${fbId}/calculated-value`);
             if (resp?.success && resp?.value !== undefined && resp?.value !== null) {
               if (cancelled) return;
               setFallbackValueFound(resp.value);

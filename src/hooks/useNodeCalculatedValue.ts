@@ -23,9 +23,15 @@ interface CalculatedValueResult {
 /**
  * Récupère une valeur calculée depuis Prisma (TreeBranchLeafNode.calculatedValue)
  * 
+ * ⚠️ IMPORTANT: Le submissionId est utilisé UNIQUEMENT pour lire les valeurs des champs sources
+ * nécessaires au calcul, PAS pour enregistrer le résultat calculé lui-même.
+ * 
+ * Les calculated values (display fields) ne sont JAMAIS enregistrés dans la submission.
+ * Ils calculent toujours en temps réel basés sur les valeurs actuelles des champs normaux.
+ * 
  * @param nodeId - ID du nœud TreeBranchLeaf
  * @param treeId - ID de l'arbre
- * @param submissionId - (Optionnel) ID de la soumission pour contextualiser
+ * @param submissionId - (Optionnel) ID de la soumission pour lire les valeurs des champs sources
  * @returns { value, loading, error, calculatedAt, calculatedBy }
  */
 export function useNodeCalculatedValue(
@@ -53,6 +59,10 @@ export function useNodeCalculatedValue(
 
       // 🎯 Endpoint: GET /api/tree-nodes/:nodeId/calculated-value
       // Retourne: { value, calculatedAt, calculatedBy }
+      // 
+      // ⚠️ IMPORTANT: Le submissionId est envoyé UNIQUEMENT pour lire les valeurs
+      // des champs sources nécessaires au calcul. Le résultat calculé lui-même
+      // n'est JAMAIS enregistré dans la submission - il reste dynamique.
       const response = await api.get(
         `/api/tree-nodes/${nodeId}/calculated-value`,
         {
@@ -77,7 +87,6 @@ export function useNodeCalculatedValue(
             obj.result ?? 
             obj.calculatedValue ?? 
             obj.text ?? 
-            obj.humanText ?? 
             extractedValue;
         }
 
@@ -133,14 +142,20 @@ export function useNodeCalculatedValue(
       return;
     }
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ nodeId?: string }>).detail;
+      const detail = (event as CustomEvent<{ nodeId?: string; submissionId?: string; debugId?: string }>).detail;
       if (!detail?.nodeId || detail.nodeId === nodeId) {
+        console.log('🔄 [useNodeCalculatedValue] Refetch triggered by event:', { 
+          nodeId, 
+          eventSubmissionId: detail?.submissionId,
+          currentSubmissionId: submissionId,
+          debugId: detail?.debugId
+        });
         fetchCalculatedValue();
       }
     };
     window.addEventListener('tbl-force-retransform', handler);
     return () => window.removeEventListener('tbl-force-retransform', handler);
-  }, [fetchCalculatedValue, nodeId]);
+  }, [fetchCalculatedValue, nodeId, submissionId]);
 
   // 🔔 Rafraîchir aussi quand un événement tbl-node-updated est dispatché avec notre nodeId
   useEffect(() => {

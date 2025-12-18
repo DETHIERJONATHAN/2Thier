@@ -160,6 +160,23 @@ async function saveUserEntriesNeutral(
   let saved = 0;
   const entries = new Map<string, SubmissionDataEntry>();
 
+  // 🚫 ÉTAPE 1 : Récupérer UNIQUEMENT les nodes avec "preview-unknown-user" dans calculatedBy (= DISPLAY fields à exclure)
+  const displayNodes = treeId 
+    ? await prisma.treeBranchLeafNode.findMany({
+        where: { 
+          treeId,
+          calculatedBy: { contains: "preview-unknown-user" } // ✅ Seulement les displays avec preview-unknown-user
+        },
+        select: { id: true, calculatedBy: true, label: true }
+      })
+    : [];
+
+  const displayNodeIds = new Set(displayNodes.map(n => n.id));
+  
+  if (displayNodeIds.size > 0) {
+    console.log(`🚫 [SAVE] ${displayNodeIds.size} DISPLAY fields (preview-unknown-user) identifiés - ne seront PAS sauvegardés`);
+  }
+
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
   const sharedRefAliasMap = sharedRefKeys.length
     ? await resolveSharedReferenceAliases(sharedRefKeys, treeId)
@@ -170,9 +187,17 @@ async function saveUserEntriesNeutral(
       continue;
     }
     if (!isAcceptedNodeId(key)) continue;
-    // ✅ CORRECTIF : Sauvegarder TOUTES les valeurs (même null/undefined/vide)
-    // pour que operation-interpreter.ts puisse les récupérer depuis TreeBranchLeafSubmissionData
-    // if (value === null || value === undefined || value === '') continue;  // ❌ LIGNE SUPPRIMÉE
+    
+    // 🚫 ÉTAPE 2 : Skip UNIQUEMENT les DISPLAY fields avec "preview-unknown-user"
+    if (displayNodeIds.has(key)) {
+      console.log(`🚫 [SAVE] Display field ignoré: ${key} (preview-unknown-user dans calculatedBy)`);
+      continue; // Ne PAS sauvegarder les displays
+    }
+    
+    // ✅ ÉTAPE 3 : Sauvegarder les champs complétés (skip null/undefined/vide)
+    if (value === null || value === undefined || value === '') {
+      continue; // Ne sauvegarder que les champs remplis
+    }
 
     const storageIds = isSharedReferenceId(key)
       ? [key, ...(sharedRefAliasMap.get(key) || [])]
@@ -200,10 +225,6 @@ async function saveUserEntriesNeutral(
           action: 'user_input',
           sourceNodeId: key,
           aliasResolved: nodeId !== key
-        } as Prisma.InputJsonValue,
-        operationResult: {
-          processedValue: value,
-          status: 'stored'
         } as Prisma.InputJsonValue
       };
 
@@ -231,8 +252,7 @@ async function saveUserEntriesNeutral(
           data: {
             value: entry.value,
             operationSource: 'neutral',
-            operationDetail: entry.operationDetail,
-            operationResult: entry.operationResult
+            operationDetail: entry.operationDetail
           }
         });
         saved++;
@@ -255,7 +275,7 @@ async function evaluateCapacitiesForSubmission(
   // Capacités pour l'arbre
   const capacities = await prisma.treeBranchLeafNodeVariable.findMany({
     where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
-    include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
+    include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
   });
 
   const _tblContext = {
@@ -272,6 +292,16 @@ async function evaluateCapacitiesForSubmission(
 
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef!;
+    
+    // 🚫 SKIP les display fields - ils ne doivent JAMAIS être persistés
+    const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === 'DISPLAY' 
+      || capacity.TreeBranchLeafNode?.type === 'DISPLAY';
+    
+    if (isDisplayField) {
+      console.log(`🚫 [TBL CAPACITY] Display field ignoré: ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label})`);
+      continue; // Skip complètement ce capacity
+    }
+    
     try {
       // ✨ UTILISATION DU SYSTÈME UNIFIÉ operation-interpreter.ts
       const capacityResult = await evaluateVariableOperation(
@@ -304,8 +334,7 @@ async function evaluateCapacitiesForSubmission(
           (existing.sourceRef || null) !== (sourceRef || null) ||
           (existing.operationSource || null) !== (normalizedOperationSource || null) ||
           (existing.fieldLabel || null) !== ((capacity.TreeBranchLeafNode?.label || null)) ||
-          normalize(existing.operationDetail) !== normalize(parsedDetail) ||
-          normalize(existing.operationResult) !== normalize(capacityResult.operationResult)
+          normalize(existing.operationDetail) !== normalize(parsedDetail)
         );
         if (changed) {
           await prisma.treeBranchLeafSubmissionData.update({
@@ -316,7 +345,6 @@ async function evaluateCapacitiesForSubmission(
               operationSource: normalizedOperationSource,
               fieldLabel: capacity.TreeBranchLeafNode?.label || null,
               operationDetail: parsedDetail,
-              operationResult: capacityResult.operationResult as unknown as Prisma.InputJsonValue,
               lastResolved: new Date()
             }
           });
@@ -333,7 +361,6 @@ async function evaluateCapacitiesForSubmission(
             operationSource: normalizedOperationSource,
             fieldLabel: capacity.TreeBranchLeafNode?.label || null,
             operationDetail: parsedDetail,
-            operationResult: capacityResult.operationResult as unknown as Prisma.InputJsonValue,
             lastResolved: new Date()
           }
         });
@@ -365,10 +392,34 @@ async function evaluateCapacitiesForSubmission(
 
   if (calculatedValuesToStore.length > 0) {
     try {
-      const storeResult = await storeCalculatedValues(calculatedValuesToStore, submissionId);
-      results.stored = storeResult.stored;
-      if (!storeResult.success && storeResult.errors.length > 0) {
-        console.warn('[TBL CAPACITY STORE] Certaines valeurs n\'ont pas pu être enregistrées:', storeResult.errors);
+      // 🚨 IMPORTANT : Récupérer les infos des nodes pour filtrer les DISPLAY fields
+      const nodeIds = calculatedValuesToStore.map(v => v.nodeId);
+      const nodesInfo = await prisma.treeBranchLeafNode.findMany({
+        where: { id: { in: nodeIds } },
+        select: { id: true, fieldType: true, type: true }
+      });
+      const displayFieldIds = new Set(
+        nodesInfo
+          .filter(n => n.fieldType === 'DISPLAY' || n.type === 'DISPLAY')
+          .map(n => n.id)
+      );
+      
+      // 🚫 Filtrer les display fields AVANT de stocker
+      const valuesToStoreFiltered = calculatedValuesToStore.filter(v => {
+        if (displayFieldIds.has(v.nodeId)) {
+          console.log(`🚫 [TBL CAPACITY STORE] Display field exclu de la persistence: ${v.nodeId}`);
+          return false;
+        }
+        return true;
+      });
+      
+      if (valuesToStoreFiltered.length > 0) {
+        const storeResult = await storeCalculatedValues(valuesToStoreFiltered, submissionId);
+        results.stored = storeResult.stored;
+        console.log(`[TBL CAPACITY STORE] ✅ ${results.stored} valeurs stockées (${displayFieldIds.size} display fields exclus)`);
+        if (!storeResult.success && storeResult.errors.length > 0) {
+          console.warn('[TBL CAPACITY STORE] Certaines valeurs n\'ont pas pu être enregistrées:', storeResult.errors);
+        }
       }
     } catch (storeError) {
       console.error('[TBL CAPACITY STORE] Erreur lors du stockage des valeurs calculées:', storeError);
@@ -480,12 +531,9 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
           } catch { return calculationResult.operationDetail as unknown as Prisma.InputJsonValue; }
         })();
 
-        const nextResult: Prisma.InputJsonValue = calculationResult.operationResult as unknown as Prisma.InputJsonValue;
-
         const changed = (
           (data.operationSource || null) !== (normalizedSource || null) ||
-          normalize(data.operationDetail) !== normalize(nextDetail) ||
-          normalize(data.operationResult) !== normalize(nextResult)
+          normalize(data.operationDetail) !== normalize(nextDetail)
         );
 
         if (changed) {
@@ -493,7 +541,6 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
             where: { id: data.id },
             data: {
               operationDetail: nextDetail,
-              operationResult: nextResult, // 🔥 TRADUCTION INTELLIGENTE !
               operationSource: normalizedSource,
               lastResolved: new Date()
             }
@@ -683,39 +730,47 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     }
     
     // 2. Vérifier et gérer le Lead (clientId)
+    // 🔥 IMPORTANT: TOUT DEVIS DOIT AVOIR UN LEAD ASSOCIÉ (organizationId + treeId + leadId)
+    // ⚠️ VALIDATION STRICTE: Le lead est OBLIGATOIRE, pas de création automatique de lead par défaut
+    
+    if (!clientId) {
+      console.log('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS');
+      return res.status(400).json({
+        success: false,
+        error: 'Lead obligatoire',
+        message: 'Un lead doit être sélectionné pour créer un devis. Veuillez sélectionner ou créer un lead.'
+      });
+    }
+    
     let effectiveLeadId = clientId;
     
-    if (effectiveLeadId) {
-      // Vérifier que le lead fourni existe bien
-      const leadExists = await prisma.lead.findUnique({
-        where: { id: effectiveLeadId },
-        select: { id: true, firstName: true, lastName: true, email: true }
+    // Vérifier que le lead fourni existe bien
+    const leadExists = await prisma.lead.findUnique({
+      where: { id: effectiveLeadId },
+      select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
+    });
+    
+    if (!leadExists) {
+      console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable`);
+      return res.status(404).json({
+        success: false,
+        error: 'Lead introuvable',
+        message: `Le lead ${effectiveLeadId} n'existe pas. Veuillez sélectionner un lead valide.`
       });
-      
-      if (!leadExists) {
-        console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable, création d'un lead par défaut...`);
-        
-        // Créer un lead par défaut
-        const defaultLead = await prisma.lead.create({
-          data: {
-            id: `lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            firstName: "Client",
-            lastName: "Défaut",
-            email: `client-${Date.now()}@example.com`,
-            phone: "",
-            organizationId: organizationId!,
-            updatedAt: new Date()
-          }
-        });
-        
-        effectiveLeadId = defaultLead.id;
-        console.log(`👤 [TBL CREATE-AND-EVALUATE] Lead par défaut créé: ${effectiveLeadId} (${defaultLead.firstName} ${defaultLead.lastName})`);
-      } else {
-        console.log(`✅ [TBL CREATE-AND-EVALUATE] Lead validé: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
-      }
-    } else {
-      console.log('ℹ️ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni, soumission sans lead associé');
     }
+    
+    // Vérifier que le lead appartient bien à la même organisation
+    if (leadExists.organizationId !== organizationId) {
+      console.log(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${effectiveLeadId} n'appartient pas à l'organisation ${organizationId}`);
+      return res.status(403).json({
+        success: false,
+        error: 'Lead non autorisé',
+        message: 'Le lead sélectionné n\'appartient pas à votre organisation.'
+      });
+    }
+    
+    console.log(`✅ [TBL CREATE-AND-EVALUATE] Lead validé: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
+    effectiveLeadId = leadExists.id;
     
     // 3. Vérifier l'utilisateur si fourni
     let effectiveUserId = userId;
@@ -740,6 +795,28 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       const existing = await prisma.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
       if (!existing) submissionId = undefined;
     }
+    
+    // 🔥 NOUVEAU: Chercher une submission draft existante AVANT de créer une nouvelle
+    // ⚠️ IMPORTANT: On cherche TOUJOURS avec les 3 critères: organizationId + treeId + leadId
+    // Car désormais, TOUT devis a un lead associé (créé par défaut si nécessaire)
+    if (!submissionId) {
+      const existingDraft = await prisma.treeBranchLeafSubmission.findFirst({
+        where: {
+          treeId: effectiveTreeId,
+          leadId: effectiveLeadId,
+          organizationId: organizationId,
+          status: 'draft'
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true }
+      });
+      
+      if (existingDraft) {
+        submissionId = existingDraft.id;
+        console.log(`♻️ [TBL CREATE-AND-EVALUATE] Réutilisation du draft existant: ${submissionId} (leadId: ${effectiveLeadId})`);
+      }
+    }
+    
     if (!submissionId) {
       submissionId = `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       await prisma.treeBranchLeafSubmission.create({
@@ -748,16 +825,28 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
           treeId: effectiveTreeId,
           userId: effectiveUserId,
           leadId: effectiveLeadId,
-          status: status || 'completed',
+          organizationId: organizationId, // 🔥 IMPORTANT pour retrouver les drafts
+          status: status || 'draft',
           summary: { name: providedName || `Devis TBL ${new Date().toLocaleDateString()}` },
           exportData: cleanFormData || {},
           completedAt: status === 'completed' ? new Date() : null,
           updatedAt: new Date()
         }
       });
-      console.log(`✅ [TBL CREATE-AND-EVALUATE] Soumission créée: ${submissionId}`);
+      console.log(`✅ [TBL CREATE-AND-EVALUATE] Soumission créée: ${submissionId} pour organization ${organizationId}`);
     } else {
-      console.log(`� [TBL CREATE-AND-EVALUATE] Réutilisation de la soumission: ${submissionId}`);
+      // Mettre à jour la submission existante
+      await prisma.treeBranchLeafSubmission.update({
+        where: { id: submissionId },
+        data: {
+          status: status || 'draft',
+          summary: { name: providedName || `Devis TBL ${new Date().toLocaleDateString()}` },
+          exportData: cleanFormData || {},
+          completedAt: status === 'completed' ? new Date() : null,
+          updatedAt: new Date()
+        }
+      });
+      console.log(`♻️ [TBL CREATE-AND-EVALUATE] Soumission mise à jour: ${submissionId}`);
     }
     
     // 5. Sauvegarder d'abord les données UTILISATEUR en base, puis évaluer et sauvegarder les CAPACITÉS
@@ -1215,12 +1304,29 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
     // 💾 STOCKER LES VALEURS CALCULÉES DANS PRISMA
     try {
+      // 🚨 IMPORTANT : Récupérer les infos des nodes pour filtrer les DISPLAY fields
+      const nodeIds = results.map(r => r.nodeId);
+      const nodesInfo = await prisma.treeBranchLeafNode.findMany({
+        where: { id: { in: nodeIds } },
+        select: { id: true, fieldType: true, type: true }
+      });
+      const displayFieldIds = new Set(
+        nodesInfo
+          .filter(n => n.fieldType === 'DISPLAY' || n.type === 'DISPLAY')
+          .map(n => n.id)
+      );
+      
       const calculatedValues = results
         .map(r => {
           const candidate = r.value ?? (r as { calculatedValue?: unknown }).calculatedValue;
           return { ...r, candidate };
         })
         .filter(r => {
+          // 🚫 EXCLURE les display fields - ils ne doivent JAMAIS être persistés
+          if (displayFieldIds.has(r.nodeId)) {
+            console.log(`🚫 [PREVIEW-EVALUATE] Display field exclu de la persistence: ${r.nodeId}`);
+            return false;
+          }
           // Exclure null, undefined, chaînes vides, et symboles de vide (∅)
           if (r.candidate === null || r.candidate === undefined) return false;
           const strValue = String(r.candidate).trim();
@@ -1235,7 +1341,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
       if (calculatedValues.length > 0) {
         await storeCalculatedValues(calculatedValues, submissionId);
-        console.log(`[PREVIEW-EVALUATE] ✅ ${calculatedValues.length} valeurs stockées dans Prisma`);
+        console.log(`[PREVIEW-EVALUATE] ✅ ${calculatedValues.length} valeurs stockées dans Prisma (${displayFieldIds.size} display fields exclus)`);
       }
     } catch (storeError) {
       console.error(`[PREVIEW-EVALUATE] ⚠️ Erreur stockage valeurs calculées:`, storeError);

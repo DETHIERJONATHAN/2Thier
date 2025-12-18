@@ -28,7 +28,9 @@ initConsoleFilter();
 // }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+  // StrictMode désactivé pour éviter le double-mounting visible (mount → unmount → mount)
+  // qui cause des flash visuels en développement
+  // <StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <ErrorBoundary>
@@ -56,5 +58,6 @@ createRoot(document.getElementById('root')!).render(
         </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
-  </StrictMode>,
+  // </StrictMode>
+  ,
 )

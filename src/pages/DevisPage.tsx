@@ -413,6 +413,24 @@ export default function DevisPage() {
     return () => { mounted = false; };
   }, [leadId, get]);
 
+  // Réinitialiser l'état UI quand le storageKey change et qu'il n'y a pas de données
+  useEffect(() => {
+    if (!lead || !storageKey) return;
+    const existing = (lead.data?.devis as Record<string, unknown> | undefined)?.[storageKey];
+    const hasData = existing && typeof existing === 'object' && Object.keys(existing).filter(k => k !== '_meta').length > 0;
+    
+    if (!hasData) {
+      // Réinitialiser les états UI pour un devis vierge
+      setUi({});
+      setErrors({});
+      setAutoFields(new Set());
+      setManualOverrideFields(new Set());
+      overrideMetaRef.current = {};
+      recentUserFieldsRef.current = new Set();
+      lastUserEditRef.current = null;
+    }
+  }, [storageKey, lead]);
+
   // Renseigner l'input avec le nom du lead sélectionné
   useEffect(() => {
     if (lead && leadId) {
@@ -532,6 +550,9 @@ export default function DevisPage() {
       setDevisName('');
     }
 
+    // Si aucun devis n'existe (suppression complète), réinitialiser l'état
+    const hasExistingData = existing && typeof existing === 'object' && Object.keys(existing).filter(k => k !== '_meta').length > 0;
+    
     // Construire un préremplissage à partir du lead pour les champs vides
     const prefill: Record<string, unknown> = {};
     if (lead) {
@@ -557,7 +578,11 @@ export default function DevisPage() {
     }
 
     // Fusion: prefill (faible) < existing (fort)
-    const combined = { ...(prefill || {}), ...(existing || {}) } as Record<string, unknown>;
+    // Si pas de données existantes, utiliser uniquement le prefill pour un état vierge
+    const combined = hasExistingData 
+      ? { ...(prefill || {}), ...(existing || {}) } as Record<string, unknown>
+      : { ...(prefill || {}) } as Record<string, unknown>;
+    
     // Restauration automatique: si advanced_select prix présent mais champ numérique pas renseigné, repropager vers miroir
     try {
       if (priceFieldIds.size && !combined[PRICE_MIRROR_ID]) {
@@ -1242,9 +1267,25 @@ export default function DevisPage() {
 
   const isReady = Boolean(blockId && leadId && block);
 
+  // Titre dynamique de la page
+  const pageTitle = useMemo(() => {
+    const parts: string[] = [];
+    if (lead?.name) parts.push(lead.name);
+    if (block?.name) {
+      if (devisName?.trim()) {
+        parts.push(devisName);
+      } else {
+        parts.push(`${block.name} (Nouveau devis)`);
+      }
+    } else if (lead?.name) {
+      parts.push('Sélectionnez un formulaire');
+    }
+    return parts.length > 0 ? parts.join(' - ') : 'Devis';
+  }, [lead, block, devisName]);
+
   return (
     <div className="w-full px-4 py-4" ref={containerRef}>
-      <h1 className="text-2xl font-semibold mb-4">Devis {block?.name ? `— ${block.name}` : ''}</h1>
+      <h1 className="text-2xl font-semibold mb-4">{pageTitle}</h1>
 
       {/* Sélection Lead + Formulaire + DevisId */}
       <div className="flex flex-wrap items-center gap-2 mb-4">

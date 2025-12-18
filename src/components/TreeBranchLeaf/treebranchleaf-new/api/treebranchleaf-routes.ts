@@ -9385,12 +9385,34 @@ router.get('/submissions/:id', async (req, res) => {
             company: true
           }
         },
-        User: {
+        User_TreeBranchLeafSubmission_userIdToUser: {
           select: {
             id: true,
             email: true,
             firstName: true,
             lastName: true
+          }
+        },
+        User_TreeBranchLeafSubmission_lastEditedByToUser: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        User_TreeBranchLeafSubmission_lockedByToUser: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        Organization: {
+          select: {
+            id: true,
+            name: true
           }
         }
       }

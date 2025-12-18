@@ -918,6 +918,7 @@ model Organization {
   TreeBranchLeafNodeFormula   TreeBranchLeafNodeFormula[]
   TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
   TreeBranchLeafTree          TreeBranchLeafTree[]
+  TreeBranchLeafSubmission    TreeBranchLeafSubmission[]
   UserOrganization            UserOrganization[]
   ContactSubmissions          ContactSubmission[]
   WebSites                    WebSite[]
@@ -1683,6 +1684,7 @@ model TreeBranchLeafSubmission {
   treeId                                           String
   userId                                           String?
   leadId                                           String?
+  organizationId                                   String?
   sessionId                                        String?
   status                                           String                            @default("draft")
   totalScore                                       Float?
@@ -1700,6 +1702,7 @@ model TreeBranchLeafSubmission {
   User_TreeBranchLeafSubmission_lockedByToUser     User?                             @relation("TreeBranchLeafSubmission_lockedByToUser", fields: [lockedBy], references: [id])
   TreeBranchLeafTree                               TreeBranchLeafTree                @relation(fields: [treeId], references: [id], onDelete: Cascade)
   User_TreeBranchLeafSubmission_userIdToUser       User?                             @relation("TreeBranchLeafSubmission_userIdToUser", fields: [userId], references: [id])
+  Organization                                     Organization?                     @relation(fields: [organizationId], references: [id])
   TreeBranchLeafSubmissionData                     TreeBranchLeafSubmissionData[]
   TreeBranchLeafSubmissionVersion                  TreeBranchLeafSubmissionVersion[]
 
@@ -1707,6 +1710,7 @@ model TreeBranchLeafSubmission {
   @@index([lastEditedBy])
   @@index([leadId])
   @@index([lockedBy])
+  @@index([organizationId])
   @@index([status])
   @@index([treeId])
   @@index([userId])

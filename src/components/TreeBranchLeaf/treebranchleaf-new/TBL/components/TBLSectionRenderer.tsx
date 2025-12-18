@@ -3579,6 +3579,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             isValidation={isValidation}
             formData={formData}
             treeId={treeId}
+            submissionId={submissionId}
           />
         </Col>
       );
@@ -3710,7 +3711,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           <CalculatedValueDisplay
             nodeId={nodeIdToUse}
             treeId={treeId}
-            submissionId={submissionId ?? undefined}
+            // ⚠️ NE PAS passer submissionId pour les display fields
+            // Les display fields calculent en temps réel basés sur l'arbre, pas sur une soumission
+            submissionId={undefined}
             placeholder="---"
             precision={finalPrecision}
             prefix={finalPrefix}
@@ -4898,6 +4901,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 formData={formData}
                                 treeMetadata={condField.treeMetadata}
                                 treeId={treeId}
+                                submissionId={submissionId}
                               />
                             </Col>
                           );
@@ -4921,6 +4925,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 formData={formData}
                                 treeMetadata={field.treeMetadata}
                                 treeId={treeId}
+                                submissionId={submissionId}
                               />
                             </Col>
                             {conditionalFieldsToRender}
@@ -4956,6 +4961,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               formData={formData}
                               treeMetadata={field.treeMetadata}
                               treeId={treeId}
+                              submissionId={submissionId}
                             />
                           </div>
                           
