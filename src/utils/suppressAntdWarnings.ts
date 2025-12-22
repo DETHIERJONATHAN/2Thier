@@ -25,6 +25,12 @@ console.warn = (...args: unknown[]) => {
     if (message.includes('Received `true` for a non-boolean attribute `jsx`')) {
       return;
     }
+    
+    // Supprimer l'avertissement nested scroll container de @hello-pangea/dnd (connu, en attente de fix upstream)
+    if (message.includes('unsupported nested scroll container detected') || 
+        message.includes('@hello-pangea/dnd')) {
+      return;
+    }
   }
   
   // Laisser passer tous les autres avertissements

@@ -743,12 +743,14 @@ model Lead {
   Organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   LeadSource               LeadSource?                @relation(fields: [sourceId], references: [id])
   LeadStatus               LeadStatus?                @relation(fields: [statusId], references: [id])
+  Quote                    Quote[]
   TechnicalData            TechnicalData[]
   TelnyxCall               TelnyxCall[]
   TelnyxMessage            TelnyxMessage[]
   TimelineEvent            TimelineEvent[]
   TreeBranchLeafStage      TreeBranchLeafStage[]
   TreeBranchLeafSubmission TreeBranchLeafSubmission[]
+  GeneratedDocuments       GeneratedDocument[]
 
   @@index([email])
   @@index([firstName, lastName])
@@ -905,6 +907,7 @@ model Organization {
   Product                     Product[]
   PublicForms                 PublicForm[]
   PublicFormSubmissions       PublicFormSubmission[]
+  Quote                       Quote[]
   Role                        Role[]
   TechnicalData               TechnicalData[]
   TelnyxCall                  TelnyxCall[]
@@ -917,11 +920,14 @@ model Organization {
   TreeBranchLeafNodeCondition TreeBranchLeafNodeCondition[]
   TreeBranchLeafNodeFormula   TreeBranchLeafNodeFormula[]
   TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
-  TreeBranchLeafTree          TreeBranchLeafTree[]
   TreeBranchLeafSubmission    TreeBranchLeafSubmission[]
+  TreeBranchLeafTree          TreeBranchLeafTree[]
   UserOrganization            UserOrganization[]
   ContactSubmissions          ContactSubmission[]
   WebSites                    WebSite[]
+  DocumentTemplates           DocumentTemplate[]
+  DocumentThemes              DocumentTheme[]
+  GeneratedDocuments          GeneratedDocument[]
 }
 
 model OrganizationModuleStatus {
@@ -1295,7 +1301,6 @@ model TreeBranchLeafNode {
   isRequired                     Boolean                          @default(false)
   isVisible                      Boolean                          @default(true)
   isActive                       Boolean                          @default(true)
-  isMultiple                     Boolean?                         @default(false)
   fieldConfig                    Json?
   conditionConfig                Json?
   formulaConfig                  Json?
@@ -1304,11 +1309,7 @@ model TreeBranchLeafNode {
   linkConfig                     Json?
   defaultValue                   String?
   calculatedValue                String?
-  calculatedAt                   DateTime?                        // Quand la valeur a été calculée
-  calculatedBy                   String?                          // Source: "formula-abc", "table-def", "condition-ghi", etc.
   metadata                       Json                             @default("{}")
-  subtabs                        Json?                            @db.Json
-  subtab                         Json?                            @db.Json
   createdAt                      DateTime                         @default(now())
   updatedAt                      DateTime
   hasAPI                         Boolean                          @default(false)
@@ -1318,11 +1319,6 @@ model TreeBranchLeafNode {
   hasLink                        Boolean                          @default(false)
   hasMarkers                     Boolean                          @default(false)
   hasTable                       Boolean                          @default(false)
-  // Liens directs: stocker uniquement les IDs (plusieurs possibles)
-  linkedTableIds                 String[]                         @default([])
-  linkedConditionIds             String[]                         @default([])
-  linkedFormulaIds               String[]                         @default([])
-  linkedVariableIds              String[]                         @default([])
   api_activeId                   String?
   api_bodyVars                   Json?
   api_instances                  Json?
@@ -1413,39 +1409,45 @@ model TreeBranchLeafNode {
   text_helpTooltipText           String?
   text_helpTooltipImage          String?
   repeater_templateNodeIds       String?
-  repeater_templateNodeLabels    String?
   repeater_minItems              Int?                             @default(0)
-  // Sub-tabs: JSON array to describe a branch's sub-tabs (visual only)
   repeater_maxItems              Int?
   repeater_addButtonLabel        String?
+  repeater_templateNodeLabels    String?
+  isMultiple                     Boolean?                         @default(false)
+  isSharedReference              Boolean?                         @default(false)
+  sharedReferenceCategory        String?
+  sharedReferenceDescription     String?
+  sharedReferenceId              String?
+  sharedReferenceName            String?
+  sharedReferenceIds             String[]                         @default([])
   repeater_buttonSize            String?                          @default("middle")
   repeater_buttonWidth           String?                          @default("auto")
   repeater_iconOnly              Boolean?                         @default(false)
-  // 🖥️ Configuration layout responsive pour sections/branches
-  section_collapsible            Boolean?                         @default(false)
-  section_defaultCollapsed       Boolean?                         @default(false)
-  section_showChildrenCount      Boolean?                         @default(false)
-  section_columnsDesktop         Int?                             @default(2)
-  section_columnsMobile          Int?                             @default(1)
-  section_gutter                 Int?                             @default(16)
-  // 📎 Configuration fichiers
-  file_maxSize                   Int?
+  linkedConditionIds             String[]                         @default([])
+  linkedFormulaIds               String[]                         @default([])
+  linkedTableIds                 String[]                         @default([])
+  linkedVariableIds              String[]                         @default([])
+  calculatedAt                   DateTime?
+  calculatedBy                   String?
+  subtabs                        Json?                            @db.Json
+  subtab                         Json?                            @db.Json
   file_allowedTypes              String?
+  file_maxSize                   Int?
   file_multiple                  Boolean?                         @default(false)
   file_showPreview               Boolean?                         @default(true)
-  isSharedReference              Boolean?                         @default(false)
-  sharedReferenceId              String?
-  sharedReferenceName            String?
-  sharedReferenceCategory        String?
-  sharedReferenceDescription     String?
-  sharedReferenceIds             String[]                         @default([])
-  referenceSource                TreeBranchLeafNode?              @relation("SharedReference", fields: [sharedReferenceId], references: [id], onDelete: SetNull)
-  referenceUsages                TreeBranchLeafNode[]             @relation("SharedReference")
+  section_collapsible            Boolean?                         @default(false)
+  section_columnsDesktop         Int?                             @default(2)
+  section_columnsMobile          Int?                             @default(1)
+  section_defaultCollapsed       Boolean?                         @default(false)
+  section_gutter                 Int?                             @default(16)
+  section_showChildrenCount      Boolean?                         @default(false)
   TreeBranchLeafDateConfig       TreeBranchLeafDateConfig?
   TreeBranchLeafFormulaConfig    TreeBranchLeafFormulaConfig?
   TreeBranchLeafFormulaReference TreeBranchLeafFormulaReference[]
   TreeBranchLeafNode             TreeBranchLeafNode?              @relation("TreeBranchLeafNodeToTreeBranchLeafNode", fields: [parentId], references: [id], onDelete: Cascade)
   other_TreeBranchLeafNode       TreeBranchLeafNode[]             @relation("TreeBranchLeafNodeToTreeBranchLeafNode")
+  referenceSource                TreeBranchLeafNode?              @relation("SharedReference", fields: [sharedReferenceId], references: [id])
+  referenceUsages                TreeBranchLeafNode[]             @relation("SharedReference")
   TreeBranchLeafTree             TreeBranchLeafTree               @relation(fields: [treeId], references: [id], onDelete: Cascade)
   TreeBranchLeafNodeCondition    TreeBranchLeafNodeCondition[]
   TreeBranchLeafNodeFormula      TreeBranchLeafNodeFormula[]
@@ -1503,12 +1505,12 @@ model TreeBranchLeafNodeFormula {
   name               String
   tokens             Json               @default("[]")
   description        String?
-  targetProperty     String?            // Cible de la formule: null=valeur, 'number_max', 'number_min', 'visible', etc.
-  constraintMessage  String?            // Message affiché quand la contrainte n'est pas respectée
   isDefault          Boolean            @default(false)
   order              Int                @default(0)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @default(now())
+  targetProperty     String?
+  constraintMessage  String?
   TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   Organization       Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1539,10 +1541,6 @@ model TreeBranchLeafNodeTable {
   name                 String
   description          String?
   type                 String                          @default("basic")
-  rowCount             Int                             @default(0)
-  columnCount          Int                             @default(0)
-  tableColumns         TreeBranchLeafNodeTableColumn[]
-  tableRows            TreeBranchLeafNodeTableRow[]
   meta                 Json                            @default("{}")
   isDefault            Boolean                         @default(false)
   order                Int                             @default(0)
@@ -1550,8 +1548,12 @@ model TreeBranchLeafNodeTable {
   updatedAt            DateTime                        @updatedAt
   lookupDisplayColumns String[]                        @default([])
   lookupSelectColumn   String?
+  columnCount          Int                             @default(0)
+  rowCount             Int                             @default(0)
   TreeBranchLeafNode   TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   Organization         Organization?                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tableColumns         TreeBranchLeafNodeTableColumn[]
+  tableRows            TreeBranchLeafNodeTableRow[]
 
   @@unique([nodeId, name])
   @@index([lookupSelectColumn])
@@ -1560,15 +1562,15 @@ model TreeBranchLeafNodeTable {
 }
 
 model TreeBranchLeafNodeTableColumn {
-  id           String                  @id @default(cuid())
-  tableId      String
-  columnIndex  Int
-  name         String
-  type         String?                 @default("text")
-  width        Int?
-  format       String?
-  metadata     Json                    @default("{}")
-  table        TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  id          String                  @id @default(cuid())
+  tableId     String
+  columnIndex Int
+  name        String
+  type        String?                 @default("text")
+  width       Int?
+  format      String?
+  metadata    Json                    @default("{}")
+  table       TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@unique([tableId, columnIndex])
   @@index([tableId])
@@ -1577,8 +1579,8 @@ model TreeBranchLeafNodeTableColumn {
 model TreeBranchLeafNodeTableRow {
   id       String                  @id @default(cuid())
   tableId  String
-  rowIndex Int
   cells    Json
+  rowIndex Int
   table    TreeBranchLeafNodeTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@unique([tableId, rowIndex])
@@ -1684,7 +1686,6 @@ model TreeBranchLeafSubmission {
   treeId                                           String
   userId                                           String?
   leadId                                           String?
-  organizationId                                   String?
   sessionId                                        String?
   status                                           String                            @default("draft")
   totalScore                                       Float?
@@ -1697,14 +1698,16 @@ model TreeBranchLeafSubmission {
   lastEditedBy                                     String?
   lockedBy                                         String?
   lockedAt                                         DateTime?
+  organizationId                                   String?
   User_TreeBranchLeafSubmission_lastEditedByToUser User?                             @relation("TreeBranchLeafSubmission_lastEditedByToUser", fields: [lastEditedBy], references: [id])
   Lead                                             Lead?                             @relation(fields: [leadId], references: [id])
   User_TreeBranchLeafSubmission_lockedByToUser     User?                             @relation("TreeBranchLeafSubmission_lockedByToUser", fields: [lockedBy], references: [id])
+  Organization                                     Organization?                     @relation(fields: [organizationId], references: [id])
   TreeBranchLeafTree                               TreeBranchLeafTree                @relation(fields: [treeId], references: [id], onDelete: Cascade)
   User_TreeBranchLeafSubmission_userIdToUser       User?                             @relation("TreeBranchLeafSubmission_userIdToUser", fields: [userId], references: [id])
-  Organization                                     Organization?                     @relation(fields: [organizationId], references: [id])
   TreeBranchLeafSubmissionData                     TreeBranchLeafSubmissionData[]
   TreeBranchLeafSubmissionVersion                  TreeBranchLeafSubmissionVersion[]
+  GeneratedDocuments                               GeneratedDocument[]
 
   @@index([createdAt])
   @@index([lastEditedBy])
@@ -1819,6 +1822,7 @@ model TreeBranchLeafTree {
   TreeBranchLeafNode          TreeBranchLeafNode[]
   TreeBranchLeafSubmission    TreeBranchLeafSubmission[]
   TreeBranchLeafTableData     TreeBranchLeafTableData[]
+  DocumentTemplates           DocumentTemplate[]            // Templates de documents liés à cet arbre
   Organization                Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([category])
@@ -1867,6 +1871,9 @@ model User {
   UserService                                                          UserService[]
   WebSiteBlogPost                                                      WebSiteBlogPost[]
   WebSiteMediaFile                                                     WebSiteMediaFile[]
+  CreatedDocumentTemplates                                             DocumentTemplate[]                @relation("DocumentTemplateCreator")
+  CreatedDocuments                                                     GeneratedDocument[]               @relation("GeneratedDocument_createdByToUser")
+  SentDocuments                                                        GeneratedDocument[]               @relation("GeneratedDocument_sentByToUser")
 }
 
 model UserOrganization {
@@ -2236,6 +2243,66 @@ model ContactSubmission {
   @@map("contact_submissions")
 }
 
+model Quote {
+  id             String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  organizationId String
+  leadId         String
+  blockId        String          @db.Uuid
+  createdById    String?         @db.Uuid
+  number         String?
+  status         QuoteStatus     @default(DRAFT)
+  title          String?
+  version        Int             @default(1)
+  currency       String          @default("EUR")
+  validUntil     DateTime?       @db.Timestamp(6)
+  notes          String?
+  data           Json?
+  totals         Json?
+  createdAt      DateTime        @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+  lead           Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documents      QuoteDocument[]
+  items          QuoteItem[]
+
+  @@index([leadId])
+  @@index([organizationId])
+  @@index([status, updatedAt])
+}
+
+model QuoteItem {
+  id          String  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  quoteId     String
+  order       Int     @default(0)
+  label       String
+  description String?
+  quantity    Decimal @db.Decimal(18, 4)
+  unitPrice   Decimal @db.Decimal(18, 4)
+  discountPct Decimal @default(0) @db.Decimal(5, 2)
+  taxPct      Decimal @default(21) @db.Decimal(5, 2)
+  totalExcl   Decimal @db.Decimal(18, 4)
+  totalIncl   Decimal @db.Decimal(18, 4)
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
+model QuoteDocument {
+  id          String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  quoteId     String
+  version     Int              @default(1)
+  storageType QuoteStorageType @default(LOCAL)
+  fileName    String
+  mimeType    String           @default("text/html")
+  url         String?
+  driveFileId String?
+  path        String?
+  createdAt   DateTime         @default(now()) @db.Timestamp(6)
+  quote       Quote            @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -2273,4 +2340,205 @@ enum UserOrganizationStatus {
   ACTIVE
   INACTIVE
   REJECTED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum QuoteStorageType {
+  LOCAL
+  DRIVE
+}
+
+// ==========================================
+// ENUMS SYSTÈME DE DOCUMENTS PDF
+// ==========================================
+
+enum DocumentType {
+  QUOTE
+  INVOICE
+  ORDER
+  CONTRACT
+  PRESENTATION
+}
+
+enum DocumentStatus {
+  DRAFT
+  PENDING
+  SENT
+  VIEWED
+  SIGNED
+  PAID
+  CANCELLED
+}
+
+enum SectionType {
+  COVER_PAGE
+  COMPANY_PRESENTATION
+  TEXT_BLOCK
+  PRODUCT_OFFER
+  PRICING_TABLE
+  CHART_ROI
+  CHART_BAR
+  CHART_LINE
+  CHART_PIE
+  IMAGE
+  TERMS_CONDITIONS
+  SIGNATURE_BLOCK
+  PAGE_BREAK
+  CUSTOM_HTML
+  MODULAR_PAGE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+}
+
+enum SignatureStatus {
+  NOT_REQUIRED
+  PENDING
+  SIGNED
+  DECLINED
+}
+
+// ==========================================
+// MODÈLES SYSTÈME DE DOCUMENTS PDF
+// ==========================================
+
+model DocumentTemplate {
+  id              String              @id
+  name            String
+  type            DocumentType
+  description     String?
+  organizationId  String
+  treeId          String?             // Arbre TBL associé (optionnel pour templates génériques)
+  translations    Json                @default("{}")
+  defaultLanguage String              @default("fr")
+  themeId         String?
+  isActive        Boolean             @default(true)
+  isAdminOnly     Boolean             @default(true)
+  createdBy       String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tree              TreeBranchLeafTree? @relation(fields: [treeId], references: [id], onDelete: SetNull)
+  theme             DocumentTheme?      @relation(fields: [themeId], references: [id], onDelete: SetNull)
+  createdByUser     User?               @relation("DocumentTemplateCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  sections          DocumentSection[]
+  generatedDocuments GeneratedDocument[] @relation("TemplateToDocument")
+  
+  @@index([organizationId])
+  @@index([treeId])
+  @@index([themeId])
+  @@index([createdBy])
+}
+
+model DocumentSection {
+  id                  String           @id
+  templateId          String
+  order               Int
+  type                SectionType
+  config              Json             @default("{}")
+  displayConditions   Json?
+  linkedNodeIds       String[]         @default([])
+  linkedVariables     String[]         @default([])
+  translations        Json             @default("{}")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  
+  template            DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  @@index([templateId])
+  @@index([order])
+}
+
+model DocumentTheme {
+  id               String              @id
+  name             String
+  organizationId   String
+  primaryColor     String              @default("#1890ff")
+  secondaryColor   String              @default("#52c41a")
+  accentColor      String?
+  textColor        String              @default("#000000")
+  backgroundColor  String              @default("#ffffff")
+  fontFamily       String              @default("Arial, sans-serif")
+  fontSize         Int                 @default(12)
+  logoUrl          String?
+  headerImageUrl   String?
+  footerImageUrl   String?
+  headerTemplate   Json                @default("{}")
+  footerTemplate   Json                @default("{}")
+  customStyles     Json?
+  isDefault        Boolean             @default(false)
+  isActive         Boolean             @default(true)
+  isPublic         Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  templates        DocumentTemplate[]
+  
+  @@index([organizationId])
+  @@index([isDefault])
+  @@index([isActive])
+}
+
+model GeneratedDocument {
+  id                String                    @id
+  submissionId      String?
+  leadId            String?
+  templateId        String
+  organizationId    String
+  type              DocumentType
+  language          String                    @default("fr")
+  pdfUrl            String?
+  pdfFilename       String?
+  status            DocumentStatus            @default(DRAFT)
+  dataSnapshot      Json?
+  clientAccessToken String?                   @unique
+  clientViewedAt    DateTime?
+  signedAt          DateTime?
+  signatureUrl      String?
+  signedBy          String?
+  paidAt            DateTime?
+  paymentAmount     Decimal?                  @db.Decimal(10, 2)
+  paymentMethod     String?
+  paymentReference  String?
+  sentAt            DateTime?
+  sentTo            String?
+  sentBy            String?
+  documentNumber    String?                   @unique
+  title             String?
+  notes             String?
+  createdBy         String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  
+  createdByUser     User?                     @relation("GeneratedDocument_createdByToUser", fields: [createdBy], references: [id])
+  lead              Lead?                     @relation(fields: [leadId], references: [id])
+  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sentByUser        User?                     @relation("GeneratedDocument_sentByToUser", fields: [sentBy], references: [id])
+  submission        TreeBranchLeafSubmission? @relation(fields: [submissionId], references: [id])
+  template          DocumentTemplate          @relation("TemplateToDocument", fields: [templateId], references: [id])
+
+  @@index([submissionId])
+  @@index([leadId])
+  @@index([templateId])
+  @@index([status])
+  @@index([documentNumber])
+  @@index([clientAccessToken])
+  @@index([createdAt])
+  @@index([organizationId])
+  @@index([type])
 }

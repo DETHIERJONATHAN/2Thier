@@ -1,0 +1,1185 @@
+import { Router, type Request, type Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { nanoid } from 'nanoid';
+import { renderDocumentPdf } from '../services/documentPdfRenderer';
+
+const router = Router();
+const prisma = new PrismaClient();
+
+/**
+ * Extrait les composants d'adresse (street, box, postalCode, city) depuis un lead.
+ * Priorité : 
+ * 1. Champs directs sur le lead (si existants)
+ * 2. Champs dans lead.data (JSON)
+ * 3. Parse de l'adresse complète (format belge : "Rue Numéro Boîte, Code Postal Ville")
+ */
+function extractAddressComponents(lead: any): {
+  address: string;
+  street: string;
+  number: string;
+  box: string;
+  postalCode: string;
+  city: string;
+  country: string;
+} {
+  const data = lead?.data || {};
+  
+  // Résultat par défaut
+  const result = {
+    address: '',
+    street: '',
+    number: '',
+    box: '',
+    postalCode: '',
+    city: '',
+    country: ''
+  };
+  
+  // 1. Chercher les champs directs sur le lead
+  result.address = lead?.address || data?.address || '';
+  result.street = lead?.street || data?.street || '';
+  result.number = lead?.number || data?.number || '';
+  result.box = lead?.box || data?.box || data?.boite || '';
+  result.postalCode = lead?.postalCode || lead?.zipCode || data?.postalCode || data?.zipCode || data?.zip || '';
+  result.city = lead?.city || lead?.ville || data?.city || data?.ville || '';
+  result.country = lead?.country || lead?.pays || data?.country || data?.pays || '';
+  
+  // 2. Si on a l'adresse complète mais pas les composants, essayer de parser
+  if (result.address && (!result.street || !result.postalCode || !result.city)) {
+    const parsed = parseAddress(result.address);
+    if (!result.street && parsed.street) result.street = parsed.street;
+    if (!result.number && parsed.number) result.number = parsed.number;
+    if (!result.box && parsed.box) result.box = parsed.box;
+    if (!result.postalCode && parsed.postalCode) result.postalCode = parsed.postalCode;
+    if (!result.city && parsed.city) result.city = parsed.city;
+  }
+  
+  // 3. Si on a les composants mais pas l'adresse complète, la reconstruire
+  if (!result.address && (result.street || result.city)) {
+    const parts = [];
+    if (result.street) {
+      let streetPart = result.street;
+      if (result.number) streetPart += ' ' + result.number;
+      if (result.box) streetPart += ' ' + result.box;
+      parts.push(streetPart);
+    }
+    if (result.postalCode || result.city) {
+      parts.push([result.postalCode, result.city].filter(Boolean).join(' '));
+    }
+    result.address = parts.join(', ');
+  }
+  
+  return result;
+}
+
+/**
+ * Parse une adresse belge au format "Rue Nom Numéro Boîte, Code Postal Ville"
+ * Exemples:
+ * - "Rue de la Loi 16, 1000 Bruxelles"
+ * - "Avenue Louise 123 Bte 4, 1050 Ixelles"
+ * - "Chaussée de Waterloo 45, 1060 Saint-Gilles"
+ */
+function parseAddress(address: string): {
+  street: string;
+  number: string;
+  box: string;
+  postalCode: string;
+  city: string;
+} {
+  const result = { street: '', number: '', box: '', postalCode: '', city: '' };
+  
+  if (!address || typeof address !== 'string') return result;
+  
+  // Séparer par virgule ou par le code postal
+  // Format typique: "Rue XXX, 1234 Ville" ou "Rue XXX 1234 Ville"
+  
+  // Regex pour code postal belge (4 chiffres)
+  const postalMatch = address.match(/(\d{4})\s*(.+?)$/i);
+  
+  if (postalMatch) {
+    result.postalCode = postalMatch[1];
+    result.city = postalMatch[2].replace(/^,\s*/, '').trim();
+    
+    // Le reste est la partie rue/numéro
+    const streetPart = address.substring(0, postalMatch.index).replace(/,\s*$/, '').trim();
+    
+    // Chercher le numéro et boîte dans la partie rue
+    // Pattern: "Rue de la Loi 16" ou "Avenue Louise 123 Bte 4"
+    const streetNumMatch = streetPart.match(/^(.+?)\s+(\d+[a-zA-Z]?)(?:\s+(?:Bte|boîte|box|b)?\.?\s*(\d+|[a-zA-Z]))?$/i);
+    
+    if (streetNumMatch) {
+      result.street = streetNumMatch[1].trim();
+      result.number = streetNumMatch[2];
+      result.box = streetNumMatch[3] || '';
+    } else {
+      result.street = streetPart;
+    }
+  } else {
+    // Pas de code postal trouvé, garder comme rue
+    result.street = address;
+  }
+  
+  return result;
+}
+
+// ==========================================
+// ROUTES DOCUMENT TEMPLATES (ADMIN ONLY)
+// ==========================================
+
+// GET /api/documents/templates - Liste tous les templates
+// Query params: treeId, isActive, type
+router.get('/templates', async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const { treeId, isActive, type } = req.query;
+    
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization ID requis' });
+    }
+
+    // Construire les filtres
+    const where: any = { organizationId };
+    
+    // Filtrer par arbre TBL si spécifié
+    if (treeId) {
+      where.OR = [
+        { treeId: treeId as string },
+        { treeId: null } // Templates génériques disponibles pour tous les arbres
+      ];
+    }
+    
+    // Filtrer par statut actif
+    if (isActive === 'true') {
+      where.isActive = true;
+    } else if (isActive === 'false') {
+      where.isActive = false;
+    }
+    
+    // Filtrer par type de document
+    if (type) {
+      where.type = type as string;
+    }
+
+    const templates = await prisma.documentTemplate.findMany({
+      where,
+      include: {
+        sections: {
+          orderBy: { order: 'asc' }
+        },
+        theme: true,
+        tree: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        _count: {
+          select: { generatedDocuments: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(templates);
+  } catch (error) {
+    console.error('Erreur récupération templates:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/documents/templates/:id - Récupérer un template spécifique
+router.get('/templates/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    const template = await prisma.documentTemplate.findFirst({
+      where: { 
+        id,
+        organizationId 
+      },
+      include: {
+        sections: {
+          orderBy: { order: 'asc' }
+        },
+        theme: true
+      }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    res.json(template);
+  } catch (error) {
+    console.error('Erreur récupération template:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/documents/templates - Créer un nouveau template
+router.post('/templates', async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    
+    const {
+      name,
+      type,
+      description,
+      translations,
+      defaultLanguage,
+      themeId,
+      sections
+    } = req.body;
+
+    if (!name || !type) {
+      return res.status(400).json({ error: 'Nom et type requis' });
+    }
+
+    const template = await prisma.documentTemplate.create({
+      data: {
+        id: nanoid(),
+        name,
+        type,
+        description,
+        organizationId,
+        translations: translations || {},
+        defaultLanguage: defaultLanguage || 'fr',
+        themeId,
+        createdBy: userId,
+        sections: {
+          create: (sections || []).map((section: any, index: number) => ({
+            id: nanoid(),
+            order: section.order || index,
+            type: section.type,
+            config: section.config || {},
+            displayConditions: section.displayConditions,
+            linkedNodeIds: section.linkedNodeIds || [],
+            linkedVariables: section.linkedVariables || [],
+            translations: section.translations || {}
+          }))
+        }
+      },
+      include: {
+        sections: true,
+        theme: true
+      }
+    });
+
+    res.status(201).json(template);
+  } catch (error) {
+    console.error('Erreur création template:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/documents/templates/:id - Mettre à jour un template
+router.put('/templates/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    
+    const {
+      name,
+      type,
+      description,
+      treeId,
+      translations,
+      defaultLanguage,
+      themeId,
+      isActive,
+      sections
+    } = req.body;
+
+    console.log('📝 [TEMPLATE UPDATE] Mise à jour template:', { id, name, treeId, type });
+
+    // Vérifier que le template existe et appartient à l'organisation
+    const existing = await prisma.documentTemplate.findFirst({
+      where: { id, organizationId }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    // Supprimer les anciennes sections si de nouvelles sont fournies
+    if (sections) {
+      await prisma.documentSection.deleteMany({
+        where: { templateId: id }
+      });
+    }
+
+    const template = await prisma.documentTemplate.update({
+      where: { id },
+      data: {
+        name,
+        type,
+        description,
+        treeId: treeId || null, // Permet de mettre à null pour revenir à générique
+        translations,
+        defaultLanguage,
+        themeId,
+        isActive,
+        ...(sections && {
+          sections: {
+            create: sections.map((section: any, index: number) => ({
+              id: nanoid(),
+              order: section.order || index,
+              type: section.type,
+              config: section.config || {},
+              displayConditions: section.displayConditions,
+              linkedNodeIds: section.linkedNodeIds || [],
+              linkedVariables: section.linkedVariables || [],
+              translations: section.translations || {}
+            }))
+          }
+        })
+      },
+      include: {
+        sections: { orderBy: { order: 'asc' } },
+        theme: true,
+        tree: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    res.json(template);
+  } catch (error) {
+    console.error('Erreur mise à jour template:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/documents/templates/:id - Supprimer un template
+router.delete('/templates/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    const template = await prisma.documentTemplate.findFirst({
+      where: { id, organizationId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    // Vérifier qu'il n'y a pas de documents générés avec ce template
+    const documentsCount = await prisma.generatedDocument.count({
+      where: { templateId: id }
+    });
+
+    if (documentsCount > 0) {
+      return res.status(400).json({ 
+        error: 'Impossible de supprimer : des documents utilisent ce template',
+        documentsCount 
+      });
+    }
+
+    await prisma.documentTemplate.delete({
+      where: { id }
+    });
+
+    res.json({ success: true, message: 'Template supprimé' });
+  } catch (error) {
+    console.error('Erreur suppression template:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ==========================================
+// ROUTES THEMES
+// ==========================================
+
+// GET /api/documents/themes - Liste tous les thèmes
+router.get('/themes', async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    const themes = await prisma.documentTheme.findMany({
+      where: { organizationId },
+      orderBy: [
+        { isDefault: 'desc' },
+        { name: 'asc' }
+      ]
+    });
+
+    res.json(themes);
+  } catch (error) {
+    console.error('Erreur récupération thèmes:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/documents/themes - Créer un nouveau thème
+router.post('/themes', async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const themeData = req.body;
+
+    // Si c'est le thème par défaut, retirer le flag des autres
+    if (themeData.isDefault) {
+      await prisma.documentTheme.updateMany({
+        where: { organizationId, isDefault: true },
+        data: { isDefault: false }
+      });
+    }
+
+    const theme = await prisma.documentTheme.create({
+      data: {
+        id: nanoid(),
+        ...themeData,
+        organizationId
+      }
+    });
+
+    res.status(201).json(theme);
+  } catch (error) {
+    console.error('Erreur création thème:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/documents/themes/:id - Mettre à jour un thème
+router.put('/themes/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const themeData = req.body;
+
+    // Si c'est le thème par défaut, retirer le flag des autres
+    if (themeData.isDefault) {
+      await prisma.documentTheme.updateMany({
+        where: { 
+          organizationId, 
+          isDefault: true,
+          id: { not: id }
+        },
+        data: { isDefault: false }
+      });
+    }
+
+    const theme = await prisma.documentTheme.update({
+      where: { id },
+      data: themeData
+    });
+
+    res.json(theme);
+  } catch (error) {
+    console.error('Erreur mise à jour thème:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/documents/themes/:id - Supprimer un thème
+router.delete('/themes/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Vérifier qu'aucun template n'utilise ce thème
+    const templatesCount = await prisma.documentTemplate.count({
+      where: { themeId: id }
+    });
+
+    if (templatesCount > 0) {
+      return res.status(400).json({
+        error: 'Impossible de supprimer : des templates utilisent ce thème',
+        templatesCount
+      });
+    }
+
+    await prisma.documentTheme.delete({
+      where: { id }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur suppression thème:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ==========================================
+// ROUTES SECTIONS
+// ==========================================
+
+// GET /api/documents/templates/:templateId/sections - Liste les sections d'un template
+router.get('/templates/:templateId/sections', async (req: Request, res: Response) => {
+  try {
+    const { templateId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    // Vérifier que le template appartient à l'organisation
+    const template = await prisma.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    const sections = await prisma.documentSection.findMany({
+      where: { templateId },
+      orderBy: { order: 'asc' }
+    });
+
+    res.json(sections);
+  } catch (error) {
+    console.error('Erreur récupération sections:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/documents/templates/:templateId/sections - Créer une section
+router.post('/templates/:templateId/sections', async (req: Request, res: Response) => {
+  try {
+    const { templateId } = req.params;
+    const { type, order, config } = req.body;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    // Vérifier que le template appartient à l'organisation
+    const template = await prisma.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    const section = await prisma.documentSection.create({
+      data: {
+        id: nanoid(),
+        templateId,
+        type,
+        order: order ?? 0,
+        config: config || {}
+      }
+    });
+
+    res.json(section);
+  } catch (error: any) {
+    console.error('Erreur création section:', error?.message || error);
+    console.error('Stack:', error?.stack);
+    res.status(500).json({ error: 'Erreur serveur', details: error?.message });
+  }
+});
+
+// PUT /api/documents/templates/:templateId/sections/:sectionId - Modifier une section
+router.put('/templates/:templateId/sections/:sectionId', async (req: Request, res: Response) => {
+  try {
+    const { templateId, sectionId } = req.params;
+    const { order, config } = req.body;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    // Vérifier que le template appartient à l'organisation
+    const template = await prisma.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    const section = await prisma.documentSection.update({
+      where: { id: sectionId },
+      data: {
+        ...(order !== undefined && { order }),
+        ...(config && { config })
+      }
+    });
+
+    res.json(section);
+  } catch (error) {
+    console.error('Erreur mise à jour section:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/documents/templates/:templateId/sections/:sectionId - Supprimer une section
+router.delete('/templates/:templateId/sections/:sectionId', async (req: Request, res: Response) => {
+  try {
+    const { templateId, sectionId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    // Vérifier que le template appartient à l'organisation
+    const template = await prisma.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    await prisma.documentSection.delete({
+      where: { id: sectionId }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur suppression section:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ==========================================
+// ROUTES DOCUMENTS GÉNÉRÉS
+// ==========================================
+
+// GET /api/documents/generated - Liste les documents générés
+// Query params: leadId, submissionId, templateId
+router.get('/generated', async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const { leadId, submissionId, templateId } = req.query;
+    
+    console.log('📄 [GET /generated] Query params:', { leadId, submissionId, templateId, organizationId });
+    
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization ID requis' });
+    }
+
+    // Construire les filtres - le document a directement organizationId
+    const where: any = {
+      organizationId
+    };
+    
+    if (leadId) {
+      where.leadId = leadId as string;
+    }
+    
+    if (submissionId) {
+      where.submissionId = submissionId as string;
+    }
+    
+    if (templateId) {
+      where.templateId = templateId as string;
+    }
+
+    console.log('📄 [GET /generated] Where clause:', JSON.stringify(where, null, 2));
+
+    const documents = await prisma.generatedDocument.findMany({
+      where,
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        },
+        sentByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    console.log('📄 [GET /generated] Found documents:', documents.length);
+    res.json(documents);
+  } catch (error: any) {
+    console.error('❌ [GET /generated] Erreur récupération documents générés:', error);
+    console.error('❌ [GET /generated] Error name:', error?.name);
+    console.error('❌ [GET /generated] Error code:', error?.code);
+    console.error('❌ [GET /generated] Error message:', error?.message);
+    res.status(500).json({ error: 'Erreur serveur', details: error?.message });
+  }
+});
+
+// GET /api/documents/generated/:id - Récupérer un document généré spécifique
+router.get('/generated/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    const document = await prisma.generatedDocument.findFirst({
+      where: { 
+        id,
+        organizationId
+      },
+      include: {
+        template: true,
+        sentByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        lead: true
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document non trouvé' });
+    }
+
+    res.json(document);
+  } catch (error) {
+    console.error('Erreur récupération document:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/documents/generated/generate - Générer un nouveau document PDF
+router.post('/generated/generate', async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.headers['x-organization-id'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    
+    const {
+      templateId,
+      leadId,
+      submissionId,
+      tblData,
+      lead: leadData,
+      language
+    } = req.body;
+
+    console.log('📄 [GENERATE DOC] Demande de génération:', { templateId, leadId, submissionId, organizationId, userId });
+    console.log('📄 [GENERATE DOC] Body complet:', JSON.stringify(req.body, null, 2));
+
+    if (!templateId) {
+      return res.status(400).json({ error: 'Template ID requis' });
+    }
+
+    // Récupérer le template avec ses sections
+    console.log('📄 [GENERATE DOC] Recherche du template...');
+    const template = await prisma.documentTemplate.findFirst({
+      where: { 
+        id: templateId,
+        organizationId 
+      },
+      include: {
+        sections: {
+          orderBy: { order: 'asc' }
+        },
+        theme: true
+      }
+    });
+
+    console.log('📄 [GENERATE DOC] Template trouvé:', template ? template.id : 'null');
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template non trouvé' });
+    }
+
+    // Générer un numéro de document unique
+    const documentCount = await prisma.generatedDocument.count({
+      where: { templateId }
+    });
+    const documentNumber = `${template.type}-${String(documentCount + 1).padStart(6, '0')}`;
+
+    // Créer l'entrée du document généré
+    // Utiliser les champs conformes au schéma Prisma (synchronisé avec la base de données)
+    const generatedDocument = await prisma.generatedDocument.create({
+      data: {
+        id: nanoid(),
+        templateId,
+        organizationId,
+        leadId: leadId || null,
+        submissionId: submissionId || null,
+        type: template.type,
+        status: 'DRAFT',
+        language: language || template.defaultLanguage || 'fr',
+        documentNumber,
+        pdfUrl: null, // Sera rempli après génération réelle du PDF
+        dataSnapshot: {
+          tblData: tblData || {},
+          lead: leadData || {},
+          generatedAt: new Date().toISOString(),
+          generatedBy: userId
+        },
+        createdBy: userId || null
+      },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        }
+      }
+    });
+
+    console.log('📄 [GENERATE DOC] Document créé:', generatedDocument.id);
+
+    // TODO: Implémenter la vraie génération PDF ici
+    // Pour l'instant, on simule avec un statut SENT (ready)
+    console.log('📄 [GENERATE DOC] Mise à jour du document avec statut SENT...');
+    const updatedDocument = await prisma.generatedDocument.update({
+      where: { id: generatedDocument.id },
+      data: {
+        status: 'SENT', // Le PDF est "prêt"
+        pdfUrl: `/api/documents/generated/${generatedDocument.id}/download`
+      },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        },
+        sentByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    console.log('📄 [GENERATE DOC] Document mis à jour avec succès:', updatedDocument.id);
+    res.status(201).json(updatedDocument);
+  } catch (error: any) {
+    console.error('❌ [GENERATE DOC] Erreur génération document:', error);
+    console.error('❌ [GENERATE DOC] Error name:', error?.name);
+    console.error('❌ [GENERATE DOC] Error code:', error?.code);
+    console.error('❌ [GENERATE DOC] Error message:', error?.message);
+    console.error('❌ [GENERATE DOC] Error meta:', error?.meta);
+    res.status(500).json({ error: 'Erreur serveur lors de la génération', details: error?.message });
+  }
+});
+
+// DELETE /api/documents/generated/:id - Supprimer un document généré
+router.delete('/generated/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    const document = await prisma.generatedDocument.findFirst({
+      where: { 
+        id, 
+        organizationId
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document non trouvé' });
+    }
+
+    // TODO: Supprimer aussi le fichier physique du stockage
+
+    await prisma.generatedDocument.delete({
+      where: { id }
+    });
+
+    res.json({ success: true, message: 'Document supprimé' });
+  } catch (error) {
+    console.error('Erreur suppression document:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/documents/generated/:id/download - Télécharger le PDF d'un document
+router.get('/generated/:id/download', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    console.log('📥 [DOWNLOAD] Demande de téléchargement:', { id, organizationId });
+
+    // Charger le document avec template, sections, theme et lead
+    const document = await prisma.generatedDocument.findFirst({
+      where: { 
+        id,
+        organizationId
+      },
+      include: {
+        template: {
+          include: {
+            sections: {
+              orderBy: { order: 'asc' }
+            },
+            theme: true
+          }
+        },
+        lead: true
+      }
+    });
+
+    if (!document) {
+      console.log('📥 [DOWNLOAD] Document non trouvé');
+      return res.status(404).json({ error: 'Document non trouvé' });
+    }
+
+    console.log('📥 [DOWNLOAD] Document trouvé:', document.documentNumber);
+
+    // Charger le thème par défaut de l'organisation (ou celui du template)
+    const defaultTheme = await prisma.documentTheme.findFirst({
+      where: { 
+        organizationId,
+        isDefault: true 
+      }
+    });
+
+    // Charger les infos de l'organisation
+    const organization = await prisma.organization.findFirst({
+      where: { id: organizationId }
+    });
+
+    // Construire le contexte pour le renderer
+    const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
+    
+    // Priorité : theme du template (relation) > theme par défaut de l'org > valeurs par défaut
+    const templateTheme = document.template?.theme;
+    const themeSource = templateTheme || defaultTheme;
+    const theme = themeSource ? {
+      primaryColor: themeSource.primaryColor || '#1890ff',
+      secondaryColor: themeSource.secondaryColor || '#52c41a',
+      accentColor: themeSource.accentColor || '#faad14',
+      textColor: themeSource.textColor || '#333333',
+      backgroundColor: themeSource.backgroundColor || '#ffffff',
+      fontFamily: themeSource.fontFamily || 'Helvetica',
+      fontSize: themeSource.fontSize || 12,
+      logoUrl: themeSource.logoUrl || ''
+    } : {
+      primaryColor: '#1890ff',
+      secondaryColor: '#52c41a',
+      accentColor: '#faad14',
+      textColor: '#333333',
+      backgroundColor: '#ffffff',
+      fontFamily: 'Helvetica',
+      fontSize: 12,
+      logoUrl: ''
+    };
+    
+    console.log('📥 [DOWNLOAD] Theme utilisé:', {
+      source: templateTheme ? 'template' : (defaultTheme ? 'default' : 'fallback'),
+      primaryColor: theme.primaryColor,
+      fontFamily: theme.fontFamily
+    });
+    
+    // Mapper les sections
+    const sections = document.template?.sections?.map(s => ({
+      id: s.id,
+      type: s.type,
+      name: (s as any).name || s.type,
+      config: (s.config || {}) as Record<string, any>,
+      translations: (s.translations || {}) as Record<string, any>,
+      linkedNodeIds: (s.linkedNodeIds || []) as string[],
+      order: s.order,
+      isActive: (s as any).isActive !== false
+    })) || [];
+    
+    // Debug: log des sections
+    console.log('📥 [DOWNLOAD] Sections mappées:', sections.length);
+    for (const sec of sections) {
+      console.log(`📥 [DOWNLOAD] Section ${sec.type}:`, {
+        id: sec.id,
+        configKeys: Object.keys(sec.config || {}),
+        hasModules: !!(sec.config as any)?.modules,
+        modulesCount: (sec.config as any)?.modules?.length || 0
+      });
+      if ((sec.config as any)?.modules?.length > 0) {
+        console.log('📥 [DOWNLOAD] Premier module:', JSON.stringify((sec.config as any).modules[0], null, 2).substring(0, 500));
+      }
+    }
+    
+    const renderContext = {
+      template: document.template ? {
+        id: document.template.id,
+        name: document.template.name,
+        type: document.template.type,
+        theme: theme,
+        sections: sections // Sections DANS le template comme attendu par le renderer
+      } : {
+        id: 'default',
+        name: 'Document',
+        type: 'QUOTE',
+        theme: theme,
+        sections: []
+      },
+      lead: (() => {
+        // Merger les données du lead de la DB avec celles du dataSnapshot (TBL)
+        const dbLead = document.lead || {};
+        const snapshotLead = dataSnapshot.lead || {};
+        
+        // Combiner les sources de données (priorité au DB, puis snapshot)
+        const mergedLead = {
+          ...snapshotLead,
+          ...dbLead,
+          // S'assurer que l'adresse vient de l'une des deux sources
+          address: (dbLead as any).address || snapshotLead.address || '',
+          data: (dbLead as any).data || {}
+        };
+        
+        const addressComponents = extractAddressComponents(mergedLead);
+        
+        return {
+          id: (dbLead as any).id || snapshotLead.id || '',
+          firstName: (dbLead as any).firstName || snapshotLead.firstName || '',
+          lastName: (dbLead as any).lastName || snapshotLead.lastName || '',
+          fullName: [(dbLead as any).firstName || snapshotLead.firstName, (dbLead as any).lastName || snapshotLead.lastName].filter(Boolean).join(' '),
+          email: (dbLead as any).email || snapshotLead.email || '',
+          phone: (dbLead as any).phone || snapshotLead.phone || '',
+          company: (dbLead as any).company || snapshotLead.company || '',
+          // Adresse complète
+          address: addressComponents.address,
+          // Composants séparés
+          street: addressComponents.street,
+          number: addressComponents.number,
+          box: addressComponents.box,
+          postalCode: addressComponents.postalCode,
+          city: addressComponents.city,
+          country: addressComponents.country,
+        };
+      })(),
+      organization: organization ? {
+        name: organization.name || '',
+        email: (organization as any).email || '',
+        phone: (organization as any).phone || '',
+        address: (organization as any).address || '',
+        vatNumber: (organization as any).vatNumber || '',
+        logo: (organization as any).logo || ''
+      } : undefined,
+      tblData: dataSnapshot.tblData || dataSnapshot,
+      quote: dataSnapshot.quote || {
+        number: document.documentNumber,
+        date: document.createdAt?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+        validUntil: dataSnapshot.validUntil || '',
+        totalHT: dataSnapshot.totalHT || 0,
+        totalTVA: dataSnapshot.totalTVA || 0,
+        totalTTC: dataSnapshot.totalTTC || 0
+      },
+      documentNumber: document.documentNumber || '',
+      language: document.language || 'fr'
+    };
+
+    console.log('📥 [DOWNLOAD] Contexte de rendu:', {
+      templateId: renderContext.template.id,
+      sectionsCount: renderContext.template.sections.length,
+      leadName: renderContext.lead.firstName + ' ' + renderContext.lead.lastName,
+      language: renderContext.language,
+      tblDataKeys: Object.keys(renderContext.tblData || {}),
+      tblDataKeysCount: Object.keys(renderContext.tblData || {}).length,
+      dataSnapshotKeys: Object.keys(dataSnapshot || {})
+    });
+    console.log('📥 [DOWNLOAD] Lead data (avec adresse parsée):', {
+      address: renderContext.lead.address,
+      street: renderContext.lead.street,
+      number: renderContext.lead.number,
+      box: renderContext.lead.box,
+      postalCode: renderContext.lead.postalCode,
+      city: renderContext.lead.city,
+      country: renderContext.lead.country
+    });
+    console.log('📥 [DOWNLOAD] tblData complet:', JSON.stringify(renderContext.tblData, null, 2).substring(0, 2000));
+
+    // Générer le PDF avec le nouveau renderer basé sur les templates
+    const pdfBuffer = await renderDocumentPdf(renderContext);
+
+    // Générer un nom de fichier
+    const filename = `${document.documentNumber || document.id}.pdf`;
+    
+    console.log('📥 [DOWNLOAD] PDF généré, taille:', pdfBuffer.length, 'bytes');
+
+    // Envoyer le PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length.toString());
+    
+    res.send(pdfBuffer);
+  } catch (error: any) {
+    console.error('❌ [DOWNLOAD] Erreur téléchargement:', error);
+    res.status(500).json({ error: 'Erreur serveur', details: error?.message });
+  }
+});
+
+// GET /api/documents/generated/:id/preview - Aperçu du document (HTML ou données)
+router.get('/generated/:id/preview', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    console.log('👁️ [PREVIEW] Demande d\'aperçu:', { id, organizationId });
+
+    const document = await prisma.generatedDocument.findFirst({
+      where: { 
+        id,
+        organizationId
+      },
+      include: {
+        template: {
+          include: {
+            sections: {
+              orderBy: { order: 'asc' }
+            },
+            theme: true
+          }
+        },
+        lead: true,
+        submission: true
+      }
+    });
+
+    if (!document) {
+      console.log('👁️ [PREVIEW] Document non trouvé');
+      return res.status(404).json({ error: 'Document non trouvé' });
+    }
+
+    console.log('👁️ [PREVIEW] Document trouvé:', document.documentNumber);
+
+    // Retourner toutes les données nécessaires pour l'aperçu
+    res.json({
+      id: document.id,
+      documentNumber: document.documentNumber,
+      type: document.type,
+      status: document.status,
+      language: document.language,
+      title: document.title,
+      notes: document.notes,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt,
+      template: document.template,
+      lead: document.lead,
+      dataSnapshot: document.dataSnapshot,
+      // Informations de signature/paiement
+      signedAt: document.signedAt,
+      signatureUrl: document.signatureUrl,
+      paidAt: document.paidAt,
+      paymentAmount: document.paymentAmount,
+      paymentMethod: document.paymentMethod
+    });
+  } catch (error: any) {
+    console.error('❌ [PREVIEW] Erreur aperçu:', error);
+    res.status(500).json({ error: 'Erreur serveur', details: error?.message });
+  }
+});
+
+export default router;

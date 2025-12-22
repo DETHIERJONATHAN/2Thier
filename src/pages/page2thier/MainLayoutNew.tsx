@@ -639,6 +639,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         key: 'admin-sites',
         label: '⚙️ Gérer les sites web',
         onClick: () => navigate('/admin/sites-web')
+      },
+      {
+        key: 'admin-documents',
+        label: '📄 Gérer les documents',
+        onClick: () => navigate('/admin/documents')
       }
     ]
   }), [navigate]);

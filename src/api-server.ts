@@ -25,6 +25,7 @@ import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge
 import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES
 import websitesRouter from './api/websites'; // 🌐 GESTION DES SITES WEB
 import imageUploadRouter from './api/image-upload'; // 📸 UPLOAD D'IMAGES
+import documentsRouter from './routes/documents'; // 📄 GESTION DES TEMPLATES DE DOCUMENTS
 console.log('✅ [DEBUG] Router minimal importé');
 // import analyticsRouter from './routes/analytics.ts'; // 📊 ANALYTICS - FUTUR
 import { setupSecurity } from './middlewares/security';
@@ -424,6 +425,8 @@ app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE
 app.use('/api/treebranchleaf', treebranchleafRouter);
 app.use('/api/treebranchleaf-ops', centralizedOperationsRouter);
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
+app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES
+app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)
 console.log('✅ Routes TreeBranchLeaf NOUVEAU système montées sur /treebranchleaf');
 console.log('✅ Routes TreeBranchLeaf Opérations Centralisées montées sur /treebranchleaf-ops');
 console.log('✅ Routes IA Génération de Contenu montées sur /api/ai');

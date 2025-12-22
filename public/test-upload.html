@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Upload Image Base64</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: #fff; }
+    .container { max-width: 600px; margin: auto; }
+    #preview { max-width: 300px; margin-top: 20px; border: 2px solid #4a90d9; }
+    #result { background: #333; padding: 10px; margin-top: 20px; word-break: break-all; font-size: 12px; max-height: 200px; overflow: auto; }
+    input[type="file"] { padding: 10px; background: #4a90d9; border: none; border-radius: 5px; cursor: pointer; }
+    .success { color: #52c41a; }
+    .error { color: #ff4d4f; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Test Upload Image → Base64</h1>
+    <p>Ce test vérifie que FileReader fonctionne correctement dans votre navigateur.</p>
+    
+    <input type="file" id="fileInput" accept="image/*" />
+    
+    <div id="status"></div>
+    <img id="preview" style="display: none;" />
+    <div id="result"></div>
+  </div>
+
+  <script>
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      const status = document.getElementById('status');
+      const preview = document.getElementById('preview');
+      const result = document.getElementById('result');
+      
+      if (!file) {
+        status.innerHTML = '<span class="error">❌ Aucun fichier sélectionné</span>';
+        return;
+      }
+
+      console.log('📤 File selected:', file.name, file.size, file.type);
+      status.innerHTML = '⏳ Conversion en cours...';
+
+      const reader = new FileReader();
+      
+      reader.onloadstart = () => {
+        console.log('📖 FileReader: onloadstart');
+      };
+
+      reader.onprogress = (e) => {
+        console.log('📊 FileReader: onprogress', e.loaded, '/', e.total);
+      };
+
+      reader.onload = (e) => {
+        const base64 = e.target.result;
+        console.log('✅ FileReader: onload - base64 length:', base64.length);
+        
+        status.innerHTML = '<span class="success">✅ Conversion réussie!</span><br>Taille base64: ' + base64.length + ' caractères';
+        preview.src = base64;
+        preview.style.display = 'block';
+        result.textContent = base64.substring(0, 500) + '...';
+      };
+
+      reader.onerror = (e) => {
+        console.error('❌ FileReader: onerror', e);
+        status.innerHTML = '<span class="error">❌ Erreur lors de la lecture: ' + reader.error + '</span>';
+      };
+
+      reader.onabort = () => {
+        console.log('⚠️ FileReader: onabort');
+        status.innerHTML = '<span class="error">⚠️ Lecture annulée</span>';
+      };
+
+      reader.readAsDataURL(file);
+    });
+  </script>
+</body>
+</html>

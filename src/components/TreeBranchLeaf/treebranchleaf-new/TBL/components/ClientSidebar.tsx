@@ -10,6 +10,7 @@ import {
   PhoneOutlined,
   HomeOutlined
 } from '@ant-design/icons';
+import DocumentsSection from '../../../../../components/Documents/DocumentsSection';
 
 const { Text } = Typography;
 
@@ -20,6 +21,8 @@ interface ClientSidebarProps {
     phone: string;
     address: string;
   };
+  submissionId?: string;
+  leadId?: string;
 }
 
 const ClientSidebar: React.FC<ClientSidebarProps> = ({ 
@@ -28,7 +31,9 @@ const ClientSidebar: React.FC<ClientSidebarProps> = ({
     email: "alice.dupont@example.com", 
     phone: "+32 477 12 34 56",
     address: "Rue des Fleurs 12, 1000 Bruxelles"
-  }
+  },
+  submissionId,
+  leadId
 }) => {
   // Données mockées (viendront des calculs TreeBranchLeaf)
   const stats = {
@@ -65,6 +70,12 @@ const ClientSidebar: React.FC<ClientSidebarProps> = ({
           </div>
         </Space>
       </Card>
+
+      {/* Documents - NOUVEAU */}
+      <DocumentsSection 
+        submissionId={submissionId}
+        leadId={leadId}
+      />
 
       {/* Résumé projet */}
       <Card title="Résumé du projet" className="shadow-sm">

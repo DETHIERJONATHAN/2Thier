@@ -36,6 +36,7 @@ import { useParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
 import { ClientSidebar } from './components/ClientSidebar';
+import DocumentsSection from '../../../Documents/DocumentsSection';
 import TBLSectionRenderer from './components/TBLSectionRenderer';
 import { useTBLDataPrismaComplete, type TBLField, type TBLSection } from './hooks/useTBLDataPrismaComplete';
 import { useTBLDataHierarchicalFixed } from './hooks/useTBLData-hierarchical-fixed';
@@ -118,6 +119,12 @@ const TBL: React.FC<TBLProps> = ({
   const [devisSelectorVisible, setDevisSelectorVisible] = useState(false);
   const [availableDevis, setAvailableDevis] = useState<Array<{id: string, firstName: string, lastName: string, email: string, company?: string, submissions: Array<{id: string, name: string, status: string, createdAt: string, treeName?: string}>}>>([]);
   const [devisSearchTerm, setDevisSearchTerm] = useState('');
+  
+  // États pour le modal de génération PDF
+  const [pdfModalVisible, setPdfModalVisible] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<Array<{id: string, name: string, type: string, description?: string}>>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   
   // États pour le modal de création de devis
   const [devisCreatorVisible, setDevisCreatorVisible] = useState(false);
@@ -1168,20 +1175,90 @@ const TBL: React.FC<TBLProps> = ({
     }
   };
 
-  // Générer le PDF
-  const handleGeneratePDF = () => {
-    // 🎯 DÉCLENCHER LA VALIDATION SIMPLE avant la génération PDF
-    startValidation();
+  // Générer le PDF - Ouvrir le modal de sélection de template
+  const handleGeneratePDF = async () => {
+    // Vérifier qu'on a un client sélectionné
+    if (!clientData.id) {
+      message.warning('Veuillez d\'abord sélectionner un client');
+      return;
+    }
     
-    console.log('🎯 VALIDATION PDF DÉCLENCHÉE !');
+    // Vérifier qu'on a une submission
+    if (!submissionId) {
+      message.warning('Veuillez d\'abord sauvegarder le devis');
+      return;
+    }
     
-    message.info('Génération PDF - Validation en cours...');
-    
-    // Arrêter la validation après un délai
-    setTimeout(() => {
-      stopValidation();
-      message.success('Validation terminée');
-    }, 3000);
+    // Charger les templates disponibles pour cet arbre
+    try {
+      setLoadingTemplates(true);
+      setPdfModalVisible(true);
+      
+      const effectiveTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
+      const response = await api.get(`/api/documents/templates?treeId=${effectiveTreeId}&isActive=true`);
+      
+      const templates = Array.isArray(response) ? response : (response?.data || []);
+      setAvailableTemplates(templates);
+      
+      if (templates.length === 0) {
+        message.info('Aucun template de document disponible pour cet arbre');
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement templates:', error);
+      message.error('Erreur lors du chargement des templates');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+  
+  // Générer le PDF avec un template spécifique
+  const handleGeneratePDFWithTemplate = async (templateId: string) => {
+    try {
+      setGeneratingPdf(true);
+      
+      // Préparer les données du document
+      const documentData = {
+        templateId,
+        submissionId,
+        leadId: clientData.id,
+        // Données du formulaire TBL
+        tblData: formData,
+        // Données du client
+        lead: {
+          firstName: clientData.name.split(' ')[0] || '',
+          lastName: clientData.name.split(' ').slice(1).join(' ') || '',
+          email: clientData.email,
+          phone: clientData.phone,
+          address: clientData.address,
+          company: clientData.name,
+        },
+      };
+      
+      console.log('📄 [TBL] Génération PDF avec:', documentData);
+      
+      const response = await api.post('/api/documents/generated/generate', documentData);
+      
+      if (response?.id) {
+        message.success('Document généré avec succès !');
+        setPdfModalVisible(false);
+        
+        // Ouvrir le PDF directement dans un nouvel onglet
+        const pdfUrl = `/api/documents/generated/${response.id}/download`;
+        console.log('📄 [TBL] Ouverture du PDF:', pdfUrl);
+        window.open(pdfUrl, '_blank');
+        
+        // Émettre un événement pour rafraîchir la liste des documents
+        window.dispatchEvent(new CustomEvent('document-generated', { detail: { documentId: response.id } }));
+      } else {
+        message.success('Document créé ! La génération PDF est en cours...');
+        setPdfModalVisible(false);
+      }
+    } catch (error: any) {
+      console.error('❌ Erreur génération PDF:', error);
+      message.error(error?.response?.data?.error || 'Erreur lors de la génération du document');
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   // Charger un devis existant
@@ -1522,8 +1599,8 @@ const TBL: React.FC<TBLProps> = ({
                   id: lead.id,
                   name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
                   email: lead.email || '',
-                  phone: lead.phone || '',
-                  address: lead.data?.address || ''
+                  phone: lead.phone || lead.phoneNumber || lead.phoneHome || '',
+                  address: lead.address || lead.data?.address || ''
                 };
                 setClientData(newClientData);
               }
@@ -1728,18 +1805,37 @@ const TBL: React.FC<TBLProps> = ({
       // Indicateur de chargement
       message.loading('Chargement du devis...', 0.5);
       
-      // Si un lead est fourni, mettre à jour les données client
-      if (leadData) {
-        const newClientData = {
-          id: leadData.id,
-          name: `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || 'Lead sans nom',
-          email: leadData.email || '',
-          phone: '', 
-          address: '' 
-        };
-        setClientData(newClientData);
-        setLeadId(leadData.id);
-        // console.log('🔍 [TBL] Client mis à jour:', newClientData);
+      // Si un lead est fourni, charger ses données complètes depuis l'API
+      if (leadData?.id) {
+        try {
+          const response = await api.get(`/api/leads/${leadData.id}`);
+          const lead = response.success ? response.data : response;
+          
+          if (lead && lead.id) {
+            const newClientData = {
+              id: lead.id,
+              name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead sans nom',
+              email: lead.email || '',
+              phone: lead.phone || lead.phoneNumber || lead.phoneHome || '',
+              address: lead.address || lead.data?.address || ''
+            };
+            setClientData(newClientData);
+            setLeadId(lead.id);
+            // console.log('🔍 [TBL] Client mis à jour avec données complètes:', newClientData);
+          }
+        } catch (error) {
+          console.warn('⚠️ [TBL] Impossible de charger les données complètes du lead:', error);
+          // Fallback: utiliser les données partielles fournies
+          const newClientData = {
+            id: leadData.id,
+            name: `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || 'Lead sans nom',
+            email: leadData.email || '',
+            phone: '', 
+            address: '' 
+          };
+          setClientData(newClientData);
+          setLeadId(leadData.id);
+        }
       }
       
       // Charger les données du devis sélectionné
@@ -2062,6 +2158,14 @@ const TBL: React.FC<TBLProps> = ({
                               <Text strong className="text-base">{clientData.address || 'Non renseigné'}</Text>
                             </div>
                           </div>
+                        </div>
+                        
+                        {/* Section Documents */}
+                        <div className="mt-6">
+                          <DocumentsSection 
+                            submissionId={submissionId}
+                            leadId={leadId}
+                          />
                         </div>
                       </Card>
                     )
@@ -2674,6 +2778,84 @@ const TBL: React.FC<TBLProps> = ({
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Modal de génération PDF */}
+      <Modal
+        title="📄 Générer un document"
+        open={pdfModalVisible}
+        onCancel={() => setPdfModalVisible(false)}
+        footer={null}
+        width={isMobile ? 360 : 600}
+      >
+        <div className="space-y-4">
+          {/* Info client */}
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-2 mb-2">
+              <UserOutlined className="text-blue-600" />
+              <span className="font-medium text-blue-900">Client : {clientData.name}</span>
+            </div>
+            <div className="text-sm text-blue-700">
+              {clientData.email && <div>✉️ {clientData.email}</div>}
+              {clientData.phone && <div>📞 {clientData.phone}</div>}
+            </div>
+          </div>
+          
+          {/* Liste des templates */}
+          {loadingTemplates ? (
+            <div className="text-center py-8">
+              <Spin tip="Chargement des templates..." />
+            </div>
+          ) : availableTemplates.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FileTextOutlined style={{ fontSize: '48px', marginBottom: '16px', display: 'block' }} />
+              <p>Aucun template disponible pour cet arbre</p>
+              <p className="text-sm">Contactez l'administrateur pour en ajouter</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600 mb-3">
+                Sélectionnez le type de document à générer :
+              </p>
+              {availableTemplates.map((template) => (
+                <Card
+                  key={template.id}
+                  hoverable
+                  className="cursor-pointer border-2 hover:border-blue-400 transition-colors"
+                  onClick={() => !generatingPdf && handleGeneratePDFWithTemplate(template.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">
+                        {template.type === 'QUOTE' && '📋'}
+                        {template.type === 'INVOICE' && '🧾'}
+                        {template.type === 'CONTRACT' && '📝'}
+                        {template.type === 'ORDER' && '📦'}
+                        {template.type === 'PRESENTATION' && '📊'}
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{template.name}</div>
+                        {template.description && (
+                          <div className="text-sm text-gray-500">{template.description}</div>
+                        )}
+                      </div>
+                    </div>
+                    <Button 
+                      type="primary" 
+                      loading={generatingPdf}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGeneratePDFWithTemplate(template.id);
+                      }}
+                    >
+                      Générer
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </Modal>
     </Layout>
     </TBLValidationProvider>

@@ -37,6 +37,49 @@ const getCategoryColor = (category: string): string => {
   return colors[category.toLowerCase()] || '#8c8c8c';
 };
 
+// Variables prédéfinies pour les données Client/Lead
+const LEAD_VARIABLES = [
+  { key: 'lead.firstName', label: 'Prénom', icon: '👤' },
+  { key: 'lead.lastName', label: 'Nom', icon: '👤' },
+  { key: 'lead.fullName', label: 'Nom complet', icon: '👤' },
+  { key: 'lead.email', label: 'Email', icon: '📧' },
+  { key: 'lead.phone', label: 'Téléphone', icon: '📞' },
+  { key: 'lead.mobile', label: 'Mobile', icon: '📱' },
+  { key: 'lead.company', label: 'Société', icon: '🏢' },
+  { key: 'lead.vatNumber', label: 'N° TVA', icon: '🧾' },
+  { key: 'lead.address', label: 'Adresse', icon: '📍' },
+  { key: 'lead.street', label: 'Rue', icon: '🛤️' },
+  { key: 'lead.number', label: 'Numéro', icon: '🔢' },
+  { key: 'lead.box', label: 'Boîte', icon: '📦' },
+  { key: 'lead.postalCode', label: 'Code postal', icon: '📮' },
+  { key: 'lead.city', label: 'Ville', icon: '🏙️' },
+  { key: 'lead.country', label: 'Pays', icon: '🌍' },
+  { key: 'lead.notes', label: 'Notes', icon: '📝' },
+];
+
+// Variables prédéfinies pour les données Devis
+const QUOTE_VARIABLES = [
+  { key: 'quote.number', label: 'N° de devis', icon: '📄' },
+  { key: 'quote.date', label: 'Date', icon: '📅' },
+  { key: 'quote.validUntil', label: 'Validité', icon: '⏰' },
+  { key: 'quote.totalHT', label: 'Total HT', icon: '💰' },
+  { key: 'quote.totalTVA', label: 'Total TVA', icon: '💶' },
+  { key: 'quote.totalTTC', label: 'Total TTC', icon: '💵' },
+  { key: 'quote.status', label: 'Statut', icon: '📊' },
+  { key: 'quote.reference', label: 'Référence', icon: '🔖' },
+];
+
+// Variables prédéfinies pour les données Organisation
+const ORG_VARIABLES = [
+  { key: 'org.name', label: 'Nom société', icon: '🏛️' },
+  { key: 'org.email', label: 'Email', icon: '📧' },
+  { key: 'org.phone', label: 'Téléphone', icon: '📞' },
+  { key: 'org.address', label: 'Adresse complète', icon: '📍' },
+  { key: 'org.vatNumber', label: 'N° TVA', icon: '🧾' },
+  { key: 'org.bankAccount', label: 'Compte bancaire', icon: '🏦' },
+  { key: 'org.website', label: 'Site web', icon: '🌐' },
+];
+
 const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, selectionContext = 'token', allowMulti = false }) => {
   const { api } = useAuthenticatedApi();
   const [nodes, setNodes] = useState<NodeLite[]>([]);
@@ -48,6 +91,9 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
   const [formulaSearch, setFormulaSearch] = useState('');
   const [nodeFormulas, setNodeFormulas] = useState<Array<{ id: string; name: string; tokens?: string[] }>>([]);
   const [allNodeFormulas, setAllNodeFormulas] = useState<Array<{ id: string; name: string; tokens?: string[]; nodeLabel?: string; nodeId?: string }>>([]);
+  
+  // État pour l'onglet actif (système de tabs personnalisé) - commence sur Client
+  const [activeTab, setActiveTab] = useState<string>('client');
   
   // États pour les conditions réutilisables
   const [conditionsLoading, setConditionsLoading] = useState(false);
@@ -350,6 +396,15 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
 
   const handleOk = () => {
     if (!value || (Array.isArray(value) && value.length === 0)) return onClose();
+    
+    // 🆕 Cas variables prédéfinies Client/Devis/Organisation (format {lead.xxx}, {quote.xxx}, {org.xxx})
+    if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+      // C'est une variable prédéfinie, on la retourne directement comme référence
+      onSelect({ kind: 'node', ref: value });
+      onClose();
+      return;
+    }
+    
     // Mode ALORS (SHOW) → toujours id de nœud via @value.{id} pour compat (pas de multi)
     if (selectionContext === 'nodeId') {
       if (Array.isArray(value)) {
@@ -417,14 +472,230 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
       onOk={handleOk}
       okText="Sélectionner"
       okButtonProps={{ disabled: !value, loading }}
+      className="node-tree-selector-modal"
+      width={700}
     >
       <Space direction="vertical" style={{ width: '100%' }}>
         {error && (
           <Alert type="error" showIcon message={error} style={{ marginBottom: 8 }} />
         )}
+        {/* Barre d'onglets avec scroll horizontal drag-to-scroll */}
+        <style>{`
+          .node-tree-tabs-scroll-container::-webkit-scrollbar {
+            height: 6px;
+          }
+          .node-tree-tabs-scroll-container::-webkit-scrollbar-track {
+            background: #f0f0f0;
+            border-radius: 3px;
+          }
+          .node-tree-tabs-scroll-container::-webkit-scrollbar-thumb {
+            background: #bfbfbf;
+            border-radius: 3px;
+          }
+          .node-tree-tabs-scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #999;
+          }
+          .node-tree-tabs-scroll-container .ant-tabs-nav-list {
+            gap: 4px;
+          }
+          .node-tree-tabs-scroll-container .ant-tabs-tab {
+            padding: 6px 12px !important;
+            margin: 0 !important;
+            border: 1px solid #d9d9d9 !important;
+            border-radius: 6px !important;
+            background: #fafafa !important;
+            transition: all 0.2s ease !important;
+          }
+          .node-tree-tabs-scroll-container .ant-tabs-tab:hover {
+            border-color: #1890ff !important;
+            color: #1890ff !important;
+          }
+          .node-tree-tabs-scroll-container .ant-tabs-tab-active {
+            background: #e6f4ff !important;
+            border-color: #1890ff !important;
+          }
+          .node-tree-tabs-scroll-container .ant-tabs-ink-bar {
+            display: none !important;
+          }
+        `}</style>
         <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key)}
+          renderTabBar={(props, DefaultTabBar) => (
+            <div 
+              className="node-tree-tabs-scroll-container"
+              style={{
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'thin',
+                cursor: 'grab',
+              }}
+              onMouseDown={(e) => {
+                // Ne pas déclencher le drag si on clique sur un onglet
+                if ((e.target as HTMLElement).closest('.ant-tabs-tab')) return;
+                
+                const container = e.currentTarget;
+                const startX = e.pageX;
+                const scrollLeftStart = container.scrollLeft;
+                container.style.cursor = 'grabbing';
+                
+                const onMouseMove = (moveE: MouseEvent) => {
+                  const walk = (moveE.pageX - startX) * 1.5;
+                  container.scrollLeft = scrollLeftStart - walk;
+                };
+                
+                const onMouseUp = () => {
+                  container.style.cursor = 'grab';
+                  document.removeEventListener('mousemove', onMouseMove);
+                  document.removeEventListener('mouseup', onMouseUp);
+                };
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+              }}
+            >
+              <DefaultTabBar {...props} style={{ margin: 0, minWidth: 'max-content' }} />
+            </div>
+          )}
           items={[
-            { key: 'nodes', label: 'Champs & Options', children: (
+            // ===== DONNÉES CLIENT =====
+            { key: 'client', label: '👤 Client', children: (
+              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+                  Sélectionnez une donnée du client/lead pour l'insérer
+                </Typography.Text>
+                <List
+                  size="small"
+                  bordered
+                  dataSource={LEAD_VARIABLES}
+                  renderItem={(item) => {
+                    const isSelected = value === `{${item.key}}`;
+                    return (
+                      <List.Item
+                        onClick={() => setValue(`{${item.key}}`)}
+                        style={{ 
+                          cursor: 'pointer', 
+                          backgroundColor: isSelected ? '#1890ff' : undefined,
+                          color: isSelected ? 'white' : undefined,
+                          padding: '8px 12px',
+                        }}
+                      >
+                        <Space>
+                          <span>{item.icon}</span>
+                          <Typography.Text style={{ color: isSelected ? 'white' : undefined }}>
+                            {item.label}
+                          </Typography.Text>
+                          <Typography.Text 
+                            type="secondary" 
+                            style={{ 
+                              fontSize: 11, 
+                              fontFamily: 'monospace',
+                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999'
+                            }}
+                          >
+                            {`{${item.key}}`}
+                          </Typography.Text>
+                          {isSelected && <span>✓</span>}
+                        </Space>
+                      </List.Item>
+                    );
+                  }}
+                />
+              </div>
+            )},
+            // ===== DONNÉES DEVIS =====
+            { key: 'devis', label: '📄 Devis', children: (
+              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+                  Sélectionnez une donnée du devis pour l'insérer
+                </Typography.Text>
+                <List
+                  size="small"
+                  bordered
+                  dataSource={QUOTE_VARIABLES}
+                  renderItem={(item) => {
+                    const isSelected = value === `{${item.key}}`;
+                    return (
+                      <List.Item
+                        onClick={() => setValue(`{${item.key}}`)}
+                        style={{ 
+                          cursor: 'pointer', 
+                          backgroundColor: isSelected ? '#52c41a' : undefined,
+                          color: isSelected ? 'white' : undefined,
+                          padding: '8px 12px',
+                        }}
+                      >
+                        <Space>
+                          <span>{item.icon}</span>
+                          <Typography.Text style={{ color: isSelected ? 'white' : undefined }}>
+                            {item.label}
+                          </Typography.Text>
+                          <Typography.Text 
+                            type="secondary" 
+                            style={{ 
+                              fontSize: 11, 
+                              fontFamily: 'monospace',
+                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999'
+                            }}
+                          >
+                            {`{${item.key}}`}
+                          </Typography.Text>
+                          {isSelected && <span>✓</span>}
+                        </Space>
+                      </List.Item>
+                    );
+                  }}
+                />
+              </div>
+            )},
+            // ===== DONNÉES ORGANISATION =====
+            { key: 'organisation', label: '🏛️ Société', children: (
+              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+                  Sélectionnez une donnée de votre société pour l'insérer
+                </Typography.Text>
+                <List
+                  size="small"
+                  bordered
+                  dataSource={ORG_VARIABLES}
+                  renderItem={(item) => {
+                    const isSelected = value === `{${item.key}}`;
+                    return (
+                      <List.Item
+                        onClick={() => setValue(`{${item.key}}`)}
+                        style={{ 
+                          cursor: 'pointer', 
+                          backgroundColor: isSelected ? '#722ed1' : undefined,
+                          color: isSelected ? 'white' : undefined,
+                          padding: '8px 12px',
+                        }}
+                      >
+                        <Space>
+                          <span>{item.icon}</span>
+                          <Typography.Text style={{ color: isSelected ? 'white' : undefined }}>
+                            {item.label}
+                          </Typography.Text>
+                          <Typography.Text 
+                            type="secondary" 
+                            style={{ 
+                              fontSize: 11, 
+                              fontFamily: 'monospace',
+                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999'
+                            }}
+                          >
+                            {`{${item.key}}`}
+                          </Typography.Text>
+                          {isSelected && <span>✓</span>}
+                        </Space>
+                      </List.Item>
+                    );
+                  }}
+                />
+              </div>
+            )},
+            // ===== DONNÉES TBL (Champs & Options) =====
+            { key: 'nodes', label: '📋 Champs TBL', children: (
               <div>
                 {loading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -441,7 +712,6 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                       placeholder="Choisissez un nœud"
                       value={value}
                       onChange={(v) => setValue(v)}
-                      // Replié par défaut (ne pas utiliser treeDefaultExpandAll)
                       showSearch
                       treeLine
                       treeIcon={false}
@@ -449,11 +719,11 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                     />
                     {(() => {
                       if (!value) return null;
-                      if (Array.isArray(value)) return null; // pas d'interrupteur en multi
+                      if (Array.isArray(value)) return null;
                       const n = nodesById[value];
                       if (!n) return null;
-                      if (selectionContext === 'nodeId') return null; // pas de choix en mode ALORS
-                      if (String(value).includes('::')) return null; // sous-entrée virtuelle déjà explicite
+                      if (selectionContext === 'nodeId') return null;
+                      if (String(value).includes('::')) return null;
                       const isCombined = n.type === 'leaf_option_field';
                       const isOptionOnly = n.type === 'leaf_option';
                       const isFieldOnly = n.type === 'leaf_field';
@@ -484,7 +754,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                 )}
               </div>
             )},
-            { key: 'formulas', label: 'Formules (réutilisables)', children: (
+            { key: 'formulas', label: '🧮 Formules', children: (
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
                 <Input
                   size="small"
@@ -597,7 +867,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                 )}
               </Space>
             )},
-            { key: 'conditions', label: 'Conditions (réutilisables)', children: (
+            { key: 'conditions', label: '⚡ Conditions', children: (
               <Space direction="vertical" style={{ width: '100%' }}>
                 {/* Recherche dans les conditions */}
                 <Input.Search
@@ -707,7 +977,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                 )}
               </Space>
             )},
-            { key: 'tables', label: 'Tables (réutilisables)', children: (
+            { key: 'tables', label: '📊 Tables', children: (
               <Space direction="vertical" style={{ width: '100%' }}>
                 {/* Recherche dans les tables */}
                 <Input.Search

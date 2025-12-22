@@ -48,6 +48,54 @@ const upload = multer({
   }
 });
 
+// POST - Upload simple pour documents (sans websiteId requis)
+router.post('/upload', upload.single('file'), async (req: any, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Aucun fichier fourni'
+      });
+    }
+
+    console.log('📸 [IMAGE-UPLOAD] Fichier reçu:', {
+      originalName: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      filename: req.file.filename
+    });
+
+    // Construire l'URL publique
+    const fileUrl = `/uploads/websites/${req.file.filename}`;
+    const fullUrl = `http://localhost:4000${fileUrl}`;
+
+    console.log('📸 ✅ Upload réussi:', {
+      fileName: req.file.originalname,
+      url: fullUrl,
+      size: `${(req.file.size / 1024).toFixed(2)} KB`
+    });
+
+    res.json({
+      success: true,
+      message: 'Image uploadée avec succès',
+      url: fullUrl, // URL complète utilisable dans le frontend
+      fileUrl, // Chemin relatif
+      file: {
+        fileName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      }
+    });
+  } catch (error) {
+    console.error('❌ [IMAGE-UPLOAD] Erreur:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'upload',
+      error: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+  }
+});
+
 // POST - Upload une image
 router.post('/upload-image', upload.single('image'), async (req: any, res) => {
   try {

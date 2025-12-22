@@ -1505,3 +1505,111 @@
 /* Couleurs par type: conserver mais sans hover accentué */
 .form-builder-compact .palette-field-item[data-type="radio"] { border-color: #f59e0b !important; }
 .form-builder-compact .palette-field-item[data-type="checkboxes"]
+
+/* =====================================================
+   NodeTreeSelector - VRAI scroll horizontal avec drag
+   ===================================================== */
+
+/* Container des onglets */
+.node-tree-selector-modal .ant-tabs > .ant-tabs-nav {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+}
+
+/* FORCER le vrai scroll horizontal - c'est la clé ! */
+.node-tree-selector-modal .ant-tabs > .ant-tabs-nav .ant-tabs-nav-wrap {
+  flex: 1 1 0 !important;
+  overflow-x: scroll !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important; /* Smooth scroll iOS */
+  scrollbar-width: thin !important; /* Firefox */
+  scroll-behavior: smooth !important;
+  cursor: grab !important;
+}
+
+.node-tree-selector-modal .ant-tabs > .ant-tabs-nav .ant-tabs-nav-wrap:active {
+  cursor: grabbing !important;
+}
+
+/* Scrollbar visible et stylée */
+.node-tree-selector-modal .ant-tabs-nav-wrap::-webkit-scrollbar {
+  height: 6px !important;
+  display: block !important;
+}
+
+.node-tree-selector-modal .ant-tabs-nav-wrap::-webkit-scrollbar-track {
+  background: #f0f0f0 !important;
+  border-radius: 3px !important;
+}
+
+.node-tree-selector-modal .ant-tabs-nav-wrap::-webkit-scrollbar-thumb {
+  background: #bfbfbf !important;
+  border-radius: 3px !important;
+}
+
+.node-tree-selector-modal .ant-tabs-nav-wrap::-webkit-scrollbar-thumb:hover {
+  background: #8c8c8c !important;
+}
+
+/* DÉSACTIVER les masques/ombres qui bloquent le scroll */
+.node-tree-selector-modal .ant-tabs-nav-wrap::before,
+.node-tree-selector-modal .ant-tabs-nav-wrap::after {
+  display: none !important;
+  content: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Liste des onglets - NE PAS utiliser transform, juste flex */
+.node-tree-selector-modal .ant-tabs-nav-list {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  transform: none !important; /* Désactiver le transform Ant Design */
+  position: relative !important;
+}
+
+/* Chaque onglet - compact et non-shrinkable */
+.node-tree-selector-modal .ant-tabs-tab {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  padding: 6px 12px !important;
+  margin: 0 2px !important;
+  font-size: 13px !important;
+}
+
+/* Cacher le bouton "more" car on a le scroll maintenant */
+.node-tree-selector-modal .ant-tabs-nav-operations {
+  display: none !important;
+}
+
+/* OU si on veut garder le bouton more visible */
+/*
+.node-tree-selector-modal .ant-tabs-nav-more {
+  padding: 0 8px !important;
+  background: #fafafa !important;
+  border: 1px solid #d9d9d9 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+}
+*/
+
+/* Dropdown menu des onglets (si affiché) */
+.ant-tabs-dropdown {
+  z-index: 1100 !important;
+}
+
+.ant-tabs-dropdown .ant-tabs-dropdown-menu {
+  max-height: 400px !important;
+  overflow-y: auto !important;
+  background: white !important;
+  border-radius: 8px !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
+}
+
+.ant-tabs-dropdown .ant-tabs-dropdown-menu-item {
+  padding: 10px 16px !important;
+}
+
+.ant-tabs-dropdown .ant-tabs-dropdown-menu-item:hover {
+  background: #f0f5ff !important;
+}

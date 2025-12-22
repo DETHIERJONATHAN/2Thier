@@ -38,6 +38,9 @@ import aiRouter from './api/ai'; // 🤖 GEMINI AI (optimisation, suggestions)
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION INTELLIGENTE DE CONTENU
 import createRepeatRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes';
 
+// 📄 ROUTES GESTION DOCUMENTS PDF
+import documentsRouter from './routes/documents'; // 📄 TEMPLATES DE DOCUMENTS (ADMIN)
+
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
 import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
 import { renderWebsite } from './middleware/websiteRenderer';
@@ -191,10 +194,21 @@ app.use(session({
 
 console.log('✅ [ENTERPRISE-SECURITY] Configuration sécurité niveau Enterprise activée');
 
-// 📸 Servir les fichiers uploadés en statique
+// 📸 Servir les fichiers uploadés en statique avec CORS
 const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
-app.use('/uploads', express.static(uploadsDir));
-console.log('📸 [UPLOADS] Dossier uploads configuré:', uploadsDir);
+app.use('/uploads', (req, res, next) => {
+  // Headers CORS pour autoriser l'affichage des images
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(uploadsDir, {
+  maxAge: '1h', // Cache 1 heure
+  etag: true,
+  lastModified: true
+}));
+console.log('📸 [UPLOADS] Dossier uploads configuré avec CORS:', uploadsDir);
 
 // Configuration Passport
 console.log('🔧 [API-SERVER-CLEAN] Configuration Passport...');
@@ -217,7 +231,8 @@ app.use('/api/ai-content', aiContentRouter); // 🤖 GÉNÉRATION CONTENU IA (Ge
 app.use('/api/ai', aiFieldGeneratorRouter); // 🤖 IA GÉNÉRATION INTELLIGENTE (generate-field, status)
 app.use('/api/ai', aiRouter); // 🤖 GEMINI AI (suggestions, optimisations)
 app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
-app.use('/api', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
+app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
+app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
 app.use('/api/treebranchleaf', tableRoutesNewRouter); // 📊 ROUTES TABLES NORMALISÉES

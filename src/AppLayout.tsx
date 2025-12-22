@@ -94,6 +94,9 @@ const OrganizationSettings = lazy(() => import('./pages/settings/OrganizationSet
 const ProfileSettings = lazy(() => import('./pages/settings/ProfileSettings'));
 const EmailSettings = lazy(() => import('./pages/settings/EmailSettings'));
 
+// Pages Documents (Admin)
+const DocumentTemplatesPage = lazy(() => import('./pages/DocumentTemplatesPage'));
+
 // Pages diagnostics
 const FormulaDiagnosticPage = lazy(() => import('./pages/Diagnostics/FormulaDiagnosticPage'));
 const FormulaTestPage = lazy(() => import('./pages/Diagnostics/FormulaTestPage'));
@@ -215,6 +218,9 @@ export default function AppLayout() {
             
             {/* Admin - Gestion des sites web (Super Admin uniquement) */}
             {isSuperAdmin && <Route path="/admin/sites-web" element={<WebsitesAdminPage />} />}
+            
+            {/* Admin - Gestion des documents (Admin uniquement) */}
+            {isSuperAdmin && <Route path="/admin/documents" element={<DocumentTemplatesPage />} />}
             
             {/* Devis - Accessible si module présent ou super admin */}
             {(hasFeature('devis') || isSuperAdmin) && <Route path="/devis" element={<DevisPage />} />}
