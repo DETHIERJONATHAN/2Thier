@@ -2,7 +2,7 @@
  * 📑 PAGE TABS - Onglets de navigation entre les pages du document
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button, Input, Popconfirm, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, CopyOutlined } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -31,6 +31,15 @@ const PageTabs = ({
 }: PageTabsProps) => {
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  
+  // Détection mobile
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
@@ -74,21 +83,23 @@ const PageTabs = ({
     <div style={{
       backgroundColor: '#1f1f1f',
       borderBottom: '1px solid #333',
-      padding: '8px 16px',
+      padding: isMobile ? '6px 8px' : '8px 16px',
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
+      gap: isMobile ? '4px' : '8px',
     }}>
-      {/* Label */}
-      <div style={{ 
-        color: '#888', 
-        fontSize: '12px', 
-        fontWeight: 600,
-        marginRight: '8px',
-        whiteSpace: 'nowrap',
-      }}>
-        📄 PAGES
-      </div>
+      {/* Label - caché sur mobile */}
+      {!isMobile && (
+        <div style={{ 
+          color: '#888', 
+          fontSize: '12px', 
+          fontWeight: 600,
+          marginRight: '8px',
+          whiteSpace: 'nowrap',
+        }}>
+          📄 PAGES
+        </div>
+      )}
 
       {/* Tabs Container */}
       <DragDropContext onDragEnd={handleDragEnd}>
@@ -117,15 +128,15 @@ const PageTabs = ({
                         ...provided.draggableProps.style,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
-                        padding: '8px 12px',
+                        gap: isMobile ? '4px' : '6px',
+                        padding: isMobile ? '6px 8px' : '8px 12px',
                         borderRadius: '6px 6px 0 0',
                         backgroundColor: activePageId === page.id ? '#2d2d2d' : 'transparent',
                         borderBottom: activePageId === page.id ? '2px solid #1890ff' : '2px solid transparent',
                         color: activePageId === page.id ? '#fff' : '#aaa',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
-                        minWidth: '100px',
+                        minWidth: isMobile ? '60px' : '100px',
                         position: 'relative',
                         opacity: snapshot.isDragging ? 0.8 : 1,
                       }}
@@ -134,11 +145,11 @@ const PageTabs = ({
                       <span style={{
                         backgroundColor: activePageId === page.id ? '#1890ff' : '#444',
                         color: '#fff',
-                        fontSize: '10px',
+                        fontSize: isMobile ? '9px' : '10px',
                         fontWeight: 700,
-                        padding: '2px 6px',
+                        padding: isMobile ? '1px 4px' : '2px 6px',
                         borderRadius: '4px',
-                        minWidth: '20px',
+                        minWidth: isMobile ? '16px' : '20px',
                         textAlign: 'center',
                       }}>
                         {index + 1}
@@ -154,7 +165,7 @@ const PageTabs = ({
                           onKeyDown={handleKeyDown}
                           autoFocus
                           style={{
-                            width: '100px',
+                            width: isMobile ? '60px' : '100px',
                             height: '24px',
                             backgroundColor: '#333',
                             border: '1px solid #1890ff',
@@ -164,19 +175,19 @@ const PageTabs = ({
                         />
                       ) : (
                         <span style={{ 
-                          fontSize: '13px',
+                          fontSize: isMobile ? '11px' : '13px',
                           fontWeight: activePageId === page.id ? 600 : 400,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
-                          maxWidth: '120px',
+                          maxWidth: isMobile ? '40px' : '120px',
                         }}>
-                          {page.name}
+                          {isMobile ? `P${index + 1}` : page.name}
                         </span>
                       )}
 
-                      {/* Actions (visibles au survol ou si actif) */}
-                      {activePageId === page.id && (
+                      {/* Actions (visibles au survol ou si actif - cachées sur mobile) */}
+                      {activePageId === page.id && !isMobile && (
                         <div style={{
                           display: 'flex',
                           gap: '2px',
@@ -268,6 +279,8 @@ const PageTabs = ({
             backgroundColor: '#52c41a',
             borderColor: '#52c41a',
             borderRadius: '6px',
+            padding: isMobile ? '0 8px' : '0 12px',
+            fontSize: isMobile ? '11px' : '13px',
           }}
         >
           Page

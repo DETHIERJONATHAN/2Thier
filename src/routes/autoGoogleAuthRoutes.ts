@@ -9,6 +9,74 @@ const router = Router();
 type CachedConnectResult = { expiresAt: number; payload: Record<string, unknown> };
 const connectCache = new Map<string, CachedConnectResult>();
 
+// GET /api/auto-google-auth/status
+// Retourne le statut de connexion Google pour l'utilisateur/organisation
+router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  console.log('[ROUTE] /api/auto-google-auth/status atteint');
+  const { userId, organizationId } = req.query as { userId?: string; organizationId?: string };
+  
+  if (!userId || !organizationId) {
+    return res.json({
+      success: true,
+      data: {
+        connected: false,
+        email: null,
+        scopes: [],
+        lastSync: null,
+        error: !organizationId ? 'Organization ID requis' : 'User ID requis'
+      }
+    });
+  }
+
+  try {
+    // Vérifier si des tokens existent pour cette organisation
+    const tokens = await prisma.googleToken.findUnique({
+      where: { organizationId }
+    });
+
+    if (!tokens || !tokens.accessToken) {
+      return res.json({
+        success: true,
+        data: {
+          connected: false,
+          email: null,
+          scopes: tokens?.scope?.split(' ') || [],
+          lastSync: null
+        }
+      });
+    }
+
+    // Récupérer la config Google Workspace pour l'email admin
+    const gwConfig = await prisma.googleWorkspaceConfig.findUnique({
+      where: { organizationId }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        connected: true,
+        email: gwConfig?.adminEmail || null,
+        scopes: tokens.scope?.split(' ') || [],
+        lastSync: tokens.updatedAt || null,
+        expiresAt: tokens.expiresAt
+      }
+    });
+
+  } catch (error) {
+    console.error('[AutoGoogleAuth] Erreur status:', error);
+    return res.json({
+      success: true,
+      data: {
+        connected: false,
+        email: null,
+        scopes: [],
+        lastSync: null,
+        error: 'Erreur serveur'
+      }
+    });
+  }
+});
+
 // POST /api/auto-google-auth/connect
 // Tente de connecter l'utilisateur à Google Workspace en arrière-plan.
 // Si les tokens existent et sont valides (ou peuvent être rafraîchis), c'est transparent.

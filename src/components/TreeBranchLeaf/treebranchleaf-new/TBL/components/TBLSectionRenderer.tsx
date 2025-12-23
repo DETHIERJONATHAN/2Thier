@@ -23,7 +23,8 @@ import {
   Collapse,
   Grid,
   Button,
-  Form
+  Form,
+  Tooltip
 } from 'antd';
 import { 
   BranchesOutlined,
@@ -953,6 +954,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // 🔥 FORCE RETRANSFORM LISTENER: Listen for displayAlways updates
   const [, forceUpdate] = useState({});
+  
+  // 🎯 État pour ouvrir/fermer la section Données (bulles)
+  const [isDataSectionOpen, setIsDataSectionOpen] = useState(true);
   
   // 🚫 PROTECTION ANTI-DOUBLE-CLIC pour les boutons de répétition
   const [isRepeating, setIsRepeating] = useState<Record<string, boolean>>({});
@@ -4189,6 +4193,54 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // 🎯 Détection des champs "Total" pour style distinctif (teal foncé + texte blanc)
     const isTotalField = (field.label || '').toLowerCase().includes('total');
     
+    // 🎨 NOUVEAU: Système d'icônes pour les cartes de données
+    // L'icône peut être définie dans field.config.displayIcon ou field.metadata.displayIcon
+    // Sinon on détecte automatiquement selon le label
+    const getFieldIcon = (f: TBLField): string => {
+      const cfg = (f.config || {}) as Record<string, unknown>;
+      const meta = ((f as any).metadata || {}) as Record<string, unknown>;
+      
+      // 1. Icône explicitement configurée
+      if (cfg.displayIcon) return String(cfg.displayIcon);
+      if (meta.displayIcon) return String(meta.displayIcon);
+      
+      // 2. Auto-détection basée sur le label
+      const label = (f.label || '').toLowerCase();
+      
+      // Orientation / Angles
+      if (label.includes('orientation') || label.includes('inclinaison') || label.includes('angle')) return '🧭';
+      
+      // Longueurs / Distances
+      if (label.includes('longueur') || label.includes('distance') || label.includes('hauteur')) return '📏';
+      if (label.includes('rampant')) return '📐';
+      
+      // Surfaces
+      if (label.includes('m²') || label.includes('surface') || label.includes('aire')) return '⬜';
+      
+      // Toiture
+      if (label.includes('toiture') || label.includes('toit')) return '🏠';
+      
+      // Panneaux solaires
+      if (label.includes('panneau') || label.includes('module')) return '☀️';
+      
+      // Prix / Coûts
+      if (label.includes('prix') || label.includes('coût') || label.includes('€') || label.includes('total')) return '💰';
+      
+      // Quantités
+      if (label.includes('nombre') || label.includes('quantité') || label.includes('qty')) return '🔢';
+      
+      // Puissance / Énergie
+      if (label.includes('puissance') || label.includes('kwc') || label.includes('watt')) return '⚡';
+      
+      // Poids
+      if (label.includes('poids') || label.includes('kg') || label.includes('masse')) return '⚖️';
+      
+      // Par défaut
+      return '📊';
+    };
+    
+    const fieldIcon = getFieldIcon(field);
+    
     // Style de base
     let cardStyle = buildDisplayCardStyle(displayAppearance.tokens, displayAppearance.styleOverrides);
     let labelStyle = buildDisplayLabelStyle(displayAppearance.tokens);
@@ -4213,51 +4265,102 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       };
     }
     
-    const cardSize = displayAppearance.tokens.size === 'lg' ? 'default' : 'small';
-    const bodyPadding = `${displayAppearance.tokens.paddingY}px ${displayAppearance.tokens.paddingX}px`;
+    // 🎨 DESIGN MODERNE: Bulles rondes compactes
+    // Icône + Valeur seulement, label en tooltip
+    const bubbleSize = isTotalField ? 90 : 80; // px - plus petit pour mobile
     
-    // 🎨 Style du conteneur - force le texte blanc pour les champs Total
-    const containerStyle: React.CSSProperties = {
-      width: '100%',
-      textAlign: displayAppearance.tokens.align,
-      ...(isTotalField ? { color: '#ffffff', fontWeight: 700 } : {})
+    // 🔢 Détecter si c'est une copie (suffixe -1, -2, etc.)
+    const copyMatch = (field.id || '').match(/-(\d+)$/);
+    const copyNumber = copyMatch ? copyMatch[1] : null;
+    
+    // Style de la bulle
+    const bubbleStyle: React.CSSProperties = {
+      width: bubbleSize,
+      height: bubbleSize,
+      borderRadius: '50%',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: isTotalField 
+        ? 'linear-gradient(135deg, #0b5c6b 0%, #0d4f59 100%)'
+        : 'linear-gradient(135deg, #f0fdfa 0%, #e0f7f5 100%)',
+      border: isTotalField ? '2px solid #094d56' : '2px solid #99f6e4',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      cursor: 'default',
+      transition: 'all 0.2s ease',
+      margin: '0 auto',
+      position: 'relative',
+    };
+    
+    // 🔴 Badge rouge pour les copies
+    const copyBadgeStyle: React.CSSProperties = {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      width: 20,
+      height: 20,
+      borderRadius: '50%',
+      backgroundColor: '#ef4444',
+      color: '#ffffff',
+      fontSize: 11,
+      fontWeight: 700,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      border: '2px solid #ffffff',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+    };
+    
+    const iconStyle: React.CSSProperties = {
+      fontSize: isTotalField ? 24 : 22,
+      marginBottom: 2,
+      filter: isTotalField ? 'brightness(0) invert(1)' : 'none',
+    };
+    
+    const valueTextStyle: React.CSSProperties = {
+      fontSize: isTotalField ? 14 : 12,
+      fontWeight: 600,
+      color: isTotalField ? '#ffffff' : '#0d9488',
+      textAlign: 'center',
+      lineHeight: 1.2,
+      maxWidth: bubbleSize - 16,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
     };
     
     return (
-      <Col key={field.id} {...displayColProps}>
-        <Card
-          size={cardSize}
-          style={cardStyle}
-          styles={{ body: { padding: bodyPadding } }}
-        >
-          <div style={containerStyle}>
-            <Text style={labelStyle}>
-              {field.label}
-            </Text>
+      <Col key={field.id} xs={8} sm={6} md={4} lg={4} xl={3} style={{ marginBottom: 12 }}>
+        <Tooltip title={field.label} placement="top">
+          <div 
+            style={bubbleStyle}
+            className="hover:shadow-lg hover:scale-105"
+          >
+            {/* 🔴 Badge numéro de copie */}
+            {copyNumber && (
+              <span style={copyBadgeStyle}>{copyNumber}</span>
+            )}
+            <span style={iconStyle}>{fieldIcon}</span>
             {(() => {
               const displayValue = getDisplayValue();
-              console.log(`✅ [RENDER DATA FIELD] Fin renderDataSectionField pour: "${field.label}" - displayValue:`, displayValue);
 
               if (React.isValidElement(displayValue)) {
                 return (
-                  <div style={{ width: '100%', ...(isTotalField ? { color: '#ffffff', fontWeight: 700 } : {}) }}>
+                  <div style={valueTextStyle}>
                     {displayValue}
                   </div>
                 );
               }
 
-              // 🎯 NOUVEAU SYSTÈME ULTRA-SIMPLE:
-              // BackendValueDisplay retourne juste la valeur (string ou Fragment avec string)
-              // La carte bleue ENVELOPPE TOUJOURS dans un <Text> avec le bon style
-
               return (
-                <Text style={valueStyle}>
+                <span style={valueTextStyle}>
                   {displayValue ?? '---'}
-                </Text>
+                </span>
               );
             })()}
           </div>
-        </Card>
+        </Tooltip>
       </Col>
     );
   };
@@ -4284,20 +4387,34 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         {/* En-tête de section (seulement pour les sous-sections, pas le niveau racine) */}
         {level > 0 && (
           <div className="mb-4">
-            {/* Style spécial pour section "Données" */}
+            {/* Style spécial pour section "Données" avec toggle ouvrir/fermer */}
             {section.title === 'Données' || section.title.includes('Données') ? (
               <div 
+                onClick={() => setIsDataSectionOpen(!isDataSectionOpen)}
                 style={{
                   background: 'linear-gradient(135deg, #14b8a6 0%, #0891b2 100%)',
                   color: 'white',
-                  padding: '12px 16px',
+                  padding: '10px 16px',
                   borderRadius: '8px',
-                  marginBottom: '16px'
+                  marginBottom: isDataSectionOpen ? '16px' : '0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.2s ease',
                 }}
+                className="hover:opacity-90"
               >
                 <Text strong style={{ color: 'white', fontSize: '16px' }}>
                   {section.title}
                 </Text>
+                <span style={{ 
+                  fontSize: 18, 
+                  transition: 'transform 0.2s ease',
+                  transform: isDataSectionOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                }}>
+                  ▼
+                </span>
               </div>
             ) : (
               <div className="flex justify-between items-start">
@@ -4326,25 +4443,61 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           <>
             {/* Style spécial pour les champs des sections données */}
             {(section.isDataSection || section.title === 'Données' || section.title.includes('Données')) ? (
-              <div style={{ marginBottom: '16px' }}>
-                <Row gutter={getDataRowGutter(section)} justify="center">
-                  {(() => {
-                    const filteredFields = orderedFields.filter(field => {
-                      const meta = (field.metadata || {}) as any;
-                      const sourceTemplateId = meta?.sourceTemplateId;
-                      const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
-                      const isPhysicalRepeaterCopy = Boolean(meta?.duplicatedFromRepeater);
-                      const isRepeaterVariant = Boolean((field as any).parentRepeaterId) || (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId));
-                      
-                      // 🎯 DEBUG SPÉCIAL PANNEAU
-                      const isPanneauField = field.label?.includes('Panneau') || field.label?.includes('panneau');
-                      if (isPanneauField) {
-                        console.log(`🎯🎯🎯 [PANNEAU FILTER DEBUG] Champ Panneau dans filtrage DATA SECTION:`, {
-                          label: field.label,
-                          id: field.id,
-                          sourceTemplateId,
-                          fieldParentId,
-                          isPhysicalRepeaterCopy,
+              <>
+                {/* 🎯 Flèche simple pour ouvrir/fermer les bulles */}
+                <div 
+                  onClick={() => setIsDataSectionOpen(!isDataSectionOpen)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    padding: '4px 8px',
+                    marginBottom: isDataSectionOpen ? '8px' : '0',
+                    borderRadius: '4px',
+                    transition: 'all 0.2s ease',
+                    userSelect: 'none',
+                    color: '#0d9488',
+                    fontSize: 13,
+                  }}
+                  className="hover:bg-gray-100"
+                >
+                  <span style={{ 
+                    transition: 'transform 0.2s ease',
+                    transform: isDataSectionOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    fontSize: 12,
+                  }}>
+                    ▼
+                  </span>
+                  <span style={{ fontWeight: 500 }}>Données</span>
+                </div>
+                
+                {/* Contenu des bulles avec animation */}
+                <div style={{ 
+                  overflow: 'hidden',
+                  maxHeight: isDataSectionOpen ? '2000px' : '0',
+                  opacity: isDataSectionOpen ? 1 : 0,
+                  transition: 'all 0.3s ease-in-out',
+                  marginBottom: isDataSectionOpen ? '16px' : '0',
+                }}>
+                  <Row gutter={getDataRowGutter(section)} justify="center">
+                    {(() => {
+                      const filteredFields = orderedFields.filter(field => {
+                        const meta = (field.metadata || {}) as any;
+                        const sourceTemplateId = meta?.sourceTemplateId;
+                        const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
+                        const isPhysicalRepeaterCopy = Boolean(meta?.duplicatedFromRepeater);
+                        const isRepeaterVariant = Boolean((field as any).parentRepeaterId) || (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId));
+                        
+                        // 🎯 DEBUG SPÉCIAL PANNEAU
+                        const isPanneauField = field.label?.includes('Panneau') || field.label?.includes('panneau');
+                        if (isPanneauField) {
+                          console.log(`🎯🎯🎯 [PANNEAU FILTER DEBUG] Champ Panneau dans filtrage DATA SECTION:`, {
+                            label: field.label,
+                            id: field.id,
+                            sourceTemplateId,
+                            fieldParentId,
+                            isPhysicalRepeaterCopy,
                           isRepeaterVariant,
                           duplicatedFromRepeater: meta?.duplicatedFromRepeater,
                           willBeExcluded: isRepeaterVariant && !isPhysicalRepeaterCopy
@@ -4376,8 +4529,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       return elements.concat(groupElements);
                     }, []);
                   })()}
-                </Row>
-              </div>
+                  </Row>
+                </div>
+              </>
             ) : visibilityFilteredFields.length > 0 ? (
               <Row gutter={getFormRowGutter(section)} className="tbl-form-row">
                 {(() => {

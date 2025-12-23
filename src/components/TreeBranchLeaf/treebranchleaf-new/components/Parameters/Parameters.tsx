@@ -1418,10 +1418,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       size="small"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Barre d'actions rapides */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          {/* Actions Références partagées */}
-          <Space size={6}>
+        {/* Barre d'actions rapides - responsive */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Actions Références partagées - wrap sur mobile */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             <Tooltip title="Appliquer les références partagées depuis le gabarit original sur cette copie (crée/associe les copies -1)">
               <Button
                 size="small"
@@ -1439,8 +1439,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 }}
                 loading={applyingSharedRefs}
                 disabled={!selectedNode || props.readOnly}
+                style={{ fontSize: 11 }}
               >
-                Appliquer réf. partagées
+                📎 Appliquer réf.
               </Button>
             </Tooltip>
 
@@ -1464,25 +1465,25 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               okButtonProps={{ danger: true }}
               disabled={!selectedNode || props.readOnly}
             >
-              <Button danger size="small" loading={unlinkingSharedRefs} disabled={!selectedNode || props.readOnly}>
-                Supprimer réf. partagées
+              <Button danger size="small" loading={unlinkingSharedRefs} disabled={!selectedNode || props.readOnly} style={{ fontSize: 11 }}>
+                🗑️ Suppr. réf.
               </Button>
             </Popconfirm>
-          </Space>
 
-          <Popconfirm
-            title="Supprimer ce nœud ?"
-            description="Cette action supprimera également ses enfants."
-            okText="Supprimer"
-            cancelText="Annuler"
-            okButtonProps={{ danger: true }}
-            onConfirm={handleDeleteSelected}
-            disabled={!selectedNode || props.readOnly}
-          >
-            <Button danger size="small" icon={<DeleteOutlined />} disabled={!selectedNode || props.readOnly}>
-              Supprimer ce nœud
-            </Button>
-          </Popconfirm>
+            <Popconfirm
+              title="Supprimer ce nœud ?"
+              description="Cette action supprimera également ses enfants."
+              okText="Supprimer"
+              cancelText="Annuler"
+              okButtonProps={{ danger: true }}
+              onConfirm={handleDeleteSelected}
+              disabled={!selectedNode || props.readOnly}
+            >
+              <Button danger size="small" icon={<DeleteOutlined />} disabled={!selectedNode || props.readOnly} style={{ fontSize: 11 }}>
+                Supprimer nœud
+              </Button>
+            </Popconfirm>
+          </div>
         </div>
         {/* Section Apparence */}
         <div>
@@ -1818,24 +1819,16 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     const meta = (d.metadata || {}) as any;
                     const assigned = meta?.subTab || 'Général';
                     return (
-                      <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: 6, border: '1px solid #eee', borderRadius: 6 }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <div style={{ fontSize: 12, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label || d.id}</div>
-                          <div style={{ fontSize: 11, color: '#666', background: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>{assigned}</div>
-                        </div>
-                        <div>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {/* Remplacer le Select inline par un simple Tag afin d'encourager l'édition depuis le champ */}
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <div>
-                                {(meta?.subTab && typeof meta?.subTab === 'string') ? (
-                                  <Tag color="blue">{meta.subTab}</Tag>
-                                ) : (
-                                  <Tag color="default">Aucun</Tag>
-                                )}
-                              </div>
-                            </div>
-                            <Button size="small" onClick={() => { if (onSelectNodeId) onSelectNodeId(d.id); }}>Éditer</Button>
+                      <div key={d.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 6, border: '1px solid #eee', borderRadius: 6 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ fontSize: 12, flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label || d.id}</div>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                            {(meta?.subTab && typeof meta?.subTab === 'string') ? (
+                              <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{meta.subTab}</Tag>
+                            ) : (
+                              <Tag color="default" style={{ margin: 0, fontSize: 10 }}>Aucun</Tag>
+                            )}
+                            <Button size="small" onClick={() => { if (onSelectNodeId) onSelectNodeId(d.id); }} style={{ fontSize: 10 }}>Éditer</Button>
                           </div>
                         </div>
                       </div>
@@ -2350,8 +2343,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                                   const displayLabel = `${tplNode?.label || tplId}${suffix !== undefined ? `-${suffix}` : ''}`;
 
                                   return (
-                                  <div key={copy.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                    <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <div key={copy.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                    <div style={{ fontSize: 12, flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                       {displayLabel}
                                     </div>
                                     <Popconfirm
@@ -2374,8 +2367,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                                         }
                                       }}
                                     >
-                                      <Button danger size="small" icon={<DeleteOutlined />}>
-                                        Supprimer
+                                      <Button danger size="small" icon={<DeleteOutlined />} style={{ fontSize: 10, flexShrink: 0 }}>
+                                        Suppr.
                                       </Button>
                                     </Popconfirm>
                                   </div>

@@ -64,9 +64,9 @@ const Devis1minuteAdminIntegrations = lazy(() => import('./pages/devis1minute/ad
 const Devis1minuteAdminSite = lazy(() => import('./pages/devis1minute/admin/Devis1minuteAdminSite'));
 
 // Pages Google Workspace (très lourdes)
-const GoogleMailPageFixed = lazy(() => import('./pages/GoogleMailPageFixed_New'));
+const GoogleGmailPageV2 = lazy(() => import('./google-workspace/pages/GoogleGmailPageV2'));
 const GoogleAgendaPage = lazy(() => import('./pages/GoogleAgendaPage'));
-const GoogleDrivePage = lazy(() => import('./pages/GoogleDrivePage'));
+const GoogleDrivePage = lazy(() => import('./google-workspace/pages/GoogleDrivePageV2'));
 const GoogleMeetPage = lazy(() => import('./pages/GoogleMeetPage'));
 const TelnyxPage = lazy(() => import('./pages/TelnyxPage'));
 const GoogleGroupsPage = lazy(() => import('./pages/GoogleGroupsPage'));
@@ -250,7 +250,7 @@ export default function AppLayout() {
             <Route path="/devis1minute/billing" element={<LandingPagesPage />} />
 
             {/* Routes Google Workspace - CORRESPONDANT EXACTEMENT AUX ROUTES DE LA DB */}
-            {(hasFeature('google_gmail_access') || hasFeature('google_gmail')) && <Route path="/google-gmail" element={<GoogleMailPageFixed />} />}
+            {(hasFeature('google_gmail_access') || hasFeature('google_gmail')) && <Route path="/google-gmail" element={<GoogleGmailPageV2 />} />}
             {hasFeature('google_agenda_access') && <Route path="/google-agenda" element={<GoogleAgendaPage />} />}
             {(hasFeature('analytics_access') || isSuperAdmin) && <Route path="/analytics" element={<GoogleAnalyticsPage />} />}
             {hasFeature('google_contacts_access') && <Route path="/google-contacts" element={<GoogleContactsPage />} />}

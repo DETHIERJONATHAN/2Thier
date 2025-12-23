@@ -924,7 +924,11 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         activePanel: 'properties'
       }
     }));
-  }, []);
+    // 📱 Sur mobile, basculer automatiquement vers l'onglet Paramètres
+    if (!isDesktop) {
+      setActiveMobileTab('parameters');
+    }
+  }, [isDesktop]);
   
   const deactivateCapability = useCallback(async (nodeId: string, capability: string) => {
     // console.log('🛑 deactivateCapability:', { nodeId, capability }); // ✨ Log réduit
@@ -1645,14 +1649,14 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
 
   const mobileSections: Array<{ key: string; label: string; content: React.ReactNode }> = [
     {
-      key: 'structure',
-      label: uiState.panelState.previewMode ? 'Aperçu' : 'Structure',
-      content: structureCard
-    },
-    {
       key: 'palette',
       label: 'Palette',
       content: paletteCard
+    },
+    {
+      key: 'structure',
+      label: uiState.panelState.previewMode ? 'Aperçu' : 'Structure',
+      content: structureCard
     }
   ];
 

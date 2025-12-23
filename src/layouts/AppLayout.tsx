@@ -30,7 +30,7 @@ const DevisPage = React.lazy(() => import('../pages/DevisPage'));
 const TreeBranchLeafLayoutV2 = React.lazy(() => import('../pages/Formulaire/TreeBranchLeafWrapper-Fixed'));
 
 // Pages Google Workspace
-const GoogleMailPageFixed = React.lazy(() => import('../pages/GoogleMailPageFixed_New'));
+const GoogleGmailPageV2 = React.lazy(() => import('../google-workspace/pages/GoogleGmailPageV2'));
 const GoogleAgendaPage = React.lazy(() => import('../pages/GoogleAgendaPage'));
 const GoogleContactsPage = React.lazy(() => import('../pages/GoogleContactsPage'));
 
@@ -123,7 +123,7 @@ export const AppLayout: React.FC = () => {
                   {(hasFeature('devis') || isSuperAdmin) && <Route path="/devis" element={<DevisPage />} />}
 
                   {/* Routes Google Workspace */}
-                  {hasFeature('google_gmail_access') && <Route path="/google-gmail" element={<GoogleMailPageFixed />} />}
+                  {hasFeature('google_gmail_access') && <Route path="/google-gmail" element={<GoogleGmailPageV2 />} />}
                   {hasFeature('google_agenda_access') && <Route path="/google-agenda" element={<GoogleAgendaPage />} />}
                   {hasFeature('google_contacts_access') && <Route path="/google-contacts" element={<GoogleContactsPage />} />}
 

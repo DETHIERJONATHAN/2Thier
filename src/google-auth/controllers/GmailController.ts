@@ -116,6 +116,10 @@ export const getMessages = async (req: AuthenticatedRequest, res: Response) => {
         case 'spam':
           finalLabelIds = ['SPAM'];
           break;
+        case 'all':
+          // Tous les messages - pas de filtre de label
+          finalLabelIds = undefined;
+          break;
         default:
           // Pour les dossiers personnalisés, utiliser le nom comme labelId
           finalLabelIds = [mailboxStr];
@@ -222,7 +226,8 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
     const to = req.body.to;
     const subject = req.body.subject;
     const body = req.body.body || '';
-    const isHtml = req.body.isHtml === 'true';
+    // isHtml peut être boolean (JSON) ou string (FormData)
+    const isHtml = req.body.isHtml === true || req.body.isHtml === 'true';
     const cc = req.body.cc;
     const bcc = req.body.bcc;
     const fromName = req.body.fromName; // 🆕 Nouveau paramètre pour nom professionnel
@@ -230,8 +235,9 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
     console.log('[Gmail Controller] 📧 Données extraites:', { 
       to, 
       subject, 
-      body: body?.substring(0, 50), 
-      isHtml, 
+      body: body?.substring(0, 100), 
+      isHtml,
+      isHtmlRaw: req.body.isHtml,
       cc, 
       bcc, 
       fromName: fromName || 'Par défaut: 2Thier CRM' 

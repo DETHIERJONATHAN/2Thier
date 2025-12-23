@@ -118,17 +118,44 @@ const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
     }
   };
 
-  // Aperçu du document
+  // Aperçu du document - ouvre le PDF dans le navigateur
   const handlePreview = async (doc: GeneratedDocument) => {
     try {
+      // Si le document a une URL PDF, l'ouvrir directement dans un nouvel onglet
+      if (doc.pdfUrl) {
+        window.open(doc.pdfUrl, '_blank');
+        return;
+      }
+      
+      // Sinon, essayer de récupérer le PDF via l'API
       setPreviewLoading(true);
       setSelectedDoc(doc);
-      const response = await api.get(`/api/documents/generated/${doc.id}/preview`);
-      setPreviewData(response);
-      setPreviewModalVisible(true);
+      
+      // Récupérer le PDF en blob et l'ouvrir dans le navigateur
+      const response = await api.get(`/api/documents/generated/${doc.id}/pdf`, { responseType: 'blob' });
+      
+      if (response instanceof Blob) {
+        // Créer une URL temporaire pour le blob et l'ouvrir
+        const blobUrl = URL.createObjectURL(response);
+        window.open(blobUrl, '_blank');
+        // Nettoyer l'URL après un délai
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } else {
+        // Fallback: ouvrir la modal avec les données
+        const previewResponse = await api.get(`/api/documents/generated/${doc.id}/preview`);
+        setPreviewData(previewResponse);
+        setPreviewModalVisible(true);
+      }
     } catch (error) {
       console.error('Erreur aperçu:', error);
-      message.error('Erreur lors du chargement de l\'aperçu');
+      // Fallback: essayer d'ouvrir la modal avec les données JSON
+      try {
+        const previewResponse = await api.get(`/api/documents/generated/${doc.id}/preview`);
+        setPreviewData(previewResponse);
+        setPreviewModalVisible(true);
+      } catch {
+        message.error('Erreur lors du chargement de l\'aperçu');
+      }
     } finally {
       setPreviewLoading(false);
     }

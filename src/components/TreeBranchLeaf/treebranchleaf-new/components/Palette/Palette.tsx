@@ -8,7 +8,8 @@
  */
 
 import React from 'react';
-import { Card, Typography, Tooltip } from 'antd';
+import { Card, Typography, Tooltip, Button } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useDraggable } from '@dnd-kit/core';
 // (icônes inutilisées supprimées)
 import type { NodeTypeKey, TreeBranchLeafRegistry } from '../../types';
@@ -85,7 +86,6 @@ const PaletteItem: React.FC<PaletteItemProps> = ({
           size="small"
           hoverable={!readOnly}
           style={{
-            marginBottom: '8px',
             borderColor: color,
             borderWidth: '2px',
             borderStyle: isDragging ? 'dashed' : 'solid',
@@ -180,17 +180,47 @@ const Palette: React.FC<PaletteProps> = ({
           </div>
 
           {category.items.map(nodeType => (
-            <div key={`wrap-${nodeType.key}`} onDoubleClick={() => !readOnly && onItemCreate(nodeType.key)}>
-            <PaletteItem
-              key={`palette-${nodeType.key}`}
-              id={`palette-${nodeType.key}`}
-              nodeType={nodeType.key}
-              emoji={nodeType.emoji}
-              label={nodeType.label}
-              description={nodeType.description}
-              color={nodeType.color}
-              readOnly={readOnly}
-            />
+            <div 
+              key={`wrap-${nodeType.key}`} 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'stretch', 
+                gap: 4, 
+                marginBottom: 8 
+              }}
+            >
+              <div 
+                style={{ flex: 1 }}
+                onDoubleClick={() => !readOnly && onItemCreate(nodeType.key)}
+              >
+                <PaletteItem
+                  key={`palette-${nodeType.key}`}
+                  id={`palette-${nodeType.key}`}
+                  nodeType={nodeType.key}
+                  emoji={nodeType.emoji}
+                  label={nodeType.label}
+                  description={nodeType.description}
+                  color={nodeType.color}
+                  readOnly={readOnly}
+                />
+              </div>
+              {/* Bouton + pour ajouter rapidement (utile sur mobile) */}
+              <Tooltip title={`Ajouter ${nodeType.label}`} placement="right">
+                <Button
+                  type="primary"
+                  ghost
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => !readOnly && onItemCreate(nodeType.key)}
+                  disabled={readOnly}
+                  style={{ 
+                    minWidth: 32,
+                    height: 'auto',
+                    borderColor: nodeType.color,
+                    color: nodeType.color
+                  }}
+                />
+              </Tooltip>
             </div>
           ))}
         </div>

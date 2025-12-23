@@ -1,7 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import { faker } from '@faker-js/faker';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+
+// Hash du mot de passe "password" pour le développement
+const DEV_PASSWORD_HASH = bcrypt.hashSync('password', 10);
 
 function generateId() {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -78,18 +82,22 @@ async function main() {
           email: u.email,
           firstName: u.firstName,
           lastName: u.lastName,
-            // Mot de passe placeholder - l'app devrait gérer le hash ailleurs
-          passwordHash: 'dev-placeholder-password-hash',
+          // Hash bcrypt du mot de passe "password" pour le développement
+          passwordHash: DEV_PASSWORD_HASH,
           role: 'super_admin'
         }
       });
       console.log('👤 Utilisateur créé:', u.email);
-    } else if (user.role !== 'super_admin') {
+    } else if (user.role !== 'super_admin' || !user.passwordHash?.startsWith('$2')) {
+      // Mettre à jour le rôle ET le passwordHash si c'est un placeholder
       await prisma.user.update({
         where: { id: user.id },
-        data: { role: 'super_admin' }
+        data: { 
+          role: 'super_admin',
+          passwordHash: DEV_PASSWORD_HASH 
+        }
       });
-      console.log('👤 Rôle mis à jour -> super_admin:', u.email);
+      console.log('👤 Rôle/password mis à jour -> super_admin:', u.email);
     } else {
       console.log('👤 Utilisateur déjà présent:', u.email);
     }

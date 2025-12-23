@@ -3,7 +3,7 @@ import { useAuth } from '../auth/useAuth';
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function Connexion() {
-  const [email, setEmail] = useState('superadmin@example.com');
+  const [email, setEmail] = useState('dethier.jls@gmail.com');
   const [password, setPassword] = useState('password');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

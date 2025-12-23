@@ -239,7 +239,7 @@ export class GoogleGmailService {
   }
 
   /**
-   * Envoie un email (avec support des pièces jointes) - VERSION ANTI-SPAM
+   * Envoie un email - COMME GMAIL FAIT
    */
   async sendEmail(options: {
     to: string;
@@ -253,176 +253,68 @@ export class GoogleGmailService {
       content: Buffer;
       mimeType: string;
     }>;
-    fromName?: string; // 🆕 Nom professionnel de l'expéditeur
+    fromName?: string;
   }): Promise<{ messageId: string } | null> {
-    console.log(`[GoogleGmailService] 📧 Envoi professionnel d'un email à: ${options.to} avec ${options.attachments?.length || 0} pièces jointes`);
+    console.log(`[GoogleGmailService] 📧 Envoi email à: ${options.to}`);
 
     try {
-      let message = '';
-      const boundary = 'boundary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      const boundary = '----=_Part_' + Date.now();
+      let messageParts: string[] = [];
       
-      // 🔧 HEADERS PROFESSIONNELS ANTI-SPAM
+      // HEADERS - comme Gmail
+      messageParts.push(`From: ${options.fromName || '2Thier CRM'} <${this.adminEmail}>`);
+      messageParts.push(`To: ${options.to}`);
+      messageParts.push(`Subject: ${options.subject}`);
       
-      // From professionnel avec nom d'affichage
-      if (this.adminEmail) {
-        const fromName = options.fromName || '2Thier CRM';
-        message += `From: "${fromName}" <${this.adminEmail}>\r\n`;
-      }
+      if (options.cc) messageParts.push(`Cc: ${options.cc}`);
+      if (options.bcc) messageParts.push(`Bcc: ${options.bcc}`);
       
-      message += `To: ${options.to}\r\n`;
-      message += `Subject: ${options.subject}\r\n`;
+      messageParts.push(`MIME-Version: 1.0`);
       
-      if (options.cc) {
-        message += `Cc: ${options.cc}\r\n`;
-      }
-      if (options.bcc) {
-        message += `Bcc: ${options.bcc}\r\n`;
-      }
-      
-      // 🆕 HEADERS DE DÉLIVRABILITÉ CRITIQUES
-      message += `Date: ${new Date().toUTCString()}\r\n`;
-      message += `Message-ID: <${Date.now()}.${Math.random().toString(36).substr(2)}.crm@2thier.be>\r\n`;
-      message += `MIME-Version: 1.0\r\n`;
-      
-      // Headers de légitimité professionnelle
-      message += `X-Mailer: 2Thier CRM v2.0\r\n`;
-      message += `X-Priority: 3\r\n`; // Priorité normale (pas urgent = moins spam)
-      message += `X-MSMail-Priority: Normal\r\n`;
-      message += `Importance: Normal\r\n`;
-      
-      // Headers de sécurité et d'authentification
-      message += `X-Auto-Response-Suppress: All\r\n`; // Éviter les réponses automatiques
-      message += `List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n`;
-      
-      // 🆕 Structure professionnelle du contenu
       if (options.attachments && options.attachments.length > 0) {
-        // Message multipart avec pièces jointes
-        message += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+        // Avec pièces jointes
+        messageParts.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+        messageParts.push('');
+        messageParts.push(`--${boundary}`);
+        messageParts.push(`Content-Type: ${options.isHtml ? 'text/html' : 'text/plain'}; charset="UTF-8"`);
+        messageParts.push('');
+        messageParts.push(options.body);
         
-        // Texte d'introduction multipart professionnel
-        message += `This is a multi-part message in MIME format.\r\n\r\n`;
-        
-        // Partie corps du message
-        message += `--${boundary}\r\n`;
-        const contentType = options.isHtml ? 'text/html' : 'text/plain';
-        message += `Content-Type: ${contentType}; charset=utf-8\r\n`;
-        message += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
-        
-        // 🆕 Corps professionnel avec signature
-        const professionalBody = this.formatProfessionalBody(options.body, options.isHtml);
-        message += professionalBody + '\r\n\r\n';
-
-        // Ajouter chaque pièce jointe avec headers corrects
-        for (const attachment of options.attachments) {
-          message += `--${boundary}\r\n`;
-          message += `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"\r\n`;
-          message += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;
-          message += `Content-Transfer-Encoding: base64\r\n`;
-          message += `Content-ID: <${attachment.filename.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}>\r\n\r\n`;
-          
-          // Encoder le contenu en base64 avec retours à la ligne RFC conformes
-          const base64Content = attachment.content.toString('base64');
-          const chunkedContent = base64Content.match(/.{1,76}/g)?.join('\r\n') || base64Content;
-          message += chunkedContent + '\r\n\r\n';
+        for (const att of options.attachments) {
+          messageParts.push(`--${boundary}`);
+          messageParts.push(`Content-Type: ${att.mimeType}; name="${att.filename}"`);
+          messageParts.push(`Content-Disposition: attachment; filename="${att.filename}"`);
+          messageParts.push(`Content-Transfer-Encoding: base64`);
+          messageParts.push('');
+          messageParts.push(att.content.toString('base64'));
         }
-
-        // Fermer le boundary
-        message += `--${boundary}--\r\n`;
+        messageParts.push(`--${boundary}--`);
       } else {
-        // Message simple sans pièces jointes mais avec headers professionnels
-        const contentType = options.isHtml ? 'text/html' : 'text/plain';
-        message += `Content-Type: ${contentType}; charset=utf-8\r\n`;
-        message += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
-        
-        // 🆕 Corps professionnel avec signature
-        const professionalBody = this.formatProfessionalBody(options.body, options.isHtml);
-        message += professionalBody;
+        // Sans pièces jointes - SIMPLE comme Gmail
+        messageParts.push(`Content-Type: ${options.isHtml ? 'text/html' : 'text/plain'}; charset="UTF-8"`);
+        messageParts.push('');
+        messageParts.push(options.body);
       }
-
-      // Encoder en base64 pour Gmail API
-      const encodedMessage = Buffer.from(message).toString('base64')
+      
+      const rawMessage = messageParts.join('\r\n');
+      
+      // Encoder pour Gmail API (URL-safe base64)
+      const encodedMessage = Buffer.from(rawMessage)
+        .toString('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
 
-      console.log('[GoogleGmailService] 📤 Envoi du message encodé...');
-
       const response = await this.gmail.users.messages.send({
         userId: 'me',
-        requestBody: {
-          raw: encodedMessage
-        }
+        requestBody: { raw: encodedMessage }
       });
 
-      console.log(`[GoogleGmailService] ✅ Email envoyé avec l'ID: ${response.data.id}`);
+      console.log(`[GoogleGmailService] ✅ Email envoyé: ${response.data.id}`);
       return { messageId: response.data.id! };
     } catch (error) {
-      console.error('[GoogleGmailService] ❌ Erreur lors de l\'envoi de l\'email:', error);
+      console.error('[GoogleGmailService] ❌ Erreur envoi:', error);
       return null;
-    }
-  }
-
-  /**
-   * 🆕 Formate le corps de l'email de manière professionnelle avec signature
-   */
-  private formatProfessionalBody(body: string, isHtml: boolean = false): string {
-    if (isHtml) {
-      // Version HTML professionnelle
-      return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email de 2Thier CRM</title>
-</head>
-<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; background-color: #f9f9f9;">
-    <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 20px;">
-        <!-- En-tête professionnel -->
-        <div style="border-bottom: 3px solid #0066cc; padding-bottom: 20px; margin-bottom: 30px;">
-            <h2 style="color: #0066cc; margin: 0; font-size: 24px;">2Thier CRM</h2>
-            <p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">Solution de gestion client professionnelle</p>
-        </div>
-        
-        <!-- Contenu principal -->
-        <div style="margin-bottom: 40px;">
-            ${body}
-        </div>
-        
-        <!-- Signature professionnelle -->
-        <div style="border-top: 1px solid #eee; padding-top: 20px; margin-top: 30px;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="vertical-align: top; padding-right: 20px;">
-                        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #0066cc;">Équipe 2Thier CRM</p>
-                        <p style="margin: 5px 0; font-size: 14px; color: #666;">Solution de gestion client intégrée</p>
-                        <p style="margin: 5px 0; font-size: 14px; color: #666;">
-                            <a href="mailto:support@2thier.be" style="color: #0066cc; text-decoration: none;">support@2thier.be</a>
-                        </p>
-                    </td>
-                </tr>
-            </table>
-        </div>
-        
-        <!-- Footer de confidentialité -->
-        <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 20px; font-size: 12px; color: #999; text-align: center;">
-            <p style="margin: 0;">Ce message est confidentiel et destiné uniquement au destinataire indiqué.</p>
-            <p style="margin: 5px 0 0 0;">Si vous n'êtes pas le destinataire prévu, veuillez supprimer ce message.</p>
-        </div>
-    </div>
-</body>
-</html>`.trim();
-    } else {
-      // Version texte professionnelle
-      return `${body}
-
---
-Équipe 2Thier CRM
-Solution de gestion client intégrée
-Email: support@2thier.be
-
-Ce message est confidentiel et destiné uniquement au destinataire indiqué.
-Si vous n'êtes pas le destinataire prévu, veuillez supprimer ce message.`;
     }
   }
 

@@ -215,17 +215,9 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
   
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    // Sélection du nœud
+    // Sélection du nœud uniquement (double-clic pour ouvrir les paramètres)
     onSelect(node);
-    // Ouvrir directement le panneau de paramètres sur clic simple (comportement attendu)
-    if (onOpenNodeSettings) {
-      try {
-        onOpenNodeSettings(node);
-      } catch (err) {
-        console.warn('⚠️ Erreur lors de "onOpenNodeSettings" au clic:', err);
-      }
-    }
-  }, [node, onSelect, onOpenNodeSettings]);
+  }, [node, onSelect]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();

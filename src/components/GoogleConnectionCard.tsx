@@ -77,13 +77,13 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
     
     try {
       setLoading(true);
-      console.log('[GoogleConnectionCard] 📡 Appel API /google-auth/connect...');
+      console.log('[GoogleConnectionCard] 📡 Appel API /api/google-auth/connect...');
       console.log('[GoogleConnectionCard] 🏢 Avec organizationId:', organizationId);
       
       // Construire l'URL avec organizationId si fourni
       const connectUrl = organizationId 
-        ? `/google-auth/connect?organizationId=${organizationId}`
-        : '/google-auth/connect';
+        ? `/api/google-auth/connect?organizationId=${organizationId}`
+        : '/api/google-auth/connect';
         
       console.log('[GoogleConnectionCard] 🔗 URL de connexion:', connectUrl);
       

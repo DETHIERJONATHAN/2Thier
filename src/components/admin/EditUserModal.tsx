@@ -28,7 +28,7 @@ interface Role {
   label?: string;
 }
 
-// 🛡️ SCHÉMA ZOD ULTRA-STRICT POUR VALIDATION
+// 🛡️ SCHÉMA ZOD POUR VALIDATION
 const editUserSchema = z.object({
   firstName: z.string()
     .min(1, "Prénom requis")
@@ -52,12 +52,11 @@ const editUserSchema = z.object({
     .nullable()
     .transform(val => val === "" ? null : val),
   avatarUrl: z.string()
-    .url("URL d'avatar invalide")
     .optional()
     .nullable()
-    .transform(val => val === "" ? null : val),
+    .transform(val => val === "" ? null : val)
+    .refine(val => !val || val.startsWith('http'), "URL d'avatar invalide"),
   roleId: z.string()
-    .uuid("ID de rôle invalide")
     .min(1, "Rôle requis")
 });
 
@@ -99,14 +98,21 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onCancel, onSuccess
     avatarUrl?: string; 
     roleId: string 
   }) => {
+    console.log('[EditUserModal] handleUpdate appelé avec:', values);
+    console.log('[EditUserModal] user:', user);
+    console.log('[EditUserModal] userOrganizationId:', user?.userOrganizationId);
+    
     if (!user || !user.userOrganizationId) {
+      console.error('[EditUserModal] userOrganizationId manquant!');
       message.error("Impossible de trouver l'identifiant de l'utilisateur.");
       return;
     }
 
     // 🛡️ VALIDATION ZOD STRICTE
     const validationResult = editUserSchema.safeParse(values);
+    console.log('[EditUserModal] Validation Zod:', validationResult);
     if (!validationResult.success) {
+      console.error('[EditUserModal] Erreurs Zod:', validationResult.error.errors);
       message.error("Données invalides: " + validationResult.error.errors.map(e => e.message).join(", "));
       return;
     }
@@ -124,24 +130,29 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onCancel, onSuccess
         avatarUrl: validationResult.data.avatarUrl
       };
       
-      const userResponse = await api.patch(`/users/${user.id}`, userUpdateData);
+      console.log('[EditUserModal] Mise à jour utilisateur:', { userId: user.id, data: userUpdateData });
+      const userResponse = await api.patch(`/api/users/${user.id}`, userUpdateData);
+      console.log('[EditUserModal] Réponse user update:', userResponse);
       
       // Mise à jour du rôle dans l'organisation
       const roleUpdateData = {
         roleId: validationResult.data.roleId
       };
       
-      const roleResponse = await api.patch(`/users/user-organizations/${user.userOrganizationId}`, roleUpdateData);
+      console.log('[EditUserModal] Mise à jour rôle:', { userOrgId: user.userOrganizationId, data: roleUpdateData });
+      const roleResponse = await api.patch(`/api/users/user-organizations/${user.userOrganizationId}`, roleUpdateData);
+      console.log('[EditUserModal] Réponse role update:', roleResponse);
       
       // Vérification que les deux mises à jour ont réussi
       if (userResponse?.success && roleResponse?.success) {
         message.success('Utilisateur mis à jour avec succès !');
         onSuccess();
       } else {
+        console.error('[EditUserModal] Échec:', { userResponse, roleResponse });
         message.error('Erreur lors de la mise à jour de l\'utilisateur');
       }
     } catch (error) {
-      console.error('Erreur lors de la mise à jour:', error);
+      console.error('[EditUserModal] Erreur lors de la mise à jour:', error);
       message.error('Erreur lors de la mise à jour de l\'utilisateur');
     } finally {
       setLoading(false);

@@ -255,8 +255,11 @@ const StructureComponent: React.FC<StructureProps> = ({
   const allNodesForMemo = useMemo(() => flattenedNodes.map(fn => fn.node), [flattenedNodes]);
 
   const handleDoubleClick = useCallback((node: TreeBranchLeafNode) => {
-    onToggleExpanded(node.id);
-  }, [onToggleExpanded]);
+    // Double-clic : ouvrir les paramètres du nœud (et basculer vers l'onglet Paramètres sur mobile)
+    if (onOpenNodeSettings) {
+      onOpenNodeSettings(node);
+    }
+  }, [onOpenNodeSettings]);
 
   const handleToggleExpandNode = useCallback((node: TreeBranchLeafNode) => {
     onToggleExpanded(node.id);

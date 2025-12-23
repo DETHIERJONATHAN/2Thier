@@ -9,11 +9,12 @@ import {
   Select, 
   message, 
   Space, 
-  Tag, 
-  Popconfirm,
+  Tag,
   Tabs,
   Drawer,
-  Tooltip
+  Tooltip,
+  Grid,
+  Dropdown
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -22,7 +23,9 @@ import {
   FileTextOutlined,
   CopyOutlined,
   SettingOutlined,
-  BuildOutlined
+  BuildOutlined,
+  MoreOutlined,
+  EllipsisOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import DocumentTemplateEditor from '../components/documents/DocumentTemplateEditor';
@@ -210,24 +213,85 @@ const DocumentTemplatesPage = () => {
     }
   };
 
-  // Colonnes du tableau
+  // Colonnes du tableau (responsive)
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.sm;
+  
+  // Menu actions pour mobile
+  const getActionMenu = (record: DocumentTemplate) => ({
+    items: [
+      {
+        key: 'builder',
+        icon: <BuildOutlined />,
+        label: 'Page Builder',
+        onClick: () => openPageBuilder(record.id),
+      },
+      {
+        key: 'editor',
+        icon: <SettingOutlined />,
+        label: 'Éditeur classique',
+        onClick: () => openEditor(record.id),
+      },
+      {
+        key: 'edit',
+        icon: <EditOutlined />,
+        label: 'Modifier',
+        onClick: () => openModal(record),
+      },
+      {
+        key: 'duplicate',
+        icon: <CopyOutlined />,
+        label: 'Dupliquer',
+        onClick: () => handleDuplicateTemplate(record),
+      },
+      {
+        type: 'divider' as const,
+      },
+      {
+        key: 'delete',
+        icon: <DeleteOutlined />,
+        label: 'Supprimer',
+        danger: true,
+        onClick: () => {
+          Modal.confirm({
+            title: 'Supprimer ce template ?',
+            content: 'Cette action est irréversible.',
+            okText: 'Supprimer',
+            cancelText: 'Annuler',
+            okButtonProps: { danger: true },
+            onOk: () => handleDeleteTemplate(record.id),
+          });
+        },
+      },
+    ],
+  });
+  
   const columns = [
     {
       title: 'Nom',
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: DocumentTemplate) => (
-        <Space>
-          <FileTextOutlined />
-          <span className="font-medium">{text}</span>
-          {!record.isActive && <Tag color="red">Inactif</Tag>}
-        </Space>
+        <div>
+          <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <FileTextOutlined />
+            {text}
+          </div>
+          {isMobile && (
+            <Tag color={record.type === 'QUOTE' ? 'blue' : record.type === 'INVOICE' ? 'green' : 'default'} style={{ marginTop: 4 }}>
+              {record.type === 'QUOTE' ? 'Devis' : record.type === 'INVOICE' ? 'Facture' : record.type}
+            </Tag>
+          )}
+          {!record.isActive && <Tag color="red" style={{ marginTop: 4 }}>Inactif</Tag>}
+        </div>
       )
     },
     {
       title: 'Type',
       dataIndex: 'type',
       key: 'type',
+      width: 100,
+      responsive: ['sm'] as ('sm')[],
       render: (type: string) => {
         const typeLabels: Record<string, { label: string; color: string }> = {
           QUOTE: { label: 'Devis', color: 'blue' },
@@ -244,6 +308,8 @@ const DocumentTemplatesPage = () => {
       title: '🌳 Arbre TBL',
       dataIndex: 'tree',
       key: 'tree',
+      width: 120,
+      responsive: ['lg'] as ('lg')[],
       render: (tree: { id: string; name: string } | null) => (
         tree ? (
           <Tag color="green">🌳 {tree.name}</Tag>
@@ -256,13 +322,17 @@ const DocumentTemplatesPage = () => {
       title: 'Description',
       dataIndex: 'description',
       key: 'description',
-      ellipsis: true
+      ellipsis: true,
+      width: 150,
+      responsive: ['xl'] as ('xl')[],
     },
     {
-      title: 'Documents générés',
+      title: 'Docs',
       dataIndex: ['_count', 'generatedDocuments'],
       key: 'count',
       align: 'center' as const,
+      width: 60,
+      responsive: ['md'] as ('md')[],
       render: (count: number) => (
         <Tag color={count > 0 ? 'blue' : 'default'}>{count}</Tag>
       )
@@ -271,76 +341,64 @@ const DocumentTemplatesPage = () => {
       title: 'Créé le',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 100,
+      responsive: ['lg'] as ('lg')[],
       render: (date: string) => new Date(date).toLocaleDateString('fr-FR')
     },
     {
-      title: 'Actions',
+      title: '',
       key: 'actions',
-      align: 'center' as const,
+      width: isMobile ? 50 : 140,
       render: (_: any, record: DocumentTemplate) => (
-        <Space>
-          <Tooltip title="🏗️ Page Builder (Nouveau!)">
-            <Button
-              type="primary"
-              icon={<BuildOutlined />}
-              onClick={() => openPageBuilder(record.id)}
-              size="small"
-            />
-          </Tooltip>
-          <Tooltip title="Éditeur classique">
-            <Button
-              type="link"
-              icon={<SettingOutlined />}
-              onClick={() => openEditor(record.id)}
-            />
-          </Tooltip>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => openModal(record)}
-            title="Modifier les informations"
-          />
-          <Button
-            type="link"
-            icon={<CopyOutlined />}
-            onClick={() => handleDuplicateTemplate(record)}
-            title="Dupliquer"
-          />
-          <Popconfirm
-            title="Supprimer ce template ?"
-            description="Cette action est irréversible."
-            onConfirm={() => handleDeleteTemplate(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
-            okButtonProps={{ danger: true }}
-          >
-            <Button
-              type="link"
-              danger
-              icon={<DeleteOutlined />}
-              title="Supprimer"
-            />
-          </Popconfirm>
-        </Space>
+        isMobile ? (
+          <Dropdown menu={getActionMenu(record)} trigger={['click']}>
+            <Button icon={<EllipsisOutlined />} type="text" />
+          </Dropdown>
+        ) : (
+          <Space size={2}>
+            <Tooltip title="Page Builder">
+              <Button
+                type="primary"
+                icon={<BuildOutlined />}
+                onClick={() => openPageBuilder(record.id)}
+                size="small"
+              />
+            </Tooltip>
+            <Tooltip title="Classique">
+              <Button
+                icon={<SettingOutlined />}
+                onClick={() => openEditor(record.id)}
+                size="small"
+              />
+            </Tooltip>
+            <Dropdown menu={getActionMenu(record)} trigger={['click']}>
+              <Button icon={<MoreOutlined />} size="small" />
+            </Dropdown>
+          </Space>
+        )
       )
     }
   ];
 
   return (
-    <div className="p-6">
+    <div className="p-2 sm:p-4 md:p-6">
       <Card
         title={
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold m-0">📄 Gestion des Documents</h1>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold m-0">
+              📄 {isMobile ? 'Documents' : 'Gestion des Documents'}
+            </h1>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => openModal()}
+              size={isMobile ? 'middle' : 'large'}
             >
-              Nouveau Template
+              {isMobile ? 'Nouveau' : 'Nouveau Template'}
             </Button>
           </div>
         }
+        bodyStyle={{ padding: isMobile ? '8px' : '12px' }}
       >
         <Tabs defaultActiveKey="templates">
           <TabPane tab="Templates" key="templates">
@@ -349,7 +407,8 @@ const DocumentTemplatesPage = () => {
               columns={columns}
               rowKey="id"
               loading={loading}
-              pagination={{ pageSize: 10 }}
+              pagination={{ pageSize: 10, responsive: true, size: isMobile ? 'small' : 'default' }}
+              size="small"
             />
           </TabPane>
           
@@ -358,12 +417,12 @@ const DocumentTemplatesPage = () => {
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setThemeModalVisible(true)}
-              className="mb-4"
+              className="mb-4 w-full sm:w-auto"
             >
               Nouveau Thème
             </Button>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {themes.map(theme => (
                 <Card
                   key={theme.id}
@@ -403,7 +462,9 @@ const DocumentTemplatesPage = () => {
           form.resetFields();
         }}
         onOk={() => form.submit()}
-        width={700}
+        width="95vw"
+        style={{ maxWidth: 700 }}
+        centered
       >
         <Form
           form={form}

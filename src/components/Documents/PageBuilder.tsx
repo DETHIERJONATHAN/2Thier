@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Button, message, Space, Modal, Tag, Tooltip, Switch, Spin } from 'antd';
+import { Button, message, Space, Modal, Tag, Tooltip, Switch, Spin, Tabs } from 'antd';
 import { 
   SaveOutlined, 
   UndoOutlined, 
@@ -40,6 +40,18 @@ interface PageBuilderProps {
 
 const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilderProps) => {
   const { api } = useAuthenticatedApi();
+  
+  // Détection responsive avec window.innerWidth (plus fiable dans les Drawers)
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1024;
   
   // État du document
   const [config, setConfig] = useState<DocumentTemplateConfig>(() => {
@@ -89,6 +101,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const [loading, setLoading] = useState(!initialConfig); // Chargement si pas de config initiale
   const [rightPanelWidth, setRightPanelWidth] = useState(380); // Largeur du panneau de droite (redimensionnable)
   const [isResizingPanel, setIsResizingPanel] = useState(false); // État du redimensionnement
+  const [mobileActiveTab, setMobileActiveTab] = useState<'preview' | 'modules' | 'config'>('preview'); // Onglet mobile actif
 
   // Données de test pour le mode preview et l'évaluation des conditions
   const previewDocumentData = useMemo(() => ({
@@ -694,301 +707,427 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       <div style={{
         backgroundColor: '#1f1f1f',
         borderBottom: '1px solid #333',
-        padding: '12px 20px',
+        padding: isMobile ? '8px 12px' : '12px 20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: '8px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <h2 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-            🏗️ Page Builder
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px' }}>
+          <h2 style={{ margin: 0, color: '#fff', fontSize: isMobile ? '14px' : '18px', fontWeight: 600 }}>
+            🏗️ {isMobile ? 'Builder' : 'Page Builder'}
           </h2>
-          <Tag color="blue">{config.pages.length} {config.pages.length > 1 ? 'pages' : 'page'}</Tag>
-          <Tag color="purple">
-            {config.pages.reduce((acc, p) => acc + p.modules.length, 0)} modules
-          </Tag>
+          {!isMobile && (
+            <>
+              <Tag color="blue">{config.pages.length} {config.pages.length > 1 ? 'pages' : 'page'}</Tag>
+              <Tag color="purple">
+                {config.pages.reduce((acc, p) => acc + p.modules.length, 0)} modules
+              </Tag>
+            </>
+          )}
         </div>
 
-        <Space size="middle">
-          {/* Undo/Redo - TODO */}
-          <Tooltip title="Annuler">
-            <Button icon={<UndoOutlined />} disabled />
-          </Tooltip>
-          <Tooltip title="Rétablir">
-            <Button icon={<RedoOutlined />} disabled />
-          </Tooltip>
-
-          <div style={{ width: 1, height: 24, backgroundColor: '#333' }} />
-
-          {/* Toggle Mode Grille / Liste */}
-          <Tooltip title={gridMode ? 'Mode Liste (vertical)' : 'Mode Grille (libre)'}>
-            <Button.Group>
-              <Button 
-                type={gridMode ? 'primary' : 'default'}
-                icon={<AppstoreOutlined />} 
-                onClick={() => setGridMode(true)}
-              />
-              <Button 
-                type={!gridMode ? 'primary' : 'default'}
-                icon={<UnorderedListOutlined />} 
-                onClick={() => setGridMode(false)}
-              />
-            </Button.Group>
-          </Tooltip>
-
-          {gridMode && (
-            <Tooltip title="Afficher/Masquer la grille">
-              <Switch 
-                checked={showGrid} 
-                onChange={setShowGrid}
-                checkedChildren="Grille"
-                unCheckedChildren="Grille"
-                size="small"
-              />
-            </Tooltip>
+        <Space size={isMobile ? 'small' : 'middle'}>
+          {/* Undo/Redo - seulement desktop */}
+          {!isMobile && (
+            <>
+              <Tooltip title="Annuler">
+                <Button icon={<UndoOutlined />} disabled size={isMobile ? 'small' : 'middle'} />
+              </Tooltip>
+              <Tooltip title="Rétablir">
+                <Button icon={<RedoOutlined />} disabled size={isMobile ? 'small' : 'middle'} />
+              </Tooltip>
+              <div style={{ width: 1, height: 24, backgroundColor: '#333' }} />
+            </>
           )}
 
-          <div style={{ width: 1, height: 24, backgroundColor: '#333' }} />
+          {/* Toggle Mode Grille / Liste - desktop only */}
+          {!isMobile && (
+            <>
+              <Tooltip title={gridMode ? 'Mode Liste (vertical)' : 'Mode Grille (libre)'}>
+                <Button.Group>
+                  <Button 
+                    type={gridMode ? 'primary' : 'default'}
+                    icon={<AppstoreOutlined />} 
+                    onClick={() => setGridMode(true)}
+                  />
+                  <Button 
+                    type={!gridMode ? 'primary' : 'default'}
+                    icon={<UnorderedListOutlined />} 
+                    onClick={() => setGridMode(false)}
+                  />
+                </Button.Group>
+              </Tooltip>
 
-          <Tooltip title="Configurer le fond de cette page">
-            <Button 
-              icon={<span style={{ fontSize: '14px' }}>🎨</span>} 
-              onClick={configurePageBackground}
-            >
-              Fond
-            </Button>
-          </Tooltip>
+              {gridMode && (
+                <Switch 
+                  checked={showGrid} 
+                  onChange={setShowGrid}
+                  checkedChildren="Grille"
+                  unCheckedChildren="Grille"
+                  size="small"
+                />
+              )}
 
-          <Tooltip title="Thème global">
-            <Button 
-              icon={<BgColorsOutlined />} 
-              onClick={() => setThemeEditorOpen(true)}
-            >
-              Thème
-            </Button>
-          </Tooltip>
+              <div style={{ width: 1, height: 24, backgroundColor: '#333' }} />
+
+              <Button 
+                icon={<span style={{ fontSize: '14px' }}>🎨</span>} 
+                onClick={configurePageBackground}
+              >
+                Fond
+              </Button>
+
+              <Button 
+                icon={<BgColorsOutlined />} 
+                onClick={() => setThemeEditorOpen(true)}
+              >
+                Thème
+              </Button>
+            </>
+          )}
 
           <Tooltip title="Prévisualiser">
             <Button 
               icon={<EyeOutlined />} 
               onClick={() => setPreviewMode(true)}
-            >
-              Aperçu
-            </Button>
+              size={isMobile ? 'small' : 'middle'}
+            />
           </Tooltip>
-
-          <div style={{ width: 1, height: 24, backgroundColor: '#333' }} />
 
           <Button 
             type="primary" 
             icon={<SaveOutlined />} 
             loading={saving}
             onClick={handleSave}
-          >
-            Enregistrer
-          </Button>
+            size={isMobile ? 'small' : 'middle'}
+          />
 
           {onClose && (
-            <Button onClick={onClose}>Fermer</Button>
+            <Button onClick={onClose} size={isMobile ? 'small' : 'middle'}>
+              ✕
+            </Button>
           )}
         </Space>
       </div>
 
-      {/* PAGE TABS */}
-      <PageTabs
-        pages={config.pages}
-        activePageId={editorState.activePageId}
-        onPageSelect={(pageId) => setEditorState(prev => ({ 
-          ...prev, 
-          activePageId: pageId,
-          selectedModuleId: null,
-        }))}
-        onPageAdd={addPage}
-        onPageDelete={deletePage}
-        onPageRename={renamePage}
-        onPageDuplicate={duplicatePage}
-        onPagesReorder={reorderPages}
-      />
+      {/* PAGE TABS - desktop only */}
+      {!isMobile && (
+        <PageTabs
+          pages={config.pages}
+          activePageId={editorState.activePageId}
+          onPageSelect={(pageId) => setEditorState(prev => ({ 
+            ...prev, 
+            activePageId: pageId,
+            selectedModuleId: null,
+          }))}
+          onPageAdd={addPage}
+          onPageDelete={deletePage}
+          onPageRename={renamePage}
+          onPageDuplicate={duplicatePage}
+          onPagesReorder={reorderPages}
+        />
+      )}
 
-      {/* MAIN CONTENT - 3 colonnes */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-        {/* LEFT - Module Palette (toujours visible) */}
-        <div style={{ 
-          width: '220px', 
-          minWidth: '220px',
-          borderRight: '1px solid #333',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: '#1f1f1f',
-        }}>
-          <ModulePalette
-            onModuleDragStart={handleModuleDragStart}
-            onModuleDragEnd={handleModuleDragEnd}
-            onModuleClick={addModule}
+      {/* ============ MOBILE: 3 ONGLETS ============ */}
+      {isMobile ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Onglets mobiles */}
+          <Tabs
+            activeKey={mobileActiveTab}
+            onChange={(key) => setMobileActiveTab(key as 'preview' | 'modules' | 'config')}
+            centered
+            size="small"
+            style={{ 
+              backgroundColor: '#1f1f1f',
+              marginBottom: 0,
+            }}
+            items={[
+              {
+                key: 'preview',
+                label: '📄 Preview',
+              },
+              {
+                key: 'modules',
+                label: '📦 Modules',
+              },
+              {
+                key: 'config',
+                label: selectedModule ? '⚙️ Config' : '⚙️ —',
+                disabled: !selectedModule,
+              },
+            ]}
           />
-        </div>
 
-        {/* CENTER - Page Preview */}
-        <div 
-          style={{ 
-            flex: 1,
-            minWidth: 0,
-            backgroundColor: '#0a0a0a',
-            overflow: 'auto',
-            padding: '20px',
-            position: 'relative',
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'copy';
-          }}
-          onDrop={handlePageDrop}
-        >
-          {activePage && gridMode ? (
-            <GridPagePreview
-              page={activePage}
-              globalTheme={config.globalTheme}
-              selectedModuleId={editorState.selectedModuleId}
-              hoveredModuleId={editorState.hoveredModuleId}
-              isDragging={editorState.isDragging}
-              showGrid={showGrid}
-              previewMode={previewMode}
-              documentData={previewDocumentData}
-              onModuleSelect={(id) => {
-                setEditorState(prev => ({ ...prev, selectedModuleId: id }));
-              }}
-              onModuleHover={(id) => setEditorState(prev => ({ ...prev, hoveredModuleId: id }))}
-              onModuleDelete={deleteModule}
-              onModuleDuplicate={duplicateModule}
-              onModuleUpdate={updateModule}
-              onModulesReorder={reorderModules}
-            />
-          ) : activePage ? (
-            <PagePreview
-              page={activePage}
-              globalTheme={config.globalTheme}
-              selectedModuleId={editorState.selectedModuleId}
-              hoveredModuleId={editorState.hoveredModuleId}
-              isDragging={editorState.isDragging}
-              onModuleSelect={(id) => {
-                setEditorState(prev => ({ ...prev, selectedModuleId: id }));
-              }}
-              onModuleHover={(id) => setEditorState(prev => ({ ...prev, hoveredModuleId: id }))}
-              onModuleDelete={deleteModule}
-              onModuleUpdate={updateModule}
-              onModulesReorder={reorderModules}
-            />
-          ) : null}
-
-          {/* Drop zone indicator */}
-          {editorState.isDragging && (
-            <div style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(24, 144, 255, 0.1)',
-              border: '3px dashed #1890ff',
-              borderRadius: '12px',
+          {/* Sélecteur de page sur mobile */}
+          {mobileActiveTab === 'preview' && (
+            <div style={{ 
+              padding: '8px 12px', 
+              backgroundColor: '#1a1a1a',
+              borderBottom: '1px solid #333',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-              pointerEvents: 'none',
+              gap: '8px',
+              overflowX: 'auto',
             }}>
-              <div style={{
-                backgroundColor: '#1890ff',
-                color: '#fff',
-                padding: '16px 32px',
-                borderRadius: '8px',
-                fontSize: '16px',
-                fontWeight: 600,
-              }}>
-                📥 Déposez le module ici
-              </div>
+              {config.pages.map((page, idx) => (
+                <Button
+                  key={page.id}
+                  type={editorState.activePageId === page.id ? 'primary' : 'default'}
+                  size="small"
+                  onClick={() => setEditorState(prev => ({ ...prev, activePageId: page.id, selectedModuleId: null }))}
+                  style={{ minWidth: '60px' }}
+                >
+                  {idx + 1}. {page.name.substring(0, 8)}
+                </Button>
+              ))}
+              <Button 
+                size="small" 
+                type="dashed"
+                onClick={addPage}
+                icon={<span>+</span>}
+              />
             </div>
           )}
-        </div>
 
-        {/* RIGHT - Module Config (Panneau intégré, redimensionnable) */}
-        {selectedModule && (
-          <div style={{ 
-            width: `${rightPanelWidth}px`,
-            minWidth: '320px',
-            maxWidth: '800px',
-            borderLeft: '1px solid #333',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: '#1f1f1f',
-            overflow: 'hidden',
-            position: 'relative',
-          }}>
-            {/* Barre de redimensionnement */}
-            <div
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setIsResizingPanel(true);
-                document.body.style.cursor = 'col-resize';
-                document.body.style.userSelect = 'none';
-              }}
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: '6px',
-                cursor: 'col-resize',
-                backgroundColor: isResizingPanel ? '#1890ff' : 'transparent',
-                transition: 'background-color 0.2s',
-                zIndex: 10,
-              }}
-              onMouseEnter={(e) => {
-                if (!isResizingPanel) {
-                  (e.target as HTMLElement).style.backgroundColor = '#444';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isResizingPanel) {
-                  (e.target as HTMLElement).style.backgroundColor = 'transparent';
-                }
-              }}
-            />
-            {/* Header du panneau */}
-            <div style={{
-              padding: '12px 16px',
-              borderBottom: '1px solid #333',
-              backgroundColor: '#1a1a1a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}>
-              <span style={{ color: '#fff', fontWeight: 600, fontSize: '14px' }}>
-                ⚙️ Configuration - {getModuleById(selectedModule.moduleId)?.name}
-              </span>
-              <Button 
-                type="text" 
-                size="small" 
-                onClick={() => setEditorState(prev => ({ ...prev, selectedModuleId: null }))}
-                style={{ color: '#888' }}
-              >
-                ✕
-              </Button>
-            </div>
-            {/* Contenu scrollable */}
-            <div style={{ flex: 1, overflow: 'auto' }}>
+          {/* Contenu de l'onglet actif */}
+          <div style={{ flex: 1, overflow: 'auto', backgroundColor: mobileActiveTab === 'preview' ? '#0a0a0a' : '#1f1f1f' }}>
+            {/* PREVIEW */}
+            {mobileActiveTab === 'preview' && activePage && (
+              <div style={{ 
+                padding: '10px', 
+                display: 'flex', 
+                justifyContent: 'center',
+                minHeight: '100%',
+              }}>
+                <div style={{ 
+                  transform: 'scale(0.42)', 
+                  transformOrigin: 'top center',
+                  width: '794px',
+                }}>
+                  <GridPagePreview
+                    page={activePage}
+                    globalTheme={config.globalTheme}
+                    selectedModuleId={editorState.selectedModuleId}
+                    hoveredModuleId={editorState.hoveredModuleId}
+                    isDragging={false}
+                    showGrid={false}
+                    previewMode={false}
+                    documentData={previewDocumentData}
+                    onModuleSelect={(id) => {
+                      setEditorState(prev => ({ ...prev, selectedModuleId: id }));
+                      if (id) setMobileActiveTab('config');
+                    }}
+                    onModuleHover={(id) => setEditorState(prev => ({ ...prev, hoveredModuleId: id }))}
+                    onModuleDelete={deleteModule}
+                    onModuleDuplicate={duplicateModule}
+                    onModuleUpdate={updateModule}
+                    onModulesReorder={reorderModules}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* MODULES */}
+            {mobileActiveTab === 'modules' && (
+              <ModulePalette
+                onModuleDragStart={handleModuleDragStart}
+                onModuleDragEnd={handleModuleDragEnd}
+                onModuleClick={(moduleId) => {
+                  addModule(moduleId);
+                  setMobileActiveTab('preview');
+                }}
+              />
+            )}
+
+            {/* CONFIG */}
+            {mobileActiveTab === 'config' && selectedModule && (
               <ModuleConfigPanel
                 moduleInstance={selectedModule}
                 onUpdate={(updates) => updateModule(selectedModule.id, updates)}
                 onDelete={() => {
                   deleteModule(selectedModule.id);
                   setEditorState(prev => ({ ...prev, selectedModuleId: null }));
+                  setMobileActiveTab('preview');
                 }}
               />
-            </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        /* ============ DESKTOP: 3 COLONNES ============ */
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+          {/* LEFT - Module Palette */}
+          <div style={{ 
+            width: isTablet ? '180px' : '220px', 
+            minWidth: isTablet ? '180px' : '220px',
+            borderRight: '1px solid #333',
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: '#1f1f1f',
+          }}>
+            <ModulePalette
+              onModuleDragStart={handleModuleDragStart}
+              onModuleDragEnd={handleModuleDragEnd}
+              onModuleClick={addModule}
+            />
+          </div>
+
+          {/* CENTER - Page Preview */}
+          <div 
+            style={{ 
+              flex: 1,
+              minWidth: 0,
+              backgroundColor: '#0a0a0a',
+              overflow: 'auto',
+              padding: '20px',
+              position: 'relative',
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+            }}
+            onDrop={handlePageDrop}
+          >
+            <div style={{ 
+              transform: isTablet ? 'scale(0.55)' : 'scale(1)', 
+              transformOrigin: 'top center',
+            }}>
+              {activePage && gridMode ? (
+                <GridPagePreview
+                  page={activePage}
+                  globalTheme={config.globalTheme}
+                  selectedModuleId={editorState.selectedModuleId}
+                  hoveredModuleId={editorState.hoveredModuleId}
+                  isDragging={editorState.isDragging}
+                  showGrid={showGrid}
+                  previewMode={previewMode}
+                  documentData={previewDocumentData}
+                  onModuleSelect={(id) => setEditorState(prev => ({ ...prev, selectedModuleId: id }))}
+                  onModuleHover={(id) => setEditorState(prev => ({ ...prev, hoveredModuleId: id }))}
+                  onModuleDelete={deleteModule}
+                  onModuleDuplicate={duplicateModule}
+                  onModuleUpdate={updateModule}
+                  onModulesReorder={reorderModules}
+                />
+              ) : activePage ? (
+                <PagePreview
+                  page={activePage}
+                  globalTheme={config.globalTheme}
+                  selectedModuleId={editorState.selectedModuleId}
+                  hoveredModuleId={editorState.hoveredModuleId}
+                  isDragging={editorState.isDragging}
+                  onModuleSelect={(id) => setEditorState(prev => ({ ...prev, selectedModuleId: id }))}
+                  onModuleHover={(id) => setEditorState(prev => ({ ...prev, hoveredModuleId: id }))}
+                  onModuleDelete={deleteModule}
+                  onModuleUpdate={updateModule}
+                  onModulesReorder={reorderModules}
+                />
+              ) : null}
+            </div>
+
+            {/* Drop zone indicator */}
+            {editorState.isDragging && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(24, 144, 255, 0.1)',
+                border: '3px dashed #1890ff',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                pointerEvents: 'none',
+              }}>
+                <div style={{
+                  backgroundColor: '#1890ff',
+                  color: '#fff',
+                  padding: '16px 32px',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                }}>
+                  📥 Déposez le module ici
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT - Module Config Panel */}
+          {selectedModule && (
+            <div style={{ 
+              width: `${rightPanelWidth}px`,
+              minWidth: '320px',
+              maxWidth: '800px',
+              borderLeft: '1px solid #333',
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: '#1f1f1f',
+              overflow: 'hidden',
+              position: 'relative',
+            }}>
+              {/* Barre de redimensionnement */}
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizingPanel(true);
+                  document.body.style.cursor = 'col-resize';
+                  document.body.style.userSelect = 'none';
+                }}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: '6px',
+                  cursor: 'col-resize',
+                  backgroundColor: isResizingPanel ? '#1890ff' : 'transparent',
+                  transition: 'background-color 0.2s',
+                  zIndex: 10,
+                }}
+              />
+              {/* Header du panneau */}
+              <div style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid #333',
+                backgroundColor: '#1a1a1a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <span style={{ color: '#fff', fontWeight: 600, fontSize: '14px' }}>
+                  ⚙️ Configuration - {getModuleById(selectedModule.moduleId)?.name}
+                </span>
+                <Button 
+                  type="text" 
+                  size="small" 
+                  onClick={() => setEditorState(prev => ({ ...prev, selectedModuleId: null }))}
+                  style={{ color: '#888' }}
+                >
+                  ✕
+                </Button>
+              </div>
+              {/* Contenu scrollable */}
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                <ModuleConfigPanel
+                  moduleInstance={selectedModule}
+                  onUpdate={(updates) => updateModule(selectedModule.id, updates)}
+                  onDelete={() => {
+                    deleteModule(selectedModule.id);
+                    setEditorState(prev => ({ ...prev, selectedModuleId: null }));
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Theme Editor Modal */}
       <DocumentGlobalThemeEditor

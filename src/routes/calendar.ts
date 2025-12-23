@@ -75,14 +75,14 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
     // Construction du whereClause
     interface WhereClause {
       organizationId: string;
-      OR: Array<{ ownerId?: string; participants?: { some: { userId: string } } }>;
+      OR: Array<{ ownerId?: string; CalendarParticipant?: { some: { userId: string } } }>;
       startDate?: { gte: Date; lte: Date };
     }
     const whereClause: WhereClause = {
       organizationId,
       OR: [
         { ownerId: userIdToSearch },
-        { participants: { some: { userId: userIdToSearch } } }
+        { CalendarParticipant: { some: { userId: userIdToSearch } } }
       ]
     };
     if (startDate && endDate) {
@@ -93,8 +93,8 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
     let events = await prisma.calendarEvent.findMany({
       where: whereClause,
       include: {
-        participants: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } },
-        owner: { select: { id: true, firstName: true, lastName: true, email: true } }
+        CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+        User: { select: { id: true, firstName: true, lastName: true, email: true } }
       },
       orderBy: { startDate: 'asc' }
     });
@@ -123,8 +123,8 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
         events = await prisma.calendarEvent.findMany({
           where: whereClause,
           include: {
-            participants: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } },
-            owner: { select: { id: true, firstName: true, lastName: true, email: true } }
+            CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+            User: { select: { id: true, firstName: true, lastName: true, email: true } }
           },
           orderBy: { startDate: 'asc' }
         });
@@ -146,12 +146,13 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
           const gId = gEvent.id;
           if (!gId || !gEvent.start?.dateTime || !gEvent.end?.dateTime) continue;
 
-          // Chercher par googleEventId maintenant (champ dédié)
+          // Chercher par externalCalendarId (stocke l'ID Google)
             const existing = await prisma.calendarEvent.findFirst({
-              where: { organizationId, googleEventId: gId }
+              where: { organizationId, externalCalendarId: gId }
             });
 
           const baseData = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             title: gEvent.summary || 'Sans titre',
             description: gEvent.description || null,
             startDate: new Date(gEvent.start.dateTime),
@@ -160,7 +161,8 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
             status: 'synced',
             organizationId,
             ownerId: userIdToSearch,
-            googleEventId: gId
+            externalCalendarId: gId,
+            updatedAt: new Date()
           };
 
           if (existing) {
@@ -174,8 +176,8 @@ router.get('/events', async (req: AuthenticatedRequest, res) => {
         events = await prisma.calendarEvent.findMany({
           where: whereClause,
           include: {
-            participants: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } },
-            owner: { select: { id: true, firstName: true, lastName: true, email: true } }
+            CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+            User: { select: { id: true, firstName: true, lastName: true, email: true } }
           },
           orderBy: { startDate: 'asc' }
         });
@@ -312,11 +314,17 @@ router.post('/sync', async (req: AuthenticatedRequest, res) => {
     const organizationId = req.user!.organizationId!;
     const { startDate, endDate } = req.body;
 
+    // Dates par défaut si non fournies: -7j à +30j
+    const syncStart = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const syncEnd = endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 3600 * 1000);
+
+    console.log('[CALENDAR SYNC] Début sync pour org:', organizationId, 'du', syncStart, 'au', syncEnd);
+
     // Utilise le nouveau service Google Calendar centralisé
     const googleEvents = await googleCalendarService.syncEvents(
       organizationId,
-      new Date(startDate),
-      new Date(endDate)
+      syncStart,
+      syncEnd
     );
 
     let createdCount = 0;
@@ -326,10 +334,11 @@ router.post('/sync', async (req: AuthenticatedRequest, res) => {
       if (!gEvent.start?.dateTime || !gEvent.end?.dateTime) continue;
 
       const existingEvent = gEvent.id ? await prisma.calendarEvent.findFirst({
-        where: { organizationId, googleEventId: gEvent.id }
+        where: { organizationId, externalCalendarId: gEvent.id }
       }) : null;
 
       const eventData = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         title: gEvent.summary || 'Sans titre',
         description: gEvent.description || null,
         startDate: new Date(gEvent.start.dateTime),
@@ -338,7 +347,8 @@ router.post('/sync', async (req: AuthenticatedRequest, res) => {
         status: 'synced',
         organizationId,
         ownerId: userId,
-        googleEventId: gEvent.id || null,
+        externalCalendarId: gEvent.id || null,
+        updatedAt: new Date(),
       };
 
       if (existingEvent) {
@@ -374,6 +384,7 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
     
     // 🔧 Préparation des données pour Prisma (validation des champs)
     const prismaData = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: eventData.title,
       description: eventData.description || null,
       startDate: eventData.start || eventData.startDate,
@@ -385,6 +396,7 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
       location: eventData.location || null,
       ownerId: userId,
       organizationId,
+      updatedAt: new Date(),
     };
     
     console.log('[CALENDAR ROUTES] Données préparées pour Prisma:', prismaData);
@@ -415,12 +427,12 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
         },
       };
       
-      const googleEventId = await googleCalendarService.createEvent(organizationId, googleEventData);
+      const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData);
       
       const updatedEvent = await prisma.calendarEvent.update({
         where: { id: event.id },
         data: {
-          googleEventId,
+          externalCalendarId,
         },
         include: {
           project: { select: { id: true, name: true, clientName: true } },
@@ -486,6 +498,7 @@ router.post('/notes', async (req: AuthenticatedRequest, res) => {
     console.log('[CALENDAR ROUTES] ✔ Données normalisées:', { title, hasDescription: !!description, parsedDue, normalizedPriority, safeCategory, organizationId, ownerId });
 
     const data = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title,
       description: description || null,
       startDate: today,
@@ -497,7 +510,8 @@ router.post('/notes', async (req: AuthenticatedRequest, res) => {
       priority: normalizedPriority,
       category: safeCategory,
       organizationId,
-      ownerId
+      ownerId,
+      updatedAt: new Date()
     };
 
     console.log('[CALENDAR ROUTES] ➕ Création Prisma calendarEvent avec data:', data);
@@ -620,7 +634,7 @@ router.put('/events/:id', async (req: AuthenticatedRequest, res) => {
       data: eventData,
     });
 
-    if (updatedEvent.googleEventId) {
+    if (updatedEvent.externalCalendarId) {
       try {
         const googleEventData = {
           summary: updatedEvent.title,
@@ -635,7 +649,7 @@ router.put('/events/:id', async (req: AuthenticatedRequest, res) => {
           },
         };
         
-        await googleCalendarService.updateEvent(organizationId, updatedEvent.googleEventId, googleEventData);
+        await googleCalendarService.updateEvent(organizationId, updatedEvent.externalCalendarId, googleEventData);
       } catch (googleError) {
         console.warn('[CALENDAR ROUTES] Erreur mise à jour Google Calendar:', googleError);
       }
@@ -670,10 +684,10 @@ router.delete('/events/:id', async (req: AuthenticatedRequest, res) => {
     await prisma.calendarEvent.delete({ where: { id } });
     console.log('[CALENDAR ROUTES] ✅ Événement supprimé de la base de données');
 
-    if (eventToDelete.googleEventId) {
+    if (eventToDelete.externalCalendarId) {
       try {
         console.log('[CALENDAR ROUTES] 🔄 Suppression de Google Calendar...');
-        await googleCalendarService.deleteEvent(organizationId, eventToDelete.googleEventId);
+        await googleCalendarService.deleteEvent(organizationId, eventToDelete.externalCalendarId);
         console.log('[CALENDAR ROUTES] ✅ Événement supprimé de Google Calendar');
       } catch (googleError) {
         console.warn('[CALENDAR ROUTES] ⚠️ Erreur suppression Google Calendar:', googleError);
