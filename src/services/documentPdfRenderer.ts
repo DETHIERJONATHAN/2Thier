@@ -1079,32 +1079,144 @@ export class DocumentPdfRenderer {
   }
 
   private renderModulePricingTable(config: Record<string, any>, x: number, y: number, width: number): void {
-    // Version simplifiée du tableau de prix
+    // Version améliorée du tableau de prix avec support pricingLines
     const title = config.title || 'Tarifs';
-    const items = config.items || [];
+    const currency = config.currency || '€';
+    const tvaRate = config.tvaRate || config.vatRate || 21;
+    const showTotal = config.showTotal !== false;
+    const showTVA = config.showTVA !== false;
+    
+    // 🆕 Support des pricingLines (nouveau système) ou items (ancien système)
+    let items: Array<{ description: string; quantity: number; unitPrice: number; total: number }> = [];
+    
+    if (config.pricingLines && config.pricingLines.length > 0) {
+      console.log('📄 [PDF] PRICING_TABLE: Utilisation de pricingLines', config.pricingLines.length);
+      items = this.processPricingLines(config.pricingLines, config);
+      console.log('📄 [PDF] PRICING_TABLE: Items résolus:', items);
+    } else if (config.items && config.items.length > 0) {
+      // Ancien format: items simples
+      items = config.items.map((item: any) => ({
+        description: this.substituteVariables(item.name || item.label || ''),
+        quantity: item.quantity || 1,
+        unitPrice: parseFloat(item.price || item.amount || item.unitPrice || 0),
+        total: parseFloat(item.price || item.amount || 0) * (item.quantity || 1),
+      }));
+    } else if (config.rows && config.rows.length > 0) {
+      // Format legacy: rows
+      items = config.rows.map((row: any) => ({
+        description: this.substituteVariables(row.designation || row.label || ''),
+        quantity: row.quantity || 1,
+        unitPrice: parseFloat(row.unitPrice || 0),
+        total: (row.quantity || 1) * parseFloat(row.unitPrice || 0),
+      }));
+    }
 
+    // Titre
     this.doc
-      .fontSize(this.scaleFontSize(18))
+      .fontSize(this.scaleFontSize(16))
       .font('Helvetica-Bold')
       .fillColor(this.theme.primaryColor || '#1890ff')
       .text(title, x, y, { width: width });
 
-    let currentY = y + 30;
-
-    for (const item of items) {
-      const itemName = this.substituteVariables(item.name || item.label || '');
-      const itemPrice = item.price || item.amount || '';
-
+    let currentY = y + 25;
+    
+    // En-tête du tableau
+    const colWidths = [width * 0.5, width * 0.15, width * 0.15, width * 0.2];
+    const headerHeight = 20;
+    
+    this.doc
+      .rect(x, currentY, width, headerHeight)
+      .fill(this.theme.primaryColor || '#1890ff');
+    
+    this.doc
+      .fontSize(this.scaleFontSize(10))
+      .font('Helvetica-Bold')
+      .fillColor('#FFFFFF');
+    
+    this.doc.text('Désignation', x + 5, currentY + 5, { width: colWidths[0] - 10 });
+    this.doc.text('Qté', x + colWidths[0], currentY + 5, { width: colWidths[1], align: 'center' });
+    this.doc.text('P.U.', x + colWidths[0] + colWidths[1], currentY + 5, { width: colWidths[2], align: 'right' });
+    this.doc.text('Total', x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 5, { width: colWidths[3], align: 'right' });
+    
+    currentY += headerHeight;
+    
+    // Lignes du tableau
+    let totalHT = 0;
+    
+    if (items.length === 0) {
+      // Aucune ligne
       this.doc
-        .fontSize(this.scaleFontSize(12))
-        .font('Helvetica')
+        .fontSize(this.scaleFontSize(10))
+        .font('Helvetica-Oblique')
+        .fillColor('#999999')
+        .text('Aucune ligne configurée', x + 5, currentY + 5, { width: width - 10, align: 'center' });
+      currentY += 25;
+    } else {
+      for (const item of items) {
+        const rowHeight = 18;
+        const lineTotal = item.total || (item.quantity * item.unitPrice);
+        totalHT += lineTotal;
+        
+        this.doc
+          .fontSize(this.scaleFontSize(10))
+          .font('Helvetica')
+          .fillColor(this.theme.textColor || '#333333');
+        
+        this.doc.text(item.description || '-', x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        this.doc.text(String(item.quantity), x + colWidths[0], currentY + 4, { width: colWidths[1], align: 'center' });
+        this.doc.text(`${item.unitPrice.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2], align: 'right' });
+        this.doc.text(`${lineTotal.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3], align: 'right' });
+        
+        // Ligne séparatrice
+        this.doc
+          .strokeColor('#e8e8e8')
+          .lineWidth(0.5)
+          .moveTo(x, currentY + rowHeight)
+          .lineTo(x + width, currentY + rowHeight)
+          .stroke();
+        
+        currentY += rowHeight;
+      }
+    }
+    
+    // Totaux
+    if (showTotal) {
+      const tva = totalHT * (tvaRate / 100);
+      const totalTTC = totalHT + tva;
+      
+      currentY += 5;
+      
+      // Total HT
+      this.doc
+        .fontSize(this.scaleFontSize(10))
+        .font('Helvetica-Bold')
         .fillColor(this.theme.textColor || '#333333')
-        .text(itemName, x, currentY, { width: width * 0.7, continued: false });
-
-      this.doc
-        .text(String(itemPrice), x + width * 0.7, currentY, { width: width * 0.3, align: 'right' });
-
-      currentY += 20;
+        .text('Total HT', x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: 'right' });
+      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: 'right' });
+      
+      currentY += 15;
+      
+      if (showTVA) {
+        // TVA
+        this.doc
+          .font('Helvetica')
+          .text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: 'right' });
+        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: 'right' });
+        
+        currentY += 15;
+        
+        // Total TTC
+        this.doc
+          .rect(x + width * 0.6, currentY - 2, width * 0.4, 20)
+          .fill(this.theme.primaryColor || '#1890ff');
+        
+        this.doc
+          .fontSize(this.scaleFontSize(12))
+          .font('Helvetica-Bold')
+          .fillColor('#FFFFFF')
+          .text('Total TTC', x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
+        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 5, align: 'right' });
+      }
     }
   }
 
@@ -1431,13 +1543,22 @@ export class DocumentPdfRenderer {
     this.checkPageBreak(250);
 
     const title = this.substituteVariables(
-      this.getTranslatedValue(config.title, 'Détail de l\'offre')
+      this.getTranslatedValue(config.title || config.tableTitle, 'Détail de l\'offre')
     );
 
     this.renderSectionTitle(title);
 
-    // Données de pricing depuis TBL ou config
-    const items = config.items || this.extractPricingFromTbl();
+    // 🆕 NOUVEAU SYSTÈME: Utiliser pricingLines configurées
+    const pricingLines = config.pricingLines || [];
+    let items: any[] = [];
+    
+    if (pricingLines.length > 0) {
+      // Transformer les pricingLines en items pour le rendu
+      items = this.processPricingLines(pricingLines, config);
+    } else {
+      // Fallback: anciennes données ou extraction TBL
+      items = config.items || this.extractPricingFromTbl();
+    }
 
     if (items && items.length > 0) {
       this.renderPriceTable(items, config);
@@ -1452,6 +1573,239 @@ export class DocumentPdfRenderer {
     // Totaux
     if (config.showTotals !== false) {
       this.renderPriceTotals(config);
+    }
+  }
+
+  /**
+   * 🆕 Traite les lignes de pricing configurées
+   * - Évalue les conditions d'affichage
+   * - Résout les références TBL (@value.xxx, @calculated.xxx, node-formula:xxx, etc.)
+   * - Génère N lignes pour les repeaters
+   */
+  private processPricingLines(pricingLines: any[], _config: Record<string, any>): any[] {
+    const results: any[] = [];
+    const tblData = this.ctx.tblData || {};
+    
+    for (const line of pricingLines) {
+      // 1. Évaluer la condition d'affichage
+      if (line.condition && !this.evaluateCondition(line.condition)) {
+        console.log(`📄 [PDF] Ligne "${line.label}" ignorée (condition non remplie)`);
+        continue;
+      }
+      
+      // 2. Traiter selon le type de ligne
+      if (line.type === 'repeater' && line.repeaterId) {
+        // Génère N lignes selon les instances du repeater
+        const repeaterInstances = this.getRepeaterInstances(line.repeaterId, tblData);
+        
+        for (const instance of repeaterInstances) {
+          const resolvedLine = this.resolveLineValues(line, instance);
+          results.push(resolvedLine);
+        }
+      } else {
+        // Ligne statique ou dynamique simple
+        const resolvedLine = this.resolveLineValues(line);
+        results.push(resolvedLine);
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Résout les valeurs d'une ligne (substitue les tokens TBL)
+   */
+  private resolveLineValues(line: any, repeaterInstance?: any): any {
+    console.log('📄 [PDF] resolveLineValues:', {
+      label: line.label,
+      labelSource: line.labelSource,
+      quantity: line.quantity,
+      quantitySource: line.quantitySource,
+      unitPrice: line.unitPrice,
+      unitPriceSource: line.unitPriceSource,
+    });
+    
+    const resolvedLine = {
+      description: '',
+      quantity: 1,
+      unitPrice: 0,
+      total: 0,
+    };
+    
+    // Résoudre le label/description
+    if (line.labelSource) {
+      const resolved = this.resolveVariable(line.labelSource);
+      console.log(`📄 [PDF] Label résolu: "${resolved}" (source: ${line.labelSource})`);
+      resolvedLine.description = resolved || line.label || 'Non défini';
+    } else {
+      resolvedLine.description = this.substituteVariables(line.label || '');
+    }
+    
+    // Pour les repeaters, ajouter l'instance au label si nécessaire
+    if (repeaterInstance && repeaterInstance.instanceLabel) {
+      resolvedLine.description = `${resolvedLine.description} (${repeaterInstance.instanceLabel})`;
+    }
+    
+    // Résoudre la quantité
+    if (line.quantitySource) {
+      const qty = this.resolveVariable(line.quantitySource);
+      console.log(`📄 [PDF] Quantité résolue: "${qty}" (source: ${line.quantitySource})`);
+      resolvedLine.quantity = parseFloat(qty) || 1;
+    } else if (typeof line.quantity === 'string' && line.quantity.startsWith('@')) {
+      const qty = this.resolveVariable(line.quantity);
+      resolvedLine.quantity = parseFloat(qty) || 1;
+    } else {
+      resolvedLine.quantity = parseFloat(line.quantity) || 1;
+    }
+    
+    // Résoudre le prix unitaire
+    if (line.unitPriceSource) {
+      const price = this.resolveVariable(line.unitPriceSource);
+      console.log(`📄 [PDF] Prix résolu: "${price}" (source: ${line.unitPriceSource})`);
+      resolvedLine.unitPrice = parseFloat(price) || 0;
+    } else if (typeof line.unitPrice === 'string' && (line.unitPrice.startsWith('@') || line.unitPrice.startsWith('node-formula:') || line.unitPrice.startsWith('condition:'))) {
+      const price = this.resolveVariable(line.unitPrice);
+      resolvedLine.unitPrice = parseFloat(price) || 0;
+    } else {
+      resolvedLine.unitPrice = parseFloat(line.unitPrice) || 0;
+    }
+    
+    console.log(`📄 [PDF] ➡️ Ligne résolue:`, resolvedLine);
+    
+    // Résoudre le total (ou le calculer)
+    if (line.totalSource) {
+      const tot = this.resolveVariable(line.totalSource);
+      resolvedLine.total = parseFloat(tot) || 0;
+    } else if (typeof line.total === 'string' && line.total.startsWith('@')) {
+      const tot = this.resolveVariable(line.total);
+      resolvedLine.total = parseFloat(tot) || 0;
+    } else if (line.total !== undefined) {
+      resolvedLine.total = parseFloat(line.total) || 0;
+    } else {
+      // Calcul automatique si pas de total défini
+      resolvedLine.total = resolvedLine.quantity * resolvedLine.unitPrice;
+    }
+    
+    return resolvedLine;
+  }
+
+  /**
+   * Récupère les instances d'un repeater depuis les données TBL
+   */
+  private getRepeaterInstances(repeaterId: string, tblData: Record<string, any>): any[] {
+    const instances: any[] = [];
+    
+    // Chercher les nœuds qui correspondent au repeater
+    // Format typique: nodeId-1, nodeId-2, etc.
+    const repeaterPattern = new RegExp(`^${repeaterId}-\\d+$`);
+    
+    // Parcourir tblData pour trouver les instances
+    for (const key of Object.keys(tblData)) {
+      if (repeaterPattern.test(key) || key.startsWith(`${repeaterId}-`)) {
+        const instanceNumber = key.split('-').pop();
+        instances.push({
+          id: key,
+          instanceLabel: `#${instanceNumber}`,
+          data: tblData[key],
+        });
+      }
+    }
+    
+    // Si aucune instance trouvée, chercher dans la structure des submissions
+    if (instances.length === 0 && this.ctx.submission) {
+      const submission = this.ctx.submission as Record<string, any>;
+      const values = submission.values || {};
+      
+      for (const key of Object.keys(values)) {
+        if (key.includes(repeaterId) && key.match(/-\d+$/)) {
+          const instanceNumber = key.split('-').pop();
+          if (!instances.find(i => i.instanceLabel === `#${instanceNumber}`)) {
+            instances.push({
+              id: key,
+              instanceLabel: `#${instanceNumber}`,
+              data: values[key],
+            });
+          }
+        }
+      }
+    }
+    
+    console.log(`📄 [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouvée(s)`);
+    return instances;
+  }
+
+  /**
+   * Évalue une condition d'affichage
+   */
+  private evaluateCondition(condition: any): boolean {
+    if (!condition || !condition.rules || condition.rules.length === 0) {
+      return true; // Pas de condition = toujours visible
+    }
+    
+    const operator = condition.operator || 'AND';
+    const results: boolean[] = [];
+    
+    for (const rule of condition.rules) {
+      const sourceValue = this.resolveVariable(rule.source);
+      const targetValue = rule.value;
+      
+      let ruleResult = false;
+      
+      switch (rule.operator) {
+        case 'equals':
+        case '==':
+          ruleResult = String(sourceValue) === String(targetValue);
+          break;
+        case 'notEquals':
+        case '!=':
+          ruleResult = String(sourceValue) !== String(targetValue);
+          break;
+        case 'contains':
+          ruleResult = String(sourceValue).includes(String(targetValue));
+          break;
+        case 'notContains':
+          ruleResult = !String(sourceValue).includes(String(targetValue));
+          break;
+        case 'greaterThan':
+        case '>':
+          ruleResult = parseFloat(sourceValue) > parseFloat(targetValue);
+          break;
+        case 'lessThan':
+        case '<':
+          ruleResult = parseFloat(sourceValue) < parseFloat(targetValue);
+          break;
+        case 'greaterOrEqual':
+        case '>=':
+          ruleResult = parseFloat(sourceValue) >= parseFloat(targetValue);
+          break;
+        case 'lessOrEqual':
+        case '<=':
+          ruleResult = parseFloat(sourceValue) <= parseFloat(targetValue);
+          break;
+        case 'isEmpty':
+          ruleResult = !sourceValue || sourceValue === '';
+          break;
+        case 'isNotEmpty':
+          ruleResult = !!sourceValue && sourceValue !== '';
+          break;
+        case 'isTrue':
+          ruleResult = sourceValue === true || sourceValue === 'true' || sourceValue === 1;
+          break;
+        case 'isFalse':
+          ruleResult = sourceValue === false || sourceValue === 'false' || sourceValue === 0;
+          break;
+        default:
+          ruleResult = true;
+      }
+      
+      results.push(ruleResult);
+    }
+    
+    // Combiner les résultats selon l'opérateur
+    if (operator === 'AND') {
+      return results.every(r => r);
+    } else {
+      return results.some(r => r);
     }
   }
 
@@ -1998,6 +2352,8 @@ export class DocumentPdfRenderer {
     const quote = this.ctx.quote || {};
     const tblData = this.ctx.tblData || {};
 
+    console.log(`📄 [PDF] resolveVariable("${ref}")`, { tblDataKeys: Object.keys(tblData).slice(0, 10) });
+
     // Variables lead.xxx
     if (ref.startsWith('lead.')) {
       const key = ref.replace('lead.', '') as keyof LeadData;
@@ -2021,15 +2377,89 @@ export class DocumentPdfRenderer {
     // Variables @value.xxx et @select.xxx (données TBL)
     if (ref.startsWith('@value.') || ref.startsWith('@select.')) {
       const nodeRef = ref.replace(/^@(value|select)\./, '');
-      // Chercher dans tblData par ID ou par label
+      console.log(`📄 [PDF] Cherche TBL ref: "${nodeRef}"`);
+      
+      // Chercher dans tblData par ID exact
       if (tblData[nodeRef] !== undefined) {
+        console.log(`📄 [PDF] ✅ Trouvé exact: ${tblData[nodeRef]}`);
         return this.formatValue(tblData[nodeRef]);
       }
-      // Chercher par clé partielle
+      
+      // Chercher dans values si c'est une submission
+      if (tblData.values && tblData.values[nodeRef] !== undefined) {
+        console.log(`📄 [PDF] ✅ Trouvé dans values: ${tblData.values[nodeRef]}`);
+        return this.formatValue(tblData.values[nodeRef]);
+      }
+      
+      // Chercher par clé partielle (le nodeRef peut être le dernier segment d'un ID plus long)
       for (const [key, value] of Object.entries(tblData)) {
-        if (key.includes(nodeRef)) {
+        if (key.includes(nodeRef) || key.endsWith(nodeRef)) {
+          console.log(`📄 [PDF] ✅ Trouvé partiel "${key}": ${value}`);
           return this.formatValue(value);
         }
+      }
+      
+      // Chercher aussi dans values par clé partielle
+      if (tblData.values) {
+        for (const [key, value] of Object.entries(tblData.values)) {
+          if (key.includes(nodeRef) || key.endsWith(nodeRef)) {
+            console.log(`📄 [PDF] ✅ Trouvé partiel dans values "${key}": ${value}`);
+            return this.formatValue(value);
+          }
+        }
+      }
+    }
+
+    // 🆕 Variables calculatedValue:xxx ou @calculated.xxx
+    if (ref.startsWith('calculatedValue:') || ref.startsWith('@calculated.')) {
+      const calcRef = ref.replace(/^(calculatedValue:|@calculated\.)/, '');
+      console.log(`📄 [PDF] Cherche calculatedValue: "${calcRef}"`);
+      
+      // Chercher dans calculatedValues ou directement dans tblData
+      if (tblData.calculatedValues && tblData.calculatedValues[calcRef] !== undefined) {
+        return this.formatValue(tblData.calculatedValues[calcRef]);
+      }
+      if (tblData[calcRef] !== undefined) {
+        return this.formatValue(tblData[calcRef]);
+      }
+      // Chercher par suffixe
+      for (const [key, value] of Object.entries(tblData)) {
+        if (key.includes(calcRef) || key.endsWith(calcRef)) {
+          return this.formatValue(value);
+        }
+      }
+    }
+
+    // 🆕 Variables node-formula:xxx ou formula:xxx
+    if (ref.startsWith('node-formula:') || ref.startsWith('formula:')) {
+      const formulaRef = ref.replace(/^(node-formula:|formula:)/, '');
+      console.log(`📄 [PDF] Cherche formula: "${formulaRef}"`);
+      
+      // Chercher dans formulas ou directement
+      if (tblData.formulas && tblData.formulas[formulaRef] !== undefined) {
+        return this.formatValue(tblData.formulas[formulaRef]);
+      }
+      if (tblData[formulaRef] !== undefined) {
+        return this.formatValue(tblData[formulaRef]);
+      }
+      // Chercher par suffixe
+      for (const [key, value] of Object.entries(tblData)) {
+        if (key.includes(formulaRef) || key.endsWith(formulaRef)) {
+          return this.formatValue(value);
+        }
+      }
+    }
+
+    // 🆕 Variables condition:xxx
+    if (ref.startsWith('condition:')) {
+      const condRef = ref.replace('condition:', '');
+      console.log(`📄 [PDF] Cherche condition: "${condRef}"`);
+      
+      if (tblData.conditions && tblData.conditions[condRef] !== undefined) {
+        return this.formatValue(tblData.conditions[condRef]);
+      }
+      if (tblData[condRef] !== undefined) {
+        return this.formatValue(tblData[condRef]);
       }
     }
 
@@ -2037,7 +2467,16 @@ export class DocumentPdfRenderer {
     if (tblData[ref] !== undefined) {
       return this.formatValue(tblData[ref]);
     }
+    
+    // 🆕 Dernière tentative: chercher par ID partiel dans toutes les clés
+    for (const [key, value] of Object.entries(tblData)) {
+      if (key.includes(ref) || ref.includes(key)) {
+        console.log(`📄 [PDF] ✅ Trouvé par recherche globale "${key}": ${value}`);
+        return this.formatValue(value);
+      }
+    }
 
+    console.log(`📄 [PDF] ❌ Variable non trouvée: "${ref}"`);
     return '';
   }
 

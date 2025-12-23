@@ -87,6 +87,8 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const [gridMode, setGridMode] = useState(true); // Mode grille par défaut
   const [showGrid, setShowGrid] = useState(true); // Afficher la grille
   const [loading, setLoading] = useState(!initialConfig); // Chargement si pas de config initiale
+  const [rightPanelWidth, setRightPanelWidth] = useState(380); // Largeur du panneau de droite (redimensionnable)
+  const [isResizingPanel, setIsResizingPanel] = useState(false); // État du redimensionnement
 
   // Données de test pour le mode preview et l'évaluation des conditions
   const previewDocumentData = useMemo(() => ({
@@ -176,6 +178,32 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
     loadSections();
   }, [templateId, api, initialConfig]);
+
+  // Gestionnaire de redimensionnement du panneau de droite
+  useEffect(() => {
+    if (!isResizingPanel) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Calculer la nouvelle largeur depuis le bord droit de la fenêtre
+      const newWidth = window.innerWidth - e.clientX;
+      // Limiter entre 320px et 800px
+      setRightPanelWidth(Math.min(800, Math.max(320, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingPanel(false);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingPanel]);
 
   // Page active
   const activePage = useMemo(() => {
@@ -883,17 +911,49 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           )}
         </div>
 
-        {/* RIGHT - Module Config (Panneau intégré) */}
+        {/* RIGHT - Module Config (Panneau intégré, redimensionnable) */}
         {selectedModule && (
           <div style={{ 
-            width: '320px',
+            width: `${rightPanelWidth}px`,
             minWidth: '320px',
+            maxWidth: '800px',
             borderLeft: '1px solid #333',
             display: 'flex',
             flexDirection: 'column',
             backgroundColor: '#1f1f1f',
             overflow: 'hidden',
+            position: 'relative',
           }}>
+            {/* Barre de redimensionnement */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizingPanel(true);
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+              }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: '6px',
+                cursor: 'col-resize',
+                backgroundColor: isResizingPanel ? '#1890ff' : 'transparent',
+                transition: 'background-color 0.2s',
+                zIndex: 10,
+              }}
+              onMouseEnter={(e) => {
+                if (!isResizingPanel) {
+                  (e.target as HTMLElement).style.backgroundColor = '#444';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isResizingPanel) {
+                  (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                }
+              }}
+            />
             {/* Header du panneau */}
             <div style={{
               padding: '12px 16px',

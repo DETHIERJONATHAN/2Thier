@@ -2127,47 +2127,48 @@ const TBL: React.FC<TBLProps> = ({
                       </div>
                     ),
                     children: (
-                      <Card className="max-w-2xl mx-auto">
-                        <Title level={4}>Informations Client</Title>
-                        <div className="space-y-4 mt-4">
-                          <div className="flex items-center gap-3">
-                            <UserOutlined className="text-blue-500 text-lg" />
-                            <div className="flex items-center gap-2">
-                              <Text type="secondary">Nom :</Text>
-                              <Text strong className="text-base">{clientData.name || 'Non renseigné'}</Text>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <MailOutlined className="text-blue-500 text-lg" />
-                            <div className="flex items-center gap-2">
-                              <Text type="secondary">Email :</Text>
-                              <Text strong className="text-base">{clientData.email || 'Non renseigné'}</Text>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <PhoneOutlined className="text-blue-500 text-lg" />
-                            <div className="flex items-center gap-2">
-                              <Text type="secondary">Téléphone :</Text>
-                              <Text strong className="text-base">{clientData.phone || 'Non renseigné'}</Text>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <HomeOutlined className="text-blue-500 text-lg" />
-                            <div className="flex items-center gap-2">
-                              <Text type="secondary">Adresse :</Text>
-                              <Text strong className="text-base">{clientData.address || 'Non renseigné'}</Text>
-                            </div>
-                          </div>
-                        </div>
+                      <div>
+                        {/* Ligne 1 : Informations Client - horizontalement */}
+                        <Card size="small" style={{ marginBottom: 16 }}>
+                          <Title level={5} style={{ marginBottom: 12, textAlign: 'center' }}>Informations Client</Title>
+                          <Row gutter={[24, 8]}>
+                            <Col xs={24} sm={12} md={6}>
+                              <div className="flex items-center gap-2">
+                                <UserOutlined className="text-blue-500" />
+                                <Text type="secondary">Nom :</Text>
+                                <Text strong>{clientData.name || 'Non renseigné'}</Text>
+                              </div>
+                            </Col>
+                            <Col xs={24} sm={12} md={6}>
+                              <div className="flex items-center gap-2">
+                                <MailOutlined className="text-blue-500" />
+                                <Text type="secondary">Email :</Text>
+                                <Text strong>{clientData.email || 'Non renseigné'}</Text>
+                              </div>
+                            </Col>
+                            <Col xs={24} sm={12} md={6}>
+                              <div className="flex items-center gap-2">
+                                <PhoneOutlined className="text-blue-500" />
+                                <Text type="secondary">Téléphone :</Text>
+                                <Text strong>{clientData.phone || 'Non renseigné'}</Text>
+                              </div>
+                            </Col>
+                            <Col xs={24} sm={12} md={6}>
+                              <div className="flex items-center gap-2">
+                                <HomeOutlined className="text-blue-500" />
+                                <Text type="secondary">Adresse :</Text>
+                                <Text strong>{clientData.address || 'Non renseigné'}</Text>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
                         
-                        {/* Section Documents */}
-                        <div className="mt-6">
-                          <DocumentsSection 
-                            submissionId={submissionId}
-                            leadId={leadId}
-                          />
-                        </div>
-                      </Card>
+                        {/* Ligne 2 : Documents - horizontalement */}
+                        <DocumentsSection 
+                          submissionId={submissionId}
+                          leadId={leadId}
+                        />
+                      </div>
                     )
                   },
                   // Puis les autres onglets

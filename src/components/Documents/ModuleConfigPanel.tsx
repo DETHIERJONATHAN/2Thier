@@ -3,12 +3,13 @@
  */
 
 import { useEffect, useState, useRef } from 'react';
-import { Form, Input, InputNumber, Select, Switch, ColorPicker, Button, Collapse, Space, Upload, message, Badge, Tooltip, Tabs, Tag } from 'antd';
+import { Form, Input, InputNumber, Select, Switch, ColorPicker, Button, Collapse, Space, Upload, message, Badge, Tooltip, Tabs, Tag, Divider } from 'antd';
 import { DeleteOutlined, CopyOutlined, UploadOutlined, LinkOutlined, LoadingOutlined, ThunderboltOutlined, ApiOutlined, UserOutlined, FileTextOutlined, HomeOutlined } from '@ant-design/icons';
 import { ModuleInstance } from './types';
 import { getModuleById, ConfigField } from './ModuleRegistry';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import ConditionEditorModal, { ConditionalConfig } from './ConditionEditorModal';
+import PricingLinesEditor, { PricingLine } from './PricingLinesEditor';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 const { TextArea } = Input;
@@ -769,6 +770,27 @@ const ModuleConfigPanel = ({
             moduleDef.configFields.map(renderField)
           )}
         </Form>
+        
+        {/* 🆕 ÉDITEUR DE LIGNES SPÉCIAL POUR PRICING_TABLE */}
+        {moduleInstance.moduleId === 'PRICING_TABLE' && (
+          <>
+            <Divider style={{ borderColor: '#444', margin: '24px 0 16px' }}>
+              <span style={{ color: '#888', fontSize: '12px' }}>📊 Configuration des lignes</span>
+            </Divider>
+            <PricingLinesEditor
+              lines={moduleInstance.config?.pricingLines || []}
+              onChange={(newLines: PricingLine[]) => {
+                onUpdate({ 
+                  config: { 
+                    ...moduleInstance.config, 
+                    pricingLines: newLines 
+                  } 
+                });
+              }}
+              nodeId={selectedNodeId || undefined}
+            />
+          </>
+        )}
       </div>
 
       {/* Footer avec info */}

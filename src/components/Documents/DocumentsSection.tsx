@@ -11,7 +11,9 @@ import {
   Empty,
   Spin,
   Descriptions,
-  Typography
+  Typography,
+  Row,
+  Col
 } from 'antd';
 import { 
   DownloadOutlined, 
@@ -215,63 +217,65 @@ const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (
-          <Space direction="vertical" className="w-full" size="middle">
+          /* Affichage horizontal des documents - Row/Col responsive */
+          <Row gutter={[12, 12]}>
             {documents.map(doc => (
-              <Card
-                key={doc.id}
-                size="small"
-                className="shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{getTypeIcon(doc.type)}</span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{doc.template.name}</span>
-                        {getStatusTag(doc.status)}
-                        <span className="text-sm text-gray-500">
-                          {getLanguageFlag(doc.language)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {doc.documentNumber && (
-                          <span className="mr-3">N° {doc.documentNumber}</span>
-                        )}
-                        <span>{new Date(doc.createdAt).toLocaleDateString('fr-FR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}</span>
-                      </div>
-                      {doc.sentAt && (
-                        <div className="text-xs text-gray-400">
-                          Envoyé le {new Date(doc.sentAt).toLocaleDateString('fr-FR')}
-                        </div>
-                      )}
-                      {doc.signedAt && (
-                        <div className="text-xs text-green-600">
-                          ✓ Signé le {new Date(doc.signedAt).toLocaleDateString('fr-FR')}
-                        </div>
-                      )}
-                      {doc.paidAt && (
-                        <div className="text-xs text-green-600">
-                          ✓ Payé le {new Date(doc.paidAt).toLocaleDateString('fr-FR')}
-                        </div>
-                      )}
+              <Col key={doc.id} xs={24} sm={12} md={8} lg={6} xl={4}>
+                <Card
+                  size="small"
+                  className="shadow-sm hover:shadow-md transition-shadow"
+                  style={{ height: '100%' }}
+                >
+                  {/* Header compact */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                    <span style={{ fontSize: 24, marginBottom: 4 }}>{getTypeIcon(doc.type)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <span style={{ fontWeight: 500, fontSize: 12 }}>{doc.template.name.length > 10 ? 'PV' : doc.template.name}</span>
+                      {getStatusTag(doc.status)}
+                      <span style={{ fontSize: 11, color: '#888' }}>
+                        {getLanguageFlag(doc.language)}
+                      </span>
                     </div>
+                    <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+                      {doc.documentNumber && (
+                        <div>N° {doc.documentNumber}</div>
+                      )}
+                      <div>{new Date(doc.createdAt).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}</div>
+                    </div>
+                    {doc.sentAt && (
+                      <div style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
+                        Envoyé le {new Date(doc.sentAt).toLocaleDateString('fr-FR')}
+                      </div>
+                    )}
+                    {doc.signedAt && (
+                      <div style={{ fontSize: 10, color: '#52c41a' }}>
+                        ✓ Signé le {new Date(doc.signedAt).toLocaleDateString('fr-FR')}
+                      </div>
+                    )}
+                    {doc.paidAt && (
+                      <div style={{ fontSize: 10, color: '#52c41a' }}>
+                        ✓ Payé le {new Date(doc.paidAt).toLocaleDateString('fr-FR')}
+                      </div>
+                    )}
                   </div>
                   
-                  <Space>
+                  {/* Actions compactes */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0', flexWrap: 'wrap' }}>
                     <Button
+                      size="small"
                       icon={<DownloadOutlined />}
                       onClick={() => handleDownload(doc)}
-                      disabled={!doc.pdfUrl}
                     >
                       Télécharger
                     </Button>
                     <Button
+                      size="small"
                       icon={<SendOutlined />}
                       onClick={() => openSendModal(doc)}
                     >
@@ -296,13 +300,13 @@ const DocumentsSection = ({ submissionId, leadId }: DocumentsSectionProps) => {
                         ]
                       }}
                     >
-                      <Button icon={<MoreOutlined />} />
-                    </Dropdown>
-                  </Space>
+                    <Button size="small" icon={<MoreOutlined />} />
+                  </Dropdown>
                 </div>
               </Card>
+              </Col>
             ))}
-          </Space>
+          </Row>
         )}
       </Spin>
 

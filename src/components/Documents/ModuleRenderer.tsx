@@ -499,22 +499,54 @@ const ModuleRenderer = ({
 
   // ============== PRICING_TABLE ==============
   if (module.moduleId === 'PRICING_TABLE') {
-    const rows = config.rows || [];
+    // 🆕 Support des nouvelles pricingLines ET des anciennes rows
+    const pricingLines = config.pricingLines || [];
+    const legacyRows = config.rows || [];
+    
+    // Fonction pour extraire un label lisible d'une référence TBL
+    const extractTblLabel = (ref: string) => {
+      if (!ref) return null;
+      // Extraire le nom après le @ : @value.xxx -> "Valeur TBL"
+      // Ou extraire la dernière partie significative
+      const parts = ref.split('.');
+      const lastPart = parts[parts.length - 1];
+      // Tronquer si trop long
+      return lastPart.length > 20 ? `${lastPart.substring(0, 17)}...` : lastPart;
+    };
+    
+    // Convertir pricingLines en format rows pour l'affichage
+    const rows = pricingLines.length > 0 
+      ? pricingLines.map((line: any) => ({
+          // 🔧 Utiliser labelSource si label est vide
+          designation: line.label || (line.labelSource ? `📊 ${extractTblLabel(line.labelSource)}` : 'Sans désignation'),
+          quantity: typeof line.quantity === 'number' ? line.quantity : 1,
+          unitPrice: typeof line.unitPrice === 'number' ? line.unitPrice : 0,
+          // Indicateurs visuels pour les sources TBL
+          hasLabelSource: !!line.labelSource,
+          labelSource: line.labelSource,
+          hasQuantitySource: !!line.quantitySource,
+          hasUnitPriceSource: !!line.unitPriceSource,
+          quantitySource: line.quantitySource,
+          unitPriceSource: line.unitPriceSource,
+          type: line.type,
+        }))
+      : legacyRows;
+    
     const currency = config.currency || '€';
-    const tvaRate = config.tvaRate || 21;
+    const tvaRate = config.tvaRate || config.vatRate || 21;
     
     const totalHT = rows.reduce((sum: number, row: any) => sum + ((row.quantity || 0) * (row.unitPrice || 0)), 0);
     const tva = totalHT * (tvaRate / 100);
     const totalTTC = totalHT + tva;
 
     return (
-      <div style={{ ...themeStyles }}>
+      <div style={{ ...themeStyles, backgroundColor: '#ffffff', borderRadius: '8px', padding: '12px' }}>
         {config.title && (
           <h3 style={{ marginBottom: '16px', color: globalTheme.primaryColor }}>
             {config.title}
           </h3>
         )}
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#ffffff' }}>
           <thead>
             <tr style={{ backgroundColor: globalTheme.primaryColor, color: '#fff' }}>
               <th style={{ padding: '12px', textAlign: 'left' }}>Désignation</th>
@@ -526,17 +558,65 @@ const ModuleRenderer = ({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#999', backgroundColor: '#fff' }}>
                   Aucune ligne ajoutée
                 </td>
               </tr>
             ) : (
               rows.map((row: any, idx: number) => (
-                <tr key={idx} style={{ borderBottom: '1px solid #e8e8e8' }}>
-                  <td style={{ padding: '12px' }}>{row.designation || '-'}</td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>{row.quantity || 0}</td>
-                  <td style={{ padding: '12px', textAlign: 'right' }}>{(row.unitPrice || 0).toFixed(2)} {currency}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600 }}>
+                <tr key={idx} style={{ borderBottom: '1px solid #e8e8e8', backgroundColor: '#fff' }}>
+                  <td style={{ padding: '12px', color: '#333' }}>
+                    {row.hasLabelSource ? (
+                      <span style={{ color: '#fa8c16', fontWeight: 500 }} title={row.labelSource}>
+                        {row.designation}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#333' }}>{row.designation || '-'}</span>
+                    )}
+                    {row.type === 'dynamic' && !row.hasLabelSource && (
+                      <span style={{ 
+                        marginLeft: '8px', 
+                        fontSize: '10px', 
+                        padding: '2px 6px', 
+                        backgroundColor: '#e6f7ff', 
+                        borderRadius: '4px',
+                        color: '#1890ff'
+                      }}>
+                        🔗 TBL
+                      </span>
+                    )}
+                    {row.type === 'repeater' && (
+                      <span style={{ 
+                        marginLeft: '8px', 
+                        fontSize: '10px', 
+                        padding: '2px 6px', 
+                        backgroundColor: '#f9f0ff', 
+                        borderRadius: '4px',
+                        color: '#722ed1'
+                      }}>
+                        🔁 Repeater
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center', color: '#333' }}>
+                    {row.hasQuantitySource ? (
+                      <span style={{ color: '#1890ff', fontSize: '11px', fontWeight: 500 }} title={row.quantitySource}>
+                        📊 {row.quantity || '?'}
+                      </span>
+                    ) : (
+                      row.quantity || 0
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right', color: '#333' }}>
+                    {row.hasUnitPriceSource ? (
+                      <span style={{ color: '#52c41a', fontSize: '11px', fontWeight: 500 }} title={row.unitPriceSource}>
+                        📊 {(row.unitPrice || 0).toFixed(2)} {currency}
+                      </span>
+                    ) : (
+                      <>{(row.unitPrice || 0).toFixed(2)} {currency}</>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: '#333' }}>
                     {((row.quantity || 0) * (row.unitPrice || 0)).toFixed(2)} {currency}
                   </td>
                 </tr>

@@ -248,7 +248,31 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     defaultConfig: {
       title: 'Détail du devis',
       columns: ['Désignation', 'Quantité', 'Prix unitaire', 'Total'],
-      rows: [],
+      /**
+       * 🆕 SYSTÈME DE LIGNES DYNAMIQUES
+       * Chaque ligne peut être :
+       * - type: 'static' → Ligne fixe avec valeurs manuelles
+       * - type: 'dynamic' → Liée à une source de données TBL (formule, condition, calculatedValue)
+       * - type: 'repeater' → Génère N lignes selon les instances du repeater
+       * 
+       * Structure d'une ligne:
+       * {
+       *   id: string,                    // ID unique de la ligne
+       *   type: 'static' | 'dynamic' | 'repeater',
+       *   label: string,                 // Texte de la désignation (peut contenir des tokens @value.xxx)
+       *   labelSource?: string,          // Pour type='dynamic': référence TBL pour le label
+       *   quantity: number | string,     // Quantité (ou token @value.xxx pour calcul dynamique)
+       *   quantitySource?: string,       // Référence TBL pour la quantité
+       *   unitPrice: number | string,    // Prix unitaire (ou token @calculated.xxx, node-formula:xxx)
+       *   unitPriceSource?: string,      // Référence TBL pour le prix unitaire
+       *   total?: number | string,       // Total (généralement auto-calculé ou token)
+       *   totalSource?: string,          // Référence TBL pour le total
+       *   repeaterId?: string,           // Pour type='repeater': ID du repeater
+       *   condition?: ConditionalConfig, // Condition d'affichage de la ligne
+       *   order: number                  // Ordre d'affichage
+       * }
+       */
+      pricingLines: [],
       showTotal: true,
       showTVA: true,
       tvaRate: 21,
@@ -262,6 +286,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     ],
     configFields: [
       { key: 'title', label: 'Titre du tableau', type: 'text' },
+      // Note: pricingLines est géré par un éditeur spécial dans SectionConfigPanel
       { key: 'showTotal', label: 'Afficher le total', type: 'toggle', defaultValue: true },
       { key: 'showTVA', label: 'Afficher la TVA', type: 'toggle', defaultValue: true },
       { key: 'tvaRate', label: 'Taux TVA (%)', type: 'number', defaultValue: 21 },
