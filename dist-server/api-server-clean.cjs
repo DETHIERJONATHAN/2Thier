@@ -2386,7 +2386,6 @@ async function enrichDataFromSubmission(submissionId, prisma70, valueMap, labelM
         }
       }
     } else {
-      console.warn(`[ENRICHMENT] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Impossible de trouver l'arbre pour la soumission ${submissionId}`);
     }
     for (const data of submissionData) {
       if (data.nodeId && data.value !== null) {
@@ -2519,7 +2518,6 @@ async function interpretCondition(conditionId, submissionId, prisma70, valuesCac
     }
   });
   if (!condition) {
-    console.error(`[CONDITION] \xC3\xA2\xC2\x9D\xC5\u2019 Condition introuvable: ${conditionId}`);
     return {
       result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Condition introuvable: ${conditionId}`,
@@ -2530,7 +2528,6 @@ async function interpretCondition(conditionId, submissionId, prisma70, valuesCac
   const branch = condSet.branches?.[0];
   const when = branch?.when;
   if (!when) {
-    console.error(`[CONDITION] \xC3\xA2\xC2\x9D\xC5\u2019 Structure WHEN manquante`);
     return {
       result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: "Structure condition invalide",
@@ -2550,7 +2547,6 @@ async function interpretCondition(conditionId, submissionId, prisma70, valuesCac
       if (optionNode) {
         return { value: optionNode.id, label: optionNode.label };
       }
-      console.warn(`[CONDITION] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Option non trouv\xC3\u0192\xC2\xA9e: ${optionNodeId}`);
       return { value: optionNodeId, label: "Option inconnue" };
     }
     const operandType = identifyReferenceType(ref);
@@ -2693,7 +2689,6 @@ function evaluateOperator(op, left, right) {
     case "<=":
       return Number(left) <= Number(right);
     default:
-      console.warn(`[CONDITION] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Op\xC3\u0192\xC2\xA9rateur inconnu: ${op}`);
       return false;
   }
 }
@@ -2917,7 +2912,6 @@ async function interpretFormula(formulaId, submissionId, prisma70, valuesCache, 
     }
   }
   if (!formula) {
-    console.error(`[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Formule introuvable: ${formulaId}`);
     return {
       result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Formule introuvable: ${formulaId}`,
@@ -3155,7 +3149,6 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
     }
   }
   if (!table) {
-    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Table introuvable: ${tableId}`);
     return {
       result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Table introuvable: ${tableId}`,
@@ -3741,7 +3734,6 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
     actualColValue = String(colSelectorValue);
   }
   if (finalRowIndex === -1 || finalColIndex === -1) {
-    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Valeur introuvable dans rows/columns`);
     return {
       result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Table "${table.name}"[${actualRowValue}, ${actualColValue}] = valeur introuvable`,
@@ -3835,7 +3827,6 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma70,
     }
   });
   if (!variable) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Variable introuvable: ${variableNodeId}`);
     throw new Error(`Variable introuvable: ${variableNodeId}`);
   }
   if (variable.sourceType === "fixed" && variable.fixedValue) {
@@ -4154,7 +4145,6 @@ var getMe = async (req2, res) => {
       originalUser: null
       // Pour l'usurpation d'identité, null par défaut
     };
-    console.log(`[AUTH] R\xE9cup\xE9ration des donn\xE9es utilisateur pour ${user.email}`);
     res.status(200).json(response);
   } catch (error) {
     console.error("[AUTH] Erreur lors de la v\xE9rification du token:", error);
@@ -4431,13 +4421,9 @@ var SCOPES = GOOGLE_SCOPES_LIST;
 var GoogleOAuthService = class {
   oauth2Client;
   constructor() {
-    console.log("[GoogleOAuthService] Initialisation configuration Google OAuth (core)");
     if (!isGoogleOAuthConfigured()) {
       console.warn("[GoogleOAuthService] \u26A0\uFE0F Configuration Google OAuth incompl\xE8te", describeGoogleOAuthConfig());
-    } else {
-      console.log("[GoogleOAuthService] \u2705 Configuration d\xE9tect\xE9e", describeGoogleOAuthConfig());
     }
-    console.log("[GoogleOAuthService] GOOGLE_REDIRECT_URI:", GOOGLE_REDIRECT_URI);
     this.oauth2Client = new import_googleapis.google.auth.OAuth2(
       GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET,
@@ -4446,8 +4432,6 @@ var GoogleOAuthService = class {
   }
   // Générer l'URL d'autorisation Google
   getAuthUrl(userId, organizationId) {
-    console.log(`[GoogleOAuthService] G\xE9n\xE9ration URL pour userId: ${userId}, organizationId: ${organizationId}`);
-    console.log("[GoogleOAuthService] Scopes:", SCOPES);
     const state = JSON.stringify({ userId, organizationId });
     const authUrl = this.oauth2Client.generateAuthUrl({
       access_type: "offline",
@@ -4455,7 +4439,6 @@ var GoogleOAuthService = class {
       state,
       prompt: "consent"
     });
-    console.log("[GoogleOAuthService] URL g\xE9n\xE9r\xE9e:", authUrl);
     return authUrl;
   }
   // Échanger le code contre des tokens
@@ -4534,7 +4517,6 @@ var GoogleOAuthService = class {
   }
   // Client authentifié avec email administrateur Google Workspace
   async getAuthenticatedClientForOrganization(organizationId) {
-    console.log(`[GoogleOAuthService] \u26A1 getAuthenticatedClientForOrganization appel\xE9 pour organizationId: ${organizationId}`);
     const organization = await prisma3.organization.findUnique({
       where: { id: organizationId },
       include: {
@@ -4542,56 +4524,35 @@ var GoogleOAuthService = class {
       }
     });
     if (!organization) {
-      console.log(`[GoogleOAuthService] \u274C Organisation ${organizationId} non trouv\xE9e`);
       return null;
     }
     const googleConfig = organization.GoogleWorkspaceConfig;
     if (!googleConfig || !googleConfig.adminEmail || !googleConfig.domain) {
-      console.log(`[GoogleOAuthService] \u274C Configuration Google Workspace (adminEmail ou domain) manquante pour l'organisation ${organization.name}`);
       return null;
     }
-    console.log(`[GoogleOAuthService] \u{1F4E7} Email administrateur Google Workspace: ${googleConfig.adminEmail}`);
-    console.log(`[GoogleOAuthService] \u{1F3E2} Domaine: ${googleConfig.domain}`);
     const tokens2 = await prisma3.googleToken.findUnique({
       where: { organizationId: organization.id }
     });
     if (!tokens2) {
-      console.log(`[GoogleOAuthService] \u274C Aucun token trouv\xE9 pour l'organisation ${organization.name}`);
       return null;
     }
-    console.log(`[GoogleOAuthService] \u{1F50D} Tokens trouv\xE9s pour l'organisation ${organization.name}:`);
-    console.log(`[GoogleOAuthService] - Access token: ${tokens2.accessToken ? tokens2.accessToken.substring(0, 20) + "..." : "MANQUANT"}`);
-    console.log(`[GoogleOAuthService] - Refresh token: ${tokens2.refreshToken ? tokens2.refreshToken.substring(0, 20) + "..." : "MANQUANT"}`);
-    console.log(`[GoogleOAuthService] - Expires at: ${tokens2.expiresAt}`);
     const credentials = {
       access_token: tokens2.accessToken,
       refresh_token: tokens2.refreshToken,
       token_type: tokens2.tokenType,
       expiry_date: tokens2.expiresAt?.getTime()
     };
-    console.log(`[GoogleOAuthService] \u{1F527} Configuration credentials pour ${googleConfig.adminEmail}:`, {
-      hasAccessToken: !!credentials.access_token,
-      accessTokenLength: credentials.access_token?.length,
-      hasRefreshToken: !!credentials.refresh_token,
-      refreshTokenLength: credentials.refresh_token?.length,
-      tokenType: credentials.token_type,
-      expiryDate: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : "NON_D\xC9FINI"
-    });
     const adminOAuth2Client = new import_googleapis.google.auth.OAuth2(
       GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET,
       GOOGLE_REDIRECT_URI
     );
     adminOAuth2Client.setCredentials(credentials);
-    console.log(`[GoogleOAuthService] \u{1F4CB} Credentials d\xE9finies sur OAuth2Client pour admin ${googleConfig.adminEmail}`);
     const now = /* @__PURE__ */ new Date();
     const expiryDate = tokens2.expiresAt;
-    console.log(`[GoogleOAuthService] \u23F0 V\xE9rification expiration: maintenant=${now.toISOString()}, expiry=${expiryDate?.toISOString()}`);
     if (expiryDate && expiryDate <= now) {
-      console.log(`[GoogleOAuthService] \u26A0\uFE0F Token expir\xE9 pour l'admin ${googleConfig.adminEmail}, rafra\xEEchissement...`);
       try {
         const { credentials: newCredentials } = await adminOAuth2Client.refreshAccessToken();
-        console.log(`[GoogleOAuthService] \u2705 Rafra\xEEchissement r\xE9ussi pour admin`);
         if (newCredentials.access_token && newCredentials.expiry_date) {
           await prisma3.googleToken.update({
             where: { organizationId: organization.id },
@@ -4611,15 +4572,11 @@ var GoogleOAuthService = class {
         console.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement pour admin ${googleConfig.adminEmail}:`, error);
         return null;
       }
-    } else if (expiryDate) {
-      console.log(`[GoogleOAuthService] \u2705 Token encore valide pour admin ${googleConfig.adminEmail} (expire dans ${Math.round((expiryDate.getTime() - now.getTime()) / 1e3 / 60)} minutes)`);
     }
-    console.log(`[GoogleOAuthService] \u{1F680} Retour du client OAuth2 configur\xE9 pour admin ${googleConfig.adminEmail}`);
     return adminOAuth2Client;
   }
   // Client authentifié
   async getAuthenticatedClient(userId) {
-    console.log(`[GoogleOAuthService] \u26A1 getAuthenticatedClient appel\xE9 pour userId: ${userId}`);
     const tokens2 = await this.getUserTokens(userId);
     if (!tokens2) {
       console.log(`[GoogleOAuthService] \u274C Aucun token trouv\xE9 pour l'utilisateur ${userId}`);
@@ -7112,21 +7069,16 @@ var authMiddleware = async (req2, res, next) => {
   const authHeader = req2.headers.authorization;
   const cookieToken = req2.cookies?.token;
   const orgIdFromHeader = req2.headers["x-organization-id"];
-  console.log("[AUTH] x-organization-id de l'en-t\xEAte:", orgIdFromHeader);
   let token;
   if (cookieToken) {
     token = cookieToken;
-    console.log("[AUTH] Token trouv\xE9 dans les cookies");
   } else if (authHeader && authHeader.startsWith("Bearer ")) {
     token = authHeader.split(" ")[1];
-    console.log("[AUTH] Token trouv\xE9 dans l'en-t\xEAte Authorization");
   }
   if (!token) {
-    console.log("[AUTH] Aucun token d'authentification trouv\xE9");
     return res.status(401).json({ error: "Authentification requise" });
   }
   if (token.startsWith("dev-token-")) {
-    console.log("[AUTH] Token de d\xE9veloppement d\xE9tect\xE9, non autoris\xE9 en production");
     return res.status(401).json({ error: "Token de d\xE9veloppement non autoris\xE9" });
   }
   try {
@@ -7135,25 +7087,21 @@ var authMiddleware = async (req2, res, next) => {
       where: { id: decoded.userId }
     });
     if (!user) {
-      console.log("[AUTH] Utilisateur non trouv\xE9 pour l'ID:", decoded.userId);
+      console.error("[AUTH] Utilisateur non trouv\xE9 pour l'ID:", decoded.userId);
       return res.status(401).json({ error: "Authentification invalide" });
     }
     let organizationId = decoded.organizationId || null;
     const orgIdFromQuery = req2.query?.organizationId || req2.query?.orgId;
     if (!organizationId && orgIdFromQuery) {
-      console.log("[AUTH] Fallback organizationId depuis query string:", orgIdFromQuery);
       organizationId = orgIdFromQuery;
     }
     if (orgIdFromHeader) {
-      console.log("[AUTH] Utilisation de l'ID d'organisation de l'en-t\xEAte:", orgIdFromHeader);
       organizationId = orgIdFromHeader;
     }
     if (organizationId) {
       const organization = await prisma4.organization.findUnique({ where: { id: organizationId } });
-      if (organization) {
-        console.log("[AUTH] Organisation trouv\xE9e:", organization.name);
-      } else {
-        console.log("[AUTH] AVERTISSEMENT: Organisation non trouv\xE9e pour l'ID:", organizationId);
+      if (!organization) {
+        console.error("[AUTH] Organisation non trouv\xE9e pour l'ID:", organizationId);
         return res.status(404).json({ error: "Organisation non trouv\xE9e" });
       }
     }
@@ -7168,14 +7116,6 @@ var authMiddleware = async (req2, res, next) => {
       // 👑 SUPER IMPORTANT: Définir isSuperAdmin pour que les middlewares le reconnaissent ! 👑
       isSuperAdmin: user.role === "super_admin"
     };
-    console.log("[AUTH] Utilisateur authentifi\xE9 avec:", {
-      userId: req2.user.userId,
-      role: req2.user.role,
-      firstname: req2.user.firstname,
-      lastname: req2.user.lastname,
-      email: req2.user.email,
-      organizationId: req2.user.organizationId
-    });
     return next();
   } catch (error) {
     console.error("[AUTH] Erreur de v\xE9rification du token:", error);
@@ -8078,29 +8018,20 @@ function requireRole2(roles) {
   return (req2, res, next) => {
     const authReq = req2;
     const user = authReq.user;
-    console.log("[requireRole] \u{1F50D} DEBUG - User object:", {
-      userId: user?.userId,
-      isSuperAdmin: user?.isSuperAdmin,
-      role: user?.role,
-      userExists: !!user
-    });
     if (!user) {
-      console.log("[requireRole] \u274C Pas d'utilisateur authentifi\xE9");
       res.status(403).json({ error: "Acc\xE8s refus\xE9" });
       return;
     }
     if (user.isSuperAdmin === true || user.role === "super_admin") {
-      console.log("[requireRole] \u{1F451} SuperAdmin d\xE9tect\xE9 - Acc\xE8s autoris\xE9 \xE0 tout !");
       next();
       return;
     }
     if (authReq.originalUser && authReq.originalUser.role === "super_admin") {
-      console.log("[requireRole] \u{1F451} SuperAdmin en impersonation d\xE9tect\xE9 - Acc\xE8s autoris\xE9 !");
       next();
       return;
     }
     if (!roles.includes(user.role)) {
-      console.log(`[requireRole] \u274C Acc\xE8s refus\xE9 - R\xF4le ${user.role} non autoris\xE9 pour ${roles.join(", ")}`);
+      console.warn(`[requireRole] Acc\xE8s refus\xE9 - R\xF4le ${user.role} non autoris\xE9 pour ${roles.join(", ")}`);
       res.status(403).json({ error: "Acc\xE8s refus\xE9" });
       return;
     }
@@ -9236,7 +9167,6 @@ var getActiveGoogleModules = (moduleStatuses = []) => {
   );
 };
 async function countRealActiveModules(organizationId) {
-  console.log(`[countRealActiveModules] \u{1F50D} D\xE9but count pour organisation: ${organizationId}`);
   const organization = await prisma11.organization.findUnique({
     where: { id: organizationId },
     select: {
@@ -9245,7 +9175,6 @@ async function countRealActiveModules(organizationId) {
     }
   });
   const hasGoogleWorkspace = !!organization?.GoogleWorkspaceConfig;
-  console.log(`[countRealActiveModules] \u{1F310} Organisation ${organization?.name} - Google Workspace: ${hasGoogleWorkspace}`);
   const allActiveModules = await prisma11.module.findMany({
     where: {
       active: true
@@ -9258,24 +9187,18 @@ async function countRealActiveModules(organizationId) {
       }
     }
   });
-  console.log(`[countRealActiveModules] \u{1F4CA} Total modules actifs dans Module: ${allActiveModules.length}`);
   const activeModulesForOrg = allActiveModules.filter((module2) => {
     const moduleStatus = module2.OrganizationModuleStatus[0];
     if (module2.key && module2.key.toLowerCase().startsWith("google_") && !hasGoogleWorkspace) {
-      console.log(`[countRealActiveModules] \u{1F6AB} Module Google ${module2.key}: Google Workspace d\xE9sactiv\xE9 -> EXCLU`);
       return false;
     }
     if (moduleStatus) {
-      console.log(`[countRealActiveModules] ${moduleStatus.active ? "\u2705" : "\u274C"} Module ${module2.key || "Sans cl\xE9"} (${module2.label || "Sans nom"}): statut sp\xE9cifique -> ${moduleStatus.active ? "ACTIF" : "INACTIF"}`);
       return moduleStatus.active;
     } else {
-      console.log(`[countRealActiveModules] \u2705 Module ${module2.key || "Sans cl\xE9"} (${module2.label || "Sans nom"}): pas de statut sp\xE9cifique -> ACTIF par d\xE9faut`);
       return true;
     }
   });
-  const finalCount = activeModulesForOrg.length;
-  console.log(`[countRealActiveModules] \u{1F3AF} Count final pour ${organization?.name}: ${finalCount}`);
-  return finalCount;
+  return activeModulesForOrg.length;
 }
 function hasGoogleWorkspaceEnabled(moduleStatuses = [], googleWorkspaceConfig) {
   const hasActiveModules = getActiveGoogleModules(moduleStatuses).length > 0;
@@ -9291,7 +9214,6 @@ var extractGoogleWorkspaceDomain = (organization) => {
 var cleanupOrganizationData = async (tx, organizationId) => {
   const runDelete = async (label, action2) => {
     try {
-      console.log(`[ORGANIZATIONS] \u{1F5D1}\uFE0F Suppression ${label} pour ${organizationId}`);
       await action2();
     } catch (error) {
       console.error(`[ORGANIZATIONS] \u274C \xC9chec suppression ${label} pour ${organizationId}`, error);
@@ -9464,12 +9386,9 @@ var handleZodError = (error) => {
 router9.use(authMiddleware);
 router9.use(organizationsRateLimit);
 router9.get("/active", async (req2, res) => {
-  console.log("[ORGANIZATIONS] GET /organizations/active - R\xE9cup\xE9ration organisations ACTIVES uniquement");
   try {
     const requestingUser = req2.user;
     const { search, userId } = req2.query;
-    console.log(`[ORGANIZATIONS] User role: ${requestingUser?.role}`);
-    console.log(`[ORGANIZATIONS] Query params:`, { search, userId });
     const where = {
       status: { in: ["ACTIVE", "active"] }
       // ✅ Accepter variantes de statut
@@ -9493,13 +9412,10 @@ router9.get("/active", async (req2, res) => {
       where.id = { in: orgIds };
     }
     if (isSuperAdmin(requestingUser)) {
-      console.log("[ORGANIZATIONS] Super admin - acc\xE8s aux organisations actives");
     } else if (requestingUser?.role === "admin" && requestingUser.organizationId) {
       where.id = requestingUser.organizationId;
-      console.log("[ORGANIZATIONS] Admin - acc\xE8s \xE0 son organisation uniquement si active");
     } else if (requestingUser?.organizationId) {
       where.id = requestingUser.organizationId;
-      console.log("[ORGANIZATIONS] Utilisateur - acc\xE8s \xE0 son organisation uniquement si active");
     } else {
       console.log("[ORGANIZATIONS] Acc\xE8s refus\xE9 - pas d'organisation assign\xE9e");
       return res.status(403).json({
@@ -9557,7 +9473,6 @@ router9.get("/active", async (req2, res) => {
         googleWorkspaceModules: activeGoogleModules.map((oms) => oms.Module).filter(Boolean)
       };
     }));
-    console.log(`[ORGANIZATIONS] ${enrichedOrganizations.length} organisations ACTIVES trouv\xE9es`);
     res.json({
       success: true,
       data: enrichedOrganizations
@@ -9571,12 +9486,9 @@ router9.get("/active", async (req2, res) => {
   }
 });
 router9.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] GET /organizations - R\xE9cup\xE9ration organisations S\xC9CURIS\xC9E");
   try {
     const requestingUser = req2.user;
     const { search, userId } = req2.query;
-    console.log(`[ORGANIZATIONS] User role: ${requestingUser?.role}`);
-    console.log(`[ORGANIZATIONS] Query params:`, { search, userId });
     const where = {};
     if (search && typeof search === "string") {
       const sanitizedSearch = sanitizeString(search);
@@ -9597,12 +9509,9 @@ router9.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
       where.id = { in: orgIds };
     }
     if (isSuperAdmin(requestingUser)) {
-      console.log("[ORGANIZATIONS] Super admin - acc\xE8s complet");
     } else if (requestingUser?.role === "admin" && requestingUser.organizationId) {
       where.id = requestingUser.organizationId;
-      console.log("[ORGANIZATIONS] Admin - acc\xE8s \xE0 son organisation uniquement");
     } else {
-      console.log("[ORGANIZATIONS] Acc\xE8s refus\xE9 - r\xF4le insuffisant");
       return res.status(403).json({
         success: false,
         message: "Acc\xE8s refus\xE9"
@@ -9647,7 +9556,6 @@ router9.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     const enrichedOrganizations = await Promise.all(organizations.map(async (org) => {
       const activeGoogleModules = getActiveGoogleModules(org.OrganizationModuleStatus);
       const realActiveModulesCount = await countRealActiveModules(org.id);
-      console.log(`[DEBUG] Organisation ${org.name}: ${realActiveModulesCount} modules r\xE9ellement actifs`);
       return {
         ...org,
         stats: {
@@ -9663,7 +9571,6 @@ router9.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
         googleWorkspaceModules: activeGoogleModules.map((oms) => oms.Module).filter(Boolean)
       };
     }));
-    console.log(`[ORGANIZATIONS] ${enrichedOrganizations.length} organisations trouv\xE9es`);
     res.json({
       success: true,
       data: enrichedOrganizations
@@ -9677,7 +9584,6 @@ router9.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   }
 });
 router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] POST /organizations - Cr\xE9ation organisation S\xC9CURIS\xC9E");
   try {
     const validation = organizationCreateSchema.safeParse(req2.body);
     if (!validation.success) {
@@ -9726,7 +9632,6 @@ router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), a
         }
       });
       if (data.googleWorkspace?.enabled) {
-        console.log("[ORGANIZATIONS] Configuration Google Workspace activ\xE9e");
       }
       return org;
     });
@@ -9748,12 +9653,10 @@ router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), a
   }
 });
 router9.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] GET /organizations/:id - R\xE9cup\xE9ration organisation S\xC9CURIS\xC9E");
   try {
     const { id } = req2.params;
     const requestingUser = req2.user;
     const sanitizedId = validateAndSanitizeId(id, "ID organisation");
-    console.log(`[ORGANIZATIONS] R\xE9cup\xE9ration organisation ${sanitizedId}`);
     if (!canAccessOrganization(requestingUser, sanitizedId)) {
       return res.status(403).json({
         success: false,
@@ -9836,7 +9739,6 @@ router9.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =>
       // ✅ AMÉLIORÉ : Utiliser le vrai domaine de la config
       googleWorkspaceModules: activeGoogleModules.map((oms) => oms.Module).filter(Boolean)
     };
-    console.log("[ORGANIZATIONS] Organisation r\xE9cup\xE9r\xE9e avec succ\xE8s");
     res.json({
       success: true,
       data: enrichedOrganization
@@ -9850,7 +9752,6 @@ router9.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =>
   }
 });
 router9.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] PUT /organizations/:id - Mise \xE0 jour organisation S\xC9CURIS\xC9E");
   try {
     const { id } = req2.params;
     console.log("\u{1F50D} [ORGANIZATIONS] ID re\xE7u:", id);
@@ -9952,7 +9853,6 @@ router9.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
       }
       return updated;
     });
-    console.log("[ORGANIZATIONS] Organisation mise \xE0 jour avec succ\xE8s");
     res.json({
       success: true,
       message: "Organisation mise \xE0 jour avec succ\xE8s",
@@ -9970,11 +9870,9 @@ router9.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
   }
 });
 router9.delete("/:id", organizationsDeleteRateLimit, requireRole2(["super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] DELETE /organizations/:id - Suppression organisation S\xC9CURIS\xC9E");
   try {
     const { id } = req2.params;
     const sanitizedId = validateAndSanitizeId(id, "ID organisation");
-    console.log(`[ORGANIZATIONS] Tentative suppression organisation ${sanitizedId}`);
     const existingOrg = await prisma11.organization.findUnique({
       where: { id: sanitizedId },
       include: {
@@ -10003,7 +9901,6 @@ router9.delete("/:id", organizationsDeleteRateLimit, requireRole2(["super_admin"
         where: { id: sanitizedId }
       });
     });
-    console.log("[ORGANIZATIONS] Organisation supprim\xE9e avec succ\xE8s");
     res.json({
       success: true,
       message: "Organisation supprim\xE9e avec succ\xE8s"
@@ -10025,7 +9922,6 @@ router9.delete("/:id", organizationsDeleteRateLimit, requireRole2(["super_admin"
   }
 });
 router9.get("/:id/google-modules", requireRole2(["admin", "super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] GET /organizations/:id/google-modules - R\xE9cup\xE9ration modules Google");
   try {
     const { id } = req2.params;
     const sanitizedId = validateAndSanitizeId(id, "ID organisation");
@@ -10080,7 +9976,6 @@ router9.get("/:id/google-modules", requireRole2(["admin", "super_admin"]), async
   }
 });
 router9.post("/:id/google-modules/:module/toggle", requireRole2(["super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] POST /organizations/:id/google-modules/:module/toggle - Toggle module Google");
   try {
     const { id, module: module2 } = req2.params;
     const { enabled } = req2.body;
@@ -10098,7 +9993,6 @@ router9.post("/:id/google-modules/:module/toggle", requireRole2(["super_admin"])
         message: "Le param\xE8tre enabled doit \xEAtre un bool\xE9en"
       });
     }
-    console.log(`[ORGANIZATIONS] Toggle module ${sanitizedModule} \xE0 ${enabled} pour organisation ${sanitizedId}`);
     await prisma11.$transaction(async (tx) => {
       let moduleRecord = await tx.module.findFirst({
         where: { key: sanitizedModule }
@@ -10131,7 +10025,6 @@ router9.post("/:id/google-modules/:module/toggle", requireRole2(["super_admin"])
         }
       });
     });
-    console.log("[ORGANIZATIONS] Module Google mis \xE0 jour avec succ\xE8s");
     res.json({
       success: true,
       message: `Module ${sanitizedModule} ${enabled ? "activ\xE9" : "d\xE9sactiv\xE9"} avec succ\xE8s`
@@ -10145,7 +10038,6 @@ router9.post("/:id/google-modules/:module/toggle", requireRole2(["super_admin"])
   }
 });
 router9.get("/:id/google-workspace/domain-status", requireRole2(["admin", "super_admin"]), async (req2, res) => {
-  console.log("[ORGANIZATIONS] GET /organizations/:id/google-workspace/domain-status - V\xE9rification statut domaine");
   try {
     const { id } = req2.params;
     const sanitizedId = validateAndSanitizeId(id, "ID organisation");
@@ -10188,7 +10080,6 @@ router9.get("/:id/google-workspace/domain-status", requireRole2(["admin", "super
       }
     };
     const isConfigured = false;
-    console.log("[ORGANIZATIONS] Statut domaine calcul\xE9:", { domain, isConfigured });
     res.json({
       success: true,
       data: {
@@ -10212,7 +10103,6 @@ var import_express11 = require("express");
 var router10 = (0, import_express11.Router)();
 var connectCache = /* @__PURE__ */ new Map();
 router10.get("/status", authMiddleware, async (req2, res) => {
-  console.log("[ROUTE] /api/auto-google-auth/status atteint");
   const { userId, organizationId } = req2.query;
   if (!userId || !organizationId) {
     return res.json({
@@ -10269,7 +10159,6 @@ router10.get("/status", authMiddleware, async (req2, res) => {
   }
 });
 router10.post("/connect", authMiddleware, async (req2, res) => {
-  console.log("[ROUTE] /api/auto-google-auth/connect atteint");
   const { userId, organizationId } = req2.body;
   const caller = req2.user;
   if (!userId || !organizationId) {
@@ -10298,7 +10187,6 @@ router10.post("/connect", authMiddleware, async (req2, res) => {
     }
     const authClient = await googleOAuthService.getAuthenticatedClientForOrganization(organizationId);
     if (authClient) {
-      console.log("[AutoGoogleAuth] \u2705 Connexion Google d\xE9j\xE0 active pour organisation:", organizationId);
       const ttlConnected = 15e3;
       const payload2 = { success: true, isConnected: true, needsManualAuth: false, message: "Connexion Google d\xE9j\xE0 active.", cacheTtlMs: ttlConnected };
       connectCache.set(key2, { expiresAt: now + ttlConnected, payload: payload2 });
@@ -10334,7 +10222,6 @@ router10.post("/connect", authMiddleware, async (req2, res) => {
   }
 });
 router10.post("/trigger-logout", authMiddleware, async (req2, res) => {
-  console.log("[ROUTE] /api/auto-google-auth/trigger-logout atteint");
   const { userId } = req2.body;
   console.log("[GOOGLE-LOGOUT] Re\xE7u logout CRM pour utilisateur:", userId);
   if (!userId) {
@@ -12491,24 +12378,16 @@ router16.get(
   requireRole2(["admin", "super_admin"]),
   async (req2, res) => {
     const user = req2.user;
-    console.log("[DEBUG] User role:", user?.role);
-    console.log("[DEBUG] User:", JSON.stringify(user, null, 2));
     const organizationId = req2.query.organizationId || req2.headers["x-organization-id"] || user?.organizationId;
-    console.log(`[API] GET /api/blocks pour org: ${organizationId} par user: ${user?.id || "undefined"}`);
-    console.log(`[API] Sources org ID - query: ${req2.query.organizationId}, header: ${req2.headers["x-organization-id"]}, user: ${user?.organizationId}`);
     const whereClause = {};
     if (organizationId) {
       whereClause.organizationId = organizationId;
-      console.log(`[API] Recherche de blocs pour l'organisation: ${organizationId}`);
     } else if (user?.isSuperAdmin || user?.role === "super_admin") {
-      console.log("[API] SuperAdmin a demand\xE9 tous les blocs.");
     } else {
-      console.log("[API] Utilisateur non-SuperAdmin sans ID d'orga. Retour d'un tableau vide.");
       res.json({ success: true, data: [] });
       return;
     }
     try {
-      console.log(`[API] Clause WHERE pour Prisma:`, JSON.stringify(whereClause, null, 2));
       const blocks = await prisma13.block.findMany({
         where: whereClause,
         include: {
@@ -12530,30 +12409,7 @@ router16.get(
           }
         }
       });
-      console.log(`[API] Prisma a trouv\xE9 ${blocks.length} blocks bruts`);
-      if (blocks.length > 0) {
-        const firstBlock = blocks[0];
-        console.log(`[API] Premier bloc - ID: ${firstBlock.id}, Name: ${firstBlock.name}`);
-        console.log(`[API] Premier bloc - Section prop exists: ${"Section" in firstBlock}`);
-        console.log(`[API] Premier bloc - Section value: ${Array.isArray(firstBlock.Section) ? firstBlock.Section.length + " sections" : typeof firstBlock.Section}`);
-        if (firstBlock.Section && Array.isArray(firstBlock.Section)) {
-          console.log(`[API] Section details: ${firstBlock.Section.map((s) => `${s.name}(${s.Field?.length || 0} fields)`).join(", ")}`);
-        }
-      }
-      console.log(`[API] Blocks trouv\xE9s:`, blocks.map((b) => ({ id: b.id, name: b.name, organizationId: b.organizationId, sectionsCount: b.Section?.length || 0 })));
-      console.log(`[API] Premier bloc avant adaptation:`, JSON.stringify(blocks[0], null, 2));
-      console.log(`[API] === D\xC9BUT ADAPTATION ===`);
       const blocksWithAdaptedStructure = blocks.map(adaptBlockStructure);
-      console.log(`[API] Blocks apr\xE8s adaptation: ${blocksWithAdaptedStructure.length}`);
-      if (blocksWithAdaptedStructure.length > 0) {
-        console.log(`[API] Premier bloc apr\xE8s adaptation - ID: ${blocksWithAdaptedStructure[0].id}`);
-        console.log(`[API] Premier bloc apr\xE8s adaptation - sections?: ${blocksWithAdaptedStructure[0].sections ? blocksWithAdaptedStructure[0].sections.length : "undefined"}`);
-        if (blocksWithAdaptedStructure[0].sections && blocksWithAdaptedStructure[0].sections.length > 0) {
-          console.log(`[API] Premi\xE8re section: ${blocksWithAdaptedStructure[0].sections[0].name} avec ${blocksWithAdaptedStructure[0].sections[0].fields?.length || 0} champs`);
-        }
-      }
-      console.log(`[API] === FIN ADAPTATION ===`);
-      console.log(`[API] Retour final:`, blocksWithAdaptedStructure.map((b) => ({ id: b.id, name: b.name, sectionsCount: b.sections?.length || 0 })));
       res.set({
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
@@ -14295,24 +14151,8 @@ router20.use(authMiddleware);
 router20.get("/", async (req2, res) => {
   try {
     const authReq = req2;
-    console.log("[LEADS] \u{1F50D} Utilisateur connect\xE9:", {
-      id: authReq.user?.userId || authReq.user?.id,
-      email: authReq.user?.email,
-      role: authReq.user?.role,
-      isSuperAdmin: authReq.user?.isSuperAdmin,
-      organizationId: authReq.user?.organizationId
-    });
     const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
-    console.log("[LEADS] \u{1F451} V\xE9rification SuperAdmin:", {
-      isSuperAdmin: isSuperAdmin2,
-      conditions: {
-        roleCheck: authReq.user?.role === "super_admin",
-        booleanCheck: authReq.user?.isSuperAdmin === true,
-        roleIncludesSuper: authReq.user?.role?.toLowerCase().includes("super")
-      }
-    });
     if (isSuperAdmin2) {
-      console.log("[LEADS] \u{1F30D} SuperAdmin d\xE9tect\xE9 - r\xE9cup\xE9ration de TOUS les leads");
       try {
         const allLeads = await prisma19.lead.findMany({
           include: {
@@ -14336,12 +14176,6 @@ router20.get("/", async (req2, res) => {
             updatedAt: "desc"
           }
         });
-        console.log("[LEADS] \u{1F4CA} Total leads r\xE9cup\xE9r\xE9s pour SuperAdmin:", allLeads.length);
-        console.log("[LEADS] \u{1F4CB} Leads par organisation:", allLeads.reduce((acc, lead) => {
-          const orgName = lead.Organization?.name || "Sans organisation";
-          acc[orgName] = (acc[orgName] || 0) + 1;
-          return acc;
-        }, {}));
         const formattedLeads2 = allLeads.map((lead) => {
           const data = lead.data || {};
           const formattedName = lead.firstName && lead.lastName ? `${lead.firstName} ${lead.lastName}` : lead.firstName || lead.lastName || data.name || `Lead ${lead.id.slice(0, 8)}`;
@@ -14408,12 +14242,7 @@ router20.get("/", async (req2, res) => {
     });
     const formattedLeads = leads.map((lead) => {
       const data = lead.data || {};
-      console.log(`[LEADS] Formatage lead ${lead.id}:`);
-      console.log(`[LEADS] - firstName: "${lead.firstName}" (${typeof lead.firstName})`);
-      console.log(`[LEADS] - lastName: "${lead.lastName}" (${typeof lead.lastName})`);
-      console.log(`[LEADS] - data.name: "${data.name}"`);
       const formattedName = lead.firstName && lead.lastName ? `${lead.firstName} ${lead.lastName}` : lead.firstName || lead.lastName || data.name || `Lead ${lead.id.slice(0, 8)}`;
-      console.log(`[LEADS] - Nom final: "${formattedName}"`);
       return {
         id: lead.id,
         name: formattedName,
@@ -14435,7 +14264,6 @@ router20.get("/", async (req2, res) => {
         data: lead.data
       };
     });
-    console.log(`[LEADS] ${leads.length} leads trouv\xE9s`);
     res.json({ success: true, data: formattedLeads });
   } catch (error) {
     console.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration des leads:", error);
@@ -14575,25 +14403,9 @@ router20.get("/:id", async (req2, res) => {
     const authReq = req2;
     const { id } = req2.params;
     const organizationId = authReq.user?.organizationId;
-    console.log("[LEADS] \u{1F50D} R\xE9cup\xE9ration du lead:", id, "utilisateur:", {
-      id: authReq.user?.userId || authReq.user?.id,
-      email: authReq.user?.email,
-      role: authReq.user?.role,
-      isSuperAdmin: authReq.user?.isSuperAdmin,
-      organizationId: authReq.user?.organizationId
-    });
     const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
-    console.log("[LEADS] \u{1F451} V\xE9rification SuperAdmin:", {
-      isSuperAdmin: isSuperAdmin2,
-      conditions: {
-        roleCheck: authReq.user?.role === "super_admin",
-        booleanCheck: authReq.user?.isSuperAdmin === true,
-        roleIncludesSuper: authReq.user?.role?.toLowerCase().includes("super")
-      }
-    });
     let whereCondition;
     if (isSuperAdmin2) {
-      console.log("[LEADS] \u{1F30D} SuperAdmin d\xE9tect\xE9 - acc\xE8s \xE0 TOUS les leads");
       whereCondition = { id };
     } else {
       if (!organizationId) {
@@ -14601,7 +14413,6 @@ router20.get("/:id", async (req2, res) => {
           error: "Organisation non sp\xE9cifi\xE9e"
         });
       }
-      console.log("[LEADS] \u{1F3E2} Utilisateur normal - acc\xE8s limit\xE9 \xE0 l'organisation:", organizationId);
       whereCondition = {
         id,
         organizationId
@@ -14660,7 +14471,6 @@ router20.get("/:id", async (req2, res) => {
       // Données additionnelles pour la compatibilité
       data: lead.data
     };
-    console.log("[LEADS] Lead trouv\xE9 et format\xE9:", formattedLead.name);
     res.json(formattedLead);
   } catch (error) {
     console.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration du lead:", error);
@@ -14680,7 +14490,6 @@ router20.put("/:id", async (req2, res) => {
         error: "Organisation non sp\xE9cifi\xE9e"
       });
     }
-    console.log("[LEADS] Modification du lead:", id, "donn\xE9es:", req2.body);
     const existingLead = await prisma19.lead.findFirst({
       where: {
         id,
@@ -14688,7 +14497,6 @@ router20.put("/:id", async (req2, res) => {
       }
     });
     if (!existingLead) {
-      console.log("[LEADS] Lead non trouv\xE9 pour modification:", id);
       return res.status(404).json({
         error: "Lead non trouv\xE9 ou non autoris\xE9"
       });
@@ -17511,15 +17319,11 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
    */
   async autoConnectToGoogle(userId, organizationId) {
     try {
-      console.log(`\u{1F504} [AutoGoogleAuth] D\xC9BUT autoConnectToGoogle pour user ${userId} org ${organizationId}...`);
-      console.log(`\u{1F50D} [AutoGoogleAuth] V\xE9rification tokens existants pour user ${userId}...`);
       const existingTokens = await googleOAuthService.getUserTokens(userId);
-      console.log(`\u{1F50D} [AutoGoogleAuth] Tokens existants pour user ${userId}:`, existingTokens ? "TROUV\xC9S" : "AUCUN");
       if (existingTokens) {
         const now = /* @__PURE__ */ new Date();
         const isExpired = existingTokens.expiresAt && existingTokens.expiresAt <= now;
         if (!isExpired) {
-          console.log(`\u2705 [AutoGoogleAuth] Tokens valides trouv\xE9s pour user ${userId} - connexion consid\xE9r\xE9e comme active`);
           return {
             success: true,
             isConnected: true,
@@ -17527,7 +17331,6 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
             message: "Connexion Google automatique r\xE9ussie (tokens existants)"
           };
         } else {
-          console.log(`\u26A0\uFE0F [AutoGoogleAuth] Tokens expir\xE9s pour user ${userId} - mais on laisse le middleware g\xE9rer le refresh`);
           return {
             success: true,
             isConnected: true,
@@ -17539,7 +17342,6 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
       if (organizationId) {
         const orgConnection = await this.checkOrganizationGoogleConnection(organizationId);
         if (orgConnection.hasConnection) {
-          console.log(`\u2705 [AutoGoogleAuth] Connexion Google organisation disponible pour user ${userId}`);
           return {
             success: true,
             isConnected: true,
@@ -17549,7 +17351,6 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
         }
       }
       const authUrl = googleOAuthService.getAuthUrl(userId);
-      console.log(`\u{1F510} [AutoGoogleAuth] Premi\xE8re connexion Google n\xE9cessaire pour user ${userId}`);
       return {
         success: true,
         isConnected: false,
@@ -17574,16 +17375,13 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
     try {
       const tokens2 = await googleOAuthService.getUserTokens(userId);
       if (!tokens2) {
-        console.log(`[AutoGoogleAuth] Pas de tokens pour user ${userId}`);
         return false;
       }
       const now = /* @__PURE__ */ new Date();
       const isExpired = tokens2.expiresAt && tokens2.expiresAt <= now;
       if (isExpired) {
-        console.log(`[AutoGoogleAuth] Tokens expir\xE9s pour user ${userId}`);
         return false;
       }
-      console.log(`[AutoGoogleAuth] \u2705 Tokens pr\xE9sents et non expir\xE9s pour user ${userId}`);
       return true;
     } catch (error) {
       console.error(`\u274C [AutoGoogleAuth] Test tokens failed for user ${userId}:`, error);
@@ -17595,7 +17393,6 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
    */
   async attemptTokenRefresh(userId) {
     try {
-      console.log(`[AutoGoogleAuth] \u{1F527} Refresh conservateur pour user ${userId} - d\xE9l\xE9gation au middleware`);
       const tokens2 = await googleOAuthService.getUserTokens(userId);
       return !!tokens2;
     } catch (error) {
@@ -17632,27 +17429,19 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
    */
   async handleLoginGoogleConnection(userId, organizationId) {
     try {
-      console.log(`\u{1F680} [AutoGoogleAuth] D\xC9BUT handleLoginGoogleConnection pour user ${userId} org ${organizationId}...`);
       setTimeout(async () => {
         try {
-          console.log(`\u23F0 [AutoGoogleAuth] TIMEOUT D\xC9CLENCH\xC9 (5 min) - Ex\xE9cution autoConnectToGoogle pour user ${userId}...`);
           const result = await this.autoConnectToGoogle(userId, organizationId);
-          console.log(`\u{1F4CB} [AutoGoogleAuth] R\xC9SULTAT autoConnectToGoogle pour user ${userId}:`, result);
           if (result.success && result.isConnected) {
-            console.log(`\u2705 [AutoGoogleAuth] Connexion Google automatique r\xE9ussie pour user ${userId}`);
             this.notifyFrontendGoogleConnected(userId);
           } else if (result.needsManualAuth) {
-            console.log(`\u{1F510} [AutoGoogleAuth] Connexion manuelle requise pour user ${userId}`);
-            console.log(`\u{1F517} [AutoGoogleAuth] URL d'autorisation: ${result.authUrl}`);
             this.notifyFrontendManualAuthRequired(userId, result.authUrl);
           } else {
-            console.log(`\u26A0\uFE0F [AutoGoogleAuth] R\xE9sultat inattendu pour user ${userId}:`, result);
           }
         } catch (timeoutError) {
           console.error(`\u274C [AutoGoogleAuth] Erreur dans setTimeout pour user ${userId}:`, timeoutError);
         }
       }, 5 * 60 * 1e3);
-      console.log(`\u{1F4E4} [AutoGoogleAuth] handleLoginGoogleConnection termin\xE9 pour user ${userId} - timeout 5min programm\xE9`);
     } catch (error) {
       console.error(`\u274C [AutoGoogleAuth] Erreur handleLoginGoogleConnection pour user ${userId}:`, error);
     }
@@ -17661,21 +17450,17 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
    * Notifie le frontend que Google est connecté automatiquement
    */
   notifyFrontendGoogleConnected(userId) {
-    console.log(`\u{1F4E2} [AutoGoogleAuth] Google connect\xE9 automatiquement pour user ${userId}`);
   }
   /**
    * Notifie le frontend qu'une connexion manuelle est requise
    */
   notifyFrontendManualAuthRequired(userId, authUrl) {
-    console.log(`\u{1F4E2} [AutoGoogleAuth] Connexion manuelle requise pour user ${userId}`, { authUrl });
   }
   /**
    * Déconnecte automatiquement Google lors du logout du CRM
    */
   async handleLogoutGoogleDisconnection(userId) {
     try {
-      console.log(`\u{1F504} [AutoGoogleAuth] Nettoyage session Google pour user ${userId}...`);
-      console.log(`\u2705 [AutoGoogleAuth] Session Google nettoy\xE9e pour user ${userId}`);
     } catch (error) {
       console.error(`\u274C [AutoGoogleAuth] Erreur nettoyage session Google pour user ${userId}:`, error);
     }
@@ -24973,26 +24758,19 @@ var router48 = (0, import_express49.Router)();
 router48.use(authMiddleware, impersonationMiddleware);
 router48.get("/", async (req2, res) => {
   try {
-    console.log("\u{1F50D} [module-navigation] Route appel\xE9e - Syst\xE8me Category");
-    console.log("\u{1F50D} [module-navigation] User:", req2.user);
-    console.log("\u{1F50D} [module-navigation] Prisma client status:", typeof prisma, !!prisma);
     const organizationId = req2.query.organizationId;
     if (!organizationId) {
-      console.log("\u274C [module-navigation] organizationId manquant");
       res.status(400).json({ error: "organizationId required" });
       return;
     }
-    console.log("[API] GET /api/module-navigation - Syst\xE8me Category avec s\xE9curit\xE9 multifacteur pour org:", organizationId);
     const user = req2.user;
     const isSuperAdmin2 = user?.role === "super_admin";
-    console.log(`[API] Utilisateur: ${user?.email} (${user?.role}), SuperAdmin: ${isSuperAdmin2}`);
     let userOrganizationId = user?.organizationId;
     if (!userOrganizationId && user?.id) {
       const userOrg = await prisma.userOrganization.findFirst({
         where: { userId: user.id }
       });
       userOrganizationId = userOrg?.organizationId;
-      console.log(`[API] OrganizationId r\xE9cup\xE9r\xE9 via UserOrganization: ${userOrganizationId}`);
     }
     const whereCategories = {
       AND: [
@@ -25036,7 +24814,6 @@ router48.get("/", async (req2, res) => {
       },
       orderBy: { order: "asc" }
     });
-    console.log(`[API] ${categories.length} cat\xE9gories trouv\xE9es`);
     const sections = categories.map((category) => ({
       id: `section-${category.id}`,
       title: category.name,
@@ -25060,11 +24837,9 @@ router48.get("/", async (req2, res) => {
       allowedRoles: category.allowedRoles,
       requiredPermissions: category.requiredPermissions
     }));
-    console.log("[API] Sections cr\xE9\xE9es depuis les cat\xE9gories:", sections.length);
-    console.log("[API] Sections:", sections.map((s) => `${s.title} (${s.modules.length} modules)`));
     res.json(sections);
   } catch (error) {
-    console.error("[API] Erreur syst\xE8me Category:", error);
+    console.error("[module-navigation] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des cat\xE9gories depuis la table Category" });
   }
 });
@@ -27637,12 +27412,18 @@ async function getNodeLinkedField(client, nodeId, field) {
 async function setNodeLinkedField(client, nodeId, field, values) {
   try {
     const uniqueValues = Array.from(new Set(values.filter(Boolean)));
+    const exists = await client.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true }
+    });
+    if (!exists) {
+      return;
+    }
     await client.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { [field]: uniqueValues }
     });
   } catch (e) {
-    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Impossible de d\xC3\u0192\xC2\xA9finir ${field} pour n\xC3\u2026\xE2\u20AC\u0153ud ${nodeId}:`, e.message);
   }
 }
 async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE__ */ new Set()) {
@@ -28550,9 +28331,24 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
       tokens: sumTokens,
       description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
     };
-    await db.treeBranchLeafNodeFormula.update({
+    const sumNodeExists = await db.treeBranchLeafNode.findUnique({
+      where: { id: sumFieldNodeId },
+      select: { id: true }
+    });
+    if (!sumNodeExists) {
+      return;
+    }
+    await db.treeBranchLeafNodeFormula.upsert({
       where: { id: sumFormulaId },
-      data: { tokens: sumTokens, updatedAt: now }
+      update: { tokens: sumTokens, updatedAt: now },
+      create: {
+        id: sumFormulaId,
+        name: `Somme ${mainVariable.displayName}`,
+        tokens: sumTokens,
+        nodeId: sumFieldNodeId,
+        createdAt: now,
+        updatedAt: now
+      }
     });
     const copyNodeIds = allCopies.map((c) => c.nodeId);
     const copyNodes = await db.treeBranchLeafNode.findMany({
@@ -28821,7 +28617,7 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
-async function copyFormulaCapacity2(originalFormulaId, newNodeId, suffix, prisma70, options = {}) {
+async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma70, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaCopyCache = /* @__PURE__ */ new Map()
@@ -28862,7 +28658,8 @@ async function copyFormulaCapacity2(originalFormulaId, newNodeId, suffix, prisma
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
-    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    const finalOwnerNodeId = correctOwnerNodeId;
+    const ownerNodeExistsForUpdate = !!ownerNodeExists;
     const rewriteMaps = {
       nodeIdMap,
       formulaIdMap: formulaCopyCache || /* @__PURE__ */ new Map(),
@@ -28938,23 +28735,26 @@ async function copyFormulaCapacity2(originalFormulaId, newNodeId, suffix, prisma
     } catch (e) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
-    try {
-      await addToNodeLinkedField2(prisma70, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
-    } catch (e) {
-      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedFormulaIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
+    if (ownerNodeExistsForUpdate) {
+      try {
+        await addToNodeLinkedField2(prisma70, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
+      } catch (e) {
+        console.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, e.message);
+      }
     }
-    try {
-      await prisma70.treeBranchLeafNode.update({
-        where: { id: finalOwnerNodeId },
-        data: {
-          hasFormula: true,
-          formula_activeId: newFormulaId,
-          formula_name: newFormula.name,
-          formula_description: newFormula.description
-        }
-      });
-    } catch (e) {
-      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
+    if (ownerNodeExistsForUpdate) {
+      try {
+        await prisma70.treeBranchLeafNode.update({
+          where: { id: finalOwnerNodeId },
+          data: {
+            hasFormula: true,
+            formula_activeId: newFormulaId,
+            formula_name: newFormula.name
+          }
+        });
+      } catch (e) {
+        console.warn(`Erreur lors de la mise a jour des parametres capacite:`, e.message);
+      }
     }
     formulaCopyCache.set(originalFormulaId, newFormulaId);
     return {
@@ -29135,12 +28935,8 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
             const unsuffixedSharedRefs = existingForm.tokens.filter(
               (t) => typeof t === "string" && t.includes("shared-ref") && !/-\d+$/.test(t)
             );
-            if (unsuffixedSharedRefs.length > 0) {
-              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F ${unsuffixedSharedRefs.length} shared-refs NON-suffix\xC3\u0192\xC2\xA9s:`, unsuffixedSharedRefs);
-            }
           }
         } else {
-          console.warn(`   \xC3\xA2\xC2\x9D\xC5\u2019 Formule INTROUVABLE: ${formId}`);
         }
       }
       const enrichedNodeIdMap = new Map(nodeIdMap);
@@ -29336,9 +29132,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
         where: { id: finalOwnerNodeId },
         data: {
           hasCondition: true,
-          condition_activeId: newConditionId,
-          condition_name: newCondition.name,
-          condition_description: newCondition.description
+          condition_activeId: newConditionId
         }
       });
     } catch (e) {
@@ -29456,8 +29250,10 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
     const columnIdMap = /* @__PURE__ */ new Map();
     const rowIdMap = /* @__PURE__ */ new Map();
+    let tableAlreadyExisted = false;
     let newTable = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
     if (newTable) {
+      tableAlreadyExisted = true;
       newTable = await prisma70.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
@@ -29604,66 +29400,73 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
         }
       });
     }
-    const originalColumnsRaw = await prisma70.$queryRaw`
+    let columnsCount = 0;
+    let rowsCount = 0;
+    if (tableAlreadyExisted) {
+      const existingCols = await prisma70.treeBranchLeafNodeTableColumn.count({ where: { tableId: newTableId } });
+      const existingRows = await prisma70.treeBranchLeafNodeTableRow.count({ where: { tableId: newTableId } });
+      columnsCount = existingCols;
+      rowsCount = existingRows;
+    } else {
+      const originalColumnsRaw = await prisma70.$queryRaw`
       SELECT "id", "tableId", "columnIndex", "name", "type", "width", "format", "metadata"
       FROM "TreeBranchLeafNodeTableColumn"
       WHERE "tableId" = ${originalTable.id}
       ORDER BY "columnIndex" ASC
     `;
-    let columnsCount = 0;
-    for (const col of originalColumnsRaw) {
-      try {
-        const newColumnId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-        columnIdMap.set(col.id, newColumnId);
-        const normalizedName = (() => {
-          const raw = col.name;
-          if (!raw) return raw;
-          if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
-          return `${raw}-${suffix}`;
-        })();
-        await prisma70.treeBranchLeafNodeTableColumn.create({
-          data: {
-            id: newColumnId,
-            tableId: newTableId,
-            columnIndex: col.columnIndex,
-            name: normalizedName,
-            type: col.type || "text",
-            width: col.width,
-            format: col.format,
-            metadata: col.metadata
-            // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
-          }
-        });
-        columnsCount++;
-      } catch (e) {
-        console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
+      for (const col of originalColumnsRaw) {
+        try {
+          const newColumnId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+          columnIdMap.set(col.id, newColumnId);
+          const normalizedName = (() => {
+            const raw = col.name;
+            if (!raw) return raw;
+            if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
+            return `${raw}-${suffix}`;
+          })();
+          await prisma70.treeBranchLeafNodeTableColumn.create({
+            data: {
+              id: newColumnId,
+              tableId: newTableId,
+              columnIndex: col.columnIndex,
+              name: normalizedName,
+              type: col.type || "text",
+              width: col.width,
+              format: col.format,
+              metadata: col.metadata
+              // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
+            }
+          });
+          columnsCount++;
+        } catch (e) {
+          console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
+        }
       }
-    }
-    const originalRowsRaw = await prisma70.$queryRaw`
+      const originalRowsRaw = await prisma70.$queryRaw`
       SELECT "id", "tableId", "rowIndex", "cells"
       FROM "TreeBranchLeafNodeTableRow"
       WHERE "tableId" = ${originalTable.id}
       ORDER BY "rowIndex" ASC
     `;
-    let rowsCount = 0;
-    for (const row of originalRowsRaw) {
-      try {
-        const newRowId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-        rowIdMap.set(row.id, newRowId);
-        await prisma70.treeBranchLeafNodeTableRow.create({
-          data: {
-            id: newRowId,
-            tableId: newTableId,
-            rowIndex: row.rowIndex,
-            cells: row.cells
-            // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
+      for (const row of originalRowsRaw) {
+        try {
+          const newRowId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+          rowIdMap.set(row.id, newRowId);
+          await prisma70.treeBranchLeafNodeTableRow.create({
+            data: {
+              id: newRowId,
+              tableId: newTableId,
+              rowIndex: row.rowIndex,
+              cells: row.cells
+              // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
+            }
+          });
+          rowsCount++;
+          if (rowsCount % 5 === 0) {
           }
-        });
-        rowsCount++;
-        if (rowsCount % 5 === 0) {
+        } catch (e) {
+          console.warn(`  \u26A0\uFE0F [${row.rowIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
         }
-      } catch (e) {
-        console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${row.rowIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
       }
     }
     try {
@@ -29736,11 +29539,8 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
         data: {
           hasTable: true,
           table_activeId: newTableId,
-          // Ã¢Å“â€¦ La nouvelle table est l'active
           table_instances: newTableInstances,
-          // Ã¢Å“â€¦ CopiÃƒÂ© et remappÃƒÂ©
           table_name: newTable.name,
-          table_description: newTable.description,
           table_type: newTable.type
         }
       });
@@ -29751,9 +29551,10 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     return {
       newTableId,
       nodeId: finalOwnerNodeId,
-      columnsCount: originalTable.tableColumns.length,
-      rowsCount: originalTable.tableRows.length,
-      cellsCount: cellsCopied,
+      columnsCount,
+      rowsCount,
+      cellsCount: columnsCount * rowsCount,
+      // Estimation des cellules basée sur colonnes × lignes
       success: true
     };
   } catch (error) {
@@ -29826,8 +29627,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       where: { id: originalVarId }
     });
     if (!originalVar) {
-      console.error(`\xE2\x9D\u0152 Variable introuvable: ${originalVarId}`);
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Cette variable est ORPHELINE - elle ne peut pas \xC3\xAAtre copi\xC3\xA9e`);
       if (newNodeId) {
         try {
           const orphanLinkedVarIds = await prisma70.treeBranchLeafNode.findMany({
@@ -29848,7 +29647,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         } catch (cleanErr) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de nettoyer linkedVariableIds orphelins:`, cleanErr.message);
+          console.warn(`\u26A0\uFE0F Impossible de nettoyer linkedVariableIds orphelins:`, cleanErr.message);
         }
       }
       return {
@@ -29915,7 +29714,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             emitCapacityEvent(mappedFormulaId, "formula");
           } else {
             try {
-              const formulaResult = await copyFormulaCapacity2(
+              const formulaResult = await copyFormulaCapacity(
                 parsed.id,
                 newNodeId,
                 suffix,
@@ -29930,7 +29729,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 [COPY-VAR] Exception copie formule:`, e.message, e.stack);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -29956,7 +29754,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 Exception copie condition:`, e.message);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -29977,12 +29774,15 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               if (tableResult.success) {
                 tableIdMap2.set(parsed.id, tableResult.newTableId);
                 newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
+                console.log(`\u2705 Table copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${tableResult.newTableId}`);
+                console.log(`   \u{1F4CB} ${tableResult.columnsCount} colonnes, ${tableResult.rowsCount} lignes, ${tableResult.cellsCount} cellules`);
                 emitCapacityEvent(tableResult.newTableId, "table");
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
+                console.log(`\u26A0\uFE0F \xC9chec copie table, suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 Exception copie table:`, e.message);
+              console.error(`\u274C Exception copie table:`, e.message);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -29999,11 +29799,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     }
     let finalNodeId2 = newNodeId;
-    if (nodeIdMap && nodeIdMap.size > 0) {
-    }
     if (autoCreateDisplayNode) {
       if (!originalVar.nodeId) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de cr\xC3\xA9er display node. Fallback newNodeId.`);
+        console.warn(`\u26A0\uFE0F [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de cr\xE9er display node. Fallback newNodeId.`);
         finalNodeId2 = newNodeId;
       } else {
         try {
@@ -30049,7 +29847,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               hasFormula: true,
               hasLink: true,
               hasMarkers: true,
-              // ðŸ”§ FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
+              // 🔧 FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
               condition_activeId: true,
               formula_activeId: true,
               linkedConditionIds: true,
@@ -30094,7 +29892,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             hasFormula: true,
             hasLink: true,
             hasMarkers: true,
-            // ðŸ”§ FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
+            // 🔧 FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
             condition_activeId: true,
             formula_activeId: true,
             linkedConditionIds: true,
@@ -30151,7 +29949,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 linkedVariableIds: {
                   has: originalVar.id
                 },
-                // âš ï¸ CRITICAL: Exclude the template nodes themselves
+                // ⚠️ CRITICAL: Exclude the template nodes themselves
                 // This ensures we find TRUE display nodes, not the templates
                 id: {
                   notIn: Array.from(templateIds)
@@ -30167,15 +29965,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 createdAt: "asc"
               }
             });
-            if (candidates.length === 0) {
-            } else {
-            }
             originalDisplayNode = pickDisplayCandidate(candidates);
-          }
-          if (originalDisplayNode) {
-          } else {
-            if (originalVar.nodeId && originalOwnerNode) {
-            }
           }
           const duplicatedOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
             where: { id: newNodeId },
@@ -30195,10 +29985,8 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 });
                 if (!parentExists) {
                   resolvedParentId = duplicatedOwnerNode.parentId ?? null;
-                } else {
                 }
               } catch (parentCheckErr) {
-                console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F  [DISPLAY_NODE_PARENT] Erreur lors de la v\xC3\xA9rification du parent, fallback:`, parentCheckErr.message);
                 resolvedParentId = duplicatedOwnerNode.parentId ?? null;
               }
             } else if (!resolvedParentId) {
@@ -30280,7 +30068,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               return typeof value === "string" ? value : String(value);
             };
             const tableSourceNode = originalDisplayNode ?? originalOwnerNode;
-            const displayLabel = forceSingleSuffix(originalVar.displayName || "Donn\xC3\xA9e");
+            const displayLabel = forceSingleSuffix(originalVar.displayName || "Donn\xE9e");
             const resolvedOrder = originalDisplayNode?.order ?? (originalOwnerNode.order ?? 0) + 1;
             const resolvedSubTabsJson = (() => {
               const resolved = Array.isArray(inheritedSubTabs) && inheritedSubTabs.length ? inheritedSubTabs : ownerSubTabsArray;
@@ -30314,28 +30102,34 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               createdAt: now,
               updatedAt: now,
               hasAPI: tableSourceNode.hasAPI ?? false,
-              hasCondition: tableSourceNode.hasCondition ?? false,
+              // 🔧 FIX: Ne pas hériter des flags hasFormula/hasCondition/hasTable du nœud source
+              // si la variable actuelle n'a PAS de capacité de ce type.
+              // Sinon un simple champ de saisie (variable simple) se transforme en cellule de calcul !
+              hasCondition: capacityType === "condition" ? tableSourceNode.hasCondition ?? true : false,
               hasData: tableSourceNode.hasData ?? false,
-              hasFormula: tableSourceNode.hasFormula ?? false,
+              hasFormula: capacityType === "formula" ? tableSourceNode.hasFormula ?? true : false,
               hasLink: tableSourceNode.hasLink ?? false,
               hasMarkers: tableSourceNode.hasMarkers ?? false,
-              hasTable: tableSourceNode.hasTable ?? false,
-              table_name: tableSourceNode.table_name,
-              table_activeId: tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
-              table_instances: cloneAndSuffixInstances(tableSourceNode.table_instances),
-              table_columns: tableSourceNode.table_columns,
-              table_data: tableSourceNode.table_data,
-              table_importSource: tableSourceNode.table_importSource,
-              table_isImported: tableSourceNode.table_isImported ?? false,
-              table_meta: tableSourceNode.table_meta,
-              table_rows: tableSourceNode.table_rows,
-              table_type: tableSourceNode.table_type,
-              linkedTableIds: Array.isArray(tableSourceNode.linkedTableIds) ? tableSourceNode.linkedTableIds.map((id) => appendSuffix(String(id))) : [],
-              // ðŸ”§ FIX 16/12/2025: NE PAS inclure linkedConditionIds et linkedFormulaIds ici
-              // car ils seront mis Ã  jour APRÃˆS la copie des conditions/formules.
-              // Si on les inclut avec [], ils Ã©craseraient les valeurs ajoutÃ©es par copyFormulaCapacity!
-              // linkedConditionIds: [] as any,  // SUPPRIMÃ‰
-              // linkedFormulaIds: [] as any,    // SUPPRIMÃ‰
+              hasTable: capacityType === "table" ? tableSourceNode.hasTable ?? true : false,
+              table_name: capacityType === "table" ? tableSourceNode.table_name : null,
+              table_activeId: capacityType === "table" && tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
+              table_instances: capacityType === "table" ? cloneAndSuffixInstances(tableSourceNode.table_instances) : null,
+              table_columns: capacityType === "table" ? tableSourceNode.table_columns : null,
+              table_data: capacityType === "table" ? tableSourceNode.table_data : null,
+              table_importSource: capacityType === "table" ? tableSourceNode.table_importSource : null,
+              table_isImported: capacityType === "table" ? tableSourceNode.table_isImported ?? false : false,
+              table_meta: capacityType === "table" ? tableSourceNode.table_meta : null,
+              table_rows: capacityType === "table" ? tableSourceNode.table_rows : null,
+              table_type: capacityType === "table" ? tableSourceNode.table_type : null,
+              linkedTableIds: capacityType === "table" && Array.isArray(tableSourceNode.linkedTableIds) ? tableSourceNode.linkedTableIds.map((id) => appendSuffix(String(id))) : [],
+              // 🔧 FIX 24/12/2025: Explicitement mettre à null/[] les IDs de capacités non pertinentes
+              // pour éviter qu'un champ simple hérite des formules/conditions du nœud source
+              formula_activeId: capacityType === "formula" && tableSourceNode.formula_activeId ? appendSuffix(String(tableSourceNode.formula_activeId)) : null,
+              condition_activeId: capacityType === "condition" && tableSourceNode.condition_activeId ? appendSuffix(String(tableSourceNode.condition_activeId)) : null,
+              linkedFormulaIds: [],
+              // Sera rempli après si capacityType === 'formula'
+              linkedConditionIds: [],
+              // Sera rempli après si capacityType === 'condition'
               linkedVariableIds: [newVarId],
               data_activeId: tableSourceNode.data_activeId ? appendSuffix(String(tableSourceNode.data_activeId)) : null,
               data_displayFormat: tableSourceNode.data_displayFormat,
@@ -30360,66 +30154,64 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             const copiedFormulaIds = [];
             const copiedConditionIds = [];
             try {
-              const originalFormulas = await prisma70.treeBranchLeafNodeFormula.findMany({
-                where: { nodeId: tableSourceNode.id }
-              });
-              for (const f of originalFormulas) {
-                const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
-                const existingFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
-                if (existingFormula) {
-                  if (existingFormula.nodeId === displayNodeId2) {
-                    copiedFormulaIds.push(newFormulaId);
+              if (capacityType === "formula") {
+                const originalFormulas = await prisma70.treeBranchLeafNodeFormula.findMany({
+                  where: { nodeId: tableSourceNode.id }
+                });
+                for (const f of originalFormulas) {
+                  const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
+                  const existingFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
+                  if (existingFormula) {
+                    if (existingFormula.nodeId === displayNodeId2) {
+                      copiedFormulaIds.push(newFormulaId);
+                      continue;
+                    }
                     continue;
                   }
-                  continue;
-                }
-                try {
-                  const formulaResult = await copyFormulaCapacity2(
-                    f.id,
-                    displayNodeId2,
-                    suffix,
-                    prisma70,
-                    { formulaIdMap, nodeIdMap }
-                  );
-                  if (formulaResult.success) {
-                    formulaIdMap.set(f.id, formulaResult.newFormulaId);
-                    copiedFormulaIds.push(formulaResult.newFormulaId);
-                  } else {
-                    console.error(`   \xE2\x9D\u0152 Erreur copie formule: ${f.id}`);
+                  try {
+                    const formulaResult = await copyFormulaCapacity(
+                      f.id,
+                      displayNodeId2,
+                      suffix,
+                      prisma70,
+                      { formulaIdMap, nodeIdMap }
+                    );
+                    if (formulaResult.success) {
+                      formulaIdMap.set(f.id, formulaResult.newFormulaId);
+                      copiedFormulaIds.push(formulaResult.newFormulaId);
+                    }
+                  } catch (error) {
                   }
-                } catch (error) {
-                  console.error(`   \xE2\x9D\u0152 Exception copie formule ${f.id}:`, error);
                 }
               }
-              const originalConditions = await prisma70.treeBranchLeafNodeCondition.findMany({
-                where: { nodeId: tableSourceNode.id }
-              });
-              for (const c of originalConditions) {
-                const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
-                const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
-                if (existingCondition) {
-                  if (existingCondition.nodeId === displayNodeId2) {
-                    copiedConditionIds.push(newConditionId);
+              if (capacityType === "condition") {
+                const originalConditions = await prisma70.treeBranchLeafNodeCondition.findMany({
+                  where: { nodeId: tableSourceNode.id }
+                });
+                for (const c of originalConditions) {
+                  const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
+                  const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+                  if (existingCondition) {
+                    if (existingCondition.nodeId === displayNodeId2) {
+                      copiedConditionIds.push(newConditionId);
+                      continue;
+                    }
                     continue;
                   }
-                  continue;
-                }
-                try {
-                  const conditionResult = await copyConditionCapacity(
-                    c.id,
-                    displayNodeId2,
-                    suffix,
-                    prisma70,
-                    { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
-                  );
-                  if (conditionResult.success) {
-                    conditionIdMap.set(c.id, conditionResult.newConditionId);
-                    copiedConditionIds.push(conditionResult.newConditionId);
-                  } else {
-                    console.error(`   \xE2\x9D\u0152 Erreur copie condition: ${c.id}`);
+                  try {
+                    const conditionResult = await copyConditionCapacity(
+                      c.id,
+                      displayNodeId2,
+                      suffix,
+                      prisma70,
+                      { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
+                    );
+                    if (conditionResult.success) {
+                      conditionIdMap.set(c.id, conditionResult.newConditionId);
+                      copiedConditionIds.push(conditionResult.newConditionId);
+                    }
+                  } catch (error) {
                   }
-                } catch (error) {
-                  console.error(`   \xE2\x9D\u0152 Exception copie condition ${c.id}:`, error);
                 }
               }
               const updateData = {};
@@ -30428,11 +30220,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 updateData.linkedFormulaIds = copiedFormulaIds;
                 if (tableSourceNode.formula_activeId) {
                   const newFormulaActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.formula_activeId)));
-                  if (copiedFormulaIds.includes(newFormulaActiveId)) {
-                    updateData.formula_activeId = newFormulaActiveId;
-                  } else {
-                    updateData.formula_activeId = copiedFormulaIds[0];
-                  }
+                  updateData.formula_activeId = copiedFormulaIds.includes(newFormulaActiveId) ? newFormulaActiveId : copiedFormulaIds[0];
                 } else if (copiedFormulaIds.length > 0) {
                   updateData.formula_activeId = copiedFormulaIds[0];
                 }
@@ -30442,11 +30230,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 updateData.linkedConditionIds = copiedConditionIds;
                 if (tableSourceNode.condition_activeId) {
                   const newConditionActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.condition_activeId)));
-                  if (copiedConditionIds.includes(newConditionActiveId)) {
-                    updateData.condition_activeId = newConditionActiveId;
-                  } else {
-                    updateData.condition_activeId = copiedConditionIds[0];
-                  }
+                  updateData.condition_activeId = copiedConditionIds.includes(newConditionActiveId) ? newConditionActiveId : copiedConditionIds[0];
                 } else if (copiedConditionIds.length > 0) {
                   updateData.condition_activeId = copiedConditionIds[0];
                 }
@@ -30461,9 +30245,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
                 for (const originalTableId of tableSourceNode.linkedTableIds) {
                   const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
-                  const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
-                    where: { id: newTableId }
-                  });
+                  const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
                   if (existingTable) {
                     copiedTableIds.push(newTableId);
                     tableIdMap2.set(String(originalTableId), newTableId);
@@ -30473,7 +30255,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                     const tableResult = await copyTableCapacity2(
                       String(originalTableId),
                       displayNodeId2,
-                      // La nouvelle table appartient au display node copiÃ©
                       suffix,
                       prisma70,
                       { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
@@ -30481,56 +30262,40 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                     if (tableResult.success) {
                       tableIdMap2.set(String(originalTableId), tableResult.newTableId);
                       copiedTableIds.push(tableResult.newTableId);
-                    } else {
-                      console.warn(`   \xE2\u0161\xA0\xEF\xB8\x8F \xC3\u2030chec copie table ${originalTableId}: ${tableResult.error}`);
                     }
                   } catch (tableErr) {
-                    console.error(`   \xE2\x9D\u0152 Exception copie table ${originalTableId}:`, tableErr.message);
                   }
                 }
                 if (copiedTableIds.length > 0) {
                   await prisma70.treeBranchLeafNode.update({
                     where: { id: displayNodeId2 },
-                    data: {
-                      hasTable: true,
-                      linkedTableIds: copiedTableIds
-                    }
+                    data: { hasTable: true, linkedTableIds: copiedTableIds }
                   });
                 }
               }
             } catch (copyCapErr) {
-              console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la copie des formules/conditions pour display node:`, copyCapErr.message);
             }
           } else {
-            console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de r\xC3\xA9cup\xC3\xA9rer le n\xC5\u201Cud propri\xC3\xA9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
           }
         } catch (e) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la cr\xC3\xA9ation du n\xC5\u201Cud d'affichage d\xC3\xA9di\xC3\xA9:`, e.message);
         }
       }
-    } else {
     }
     try {
       const existingById = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
-        const adjusted = `${originalVarId}-${suffix}-${tail}`;
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur id variable (${newVarId}), ajustement \xE2\u2020\u2019 ${adjusted}`);
-        newVarId = adjusted;
+        newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     try {
       const existingByKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
-        const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur exposedKey (${newExposedKey}), ajustement \xE2\u2020\u2019 ${adjustedKey}`);
-        newExposedKey = adjustedKey;
+        newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision exposedKey \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
@@ -30559,30 +30324,23 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               }
             });
             const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
-            if (!isCopiedNode) {
-              console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F SKIP addToNodeLinkedField (r\xC3\xA9utilisation): ${finalNodeId2} est un n\xC5\u201Cud ORIGINAL, pas une copie`);
-            } else {
+            if (isCopiedNode) {
               await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
             }
           } catch (e) {
-            console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
           }
           const cacheKey2 = `${originalVarId}|${finalNodeId2}`;
           variableCopyCache.set(cacheKey2, existingForNode.id);
         } else {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Variable existante MAIS MAUVAIS SUFFIXE: ${existingForNode.id}, attendu: ${expectedVarId}`);
-          console.warn(`   \xE2\u2020\u2019 Suppression de l'ancienne ET cr\xC3\xA9ation nouvelle variable obligatoire`);
           try {
             await prisma70.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
-            console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur suppression ancienne variable:`, delError.message);
           }
           _reusingExistingVariable = false;
           _existingVariableForReuse = null;
         }
       }
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification variable existante par nodeId \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let newVariable;
     if (_reusingExistingVariable && _existingVariableForReuse) {
@@ -30590,10 +30348,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     } else {
       const normalizedDisplayName = forceSingleSuffix(originalVar.displayName);
       if (!finalNodeId2) {
-        console.error(`\xE2\x9D\u0152 ERREUR CRITIQUE: finalNodeId est NULL/undefined!`);
-        console.error(`   autoCreateDisplayNode: ${autoCreateDisplayNode}`);
-        console.error(`   originalVar.nodeId: ${originalVar.nodeId}`);
-        console.error(`   newNodeId: ${newNodeId}`);
         throw new Error(`Cannot create variable: finalNodeId is ${finalNodeId2}. This indicates the display node was not created properly.`);
       }
       try {
@@ -30607,7 +30361,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             newLinkedFormulaIds.push(mappedId);
           } else {
             try {
-              const formulaResult = await copyFormulaCapacity2(
+              const formulaResult = await copyFormulaCapacity(
                 formulaId,
                 finalNodeId2,
                 suffix,
@@ -30621,7 +30375,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 Erreur copie formule r\xC3\xA9cursive:`, e.message);
               newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
             }
           }
@@ -30647,7 +30400,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 newLinkedConditionIds.push(`${conditionId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 Erreur copie condition r\xC3\xA9cursive:`, e.message);
               newLinkedConditionIds.push(`${conditionId}-${suffix}`);
             }
           }
@@ -30673,7 +30425,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 newLinkedTableIds.push(`${tableId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 Erreur copie table r\xC3\xA9cursive:`, e.message);
               newLinkedTableIds.push(`${tableId}-${suffix}`);
             }
           }
@@ -30700,12 +30451,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           }
         });
       } catch (createError) {
-        console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 ERREUR LORS DE LA CR\xC3\u2030ATION DE LA VARIABLE!`);
-        console.error(`   Erreur Prisma: ${createError.message}`);
-        console.error(`   Node ID tent\xC3\xA9: ${finalNodeId2}`);
-        console.error(`   Variable ID: ${newVarId}`);
-        console.error(`   ExposedKey: ${newExposedKey}`);
-        console.error(`   D\xC3\xA9tails complets:`, createError);
         throw createError;
       }
     }
@@ -30725,17 +30470,13 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       try {
         await linkVariableToAllCapacityNodes(prisma70, newVariable.id, newVariable.sourceRef);
       } catch (e) {
-        console.error(`\xE2\x9D\u0152 Erreur LIAISON AUTOMATIQUE VARIABLE:`, e.message);
       }
-    } else {
     }
     const verification = await prisma70.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
-    if (verification) {
-    } else {
-      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
-      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
+    if (!verification) {
+      console.error(`\u274C Variable ${newVariable.id} N'EXISTE PAS apr\xE8s cr\xE9ation !`);
     }
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
@@ -30749,13 +30490,11 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           data_precision: newVariable.precision,
           data_unit: newVariable.unit,
           data_visibleToUser: newVariable.visibleToUser,
-          // Harmoniser le label du nÅ“ud d'affichage sur le displayName de la variable
           label: normalizedNodeLabel || void 0,
           field_label: normalizedNodeLabel || void 0
         }
       });
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la mise \xC3\xA0 jour des param\xC3\xA8tres capacit\xC3\xA9 (display node):`, e.message);
     }
     if (linkToDisplaySection) {
       try {
@@ -30775,22 +30514,17 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           });
           if (displaySection) {
             await addToNodeLinkedField5(prisma70, displaySection.id, "linkedVariableIds", [newVariable.id]);
-          } else {
           }
         }
       } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors du linkage vers la section d'affichage:`, e.message);
       }
     } else if (autoCreateDisplayNode) {
       try {
         const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
-        if (!isCopiedNode) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F SKIP addToNodeLinkedField: ${finalNodeId2} est un n\xC5\u201Cud ORIGINAL (template), pas une copie. On ne doit PAS ajouter ${newVariable.id} \xC3\xA0 ses linkedVariableIds.`);
-        } else {
+        if (isCopiedNode) {
           await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedVariableIds", [newVariable.id]);
         }
       } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
       }
       try {
         if (capacityType && newSourceRef) {
@@ -30798,14 +30532,11 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              const cond = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
               await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
-                  condition_activeId: capId,
-                  condition_name: cond?.name || null,
-                  condition_description: cond?.description || null
+                  condition_activeId: capId
                 }
               });
               await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedConditionIds", [capId]);
@@ -30833,7 +30564,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   }
                 }
               } catch (e) {
-                console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Failed to sync linkedVariableIds on target node ${newNodeId}:`, e.message);
               }
             } else if (parsedCap.type === "table") {
               const tbl = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
@@ -30851,7 +30581,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           }
         }
       } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Synchronisation capacit\xC3\xA9s condition/table sur le n\xC5\u201Cud d'affichage:`, e.message);
       }
     }
     try {
@@ -30862,7 +30591,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         await replaceLinkedVariableId(prisma70, finalNodeId2, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Failed to replace linkedVariableIds on nodes ${newNodeId} / ${finalNodeId2}:`, e.message);
     }
     const cacheKeyFinal = `${originalVarId}|${finalNodeId2}`;
     variableCopyCache.set(cacheKeyFinal, newVariable.id);
@@ -30896,7 +30624,6 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         } catch (e) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ bidirectionnelle:`, e.message);
         }
       }
     }
@@ -30906,12 +30633,10 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         select: { nodeId: true }
       });
       if (originalVariable?.nodeId) {
-        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma70).catch((err) => {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur mise \xC3\xA0 jour champ Total:`, err);
+        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma70).catch(() => {
         });
       }
     } catch (sumErr) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur r\xC3\xA9cup\xC3\xA9ration variable originale pour Total:`, sumErr);
     }
     return {
       variableId: newVariable.id,
@@ -30920,21 +30645,21 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       sourceRef: newSourceRef,
       success: true,
       displayNodeId: autoCreateDisplayNode ? finalNodeId2 : void 0,
-      // ðŸŸ¢ RETOURNER LES MAPS pour que repeat-executor puisse les agrÃ©ger
+      // 🟢 RETOURNER LES MAPS pour que repeat-executor puisse les agréger
       formulaIdMap,
       conditionIdMap,
       tableIdMap: tableIdMap2
     };
   } catch (error) {
     console.error(`
-${"\xE2\u2022\x90".repeat(80)}`);
-    console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 ERREUR FATALE lors de la copie de la variable!`);
+${"\u2550".repeat(80)}`);
+    console.error(`\u274C\u274C\u274C ERREUR FATALE lors de la copie de la variable!`);
     console.error(`Variable ID: ${originalVarId}`);
     console.error(`Suffix: ${suffix}`);
     console.error(`Display Node ID: ${finalNodeId || "undefined"}`);
     console.error(`Message d'erreur:`, error instanceof Error ? error.message : String(error));
     console.error(`Stack trace:`, error instanceof Error ? error.stack : "N/A");
-    console.error(`${"\xE2\u2022\x90".repeat(80)}
+    console.error(`${"\u2550".repeat(80)}
 `);
     throw error;
   }
@@ -30954,13 +30679,14 @@ async function createDisplayNodeForExistingVariable(variableId, prisma70, displa
       table_name: true,
       table_activeId: true,
       table_instances: true,
-      // ðŸ”‘ IMPORTANT: RÃ©cupÃ©rer subtab pour que la copie soit dans le bon sous-onglet
+      // 🔑 IMPORTANT: Récupérer subtab pour que la copie soit dans le bon sous-onglet
       subtab: true,
       subtabs: true
     }
   });
-  if (!owner) throw new Error(`N\xC5\u201Cud propri\xC3\xA9taire introuvable: ${v.nodeId}`);
+  if (!owner) throw new Error(`N\u0153ud propri\xE9taire introuvable: ${v.nodeId}`);
   const displayParentId = owner.parentId;
+  console.log(`\u{1F4CC} [createDisplayNodeForExistingVariable] R\xC8GLE: Copie dans le M\xCAME parent que l'original: ${displayParentId}`);
   const now = /* @__PURE__ */ new Date();
   const baseData = {
     id: displayNodeId,
@@ -30968,7 +30694,7 @@ async function createDisplayNodeForExistingVariable(variableId, prisma70, displa
     parentId: displayParentId,
     type: "leaf_field",
     subType: null,
-    label: v.displayName || "Donn\xC3\xA9e",
+    label: v.displayName || "Donn\xE9e",
     description: null,
     value: null,
     order: (owner.order ?? 0) + 1,
@@ -30985,7 +30711,7 @@ async function createDisplayNodeForExistingVariable(variableId, prisma70, displa
     defaultValue: null,
     calculatedValue: null,
     metadata: { fromVariableId: variableId },
-    // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+    // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
     subtab: owner.subtab,
     subtabs: owner.subtabs,
     createdAt: now,
@@ -30996,7 +30722,7 @@ async function createDisplayNodeForExistingVariable(variableId, prisma70, displa
     hasFormula: false,
     hasLink: false,
     hasMarkers: false,
-    // ðŸ“Š TABLE: Copier les colonnes table du nÅ“ud original
+    // 📊 TABLE: Copier les colonnes table du nœud original
     hasTable: owner.hasTable ?? false,
     table_name: owner.table_name,
     table_activeId: owner.table_activeId,
@@ -31039,7 +30765,7 @@ async function addToNodeLinkedField5(prisma70, nodeId, field, idsToAdd) {
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F N\xC5\u201Cud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`\u26A0\uFE0F N\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
@@ -32176,7 +31902,6 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
         validLinkedIds.push(formulaId);
         formulaMap.delete(formulaId);
       } else {
-        console.warn(`[DEBUG] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  Formula ID ${formulaId} in linkedFormulaIds not found - skipping`);
       }
     }
     const unlinkedFormulas = Array.from(formulaMap.values());
@@ -32184,7 +31909,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     const newLinkedFormulaIds = [];
     for (const f of allFormulas) {
       try {
-        const formulaResult = await copyFormulaCapacity2(
+        const formulaResult = await copyFormulaCapacity(
           f.id,
           newId,
           suffixNum,
@@ -32237,7 +31962,6 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
         validLinkedConditionIds.push(conditionId);
         conditionMap.delete(conditionId);
       } else {
-        console.warn(`[DEBUG] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  Condition ID ${conditionId} in linkedConditionIds not found - skipping`);
       }
     }
     const unlinkedConditions = Array.from(conditionMap.values());
@@ -32305,15 +32029,19 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     }
     const updateActiveIds = {};
     if (oldNode.condition_activeId) {
-      const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
-      if (newConditionActiveId) {
-        updateActiveIds.condition_activeId = newConditionActiveId;
+      if (oldNode.hasCondition) {
+        const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
+        if (newConditionActiveId) {
+          updateActiveIds.condition_activeId = newConditionActiveId;
+        }
       }
     }
     if (oldNode.formula_activeId) {
-      const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
-      if (newFormulaActiveId) {
-        updateActiveIds.formula_activeId = newFormulaActiveId;
+      if (oldNode.hasFormula) {
+        const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
+        if (newFormulaActiveId) {
+          updateActiveIds.formula_activeId = newFormulaActiveId;
+        }
       }
     }
     if (Object.keys(updateActiveIds).length > 0) {
@@ -32522,7 +32250,6 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
             }
           });
         } catch (selectConfigErr) {
-          console.warn(`[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur cr\xC3\u0192\xC2\xA9ation SELECT config pour ${newId}:`, selectConfigErr.message);
         }
       } else {
       }
@@ -32549,7 +32276,6 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
             }
           });
         } catch (numberConfigErr) {
-          console.warn(`[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur cr\xC3\u0192\xC2\xA9ation NUMBER config pour ${newId}:`, numberConfigErr.message);
         }
       }
     }
@@ -32558,18 +32284,18 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
   for (const oldNodeId of toCopy) {
     const newNodeId = idMap.get(oldNodeId);
     const oldNode = byId.get(oldNodeId);
-    const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : []).map((id) => {
+    const newLinkedFormulaIds = oldNode.hasFormula ? (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : []).map((id) => {
       const mappedId = formulaIdMap.get(id);
       if (mappedId) return mappedId;
       const ensured = ensureSuffix(id);
       return ensured || appendSuffix(id);
-    }).filter(Boolean);
-    const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : []).map((id) => {
+    }).filter(Boolean) : [];
+    const newLinkedConditionIds = oldNode.hasCondition ? (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : []).map((id) => {
       const mappedId = conditionIdMap.get(id);
       if (mappedId) return mappedId;
       const ensured = ensureSuffix(id);
       return ensured || appendSuffix(id);
-    }).filter(Boolean);
+    }).filter(Boolean) : [];
     const newLinkedTableIds = (Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : []).map((id) => {
       const mappedId = tableIdMap2.get(id);
       if (mappedId) return mappedId;
@@ -32624,7 +32350,6 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
             } else {
             }
           } catch (e) {
-            console.warn(`[DEEP-COPY] Erreur copie variable ${linkedVarId}:`, e.message);
           }
         } else {
         }
@@ -32662,11 +32387,16 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
           where: { nodeId: originalNodeId }
         });
         if (!originalVar) {
-          console.warn(`[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Variable originale non trouv\xC3\u0192\xC2\xA9e pour noeud ${originalNodeId}`);
           continue;
         }
         const newVarId = appendSuffix(originalVar.id);
         const newExposedKey = appendSuffix(originalVar.exposedKey);
+        const existingVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
+          where: { id: newVarId }
+        });
+        if (existingVar) {
+          continue;
+        }
         await prisma70.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
@@ -35369,14 +35099,10 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     try {
       const variablesToCheck = await prisma47.treeBranchLeafNodeVariable.findMany({
         where: {
-          OR: [
-            { nodeId: { in: allDeletedIds } },
-            // Variables attachÃƒÂ¯Ã‚Â¿Ã‚Â½es aux nodes supprimÃƒÂ¯Ã‚Â¿Ã‚Â½s
-            { sourceNodeId: { in: allDeletedIds } }
-            // Variables pointant depuis les nodes supprimÃƒÂ¯Ã‚Â¿Ã‚Â½s
-          ]
+          nodeId: { in: allDeletedIds }
+          // Variables attachées aux nodes supprimés
         },
-        select: { id: true, name: true, nodeId: true }
+        select: { id: true, nodeId: true }
       });
       const varIdsToDelete = [];
       const suffixPattern = /-\d+$/;
@@ -35393,7 +35119,6 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       } else {
       }
     } catch (varCleanError) {
-      console.warn("[DELETE] Impossible de nettoyer les variables orphelines:", varCleanError.message);
     }
     try {
       const remainingNodes = await prisma47.treeBranchLeafNode.findMany({
@@ -39623,7 +39348,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       }
     }
     if (!selectConfig?.tableReference) {
-      return res.status(404).json({ error: "Pas de tableau r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9renc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 pour ce lookup" });
+      return res.json({ tableColumns: [], tableRows: [], options: [] });
     }
     const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id: selectConfig.tableReference },
@@ -40356,7 +40081,6 @@ router56.put("/submissions/:id", async (req2, res) => {
               data: { value: evaluation.value }
             });
           } catch (error) {
-            console.error(`[UNIVERSAL] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation variable ${row.nodeId}:`, error);
             const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
             if (parsed?.type === "condition") {
               const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
@@ -49856,145 +49580,76 @@ var publicLeads_default = router69;
 
 // src/routes/index.ts
 var apiRouter = (0, import_express71.Router)();
-console.log("[ROUTER] Configuration du routeur principal");
 apiRouter.use("/auth", authRoutes_default);
 console.log("[ROUTER] Routes d'authentification mont\xE9es sur /auth");
 apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
-console.log("[ROUTER] Routes auto-google-auth mont\xE9es sur /auto-google-auth");
 apiRouter.use("/", misc_default);
-console.log("[ROUTER] Routes diverses mont\xE9es sur /");
 apiRouter.use("/profile", profile_default);
-console.log("[ROUTER] Routes profil mont\xE9es sur /profile");
 apiRouter.post("/logout", logout);
-console.log("[ROUTER] Route de d\xE9connexion mont\xE9e sur /logout");
 apiRouter.use("/organizations", organizations_default);
-console.log("[ROUTER] Routes des organisations mont\xE9es sur /organizations");
 apiRouter.use("/organizations", googleWorkspace_default);
-console.log("[ROUTER] Routes Google Workspace mont\xE9es sur /organizations");
 apiRouter.use("/google-workspace", googleWorkspace_default);
-console.log("[ROUTER] Routes Google Workspace utilisateurs mont\xE9es sur /google-workspace");
 apiRouter.use("/modules", modules_default);
-console.log("[ROUTER] Routes des modules mont\xE9es sur /modules");
 apiRouter.use("/admin-modules", admin_modules_default);
-console.log("[ROUTER] Routes administration modules DYNAMIQUE mont\xE9es sur /admin-modules");
 apiRouter.use("/icons", icons_default);
-console.log("[ROUTER] Routes des ic\xF4nes mont\xE9es sur /icons");
 apiRouter.use("/blocks", blocks_default);
-console.log("[ROUTER] Routes des blocks mont\xE9es sur /blocks");
 apiRouter.use("/fields", fields_default);
-console.log("[ROUTER] Routes des fields mont\xE9es sur /fields");
 apiRouter.use("/sections", sections_default);
-console.log("[ROUTER] Routes des sections mont\xE9es sur /sections (avec redirections)");
 apiRouter.use("/module-navigation", module_navigation_default);
-console.log("[ROUTER] Routes navigation modules mont\xE9es sur /module-navigation");
 apiRouter.use("/form-sections", form_sections_default);
-console.log("[ROUTER] Routes sections formulaires mont\xE9es sur /form-sections");
 apiRouter.use("/field-types", fieldTypes_default);
-console.log("[ROUTER] Routes des types de champs mont\xE9es sur /field-types");
 apiRouter.use("/option-nodes", optionNodes_default);
-console.log("[ROUTER] Routes des option-nodes mont\xE9es sur /option-nodes");
 apiRouter.use("/notifications", notifications_default);
-console.log("[ROUTER] Routes des notifications mont\xE9es sur /notifications");
 apiRouter.use("/notifications-system", notificationSystemRoutes_default);
-console.log("[ROUTER] Routes du syst\xE8me de notifications mont\xE9es sur /notifications-system");
 apiRouter.use("/settings", settingsRoutes_default);
-console.log("[ROUTER] Routes des param\xE8tres mont\xE9es sur /settings");
 apiRouter.use("/leads", leadsRoutes_default);
-console.log("[ROUTER] Routes des leads mont\xE9es sur /leads");
 apiRouter.use("/dashboard", dashboard_default);
-console.log("[ROUTER] Routes du dashboard mont\xE9es sur /dashboard");
-console.log("[ROUTER] Routes des leads mont\xE9es sur /leads");
 apiRouter.use("/clients", clients_default);
-console.log("[ROUTER] Routes des clients mont\xE9es sur /clients");
 apiRouter.use("/company", company_default);
-console.log("[ROUTER] Routes des entreprises mont\xE9es sur /company");
 apiRouter.use("/projects", projects_default);
-console.log("[ROUTER] Routes des projets mont\xE9es sur /projects");
 apiRouter.use("/emails", emails_default);
-console.log("[ROUTER] Routes des emails mont\xE9es sur /emails");
 apiRouter.use("/gemini", gemini_default);
-console.log("[ROUTER] Routes Gemini AI mont\xE9es sur /gemini");
 apiRouter.use("/roles", rolesRoutes_default);
-console.log("[ROUTER] Routes des r\xF4les mont\xE9es sur /roles");
 apiRouter.use("/permissions", permissions_default);
-console.log("[ROUTER] Routes des permissions mont\xE9es sur /permissions");
 apiRouter.use("/users", usersRoutes_default);
-console.log("[ROUTER] Routes des utilisateurs mont\xE9es sur /users");
 apiRouter.use("/admin", admin_default);
-console.log("[ROUTER] Routes admin mont\xE9es sur /admin");
 apiRouter.use("/impersonate", impersonate_default);
-console.log("[ROUTER] Routes usurpation mont\xE9es sur /impersonate");
 apiRouter.use("/admin-password", adminPasswordRoutes_default);
-console.log("[ROUTER] Routes admin-password mont\xE9es sur /admin-password");
 apiRouter.use("/gmail", gmailRoutes_default);
-console.log("[ROUTER] Routes Gmail mont\xE9es sur /gmail");
 apiRouter.use("/calendar", calendar_default);
-console.log("[ROUTER] Routes Calendar mont\xE9es sur /calendar");
 apiRouter.use("/google-auth", google_auth_default);
-console.log("[ROUTER] Routes Google Auth mont\xE9es sur /google-auth");
 apiRouter.use("/google/scheduler", google_scheduler_default);
-console.log("[ROUTER] Routes Google Scheduler mont\xE9es sur /google/scheduler");
 apiRouter.use("/google-tokens", google_tokens_default);
-console.log("[ROUTER] Routes Google Tokens Monitoring mont\xE9es sur /google-tokens");
 apiRouter.use("/auth/google", google_auth_default);
-console.log("[ROUTER] Routes Google Auth (alias) mont\xE9es sur /auth/google");
 apiRouter.use("/services", services_default);
-console.log("[ROUTER] Routes des services externes mont\xE9es sur /services");
 apiRouter.use("/telnyx", telnyx_default2);
-console.log("[ROUTER] Routes Telnyx mont\xE9es sur /telnyx");
 apiRouter.use("/quotes", quotes_default);
-console.log("[ROUTER] Routes Devis mont\xE9es sur /quotes");
 apiRouter.use("/google-drive", google_drive_default);
-console.log("[ROUTER] Routes Google Drive mont\xE9es sur /google-drive");
 apiRouter.use("/google-meet", google_meet_default);
-console.log("[ROUTER] Routes Google Meet mont\xE9es sur /google-meet");
 apiRouter.use("/analytics", analytics_default);
-console.log("[ROUTER] Routes Analytics mont\xE9es sur /analytics");
 apiRouter.use("/ai", ai_default);
-console.log("[ROUTER] Routes IA mont\xE9es sur /ai");
 apiRouter.use("/ai", ai_code_default);
-console.log("[ROUTER] Routes IA Code mont\xE9es sur /ai/code/*");
 apiRouter.use("/advanced-select", advanced_select_default);
-console.log("[ROUTER] Routes Advanced Select mont\xE9es sur /advanced-select");
 apiRouter.use("/dynamic-formulas", dynamic_formulas_default);
-console.log("[ROUTER] Routes Syst\xE8me Dynamique mont\xE9es sur /dynamic-formulas");
 apiRouter.use("/treebranchleaf", treebranchleaf_routes_default);
-console.log("[ROUTER] Routes TreeBranchLeaf NOUVEAU syst\xE8me mont\xE9es sur /treebranchleaf");
 apiRouter.use("/tbl", tbl_intelligence_routes_default);
-console.log("[ROUTER] Routes TBL Intelligence mont\xE9es sur /tbl");
 apiRouter.use("/tbl", tbl_routes_default);
-console.log("[ROUTER] Routes TBL mont\xE9es sur /tbl");
 apiRouter.use("/tbl", tbl_capabilities_default);
-console.log("[ROUTER] Routes TBL Capabilities mont\xE9es sur /tbl");
 apiRouter.use("/validations", validations_default);
-console.log("[ROUTER] Routes validations (top-level) mont\xE9es sur /validations");
 apiRouter.use("/formulas", formulas_default2);
-console.log("[ROUTER] Routes formules (top-level) mont\xE9es sur /formulas");
 apiRouter.use("/dependencies", dependencies_default2);
-console.log("[ROUTER] Routes d\xE9pendances (top-level) mont\xE9es sur /dependencies");
 apiRouter.use("/invitations", invitations_default);
-console.log("[ROUTER] Routes des invitations mont\xE9es sur /invitations");
 apiRouter.use("/lead-generation", leadGeneration_default);
-console.log("[ROUTER] Routes Lead Generation mont\xE9es sur /lead-generation");
 apiRouter.use("/marketplace", marketplace_fixed_default);
-console.log("[ROUTER] Routes Marketplace mont\xE9es sur /marketplace");
 apiRouter.use("/partner", partner_default);
-console.log("[ROUTER] Routes Partner Portal mont\xE9es sur /partner");
 apiRouter.use("/forms", publicForms_default);
-console.log("[ROUTER] Routes Public Forms mont\xE9es sur /forms");
 apiRouter.use("/public-forms", publicForms_default);
-console.log("[ROUTER] Routes Public Forms mont\xE9es sur /public-forms");
 apiRouter.use("/landing-pages", landingPages_default);
-console.log("[ROUTER] Routes Landing Pages mont\xE9es sur /landing-pages");
 apiRouter.use("/campaign-analytics", campaignAnalytics_default);
-console.log("[ROUTER] Routes Campaign Analytics mont\xE9es sur /campaign-analytics");
 apiRouter.use("/dispatch", dispatch_default);
-console.log("[ROUTER] Routes Dispatch mont\xE9es sur /dispatch");
 apiRouter.use("/integrations", integrations_default);
 apiRouter.use("/integrations", integrationsStatus_default);
-console.log("[ROUTER] Routes Integrations (status + advertising/ecommerce) mont\xE9es sur /integrations");
 apiRouter.use("/public", publicLeads_default);
-console.log("[ROUTER] Routes Public API mont\xE9es sur /public");
 apiRouter.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
@@ -50013,10 +49668,6 @@ async function storeCalculatedValues(values, submissionId) {
     failed: 0,
     errors: []
   };
-  console.log(`\u{1F4CA} [StoreCalculatedValues] D\xE9but stockage de ${values.length} valeurs`, {
-    submissionId,
-    timestamp: (/* @__PURE__ */ new Date()).toISOString()
-  });
   for (const value of values) {
     try {
       const { nodeId, calculatedValue, calculatedBy = "unknown" } = value;
@@ -50046,13 +49697,6 @@ async function storeCalculatedValues(values, submissionId) {
         }
       });
       result.stored++;
-      console.log(`\u2705 [StoreCalculatedValues] Valeur stock\xE9e:`, {
-        nodeId,
-        label: node.label,
-        calculatedValue,
-        calculatedBy,
-        submissionId
-      });
     } catch (error) {
       result.failed++;
       result.errors.push({
@@ -50066,13 +49710,6 @@ async function storeCalculatedValues(values, submissionId) {
       });
     }
   }
-  console.log(`\u{1F4CA} [StoreCalculatedValues] Fin stockage:`, {
-    stored: result.stored,
-    failed: result.failed,
-    total: values.length,
-    submissionId,
-    errors: result.errors.length > 0 ? result.errors : void 0
-  });
   result.success = result.failed === 0;
   return result;
 }
@@ -50842,15 +50479,11 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
           const leadData = lead.data;
           if (leadData.postalCode) {
             valueMap.set("lead.postalCode", leadData.postalCode);
-            console.log(`[PREVIEW-EVALUATE] \u2705 Code postal Lead: ${leadData.postalCode}`);
           } else if (leadData.address && typeof leadData.address === "string") {
             const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
             if (postalCodeMatch) {
               const extractedPostalCode = postalCodeMatch[1];
               valueMap.set("lead.postalCode", extractedPostalCode);
-              console.log(`[PREVIEW-EVALUATE] \u2705 Code postal extrait: ${extractedPostalCode} depuis "${leadData.address}"`);
-            } else {
-              console.log(`[PREVIEW-EVALUATE] \u26A0\uFE0F Aucun code postal trouv\xE9 dans l'adresse: "${leadData.address}"`);
             }
           }
           if (leadData.address) {
@@ -50879,14 +50512,12 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
     }
     if (formData && typeof formData === "object") {
       const formEntries = Object.entries(formData);
-      console.log(`\u{1F50D} [Auto-Clean DEBUG] V\xE9rification auto-nettoyage sur ${formEntries.length} champs formData`);
       const sharedReferenceMapping = {
         "plan": ["shared-ref-1764095668124-l53956", "shared-ref-1764095679973-fad7d7", "shared-ref-1764093957109-52vog", "shared-ref-1764093355187-f83m8h"],
         "inclinaison": ["shared-ref-1764093957109-52vog", "shared-ref-1764093355187-f83m8h"]
       };
       for (const [nodeId, value] of formEntries) {
         if (!nodeId.startsWith("__") && value !== null && value !== void 0 && value !== "") {
-          console.log(`\u{1F50D} [Auto-Clean DEBUG] Analyse du champ ${nodeId} = "${value}"`);
           const nodeInfo = await prisma59.treeBranchLeafNode.findUnique({
             where: { id: nodeId },
             select: {
@@ -50903,10 +50534,8 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
           });
           if (nodeInfo?.TreeBranchLeafSelectConfig?.options) {
             const options = Array.isArray(nodeInfo.TreeBranchLeafSelectConfig.options) ? nodeInfo.TreeBranchLeafSelectConfig.options : [];
-            console.log(`\u{1F50D} [Auto-Clean DEBUG] Node ${nodeId} (${nodeInfo.label}) a ${options.length} options`);
             const selectedOption = options.find((opt) => opt.value === value);
             if (selectedOption?.sharedReferenceIds?.length) {
-              console.log(`\u{1F50D} [Auto-Clean DEBUG] Option s\xE9lectionn\xE9e "${selectedOption.label}" (${selectedOption.value}) a des r\xE9f\xE9rences partag\xE9es:`, selectedOption.sharedReferenceIds);
               let optionType = null;
               if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.plan)) {
                 optionType = "plan";
@@ -50914,9 +50543,7 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
                 optionType = "inclinaison";
               }
               if (optionType) {
-                console.log(`\u{1F50D} [Auto-Clean DEBUG] Option de type "${optionType}" d\xE9tect\xE9e`);
                 const referencesToClean = optionType === "plan" ? sharedReferenceMapping.inclinaison : sharedReferenceMapping.plan;
-                console.log(`\u{1F50D} [Auto-Clean DEBUG] Nettoyage des r\xE9f\xE9rences:`, referencesToClean);
                 const nodesToClean = await prisma59.treeBranchLeafNode.findMany({
                   where: {
                     treeId: effectiveTreeId,
@@ -50924,12 +50551,9 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
                   },
                   select: { id: true, label: true, sharedReferenceIds: true }
                 });
-                console.log(`\u{1F50D} [Auto-Clean DEBUG] ${nodesToClean.length} nodes \xE0 nettoyer trouv\xE9s`);
                 for (const nodeToClean of nodesToClean) {
                   if (valueMap.has(nodeToClean.id)) {
-                    const oldValue = valueMap.get(nodeToClean.id);
                     valueMap.delete(nodeToClean.id);
-                    console.log(`\u{1F50D} [Auto-Clean DEBUG] \u2705 Node ${nodeToClean.id} (${nodeToClean.label}) nettoy\xE9 (\xE9tait: "${oldValue}")`);
                   }
                 }
               }
@@ -50947,12 +50571,7 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
       const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
       return aIsSumFormula - bIsSumFormula;
     });
-    console.log(`[UNIVERSAL] \u{1F504} Ordre d'\xE9valuation:`, capacities.map((c) => `${c.TreeBranchLeafNode?.label || c.nodeId} (${c.sourceRef?.includes("sum-formula") ? "SUM" : "SIMPLE"})`));
     const submissionId = baseSubmissionId || `preview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    console.log(`[UNIVERSAL] \u{1F4E6} valueMap contient ${valueMap.size} entr\xE9es:`);
-    for (const [key2, val] of valueMap.entries()) {
-      console.log(`  - ${key2} = ${val}`);
-    }
     const context = {
       submissionId,
       organizationId,
@@ -50965,7 +50584,6 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
     let evaluated = 0;
     for (const cap of capacities) {
       try {
-        console.log(`[UNIVERSAL] \u{1F680} \xC9valuation preview pour nodeId: ${cap.nodeId}, sourceRef: ${cap.sourceRef}`);
         const evaluation = await evaluateVariableOperation(
           cap.nodeId,
           // variableNodeId
@@ -50976,10 +50594,8 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
           context.valueMap
           // valueMap (données temporaires du formulaire)
         );
-        console.log(`[UNIVERSAL] \u2705 R\xE9sultat: value="${evaluation.value}", operationResult="${evaluation.operationResult}"`);
         if (evaluation.value !== null && evaluation.value !== void 0 && evaluation.value !== "\u2205") {
           context.valueMap.set(cap.nodeId, evaluation.value);
-          console.log(`[UNIVERSAL] \u{1F4E5} Valeur ajout\xE9e au valueMap: ${cap.nodeId} = ${evaluation.value}`);
         }
         results.push({
           nodeId: cap.nodeId,
@@ -51009,7 +50625,6 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
         });
         evaluated++;
       } catch (e) {
-        console.error(`[UNIVERSAL] \u274C Erreur \xE9valuation pour nodeId ${cap.nodeId}:`, e);
         const errorMessage = e instanceof Error ? e.message : "Erreur inconnue";
         results.push({
           nodeId: cap.nodeId,
@@ -51038,10 +50653,6 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
         });
       }
     }
-    console.log(`[PREVIEW-EVALUATE] \u{1F4E4} Envoi r\xE9ponse avec ${results.length} r\xE9sultats:`);
-    results.forEach((r, i) => {
-      console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value="${r.value}" (calculatedValue="${r.calculatedValue}")`);
-    });
     try {
       const nodeIds = results.map((r) => r.nodeId);
       const nodesInfo = await prisma59.treeBranchLeafNode.findMany({
@@ -51056,7 +50667,6 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
         return { ...r, candidate };
       }).filter((r) => {
         if (displayFieldIds.has(r.nodeId)) {
-          console.log(`\u{1F6AB} [PREVIEW-EVALUATE] Display field exclu de la persistence: ${r.nodeId}`);
           return false;
         }
         if (r.candidate === null || r.candidate === void 0) return false;
@@ -51070,10 +50680,8 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
       }));
       if (calculatedValues.length > 0) {
         await storeCalculatedValues(calculatedValues, submissionId);
-        console.log(`[PREVIEW-EVALUATE] \u2705 ${calculatedValues.length} valeurs stock\xE9es dans Prisma (${displayFieldIds.size} display fields exclus)`);
       }
     } catch (storeError) {
-      console.error(`[PREVIEW-EVALUATE] \u26A0\uFE0F Erreur stockage valeurs calcul\xE9es:`, storeError);
     }
     return res.json({
       success: true,
@@ -55091,7 +54699,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
             newSourceRef = `${parsed.prefix}${mappedFormulaId}`;
           } else {
             try {
-              const formulaResult = await copyFormulaCapacity2(
+              const formulaResult = await copyFormulaCapacity(
                 parsed.id,
                 newNodeId,
                 suffix,
@@ -55336,7 +54944,6 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur id variable (${newVarId}), ajustement \xE2\u2020\u2019 ${adjusted}`);
         newVarId = adjusted;
       }
     } catch (e) {
@@ -55347,7 +54954,6 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur exposedKey (${newExposedKey}), ajustement \xE2\u2020\u2019 ${adjustedKey}`);
         newExposedKey = adjustedKey;
       }
     } catch (e) {
@@ -55474,38 +55080,33 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              const cond = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
               await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
-                  condition_activeId: capId,
-                  condition_name: cond?.name || null,
-                  condition_description: cond?.description || null
+                  condition_activeId: capId
                 }
               });
               await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedConditionIds", [capId]);
             } else if (parsedCap.type === "formula") {
-              const frm = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              const frm = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true } });
               await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasFormula: true,
                   formula_activeId: capId,
-                  formula_name: frm?.name || null,
-                  formula_description: frm?.description || null
+                  formula_name: frm?.name || null
                 }
               });
               await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedFormulaIds", [capId]);
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
+              const tbl = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
               await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
                   table_activeId: capId,
                   table_name: tbl?.name || null,
-                  table_description: tbl?.description || null,
                   table_type: tbl?.type || null
                 }
               });
@@ -56082,7 +55683,7 @@ async function fixCompleteDuplication(prisma70, originalNodeId, copiedNodeId, su
   }
   for (const formula of originalNode.TreeBranchLeafNodeFormula) {
     try {
-      const formulaResult = await copyFormulaCapacity2(
+      const formulaResult = await copyFormulaCapacity(
         formula.id,
         copiedNodeId,
         suffixNum,
@@ -57613,14 +57214,6 @@ function createRepeatRouter(prisma70) {
   router84.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
-    try {
-      const fs10 = require("fs");
-      const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-      fs10.appendFileSync("repeat-execute-calls.log", `${timestamp} - Repeater: ${repeaterNodeId}
-`);
-    } catch (e) {
-      console.error("[repeat-route] Failed to write log file:", e);
-    }
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
       return res.status(409).json({
         error: "Repeat execution already in progress for this repeater.",
@@ -59927,7 +59520,6 @@ router83.get("/generated", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const { leadId, submissionId, templateId } = req2.query;
-    console.log("\u{1F4C4} [GET /generated] Query params:", { leadId, submissionId, templateId, organizationId });
     if (!organizationId) {
       return res.status(400).json({ error: "Organization ID requis" });
     }
@@ -59943,7 +59535,6 @@ router83.get("/generated", async (req2, res) => {
     if (templateId) {
       where.templateId = templateId;
     }
-    console.log("\u{1F4C4} [GET /generated] Where clause:", JSON.stringify(where, null, 2));
     const documents = await prisma67.generatedDocument.findMany({
       where,
       include: {
@@ -59973,13 +59564,9 @@ router83.get("/generated", async (req2, res) => {
       },
       orderBy: { createdAt: "desc" }
     });
-    console.log("\u{1F4C4} [GET /generated] Found documents:", documents.length);
     res.json(documents);
   } catch (error) {
-    console.error("\u274C [GET /generated] Erreur r\xE9cup\xE9ration documents g\xE9n\xE9r\xE9s:", error);
-    console.error("\u274C [GET /generated] Error name:", error?.name);
-    console.error("\u274C [GET /generated] Error code:", error?.code);
-    console.error("\u274C [GET /generated] Error message:", error?.message);
+    console.error("\u274C [GET /generated] Erreur r\xE9cup\xE9ration documents g\xE9n\xE9r\xE9s:", error?.message);
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });

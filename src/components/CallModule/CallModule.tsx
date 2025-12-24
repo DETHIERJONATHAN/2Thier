@@ -100,7 +100,10 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
     aiAssistant.aiState?.isVisible,
     aiAssistant.overallConfidence,
     voiceTranscription.transcriptionState.isActive
-  ]);appels
+  ]);
+
+/**
+ * 🎯 Module d'appels téléphoniques intelligent
  * - 🤖 Assistant IA conversationnel intégré
  * - 📅 Calendrier Google intelligent
  * - 🎙️ Transcription vocale temps réel

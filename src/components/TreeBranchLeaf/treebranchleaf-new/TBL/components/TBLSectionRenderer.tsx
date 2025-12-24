@@ -4879,7 +4879,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               });
                             }
                           }}
-                          disabled={disabled}
                           >
                             {isAddButton ? (field.label || 'Ajouter') : (!iconOnly && field.label)}
                           </Button>

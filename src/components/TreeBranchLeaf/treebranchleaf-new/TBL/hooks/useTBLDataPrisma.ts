@@ -147,7 +147,7 @@ interface TreeBranchLeafNode {
   
   // Configuration O+C (Option + Champ)
   option_label: string | null;
-  field_label: string | null;,
+  field_label: string | null;
 }
 
 /**
@@ -229,7 +229,7 @@ export interface TBLField {
     hasTable: boolean;
     hasAPI: boolean;
     hasLink: boolean;
-    hasMarkers: boolean;,
+    hasMarkers: boolean;
   };
   
   order: number;
@@ -255,7 +255,8 @@ export interface TBLOption {
   label: string;
   value: string;
   field?: TBLField; // Si option + champ (option_field)
-  order: number;,
+  order: number;
+,
 }
 
 // ONGLET - Depuis une branche TreeBranchLeaf niveau 1
@@ -266,27 +267,27 @@ export interface TBLTab {
   icon?: string; // Depuis metadata.icon
   sections: TBLSection[];
   fields: TBLField[]; // Champs directs dans l'onglet
-  order: number;,
+  order: number;
 }
 
 // ARBRE - Depuis TreeBranchLeafTree
 export interface TBLTree {
   id: string;
   name: string;
-  tabs: TBLTab[];,
+  tabs: TBLTab[];
 }
 
 /**
  * 🚀 HOOK PRINCIPAL - Transformation DYNAMIQUE PRISMA
  */
 interface UseTBLDataPrismaParams {
-  treeId: string;,
+  treeId: string;
 }
 
 interface UseTBLDataPrismaReturn {
   tree: TBLTree | null;
   loading: boolean;
-  error: string | null;,
+  error: string | null;
 }
 
 export const useTBLDataPrisma = ({ treeId }: UseTBLDataPrismaParams): UseTBLDataPrismaReturn => {

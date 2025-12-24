@@ -28,9 +28,9 @@ import {
   EllipsisOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
-import DocumentTemplateEditor from '../components/documents/DocumentTemplateEditor';
-import PageBuilder from '../components/documents/PageBuilder';
-import ThemeEditorModal from '../components/documents/ThemeEditorModal';
+import DocumentTemplateEditor from '../components/Documents/DocumentTemplateEditor';
+import PageBuilder from '../components/Documents/PageBuilder';
+import ThemeEditorModal from '../components/Documents/ThemeEditorModal';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;

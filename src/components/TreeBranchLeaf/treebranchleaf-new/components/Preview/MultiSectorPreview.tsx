@@ -25,12 +25,14 @@ function buildHierarchy(flat: TreeBranchLeafNode[]): TreeBranchLeafNode[] {
     } else {
       roots.push(node);
     }
+  }
   // tri par order
   const sortRec = (items: TreeBranchLeafNode[]) => {
     items.sort((a, b) => (a.order || 0) - (b.order || 0));
     items.forEach(i => {
       // @ts-expect-error children possible
       if (i.children && i.children.length) sortRec(i.children);
+    });
   };
   sortRec(roots);
   return roots;

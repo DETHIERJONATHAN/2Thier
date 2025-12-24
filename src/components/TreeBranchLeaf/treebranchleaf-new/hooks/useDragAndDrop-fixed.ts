@@ -31,7 +31,7 @@ interface UseDragAndDropOptions {
   }) => Promise<TreeBranchLeafNode | null>;
   onCapabilityActivate: (nodeId: string, capability: string, config?: Record<string, unknown>) => Promise<boolean>;
   registry: typeof TreeBranchLeafRegistry;
-  nodes: TreeBranchLeafNode[]; // 👈 Ajout des nœuds pour validation,
+  nodes: TreeBranchLeafNode[]; // 👈 Ajout des nœuds pour validation
 }
 
 interface UseDragAndDropReturn {
@@ -47,7 +47,7 @@ interface UseDragAndDropReturn {
   
   // Utilitaires
   canDrop: (source: DragItem, target: DropTargetData) => boolean;
-  getDropFeedback: (source: DragItem, target: DropTargetData) => string;,
+  getDropFeedback: (source: DragItem, target: DropTargetData) => string;
 }
 
 export function useDragAndDrop({
@@ -168,7 +168,8 @@ export function useDragAndDrop({
       nodeId: over.data.current?.nodeId,
       capability: over.data.current?.capability,
       position: over.data.current?.position,
-      accepts: over.data.current?.accepts || [],
+      accepts: over.data.current?.accepts || []
+,
     };
 
     // console.log(`🚀 EXECUTING DROP:`, { draggedItem, targetData }); // ✨ Log réduit
@@ -201,7 +202,7 @@ export function useDragAndDrop({
       case 'node':
         return `✅ Déplacer l'élément ici`;
       default:
-        return "✅ Drop autorisé";,
+        return "✅ Drop autorisé";
     }
   }, [canDrop]);
 
