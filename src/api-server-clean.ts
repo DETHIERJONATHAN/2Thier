@@ -127,15 +127,16 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      fontSrc: ["'self'", "fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https:"],
-      frameSrc: ["'none'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "https:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "maps.googleapis.com", "*.googleapis.com"],
+      fontSrc: ["'self'", "fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "https:", "blob:", "maps.gstatic.com", "*.googleapis.com", "*.ggpht.com"],
+      connectSrc: ["'self'", "https:", "wss:", "maps.googleapis.com", "*.googleapis.com"],
+      frameSrc: ["'self'", "maps.google.com", "*.google.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      manifestSrc: ["'self'"]
+      manifestSrc: ["'self'"],
+      workerSrc: ["'self'", "blob:"]
     }
   },
   hsts: {
@@ -160,12 +161,14 @@ app.use(advancedRateLimit);
 // 🛡️ SÉCURITÉ NIVEAU 4 - DÉTECTION D'ANOMALIES
 app.use(anomalyDetection);
 
-// ⚡ Configuration CORS sécurisée (ajout app.2thier.be)
+// ⚡ Configuration CORS sécurisée (ajout app.2thier.be + Railway)
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const prodOrigins = [
   FRONTEND_URL || 'https://app.2thier.be',
   'https://www.2thier.be',
-  'https://crm.2thier.be'
+  'https://crm.2thier.be',
+  /\.railway\.app$/,  // Railway preview URLs
+  /\.up\.railway\.app$/  // Railway deployments
 ];
 const devOrigins = [FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000'];
 app.use(cors({
