@@ -1,5 +1,5 @@
 import prisma from '../prisma.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 /**
  * Normalise une chaîne de caractères pour être utilisée dans une adresse e-mail.
