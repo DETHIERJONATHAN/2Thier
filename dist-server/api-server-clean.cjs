@@ -52319,11 +52319,11 @@ router71.post("/sync-documents", async (req2, res) => {
       { id: "lKcJIIkGPzAZZL6E7VGA9", name: "PV", type: "QUOTE", organizationId: "1757366075154-i554z93kl" }
     ];
     const sections = [
-      { id: "oySHrW8g46r5zbtrFxULg", templateId: "lKcJIIkGPzAZZL6E7VGA9", name: "Section", type: "MODULAR_PAGE", order: 0 },
-      { id: "pN8RSMjUtymo9balcF4ux", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 0 },
-      { id: "m2_i4PAXeQwgVM2O2HX_7", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 1 },
-      { id: "4Snr4bjuSzky1oG_Ex03o", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 2 },
-      { id: "q9v4OwgdrazlRQFdPBJs0", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 3 }
+      { id: "oySHrW8g46r5zbtrFxULg", templateId: "lKcJIIkGPzAZZL6E7VGA9", type: "MODULAR_PAGE", order: 0 },
+      { id: "pN8RSMjUtymo9balcF4ux", templateId: "G7YU14mfKT9rEj7wD38lD", type: "MODULAR_PAGE", order: 0 },
+      { id: "m2_i4PAXeQwgVM2O2HX_7", templateId: "G7YU14mfKT9rEj7wD38lD", type: "MODULAR_PAGE", order: 1 },
+      { id: "4Snr4bjuSzky1oG_Ex03o", templateId: "G7YU14mfKT9rEj7wD38lD", type: "MODULAR_PAGE", order: 2 },
+      { id: "q9v4OwgdrazlRQFdPBJs0", templateId: "G7YU14mfKT9rEj7wD38lD", type: "MODULAR_PAGE", order: 3 }
     ];
     for (const theme of themes) {
       await prisma60.documentTheme.upsert({
