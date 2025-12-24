@@ -48,10 +48,12 @@ async function main() {
   if (!superAdminRole) {
     superAdminRole = await prisma.role.create({
       data: {
+        id: generateId(),
         name: 'super_admin',
         label: 'Super Administrateur',
         description: 'Accès total à toutes les fonctionnalités',
-        organizationId: org.id
+        organizationId: org.id,
+        updatedAt: new Date()
       }
     });
     console.log('🔐 Rôle super_admin créé');
@@ -79,12 +81,14 @@ async function main() {
     if (!user) {
       user = await prisma.user.create({
         data: {
+          id: generateId(),
           email: u.email,
           firstName: u.firstName,
           lastName: u.lastName,
           // Hash bcrypt du mot de passe "password" pour le développement
           passwordHash: DEV_PASSWORD_HASH,
-          role: 'super_admin'
+          role: 'super_admin',
+          updatedAt: new Date()
         }
       });
       console.log('👤 Utilisateur créé:', u.email);
@@ -133,7 +137,8 @@ async function main() {
         color: '#1890ff',
         order: 1,
         isDefault: true,
-        organizationId: org.id
+        organizationId: org.id,
+        updatedAt: new Date()
       }
     });
     console.log('🆕 Statut par défaut créé');
@@ -150,6 +155,7 @@ async function main() {
   const assignUser2 = ensuredUsers[1] || ensuredUsers[0];
 
   const leadPayloadCommon = () => ({
+    id: generateId(),
     status: 'new',
     statusId: defaultStatus!.id,
     organizationId: org.id,
@@ -157,7 +163,8 @@ async function main() {
     nextFollowUpDate: faker.date.soon({ days: 15 }),
     notes: faker.lorem.sentences(3),
     website: faker.internet.url(),
-    linkedin: `https://linkedin.com/in/${faker.helpers.slugify(faker.person.fullName()).toLowerCase()}`
+    linkedin: `https://linkedin.com/in/${faker.helpers.slugify(faker.person.fullName()).toLowerCase()}`,
+    updatedAt: new Date()
   });
 
   const leadA = await prisma.lead.create({
