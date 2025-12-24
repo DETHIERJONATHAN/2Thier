@@ -1,169 +1,93 @@
 #!/usr/bin/env node
 /**
- * Copier TOUTES les données de local → Cloud en respectant les dépendances
- * Approche: Désactiver les FK, copier, réactiver les FK
+ * Synchronise toutes les données de la base locale vers Cloud SQL
  */
-
 const { PrismaClient } = require('@prisma/client');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
 
-const CLOUD_PROJECT = 'thiernew';
-const CLOUD_IP = '34.52.233.213';
+const LOCAL_URL = 'postgresql://postgres:Jlsl2022%40@localhost:5432/2thier';
+const CLOUD_URL = 'postgresql://postgres:Jlsl2022%40@34.52.131.199:5432/2thier';
 
-(async () => {
+async function sync() {
+  console.log('🚀 SYNCHRONISATION: Base locale → Cloud SQL\n');
+
+  const local = new PrismaClient({
+    datasources: { db: { url: LOCAL_URL } }
+  });
+
+  const cloud = new PrismaClient({
+    datasources: { db: { url: CLOUD_URL } }
+  });
+
   try {
-    console.log('🚀 COPIE ROBUSTE: Local → Google Cloud (avec dépendances)\n');
+    await local.$connect();
+    console.log('✅ Base locale connectée');
 
-    // Récupérer le mot de passe
-    const { stdout: password } = await execAsync(
-      `gcloud secrets versions access latest --secret=crm-postgres-password --project=${CLOUD_PROJECT}`
-    );
-    const CLOUD_PASSWORD = encodeURIComponent(password.trim());
+    await cloud.$connect();
+    console.log('✅ Cloud SQL connecté\n');
 
-    // Créer les clients Prisma
-    const prismaLocal = new PrismaClient({
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL || 'postgresql://postgres:Jlsl2022%40@localhost:5432/2thier'
-        }
-      }
-    });
-
-    const prismaCloud = new PrismaClient({
-      datasources: {
-        db: {
-          url: `postgresql://postgres:${CLOUD_PASSWORD}@${CLOUD_IP}:5432/2thier`
-        }
-      }
-    });
-
-    console.log('1️⃣  Connexion aux BD...');
-    await prismaLocal.$queryRaw`SELECT 1`;
-    await prismaCloud.$queryRaw`SELECT 1`;
-    console.log('✅\n');
-
-    // Désactiver les contraintes FK
-    console.log('2️⃣  Désactivation des contraintes FK sur Cloud...');
-    const tables = [
-      'TreeBranchLeafNodeFormula', 'TreeBranchLeafNodeCondition', 'TreeBranchLeafNodeVariable',
-      'TreeBranchLeafNodeTable', 'TreeBranchLeafNodeTableColumn', 'TreeBranchLeafNodeTableRow',
-      'TreeBranchLeafNode', 'TreeBranchLeafTree', 'TreeBranch'
-    ];
-    for (const t of tables) {
-      try {
-        await prismaCloud.$executeRawUnsafe(`ALTER TABLE IF EXISTS "${t}" DISABLE TRIGGER ALL`);
-      } catch (e) {}
-    }
-    console.log('✅\n');
-
-    // Vider les tables Cloud
-    console.log('3️⃣  Vidage des tables Cloud...');
-    const tablesToCopy = [
-      'TreeBranchLeafNodeCondition',
-      'TreeBranchLeafNodeFormula',
-      'TreeBranchLeafNodeVariable',
-      'TreeBranchLeafNodeTableRow',
-      'TreeBranchLeafNodeTableColumn',
-      'TreeBranchLeafNodeTable',
-      'TreeBranchLeafNode',
-      'TreeBranchLeafTree',
+    // Tables à synchroniser dans l'ordre (respect des foreign keys)
+    const syncTasks = [
+      { name: 'Organization', model: 'organization' },
+      { name: 'User', model: 'user' },
+      { name: 'Role', model: 'role' },
+      { name: 'UserOrganization', model: 'userOrganization' },
+      { name: 'Permission', model: 'permission' },
+      { name: 'Module', model: 'module' },
+      { name: 'OrganizationModule', model: 'organizationModule' },
+      { name: 'Section', model: 'section' },
+      { name: 'LeadStatus', model: 'leadStatus' },
+      { name: 'Lead', model: 'lead' },
+      { name: 'TreeBranch', model: 'treeBranch' },
+      { name: 'TreeBranchLeaf', model: 'treeBranchLeaf' },
+      { name: 'TreeBranchLeafNode', model: 'treeBranchLeafNode' },
+      { name: 'NodeFormula', model: 'nodeFormula' },
+      { name: 'NodeVariable', model: 'nodeVariable' },
+      { name: 'NodeCondition', model: 'nodeCondition' },
+      { name: 'Submission', model: 'submission' },
+      { name: 'DocumentTemplate', model: 'documentTemplate' },
+      { name: 'DocumentTheme', model: 'documentTheme' },
+      { name: 'DocumentSection', model: 'documentSection' },
     ];
 
-    for (const table of tablesToCopy) {
+    for (const task of syncTasks) {
       try {
-        await prismaCloud.$executeRawUnsafe(`DELETE FROM "${table}"`);
-      } catch (e) {
-        // Silencieux
-      }
-    }
-    console.log('✅\n');
-
-    // Copier les données table par table
-    console.log('4️⃣  Copie des données...\n');
-    
-    let totalCopied = 0;
-
-    for (const table of tablesToCopy) {
-      try {
-        // Obtenir les données
-        const records = await prismaLocal.$queryRawUnsafe(`
-          SELECT * FROM "${table}"
-        `);
-
-        if (records.length === 0) {
-          console.log(`   ${table}: 0 enregistrements`);
+        // Récupérer données locales
+        const data = await local[task.model].findMany();
+        
+        if (data.length === 0) {
+          console.log(`⏭️  ${task.name}: vide`);
           continue;
         }
 
-        // Insérer en une seule requête (COPY is better but using INSERT for Prisma compatibility)
-        const columns = Object.keys(records[0]);
-        const columnList = columns.join('", "');
-        const columnRefs = '("' + columnList + '")';
-
-        // Utiliser COPY ou multi-row INSERT pour la performance
-        const values = records.map(r => {
-          return '(' + columns.map(col => {
-            const v = r[col];
-            if (v === null) return 'NULL';
-            if (v === true) return 'true';
-            if (v === false) return 'false';
-            if (typeof v === 'number') return v.toString();
-            if (typeof v === 'object') {
-              const jsonStr = JSON.stringify(v).replace(/'/g, "''");
-              return `'${jsonStr}'`;
-            }
-            const str = (v + '').replace(/'/g, "''");
-            return `'${str}'`;
-          }).join(', ') + ')';
-        }).join(',');
-
-        const sql = `INSERT INTO "${table}" ${columnRefs} VALUES ${values} ON CONFLICT DO NOTHING`;
+        // Supprimer données cloud existantes
+        await cloud[task.model].deleteMany();
         
-        await prismaCloud.$executeRawUnsafe(sql);
-        console.log(`   ✅ ${table}: ${records.length} enregistrements`);
-        totalCopied += records.length;
+        // Insérer nouvelles données
+        let inserted = 0;
+        for (const record of data) {
+          try {
+            await cloud[task.model].create({ data: record });
+            inserted++;
+          } catch (e) {
+            // Ignorer les erreurs de contrainte (données déjà présentes)
+          }
+        }
+        
+        console.log(`✅ ${task.name}: ${inserted}/${data.length} synchronisés`);
       } catch (e) {
-        console.log(`   ⚠️  ${table}: ${e.message.substring(0, 60)}`);
+        console.log(`❌ ${task.name}: ${e.message.substring(0, 60)}`);
       }
     }
 
-    // Réactiver les FK
-    console.log('\n5️⃣  Réactivation des contraintes FK...');
-    for (const t of tables) {
-      try {
-        await prismaCloud.$executeRawUnsafe(`ALTER TABLE IF EXISTS "${t}" ENABLE TRIGGER ALL`);
-      } catch (e) {}
-    }
-    console.log('✅\n');
+    console.log('\n🎉 Synchronisation terminée!');
 
-    // Vérification
-    console.log('6️⃣  VÉRIFICATION:\n');
-    const checks = [
-      { table: 'TreeBranchLeafNode', expected: 134 },
-      { table: 'TreeBranchLeafNodeTableRow', expected: 43186 }
-    ];
-
-    for (const check of checks) {
-      const local = await prismaLocal.$queryRawUnsafe(`SELECT COUNT(*) as c FROM "${check.table}"`);
-      const cloud = await prismaCloud.$queryRawUnsafe(`SELECT COUNT(*) as c FROM "${check.table}"`);
-      const lCount = local[0]?.c || 0;
-      const cCount = cloud[0]?.c || 0;
-      const ok = lCount === cCount ? '✅' : '⚠️';
-      console.log(`${ok} ${check.table}:`);
-      console.log(`   Local: ${lCount} | Cloud: ${cCount}\n`);
-    }
-
-    console.log('='.repeat(60));
-    console.log('✨ SYNC COMPLÉTÉE!');
-    console.log('='.repeat(60));
-
-    await prismaLocal.$disconnect();
-    await prismaCloud.$disconnect();
-    process.exit(0);
-  } catch (error) {
-    console.error('\n❌ Erreur:', error.message);
-    process.exit(1);
+  } finally {
+    await local.$disconnect();
+    await cloud.$disconnect();
   }
-})();
+}
+
+sync().catch(e => {
+  console.error('❌ Erreur fatale:', e.message);
+  process.exit(1);
+});

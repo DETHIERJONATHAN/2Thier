@@ -62,3 +62,15 @@ donnees-service-account.txt
 *.temp
 .DS_Store
 Thumbs.db
+
+# SQL Dumps
+*.sql
+*.dump
+*.csv
+
+# Heavy folders
+archive/
+backups/
+uploads/
+*.zip
+*.tar.gz

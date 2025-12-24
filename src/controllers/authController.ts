@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
+import { JWT_SECRET, TOKEN_EXPIRY } from '../config';
 
 // Helper pour lire JWT_SECRET dynamiquement (amélioration pour la production)
 // En local: utilise la valeur par défaut ou .env

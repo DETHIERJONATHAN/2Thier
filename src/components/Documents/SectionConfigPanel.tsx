@@ -317,12 +317,14 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
   };
 
   // Configuration de l'upload d'images
-  const getUploadProps = (fieldName: string): UploadProps => ({
-    name: 'file',
-    action: 'http://localhost:4000/api/image-upload/upload',
-    headers: {
-      // L'API d'upload gère automatiquement l'auth via cookies
-    },
+  const getUploadProps = (fieldName: string): UploadProps => {
+    const apiBase = (typeof window !== 'undefined' && (window as any).__API_BASE_URL) || '';
+    return {
+      name: 'file',
+      action: `${apiBase}/api/image-upload/upload`,
+      headers: {
+        // L'API d'upload gère automatiquement l'auth via cookies
+      },
     maxCount: 1,
     listType: 'picture',
     onChange(info) {

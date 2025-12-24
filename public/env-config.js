@@ -7,6 +7,7 @@
   // En développement: localhost:4000
   const isDev = !window.location.hostname.includes('2thier.be') && 
                 !window.location.hostname.includes('devis1min.be') &&
+                !window.location.hostname.includes('railway.app') &&
                 window.location.hostname !== '127.0.0.1';
 
   // Configuration des URLs

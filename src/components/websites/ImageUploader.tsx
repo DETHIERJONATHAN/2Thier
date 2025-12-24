@@ -82,7 +82,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         formData.append('websiteId', websiteId.toString());
         formData.append('category', selectedCategory);
 
-        const response = await fetch('http://localhost:4000/api/upload-image', {
+        const apiBase = (typeof window !== 'undefined' && (window as any).__API_BASE_URL) || '';
+        const response = await fetch(`${apiBase}/api/upload-image`, {
           method: 'POST',
           body: formData,
           credentials: 'include',
