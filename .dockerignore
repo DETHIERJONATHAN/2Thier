@@ -29,6 +29,11 @@ build
 !scripts/add-missing-columns.cjs
 !scripts/migrate-and-start.sh
 
+# Fichiers TypeScript de test/diagnostic Ã  la racine (ne pas copier dans Docker)
+/*.ts
+!vite.config.ts
+!vitest.config.ts
+
 # Documentation et backups
 *.md
 *.txt
@@ -38,5 +43,5 @@ build
 Oracle/
 backup*.sql
 
-# Scripts archivés
+# Scripts archivï¿½s
 archived-scripts/
