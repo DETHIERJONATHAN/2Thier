@@ -71,6 +71,7 @@ import integrationsRoutes from './integrations'; // 🔌 Intégrations (advertis
 
 // 🌐 ROUTES PUBLIQUES (sans authentification)
 import publicLeadsRoutes from './publicLeads'; // 🌍 API publique leads
+import documentsRoutes from './documents'; // 📄 Routes documents (templates, génération PDF)
 
 const apiRouter = Router();
 
@@ -347,6 +348,10 @@ apiRouter.use('/integrations', integrationsStatusRoutes);
 
 // 🌐 ROUTES PUBLIQUES (sans authentification requise)
 apiRouter.use('/public', publicLeadsRoutes);
+
+
+// 📄 Routes Documents (templates, génération PDF)
+apiRouter.use('/documents', documentsRoutes);
 
 
 // apiRouter.use('/auth/google', googleAuthRouter); // NOUVEAU: Authentification Google OAuth - Commenté car non défini
