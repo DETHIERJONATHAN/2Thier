@@ -4078,12 +4078,15 @@ var login = async (req2, res) => {
       getJWTSecret(),
       { expiresIn: "24h" }
     );
+    const isProduction2 = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 24 * 60 * 60 * 1e3
+      secure: isProduction2,
+      sameSite: isProduction2 ? "none" : "lax",
+      // 'none' requis pour cross-site en production avec secure
+      maxAge: 24 * 60 * 60 * 1e3,
       // 24 heures
+      path: "/"
     });
     console.log(`[AUTH] Connexion r\xE9ussie pour ${email}`);
     res.status(200).json(response);
@@ -60630,7 +60633,8 @@ app.use((0, import_express_session.default)({
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1e3,
     // 24 heures
-    sameSite: "strict"
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    path: "/"
   },
   store: void 0
   // TODO: Ajouter un store persistant en production
