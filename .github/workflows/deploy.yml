@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "main"
+      - "production-restore"
 
 env:
   PROJECT_ID: thiernew
