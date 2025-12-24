@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, type TreeBranchLeafNode } from '@prisma/client';
+﻿import { Prisma, PrismaClient, type TreeBranchLeafNode } from '@prisma/client';
 import type { DuplicationContext } from '../../registry/repeat-id-registry.js';
 import { logCapacityEvent } from '../repeat-blueprint-writer.js';
 import {
@@ -31,7 +31,7 @@ export interface DeepCopyResult {
   formulaIdMap: Record<string, string>;
   conditionIdMap: Record<string, string>;
   tableIdMap: Record<string, string>;
-  displayNodeIds: string[]; // IDs des nœuds d'affichage créés par copyVariableWithCapacities
+  displayNodeIds: string[]; // IDs des nÃ…â€œuds d'affichage crÃƒÂ©ÃƒÂ©s par copyVariableWithCapacities
 }
 
 export async function deepCopyNodeInternal(
@@ -51,21 +51,18 @@ export async function deepCopyNodeInternal(
   } = opts || {};
 
   const replaceIdsInTokens = (tokens: unknown, idMap: Map<string, string>): unknown => {
-    console.log(`\n[🔥 REPLACE-TOKENS] Called with ${Array.isArray(tokens) ? tokens.length : typeof tokens} tokens`);
     if (!tokens) return tokens;
     
     const mapOne = (s: string) => s.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1: string) => {
-      // 🎯 ÉTAPE 1: Chercher dans idMap (nœuds copiés dans cette copie)
+      // Ã°Å¸Å½Â¯ Ãƒâ€°TAPE 1: Chercher dans idMap (nÃ…â€œuds copiÃƒÂ©s dans cette copie)
       if (idMap.has(p1)) {
         const newId = idMap.get(p1)!;
-        console.log(`[DEBUG-REPLACE] ✅ Trouvé dans idMap: @value.${p1} → @value.${newId}`);
         return `@value.${newId}`;
       }
       
-      // 🎯 ÉTAPE 2: Si le nœud n'est pas dans idMap, c'est une référence EXTERNE
-      // On doit TOUJOURS suffixer pour créer la copie référencée
+      // Ã°Å¸Å½Â¯ Ãƒâ€°TAPE 2: Si le nÃ…â€œud n'est pas dans idMap, c'est une rÃƒÂ©fÃƒÂ©rence EXTERNE
+      // On doit TOUJOURS suffixer pour crÃƒÂ©er la copie rÃƒÂ©fÃƒÂ©rencÃƒÂ©e
       const suffixedId = appendSuffix(p1);
-      console.log(`[DEBUG-REPLACE] ✅ Référence externe suffixée: @value.${p1} → @value.${suffixedId}`);
       return `@value.${suffixedId}`;
     });
     
@@ -89,47 +86,42 @@ export async function deepCopyNodeInternal(
     try {
       let str = JSON.stringify(conditionSet);
       
-      // 🎯 Remplacer les références @value.nodeId
+      // Ã°Å¸Å½Â¯ Remplacer les rÃƒÂ©fÃƒÂ©rences @value.nodeId
       str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1: string) => {
-        // Chercher dans idMap d'abord (nœuds copiés dans cette copie)
+        // Chercher dans idMap d'abord (nÃ…â€œuds copiÃƒÂ©s dans cette copie)
         if (idMap.has(p1)) {
           const newId = idMap.get(p1)!;
-          console.log(`[DEBUG-CONDITION] ✅ @value.${p1} → @value.${newId}`);
           return `@value.${newId}`;
         }
         
-        // TOUJOURS suffixer les références externes
+        // TOUJOURS suffixer les rÃƒÂ©fÃƒÂ©rences externes
         const suffixedId = appendSuffix(p1);
-        console.log(`[DEBUG-CONDITION] ✅ @value.${p1} → @value.${suffixedId} (auto-suffix externe)`);
         return `@value.${suffixedId}`;
       });
       
-      // 🎯 Remplacer les références node-formula:
+      // Ã°Å¸Å½Â¯ Remplacer les rÃƒÂ©fÃƒÂ©rences node-formula:
       str = str.replace(/node-formula:([a-f0-9-]{36})/gi, (_m, p1: string) => {
         const newId = formulaIdMap.get(p1) || p1;
-        console.log(`[DEBUG-CONDITION] Formula: node-formula:${p1} → node-formula:${newId}`);
         return `node-formula:${newId}`;
       });
       
-      // 🎯 Remplacer les nodeIds directs dans les actions (shared-ref, node IDs)
+      // Ã°Å¸Å½Â¯ Remplacer les nodeIds directs dans les actions (shared-ref, node IDs)
       str = str.replace(/("nodeIds":\s*\["?)([a-zA-Z0-9_:-]+)/g, (_m, prefix: string, nodeId: string) => {
-        // Si c'est une référence avec : (node-formula:, condition:, etc), on l'a déjà traitée
+        // Si c'est une rÃƒÂ©fÃƒÂ©rence avec : (node-formula:, condition:, etc), on l'a dÃƒÂ©jÃƒÂ  traitÃƒÂ©e
         if (nodeId.includes(':')) {
           return _m;
         }
         
         // Si c'est un shared-ref- ou un node ID, on doit le suffixer
         if (nodeId.startsWith('shared-ref-') || !nodeId.includes('-')) {
-          // C'est un shared-ref ou un simple ID, doit être suffixé
+          // C'est un shared-ref ou un simple ID, doit ÃƒÂªtre suffixÃƒÂ©
           if (idMap.has(nodeId)) {
             const newId = idMap.get(nodeId)!;
-            console.log(`[DEBUG-CONDITION] NodeId in actions: ${nodeId} → ${newId}`);
             return prefix + newId;
           }
           
           // Suffixer directement
           const suffixedId = appendSuffix(nodeId);
-          console.log(`[DEBUG-CONDITION] NodeId in actions (auto-suffix): ${nodeId} → ${suffixedId}`);
           return prefix + suffixedId;
         }
         
@@ -147,12 +139,12 @@ export async function deepCopyNodeInternal(
     include: { TreeBranchLeafTree: { select: { organizationId: true } } }
   });
   if (!source) {
-    throw new Error('Nœud source introuvable');
+    throw new Error('NÃ…â€œud source introuvable');
   }
 
   const { organizationId, isSuperAdmin } = getAuthCtx(req);
   if (!isSuperAdmin && organizationId && source.TreeBranchLeafTree?.organizationId !== organizationId) {
-    throw new Error('Accès non autorisé à cet arbre');
+    throw new Error('AccÃƒÂ¨s non autorisÃƒÂ© ÃƒÂ  cet arbre');
   }
 
   const sanitizedForcedSuffix = (() => {
@@ -161,25 +153,20 @@ export async function deepCopyNodeInternal(
     return token;
   })();
 
-  console.log(`🔍 [DEBUG-DEEP-COPY] nodeId: ${nodeId}, forcedSuffix: ${forcedSuffix}, suffixNum: ${suffixNum}`);
   
   let copySuffixNum = typeof forcedSuffix === 'number' && Number.isFinite(forcedSuffix)
     ? forcedSuffix
     : (suffixNum ?? null);
   
-  console.log(`🔍 [DEBUG-DEEP-COPY] copySuffixNum initial: ${copySuffixNum}`);
   
   if (!sanitizedForcedSuffix) {
-    // 🎯 FIX CRITIQUE: Si suffixNum est fourni explicitement (par duplicate-templates),
+    // Ã°Å¸Å½Â¯ FIX CRITIQUE: Si suffixNum est fourni explicitement (par duplicate-templates),
     // l'utiliser DIRECTEMENT sans aucune logique de recalcul automatique
     if (suffixNum != null && Number.isFinite(suffixNum)) {
-      console.log(`✅ [DEBUG-DEEP-COPY] SuffixNum fourni explicitement: ${suffixNum} - UTILISATION DIRECTE`);
       copySuffixNum = suffixNum;
     } else if (copySuffixNum != null && Number.isFinite(copySuffixNum)) {
-      console.log(`✅ [DEBUG-DEEP-COPY] CopySuffixNum valide: ${copySuffixNum} - UTILISATION DIRECTE`);
-      // Déjà assigné, ne pas changer
+      // DÃƒÂ©jÃƒÂ  assignÃƒÂ©, ne pas changer
     } else {
-      console.log(`🔄 [DEBUG-DEEP-COPY] Aucun suffix fourni - calcul automatique nécessaire`);
       
       // Normaliser l'ID source en retirant tous les suffixes existants
       // Ex: "54adf56b-...-1" ou "54adf56b-...-1-1" devient "54adf56b-..."
@@ -190,7 +177,7 @@ export async function deepCopyNodeInternal(
           treeId: source.treeId, 
           id: { 
             startsWith: `${baseSourceId}-`,
-            // Exclure les suffixes composés (on cherche juste -1, -2, -3, pas -1-1)
+            // Exclure les suffixes composÃƒÂ©s (on cherche juste -1, -2, -3, pas -1-1)
           } 
         },
         select: { id: true }
@@ -198,7 +185,7 @@ export async function deepCopyNodeInternal(
       let maxSuffix = 0;
       for (const rec of existingIdsWithSuffix) {
         const rest = rec.id.slice(baseSourceId.length + 1);
-        // Ne considérer que les suffixes simples: uniquement des chiffres
+        // Ne considÃƒÂ©rer que les suffixes simples: uniquement des chiffres
         if (/^\d+$/.test(rest)) {
           const num = Number(rest);
           if (Number.isFinite(num) && num > maxSuffix) maxSuffix = num;
@@ -206,7 +193,6 @@ export async function deepCopyNodeInternal(
       }
       copySuffixNum = maxSuffix + 1;
     }
-    console.log(`🎯 [DEBUG-DEEP-COPY] copySuffixNum final: ${copySuffixNum}`);
   }
 
   const suffixToken = sanitizedForcedSuffix || `${copySuffixNum}`;
@@ -219,7 +205,7 @@ export async function deepCopyNodeInternal(
   const ensureSuffix = (value: string | null | undefined): string | null | undefined => {
     if (!value) return value;
     if (hasCurrentSuffix(value)) return value;
-    // ⚠️ Toujours recalculer le suffixe lorsqu'il est différent (ex: passer de -1 à -2)
+    // Ã¢Å¡Â Ã¯Â¸Â Toujours recalculer le suffixe lorsqu'il est diffÃƒÂ©rent (ex: passer de -1 ÃƒÂ  -2)
     const base = stripNumericSuffix(value);
     return `${base}-${suffixToken}`;
   };
@@ -232,7 +218,7 @@ export async function deepCopyNodeInternal(
   const normalizeLabelWithSuffix = (value: string | null | undefined): string | null | undefined => {
     if (!value) return value;
     const base = value.replace(/-\d+(?:-\d+)*$/, '');
-    // Si déjà suffixé par ce token, ne pas doubler
+    // Si dÃƒÂ©jÃƒÂ  suffixÃƒÂ© par ce token, ne pas doubler
     if (hasCurrentSuffix(value)) return `${base}-${suffixToken}`;
     return `${base}-${suffixToken}`;
   };
@@ -269,7 +255,7 @@ export async function deepCopyNodeInternal(
   }
 
   const idMap = new Map<string, string>();
-  // Les templateNodeIds sont maintenant garantis sans suffixes grâce au filtrage en amont
+  // Les templateNodeIds sont maintenant garantis sans suffixes grÃƒÂ¢ce au filtrage en amont
   // On applique directement le suffixe sans normalisation
   for (const oldId of toCopy) {
     const candidateId = appendSuffix(oldId);
@@ -279,9 +265,9 @@ export async function deepCopyNodeInternal(
   const formulaIdMap = new Map<string, string>();
   const conditionIdMap = new Map<string, string>();
   const tableIdMap = new Map<string, string>();
-  const displayNodeIds: string[] = []; // IDs des nœuds d'affichage créés par copyVariableWithCapacities
+  const displayNodeIds: string[] = []; // IDs des nÃ…â€œuds d'affichage crÃƒÂ©ÃƒÂ©s par copyVariableWithCapacities
 
-  // 🔴 FIX: Un nœud peut avoir PLUSIEURS variables (affichage multiples)
+  // Ã°Å¸â€Â´ FIX: Un nÃ…â€œud peut avoir PLUSIEURS variables (affichage multiples)
   // Utiliser une Map<nodeId, Set<variableIds>> au lieu de Map<nodeId, variableId>
   const directVariableIdByNodeId = new Map<string, Set<string>>();
   if (toCopy.size > 0) {
@@ -322,7 +308,7 @@ export async function deepCopyNodeInternal(
     const localQueue: string[] = [];
     const zeroIndegreeNodes: string[] = [];
     for (const [id, deg] of indegree.entries()) if (deg === 0) zeroIndegreeNodes.push(id);
-    // Trier les nœuds sans dépendance par leur ordre pour garantir une création cohérente
+    // Trier les nÃ…â€œuds sans dÃƒÂ©pendance par leur ordre pour garantir une crÃƒÂ©ation cohÃƒÂ©rente
     zeroIndegreeNodes.sort((a, b) => {
       const nodeA = byId.get(a);
       const nodeB = byId.get(b);
@@ -341,7 +327,7 @@ export async function deepCopyNodeInternal(
         indegree.set(next, d);
         if (d === 0) nextNodes.push(next);
       }
-      // Trier les enfants avant de les ajouter à la queue
+      // Trier les enfants avant de les ajouter ÃƒÂ  la queue
       nextNodes.sort((a, b) => {
         const nodeA = byId.get(a);
         const nodeB = byId.get(b);
@@ -401,7 +387,7 @@ export async function deepCopyNodeInternal(
     hasAPI: oldNode.hasAPI,
     hasLink: oldNode.hasLink,
     hasMarkers: oldNode.hasMarkers,
-    // 🔧 FIX: Copier les propriétés data_* pour hériter de l'unité et de la précision
+    // Ã°Å¸â€Â§ FIX: Copier les propriÃƒÂ©tÃƒÂ©s data_* pour hÃƒÂ©riter de l'unitÃƒÂ© et de la prÃƒÂ©cision
     data_unit: oldNode.data_unit,
     data_precision: oldNode.data_precision,
     data_displayFormat: oldNode.data_displayFormat,
@@ -541,21 +527,21 @@ export async function deepCopyNodeInternal(
       return updatedInstances as Prisma.InputJsonValue;
     })(),
     table_name: oldNode.table_name,
-    // 🔴 CRITIQUE: Garder TOUJOURS les repeater_templateNodeIds ORIGINAUX (pas de suffixe!)
-    // Les templateNodeIds doivent être les UUIDs purs des templates originaux,
-    // JAMAIS les IDs suffixés des copies (-1, -2, etc.)
-    // Si on mappe vers les suffixés, la 2e duplication trouvera uuid-A-1 au lieu de uuid-A!
+    // Ã°Å¸â€Â´ CRITIQUE: Garder TOUJOURS les repeater_templateNodeIds ORIGINAUX (pas de suffixe!)
+    // Les templateNodeIds doivent ÃƒÂªtre les UUIDs purs des templates originaux,
+    // JAMAIS les IDs suffixÃƒÂ©s des copies (-1, -2, etc.)
+    // Si on mappe vers les suffixÃƒÂ©s, la 2e duplication trouvera uuid-A-1 au lieu de uuid-A!
     repeater_templateNodeIds: (() => {
-      // 🔴 CRITIQUE: Ne PAS copier la configuration de repeater lors d'une duplication via repeater
+      // Ã°Å¸â€Â´ CRITIQUE: Ne PAS copier la configuration de repeater lors d'une duplication via repeater
       // Si on copie un template en tant que partie d'un repeater, la copie ne doit PAS
       // conserver `repeater_templateNodeIds` (la copie ne doit pas devenir un repeater).
       if (normalizedRepeatContext) return null;
       
-      // ✅ FIX: JAMAIS mapper les IDs! Garder les IDs originaux sans suffixes
+      // Ã¢Å“â€¦ FIX: JAMAIS mapper les IDs! Garder les IDs originaux sans suffixes
       if (!oldNode.repeater_templateNodeIds) return oldNode.repeater_templateNodeIds;
       
-      // Retourner tel quel - les templateNodeIds doivent rester inchangés
-      // (ils contiennent déjà les IDs originaux purs sans suffixes)
+      // Retourner tel quel - les templateNodeIds doivent rester inchangÃƒÂ©s
+      // (ils contiennent dÃƒÂ©jÃƒÂ  les IDs originaux purs sans suffixes)
       return oldNode.repeater_templateNodeIds;
     })(),
     repeater_templateNodeLabels: oldNode.repeater_templateNodeLabels,
@@ -568,29 +554,27 @@ export async function deepCopyNodeInternal(
     metadata: (() => {
       const origMeta = (typeof oldNode.metadata === 'object' ? (oldNode.metadata as Record<string, unknown>) : {});
       const newMeta = { ...origMeta, copiedFromNodeId: oldNode.id, copySuffix: metadataCopySuffix } as Record<string, unknown>;
-      // 🔴 Ne pas copier la configuration de repeater dans les clones créés via un repeater
+      // Ã°Å¸â€Â´ Ne pas copier la configuration de repeater dans les clones crÃƒÂ©ÃƒÂ©s via un repeater
       if (normalizedRepeatContext && newMeta.repeater) {
         delete newMeta.repeater;
       }
       return newMeta as Prisma.InputJsonValue;
     })(),
-    // 🔧 TRAITER LE fieldConfig: suffix les références aux nodes
+    // Ã°Å¸â€Â§ TRAITER LE fieldConfig: suffix les rÃƒÂ©fÃƒÂ©rences aux nodes
     fieldConfig: (() => {
       if (!oldNode.fieldConfig) {
         return oldNode.fieldConfig;
       }
       try {
         const str = JSON.stringify(oldNode.fieldConfig);
-        // Remplacer les UUIDs par leurs versions suffixées
+        // Remplacer les UUIDs par leurs versions suffixÃƒÂ©es
         let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
           const mapped = idMap.get(uuid);
           if (mapped) {
-            console.log(`[fieldConfig] UUID remappé: ${uuid} → ${mapped}`);
             return mapped;
           }
-          // Si pas dans la map et suffixe pas déjà appliqué, l'ajouter
+          // Si pas dans la map et suffixe pas dÃƒÂ©jÃƒÂ  appliquÃƒÂ©, l'ajouter
           if (!uuid.match(/-\d+$/)) {
-            console.log(`[fieldConfig] UUID suffixé: ${uuid} → ${uuid}-${suffixNum}`);
             return `${uuid}-${suffixNum}`;
           }
           return uuid;
@@ -611,7 +595,7 @@ export async function deepCopyNodeInternal(
     linkedTableIds: Array.isArray(oldNode.linkedTableIds)
       ? oldNode.linkedTableIds.map(id => ensureSuffix(id) || id)
       : [],
-    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiées
+    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiÃƒÂ©es
     linkedVariableIds: Array.isArray(oldNode.linkedVariableIds)
       ? oldNode.linkedVariableIds.map(id => ensureSuffix(id) || id)
       : [],
@@ -635,9 +619,8 @@ export async function deepCopyNodeInternal(
         return originalParentId ?? null;
       }
       
-      // 🚫 NE PAS cloner les sections si shouldCloneExternalParents = false
+      // Ã°Å¸Å¡Â« NE PAS cloner les sections si shouldCloneExternalParents = false
       if (!shouldCloneExternalParents && parentNode.type === 'section') {
-        console.log(`⏭️ [deep-copy] Skipping section clone: "${parentNode.label}" (shouldCloneExternalParents=false)`);
         resolvedExternalParents.set(originalParentId, originalParentId ?? null);
         return originalParentId ?? null;
       }
@@ -721,30 +704,27 @@ export async function deepCopyNodeInternal(
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
 
-    // 🆕 Si ce node a des tables liées (linkedTableIds), l'ajouter à displayNodeIds
-    // pour que le post-processing crée les variables pour afficher les données
+    // Ã°Å¸â€ â€¢ Si ce node a des tables liÃƒÂ©es (linkedTableIds), l'ajouter ÃƒÂ  displayNodeIds
+    // pour que le post-processing crÃƒÂ©e les variables pour afficher les donnÃƒÂ©es
     if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
       displayNodeIds.push(newId);
-      console.log(`[DEEP-COPY] 📊 Node ${newId} ajouté à displayNodeIds (linkedTableIds: ${cloneData.linkedTableIds.length})`);
     }
   }
 
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId)!;
     
-    // 🔑 CRITICAL: Récupérer l'ordre de linkedFormulaIds de l'original
+    // Ã°Å¸â€â€˜ CRITICAL: RÃƒÂ©cupÃƒÂ©rer l'ordre de linkedFormulaIds de l'original
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
-    console.log(`[DEBUG] Processing node ${oldId}, linkedFormulaIds order: ${JSON.stringify(linkedFormulaIdOrder)}`);
     
-    // Récupérer toutes les formules
+    // RÃƒÂ©cupÃƒÂ©rer toutes les formules
     const formulas = await prisma.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
-    console.log(`[DEBUG] Found ${formulas.length} formulas for node ${oldId}`);
     
     // CRITICAL: Trier selon linkedFormulaIds order, MAIS SEULEMENT les IDs valides
-    // D'abord, créer une map formula id -> formula
+    // D'abord, crÃƒÂ©er une map formula id -> formula
     const formulaMap = new Map(formulas.map(f => [f.id, f]));
     
-    // Créer le tableau trié en validant chaque ID
+    // CrÃƒÂ©er le tableau triÃƒÂ© en validant chaque ID
     const sortedFormulas: typeof formulas = [];
     const validLinkedIds: string[] = [];
     for (const formulaId of linkedFormulaIdOrder) {
@@ -753,22 +733,20 @@ export async function deepCopyNodeInternal(
         sortedFormulas.push(formula);
         validLinkedIds.push(formulaId);
         formulaMap.delete(formulaId);
-        console.log(`[DEBUG] Added formula ${formula.id} (${formula.name}) at position ${sortedFormulas.length - 1}`);
       } else {
-        console.warn(`[DEBUG] ⚠️  Formula ID ${formulaId} in linkedFormulaIds not found - skipping`);
+        
       }
     }
     
-    // Ajouter les formules restantes (non liées ou qui n'étaient pas dans linkedFormulaIds)
+    // Ajouter les formules restantes (non liÃƒÂ©es ou qui n'ÃƒÂ©taient pas dans linkedFormulaIds)
     const unlinkedFormulas = Array.from(formulaMap.values());
     const allFormulas = [...sortedFormulas, ...unlinkedFormulas];
-    console.log(`[DEBUG] Final formula order: ${allFormulas.map(f => f.id).join(', ')}`);
     
     const newLinkedFormulaIds: string[] = [];
     
     for (const f of allFormulas) {
       try {
-        // Utiliser copyFormulaCapacity pour avoir la réécriture complète
+        // Utiliser copyFormulaCapacity pour avoir la rÃƒÂ©ÃƒÂ©criture complÃƒÂ¨te
         const formulaResult = await copyFormulaCapacity(
           f.id,
           newId,
@@ -784,10 +762,9 @@ export async function deepCopyNodeInternal(
           const newFormulaId = formulaResult.newFormulaId;
           formulaIdMap.set(f.id, newFormulaId);
           
-          // 🔑 Ajouter au linkedFormulaIds seulement si c'était lié à l'original
+          // Ã°Å¸â€â€˜ Ajouter au linkedFormulaIds seulement si c'ÃƒÂ©tait liÃƒÂ© ÃƒÂ  l'original
           if (validLinkedIds.includes(f.id)) {
             newLinkedFormulaIds.push(newFormulaId);
-            console.log(`[DEBUG] Linked formula (centralisé): ${newFormulaId} added at position ${newLinkedFormulaIds.length - 1}`);
           }
 
           if (normalizedRepeatContext) {
@@ -801,19 +778,17 @@ export async function deepCopyNodeInternal(
             });
           }
         } else {
-          console.error(`❌ Erreur copie formule centralisée: ${f.id}`);
+          console.error(`Ã¢ÂÅ’ Erreur copie formule centralisÃƒÂ©e: ${f.id}`);
         }
       } catch (error) {
-        console.error(`❌ Exception copie formule ${f.id}:`, error);
+        console.error(`Ã¢ÂÅ’ Exception copie formule ${f.id}:`, error);
       }
     }
     
-    // 🔑 CRITICAL: Ajouter tous les linkedFormulaIds en UNE SEULE OPÉRATION dans le BON ORDRE!
-    console.log(`[DEBUG] Final newLinkedFormulaIds: ${JSON.stringify(newLinkedFormulaIds)}`);
+    // Ã°Å¸â€â€˜ CRITICAL: Ajouter tous les linkedFormulaIds en UNE SEULE OPÃƒâ€°RATION dans le BON ORDRE!
     if (newLinkedFormulaIds.length > 0) {
       try {
         await addToNodeLinkedField(prisma, newId, 'linkedFormulaIds', newLinkedFormulaIds);
-        console.log(`[DEBUG] Successfully added linkedFormulaIds to node ${newId}`);
       } catch (e) {
         console.warn('[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:', (e as Error).message);
       }
@@ -824,10 +799,10 @@ export async function deepCopyNodeInternal(
     const copiedNodeIds = new Set(idMap.values());
     
     // Trier les conditions selon linkedConditionIdOrder, MAIS SEULEMENT les IDs valides
-    // D'abord, créer une map condition id -> condition
+    // D'abord, crÃƒÂ©er une map condition id -> condition
     const conditionMap = new Map(conditions.map(c => [c.id, c]));
     
-    // Créer le tableau trié en validant chaque ID
+    // CrÃƒÂ©er le tableau triÃƒÂ© en validant chaque ID
     const sortedConditions: typeof conditions = [];
     const validLinkedConditionIds: string[] = [];
     for (const conditionId of linkedConditionIdOrder) {
@@ -836,13 +811,12 @@ export async function deepCopyNodeInternal(
         sortedConditions.push(condition);
         validLinkedConditionIds.push(conditionId);
         conditionMap.delete(conditionId);
-        console.log(`[DEBUG] Added condition ${condition.id} (${condition.name}) at position ${sortedConditions.length - 1}`);
       } else {
-        console.warn(`[DEBUG] ⚠️  Condition ID ${conditionId} in linkedConditionIds not found - skipping`);
+        
       }
     }
     
-    // Ajouter les conditions restantes (non liées ou qui n'étaient pas dans linkedConditionIds)
+    // Ajouter les conditions restantes (non liÃƒÂ©es ou qui n'ÃƒÂ©taient pas dans linkedConditionIds)
     const unlinkedConditions = Array.from(conditionMap.values());
     const allConditions = [...sortedConditions, ...unlinkedConditions];
     
@@ -853,24 +827,23 @@ export async function deepCopyNodeInternal(
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap) as Prisma.InputJsonValue;
       
-      // 🔧 FIX DYNAMIQUE: Vérifier si la condition existe déjà AVANT de la créer
+      // Ã°Å¸â€Â§ FIX DYNAMIQUE: VÃƒÂ©rifier si la condition existe dÃƒÂ©jÃƒÂ  AVANT de la crÃƒÂ©er
       const existingCondition = await prisma.treeBranchLeafNodeCondition.findUnique({
         where: { id: newConditionId }
       });
       
       if (existingCondition) {
-        // La condition existe déjà - si elle appartient à un autre nœud, c'est OK
-        // On l'ajoute juste aux linkedConditionIds de ce nœud
-        console.log(`[DEEP-COPY] ⚠️ Condition ${newConditionId} existe déjà (nodeId: ${existingCondition.nodeId}), skip création`);
+        // La condition existe dÃƒÂ©jÃƒÂ  - si elle appartient ÃƒÂ  un autre nÃ…â€œud, c'est OK
+        // On l'ajoute juste aux linkedConditionIds de ce nÃ…â€œud
         
-        // Si elle appartient à ce nœud, parfait. Sinon, on la référence quand même.
+        // Si elle appartient ÃƒÂ  ce nÃ…â€œud, parfait. Sinon, on la rÃƒÂ©fÃƒÂ©rence quand mÃƒÂªme.
         if (validLinkedConditionIds.includes(c.id)) {
           newLinkedConditionIds.push(newConditionId);
         }
         continue;
       }
       
-      // La condition n'existe pas, on la crée avec le bon nodeId
+      // La condition n'existe pas, on la crÃƒÂ©e avec le bon nodeId
       await prisma.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
@@ -885,9 +858,8 @@ export async function deepCopyNodeInternal(
           updatedAt: new Date()
         }
       });
-      console.log(`[DEEP-COPY] ✅ Condition ${newConditionId} créée pour nodeId: ${newId}`);
       
-      // 🔑 Ajouter au linkedConditionIds seulement si c'était lié à l'original (et que l'ID était valide)
+      // Ã°Å¸â€â€˜ Ajouter au linkedConditionIds seulement si c'ÃƒÂ©tait liÃƒÂ© ÃƒÂ  l'original (et que l'ID ÃƒÂ©tait valide)
       if (validLinkedConditionIds.includes(c.id)) {
         newLinkedConditionIds.push(newConditionId);
       }
@@ -906,8 +878,8 @@ export async function deepCopyNodeInternal(
         const refs = Array.from(extractNodeIdsFromConditionSet(newSet));
         for (const refId of refs) {
           const normalizedRefId = normalizeRefId(refId);
-          // Ne pas polluer les templates originaux : lors d'une duplication, on ne met à jour
-          // que les nœuds copiés (suffixés) présents dans idMap.values().
+          // Ne pas polluer les templates originaux : lors d'une duplication, on ne met ÃƒÂ  jour
+          // que les nÃ…â€œuds copiÃƒÂ©s (suffixÃƒÂ©s) prÃƒÂ©sents dans idMap.values().
           if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) {
             continue;
           }
@@ -918,7 +890,7 @@ export async function deepCopyNodeInternal(
       }
     }
     
-    // 🔑 IMPORTANT: Ajouter tous les linkedConditionIds en UNE SEULE OPÉRATION dans le BON ORDRE!
+    // Ã°Å¸â€â€˜ IMPORTANT: Ajouter tous les linkedConditionIds en UNE SEULE OPÃƒâ€°RATION dans le BON ORDRE!
     if (newLinkedConditionIds.length > 0) {
       try {
         await addToNodeLinkedField(prisma, newId, 'linkedConditionIds', newLinkedConditionIds);
@@ -927,23 +899,27 @@ export async function deepCopyNodeInternal(
       }
     }
 
-    // 🔧 FIX: Mettre à jour condition_activeId et formula_activeId avec les IDs remappés
-    // APRÈS la copie des conditions et formules pour que les maps soient complètes
+    // Ã°Å¸â€Â§ FIX: Mettre ÃƒÂ  jour condition_activeId et formula_activeId avec les IDs remappÃƒÂ©s
+    // APRÃƒË†S la copie des conditions et formules pour que les maps soient complÃƒÂ¨tes
     const updateActiveIds: { condition_activeId?: string | null; formula_activeId?: string | null } = {};
     
     if (oldNode.condition_activeId) {
-      const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
-      if (newConditionActiveId) {
-        updateActiveIds.condition_activeId = newConditionActiveId;
-        console.log(`[DEEP-COPY] 🔗 condition_activeId remappé: ${oldNode.condition_activeId} → ${newConditionActiveId}`);
+      // 🔧 FIX 24/12/2025: Seulement mettre à jour si hasCondition est true
+      if (oldNode.hasCondition) {
+        const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
+        if (newConditionActiveId) {
+          updateActiveIds.condition_activeId = newConditionActiveId;
+        }
       }
     }
     
     if (oldNode.formula_activeId) {
-      const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
-      if (newFormulaActiveId) {
-        updateActiveIds.formula_activeId = newFormulaActiveId;
-        console.log(`[DEEP-COPY] 🔗 formula_activeId remappé: ${oldNode.formula_activeId} → ${newFormulaActiveId}`);
+      // 🔧 FIX 24/12/2025: Seulement mettre à jour si hasFormula est true
+      if (oldNode.hasFormula) {
+        const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
+        if (newFormulaActiveId) {
+          updateActiveIds.formula_activeId = newFormulaActiveId;
+        }
       }
     }
     
@@ -953,33 +929,32 @@ export async function deepCopyNodeInternal(
           where: { id: newId },
           data: updateActiveIds
         });
-        console.log(`[DEEP-COPY] ✅ ActiveIds mis à jour pour ${newId}:`, updateActiveIds);
       } catch (e) {
-        console.warn('[DEEP-COPY] ⚠️ Erreur mise à jour activeIds:', (e as Error).message);
+        console.warn('[DEEP-COPY] Ã¢Å¡Â Ã¯Â¸Â Erreur mise ÃƒÂ  jour activeIds:', (e as Error).message);
       }
     }
 
-    // 🔴 COPIE DES TABLES: Chercher les tables de 3 façons:
-    // 1. Tables où nodeId = oldId (propriété directe)
-    // 2. Tables via table_activeId (référence active)
-    // 3. Tables via linkedTableIds (références multiples)
+    // Ã°Å¸â€Â´ COPIE DES TABLES: Chercher les tables de 3 faÃƒÂ§ons:
+    // 1. Tables oÃƒÂ¹ nodeId = oldId (propriÃƒÂ©tÃƒÂ© directe)
+    // 2. Tables via table_activeId (rÃƒÂ©fÃƒÂ©rence active)
+    // 3. Tables via linkedTableIds (rÃƒÂ©fÃƒÂ©rences multiples)
     const tables = await prisma.treeBranchLeafNodeTable.findMany({
       where: { nodeId: oldId },
       include: { tableColumns: true, tableRows: true }
     });
 
-    // 🆕 IMPORTANT: Aussi copier les tables référencées via table_activeId qui ne sont PAS liées au nodeId
-    // Cas typique: un champ "Orientation" template (22de...) référence une table (0701ed...) 
-    // qui est liée à un display node (440d...), pas au template node lui-même
+    // Ã°Å¸â€ â€¢ IMPORTANT: Aussi copier les tables rÃƒÂ©fÃƒÂ©rencÃƒÂ©es via table_activeId qui ne sont PAS liÃƒÂ©es au nodeId
+    // Cas typique: un champ "Orientation" template (22de...) rÃƒÂ©fÃƒÂ©rence une table (0701ed...) 
+    // qui est liÃƒÂ©e ÃƒÂ  un display node (440d...), pas au template node lui-mÃƒÂªme
     const additionalTableIds: string[] = [];
     if (source.table_activeId && !tables.some(t => t.id === source.table_activeId)) {
       additionalTableIds.push(source.table_activeId);
     }
     
-    // 🆕 CRITIQUE: Aussi copier les tables référencées via linkedTableIds
+    // Ã°Å¸â€ â€¢ CRITIQUE: Aussi copier les tables rÃƒÂ©fÃƒÂ©rencÃƒÂ©es via linkedTableIds
     // Cas typique: "Panneaux max" a linkedTableIds: ["Longueur panneau", "Largeur panneau"]
-    // Ces tables ont nodeId = Panneaux max, donc déjà incluses dans `tables`
-    // MAIS si le nodeId de la table est différent (ex: table partagée), on doit l'ajouter
+    // Ces tables ont nodeId = Panneaux max, donc dÃƒÂ©jÃƒÂ  incluses dans `tables`
+    // MAIS si le nodeId de la table est diffÃƒÂ©rent (ex: table partagÃƒÂ©e), on doit l'ajouter
     if (Array.isArray(oldNode.linkedTableIds)) {
       for (const linkedTableId of oldNode.linkedTableIds) {
         if (!tables.some(t => t.id === linkedTableId) && !additionalTableIds.includes(linkedTableId)) {
@@ -999,7 +974,7 @@ export async function deepCopyNodeInternal(
         })
       : [];
     
-    // 🔑 IMPORTANT: Trier les tables selon l'ordre de linkedTableIds (pas orderBy!)
+    // Ã°Å¸â€â€˜ IMPORTANT: Trier les tables selon l'ordre de linkedTableIds (pas orderBy!)
     const linkedTableIdOrder = Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : [];
     
     const sortedTables = linkedTableIdOrder
@@ -1010,33 +985,27 @@ export async function deepCopyNodeInternal(
     const allTablesToCopy = [...sortedTables, ...unlinkedTables];
     
     if (additionalTables.length > 0) {
-      console.log(`[DEEP-COPY] 📊 Tables additionnelles trouvées via table_activeId: ${additionalTables.map(t => t.id).join(', ')}`);
     }
     
     const newLinkedTableIds: string[] = [];
     
-    console.log(`\n\n🔴🔴🔴 [DEEP-COPY-SERVICE] DÉBUT COPIE TABLES - ${allTablesToCopy.length} tables à copier 🔴🔴🔴\n`);
     
     for (const t of allTablesToCopy) {
       const newTableId = appendSuffix(t.id);
       tableIdMap.set(t.id, newTableId);
       
-      console.log(`🔴 [DEEP-COPY-SERVICE] Traitement table: ${t.id} -> ${newTableId}`);
-      console.log(`🔴 [DEEP-COPY-SERVICE] META ORIGINAL:`, JSON.stringify(t.meta)?.substring(0, 200));
       
-      // Vérifier si la table copiée existe déjà
+      // VÃƒÂ©rifier si la table copiÃƒÂ©e existe dÃƒÂ©jÃƒÂ 
       const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: newTableId }
       });
       
       if (existingTable) {
-        console.log(`[DEEP-COPY] ⏩ Table ${newTableId} existe déjà, skip`);
         continue;
       }
       
-      console.log(`[DEEP-COPY] 📊 Copie table: ${t.id} -> ${newTableId} (source nodeId: ${t.nodeId}, target nodeId: ${newId})`);
       
-      // 🔑 Ajouter au linkedTableIds seulement si c'était lié à l'original
+      // Ã°Å¸â€â€˜ Ajouter au linkedTableIds seulement si c'ÃƒÂ©tait liÃƒÂ© ÃƒÂ  l'original
       if (linkedTableIdOrder.includes(t.id)) {
         newLinkedTableIds.push(newTableId);
       }
@@ -1051,7 +1020,7 @@ export async function deepCopyNodeInternal(
           type: t.type,
           rowCount: t.rowCount,
           columnCount: t.columnCount,
-          // 🔧 TRAITER LE meta: suffix les références aux nodes ET comparisonColumn
+          // Ã°Å¸â€Â§ TRAITER LE meta: suffix les rÃƒÂ©fÃƒÂ©rences aux nodes ET comparisonColumn
           meta: (() => {
             if (!t.meta) {
               return t.meta as Prisma.InputJsonValue;
@@ -1059,12 +1028,10 @@ export async function deepCopyNodeInternal(
             try {
               const metaObj = typeof t.meta === 'string' ? JSON.parse(t.meta) : JSON.parse(JSON.stringify(t.meta));
               
-              console.log(`[table.meta] 🔍 AVANT traitement:`, JSON.stringify(metaObj).substring(0, 300));
               
-              // 🔢 COPIE TABLE META: suffixer TOUS les champs dans lookup
+              // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les champs dans lookup
               // Suffixer les UUIDs dans selectors
               if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${copySuffixNum}`)) {
-                console.log(`[table.meta] columnFieldId: ${metaObj.lookup.selectors.columnFieldId} → ${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`);
                 metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`;
               }
               if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${copySuffixNum}`)) {
@@ -1091,12 +1058,11 @@ export async function deepCopyNodeInternal(
                 }
               }
               
-              // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+              // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
               if (metaObj?.lookup?.displayColumn) {
                 if (Array.isArray(metaObj.lookup.displayColumn)) {
                   metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
                     if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(computedLabelSuffix)) {
-                      console.log(`[table.meta] displayColumn[]: ${col} → ${col}${computedLabelSuffix}`);
                       return `${col}${computedLabelSuffix}`;
                     }
                     return col;
@@ -1104,18 +1070,16 @@ export async function deepCopyNodeInternal(
                 } else if (typeof metaObj.lookup.displayColumn === 'string') {
                   const val = metaObj.lookup.displayColumn;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    console.log(`[table.meta] displayColumn: ${val} → ${val}${computedLabelSuffix}`);
                     metaObj.lookup.displayColumn = `${val}${computedLabelSuffix}`;
                   }
                 }
               }
               
-              // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+              // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
               if (metaObj?.lookup?.displayRow) {
                 if (Array.isArray(metaObj.lookup.displayRow)) {
                   metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
                     if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(computedLabelSuffix)) {
-                      console.log(`[table.meta] displayRow[]: ${row} → ${row}${computedLabelSuffix}`);
                       return `${row}${computedLabelSuffix}`;
                     }
                     return row;
@@ -1123,13 +1087,11 @@ export async function deepCopyNodeInternal(
                 } else if (typeof metaObj.lookup.displayRow === 'string') {
                   const val = metaObj.lookup.displayRow;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    console.log(`[table.meta] displayRow: ${val} → ${val}${computedLabelSuffix}`);
                     metaObj.lookup.displayRow = `${val}${computedLabelSuffix}`;
                   }
                 }
               }
               
-              console.log(`[table.meta] ✅ APRÈS traitement:`, JSON.stringify(metaObj).substring(0, 300));
               
               return metaObj as Prisma.InputJsonValue;
             } catch (err) {
@@ -1147,7 +1109,7 @@ export async function deepCopyNodeInternal(
             create: t.tableColumns.map(col => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
               name: col.name 
                 ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${computedLabelSuffix}`)
                 : col.name,
@@ -1177,7 +1139,7 @@ export async function deepCopyNodeInternal(
       }
     }
     
-    // 🔑 IMPORTANT: Ajouter tous les linkedTableIds en UNE SEULE OPÉRATION dans le BON ORDRE!
+    // Ã°Å¸â€â€˜ IMPORTANT: Ajouter tous les linkedTableIds en UNE SEULE OPÃƒâ€°RATION dans le BON ORDRE!
     if (newLinkedTableIds.length > 0) {
       try {
         await addToNodeLinkedField(prisma, newId, 'linkedTableIds', newLinkedTableIds);
@@ -1186,14 +1148,14 @@ export async function deepCopyNodeInternal(
       }
     }
 
-    // 🆕 COPIE DES SELECT CONFIGS (TreeBranchLeafSelectConfig)
-    // C'est crucial pour les champs "données d'affichage" qui utilisent des lookups
+    // Ã°Å¸â€ â€¢ COPIE DES SELECT CONFIGS (TreeBranchLeafSelectConfig)
+    // C'est crucial pour les champs "donnÃƒÂ©es d'affichage" qui utilisent des lookups
     const originalSelectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
       where: { nodeId: oldId }
     });
 
     if (originalSelectConfig) {
-      // Vérifier si la copie existe déjà
+      // VÃƒÂ©rifier si la copie existe dÃƒÂ©jÃƒÂ 
       const existingCopyConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: newId }
       });
@@ -1204,7 +1166,6 @@ export async function deepCopyNodeInternal(
           ? appendSuffix(originalSelectConfig.tableReference)
           : null;
 
-        console.log(`[DEEP-COPY] 📊 Duplication SELECT config: ${oldId} -> ${newId} (tableRef: ${newTableReference})`);
 
         try {
           await prisma.treeBranchLeafSelectConfig.create({
@@ -1238,16 +1199,14 @@ export async function deepCopyNodeInternal(
               updatedAt: new Date()
             }
           });
-          console.log(`[DEEP-COPY] ✅ SELECT config créée pour ${newId}`);
         } catch (selectConfigErr) {
-          console.warn(`[DEEP-COPY] ⚠️ Erreur création SELECT config pour ${newId}:`, (selectConfigErr as Error).message);
+          
         }
       } else {
-        console.log(`[DEEP-COPY] ♻️ SELECT config existe déjà pour ${newId}`);
       }
     }
 
-    // 🆕 COPIE DES NUMBER CONFIGS (TreeBranchLeafNumberConfig)
+    // Ã°Å¸â€ â€¢ COPIE DES NUMBER CONFIGS (TreeBranchLeafNumberConfig)
     const originalNumberConfig = await prisma.treeBranchLeafNumberConfig.findUnique({
       where: { nodeId: oldId }
     });
@@ -1258,7 +1217,6 @@ export async function deepCopyNodeInternal(
       });
 
       if (!existingCopyNumberConfig) {
-        console.log(`[DEEP-COPY] 🔢 Duplication NUMBER config: ${oldId} -> ${newId}`);
 
         try {
           await prisma.treeBranchLeafNumberConfig.create({
@@ -1273,9 +1231,8 @@ export async function deepCopyNodeInternal(
               prefix: originalNumberConfig.prefix
             }
           });
-          console.log(`[DEEP-COPY] ✅ NUMBER config créée pour ${newId}`);
         } catch (numberConfigErr) {
-          console.warn(`[DEEP-COPY] ⚠️ Erreur création NUMBER config pour ${newId}:`, (numberConfigErr as Error).message);
+          
         }
       }
     }
@@ -1286,23 +1243,31 @@ export async function deepCopyNodeInternal(
     const newNodeId = idMap.get(oldNodeId)!;
     const oldNode = byId.get(oldNodeId)!;
 
-    const newLinkedFormulaIds = (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [])
-      .map(id => {
-        const mappedId = formulaIdMap.get(id);
-        if (mappedId) return mappedId;
-        const ensured = ensureSuffix(id);
-        return ensured || appendSuffix(id);
-      })
-      .filter(Boolean);
+    // 🔧 FIX 24/12/2025: Ne copier linkedFormulaIds QUE si le nœud a réellement hasFormula
+    // Sinon un champ simple (ex: "Longueur") qui n'a pas de formule mais qui a des linkedFormulaIds
+    // (par héritage ou erreur) se transforme en cellule de calcul
+    const newLinkedFormulaIds = oldNode.hasFormula 
+      ? (Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [])
+          .map(id => {
+            const mappedId = formulaIdMap.get(id);
+            if (mappedId) return mappedId;
+            const ensured = ensureSuffix(id);
+            return ensured || appendSuffix(id);
+          })
+          .filter(Boolean)
+      : [];
 
-    const newLinkedConditionIds = (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [])
-      .map(id => {
-        const mappedId = conditionIdMap.get(id);
-        if (mappedId) return mappedId;
-        const ensured = ensureSuffix(id);
-        return ensured || appendSuffix(id);
-      })
-      .filter(Boolean);
+    // 🔧 FIX 24/12/2025: Ne copier linkedConditionIds QUE si le nœud a réellement hasCondition
+    const newLinkedConditionIds = oldNode.hasCondition
+      ? (Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [])
+          .map(id => {
+            const mappedId = conditionIdMap.get(id);
+            if (mappedId) return mappedId;
+            const ensured = ensureSuffix(id);
+            return ensured || appendSuffix(id);
+          })
+          .filter(Boolean)
+      : [];
 
     const newLinkedTableIds = (Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds : [])
       .map(id => {
@@ -1314,24 +1279,21 @@ export async function deepCopyNodeInternal(
       .filter(Boolean);
 
     const sourceLinkedVariableIds = new Set<string>();
-    console.log(`\n🔷🔷🔷 [LINKED_VARS] Traitement nœud ${oldNodeId} -> ${newNodeId}`);
-    console.log(`🔷 [LINKED_VARS] oldNode.linkedVariableIds = ${JSON.stringify(oldNode.linkedVariableIds)}`);
     if (Array.isArray(oldNode.linkedVariableIds)) {
       for (const rawId of oldNode.linkedVariableIds) {
         if (typeof rawId === 'string') {
           const normalized = rawId.trim();
           if (normalized) {
-            // ⚠️ Normaliser en retirant d'éventuels anciens suffixes (-1, -2, ...)
+            // Ã¢Å¡Â Ã¯Â¸Â Normaliser en retirant d'ÃƒÂ©ventuels anciens suffixes (-1, -2, ...)
             // pour toujours repartir de l'ID base lors d'une nouvelle duplication
             const baseId = stripNumericSuffix(normalized);
             sourceLinkedVariableIds.add(baseId || normalized);
-            console.log(`🔷 [LINKED_VARS] Ajouté: ${baseId || normalized} (depuis: ${rawId})`);
           }
         }
       }
     }
     
-    // 🔴 FIX: Ajouter TOUTES les variables directes du nœud (pas seulement 1)
+    // Ã°Å¸â€Â´ FIX: Ajouter TOUTES les variables directes du nÃ…â€œud (pas seulement 1)
     const directVarIds = directVariableIdByNodeId.get(oldNodeId);
     if (directVarIds && directVarIds.size > 0) {
       for (const directVarIdForNode of directVarIds) {
@@ -1340,21 +1302,16 @@ export async function deepCopyNodeInternal(
       }
     }
 
-    // ⚠️ CRITIQUE: On copie les variables pour créer les display nodes
-    // MAIS on ne met PAS à jour linkedVariableIds après !
-    // Le linkedVariableIds reste celui du template original (copié automatiquement)
+    // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: On copie les variables pour crÃƒÂ©er les display nodes
+    // MAIS on ne met PAS ÃƒÂ  jour linkedVariableIds aprÃƒÂ¨s !
+    // Le linkedVariableIds reste celui du template original (copiÃƒÂ© automatiquement)
     
-    console.log(`🔷 [LINKED_VARS] sourceLinkedVariableIds.size = ${sourceLinkedVariableIds.size}`);
-    console.log(`🔷 [LINKED_VARS] Contenu: ${JSON.stringify([...sourceLinkedVariableIds])}`);
     
     if (sourceLinkedVariableIds.size > 0) {
-      console.log(`🔷 [LINKED_VARS] ✅ Entrée dans la boucle de copie de variables!`);
       for (const linkedVarId of sourceLinkedVariableIds) {
-        console.log(`🔷 [LINKED_VARS] Traitement variable: ${linkedVarId}`);
         const isSharedRef = linkedVarId.startsWith('shared-ref-');
         if (!isSharedRef) {
           try {
-            console.log(`🔷 [LINKED_VARS] 📞 Appel copyVariableWithCapacities(${linkedVarId}, ${suffixToken}, ${newNodeId})`);
             const copyResult = await copyVariableWithCapacities(
               linkedVarId,
               suffixToken,
@@ -1368,23 +1325,19 @@ export async function deepCopyNodeInternal(
                 variableCopyCache,
                 autoCreateDisplayNode: true,
                 displayNodeAlreadyCreated: false,
-                displayParentId: newNodeId, // 🔧 FIX: Le parent doit être le nœud copié (pas son parent)
+                displayParentId: newNodeId, // Ã°Å¸â€Â§ FIX: Le parent doit ÃƒÂªtre le nÃ…â€œud copiÃƒÂ© (pas son parent)
                 isFromRepeaterDuplication: isFromRepeaterDuplication,
                 repeatContext: normalizedRepeatContext
               }
             );
-            console.log(`🔷 [LINKED_VARS] 📤 Résultat copyVariableWithCapacities: success=${copyResult.success}, displayNodeId=${copyResult.displayNodeId}`);
             if (copyResult.success && copyResult.displayNodeId) {
               displayNodeIds.push(copyResult.displayNodeId);
-              console.log(`🔷 [LINKED_VARS] ✅ Display node ajouté: ${copyResult.displayNodeId}`);
             } else {
-              console.log(`🔷 [LINKED_VARS] ⚠️ Pas de display node créé! error=${copyResult.error}`);
             }
           } catch (e) {
-            console.warn(`[DEEP-COPY] Erreur copie variable ${linkedVarId}:`, (e as Error).message);
+            
           }
         } else {
-          console.log(`🔷 [LINKED_VARS] ⏭️ Variable ignorée (shared-ref): ${linkedVarId}`);
         }
       }
     }
@@ -1395,21 +1348,21 @@ export async function deepCopyNodeInternal(
       newLinkedTableIds.length > 0
     ) {
       try {
-        // ⚠️ CRITIQUE: Ne PAS mettre à jour linkedVariableIds !
-        // Il est copié automatiquement et doit rester intact
+        // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Ne PAS mettre ÃƒÂ  jour linkedVariableIds !
+        // Il est copiÃƒÂ© automatiquement et doit rester intact
         await prisma.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
             linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
             linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] }
-            // linkedVariableIds: SUPPRIMÉ - ne doit PAS être mis à jour !
+            // linkedVariableIds: SUPPRIMÃƒâ€° - ne doit PAS ÃƒÂªtre mis ÃƒÂ  jour !
           }
         });
         
-        // ⚠️ SUPPRIMÉ: Ne PAS mettre à jour linkedVariableIds après la copie !
-        // Le linkedVariableIds est copié automatiquement depuis le template original
-        // et doit rester INTACT (contenir seulement l'ID original, pas les IDs copiés)
+        // Ã¢Å¡Â Ã¯Â¸Â SUPPRIMÃƒâ€°: Ne PAS mettre ÃƒÂ  jour linkedVariableIds aprÃƒÂ¨s la copie !
+        // Le linkedVariableIds est copiÃƒÂ© automatiquement depuis le template original
+        // et doit rester INTACT (contenir seulement l'ID original, pas les IDs copiÃƒÂ©s)
       } catch (e) {
         console.warn('[DEEP-COPY] Erreur lors du UPDATE des linked***', (e as Error).message);
       }
@@ -1419,13 +1372,12 @@ export async function deepCopyNodeInternal(
   const rootNewId = idMap.get(source.id)!;
 
   // ------------------------------------------------------------------
-  // POST-PROCESS: Créer variables pour noeuds avec linkedTableIds
+  // POST-PROCESS: CrÃƒÂ©er variables pour noeuds avec linkedTableIds
   // ------------------------------------------------------------------
   if (displayNodeIds.length > 0) {
-    console.log(`[DEEP-COPY] 🔧 Création variables pour ${displayNodeIds.length} noeuds avec linkedTableIds`);
     for (const nodeId of displayNodeIds) {
       try {
-        // Récupérer le noeud copié
+        // RÃƒÂ©cupÃƒÂ©rer le noeud copiÃƒÂ©
         const copiedNode = await prisma.treeBranchLeafNode.findUnique({
           where: { id: nodeId },
           select: { id: true, label: true, field_label: true, linkedTableIds: true }
@@ -1438,7 +1390,6 @@ export async function deepCopyNodeInternal(
         // Trouver le noeud ORIGINAL (enlever suffixe)
         const originalNodeId = nodeId.replace(/-\d+$/, '');
         
-        console.log(`[DEEP-COPY] 🔍 Recherche variable pour noeud original ${originalNodeId}`);
 
         // Chercher variable originale avec le nodeId du NOEUD ORIGINAL
         const originalVar = await prisma.treeBranchLeafNodeVariable.findFirst({
@@ -1446,18 +1397,26 @@ export async function deepCopyNodeInternal(
         });
 
         if (!originalVar) {
-          console.warn(`[DEEP-COPY] ⚠️ Variable originale non trouvée pour noeud ${originalNodeId}`);
+          
           continue;
         }
         
-        console.log(`[DEEP-COPY] ✅ Variable originale trouvée: ${originalVar.id} (${originalVar.exposedKey})`);
 
-        // Créer la variable copiée avec nodeId = noeud copié
-        // 🛠️ Utiliser appendSuffix pour garantir le format "-suffix" et éviter les collisions
+        // CrÃƒÂ©er la variable copiÃƒÂ©e avec nodeId = noeud copiÃƒÂ©
+        // Ã°Å¸â€ºÂ Ã¯Â¸Â Utiliser appendSuffix pour garantir le format "-suffix" et ÃƒÂ©viter les collisions
         const newVarId = appendSuffix(originalVar.id);
         const newExposedKey = appendSuffix(originalVar.exposedKey);
 
-        console.log(`[DEEP-COPY] 🔧 Création variable ${newVarId} avec nodeId=${nodeId}`);
+
+        //  Vérifier si cette variable existe déjà (copie idempotente)
+        const existingVar = await prisma.treeBranchLeafNodeVariable.findUnique({
+          where: { id: newVarId }
+        });
+        
+        if (existingVar) {
+          // Variable déjà copiée, pas besoin de recréer
+          continue;
+        }
 
         await prisma.treeBranchLeafNodeVariable.create({
           data: {
@@ -1480,7 +1439,7 @@ export async function deepCopyNodeInternal(
           }
         });
 
-        // Synchroniser data_activeId + linkedVariableIds sur le noeud copié
+        // Synchroniser data_activeId + linkedVariableIds sur le noeud copiÃƒÂ©
         await prisma.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
@@ -1491,14 +1450,13 @@ export async function deepCopyNodeInternal(
             data_precision: originalVar.precision,
             data_unit: originalVar.unit,
             data_visibleToUser: originalVar.visibleToUser,
-            // linkedVariableIds doit contenir la variable copiée (suffixée)
+            // linkedVariableIds doit contenir la variable copiÃƒÂ©e (suffixÃƒÂ©e)
             linkedVariableIds: { set: [newVarId] }
           }
         });
 
-        console.log(`[DEEP-COPY] ✅ Variable ${newVarId} créée et ${nodeId} synchronisé`);
       } catch (varError) {
-        console.error(`[DEEP-COPY] ❌ Erreur création variable pour ${nodeId}:`, varError);
+        console.error(`[DEEP-COPY] Ã¢ÂÅ’ Erreur crÃƒÂ©ation variable pour ${nodeId}:`, varError);
       }
     }
   }

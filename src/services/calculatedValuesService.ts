@@ -42,10 +42,7 @@ export async function storeCalculatedValues(
     errors: []
   };
 
-  console.log(`📊 [StoreCalculatedValues] Début stockage de ${values.length} valeurs`, {
-    submissionId,
-    timestamp: new Date().toISOString()
-  });
+  // Stockage silencieux des valeurs calculées
 
   for (const value of values) {
     try {
@@ -83,14 +80,6 @@ export async function storeCalculatedValues(
       });
 
       result.stored++;
-
-      console.log(`✅ [StoreCalculatedValues] Valeur stockée:`, {
-        nodeId,
-        label: node.label,
-        calculatedValue,
-        calculatedBy,
-        submissionId
-      });
     } catch (error) {
       result.failed++;
       result.errors.push({
@@ -105,14 +94,6 @@ export async function storeCalculatedValues(
       });
     }
   }
-
-  console.log(`📊 [StoreCalculatedValues] Fin stockage:`, {
-    stored: result.stored,
-    failed: result.failed,
-    total: values.length,
-    submissionId,
-    errors: result.errors.length > 0 ? result.errors : undefined
-  });
 
   result.success = result.failed === 0;
   return result;

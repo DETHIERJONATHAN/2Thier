@@ -41,7 +41,9 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient | undefined 
 const prismaClient =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : [],
+    // ⚠️ Désactivé les logs 'query' en dev car TBL génère des centaines de requêtes
+    // Pour réactiver: ['query', 'info', 'warn', 'error']
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : [],
     // 🚀 Configuration optimisée du connection pool
     datasources: {
       db: {

@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 
 export interface TableLookupOption {
   value: string | number;
@@ -308,26 +309,28 @@ function extractOptions(
   payload: TableLookupPayload,
   config: TreeBranchLeafSelectConfig
 ): TableLookupOption[] {
-  console.log('🔍 [extractOptions] ENTRÉE:', {
-    payload: payload,
-    payloadType: typeof payload,
-    isArray: Array.isArray(payload),
-    hasDirectOptions: hasDirectOptions(payload),
-    isNormalizedInstance: isNormalizedInstance(payload),
-    keys: payload && typeof payload === 'object' ? Object.keys(payload) : []
-  });
+  if (isTBLDebugEnabled()) {
+    tblLog('🔍 [extractOptions] ENTRÉE:', {
+      payload: payload,
+      payloadType: typeof payload,
+      isArray: Array.isArray(payload),
+      hasDirectOptions: hasDirectOptions(payload),
+      isNormalizedInstance: isNormalizedInstance(payload),
+      keys: payload && typeof payload === 'object' ? Object.keys(payload) : []
+    });
+  }
   
   if (hasDirectOptions(payload)) {
-    console.log('✅ [extractOptions] Utilisation du chemin hasDirectOptions (payload.options)');
+    if (isTBLDebugEnabled()) tblLog('✅ [extractOptions] Utilisation du chemin hasDirectOptions (payload.options)');
     return sanitizeDirectOptions(payload.options);
   }
 
   if (isNormalizedInstance(payload)) {
-    console.log('✅ [extractOptions] Utilisation du chemin isNormalizedInstance (table complète)');
+    if (isTBLDebugEnabled()) tblLog('✅ [extractOptions] Utilisation du chemin isNormalizedInstance (table complète)');
     return extractOptionsFromTable(payload, config);
   }
 
-  console.log('❌ [extractOptions] Aucun chemin reconnu - retour array vide');
+  if (isTBLDebugEnabled()) tblLog('❌ [extractOptions] Aucun chemin reconnu - retour array vide');
   return [];
 }
 
@@ -336,13 +339,8 @@ function hasDirectOptions(payload: TableLookupPayload): payload is TableLookupAp
     payload && typeof payload === 'object' && Array.isArray((payload as TableLookupApiResponse).options)
   );
   
-  console.log('🔍 [hasDirectOptions] Test:', {
-    payload: payload,
-    isObject: payload && typeof payload === 'object',
-    hasOptionsProperty: payload && typeof payload === 'object' && 'options' in payload,
-    optionsIsArray: payload && typeof payload === 'object' && Array.isArray((payload as any).options),
-    result: hasOptions
-  });
+  // Log conditionnel - très verbeux
+  // if (isTBLDebugEnabled()) tblLog('🔍 [hasDirectOptions] Test:', { result: hasOptions });
   
   return hasOptions;
 }
@@ -443,35 +441,20 @@ function extractOptionsFromTable(
     }
   }
 
-  console.log('📊 [extractOptions] Options générées:', options);
-  console.log('📊 [extractOptions] 3 PREMIÈRES OPTIONS:', options.slice(0, 3).map(o => ({ value: o.value, label: o.label })));
+  // Logs supprimés - trop verbeux
   return options;
 }
 
   function sanitizeDirectOptions(rawOptions: unknown[]): TableLookupOption[] {
-    console.log('🔍 [sanitizeDirectOptions] ENTRÉE:', {
-      type: typeof rawOptions,
-      isArray: Array.isArray(rawOptions),
-      length: Array.isArray(rawOptions) ? rawOptions.length : 'N/A',
-      first3: Array.isArray(rawOptions) ? rawOptions.slice(0, 3) : rawOptions
-    });
-    
     const safeOptions: TableLookupOption[] = [];
 
     if (!Array.isArray(rawOptions)) {
-      console.warn('⚠️ [sanitizeDirectOptions] rawOptions n\'est pas un array:', rawOptions);
+      tblWarn('⚠️ [sanitizeDirectOptions] rawOptions n\'est pas un array:', rawOptions);
       return safeOptions;
     }
 
     rawOptions.forEach((entry, index) => {
-      console.log(`🔍 [sanitizeDirectOptions] Traitement option [${index}]:`, {
-        entry,
-        type: typeof entry,
-        isObject: entry && typeof entry === 'object'
-      });
-      
       if (!entry || typeof entry !== 'object') {
-        console.log(`⚠️ [sanitizeDirectOptions] Option [${index}] ignorée (pas un objet)`);
         return;
       }
       
@@ -479,10 +462,7 @@ function extractOptionsFromTable(
       const value = option.value ?? option.key ?? option.id;
       const label = option.label ?? option.display ?? value;
 
-      console.log(`🔍 [sanitizeDirectOptions] Option [${index}] extraite:`, { value, label });
-
       if (value === undefined || value === null) {
-        console.log(`⚠️ [sanitizeDirectOptions] Option [${index}] ignorée (value undefined/null)`);
         return;
       }
 
@@ -492,11 +472,12 @@ function extractOptionsFromTable(
         disabled: typeof option.disabled === 'boolean' ? option.disabled : undefined,
       };
       
-      console.log(`✅ [sanitizeDirectOptions] Option [${index}] ajoutée:`, finalOption);
       safeOptions.push(finalOption);
     });
 
-    console.log('📊 [sanitizeDirectOptions] Options générées (direct):', safeOptions);
-    console.log(`🎯 [sanitizeDirectOptions] RÉSULTAT: ${safeOptions.length} options sur ${rawOptions?.length || 0} entrées`);
+    // Log résumé uniquement si debug activé
+    if (isTBLDebugEnabled()) {
+      tblLog(`🎯 [sanitizeDirectOptions] RÉSULTAT: ${safeOptions.length} options`);
+    }
     return safeOptions;
   }

@@ -12,7 +12,7 @@ const connectCache = new Map<string, CachedConnectResult>();
 // GET /api/auto-google-auth/status
 // Retourne le statut de connexion Google pour l'utilisateur/organisation
 router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => {
-  console.log('[ROUTE] /api/auto-google-auth/status atteint');
+  
   const { userId, organizationId } = req.query as { userId?: string; organizationId?: string };
   
   if (!userId || !organizationId) {
@@ -82,7 +82,7 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
 // Si les tokens existent et sont valides (ou peuvent être rafraîchis), c'est transparent.
 // Sinon, renvoie une URL d'autorisation pour que le frontend puisse rediriger l'utilisateur.
 router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) => {
-  console.log('[ROUTE] /api/auto-google-auth/connect atteint');
+  
   const { userId, organizationId } = req.body;
   const caller = req.user;
 
@@ -122,7 +122,6 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
 
     if (authClient) {
       // L'utilisateur est déjà connecté et le token est valide (ou a été rafraîchi)
-      console.log('[AutoGoogleAuth] ✅ Connexion Google déjà active pour organisation:', organizationId);
       const ttlConnected = 15_000;
       const payload = { success: true, isConnected: true, needsManualAuth: false, message: 'Connexion Google déjà active.', cacheTtlMs: ttlConnected };
       connectCache.set(key, { expiresAt: now + ttlConnected, payload });
@@ -171,7 +170,7 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
 
 // POST /api/auto-google-auth/trigger-logout
 router.post('/trigger-logout', authMiddleware, async (req: AuthenticatedRequest, res) => {
-  console.log('[ROUTE] /api/auto-google-auth/trigger-logout atteint');
+  
   const { userId } = req.body;
   console.log('[GOOGLE-LOGOUT] Reçu logout CRM pour utilisateur:', userId);
 

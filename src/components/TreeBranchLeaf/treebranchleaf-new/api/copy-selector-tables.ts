@@ -1,14 +1,14 @@
 /**
- * 🎯 Copier les tables des SELECTORS après la copie de nœuds
+ * Ã°Å¸Å½Â¯ Copier les tables des SELECTORS aprÃƒÂ¨s la copie de nÃ…â€œuds
  * 
  * Quand on duplique un repeater qui contient des selecteurs,
- * les selecteurs sont copiés comme des nœuds (avec leurs IDs remappés),
- * mais leurs tables associées (linkedTableIds) ne sont PAS copiées!
+ * les selecteurs sont copiÃƒÂ©s comme des nÃ…â€œuds (avec leurs IDs remappÃƒÂ©s),
+ * mais leurs tables associÃƒÂ©es (linkedTableIds) ne sont PAS copiÃƒÂ©es!
  * 
- * Cette fonction gère ça:
- * 1. Cherche tous les nœuds SELECTORS dans la copie
+ * Cette fonction gÃƒÂ¨re ÃƒÂ§a:
+ * 1. Cherche tous les nÃ…â€œuds SELECTORS dans la copie
  * 2. Pour chaque selector avec table_activeId, copie sa table
- * 3. Met à jour le selector avec la nouvelle table copiée
+ * 3. Met ÃƒÂ  jour le selector avec la nouvelle table copiÃƒÂ©e
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -21,7 +21,7 @@ export interface CopySelectorTablesOptions {
 }
 
 /**
- * Copie les tables des selectors APRÈS la duplication de nœuds
+ * Copie les tables des selectors APRÃƒË†S la duplication de nÃ…â€œuds
  */
 export async function copySelectorTablesAfterNodeCopy(
   prisma: PrismaClient,
@@ -30,14 +30,9 @@ export async function copySelectorTablesAfterNodeCopy(
   options: CopySelectorTablesOptions,
   suffix: number
 ): Promise<void> {
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`🎯 COPIE DES TABLES DES SELECTORS`);
-  console.log(`   copiedRootNodeId: ${copiedRootNodeId}`);
-  console.log(`   suffix: ${suffix}`);
-  console.log(`${'═'.repeat(80)}`);
 
   try {
-    // 1️⃣ Chercher le nœud copié et tous ses descendants
+    // 1Ã¯Â¸ÂÃ¢Æ’Â£ Chercher le nÃ…â€œud copiÃƒÂ© et tous ses descendants
     const getAllDescendants = async (nodeId: string): Promise<string[]> => {
       const results: string[] = [];
       const queue = [nodeId];
@@ -61,10 +56,8 @@ export async function copySelectorTablesAfterNodeCopy(
     const originalNodeIds = await getAllDescendants(originalRootNodeId);
     const copiedNodeIds = await getAllDescendants(copiedRootNodeId);
     
-    console.log(`📋 ${copiedNodeIds.length} nœuds trouvés dans l'arborescence copiée`);
-    console.log(`📋 ${originalNodeIds.length} nœuds trouvés dans l'arborescence originale`);
 
-    // 2️⃣ Chercher les nœuds ORIGINAUX avec table_activeId
+    // 2Ã¯Â¸ÂÃ¢Æ’Â£ Chercher les nÃ…â€œuds ORIGINAUX avec table_activeId
     const selectorsInOriginal = await prisma.treeBranchLeafNode.findMany({
       where: {
         id: { in: originalNodeIds },
@@ -79,33 +72,26 @@ export async function copySelectorTablesAfterNodeCopy(
       }
     });
 
-    console.log(`🔍 ${selectorsInOriginal.length} selector(s) trouvé(s) dans l'ORIGINAL`);
 
-    // 3️⃣ Pour chaque selector ORIGINAL, trouver son équivalent COPIÉ et copier sa table
+    // 3Ã¯Â¸ÂÃ¢Æ’Â£ Pour chaque selector ORIGINAL, trouver son ÃƒÂ©quivalent COPIÃƒâ€° et copier sa table
     for (const originalSelector of selectorsInOriginal) {
       const originalTableId = originalSelector.table_activeId;
       if (!originalTableId) continue;
 
-      // Trouver le selector copié (via nodeIdMap)
+      // Trouver le selector copiÃƒÂ© (via nodeIdMap)
       const copiedSelectorId = options.nodeIdMap.get(originalSelector.id);
       if (!copiedSelectorId) {
-        console.log(`   ⚠️ Selector ${originalSelector.label}: pas trouvé dans nodeIdMap`);
         continue;
       }
 
-      // 🎯 SKIP si le selector a un selectConfig (lookup vers table partagée, pas de copie nécessaire)
+      // Ã°Å¸Å½Â¯ SKIP si le selector a un selectConfig (lookup vers table partagÃƒÂ©e, pas de copie nÃƒÂ©cessaire)
       const hasSelectConfig = await prisma.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: originalSelector.id }
       });
       if (hasSelectConfig) {
-        console.log(`   ⏭️ Selector ${originalSelector.label}: utilise selectConfig (lookup), pas de copie de table`);
         continue;
       }
 
-      console.log(`\n   📍 Selector: ${originalSelector.label}`);
-      console.log(`      - Original ID: ${originalSelector.id.substring(0, 12)}...`);
-      console.log(`      - Copié ID: ${copiedSelectorId.substring(0, 12)}...`);
-      console.log(`      - Table originale: ${originalTableId}`);
 
       // Chercher la table originale du selector
       const originalTable = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -124,22 +110,16 @@ export async function copySelectorTablesAfterNodeCopy(
       });
 
       if (!originalTable) {
-        console.log(`      ❌ Table ${originalTableId} NOT FOUND`);
         continue;
       }
 
-      console.log(`      ✅ Table trouvée: ${originalTable.name} (${originalTable.tableRows.length} lignes)`);
 
       // Copier la table avec la bonne signature
       try {
-        console.log(`      🔄 Appel copyTableCapacity...`);
-        console.log(`         - originalTableId: ${originalTableId}`);
-        console.log(`         - copiedSelectorId (newNodeId): ${copiedSelectorId}`);
-        console.log(`         - suffix: ${suffix}`);
         
         const result = await copyTableCapacity(
           originalTableId,  // ID de la table originale
-          copiedSelectorId, // 👈 Le nœud selector copié sera propriétaire de la table copiée
+          copiedSelectorId, // Ã°Å¸â€˜Ë† Le nÃ…â€œud selector copiÃƒÂ© sera propriÃƒÂ©taire de la table copiÃƒÂ©e
           suffix,
           prisma,
           {
@@ -150,26 +130,17 @@ export async function copySelectorTablesAfterNodeCopy(
         );
 
         if (result.success) {
-          console.log(`      ✅ Table copiée: ${result.newTableId}`);
-          console.log(`         - Colonnes: ${result.columnsCount}`);
-          console.log(`         - Lignes: ${result.rowsCount}`);
-          console.log(`         - Cellules: ${result.cellsCount}`);
 
-          // 🎯 Les données ont déjà été copiées par copyTableCapacity !
+          // Ã°Å¸Å½Â¯ Les donnÃƒÂ©es ont dÃƒÂ©jÃƒÂ  ÃƒÂ©tÃƒÂ© copiÃƒÂ©es par copyTableCapacity !
           // On juste confirme que le selector pointe vers la nouvelle table
-          console.log(`      ✅ Selector COPIÉ automatiquement mis à jour via copyTableCapacity`);
-          console.log(`         - table_activeId = ${result.newTableId}`);
-          console.log(`         - table_instances peuplé avec données`);
         } else {
-          console.log(`      ❌ Erreur copie table: ${result.error}`);
         }
       } catch (e) {
-        console.warn(`      ⚠️ Erreur lors de la copie:`, (e as Error).message);
+        console.warn(`      Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la copie:`, (e as Error).message);
       }
     }
 
-    console.log(`\n✅ Copie des tables des selectors terminée\n`);
   } catch (e) {
-    console.warn(`⚠️ Erreur dans copySelectorTablesAfterNodeCopy:`, (e as Error).message);
+    console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur dans copySelectorTablesAfterNodeCopy:`, (e as Error).message);
   }
 }

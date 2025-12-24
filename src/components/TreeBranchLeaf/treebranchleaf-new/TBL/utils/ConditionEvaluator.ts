@@ -52,9 +52,9 @@ export class ConditionEvaluator {
   ): ConditionResult {
     
     if (debug) {
-      console.log('🔀 [CONDITION] Évaluation conditionSet:', conditionSet.id);
-      console.log('🔀 [CONDITION] Mode:', conditionSet.mode);
-      console.log('🔀 [CONDITION] Branches:', conditionSet.branches.length);
+      
+      
+      
     }
     
     try {
@@ -64,7 +64,7 @@ export class ConditionEvaluator {
           const conditionResult = this.evaluateCondition(branch.when, formData, debug);
           
           if (debug) {
-            console.log(`🔀 [CONDITION] Branche ${branch.id} (${branch.label}):`, conditionResult);
+            
           }
           
           if (conditionResult) {
@@ -82,7 +82,7 @@ export class ConditionEvaluator {
       // Aucune branche n'a matché → fallback
       if (conditionSet.fallback) {
         if (debug) {
-          console.log('🔀 [CONDITION] Exécution fallback:', conditionSet.fallback.label);
+          
         }
         
         const fallbackResult = this.executeActions(conditionSet.fallback.actions, formData, debug);
@@ -118,8 +118,8 @@ export class ConditionEvaluator {
     const leftValue = this.resolveReference(left.ref, formData, debug);
     
     if (debug) {
-      console.log(`🔀 [CONDITION] Opération: ${op}`);
-      console.log(`🔀 [CONDITION] Left ref: ${left.ref} = ${leftValue}`);
+      
+      
     }
     
     switch (op) {
@@ -127,7 +127,7 @@ export class ConditionEvaluator {
         const isEmpty = leftValue === null || leftValue === undefined || leftValue === '';
         const result = !isEmpty;
         if (debug) {
-          console.log(`🔀 [CONDITION] isNotEmpty(${leftValue}) = ${result}`);
+          
         }
         return result;
       }
@@ -135,7 +135,7 @@ export class ConditionEvaluator {
       case 'isEmpty': {
         const isEmptyResult = leftValue === null || leftValue === undefined || leftValue === '';
         if (debug) {
-          console.log(`🔀 [CONDITION] isEmpty(${leftValue}) = ${isEmptyResult}`);
+          
         }
         return isEmptyResult;
       }
@@ -144,14 +144,14 @@ export class ConditionEvaluator {
         const rightValue = right ? this.resolveReference(right.ref || right.value, formData, debug) : null;
         const equalsResult = leftValue === rightValue;
         if (debug) {
-          console.log(`🔀 [CONDITION] equals(${leftValue}, ${rightValue}) = ${equalsResult}`);
+          
         }
         return equalsResult;
       }
         
       default:
         if (debug) {
-          console.warn(`🔀 [CONDITION] Opération non supportée: ${op}`);
+          
         }
         return false;
     }
@@ -177,7 +177,7 @@ export class ConditionEvaluator {
       // Chercher dans formData par nodeId direct
       if (formData[nodeId] !== undefined) {
         if (debug) {
-          console.log(`🔀 [CONDITION] Référence ${ref} -> ${formData[nodeId]}`);
+          
         }
         return formData[nodeId];
       }
@@ -186,15 +186,15 @@ export class ConditionEvaluator {
       for (const [key, value] of Object.entries(formData)) {
         if (key.includes(nodeId)) {
           if (debug) {
-            console.log(`🔀 [CONDITION] Référence ${ref} -> ${value} (via clé ${key})`);
+            
           }
           return value;
         }
       }
       
       if (debug) {
-        console.log(`🔀 [CONDITION] Référence ${ref} non trouvée dans formData`);
-        console.log(`🔀 [CONDITION] FormData keys:`, Object.keys(formData));
+        
+        
       }
       
       return null;
@@ -219,7 +219,7 @@ export class ConditionEvaluator {
     const action = actions[0]; // Prendre la première action
     
     if (debug) {
-      console.log(`🔀 [CONDITION] Exécution action:`, action);
+      
     }
     
     switch (action.type) {
@@ -231,21 +231,21 @@ export class ConditionEvaluator {
         if (nodeId.startsWith('node-formula:')) {
           const formulaId = nodeId.replace('node-formula:', '');
           if (debug) {
-            console.log(`🔀 [CONDITION] Action SHOW formule: ${formulaId}`);
+            
           }
           return { type: 'formula', id: formulaId };
         }
         
         // Sinon c'est un nodeId direct
         if (debug) {
-          console.log(`🔀 [CONDITION] Action SHOW nodeId: ${nodeId}`);
+          
         }
         return { type: 'nodeValue', id: nodeId };
       }
         
       default:
         if (debug) {
-          console.warn(`🔀 [CONDITION] Action non supportée: ${action.type}`);
+          
         }
         return null;
     }

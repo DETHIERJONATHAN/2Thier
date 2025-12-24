@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 
 export interface NodeFormula {
   id: string;
@@ -54,13 +55,13 @@ export const useNodeFormulas = ({
 
   useEffect(() => {
     if (!enabled || !nodeId || !api) {
-      console.log(`⏭️ [useNodeFormulas] Skip pour ${nodeId}: enabled=${enabled}, hasApi=${!!api}`);
+      // Log supprimé - trop fréquent
       return;
     }
 
     // Si déjà chargé pour ce nodeId (et pas de refresh), utiliser le cache
     if (lastLoadedNodeId.current === nodeId && refreshKey === 0) {
-      console.log(`📦 [useNodeFormulas] Utilisation cache pour ${nodeId}: ${cachedFormulas.current.length} formules`);
+      // Log supprimé - utilisation du cache silencieuse
       setFormulas(cachedFormulas.current);
       return;
     }
@@ -69,23 +70,27 @@ export const useNodeFormulas = ({
       setLoading(true);
       setError(null);
       
-      console.log(`🔄 [useNodeFormulas] Chargement formules pour node: ${nodeId}...`);
+      if (isTBLDebugEnabled()) {
+        tblLog(`🔄 [useNodeFormulas] Chargement formules pour node: ${nodeId}...`);
+      }
 
       try {
         const response = await api.get(`/api/treebranchleaf/nodes/${nodeId}/formulas`) as { formulas: NodeFormula[] };
         const loadedFormulas = response.formulas || [];
         
-        console.log(`✅ [useNodeFormulas] Réponse API pour ${nodeId}:`, loadedFormulas);
+        if (isTBLDebugEnabled()) {
+          tblLog(`✅ [useNodeFormulas] Réponse API pour ${nodeId}:`, loadedFormulas);
+        }
         
         if (mountedRef.current) {
           setFormulas(loadedFormulas);
           lastLoadedNodeId.current = nodeId;
           cachedFormulas.current = loadedFormulas;
           
-          // Log pour debug
+          // Log pour debug uniquement si formules de contrainte
           const constraintFormulas = loadedFormulas.filter(f => f.targetProperty);
-          if (constraintFormulas.length > 0) {
-            console.log(`🎯 [useNodeFormulas] Formules de contrainte pour ${nodeId}:`, constraintFormulas);
+          if (constraintFormulas.length > 0 && isTBLDebugEnabled()) {
+            tblLog(`🎯 [useNodeFormulas] Formules de contrainte pour ${nodeId}:`, constraintFormulas);
           }
         }
       } catch (err) {

@@ -1,20 +1,20 @@
 /**
- * 🚫 Service d'isolation stricte des champs copiés
+ * Ã°Å¸Å¡Â« Service d'isolation stricte des champs copiÃƒÂ©s
  * 
- * Ce service s'assure que les champs copiés sont COMPLÈTEMENT indépendants
- * de l'original, même au niveau des références et des calculs.
+ * Ce service s'assure que les champs copiÃƒÂ©s sont COMPLÃƒË†TEMENT indÃƒÂ©pendants
+ * de l'original, mÃƒÂªme au niveau des rÃƒÂ©fÃƒÂ©rences et des calculs.
  */
 
 import { type PrismaClient } from '@prisma/client';
 
 export interface IsolationResult {
-  /** Nœuds isolés avec succès */
+  /** NÃ…â€œuds isolÃƒÂ©s avec succÃƒÂ¨s */
   isolatedNodes: Array<{
     nodeId: string;
     label: string | null;
     changes: string[];
   }>;
-  /** Erreurs rencontrées */
+  /** Erreurs rencontrÃƒÂ©es */
   errors: Array<{
     nodeId: string;
     error: string;
@@ -22,19 +22,17 @@ export interface IsolationResult {
 }
 
 /**
- * 🚫 Forcer l'isolation complète des champs copiés
+ * Ã°Å¸Å¡Â« Forcer l'isolation complÃƒÂ¨te des champs copiÃƒÂ©s
  * 
  * Cette fonction s'assure que :
- * 1. Tous les champs copiés ont calculatedValue = null
- * 2. Aucune référence cachée vers l'original
+ * 1. Tous les champs copiÃƒÂ©s ont calculatedValue = null
+ * 2. Aucune rÃƒÂ©fÃƒÂ©rence cachÃƒÂ©e vers l'original
  * 3. Les formules/conditions/tables pointent vers les bonnes copies
  */
 export async function enforceStrictIsolation(
   prisma: PrismaClient,
   copiedNodeIds: string[]
 ): Promise<IsolationResult> {
-  console.log(`🚫 [ISOLATION] === DÉBUT ISOLATION STRICTE ===`);
-  console.log(`🚫 [ISOLATION] Isolation de ${copiedNodeIds.length} nœuds copiés`);
   
   const result: IsolationResult = {
     isolatedNodes: [],
@@ -45,9 +43,8 @@ export async function enforceStrictIsolation(
     try {
       const changes: string[] = [];
       
-      console.log(`\n🚫 [ISOLATION] Traitement ${nodeId}...`);
       
-      // 1. Récupérer le nœud avec toutes ses relations
+      // 1. RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud avec toutes ses relations
       const node = await prisma.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
@@ -59,31 +56,29 @@ export async function enforceStrictIsolation(
       });
 
       if (!node) {
-        result.errors.push({ nodeId, error: 'Nœud non trouvé' });
+        result.errors.push({ nodeId, error: 'NÃ…â€œud non trouvÃƒÂ©' });
         continue;
       }
 
-      // 2. FORCER calculatedValue à null si c'est un champ avec capacités
+      // 2. FORCER calculatedValue ÃƒÂ  null si c'est un champ avec capacitÃƒÂ©s
       if (node.hasFormula || node.hasCondition || node.hasTable) {
         if (node.calculatedValue !== null) {
           await prisma.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
-          changes.push(`calculatedValue: ${node.calculatedValue} → null`);
-          console.log(`🚫 [ISOLATION] ${node.label}: calculatedValue forcé à null`);
+          changes.push(`calculatedValue: ${node.calculatedValue} Ã¢â€ â€™ null`);
         }
       }
 
-      // 3. Vérifier que les formules/conditions/tables existent
+      // 3. VÃƒÂ©rifier que les formules/conditions/tables existent
       if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
         // Flag incorrect - corriger
         await prisma.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasFormula: false }
         });
-        changes.push('hasFormula: true → false (aucune formule trouvée)');
-        console.log(`🚫 [ISOLATION] ${node.label}: hasFormula corrigé à false`);
+        changes.push('hasFormula: true Ã¢â€ â€™ false (aucune formule trouvÃƒÂ©e)');
       }
 
       if (node.hasCondition && node.TreeBranchLeafNodeCondition.length === 0) {
@@ -91,8 +86,7 @@ export async function enforceStrictIsolation(
           where: { id: nodeId },
           data: { hasCondition: false }
         });
-        changes.push('hasCondition: true → false (aucune condition trouvée)');
-        console.log(`🚫 [ISOLATION] ${node.label}: hasCondition corrigé à false`);
+        changes.push('hasCondition: true Ã¢â€ â€™ false (aucune condition trouvÃƒÂ©e)');
       }
 
       if (node.hasTable && node.TreeBranchLeafNodeTable.length === 0) {
@@ -100,11 +94,10 @@ export async function enforceStrictIsolation(
           where: { id: nodeId },
           data: { hasTable: false }
         });
-        changes.push('hasTable: true → false (aucune table trouvée)');
-        console.log(`🚫 [ISOLATION] ${node.label}: hasTable corrigé à false`);
+        changes.push('hasTable: true Ã¢â€ â€™ false (aucune table trouvÃƒÂ©e)');
       }
 
-      // 4. Marquer le nœud avec metadata d'isolation
+      // 4. Marquer le nÃ…â€œud avec metadata d'isolation
       const currentMetadata = (node.metadata && typeof node.metadata === 'object') 
         ? (node.metadata as Record<string, unknown>) 
         : {};
@@ -121,7 +114,7 @@ export async function enforceStrictIsolation(
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
-      changes.push('metadata: marqué comme strictement isolé');
+      changes.push('metadata: marquÃƒÂ© comme strictement isolÃƒÂ©');
 
       result.isolatedNodes.push({
         nodeId: node.id,
@@ -129,31 +122,25 @@ export async function enforceStrictIsolation(
         changes
       });
 
-      console.log(`✅ [ISOLATION] ${node.label}: ${changes.length} changements appliqués`);
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       result.errors.push({ nodeId, error: errorMsg });
-      console.error(`❌ [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
+      console.error(`Ã¢ÂÅ’ [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
     }
   }
 
-  console.log(`\n🚫 [ISOLATION] === RÉSULTATS ISOLATION ===`);
-  console.log(`  Nœuds isolés: ${result.isolatedNodes.length}`);
-  console.log(`  Erreurs: ${result.errors.length}`);
-  console.log(`🚫 [ISOLATION] === FIN ISOLATION STRICTE ===`);
 
   return result;
 }
 
 /**
- * 🔍 Vérifier l'état d'isolation des nœuds
+ * Ã°Å¸â€Â VÃƒÂ©rifier l'ÃƒÂ©tat d'isolation des nÃ…â€œuds
  */
 export async function verifyIsolation(
   prisma: PrismaClient,
   copiedNodeIds: string[]
 ): Promise<void> {
-  console.log(`🔍 [VERIFY-ISOLATION] Vérification de ${copiedNodeIds.length} nœuds`);
 
   for (const nodeId of copiedNodeIds) {
     const node = await prisma.treeBranchLeafNode.findUnique({
@@ -178,17 +165,11 @@ export async function verifyIsolation(
     const isIsolated = metadata.strictlyIsolated === true;
     const hasCapacity = node.hasFormula || node.hasCondition || node.hasTable;
 
-    console.log(`📊 [VERIFY] ${node.label}:`);
-    console.log(`  - calculatedValue: ${node.calculatedValue}`);
-    console.log(`  - hasCapacity: ${hasCapacity}`);
-    console.log(`  - strictlyIsolated: ${isIsolated}`);
 
     if (hasCapacity && node.calculatedValue !== null) {
-      console.log(`⚠️ [VERIFY] PROBLÈME: ${node.label} a une capacité mais calculatedValue != null`);
     }
 
     if (!isIsolated) {
-      console.log(`⚠️ [VERIFY] PROBLÈME: ${node.label} n'est pas marqué comme isolé`);
     }
   }
 }

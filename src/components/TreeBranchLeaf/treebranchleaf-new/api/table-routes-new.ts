@@ -1,12 +1,12 @@
 /**
- * 🗂️ NOUVELLES ROUTES POUR LES TABLES - ARCHITECTURE NORMALISÉE
+ * Ã°Å¸â€”â€šÃ¯Â¸Â NOUVELLES ROUTES POUR LES TABLES - ARCHITECTURE NORMALISÃƒâ€°E
  * 
- * Cette version utilise une architecture 100% normalisée :
- * - TreeBranchLeafNodeTable : Métadonnées de la table
- * - TreeBranchLeafNodeTableColumn : Chaque colonne est une entrée séparée
- * - TreeBranchLeafNodeTableRow : Chaque ligne est une entrée séparée
+ * Cette version utilise une architecture 100% normalisÃƒÂ©e :
+ * - TreeBranchLeafNodeTable : MÃƒÂ©tadonnÃƒÂ©es de la table
+ * - TreeBranchLeafNodeTableColumn : Chaque colonne est une entrÃƒÂ©e sÃƒÂ©parÃƒÂ©e
+ * - TreeBranchLeafNodeTableRow : Chaque ligne est une entrÃƒÂ©e sÃƒÂ©parÃƒÂ©e
  * 
- * Plus de JSON volumineux, tout est stocké de manière relationnelle !
+ * Plus de JSON volumineux, tout est stockÃƒÂ© de maniÃƒÂ¨re relationnelle !
  */
 
 import { Router } from 'express';
@@ -32,59 +32,55 @@ function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAd
 }
 
 // =============================================================================
-// POST /api/treebranchleaf/nodes/:nodeId/tables - Créer une table
+// POST /api/treebranchleaf/nodes/:nodeId/tables - CrÃƒÂ©er une table
 // =============================================================================
 router.post('/nodes/:nodeId/tables', async (req, res) => {
   const { nodeId } = req.params;
   const { name, description, columns, rows, type = 'static' } = req.body;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-  console.log(`[NEW POST /tables] 🚀 Début création table pour node ${nodeId}`);
-  console.log(`[NEW POST /tables] 📊 Données reçues: ${Array.isArray(columns) ? columns.length : 0} colonnes, ${Array.isArray(rows) ? rows.length : 0} lignes`);
 
   if (!name) {
     return res.status(400).json({ error: 'Le nom de la table est requis' });
   }
   if (!Array.isArray(columns)) {
-    return res.status(400).json({ error: 'La définition des colonnes est requise (array)' });
+    return res.status(400).json({ error: 'La dÃƒÂ©finition des colonnes est requise (array)' });
   }
   if (!Array.isArray(rows)) {
-    return res.status(400).json({ error: 'Les données (rows) sont requises (array)' });
+    return res.status(400).json({ error: 'Les donnÃƒÂ©es (rows) sont requises (array)' });
   }
 
   try {
-    // Vérifier que le nœud existe et appartient à l'organisation
+    // VÃƒÂ©rifier que le nÃ…â€œud existe et appartient ÃƒÂ  l'organisation
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'Nœud non trouvé' });
+      return res.status(404).json({ error: 'NÃ…â€œud non trouvÃƒÂ©' });
     }
     if (!isSuperAdmin && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'Accès non autorisé à ce nœud' });
+      return res.status(403).json({ error: 'AccÃƒÂ¨s non autorisÃƒÂ© ÃƒÂ  ce nÃ…â€œud' });
     }
 
-    // 🔄 Générer un nom unique si une table avec ce nom existe déjà pour ce nœud
+    // Ã°Å¸â€â€ž GÃƒÂ©nÃƒÂ©rer un nom unique si une table avec ce nom existe dÃƒÂ©jÃƒÂ  pour ce nÃ…â€œud
     let finalName = name;
     const existingTable = await prisma.treeBranchLeafNodeTable.findFirst({
       where: { nodeId, name: finalName },
     });
     
     if (existingTable) {
-      // Compter les tables existantes pour ce nœud et générer un nouveau nom
+      // Compter les tables existantes pour ce nÃ…â€œud et gÃƒÂ©nÃƒÂ©rer un nouveau nom
       const existingCount = await prisma.treeBranchLeafNodeTable.count({
         where: { nodeId },
       });
       finalName = `${name} (${existingCount + 1})`;
-      console.log(`[NEW POST /tables] ⚠️ Nom déjà utilisé, nouveau nom: ${finalName}`);
     }
 
     const tableId = randomUUID();
-    console.log(`[NEW POST /tables] 🆔 Nouvel ID de table généré: ${tableId}`);
 
-    // Préparer les données pour la transaction
+    // PrÃƒÂ©parer les donnÃƒÂ©es pour la transaction
     const tableData = {
       id: tableId,
       nodeId,
@@ -98,7 +94,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       updatedAt: new Date(),
     };
 
-    // Préparer les colonnes
+    // PrÃƒÂ©parer les colonnes
     const tableColumnsData = columns.map((col: any, index: number) => {
       const colName = typeof col === 'string' ? col : (col.name || `Colonne ${index + 1}`);
       const colType = typeof col === 'object' && col.type ? col.type : 'text';
@@ -117,84 +113,57 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       };
     });
 
-    // Préparer les lignes
+    // PrÃƒÂ©parer les lignes
     const tableRowsData = rows.map((row, index) => ({
       tableId: tableId,
       rowIndex: index,
       cells: row as Prisma.InputJsonValue,
     }));
 
-    console.log(`[NEW POST /tables] 📦 Transaction préparée: 1 table + ${tableColumnsData.length} colonnes + ${tableRowsData.length} lignes`);
     if (rows.length > 0) {
-      console.log(`[NEW POST /tables] 🔍 ANALYSE DÉTAILLÉE DES ROWS:`);
-      console.log(`[NEW POST /tables]    - Type de rows reçu: ${Array.isArray(rows) ? 'array' : typeof rows}`);
-      console.log(`[NEW POST /tables]    - rows.length: ${rows.length}`);
-      console.log(`[NEW POST /tables]    - rows[0] (première ligne):`, rows[0]);
-      console.log(`[NEW POST /tables]    - rows[0][0] (A1):`, rows[0]?.[0]);
-      console.log(`[NEW POST /tables]    - rows[0][1-3] (premières données):`, rows[0]?.slice(1, 4));
       if (rows.length > 1) {
-        console.log(`[NEW POST /tables]    - rows[1] (deuxième ligne):`, rows[1]);
-        console.log(`[NEW POST /tables]    - rows[1][0] (label ligne 2):`, rows[1]?.[0]);
       }
-      console.log(`[NEW POST /tables]    - rows[dernière]:`, rows[rows.length - 1]);
-      console.log(`[NEW POST /tables] 🔍 ANALYSE TABLEROWSDATA (après map):`);
-      console.log(`[NEW POST /tables]    - tableRowsData[0].cells:`, tableRowsData[0]?.cells);
       if (tableRowsData.length > 1) {
-        console.log(`[NEW POST /tables]    - tableRowsData[1].cells:`, tableRowsData[1]?.cells);
       }
-      console.log(`[NEW POST /tables]    - tableRowsData[dernière].cells:`, tableRowsData[tableRowsData.length - 1]?.cells);
     } else {
-      console.log(`[NEW POST /tables] ℹ️ Table vide créée (aucune ligne)`);
     }
 
-    // Exécuter la création dans une transaction atomique
-    // ⚠️ TIMEOUT AUGMENTÉ pour les gros fichiers (43k+ lignes)
+    // ExÃƒÂ©cuter la crÃƒÂ©ation dans une transaction atomique
+    // Ã¢Å¡Â Ã¯Â¸Â TIMEOUT AUGMENTÃƒâ€° pour les gros fichiers (43k+ lignes)
     const result = await prisma.$transaction(async (tx) => {
-      console.log(`[NEW POST /tables] 🔄 Étape 1/3: Création de la table principale...`);
       const newTable = await tx.treeBranchLeafNodeTable.create({
         data: tableData,
       });
 
       if (tableColumnsData.length > 0) {
-        console.log(`[NEW POST /tables] 🔄 Étape 2/3: Insertion de ${tableColumnsData.length} colonnes...`);
         await tx.treeBranchLeafNodeTableColumn.createMany({
           data: tableColumnsData,
         });
       }
 
       if (tableRowsData.length > 0) {
-        console.log(`[NEW POST /tables] 🔄 Étape 3/3: Insertion de ${tableRowsData.length} lignes...`);
         
-        // ⚠️ IMPORTANT: createMany ne supporte PAS les champs JSONB !
-        // Il faut utiliser create() en boucle pour préserver les arrays JSON
+        // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: createMany ne supporte PAS les champs JSONB !
+        // Il faut utiliser create() en boucle pour prÃƒÂ©server les arrays JSON
         for (const rowData of tableRowsData) {
           await tx.treeBranchLeafNodeTableRow.create({
             data: rowData,
           });
         }
         
-        console.log(`[NEW POST /tables] ✅ Lignes insérées ! Vérification...`);
-        // Vérifier les 3 premières lignes insérées
+        // VÃƒÂ©rifier les 3 premiÃƒÂ¨res lignes insÃƒÂ©rÃƒÂ©es
         const verif = await tx.treeBranchLeafNodeTableRow.findMany({
           where: { tableId },
           orderBy: { rowIndex: 'asc' },
           take: 3
         });
-        console.log(`[NEW POST /tables] 🔍 VÉRIFICATION POST-INSERTION:`);
         verif.forEach((row, idx) => {
-          console.log(`[NEW POST /tables]    - Ligne ${idx} (rowIndex=${row.rowIndex}):`);
-          console.log(`[NEW POST /tables]      cells type:`, typeof row.cells);
-          console.log(`[NEW POST /tables]      cells value:`, row.cells);
           if (typeof row.cells === 'string') {
             try {
               const parsed = JSON.parse(row.cells);
-              console.log(`[NEW POST /tables]      cells[0] après parse:`, parsed[0]);
             } catch (e) {
-              console.log(`[NEW POST /tables]      ❌ Erreur parse:`, e.message);
             }
           } else if (Array.isArray(row.cells)) {
-            console.log(`[NEW POST /tables]      cells[0]:`, row.cells[0]);
-            console.log(`[NEW POST /tables]      cells.length:`, row.cells.length);
           }
         });
       }
@@ -204,16 +173,14 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       timeout: 60000, // 60 secondes pour les gros fichiers (43k+ lignes)
     });
 
-    console.log(`[NEW POST /tables] ✅ Transaction terminée avec succès ! Table ${result.id} créée.`);
 
-    // 🎯 Mettre à jour hasTable du nœud
+    // Ã°Å¸Å½Â¯ Mettre ÃƒÂ  jour hasTable du nÃ…â€œud
     await prisma.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { hasTable: true }
     });
-    console.log(`[NEW POST /tables] ✅ hasTable mis à jour pour node ${nodeId}`);
 
-    // 📊 MAJ linkedTableIds du nœud propriétaire
+    // Ã°Å¸â€œÅ  MAJ linkedTableIds du nÃ…â€œud propriÃƒÂ©taire
     try {
       const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
       const current = node?.linkedTableIds ?? [];
@@ -223,13 +190,12 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       console.warn('[NEW POST /tables] Warning updating linkedTableIds:', (e as Error).message);
     }
 
-    // �🔄 MISE À JOUR AUTOMATIQUE DES SELECT CONFIGS
-    // Si d'autres champs référencent une ancienne table pour ce même nœud,
-    // on les met à jour pour pointer vers la nouvelle table
+    // Ã¯Â¿Â½Ã°Å¸â€â€ž MISE Ãƒâ‚¬ JOUR AUTOMATIQUE DES SELECT CONFIGS
+    // Si d'autres champs rÃƒÂ©fÃƒÂ©rencent une ancienne table pour ce mÃƒÂªme nÃ…â€œud,
+    // on les met ÃƒÂ  jour pour pointer vers la nouvelle table
     try {
-      console.log(`[NEW POST /tables] 🔍 Recherche des SelectConfigs à mettre à jour pour nodeId: ${nodeId}`);
       
-      // Trouver la SelectConfig de ce nœud (s'il en a une)
+      // Trouver la SelectConfig de ce nÃ…â€œud (s'il en a une)
       const selectConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
         where: { nodeId },
       });
@@ -237,29 +203,25 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       if (selectConfig) {
         const oldTableRef = selectConfig.tableReference;
         
-        // Mettre à jour vers la nouvelle table
+        // Mettre ÃƒÂ  jour vers la nouvelle table
         await prisma.treeBranchLeafSelectConfig.update({
           where: { id: selectConfig.id },
           data: { tableReference: result.id },
         });
         
-        console.log(`[NEW POST /tables] ✅ SelectConfig mis à jour: ${selectConfig.id}`);
-        console.log(`[NEW POST /tables]    - Ancien tableau: ${oldTableRef}`);
-        console.log(`[NEW POST /tables]    - Nouveau tableau: ${result.id}`);
         
         // Chercher d'autres champs qui utilisaient l'ancien tableau (crossover tables)
         if (oldTableRef) {
           const otherConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
             where: { 
               tableReference: oldTableRef,
-              nodeId: { not: nodeId } // Exclure celui qu'on vient de mettre à jour
+              nodeId: { not: nodeId } // Exclure celui qu'on vient de mettre ÃƒÂ  jour
             },
           });
           
           if (otherConfigs.length > 0) {
-            console.log(`[NEW POST /tables] 🔍 ${otherConfigs.length} autres SelectConfigs référencent l'ancien tableau`);
             
-            // Mettre à jour tous les autres
+            // Mettre ÃƒÂ  jour tous les autres
             const updateResult = await prisma.treeBranchLeafSelectConfig.updateMany({
               where: { 
                 tableReference: oldTableRef,
@@ -268,21 +230,18 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
               data: { tableReference: result.id }
             });
             
-            console.log(`[NEW POST /tables] ✅ ${updateResult.count} SelectConfigs supplémentaires mis à jour`);
             otherConfigs.forEach(cfg => {
-              console.log(`[NEW POST /tables]    - NodeId: ${cfg.nodeId} (keyColumn: ${cfg.keyColumn}, keyRow: ${cfg.keyRow})`);
             });
           }
         }
       } else {
-        console.log(`[NEW POST /tables] ℹ️ Pas de SelectConfig trouvée pour ce nœud`);
       }
     } catch (updateError) {
-      console.error(`[NEW POST /tables] ⚠️ Erreur lors de la mise à jour des SelectConfigs:`, updateError);
-      // Ne pas bloquer la réponse même si la mise à jour échoue
+      console.error(`[NEW POST /tables] Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des SelectConfigs:`, updateError);
+      // Ne pas bloquer la rÃƒÂ©ponse mÃƒÂªme si la mise ÃƒÂ  jour ÃƒÂ©choue
     }
 
-    // 🔄 Recharger la table avec colonnes et lignes pour renvoyer au frontend
+    // Ã°Å¸â€â€ž Recharger la table avec colonnes et lignes pour renvoyer au frontend
     const createdTable = await prisma.treeBranchLeafNodeTable.findUnique({
       where: { id: result.id },
       include: {
@@ -296,10 +255,10 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     });
 
     if (!createdTable) {
-      throw new Error('Table créée mais introuvable lors de la relecture');
+      throw new Error('Table crÃƒÂ©ÃƒÂ©e mais introuvable lors de la relecture');
     }
 
-    // Formater la réponse avec colonnes et lignes
+    // Formater la rÃƒÂ©ponse avec colonnes et lignes
     res.status(201).json({
       id: createdTable.id,
       nodeId: createdTable.nodeId,
@@ -308,7 +267,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       type: createdTable.type,
       columns: createdTable.tableColumns.map(c => c.name),
       rows: createdTable.tableRows.map(r => {
-        // Convertir JSONB Prisma → Array JavaScript natif
+        // Convertir JSONB Prisma Ã¢â€ â€™ Array JavaScript natif
         const cells = r.cells;
         if (Array.isArray(cells)) {
           return cells;
@@ -334,41 +293,40 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`❌ [NEW POST /tables] Erreur lors de la création de la table:`, error);
+    console.error(`Ã¢ÂÅ’ [NEW POST /tables] Erreur lors de la crÃƒÂ©ation de la table:`, error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       // P2002 = Violation de contrainte unique
       if (error.code === 'P2002') {
         return res.status(409).json({ 
-          error: 'Une table avec ce nom existe déjà pour ce champ. Veuillez choisir un autre nom.',
+          error: 'Une table avec ce nom existe dÃƒÂ©jÃƒÂ  pour ce champ. Veuillez choisir un autre nom.',
           code: error.code,
         });
       }
       return res.status(500).json({ 
-        error: 'Erreur de base de données lors de la création de la table.',
+        error: 'Erreur de base de donnÃƒÂ©es lors de la crÃƒÂ©ation de la table.',
         code: error.code,
         meta: error.meta,
       });
     }
-    res.status(500).json({ error: 'Impossible de créer la table' });
+    res.status(500).json({ error: 'Impossible de crÃƒÂ©er la table' });
   }
 });
 
 // =============================================================================
-// GET /api/treebranchleaf/tables/:id - Récupérer une table avec pagination
+// GET /api/treebranchleaf/tables/:id - RÃƒÂ©cupÃƒÂ©rer une table avec pagination
 // =============================================================================
 router.get('/tables/:id', async (req, res) => {
   const { id } = req.params;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
   
-  // Paramètres de pagination
+  // ParamÃƒÂ¨tres de pagination
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 100;
   const offset = (page - 1) * limit;
 
-  console.log(`[NEW GET /tables/:id] 📖 Récupération table ${id} (page ${page}, limit ${limit})`);
 
   try {
-    // Récupérer la table
+    // RÃƒÂ©cupÃƒÂ©rer la table
     const table = await prisma.treeBranchLeafNodeTable.findUnique({
       where: { id },
       include: {
@@ -384,22 +342,22 @@ router.get('/tables/:id', async (req, res) => {
     });
 
     if (!table) {
-      return res.status(404).json({ error: 'Table non trouvée' });
+      return res.status(404).json({ error: 'Table non trouvÃƒÂ©e' });
     }
 
-    // Vérification de l'organisation
+    // VÃƒÂ©rification de l'organisation
     const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: 'Accès non autorisé à cette table' });
+      return res.status(403).json({ error: 'AccÃƒÂ¨s non autorisÃƒÂ© ÃƒÂ  cette table' });
     }
 
-    // Récupérer les colonnes
+    // RÃƒÂ©cupÃƒÂ©rer les colonnes
     const columns = await prisma.treeBranchLeafNodeTableColumn.findMany({
       where: { tableId: id },
       orderBy: { columnIndex: 'asc' },
     });
 
-    // Récupérer les lignes paginées
+    // RÃƒÂ©cupÃƒÂ©rer les lignes paginÃƒÂ©es
     const rows = await prisma.treeBranchLeafNodeTableRow.findMany({
       where: { tableId: id },
       orderBy: { rowIndex: 'asc' },
@@ -407,9 +365,8 @@ router.get('/tables/:id', async (req, res) => {
       skip: offset,
     });
 
-    console.log(`[NEW GET /tables/:id] ✅ Récupéré: ${columns.length} colonnes et ${rows.length} lignes (sur ${table.rowCount} total)`);
 
-    // Renvoyer la réponse complète
+    // Renvoyer la rÃƒÂ©ponse complÃƒÂ¨te
     res.json({
       id: table.id,
       nodeId: table.nodeId,
@@ -433,26 +390,23 @@ router.get('/tables/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`❌ [NEW GET /tables/:id] Erreur lors de la récupération de la table:`, error);
-    res.status(500).json({ error: 'Impossible de récupérer la table' });
+    console.error(`Ã¢ÂÅ’ [NEW GET /tables/:id] Erreur lors de la rÃƒÂ©cupÃƒÂ©ration de la table:`, error);
+    res.status(500).json({ error: 'Impossible de rÃƒÂ©cupÃƒÂ©rer la table' });
   }
 });
 
 // =============================================================================
-// PUT /api/treebranchleaf/tables/:id - Mettre à jour une table
+// PUT /api/treebranchleaf/tables/:id - Mettre ÃƒÂ  jour une table
 // =============================================================================
 router.put('/tables/:id', async (req, res) => {
   const { id } = req.params;
   const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req.body;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-  console.log(`[NEW PUT /tables/:id] 🔄 Mise à jour table ${id}`);
-  console.log(`[NEW PUT /tables/:id] Nouvelles données: ${Array.isArray(columns) ? columns.length : 'N/A'} colonnes, ${Array.isArray(rows) ? rows.length : 'N/A'} lignes`);
-  console.log(`[NEW PUT /tables/:id] Lookup config: selectColumn=${lookupSelectColumn}, displayColumns=${JSON.stringify(lookupDisplayColumns)}`);
 
   try {
     const updatedTable = await prisma.$transaction(async (tx) => {
-      // Vérifier l'existence et les permissions
+      // VÃƒÂ©rifier l'existence et les permissions
       const table = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id },
         include: {
@@ -463,15 +417,15 @@ router.put('/tables/:id', async (req, res) => {
       });
 
       if (!table) {
-        throw new Error('Table non trouvée');
+        throw new Error('Table non trouvÃƒÂ©e');
       }
 
       const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin && organizationId && tableOrgId !== organizationId) {
-        throw new Error('Accès non autorisé');
+        throw new Error('AccÃƒÂ¨s non autorisÃƒÂ©');
       }
 
-      // Préparer les données de mise à jour
+      // PrÃƒÂ©parer les donnÃƒÂ©es de mise ÃƒÂ  jour
       const updateData: Prisma.TreeBranchLeafNodeTableUpdateInput = {
         updatedAt: new Date(),
       };
@@ -481,20 +435,18 @@ router.put('/tables/:id', async (req, res) => {
       if (Array.isArray(columns)) updateData.columnCount = columns.length;
       if (Array.isArray(rows)) updateData.rowCount = rows.length;
       
-      // 🔥 AJOUT: Sauvegarder la configuration du lookup
+      // Ã°Å¸â€Â¥ AJOUT: Sauvegarder la configuration du lookup
       if (lookupSelectColumn !== undefined) updateData.lookupSelectColumn = lookupSelectColumn;
       if (Array.isArray(lookupDisplayColumns)) updateData.lookupDisplayColumns = lookupDisplayColumns;
 
-      // Mettre à jour la table principale
+      // Mettre ÃƒÂ  jour la table principale
       const tableUpdated = await tx.treeBranchLeafNodeTable.update({
         where: { id },
         data: updateData,
       });
-      console.log(`[NEW PUT /tables/:id] ✅ Étape 1: Table principale mise à jour`);
 
       // Si de nouvelles colonnes sont fournies, les remplacer
       if (Array.isArray(columns)) {
-        console.log(`[NEW PUT /tables/:id] 🔄 Remplacement des colonnes...`);
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         
         if (columns.length > 0) {
@@ -509,18 +461,15 @@ router.put('/tables/:id', async (req, res) => {
           }));
           await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
         }
-        console.log(`[NEW PUT /tables/:id] ✅ Étape 2: ${columns.length} colonnes remplacées`);
       }
 
       // Si de nouvelles lignes sont fournies, les remplacer
       if (Array.isArray(rows)) {
-        console.log(`[NEW PUT /tables/:id] 🔄 Remplacement des lignes...`);
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: id } });
         
         if (rows.length > 0) {
-          // ⚠️ CRITIQUE: Utiliser create() en boucle au lieu de createMany()
+          // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Utiliser create() en boucle au lieu de createMany()
           // Prisma createMany() NE SUPPORTE PAS les champs JSONB correctement !
-          console.log(`[NEW PUT /tables/:id] 🔄 Création de ${rows.length} lignes (boucle create)...`);
           for (let index = 0; index < rows.length; index++) {
             const row = rows[index];
             await tx.treeBranchLeafNodeTableRow.create({
@@ -530,27 +479,24 @@ router.put('/tables/:id', async (req, res) => {
                 cells: row as Prisma.InputJsonValue,
               }
             });
-            console.log(`[PUT /tables/:id] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : 'N/A');
           }
         }
-        console.log(`[NEW PUT /tables/:id] ✅ Étape 3: ${rows.length} lignes remplacées`);
       }
 
       return tableUpdated;
     });
 
-    console.log(`[NEW PUT /tables/:id] 🎉 Transaction de mise à jour terminée avec succès`);
     
     const finalTableData = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id } });
     res.json(finalTableData);
 
   } catch (error) {
-    console.error(`❌ [NEW PUT /tables/:id] Erreur lors de la mise à jour:`, error);
-    if (error instanceof Error && (error.message === 'Table non trouvée' || error.message === 'Accès non autorisé')) {
-      const status = error.message === 'Table non trouvée' ? 404 : 403;
+    console.error(`Ã¢ÂÅ’ [NEW PUT /tables/:id] Erreur lors de la mise ÃƒÂ  jour:`, error);
+    if (error instanceof Error && (error.message === 'Table non trouvÃƒÂ©e' || error.message === 'AccÃƒÂ¨s non autorisÃƒÂ©')) {
+      const status = error.message === 'Table non trouvÃƒÂ©e' ? 404 : 403;
       return res.status(status).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Impossible de mettre à jour la table' });
+    res.status(500).json({ error: 'Impossible de mettre ÃƒÂ  jour la table' });
   }
 });
 
@@ -561,10 +507,9 @@ router.delete('/tables/:id', async (req, res) => {
   const { id } = req.params;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-  console.log(`[NEW DELETE /tables/:id] 🗑️ Suppression table ${id}`);
 
   try {
-    // Vérifier l'existence et les permissions
+    // VÃƒÂ©rifier l'existence et les permissions
     const table = await prisma.treeBranchLeafNodeTable.findUnique({
       where: { id },
       include: {
@@ -575,20 +520,19 @@ router.delete('/tables/:id', async (req, res) => {
     });
 
     if (!table) {
-      return res.status(404).json({ error: 'Table non trouvée' });
+      return res.status(404).json({ error: 'Table non trouvÃƒÂ©e' });
     }
 
     const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: 'Accès non autorisé' });
+      return res.status(403).json({ error: 'AccÃƒÂ¨s non autorisÃƒÂ©' });
     }
 
-    // 1️⃣ Supprimer la table (les colonnes et lignes seront supprimées en cascade via Prisma)
+    // 1Ã¯Â¸ÂÃ¢Æ’Â£ Supprimer la table (les colonnes et lignes seront supprimÃƒÂ©es en cascade via Prisma)
     await prisma.treeBranchLeafNodeTable.delete({ where: { id } });
-    console.log(`[NEW DELETE /tables/:id] ✅ Table ${id} supprimée (+ colonnes/lignes en cascade)`);
 
-    // 🔍 Nettoyer les champs Select/Cascader qui utilisent cette table comme lookup
-    // 💡 UTILISER LA MÊME LOGIQUE QUE LE BOUTON "DÉSACTIVER LOOKUP" QUI FONCTIONNE PARFAITEMENT
+    // Ã°Å¸â€Â Nettoyer les champs Select/Cascader qui utilisent cette table comme lookup
+    // Ã°Å¸â€™Â¡ UTILISER LA MÃƒÅ ME LOGIQUE QUE LE BOUTON "DÃƒâ€°SACTIVER LOOKUP" QUI FONCTIONNE PARFAITEMENT
     try {
       const selectConfigsUsingTable = await prisma.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: id },
@@ -596,9 +540,8 @@ router.delete('/tables/:id', async (req, res) => {
       });
 
       if (selectConfigsUsingTable.length > 0) {
-        console.log(`[NEW DELETE /tables/:id] 🧹 ${selectConfigsUsingTable.length} champ(s) Select/Cascader référencent cette table - DÉSACTIVATION LOOKUP`);
         
-        // Pour chaque champ, appliquer la MÊME logique que le bouton "Désactiver lookup"
+        // Pour chaque champ, appliquer la MÃƒÅ ME logique que le bouton "DÃƒÂ©sactiver lookup"
         for (const config of selectConfigsUsingTable) {
           const selectNode = await prisma.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
@@ -609,9 +552,8 @@ router.delete('/tables/:id', async (req, res) => {
           });
 
           if (selectNode) {
-            console.log(`[NEW DELETE /tables/:id] 🔧 Désactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
             
-            // 1️⃣ Nettoyer metadata.capabilities.table (comme le fait le bouton Désactiver)
+            // 1Ã¯Â¸ÂÃ¢Æ’Â£ Nettoyer metadata.capabilities.table (comme le fait le bouton DÃƒÂ©sactiver)
             const oldMetadata = (selectNode.metadata || {}) as Record<string, unknown>;
             const oldCapabilities = (oldMetadata.capabilities || {}) as Record<string, unknown>;
             const newCapabilities = {
@@ -628,7 +570,7 @@ router.delete('/tables/:id', async (req, res) => {
               capabilities: newCapabilities
             };
 
-            // 2️⃣ Mettre à jour le nœud (même logique que PUT /capabilities/table avec enabled: false)
+            // 2Ã¯Â¸ÂÃ¢Æ’Â£ Mettre ÃƒÂ  jour le nÃ…â€œud (mÃƒÂªme logique que PUT /capabilities/table avec enabled: false)
             await prisma.treeBranchLeafNode.update({
               where: { id: config.nodeId },
               data: {
@@ -647,23 +589,21 @@ router.delete('/tables/:id', async (req, res) => {
               }
             });
 
-            // 3️⃣ Supprimer la configuration SELECT (comme le fait le bouton Désactiver)
+            // 3Ã¯Â¸ÂÃ¢Æ’Â£ Supprimer la configuration SELECT (comme le fait le bouton DÃƒÂ©sactiver)
             await prisma.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
             
-            console.log(`[NEW DELETE /tables/:id] ✅ Lookup désactivé pour "${selectNode.label}" - champ débloqué`);
           }
         }
 
-        console.log(`[NEW DELETE /tables/:id] ✅ ${selectConfigsUsingTable.length} champ(s) Select DÉBLOQUÉS (lookup désactivé)`);
       }
     } catch (selectConfigError) {
-      console.error(`[NEW DELETE /tables/:id] ⚠️ Erreur désactivation lookups:`, selectConfigError);
-      // On continue quand même
+      console.error(`[NEW DELETE /tables/:id] Ã¢Å¡Â Ã¯Â¸Â Erreur dÃƒÂ©sactivation lookups:`, selectConfigError);
+      // On continue quand mÃƒÂªme
     }
 
-    // 2️⃣ Nettoyer TOUS les champs liés aux tables dans le nœud
+    // 2Ã¯Â¸ÂÃ¢Æ’Â£ Nettoyer TOUS les champs liÃƒÂ©s aux tables dans le nÃ…â€œud
     if (table.nodeId) {
       const node = await prisma.treeBranchLeafNode.findUnique({ 
         where: { id: table.nodeId }, 
@@ -674,14 +614,14 @@ router.delete('/tables/:id', async (req, res) => {
         } 
       });
 
-      // 🔄 Nettoyer linkedTableIds
+      // Ã°Å¸â€â€ž Nettoyer linkedTableIds
       const currentLinkedIds = node?.linkedTableIds ?? [];
       const nextLinkedIds = currentLinkedIds.filter(x => x !== id);
 
-      // 🔄 Si la table supprimée était active, réinitialiser table_activeId
+      // Ã°Å¸â€â€ž Si la table supprimÃƒÂ©e ÃƒÂ©tait active, rÃƒÂ©initialiser table_activeId
       const wasActiveTable = node?.table_activeId === id;
       
-      // 🔄 Nettoyer table_instances (retirer l'instance de cette table)
+      // Ã°Å¸â€â€ž Nettoyer table_instances (retirer l'instance de cette table)
       let cleanedInstances = node?.table_instances ?? {};
       if (typeof cleanedInstances === 'object' && cleanedInstances !== null) {
         const instances = cleanedInstances as Record<string, unknown>;
@@ -691,20 +631,20 @@ router.delete('/tables/:id', async (req, res) => {
         }
       }
 
-      // 🔄 Compter les tables restantes pour hasTable
+      // Ã°Å¸â€â€ž Compter les tables restantes pour hasTable
       const remainingTables = await prisma.treeBranchLeafNodeTable.count({
         where: { nodeId: table.nodeId }
       });
 
-      // 📝 Mise à jour du nœud avec TOUS les nettoyages
+      // Ã°Å¸â€œÂ Mise ÃƒÂ  jour du nÃ…â€œud avec TOUS les nettoyages
       await prisma.treeBranchLeafNode.update({
         where: { id: table.nodeId },
         data: {
           hasTable: remainingTables > 0,
           linkedTableIds: { set: nextLinkedIds },
-          table_activeId: wasActiveTable ? null : undefined, // Réinitialiser si c'était la table active
+          table_activeId: wasActiveTable ? null : undefined, // RÃƒÂ©initialiser si c'ÃƒÂ©tait la table active
           table_instances: cleanedInstances,
-          // Réinitialiser les autres champs si plus de tables
+          // RÃƒÂ©initialiser les autres champs si plus de tables
           ...(remainingTables === 0 && {
             table_name: null,
             table_type: null,
@@ -718,47 +658,31 @@ router.delete('/tables/:id', async (req, res) => {
         }
       });
 
-      console.log(`[NEW DELETE /tables/:id] ✅ Nœud ${table.nodeId} nettoyé:`, {
-        hasTable: remainingTables > 0,
-        linkedTableIds: nextLinkedIds.length,
-        table_activeId_reset: wasActiveTable,
-        table_instances_cleaned: true,
-        all_fields_reset: remainingTables === 0
-      });
     }
 
-    console.log(`[NEW DELETE /tables/:id] ✅ Table ${id} supprimée avec succès (+ colonnes et lignes en cascade)`);
-    res.json({ success: true, message: 'Table supprimée avec succès' });
+    res.json({ success: true, message: 'Table supprimÃƒÂ©e avec succÃƒÂ¨s' });
 
   } catch (error) {
-    console.error(`❌ [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
+    console.error(`Ã¢ÂÅ’ [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
     res.status(500).json({ error: 'Impossible de supprimer la table' });
   }
 });
 
 // =============================================================================
-// ALIASES POUR COMPATIBILITÉ AVEC L'ANCIEN FORMAT D'URL
+// ALIASES POUR COMPATIBILITÃƒâ€° AVEC L'ANCIEN FORMAT D'URL
 // =============================================================================
 
-// Alias PUT: /nodes/:nodeId/tables/:tableId → /tables/:id
+// Alias PUT: /nodes/:nodeId/tables/:tableId Ã¢â€ â€™ /tables/:id
 router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
   const { tableId } = req.params;
   const { name, description, columns, rows, type, meta } = req.body;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] 🔄 Alias route - redirection vers PUT /tables/${tableId}`);
-  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] 📊 Données reçues:`, {
-    hasColumns: !!columns,
-    hasRows: !!rows,
-    hasMeta: !!meta,
-    type
-  });
 
   try {
-    // Si le body contient seulement meta (mise à jour de configuration lookup)
-    // On ne touche PAS aux colonnes/lignes, juste les métadonnées
+    // Si le body contient seulement meta (mise ÃƒÂ  jour de configuration lookup)
+    // On ne touche PAS aux colonnes/lignes, juste les mÃƒÂ©tadonnÃƒÂ©es
     if (meta && !columns && !rows) {
-      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] ⚙️ Mise à jour métadonnées uniquement (lookup config)`);
       
       const table = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
@@ -770,15 +694,15 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       });
 
       if (!table) {
-        return res.status(404).json({ error: 'Table non trouvée' });
+        return res.status(404).json({ error: 'Table non trouvÃƒÂ©e' });
       }
 
       const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin && organizationId && tableOrgId !== organizationId) {
-        return res.status(403).json({ error: 'Accès non autorisé' });
+        return res.status(403).json({ error: 'AccÃƒÂ¨s non autorisÃƒÂ©' });
       }
 
-      // Mise à jour des métadonnées seulement (sans créer de variables)
+      // Mise ÃƒÂ  jour des mÃƒÂ©tadonnÃƒÂ©es seulement (sans crÃƒÂ©er de variables)
       const updatedTable = await prisma.treeBranchLeafNodeTable.update({
         where: { id: tableId },
         data: {
@@ -787,11 +711,10 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         },
       });
 
-      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] ✅ Métadonnées mises à jour - repeater créera les champs d'affichage`);
       return res.json(updatedTable);
     }
 
-    // Sinon, mise à jour complète (colonnes + lignes)
+    // Sinon, mise ÃƒÂ  jour complÃƒÂ¨te (colonnes + lignes)
     const updatedTable = await prisma.$transaction(async (tx) => {
       const table = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
@@ -803,12 +726,12 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       });
 
       if (!table) {
-        throw new Error('Table non trouvée');
+        throw new Error('Table non trouvÃƒÂ©e');
       }
 
       const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin && organizationId && tableOrgId !== organizationId) {
-        throw new Error('Accès non autorisé');
+        throw new Error('AccÃƒÂ¨s non autorisÃƒÂ©');
       }
 
       const updateData: Prisma.TreeBranchLeafNodeTableUpdateInput = {
@@ -818,7 +741,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       if (description !== undefined) updateData.description = description;
       if (type) updateData.type = type;
       if (meta) updateData.meta = meta as Prisma.InputJsonValue;
-      // NE mettre à jour columnCount/rowCount QUE si les arrays contiennent réellement des données
+      // NE mettre ÃƒÂ  jour columnCount/rowCount QUE si les arrays contiennent rÃƒÂ©ellement des donnÃƒÂ©es
       if (Array.isArray(columns) && columns.length > 0) updateData.columnCount = columns.length;
       if (Array.isArray(rows) && rows.length > 0) updateData.rowCount = rows.length;
 
@@ -827,10 +750,9 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         data: updateData,
       });
 
-      // ⚠️ IMPORTANT: Ne remplacer les colonnes QUE si l'array n'est PAS vide
-      // Un array vide signifie généralement que le frontend ne veut pas modifier les colonnes
+      // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Ne remplacer les colonnes QUE si l'array n'est PAS vide
+      // Un array vide signifie gÃƒÂ©nÃƒÂ©ralement que le frontend ne veut pas modifier les colonnes
       if (Array.isArray(columns) && columns.length > 0) {
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] 🔄 Remplacement des colonnes...`);
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
         
         const newColumnsData = columns.map((col: any, index: number) => ({
@@ -843,33 +765,21 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
           metadata: typeof col === 'object' && col.metadata ? col.metadata : {},
         }));
         await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] ✅ ${columns.length} colonnes remplacées`);
       }
 
-      // ⚠️ IMPORTANT: Ne remplacer les lignes QUE si l'array n'est PAS vide
-      // Un array vide signifie généralement que le frontend ne veut pas modifier les lignes
+      // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Ne remplacer les lignes QUE si l'array n'est PAS vide
+      // Un array vide signifie gÃƒÂ©nÃƒÂ©ralement que le frontend ne veut pas modifier les lignes
       if (Array.isArray(rows) && rows.length > 0) {
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] 🔄 Remplacement des lignes...`);
-        console.log(`[PUT ALIAS] 🔍 ANALYSE ROWS REÇUES DU FRONTEND:`);
-        console.log(`[PUT ALIAS]    - rows.length:`, rows.length);
-        console.log(`[PUT ALIAS]    - rows[0] type:`, typeof rows[0]);
-        console.log(`[PUT ALIAS]    - rows[0] isArray:`, Array.isArray(rows[0]));
-        console.log(`[PUT ALIAS]    - rows[0] value:`, rows[0]);
         if (rows.length > 1) {
-          console.log(`[PUT ALIAS]    - rows[1] type:`, typeof rows[1]);
-          console.log(`[PUT ALIAS]    - rows[1] isArray:`, Array.isArray(rows[1]));
-          console.log(`[PUT ALIAS]    - rows[1] value:`, rows[1]);
         }
         
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId } });
         
-        // ⚠️ CRITIQUE: Utiliser create() en boucle au lieu de createMany()
+        // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Utiliser create() en boucle au lieu de createMany()
         // Prisma createMany() NE SUPPORTE PAS les champs JSONB correctement !
-        // Il convertit les arrays JSON en simple strings, perdant les données
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] 🔄 Création de ${rows.length} lignes (boucle create)...`);
+        // Il convertit les arrays JSON en simple strings, perdant les donnÃƒÂ©es
         for (let index = 0; index < rows.length; index++) {
           const row = rows[index];
-          console.log(`[PUT ALIAS] Row ${index} AVANT create - type:`, typeof row, 'isArray:', Array.isArray(row), 'value:', row);
           await tx.treeBranchLeafNodeTableRow.create({
             data: {
               tableId,
@@ -877,51 +787,47 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
               cells: row as Prisma.InputJsonValue,
             }
           });
-          console.log(`[PUT ALIAS] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : 'N/A');
         }
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] ✅ ${rows.length} lignes remplacées`);
       }
 
       return tableUpdated;
     });
 
-    console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] 🎉 Mise à jour terminée avec succès`);
     res.json(updatedTable);
 
   } catch (error) {
-    console.error(`❌ [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
-    if (error instanceof Error && (error.message === 'Table non trouvée' || error.message === 'Accès non autorisé')) {
-      const status = error.message === 'Table non trouvée' ? 404 : 403;
+    console.error(`Ã¢ÂÅ’ [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
+    if (error instanceof Error && (error.message === 'Table non trouvÃƒÂ©e' || error.message === 'AccÃƒÂ¨s non autorisÃƒÂ©')) {
+      const status = error.message === 'Table non trouvÃƒÂ©e' ? 404 : 403;
       return res.status(status).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Impossible de mettre à jour la table' });
+    res.status(500).json({ error: 'Impossible de mettre ÃƒÂ  jour la table' });
   }
 });
 
 // =============================================================================
-// GET /api/treebranchleaf/nodes/:nodeId/tables - Liste des tables d'un nœud
+// GET /api/treebranchleaf/nodes/:nodeId/tables - Liste des tables d'un nÃ…â€œud
 // =============================================================================
 router.get('/nodes/:nodeId/tables', async (req, res) => {
   const { nodeId } = req.params;
   const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown as MinimalReq);
 
-  console.log(`[NEW GET /nodes/:nodeId/tables] 📋 Récupération des tables pour node ${nodeId}`);
 
   try {
-    // Vérifier que le nœud existe et appartient à l'organisation
+    // VÃƒÂ©rifier que le nÃ…â€œud existe et appartient ÃƒÂ  l'organisation
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
 
     if (!node) {
-      return res.status(404).json({ error: 'Nœud non trouvé' });
+      return res.status(404).json({ error: 'NÃ…â€œud non trouvÃƒÂ©' });
     }
     if (!isSuperAdmin && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: 'Accès non autorisé à ce nœud' });
+      return res.status(403).json({ error: 'AccÃƒÂ¨s non autorisÃƒÂ© ÃƒÂ  ce nÃ…â€œud' });
     }
 
-    // Récupérer toutes les tables de ce nœud avec colonnes et lignes
+    // RÃƒÂ©cupÃƒÂ©rer toutes les tables de ce nÃ…â€œud avec colonnes et lignes
     const tables = await prisma.treeBranchLeafNodeTable.findMany({
       where: { nodeId },
       include: {
@@ -935,9 +841,8 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       orderBy: { createdAt: 'asc' },
     });
 
-    console.log(`[NEW GET /nodes/:nodeId/tables] ✅ ${tables.length} table(s) trouvée(s)`);
 
-    // Reformater la réponse pour correspondre au format attendu par le frontend
+    // Reformater la rÃƒÂ©ponse pour correspondre au format attendu par le frontend
     const formattedTables = tables.map(table => ({
       id: table.id,
       name: table.name,
@@ -945,12 +850,12 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       type: table.type,
       columns: table.tableColumns.map(c => c.name),
       rows: table.tableRows.map(r => {
-        // ✅ Convertir JSONB Prisma → Array JavaScript natif
+        // Ã¢Å“â€¦ Convertir JSONB Prisma Ã¢â€ â€™ Array JavaScript natif
         const cells = r.cells;
         if (Array.isArray(cells)) {
           return cells;
         }
-        // Si cells n'est pas déjà un array, essayer de le parser
+        // Si cells n'est pas dÃƒÂ©jÃƒÂ  un array, essayer de le parser
         if (typeof cells === 'string') {
           try {
             const parsed = JSON.parse(cells);
@@ -959,7 +864,7 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
             return [String(cells)];
           }
         }
-        // Si cells est un objet (JSONB), vérifier s'il a une structure d'array
+        // Si cells est un objet (JSONB), vÃƒÂ©rifier s'il a une structure d'array
         if (cells && typeof cells === 'object') {
           return Object.values(cells);
         }
@@ -974,8 +879,8 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
     res.json(formattedTables);
 
   } catch (error) {
-    console.error(`❌ [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
-    res.status(500).json({ error: 'Impossible de récupérer les tables' });
+    console.error(`Ã¢ÂÅ’ [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
+    res.status(500).json({ error: 'Impossible de rÃƒÂ©cupÃƒÂ©rer les tables' });
   }
 });
 

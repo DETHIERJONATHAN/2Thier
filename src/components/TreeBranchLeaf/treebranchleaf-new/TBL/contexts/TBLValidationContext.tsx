@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { tblLog } from '../../../../../utils/tblDebug';
 
 export interface TBLValidationContextValue {
   isValidation: boolean;
@@ -12,12 +13,12 @@ export const TBLValidationProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isValidation, setIsValidation] = useState(false);
 
   const startValidation = useCallback(() => {
-    console.log('🎯 VALIDATION GLOBALE DÉMARRÉE');
+    tblLog('🎯 VALIDATION GLOBALE DÉMARRÉE');
     setIsValidation(true);
   }, []);
 
   const stopValidation = useCallback(() => {
-    console.log('🎯 VALIDATION GLOBALE ARRÊTÉE');
+    tblLog('🎯 VALIDATION GLOBALE ARRÊTÉE');
     setIsValidation(false);
   }, []);
 

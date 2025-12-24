@@ -19,7 +19,7 @@ export function normalizeRef(ref?: string | null): string {
     .trim();
 }
 
-// Parcourt une structure JSON et ajoute tous les nodeIds référencés dans le Set
+// Parcourt une structure JSON et ajoute tous les nodeIds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s dans le Set
 export function findAllReferencedNodeIds(data: unknown, out: Set<string>) {
   if (!data) return;
   if (Array.isArray(data)) {
@@ -29,7 +29,7 @@ export function findAllReferencedNodeIds(data: unknown, out: Set<string>) {
   if (typeof data === 'object') {
     const obj = data as Record<string, unknown>;
 
-    // Cas connus (inspirés d'operation-interpreter)
+    // Cas connus (inspirÃƒÂ©s d'operation-interpreter)
     if (obj.type === 'ref' && typeof obj.ref === 'string') {
       const id = normalizeRef(obj.ref);
       if (id) out.add(id);
@@ -71,7 +71,7 @@ async function setNodeLinkedField(client: Tx, nodeId: string, field: LinkedField
 }
 
 export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string) {
-  // Charger capacités et éléments liés au nœud
+  // Charger capacitÃƒÂ©s et ÃƒÂ©lÃƒÂ©ments liÃƒÂ©s au nÃ…â€œud
   const [formulas, conditions, tables, variable, selectConfig] = await Promise.all([
     client.treeBranchLeafNodeFormula.findMany({ where: { nodeId }, select: { id: true, tokens: true } }),
     client.treeBranchLeafNodeCondition.findMany({ where: { nodeId }, select: { id: true, conditionSet: true } }),
@@ -80,7 +80,7 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
     client.treeBranchLeafSelectConfig.findFirst({ where: { nodeId } })
   ]);
 
-  // Collecter tous les nodeIds référencés depuis les capacités/metadata
+  // Collecter tous les nodeIds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s depuis les capacitÃƒÂ©s/metadata
   const refNodeIds = new Set<string>();
   for (const f of formulas) findAllReferencedNodeIds(f.tokens as any, refNodeIds);
   for (const c of conditions) findAllReferencedNodeIds(c.conditionSet as any, refNodeIds);
@@ -90,18 +90,18 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
 
   refNodeIds.delete(nodeId);
 
-  // Construire les nouveaux ensembles pour le nœud propriétaire
+  // Construire les nouveaux ensembles pour le nÃ…â€œud propriÃƒÂ©taire
   const newLinked = {
     linkedFormulaIds: uniq(formulas.map(f => f.id)),
     linkedConditionIds: uniq(conditions.map(c => c.id)),
     linkedTableIds: uniq(tables.map(t => t.id)),
     linkedVariableIds: uniq([
       variable?.id,
-      (node as any)?.data_activeId  // fallback: variable active même si linkedVariableIds est vide
+      (node as any)?.data_activeId  // fallback: variable active mÃƒÂªme si linkedVariableIds est vide
     ].filter(Boolean) as string[]),
   };
 
-  // Ajouter les variables des nœuds référencés
+  // Ajouter les variables des nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
   if (refNodeIds.size > 0) {
     const refVars = await client.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: Array.from(refNodeIds) } },
@@ -113,7 +113,7 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
     ]);
   }
 
-  // Appliquer au nœud propriétaire (remplacement contrôlé)
+  // Appliquer au nÃ…â€œud propriÃƒÂ©taire (remplacement contrÃƒÂ´lÃƒÂ©)
   await Promise.all([
     setNodeLinkedField(client, nodeId, 'linkedFormulaIds', newLinked.linkedFormulaIds),
     setNodeLinkedField(client, nodeId, 'linkedConditionIds', newLinked.linkedConditionIds),
@@ -121,9 +121,9 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
     setNodeLinkedField(client, nodeId, 'linkedVariableIds', newLinked.linkedVariableIds),
   ]);
 
-  // MAJ inverse minimale: pour chaque nœud référencé, s'assurer qu'il liste
-  // - la formule/condition/table du nœud courant dans ses linked*Ids (trace des usages)
-  // - la variable du nœud courant dans linkedVariableIds
+  // MAJ inverse minimale: pour chaque nÃ…â€œud rÃƒÂ©fÃƒÂ©rencÃƒÂ©, s'assurer qu'il liste
+  // - la formule/condition/table du nÃ…â€œud courant dans ses linked*Ids (trace des usages)
+  // - la variable du nÃ…â€œud courant dans linkedVariableIds
   const ownerVarId = variable?.id || (node as any)?.data_activeId;
   await Promise.all(Array.from(refNodeIds).map(async refId => {
     if (formulas.length) {

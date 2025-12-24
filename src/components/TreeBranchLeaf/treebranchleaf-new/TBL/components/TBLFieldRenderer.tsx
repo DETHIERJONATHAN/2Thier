@@ -13,6 +13,7 @@ import {
   Card
 } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
+import { tblLog } from '../../../../../utils/tblDebug';
 import type { TBLField } from '../hooks/useTBLData';
 import type { TBLFormData } from '../hooks/useTBLSave';
 import dayjs from 'dayjs';
@@ -45,11 +46,11 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
   // Récupérer les données tooltip du nœud
   const tooltipData = useNodeTooltip(field);
   
-  // 🔍 DEBUG: Log des données tooltip
+  // 🔍 DEBUG: Log des données tooltip (conditionnel)
   useEffect(() => {
     const hasTooltipData = field.text_helpTooltipType && field.text_helpTooltipType !== 'none';
     if (hasTooltipData || field.label.toLowerCase().includes('consommation') || field.label.toLowerCase().includes('puissance')) {
-      console.log(`🔍 [TBL][TOOLTIP][${field.label}]`, {
+      tblLog(`🔍 [TBL][TOOLTIP][${field.label}]`, {
         fieldId: field.id,
         fieldLabel: field.label,
         tooltipData,
@@ -74,7 +75,7 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
     setLocalValue(newValue);
     onChange(field.id, newValue);
     
-    console.log('📝 [FIELD][CHANGE]', { 
+    tblLog('📝 [FIELD][CHANGE]', { 
       fieldId: field.id, 
       fieldLabel: field.label, 
       newValue
@@ -91,7 +92,7 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
       const mirrorKeyByLabel = `__mirror_data_${field.label}`;
       onChange(mirrorKeyByLabel, newValue);
       
-      console.log('🔄 [MIRROR][SYNC]', { 
+      tblLog('🔄 [MIRROR][SYNC]', { 
         mirrorKeyByLabel, 
         value: newValue,
         fieldLabel: field.label 
@@ -106,7 +107,7 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
                key.includes(field.label) ||
                key === mirrorKeyByLabel)) {
             window.TBL_FORM_DATA[key] = newValue;
-            console.log('🔄 [MIRROR][SYNC]', { key, value: newValue, fieldLabel: field.label });
+            tblLog('🔄 [MIRROR][SYNC]', { key, value: newValue, fieldLabel: field.label });
           }
         });
       }
@@ -140,7 +141,7 @@ export const TBLFieldRenderer: React.FC<TBLFieldRendererProps> = ({
   const renderLabel = () => {
     // Debug pour vérifier le contexte de validation
     if (field.required) {
-      console.log(`🎯 [TBL-ASTERISK][${field.label}] isValidation: ${isValidation}, color: ${isValidation ? 'RED' : 'GREEN'}`);
+      tblLog(`🎯 [TBL-ASTERISK][${field.label}] isValidation: ${isValidation}, color: ${isValidation ? 'RED' : 'GREEN'}`);
     }
     
     return (

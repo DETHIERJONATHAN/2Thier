@@ -1,15 +1,15 @@
 /**
- * 🌲 TreeBranchLeaf - API Backend centralisée
+ * Ã°Å¸Å’Â² TreeBranchLeaf - API Backend centralisÃƒÂ©e
  *
- * API complète pour le système TreeBranchLeaf
- * Tout est centralisé dans treebranchleaf-new/
+ * API complÃƒÂ¨te pour le systÃƒÂ¨me TreeBranchLeaf
+ * Tout est centralisÃƒÂ© dans treebranchleaf-new/
  */
 
 import type { TreeBranchLeafTree, TreeBranchLeafNode } from '../types';
 import { TreeBranchLeafRegistry } from '../core/registry';
 
 // Mock data pour commencer - remplacera l'ancienne API
-// Configuration d'organisation par défaut (modifiable via variable d'environnement)
+// Configuration d'organisation par dÃƒÂ©faut (modifiable via variable d'environnement)
 const DEFAULT_ORG_ID = process.env.TBL_DEFAULT_ORG_ID || 'dev-organization';
 
 const mockTrees: TreeBranchLeafTree[] = [
@@ -25,7 +25,7 @@ const mockTrees: TreeBranchLeafTree[] = [
   {
     id: 'tree-2', 
     name: 'Formulaire de Devis',
-    description: 'Générateur de devis avancé',
+    description: 'GÃƒÂ©nÃƒÂ©rateur de devis avancÃƒÂ©',
     organizationId: DEFAULT_ORG_ID,
     isActive: true,
     createdAt: new Date().toISOString(),
@@ -38,7 +38,7 @@ const mockNodes: Record<string, TreeBranchLeafNode[]> = {
     {
       id: 'node-1',
       label: 'Informations Personnelles',
-      description: 'Section des données personnelles',
+      description: 'Section des donnÃƒÂ©es personnelles',
       type: 'branch',
       parentId: null,
       sortOrder: 1,
@@ -99,7 +99,7 @@ const mockNodes: Record<string, TreeBranchLeafNode[]> = {
   'tree-2': [
     {
       id: 'node-4',
-      label: 'Détails du Projet',
+      label: 'DÃƒÂ©tails du Projet',
       description: 'Informations sur le projet',
       type: 'branch',
       parentId: null,
@@ -121,7 +121,7 @@ const mockNodes: Record<string, TreeBranchLeafNode[]> = {
 };
 
 /**
- * API Handlers centralisés
+ * API Handlers centralisÃƒÂ©s
  */
 export class TreeBranchLeafAPI {
   
@@ -131,12 +131,12 @@ export class TreeBranchLeafAPI {
     return mockTrees.filter(tree => tree.organizationId === organizationId);
   }
 
-  // GET /trees/:id/nodes - Nœuds d'un arbre
+  // GET /trees/:id/nodes - NÃ…â€œuds d'un arbre
   static async getTreeNodes(treeId: string): Promise<TreeBranchLeafNode[]> {
     return mockNodes[treeId] || [];
   }
 
-  // POST /trees - Créer un arbre
+  // POST /trees - CrÃƒÂ©er un arbre
   static async createTree(data: Partial<TreeBranchLeafTree>): Promise<TreeBranchLeafTree> {
     const newTree: TreeBranchLeafTree = {
       id: `tree-${Date.now()}`,
@@ -179,15 +179,15 @@ export class TreeBranchLeafAPI {
     return true;
   }
 
-  // POST /trees/:treeId/nodes - Créer un nœud
+  // POST /trees/:treeId/nodes - CrÃƒÂ©er un nÃ…â€œud
   static async createNode(treeId: string, data: Partial<TreeBranchLeafNode>): Promise<TreeBranchLeafNode | null> {
     if (!mockNodes[treeId]) return null;
 
-    // Déterminer le fieldType pour initialiser l'apparence par défaut
+    // DÃƒÂ©terminer le fieldType pour initialiser l'apparence par dÃƒÂ©faut
     const nodeType = TreeBranchLeafRegistry.getNodeType(data.type || 'leaf_field');
     const fieldType = data.subType || data.metadata?.fieldType || nodeType?.defaultFieldType;
     
-    // Initialiser l'apparence par défaut si c'est un champ
+    // Initialiser l'apparence par dÃƒÂ©faut si c'est un champ
     let defaultAppearance: Record<string, unknown> = {};
     let tblMapping = {};
     
@@ -198,7 +198,7 @@ export class TreeBranchLeafAPI {
 
     const newNode: TreeBranchLeafNode = {
       id: `node-${Date.now()}`,
-      label: data.label || 'Nouveau nœud',
+      label: data.label || 'Nouveau nÃ…â€œud',
       description: data.description || '',
       type: data.type || 'leaf_field',
       subType: fieldType,
@@ -214,7 +214,7 @@ export class TreeBranchLeafAPI {
       hasAPI: data.hasAPI || false,
       hasLink: data.hasLink || false,
       hasMarkers: data.hasMarkers || false,
-      // Ajouter l'apparence par défaut
+      // Ajouter l'apparence par dÃƒÂ©faut
       appearanceConfig: data.appearanceConfig || defaultAppearance,
       // Mapper vers les champs TBL
       ...(tblMapping as Record<string, unknown>),
@@ -226,12 +226,11 @@ export class TreeBranchLeafAPI {
     return newNode;
   }
 
-  // PUT /nodes/:id - Modifier un nœud
+  // PUT /nodes/:id - Modifier un nÃ…â€œud
   static async updateNode(nodeId: string, data: Partial<TreeBranchLeafNode>): Promise<TreeBranchLeafNode | null> {
     try {
-      console.log('🔄 [TreeBranchLeafAPI] updateNode:', nodeId, data);
       
-      // ✅ APPELER LA VRAIE API AU LIEU DU MOCK
+      // Ã¢Å“â€¦ APPELER LA VRAIE API AU LIEU DU MOCK
       const response = await fetch(`/api/treebranchleaf/nodes/${nodeId}`, {
         method: 'PUT',
         headers: {
@@ -242,20 +241,19 @@ export class TreeBranchLeafAPI {
       });
 
       if (!response.ok) {
-        console.error('❌ [TreeBranchLeafAPI] Erreur HTTP:', response.status);
+        console.error('Ã¢ÂÅ’ [TreeBranchLeafAPI] Erreur HTTP:', response.status);
         return null;
       }
 
       const updatedNode = await response.json();
-      console.log('✅ [TreeBranchLeafAPI] Node mis à jour:', updatedNode);
       return updatedNode;
     } catch (error) {
-      console.error('❌ [TreeBranchLeafAPI] Erreur updateNode:', error);
+      console.error('Ã¢ÂÅ’ [TreeBranchLeafAPI] Erreur updateNode:', error);
       return null;
     }
   }
 
-  // DELETE /nodes/:id - Supprimer un nœud
+  // DELETE /nodes/:id - Supprimer un nÃ…â€œud
   static async deleteNode(nodeId: string): Promise<boolean> {
     for (const treeId in mockNodes) {
       const index = mockNodes[treeId].findIndex(node => node.id === nodeId);

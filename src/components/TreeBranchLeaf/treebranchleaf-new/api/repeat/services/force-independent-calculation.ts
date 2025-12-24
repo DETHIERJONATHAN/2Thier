@@ -1,20 +1,19 @@
 /**
- * 🔄 Service de recalcul forcé avec données indépendantes
+ * Ã°Å¸â€â€ž Service de recalcul forcÃƒÂ© avec donnÃƒÂ©es indÃƒÂ©pendantes
  * 
- * Ce service force les champs copiés à recalculer avec leurs propres données
+ * Ce service force les champs copiÃƒÂ©s ÃƒÂ  recalculer avec leurs propres donnÃƒÂ©es
  * au lieu de fallback vers l'original.
  */
 
 import { type PrismaClient } from '@prisma/client';
 
 /**
- * 🔄 Forcer la mise à jour des références internes pour l'indépendance
+ * Ã°Å¸â€â€ž Forcer la mise ÃƒÂ  jour des rÃƒÂ©fÃƒÂ©rences internes pour l'indÃƒÂ©pendance
  */
 export async function forceIndependentCalculation(
   prisma: PrismaClient,
   copiedNodeIds: string[]
 ): Promise<void> {
-  console.log(`🔄 [FORCE-CALC] === FORÇAGE CALCUL INDÉPENDANT ===`);
   
   for (const nodeId of copiedNodeIds) {
     try {
@@ -30,13 +29,11 @@ export async function forceIndependentCalculation(
 
       if (!node) continue;
 
-      console.log(`🔄 [FORCE-CALC] Traitement ${node.label} (${nodeId})`);
 
-      // 1. Si c'est un champ de données d'affichage (formule/condition/table)
+      // 1. Si c'est un champ de donnÃƒÂ©es d'affichage (formule/condition/table)
       if (node.hasFormula || node.hasCondition || node.hasTable) {
-        console.log(`📊 [FORCE-CALC] ${node.label}: champ de données d'affichage détecté`);
         
-        // Forcer un timestamp de "dernière modification" pour invalider les caches
+        // Forcer un timestamp de "derniÃƒÂ¨re modification" pour invalider les caches
         const currentMetadata = (node.metadata && typeof node.metadata === 'object') 
           ? (node.metadata as Record<string, unknown>) 
           : {};
@@ -45,7 +42,7 @@ export async function forceIndependentCalculation(
           ...currentMetadata,
           lastForceRecalc: new Date().toISOString(),
           forceIndependentCalc: true,
-          // Marquer comme devant être recalculé côté frontend
+          // Marquer comme devant ÃƒÂªtre recalculÃƒÂ© cÃƒÂ´tÃƒÂ© frontend
           requiresFreshCalculation: true,
           calculationInvalidated: Date.now()
         };
@@ -58,41 +55,36 @@ export async function forceIndependentCalculation(
           }
         });
 
-        console.log(`✅ [FORCE-CALC] ${node.label}: métadonnées de recalcul mises à jour`);
       }
 
-      // 2. Si c'est un champ de saisie, s'assurer qu'il est vide par défaut
+      // 2. Si c'est un champ de saisie, s'assurer qu'il est vide par dÃƒÂ©faut
       else if (!node.hasFormula && !node.hasCondition && !node.hasTable) {
-        console.log(`📝 [FORCE-CALC] ${node.label}: champ de saisie - s'assurer qu'il est vide`);
         
-        // Les champs de saisie copiés doivent commencer vides
+        // Les champs de saisie copiÃƒÂ©s doivent commencer vides
         if (node.calculatedValue !== null) {
           await prisma.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
-          console.log(`🧹 [FORCE-CALC] ${node.label}: valeur de saisie remise à null`);
         }
       }
 
     } catch (error) {
-      console.error(`❌ [FORCE-CALC] Erreur pour ${nodeId}:`, error);
+      console.error(`Ã¢ÂÅ’ [FORCE-CALC] Erreur pour ${nodeId}:`, error);
     }
   }
 
-  console.log(`🔄 [FORCE-CALC] === FIN FORÇAGE CALCUL ===`);
 }
 
 /**
- * 🎯 Créer des "triggers" de recalcul pour le frontend
+ * Ã°Å¸Å½Â¯ CrÃƒÂ©er des "triggers" de recalcul pour le frontend
  */
 export async function createRecalculationTriggers(
   prisma: PrismaClient,
   copiedNodeIds: string[]
 ): Promise<void> {
-  console.log(`🎯 [TRIGGERS] Création de triggers de recalcul pour ${copiedNodeIds.length} nœuds`);
 
-  // Mettre un timestamp unique pour forcer la re-évaluation côté frontend
+  // Mettre un timestamp unique pour forcer la re-ÃƒÂ©valuation cÃƒÂ´tÃƒÂ© frontend
   const triggerTimestamp = Date.now();
   
   for (const nodeId of copiedNodeIds) {
@@ -110,7 +102,7 @@ export async function createRecalculationTriggers(
 
       const updatedMetadata = {
         ...metadata,
-        // Marqueurs pour forcer le recalcul côté frontend
+        // Marqueurs pour forcer le recalcul cÃƒÂ´tÃƒÂ© frontend
         recalcTrigger: triggerTimestamp,
         mustRecalculate: true,
         independentNode: true,
@@ -122,10 +114,9 @@ export async function createRecalculationTriggers(
         data: { metadata: updatedMetadata }
       });
 
-      console.log(`🎯 [TRIGGERS] ${currentMetadata.label}: trigger créé (${triggerTimestamp})`);
 
     } catch (error) {
-      console.error(`❌ [TRIGGERS] Erreur pour ${nodeId}:`, error);
+      console.error(`Ã¢ÂÅ’ [TRIGGERS] Erreur pour ${nodeId}:`, error);
     }
   }
 }

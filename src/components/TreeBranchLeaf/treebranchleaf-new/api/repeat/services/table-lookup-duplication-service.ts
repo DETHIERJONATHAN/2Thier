@@ -8,8 +8,8 @@ type DuplicateLookupOptions = {
 export class TableLookupDuplicationService {
   
   /**
-   * Duplique complètement les tables TBL et leurs configurations SELECT associées
-   * Assure l'indépendance totale des lookups pour les nœuds copiés
+   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
+   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
    */
   async duplicateTableLookupSystem(
     prisma: PrismaClient,
@@ -27,34 +27,31 @@ export class TableLookupDuplicationService {
       ? arg.copiedNodeId
       : `${normalizedOriginalId}${suffixToken}`;
 
-    console.log(`🗂️ [TableLookupDuplication] Duplication système table/lookup pour ${originalNodeId} -> ${copiedNodeId}`);
     
     try {
-      // 1. Récupérer les configurations SELECT du nœud original
+      // 1. RÃƒÂ©cupÃƒÂ©rer les configurations SELECT du nÃ…â€œud original
       const originalSelectConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
         where: { nodeId: originalNodeId }
       });
       
       if (originalSelectConfigs.length === 0) {
-        console.log(`   ⏭️ Aucune configuration SELECT pour ${originalNodeId}`);
         return;
       }
       
-      // 2. Pour chaque configuration SELECT, dupliquer la table TBL et créer la configuration
+      // 2. Pour chaque configuration SELECT, dupliquer la table TBL et crÃƒÂ©er la configuration
       for (const selectConfig of originalSelectConfigs) {
         await this.duplicateTableAndSelectConfig(prisma, selectConfig, copiedNodeId, suffixToken);
       }
       
-      console.log(`✅ [TableLookupDuplication] Système complet dupliqué pour ${copiedNodeId}`);
       
     } catch (error) {
-      console.error(`❌ [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
+      console.error(`Ã¢ÂÅ’ [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
       throw error;
     }
   }
   
   /**
-   * Duplique une table TBL et sa configuration SELECT associée
+   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
    */
   private async duplicateTableAndSelectConfig(
     prisma: PrismaClient,
@@ -67,7 +64,7 @@ export class TableLookupDuplicationService {
     const copiedTableId = `${originalTableId}${suffix}`;
     
     try {
-      // 1. Vérifier si la table originale existe
+      // 1. VÃƒÂ©rifier si la table originale existe
       const originalTable = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: originalTableId },
         include: {
@@ -77,17 +74,15 @@ export class TableLookupDuplicationService {
       });
       
       if (!originalTable) {
-        console.log(`   ⚠️ Table originale introuvable: ${originalTableId}`);
         return;
       }
       
-      // 2. Dupliquer la table TBL (si elle n'existe pas déjà)
+      // 2. Dupliquer la table TBL (si elle n'existe pas dÃƒÂ©jÃƒÂ )
       const existingCopiedTable = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: copiedTableId }
       });
       
       if (!existingCopiedTable) {
-        console.log(`   📋 Duplication table: ${originalTable.name} -> ${originalTable.name}${suffix}`);
         
         await prisma.treeBranchLeafNodeTable.create({
           data: {
@@ -96,7 +91,7 @@ export class TableLookupDuplicationService {
             name: originalTable.name + suffix,
             type: originalTable.type,
             description: originalTable.description,
-            // 🔢 COPIE TABLE META: suffixer UUIDs et comparisonColumn
+            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
             meta: (() => {
               if (!originalTable.meta) return originalTable.meta;
               try {
@@ -129,12 +124,11 @@ export class TableLookupDuplicationService {
                     metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
                   }
                 }
-                // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+                // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
                 if (metaObj?.lookup?.displayColumn) {
                   if (Array.isArray(metaObj.lookup.displayColumn)) {
                     metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
                       if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                        console.log(`[table.meta] displayColumn[]: ${col} → ${col}${suffix}`);
                         return `${col}${suffix}`;
                       }
                       return col;
@@ -142,17 +136,15 @@ export class TableLookupDuplicationService {
                   } else if (typeof metaObj.lookup.displayColumn === 'string') {
                     const val = metaObj.lookup.displayColumn;
                     if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      console.log(`[table.meta] displayColumn: ${val} → ${val}${suffix}`);
                       metaObj.lookup.displayColumn = `${val}${suffix}`;
                     }
                   }
                 }
-                // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+                // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
                 if (metaObj?.lookup?.displayRow) {
                   if (Array.isArray(metaObj.lookup.displayRow)) {
                     metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
                       if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                        console.log(`[table.meta] displayRow[]: ${row} → ${row}${suffix}`);
                         return `${row}${suffix}`;
                       }
                       return row;
@@ -160,7 +152,6 @@ export class TableLookupDuplicationService {
                   } else if (typeof metaObj.lookup.displayRow === 'string') {
                     const val = metaObj.lookup.displayRow;
                     if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      console.log(`[table.meta] displayRow: ${val} → ${val}${suffix}`);
                       metaObj.lookup.displayRow = `${val}${suffix}`;
                     }
                   }
@@ -177,7 +168,7 @@ export class TableLookupDuplicationService {
             lookupSelectColumn: originalTable.lookupSelectColumn,
             
             // Duplication des colonnes
-            // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
             tableColumns: {
               create: originalTable.tableColumns.map(col => ({
                 columnIndex: col.columnIndex,
@@ -201,12 +192,10 @@ export class TableLookupDuplicationService {
           }
         });
         
-        console.log(`   ✅ Table copiée créée: ${copiedTableId}`);
       } else {
-        console.log(`   ♻️ Table copiée existe déjà: ${copiedTableId}`);
       }
       
-      // 3. Créer la configuration SELECT pour le nœud copié
+      // 3. CrÃƒÂ©er la configuration SELECT pour le nÃ…â€œud copiÃƒÂ©
       const existingSelectConfig = await prisma.treeBranchLeafSelectConfig.findFirst({
         where: { 
           nodeId: copiedNodeId,
@@ -215,7 +204,6 @@ export class TableLookupDuplicationService {
       });
       
       if (!existingSelectConfig) {
-        console.log(`   🔗 Création config SELECT pour ${copiedNodeId} -> ${copiedTableId}`);
         
         await prisma.treeBranchLeafSelectConfig.create({
           data: {
@@ -232,9 +220,8 @@ export class TableLookupDuplicationService {
           }
         });
         
-        console.log(`   ✅ Config SELECT créée pour ${copiedNodeId}`);
         
-        // 🔧 Mise à jour du nœud copié pour activer les capacités table
+        // Ã°Å¸â€Â§ Mise ÃƒÂ  jour du nÃ…â€œud copiÃƒÂ© pour activer les capacitÃƒÂ©s table
         try {
           const node = await prisma.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
           const currentCapabilities = (node?.capabilities && typeof node.capabilities === 'object') ? (node.capabilities as Record<string, any>) : {};
@@ -259,28 +246,25 @@ export class TableLookupDuplicationService {
               linkedTableIds: { set: newLinked }
             }
           });
-          console.log(`   ✅ Node ${copiedNodeId} updated: hasTable=true and capabilities.table.enabled=true`);
         } catch (nodeUpdateErr) {
-          console.warn(`   ⚠️ Warning updating node ${copiedNodeId} capabilities:`, (nodeUpdateErr as Error).message);
+          console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Warning updating node ${copiedNodeId} capabilities:`, (nodeUpdateErr as Error).message);
         }
       } else {
-        console.log(`   ♻️ Config SELECT existe déjà pour ${copiedNodeId}`);
       }
       
     } catch (error) {
-      console.error(`❌ Erreur duplication table/config ${originalTableId}:`, error);
+      console.error(`Ã¢ÂÅ’ Erreur duplication table/config ${originalTableId}:`, error);
       throw error;
     }
   }
   
   /**
-   * Répare les configurations SELECT manquantes pour les nœuds copiés existants
+   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
    */
   async repairMissingSelectConfigs(prisma: PrismaClient): Promise<void> {
-    console.log(`🔧 [TableLookupDuplication] Réparation configurations SELECT manquantes`);
     
     try {
-      // Trouver tous les nœuds copiés (avec suffix -1)
+      // Trouver tous les nÃ…â€œuds copiÃƒÂ©s (avec suffix -1)
       const copiedNodes = await prisma.treeBranchLeafNode.findMany({
         where: {
           id: {
@@ -289,18 +273,16 @@ export class TableLookupDuplicationService {
         }
       });
       
-      console.log(`   📊 Trouvé ${copiedNodes.length} nœuds copiés à vérifier`);
       
       for (const copiedNode of copiedNodes) {
         const originalNodeId = copiedNode.id.replace('-1', '');
         
-        // Vérifier si le nœud copié a des configurations SELECT
+        // VÃƒÂ©rifier si le nÃ…â€œud copiÃƒÂ© a des configurations SELECT
         const copiedSelectConfigs = await prisma.treeBranchLeafSelectConfig.findMany({
           where: { nodeId: copiedNode.id }
         });
         
         if (copiedSelectConfigs.length === 0) {
-          console.log(`   🔧 Réparation nécessaire pour ${copiedNode.id}`);
           await this.duplicateTableLookupSystem(prisma, originalNodeId, {
             copiedNodeId: copiedNode.id,
             suffixToken: '-1'
@@ -308,10 +290,9 @@ export class TableLookupDuplicationService {
         }
       }
       
-      console.log(`✅ [TableLookupDuplication] Réparation terminée`);
       
     } catch (error) {
-      console.error(`❌ [TableLookupDuplication] Erreur réparation:`, error);
+      console.error(`Ã¢ÂÅ’ [TableLookupDuplication] Erreur rÃƒÂ©paration:`, error);
       throw error;
     }
   }

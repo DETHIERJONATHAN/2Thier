@@ -26,57 +26,9 @@ export interface TBLFieldWithTooltip {
 
 export const useTBLTooltip = (field: TBLFieldWithTooltip | null | undefined): TBLTooltipData => {
   return useMemo(() => {
-    const shouldDebug = true; // 🚨 DEBUG GLOBAL ACTIVÉ
-    
-    if (shouldDebug) {
-      console.log('🚨 [useTBLTooltip] APPELÉ avec:', {
-        hasField: !!field,
-        fieldLabel: field?.label || 'Inconnu',
-        fieldId: field?.id || 'Inconnu',
-        tooltipType: field?.text_helpTooltipType,
-        tooltipText: field?.text_helpTooltipText,
-        tooltipImage: field?.text_helpTooltipImage
-      });
-      
-      // 🔍 SUPER DEBUG : Afficher l'objet field complet
-      console.log('🔍 [useTBLTooltip] OBJET FIELD COMPLET:', JSON.stringify(field, null, 2));
-      
-      // 🔍 Vérification séparée pour appearanceConfig
-      const appearanceConfig = (field as any)?.appearanceConfig;
-      if (appearanceConfig) {
-        console.log('✅ [useTBLTooltip] AppearanceConfig trouvé:', {
-          helpTooltipType: appearanceConfig.helpTooltipType,
-          helpTooltipText: appearanceConfig.helpTooltipText,
-          helpTooltipImage: appearanceConfig.helpTooltipImage,
-          fullAppearanceConfig: appearanceConfig
-        });
-      } else {
-        console.log('❌ [useTBLTooltip] Pas d\'appearanceConfig');
-      }
-      
-      // 🔍 Affichage des propriétés principales du field
-      console.log('🔍 [useTBLTooltip] Propriétés field:', Object.keys(field || {}));
-      
-      // 🔥 NOUVEAU DEBUG : Chercher les propriétés tooltip partout dans l'objet
-      const allTooltipProps = {};
-      const searchTooltips = (obj: any, prefix = '') => {
-        for (const key in obj) {
-          if (key.includes('tooltip') || key.includes('Tooltip') || key.includes('help')) {
-            allTooltipProps[prefix + key] = obj[key];
-          }
-          if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-            searchTooltips(obj[key], prefix + key + '.');
-          }
-        }
-      };
-      searchTooltips(field);
-      console.log('🔥 [useTBLTooltip] TOUTES LES PROPRIÉTÉS TOOLTIP TROUVÉES:', allTooltipProps);
-    }
+    // Debug désactivé pour performance - utilisez window.enableTBLDebug() si besoin
 
     if (!field) {
-      if (shouldDebug) {
-        console.log('❌ [useTBLTooltip] FIELD NULL - RÉSULTAT: aucun tooltip');
-      }
       return {
         type: 'none',
         text: null,
@@ -85,26 +37,14 @@ export const useTBLTooltip = (field: TBLFieldWithTooltip | null | undefined): TB
       };
     }
 
-    const tooltipType = field.text_helpTooltipType;
     const tooltipText = field.text_helpTooltipText;
     const tooltipImage = field.text_helpTooltipImage;
-
-    if (shouldDebug) {
-      console.log(`🔍 [useTBLTooltip][${field.label || field.id}] Données brutes:`, {
-        tooltipType,
-        tooltipText,
-        tooltipImage
-      });
-    }
 
     // Vérifier s'il y a des données tooltip
     const hasText = tooltipText && tooltipText.trim().length > 0;
     const hasImage = tooltipImage && tooltipImage.trim().length > 0;
 
     if (!hasText && !hasImage) {
-      if (shouldDebug) {
-        console.log(`❌ [useTBLTooltip][${field.label || field.id}] AUCUN TOOLTIP TROUVÉ - RÉSULTAT: none`);
-      }
       return {
         type: 'none',
         text: null,
@@ -123,17 +63,11 @@ export const useTBLTooltip = (field: TBLFieldWithTooltip | null | undefined): TB
       type = 'text';
     }
 
-    const result = {
+    return {
       type,
       text: hasText ? tooltipText : null,
       image: hasImage ? tooltipImage : null,
       hasTooltip: true
     };
-
-    if (shouldDebug) {
-      console.log(`✅ [useTBLTooltip][${field.label || field.id}] TOOLTIP TROUVÉ:`, result);
-    }
-
-    return result;
   }, [field]);
 };

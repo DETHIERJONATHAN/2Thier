@@ -41,7 +41,6 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
     
     // Récupérer l'ID d'organisation depuis l'en-tête si disponible
     const orgIdFromHeader = req.headers['x-organization-id'] as string;
-    console.log('[AUTH] x-organization-id de l\'en-tête:', orgIdFromHeader);
     
     // Déterminer le token à utiliser (en-tête ou cookie)
     let token: string | undefined;
@@ -49,23 +48,19 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
     // Essayer d'abord le cookie (plus fiable)
     if (cookieToken) {
         token = cookieToken;
-        console.log('[AUTH] Token trouvé dans les cookies');
     } 
     // Ensuite l'en-tête Authorization si pas de cookie ou si cookie non valide
     else if (authHeader && authHeader.startsWith('Bearer ')) {
         token = authHeader.split(' ')[1];
-        console.log('[AUTH] Token trouvé dans l\'en-tête Authorization');
     }
     
     // Si aucun token n'est trouvé
     if (!token) {
-        console.log('[AUTH] Aucun token d\'authentification trouvé');
         return res.status(401).json({ error: 'Authentification requise' });
     }
     
     // Si le token est un token de développement (à partir du frontend)
     if (token.startsWith('dev-token-')) {
-        console.log('[AUTH] Token de développement détecté, non autorisé en production');
         return res.status(401).json({ error: 'Token de développement non autorisé' });
     }
     
@@ -84,7 +79,7 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
         });
         
         if (!user) {
-            console.log('[AUTH] Utilisateur non trouvé pour l\'ID:', decoded.userId);
+            console.error('[AUTH] Utilisateur non trouvé pour l\'ID:', decoded.userId);
             return res.status(401).json({ error: 'Authentification invalide' });
         }
         
@@ -93,23 +88,19 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
     // Fallback supplémentaire: query ?organizationId=... (utile pour EventSource qui ne peut pas envoyer d'en-têtes personnalisés)
     const orgIdFromQuery = (req.query?.organizationId as string) || (req.query?.orgId as string);
     if (!organizationId && orgIdFromQuery) {
-      console.log('[AUTH] Fallback organizationId depuis query string:', orgIdFromQuery);
       organizationId = orgIdFromQuery;
     }
 
     // Si on a un ID d'organisation dans l'en-tête, il prime
     if (orgIdFromHeader) {
-      console.log('[AUTH] Utilisation de l\'ID d\'organisation de l\'en-tête:', orgIdFromHeader);
       organizationId = orgIdFromHeader;
     }
 
     // Validation de l'organisation si définie
     if (organizationId) {
       const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
-      if (organization) {
-        console.log('[AUTH] Organisation trouvée:', organization.name);
-      } else {
-        console.log('[AUTH] AVERTISSEMENT: Organisation non trouvée pour l\'ID:', organizationId);
+      if (!organization) {
+        console.error('[AUTH] Organisation non trouvée pour l\'ID:', organizationId);
         return res.status(404).json({ error: 'Organisation non trouvée' });
       }
     }
@@ -127,15 +118,6 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
             isSuperAdmin: user.role === 'super_admin'
         };
         
-        console.log('[AUTH] Utilisateur authentifié avec:', { 
-            userId: req.user.userId, 
-            role: req.user.role, 
-            firstname: req.user.firstname,
-            lastname: req.user.lastname,
-            email: req.user.email,
-            organizationId: req.user.organizationId 
-        });
-        
         return next();
         
     } catch (error) {
@@ -152,9 +134,6 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
     if (!user) {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
-
-    // Log pour vérifier l'utilisateur trouvé
-    console.log('[Login] Utilisateur trouvé:', { id: user.id, email: user.email, role: user.role });
 
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatch) {

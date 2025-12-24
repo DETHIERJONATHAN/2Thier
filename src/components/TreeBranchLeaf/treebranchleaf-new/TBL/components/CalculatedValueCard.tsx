@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Spin, Empty, Tooltip } from 'antd';
 import { CalendarOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { tblLog } from '../../../../../utils/tblDebug';
 import dayjs from 'dayjs';
 
 interface CalculatedValueCardProps {
@@ -107,7 +108,7 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
         const custom = event as CustomEvent<{ node?: { id?: string } }>;
         const node = custom.detail?.node;
         if (node && node.id && node.id === nodeId) {
-          console.log('🔔 [CalculatedValueCard] tbl-node-updated reçu pour nodeId -> refresh', nodeId);
+          tblLog('🔔 [CalculatedValueCard] tbl-node-updated reçu pour nodeId -> refresh', nodeId);
           forceRefresh();
         }
       } catch (e) {
@@ -160,7 +161,7 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
         startLoading();
         setError(undefined);
 
-        console.log(`🔍 [CalculatedValueCard] Récupération valeur stockée pour nodeId: ${nodeId}`);
+        tblLog(`🔍 [CalculatedValueCard] Récupération valeur stockée pour nodeId: ${nodeId}`);
 
         const response = await api.get<{
           success?: boolean;
@@ -180,9 +181,9 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
           setValue(finalValue);
           setCalculatedAt(response.calculatedAt);
           setCalculatedBy(response.calculatedBy);
-          console.log(`✅ [CalculatedValueCard] Valeur persistée récupérée`, finalValue);
+          tblLog(`✅ [CalculatedValueCard] Valeur persistée récupérée`, finalValue);
         } else {
-          console.log(`⚠️ [CalculatedValueCard] Aucune valeur persistée pour ${nodeId}`);
+          tblLog(`⚠️ [CalculatedValueCard] Aucune valeur persistée pour ${nodeId}`);
           if (!enableLivePreview) {
             setValue(undefined);
           }
@@ -224,7 +225,7 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
         startLoading();
         setError(undefined);
 
-        console.log(`🚀 [CalculatedValueCard] Preview-evaluate pour nodeId ${nodeId}`);
+        tblLog(`🚀 [CalculatedValueCard] Preview-evaluate pour nodeId ${nodeId}`);
 
         const previewResponse = await api.post<{
           success: boolean;
@@ -241,16 +242,16 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
           const result = resolvePreviewResult(previewResponse.results);
           if (result) {
             const backendValue = extractResultValue(result);
-            console.log(`✅ [CalculatedValueCard] Preview trouvé:`, backendValue);
+            tblLog(`✅ [CalculatedValueCard] Preview trouvé:`, backendValue);
             setValue(backendValue);
             setCalculatedBy(result.operationSource as string | undefined ?? 'live-preview');
             setCalculatedAt(new Date().toISOString());
             forceRefresh();
           } else {
-            console.warn(`⚠️ [CalculatedValueCard] Aucun résultat preview pour ${nodeId}`);
+            tblLog(`⚠️ [CalculatedValueCard] Aucun résultat preview pour ${nodeId}`);
           }
         } else {
-          console.warn(`⚠️ [CalculatedValueCard] Preview-evaluate sans succès pour ${nodeId}`);
+          tblLog(`⚠️ [CalculatedValueCard] Preview-evaluate sans succès pour ${nodeId}`);
         }
       } catch (err) {
         if (!cancelled) {

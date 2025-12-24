@@ -72,11 +72,6 @@ interface TBLProps {
 const TBL: React.FC<TBLProps> = ({ 
   treeId
 }) => {
-  // Use a global flag to track mounting (alert is too intrusive)
-  if (typeof window !== 'undefined' && !(window as any).__tblMountedAt) {
-    (window as any).__tblMountedAt = Date.now();
-    console.error('🚀 [TBL] Component FIRST mounted at', new Date().toISOString());
-  }
   
   // Récupérer leadId depuis l'URL
   const { leadId: urlLeadId } = useParams<{ leadId?: string }>();
@@ -403,56 +398,27 @@ const TBL: React.FC<TBLProps> = ({
           
           // 🔥 CRITICAL: If forceRemote is true, ALWAYS process - NO EXCEPTIONS
           if (forceRemote) {
-            console.error(`🔄 [TBL] Received tbl-force-retransform event (forceRemote=TRUE - bypassing all checks)`, { debugId });
-            
-            // Increment counter for local retransform
-            setRetransformCounter(prev => {
-              const newVal = prev + 1;
-              console.error(`🚀 [TBL] Incrementing retransformCounter to ${newVal} from forceRemote event`);
-              return newVal;
-            });
-            
-            // IMMEDIATELY call refetch to sync server state
-            console.error(`🔄 [TBL] Calling refetch() immediately to update data from server (forceRemote=TRUE)`);
+            setRetransformCounter(prev => prev + 1);
             try {
               const refetchResult = refetchRef.current?.();
-              console.error(`🔄 [TBL] Refetch result:`, refetchResult);
               if (refetchResult instanceof Promise) {
-                refetchResult.then((result) => {
-                  console.error(`✅ [TBL] Refetch RESOLVED with data:`, result);
-                }).catch((err) => {
-                  console.error(`❌ [TBL] Refetch REJECTED:`, err);
-                });
+                refetchResult.catch(() => { /* silent */ });
               }
-            } catch (err) {
-              console.error(`❌ [TBL] Refetch threw error:`, err);
-            }
+            } catch { /* silent */ }
             return;
           }
           
           // For non-forceRemote events, check if we should skip
           if (detail?.skipFormReload || detail?.source === 'autosave') {
-            console.error('⏭️ [TBL] Ignoring tbl-force-retransform (auto-save/no-reload hint)');
             return;
           }
           
-          console.error(`🔄 [TBL] Received tbl-force-retransform event (forceRemote=false)`, { debugId });
-
-          // ✅ Increment retransform counter to trigger hook retransform
-          setRetransformCounter(prev => {
-            const newVal = prev + 1;
-            console.error(`🚀 [TBL] Incrementing retransformCounter to ${newVal} from event`);
-            return newVal;
-          });
-
-          console.error(`🔄 [TBL] Skipping server refetch (local retransform only)`);
+          setRetransformCounter(prev => prev + 1);
       };
     
     window.addEventListener('tbl-force-retransform', handleForceRetransform);
-    console.error('✅ [TBL] Event listener registered');
     
     return () => {
-      console.error('🔌 [TBL] Cleanup: Removing event listener');
       window.removeEventListener('tbl-force-retransform', handleForceRetransform);
     };
   }, [setRetransformCounter]);
@@ -464,8 +430,6 @@ const TBL: React.FC<TBLProps> = ({
   // PAS les display fields qui restent dynamiques et calculent à la volée.
   useEffect(() => {
     if (justCreatedDevisRef.current && submissionId) {
-      console.log('✅ [TBL] Nouveau devis créé avec submissionId:', submissionId);
-      console.log('✅ [TBL] Les display fields continuent à calculer en temps réel (pas de refresh nécessaire)');
       justCreatedDevisRef.current = false;
     }
   }, [submissionId]);
@@ -3022,13 +2986,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   const [activeSubTab, setActiveSubTab] = useState<string | undefined>(allSubTabs.length > 0 ? allSubTabs[0].key : undefined);
   useEffect(() => { if (allSubTabs.length > 0 && !allSubTabs.find(st => st.key === activeSubTab)) setActiveSubTab(allSubTabs[0].key); }, [allSubTabs, activeSubTab]);
 
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-    try {
-      const meta = sections.map(s => ({ id: s.id, title: s.title, metadata: (s as any).metadata }));
-      console.log('🔎 [TBL] ActiveSubTab change:', activeSubTab, 'sections metadata:', meta);
-    } catch (e) { console.error('[TBL] activeSubTab logging error', e); }
-  }, [activeSubTab, sections]);
+  // Log ActiveSubTab supprimé pour performance (utilisez window.enableTBLDebug() si besoin)
 
   const renderContent = () => {
     if (sections.length) {
@@ -3042,10 +3000,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       const filteredSections = sections.map(section => {
         const sectionMeta = (section as any).metadata || {};
         const sectionAlwaysVisible = (sectionMeta.displayAlways === true || String(sectionMeta.displayAlways) === 'true') || /affich|aperç|display/i.test(section.label || '');
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[TBL] [renderContent] Section filter:', { tabId, sectionId: section.id, sectionLabel: section.label, sectionAlwaysVisible, activeSubTab, sectionMeta, displayAlwaysValue: sectionMeta.displayAlways, displayAlwaysType: typeof sectionMeta.displayAlways });
-        }
-        if (process.env.NODE_ENV === 'development') console.log('[TBL] sectionAlwaysVisible for section', section.id, section.label, '=>', sectionAlwaysVisible, 'metadata:', sectionMeta);
+        // Logs supprimés pour performance - utilisez window.enableTBLDebug() pour déboguer
         
         // CRITICAL: If sectionAlwaysVisible, keep ALL fields regardless of subTab
         const filteredFields = sectionAlwaysVisible 
@@ -3078,7 +3033,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
           fields: filteredFields
         };
       });
-      if (process.env.NODE_ENV === 'development') console.log('[TBL] filteredSections summary', { tabId, totalSections: sections.length, filteredSectionsCounts: filteredSections.map(s => ({ id: s.id, label: s.label, fieldsCount: (s.fields || []).length, displayAlways: ((s as any).metadata || {}).displayAlways })) });
+      // Log filteredSections summary supprimé pour performance
 
       return (
         <div className="space-y-6">

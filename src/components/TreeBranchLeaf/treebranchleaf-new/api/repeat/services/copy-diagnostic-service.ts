@@ -1,7 +1,7 @@
 /**
- * 🔍 Service de diagnostic des copies incomplètes
+ * Ã°Å¸â€Â Service de diagnostic des copies incomplÃƒÂ¨tes
  * 
- * Ce service identifie pourquoi les champs copiés gardent les valeurs de l'original
+ * Ce service identifie pourquoi les champs copiÃƒÂ©s gardent les valeurs de l'original
  * et propose des corrections dans le processus de copie.
  */
 
@@ -9,7 +9,7 @@ import { type PrismaClient } from '@prisma/client';
 import { analyzeCapacityMismatches, fixCapacityFlags } from './capacity-mismatch-analyzer.js';
 
 export interface CopyDiagnosticResult {
-  /** Nœuds avec des capacités manquantes après copie */
+  /** NÃ…â€œuds avec des capacitÃƒÂ©s manquantes aprÃƒÂ¨s copie */
   missingCapacities: Array<{
     nodeId: string;
     label: string | null;
@@ -17,7 +17,7 @@ export interface CopyDiagnosticResult {
     hasFlag: boolean;
     actualCount: number;
   }>;
-  /** Nœuds avec des valeurs héritées incorrectes */
+  /** NÃ…â€œuds avec des valeurs hÃƒÂ©ritÃƒÂ©es incorrectes */
   inheritedValues: Array<{
     nodeId: string;
     label: string | null;
@@ -30,13 +30,12 @@ export interface CopyDiagnosticResult {
 }
 
 /**
- * 🔍 Diagnostiquer les problèmes de copie des nœuds
+ * Ã°Å¸â€Â Diagnostiquer les problÃƒÂ¨mes de copie des nÃ…â€œuds
  */
 export async function diagnoseCopyProblems(
   prisma: PrismaClient,
   copiedNodeIds: string[]
 ): Promise<CopyDiagnosticResult> {
-  console.log(`🔍 [DIAGNOSTIC] Analyse de ${copiedNodeIds.length} nœuds copiés`);
   
   const result: CopyDiagnosticResult = {
     missingCapacities: [],
@@ -44,7 +43,7 @@ export async function diagnoseCopyProblems(
     recommendations: []
   };
 
-  // Récupérer tous les nœuds copiés avec leurs capacités
+  // RÃƒÂ©cupÃƒÂ©rer tous les nÃ…â€œuds copiÃƒÂ©s avec leurs capacitÃƒÂ©s
   const copiedNodes = await prisma.treeBranchLeafNode.findMany({
     where: { id: { in: copiedNodeIds } },
     include: {
@@ -55,10 +54,9 @@ export async function diagnoseCopyProblems(
     }
   });
 
-  console.log(`🔍 [DIAGNOSTIC] Trouvé ${copiedNodes.length} nœuds copiés`);
 
   for (const node of copiedNodes) {
-    // Identifier le nœud original (sans suffixe -1, -2, etc.)
+    // Identifier le nÃ…â€œud original (sans suffixe -1, -2, etc.)
     const originalId = node.id.replace(/-\d+$/, '');
     if (originalId === node.id) continue; // Ce n'est pas une copie
 
@@ -74,13 +72,8 @@ export async function diagnoseCopyProblems(
 
     if (!original) continue;
 
-    console.log(`\n🔍 [DIAGNOSTIC] Analyse ${node.label} (copie de ${original.label})`);
-    console.log(`  Original: hasFormula=${original.hasFormula}, formules=${original.TreeBranchLeafNodeFormula.length}`);
-    console.log(`  Copié: hasFormula=${node.hasFormula}, formules=${node.TreeBranchLeafNodeFormula.length}`);
-    console.log(`  Original calculatedValue: ${original.calculatedValue}`);
-    console.log(`  Copié calculatedValue: ${node.calculatedValue}`);
 
-    // Vérifier les capacités manquantes
+    // VÃƒÂ©rifier les capacitÃƒÂ©s manquantes
     if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
       result.missingCapacities.push({
         nodeId: node.id,
@@ -111,7 +104,7 @@ export async function diagnoseCopyProblems(
       });
     }
 
-    // Vérifier les valeurs héritées
+    // VÃƒÂ©rifier les valeurs hÃƒÂ©ritÃƒÂ©es
     if (node.calculatedValue === original.calculatedValue && 
         node.calculatedValue !== null &&
         (node.hasFormula || node.hasCondition || node.hasTable)) {
@@ -124,44 +117,37 @@ export async function diagnoseCopyProblems(
       });
     }
 
-    // Analyser les décalages de capacités pour ce nœud
+    // Analyser les dÃƒÂ©calages de capacitÃƒÂ©s pour ce nÃ…â€œud
     const capacityMismatches = await analyzeCapacityMismatches(prisma, node.id);
     if (capacityMismatches.length > 0) {
-      console.log(`⚠️ [DIAGNOSTIC] ${capacityMismatches.length} décalages de capacités détectés pour ${node.label}`);
       // Corriger automatiquement les flags incorrects
       await fixCapacityFlags(prisma, node.id, capacityMismatches);
     }
   }
 
-  // Générer les recommandations
+  // GÃƒÂ©nÃƒÂ©rer les recommandations
   if (result.missingCapacities.length > 0) {
-    result.recommendations.push(`${result.missingCapacities.length} nœuds ont des capacités manquantes après copie - vérifier le processus de copie des formules/conditions/tables`);
+    result.recommendations.push(`${result.missingCapacities.length} nÃ…â€œuds ont des capacitÃƒÂ©s manquantes aprÃƒÂ¨s copie - vÃƒÂ©rifier le processus de copie des formules/conditions/tables`);
   }
 
   if (result.inheritedValues.length > 0) {
-    result.recommendations.push(`${result.inheritedValues.length} nœuds ont hérité des valeurs de l'original - forcer calculatedValue à null après copie`);
+    result.recommendations.push(`${result.inheritedValues.length} nÃ…â€œuds ont hÃƒÂ©ritÃƒÂ© des valeurs de l'original - forcer calculatedValue ÃƒÂ  null aprÃƒÂ¨s copie`);
   }
 
-  console.log(`\n🔍 [DIAGNOSTIC] === RÉSULTATS ===`);
-  console.log(`  Capacités manquantes: ${result.missingCapacities.length}`);
-  console.log(`  Valeurs héritées: ${result.inheritedValues.length}`);
-  console.log(`  Recommandations: ${result.recommendations.length}`);
 
   return result;
 }
 
 /**
- * 🛠️ Corriger les problèmes de copie détectés
+ * Ã°Å¸â€ºÂ Ã¯Â¸Â Corriger les problÃƒÂ¨mes de copie dÃƒÂ©tectÃƒÂ©s
  */
 export async function fixCopyProblems(
   prisma: PrismaClient,
   diagnostic: CopyDiagnosticResult
 ): Promise<void> {
-  console.log(`🛠️ [FIX] Correction des problèmes détectés`);
 
-  // Corriger les valeurs héritées
+  // Corriger les valeurs hÃƒÂ©ritÃƒÂ©es
   if (diagnostic.inheritedValues.length > 0) {
-    console.log(`🛠️ [FIX] Reset de ${diagnostic.inheritedValues.length} valeurs héritées`);
     
     const nodeIds = diagnostic.inheritedValues.map(item => item.nodeId);
     const result = await prisma.treeBranchLeafNode.updateMany({
@@ -169,16 +155,13 @@ export async function fixCopyProblems(
       data: { calculatedValue: null }
     });
 
-    console.log(`✅ [FIX] ${result.count} valeurs remises à null`);
   }
 
-  // Les capacités manquantes nécessitent une correction plus complexe
-  // qui doit se faire dans le processus de copie lui-même
+  // Les capacitÃƒÂ©s manquantes nÃƒÂ©cessitent une correction plus complexe
+  // qui doit se faire dans le processus de copie lui-mÃƒÂªme
   if (diagnostic.missingCapacities.length > 0) {
-    console.log(`⚠️ [FIX] ${diagnostic.missingCapacities.length} capacités manquantes nécessitent une correction du processus de copie`);
     
     for (const missing of diagnostic.missingCapacities) {
-      console.log(`  - ${missing.label} (${missing.nodeId}): ${missing.expectedCapacity} manquante`);
     }
   }
 }

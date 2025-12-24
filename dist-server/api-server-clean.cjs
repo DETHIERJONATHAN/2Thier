@@ -1298,7 +1298,7 @@ function validateExpression(expr, opts) {
   const maxLen = opts?.maxExpressionLength ?? 500;
   if (expr.length > maxLen) throw new Error("Expression trop longue");
   const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=&"\\@]+$/;
-  if (!allowed.test(expr)) throw new Error("Caract\xE8res non autoris\xE9s dans l'expression");
+  if (!allowed.test(expr)) throw new Error("Caract\xC3\u0192\xC2\xA8res non autoris\xC3\u0192\xC2\xA9s dans l'expression");
 }
 function parseExpression(expr, roleToNodeId, opts) {
   validateExpression(expr, opts);
@@ -1317,7 +1317,7 @@ function parseExpression(expr, roleToNodeId, opts) {
     }
     if (working.startsWith("__VAR__", i)) {
       const end = working.indexOf("__", i + 7);
-      if (end === -1) throw new Error("Marqueur variable mal form\xE9");
+      if (end === -1) throw new Error("Marqueur variable mal form\xC3\u0192\xC2\xA9");
       const role = working.substring(i + 7, end);
       const nodeId = roleToNodeId[role] || role;
       tokens2.push({ type: "variable", name: nodeId });
@@ -1348,7 +1348,7 @@ function parseExpression(expr, roleToNodeId, opts) {
         str += cc;
         j++;
       }
-      if (j >= working.length) throw new Error("Cha\xEEne non termin\xE9e");
+      if (j >= working.length) throw new Error("Cha\xC3\u0192\xC2\xAEne non termin\xC3\u0192\xC2\xA9e");
       tokens2.push({ type: "string", value: str });
       i = j + 1;
       lastToken = tokens2[tokens2.length - 1];
@@ -1397,7 +1397,7 @@ function parseExpression(expr, roleToNodeId, opts) {
     if (ch === ")") {
       tokens2.push({ type: "paren", value: ")" });
       parenBalance--;
-      if (parenBalance < 0) throw new Error("Parenth\xE8ses d\xE9s\xE9quilibr\xE9es");
+      if (parenBalance < 0) throw new Error("Parenth\xC3\u0192\xC2\xA8ses d\xC3\u0192\xC2\xA9s\xC3\u0192\xC2\xA9quilibr\xC3\u0192\xC2\xA9es");
       if (funcParenStack.length) {
       }
       i++;
@@ -1435,9 +1435,9 @@ function parseExpression(expr, roleToNodeId, opts) {
       lastToken = tokens2[tokens2.length - 1];
       continue;
     }
-    throw new Error("Caract\xE8re inattendu: " + ch);
+    throw new Error("Caract\xC3\u0192\xC2\xA8re inattendu: " + ch);
   }
-  if (parenBalance !== 0) throw new Error("Parenth\xE8ses d\xE9s\xE9quilibr\xE9es");
+  if (parenBalance !== 0) throw new Error("Parenth\xC3\u0192\xC2\xA8ses d\xC3\u0192\xC2\xA9s\xC3\u0192\xC2\xA9quilibr\xC3\u0192\xC2\xA9es");
   if (tokens2.some((t) => t.type === "operator" && [">", ">=", "<", "<=", "==", "!="].includes(t.value))) {
     const rewritten = [];
     for (let idx = 0; idx < tokens2.length; idx++) {
@@ -1446,7 +1446,7 @@ function parseExpression(expr, roleToNodeId, opts) {
         const op = tk.value;
         const left = rewritten.pop();
         const right = tokens2[idx + 1];
-        if (!left || !right) throw new Error("Expression comparaison mal form\xE9e");
+        if (!left || !right) throw new Error("Expression comparaison mal form\xC3\u0192\xC2\xA9e");
         idx++;
         const funcName = op === ">" ? "gt" : op === ">=" ? "gte" : op === "<" ? "lt" : op === "<=" ? "lte" : op === "==" ? "eq" : op === "!=" ? "neq" : "eq";
         rewritten.push({ type: "func", name: funcName });
@@ -1513,7 +1513,7 @@ function toRPN(tokens2) {
             }
             output.push(top);
           }
-          if (!found) throw new Error("Parenth\xE8ses d\xE9s\xE9quilibr\xE9es");
+          if (!found) throw new Error("Parenth\xC3\u0192\xC2\xA8ses d\xC3\u0192\xC2\xA9s\xC3\u0192\xC2\xA9quilibr\xC3\u0192\xC2\xA9es");
           const maybeFunc = stack[stack.length - 1];
           if (maybeFunc && maybeFunc.type === "func") {
             stack.pop();
@@ -1535,7 +1535,7 @@ function toRPN(tokens2) {
   }
   while (stack.length) {
     const top = stack.pop();
-    if (top.type === "paren") throw new Error("Parenth\xE8ses d\xE9s\xE9quilibr\xE9es (fin)");
+    if (top.type === "paren") throw new Error("Parenth\xC3\u0192\xC2\xA8ses d\xC3\u0192\xC2\xA9s\xC3\u0192\xC2\xA9quilibr\xC3\u0192\xC2\xA9es (fin)");
     output.push(top);
   }
   return output;
@@ -1987,7 +1987,7 @@ async function evaluateTokens(tokens2, opts) {
           r = usedFallback ? fallbackValue ?? 0 : primaryValue ?? 0;
           break;
         }
-        // 🔄 ARRONDIS
+        // Ã°Å¸â€â€ž ARRONDIS
         case "arrondi":
         case "round": {
           const val = toNumber2(args[0] ?? 0);
@@ -2038,7 +2038,7 @@ async function evaluateTokens(tokens2, opts) {
           r = multiple === 0 ? val : Math.floor(val / multiple) * multiple;
           break;
         }
-        // 📐 TRIGONOMÉTRIE (compléments)
+        // Ã°Å¸â€œÂ TRIGONOMÃƒâ€°TRIE (complÃƒÂ©ments)
         case "degres":
         case "degrees":
           r = mapNumericValue(args[0] ?? 0, (rad) => rad * (180 / Math.PI));
@@ -2065,7 +2065,7 @@ async function evaluateTokens(tokens2, opts) {
           r = Math.atan2(y, x);
           break;
         }
-        // 🔢 MATHÉMATIQUES (compléments)
+        // Ã°Å¸â€Â¢ MATHÃƒâ€°MATIQUES (complÃƒÂ©ments)
         case "puissance":
         case "power": {
           const base = toNumber2(args[0] ?? 0);
@@ -2101,7 +2101,7 @@ async function evaluateTokens(tokens2, opts) {
           r = divisor === 0 ? 0 : val % divisor;
           break;
         }
-        // 📊 STATISTIQUES (compléments)
+        // Ã°Å¸â€œÅ  STATISTIQUES (complÃƒÂ©ments)
         case "min": {
           const vals = args.flatMap((a) => Array.isArray(a) ? a : [toNumber2(a ?? 0)]);
           r = vals.length ? Math.min(...vals) : 0;
@@ -2157,7 +2157,7 @@ async function evaluateTokens(tokens2, opts) {
           r = vals.filter((v) => typeof v === "number" && !isNaN(v)).length;
           break;
         }
-        // 🔀 LOGIQUE & CONDITIONS
+        // Ã°Å¸â€â‚¬ LOGIQUE & CONDITIONS
         case "si":
         case "if": {
           const cond = toNumber2(args[0] ?? 0) !== 0;
@@ -2283,21 +2283,6 @@ __export(operation_interpreter_exports, {
   interpretTable: () => interpretTable,
   normalizeRef: () => normalizeRef
 });
-function formatDebugValue(value) {
-  if (value === null || value === void 0) return "\u2205";
-  if (typeof value === "string") {
-    return value.length > 120 ? `${value.slice(0, 117)}...` : value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  try {
-    const serialized = JSON.stringify(value);
-    return serialized.length > 120 ? `${serialized.slice(0, 117)}...` : serialized;
-  } catch {
-    return "[unserializable]";
-  }
-}
 function identifyReferenceType(ref) {
   if (ref.startsWith("@value.condition:") || ref.startsWith("@value.node-condition:")) {
     return "condition";
@@ -2336,58 +2321,51 @@ function identifyReferenceType(ref) {
   }
   return "field";
 }
-async function identifyReferenceTypeFromDB(id, prisma69) {
+async function identifyReferenceTypeFromDB(id, prisma70) {
   try {
-    const conditionNode = await prisma69.treeBranchLeafNode.findUnique({
+    const conditionNode = await prisma70.treeBranchLeafNode.findUnique({
       where: { id },
       select: { type: true }
     });
     if (conditionNode) {
       if (conditionNode.type === "condition") {
-        console.log(`[IDENTIFY] \u2705 ${id} est une CONDITION`);
         return "condition";
       }
       if (conditionNode.type === "node_formula") {
-        console.log(`[IDENTIFY] \u2705 ${id} est une FORMULE`);
         return "formula";
       }
       if (conditionNode.type === "node_table") {
-        console.log(`[IDENTIFY] \u2705 ${id} est une TABLE`);
         return "table";
       }
-      console.log(`[IDENTIFY] \u2705 ${id} est un CHAMP (type: ${conditionNode.type})`);
       return "field";
     }
-    console.log(`[IDENTIFY] \u26A0\uFE0F ${id} non trouv\xE9 en BD, d\xE9faut: CHAMP`);
     return "field";
   } catch (error) {
-    console.error(`[IDENTIFY] \u274C Erreur lors de l'identification en BD:`, error);
+    console.error(`[IDENTIFY] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de l'identification en BD:`, error);
     return "field";
   }
 }
 function normalizeRef(ref) {
   return ref.replace("@value.", "").replace("@table.", "").replace("node-formula:", "").replace("node-table:", "").replace("node-condition:", "").replace("condition:", "").trim();
 }
-async function enrichDataFromSubmission(submissionId, prisma69, valueMap, labelMap, treeId) {
-  console.log(`[ENRICHMENT] \u{1F4CA} Enrichissement donn\xE9es: ${submissionId}`);
+async function enrichDataFromSubmission(submissionId, prisma70, valueMap, labelMap, treeId) {
   try {
-    const submissionData = await prisma69.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma70.treeBranchLeafSubmissionData.findMany({
       where: { submissionId },
       select: {
         nodeId: true,
         value: true
       }
     });
-    console.log(`[ENRICHMENT] \u{1F4CA} ${submissionData.length} valeurs r\xE9cup\xE9r\xE9es depuis SubmissionData`);
     if (!treeId) {
-      const firstSubmissionNode = await prisma69.treeBranchLeafSubmissionData.findFirst({
+      const firstSubmissionNode = await prisma70.treeBranchLeafSubmissionData.findFirst({
         where: { submissionId },
         include: { TreeBranchLeafNode: { select: { treeId: true } } }
       });
       treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
     }
     if (treeId) {
-      const allNodes = await prisma69.treeBranchLeafNode.findMany({
+      const allNodes = await prisma70.treeBranchLeafNode.findMany({
         where: { treeId },
         select: {
           id: true,
@@ -2395,10 +2373,9 @@ async function enrichDataFromSubmission(submissionId, prisma69, valueMap, labelM
           sharedReferenceName: true,
           field_label: true,
           calculatedValue: true
-          // 🆕 Récupérer les valeurs calculées
+          // Ã°Å¸â€ â€¢ RÃƒÂ©cupÃƒÂ©rer les valeurs calculÃƒÂ©es
         }
       });
-      console.log(`[ENRICHMENT] \u{1F3F7}\uFE0F ${allNodes.length} labels r\xE9cup\xE9r\xE9s depuis l'arbre`);
       for (const node of allNodes) {
         if (!labelMap.has(node.id)) {
           const canonicalLabel = node.sharedReferenceName || node.field_label || node.label;
@@ -2406,11 +2383,10 @@ async function enrichDataFromSubmission(submissionId, prisma69, valueMap, labelM
         }
         if (!valueMap.has(node.id) && node.calculatedValue !== null && node.calculatedValue !== void 0 && node.calculatedValue !== "") {
           valueMap.set(node.id, node.calculatedValue);
-          console.log(`[ENRICHMENT] \u{1F9EE} calculatedValue enrichi: ${node.id} (${node.label}) = ${node.calculatedValue}`);
         }
       }
     } else {
-      console.warn(`[ENRICHMENT] \u26A0\uFE0F Impossible de trouver l'arbre pour la soumission ${submissionId}`);
+      console.warn(`[ENRICHMENT] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Impossible de trouver l'arbre pour la soumission ${submissionId}`);
     }
     for (const data of submissionData) {
       if (data.nodeId && data.value !== null) {
@@ -2423,22 +2399,19 @@ async function enrichDataFromSubmission(submissionId, prisma69, valueMap, labelM
         valueMap.set(data.nodeId, parsedValue);
       }
     }
-    console.log(`[ENRICHMENT] \u{1F389} Enrichissement termin\xE9 - labels: ${labelMap.size}, valeurs: ${valueMap.size}`);
   } catch (error) {
-    console.error(`[ENRICHMENT] \u274C Erreur enrichissement:`, error);
+    console.error(`[ENRICHMENT] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur enrichissement:`, error);
   }
 }
-async function getNodeValue(nodeId, submissionId, prisma69, valueMap, options) {
+async function getNodeValue(nodeId, submissionId, prisma70, valueMap, options) {
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
-    console.log(`[INTERPRETER][getNodeValue] valueMap hit ${nodeId} \u2192 ${formatDebugValue(val)}`);
     if (val === null || val === void 0) {
       return options?.preserveEmpty ? null : "0";
     }
     return String(val);
   }
-  console.log(`[INTERPRETER][getNodeValue] DB fallback ${nodeId}`);
-  const data = await prisma69.treeBranchLeafSubmissionData.findFirst({
+  const data = await prisma70.treeBranchLeafSubmissionData.findFirst({
     where: {
       nodeId,
       submissionId
@@ -2448,26 +2421,23 @@ async function getNodeValue(nodeId, submissionId, prisma69, valueMap, options) {
     }
   });
   if (data?.value !== null && data?.value !== void 0) {
-    console.log(`[INTERPRETER][getNodeValue] SubmissionData hit ${nodeId} \u2192 ${formatDebugValue(data.value)}`);
     return String(data.value);
   }
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { calculatedValue: true, label: true }
   });
   if (node?.calculatedValue !== null && node?.calculatedValue !== void 0 && node?.calculatedValue !== "") {
-    console.log(`[INTERPRETER][getNodeValue] \u{1F195} TreeBranchLeafNode.calculatedValue hit ${nodeId} (${node.label}) \u2192 ${formatDebugValue(node.calculatedValue)}`);
     return String(node.calculatedValue);
   }
-  console.log(`[INTERPRETER][getNodeValue] No value found for ${nodeId}, returning "0"`);
   return options?.preserveEmpty ? null : "0";
 }
-async function getNodeLabel(nodeId, prisma69, labelMap) {
+async function getNodeLabel(nodeId, prisma70, labelMap) {
   if (labelMap && labelMap.has(nodeId)) {
     const label = labelMap.get(nodeId);
     return label || "Inconnu";
   }
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: {
       label: true,
@@ -2477,12 +2447,12 @@ async function getNodeLabel(nodeId, prisma69, labelMap) {
   });
   return node?.sharedReferenceName || node?.field_label || node?.label || "Inconnu";
 }
-async function interpretReference(ref, submissionId, prisma69, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
+async function interpretReference(ref, submissionId, prisma70, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
   if (depth > 10) {
-    console.error(`[INTERPR\xC9TATION] \u274C R\xE9cursion trop profonde (depth=${depth}) pour ref:`, ref);
+    console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 R\xC3\u0192\xC2\xA9cursion trop profonde (depth=${depth}) pour ref:`, ref);
     return {
-      result: "\u2205",
-      humanText: "\u26A0\uFE0F R\xE9cursion trop profonde",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
+      humanText: "\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9cursion trop profonde",
       details: {
         type: "error",
         error: "Max depth exceeded",
@@ -2492,48 +2462,41 @@ async function interpretReference(ref, submissionId, prisma69, valuesCache = /* 
   }
   const cleanRef = normalizeRef(ref);
   if (valuesCache.has(cleanRef)) {
-    console.log(`[INTERPR\xC9TATION] \u267B\uFE0F Cache hit pour ref: ${cleanRef}`);
     return valuesCache.get(cleanRef);
   }
   let type = knownType || identifyReferenceType(ref);
   const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   if (type === "field" && uuidRegex.test(cleanRef)) {
-    console.log(`[INTERPR\xC9TATION] \u{1F50D} UUID ambigu d\xE9tect\xE9: ${cleanRef}, v\xE9rification en BD...`);
-    type = await identifyReferenceTypeFromDB(cleanRef, prisma69);
+    type = await identifyReferenceTypeFromDB(cleanRef, prisma70);
   }
-  console.log(`[INTERPR\xC9TATION] \u{1F50D} Type identifi\xE9: ${type} pour ref: ${ref} (depth=${depth}${knownType ? `, contexte: ${knownType}` : ""})`);
   let result;
   try {
     switch (type) {
       case "condition":
-        console.log(`[INTERPR\xC9TATION] \u{1F500} D\xE9l\xE9gation vers interpretCondition`);
-        result = await interpretCondition(cleanRef, submissionId, prisma69, valuesCache, depth, valueMap, labelMap);
+        result = await interpretCondition(cleanRef, submissionId, prisma70, valuesCache, depth, valueMap, labelMap);
         break;
       case "formula":
-        console.log(`[INTERPR\xC9TATION] \u{1F9EE} D\xE9l\xE9gation vers interpretFormula`);
-        result = await interpretFormula(cleanRef, submissionId, prisma69, valuesCache, depth, valueMap, labelMap);
+        result = await interpretFormula(cleanRef, submissionId, prisma70, valuesCache, depth, valueMap, labelMap);
         break;
       case "table":
-        console.log(`[INTERPR\xC9TATION] \u{1F4CA} D\xE9l\xE9gation vers interpretTable`);
-        result = await interpretTable(cleanRef, submissionId, prisma69, valuesCache, depth, valueMap, labelMap);
+        result = await interpretTable(cleanRef, submissionId, prisma70, valuesCache, depth, valueMap, labelMap);
         break;
       case "value":
       case "field":
-        console.log(`[INTERPR\xC9TATION] \u{1F4DD} D\xE9l\xE9gation vers interpretField (type: ${type})`);
-        result = await interpretField(cleanRef, submissionId, prisma69, valueMap, labelMap);
+        result = await interpretField(cleanRef, submissionId, prisma70, valueMap, labelMap);
         break;
       default:
-        console.error(`[INTERPR\xC9TATION] \u274C Type inconnu: ${type}`);
+        console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Type inconnu: ${type}`);
         result = {
-          result: "\u2205",
+          result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
           humanText: `Type inconnu: ${type}`,
           details: { type: "error", error: "Unknown type" }
         };
     }
   } catch (error) {
-    console.error(`[INTERPR\xC9TATION] \u274C Erreur lors de l'interpr\xE9tation:`, error);
+    console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de l'interpr\xC3\u0192\xC2\xA9tation:`, error);
     result = {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Erreur: ${error instanceof Error ? error.message : "Inconnue"}`,
       details: {
         type: "error",
@@ -2542,13 +2505,11 @@ async function interpretReference(ref, submissionId, prisma69, valuesCache = /* 
     };
   }
   valuesCache.set(cleanRef, result);
-  console.log(`[INTERPR\xC9TATION] \u2705 R\xE9sultat mis en cache pour: ${cleanRef} = ${result.result}`);
   return result;
 }
-async function interpretCondition(conditionId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
-  console.log(`[CONDITION] \u{1F500} D\xE9but interpr\xE9tation condition: ${conditionId}`);
+async function interpretCondition(conditionId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
   const cleanId = conditionId.replace("condition:", "");
-  const condition = await prisma69.treeBranchLeafNodeCondition.findUnique({
+  const condition = await prisma70.treeBranchLeafNodeCondition.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2558,62 +2519,58 @@ async function interpretCondition(conditionId, submissionId, prisma69, valuesCac
     }
   });
   if (!condition) {
-    console.error(`[CONDITION] \u274C Condition introuvable: ${conditionId}`);
+    console.error(`[CONDITION] \xC3\xA2\xC2\x9D\xC5\u2019 Condition introuvable: ${conditionId}`);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Condition introuvable: ${conditionId}`,
       details: { type: "condition", error: "Not found" }
     };
   }
-  console.log(`[CONDITION] \u2705 Condition trouv\xE9e: ${condition.name}`);
   const condSet = condition.conditionSet;
   const branch = condSet.branches?.[0];
   const when = branch?.when;
   if (!when) {
-    console.error(`[CONDITION] \u274C Structure WHEN manquante`);
+    console.error(`[CONDITION] \xC3\xA2\xC2\x9D\xC5\u2019 Structure WHEN manquante`);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: "Structure condition invalide",
       details: { type: "condition", error: "Missing WHEN" }
     };
   }
-  console.log(`[CONDITION] \u{1F50D} WHEN extrait:`, JSON.stringify(when));
   const resolveOperandReference = async (ref) => {
     if (!ref) {
       return { value: null, label: "Inconnu" };
     }
     if (ref.startsWith("@select.")) {
       const optionNodeId = ref.slice("@select.".length).split(".")[0];
-      console.log(`[CONDITION] \u{1F539} R\xE9solution @select: ${optionNodeId}`);
-      const optionNode = await prisma69.treeBranchLeafNode.findUnique({
+      const optionNode = await prisma70.treeBranchLeafNode.findUnique({
         where: { id: optionNodeId },
         select: { id: true, label: true, parentId: true }
       });
       if (optionNode) {
-        console.log(`[CONDITION] \u{1F539} Option trouv\xE9e: ${optionNode.label}`);
         return { value: optionNode.id, label: optionNode.label };
       }
-      console.warn(`[CONDITION] \u26A0\uFE0F Option non trouv\xE9e: ${optionNodeId}`);
+      console.warn(`[CONDITION] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Option non trouv\xC3\u0192\xC2\xA9e: ${optionNodeId}`);
       return { value: optionNodeId, label: "Option inconnue" };
     }
     const operandType = identifyReferenceType(ref);
     if (operandType === "field" || operandType === "value") {
       const operandId = normalizeRef(ref);
-      const value = await getNodeValue(operandId, submissionId, prisma69, valueMap, { preserveEmpty: true });
-      const label = await getNodeLabel(operandId, prisma69, labelMap);
+      const value = await getNodeValue(operandId, submissionId, prisma70, valueMap, { preserveEmpty: true });
+      const label = await getNodeLabel(operandId, prisma70, labelMap);
       return { value, label };
     }
     const interpreted = await interpretReference(
       ref,
       submissionId,
-      prisma69,
+      prisma70,
       valuesCache,
       depth + 1,
       valueMap,
       labelMap,
       operandType
     );
-    const labelFromDetails = interpreted.details?.conditionName || interpreted.details?.formulaName || interpreted.details?.tableName || interpreted.details?.label || interpreted.details?.name || `R\xE9f\xE9rence ${operandType}`;
+    const labelFromDetails = interpreted.details?.conditionName || interpreted.details?.formulaName || interpreted.details?.tableName || interpreted.details?.label || interpreted.details?.name || `R\xC3\u0192\xC2\xA9f\xC3\u0192\xC2\xA9rence ${operandType}`;
     return {
       value: interpreted.result,
       label: labelFromDetails
@@ -2626,7 +2583,6 @@ async function interpretCondition(conditionId, submissionId, prisma69, valuesCac
     const leftInfo = await resolveOperandReference(leftRef);
     leftValue = leftInfo.value;
     leftLabel = leftInfo.label;
-    console.log(`[CONDITION] \u{1F4CA} LEFT: ${leftLabel} = ${leftValue}`);
   }
   const rightRef = when.right?.ref;
   let rightValue = null;
@@ -2635,60 +2591,51 @@ async function interpretCondition(conditionId, submissionId, prisma69, valuesCac
     const rightInfo = await resolveOperandReference(rightRef);
     rightValue = rightInfo.value;
     rightLabel = rightInfo.label;
-    console.log(`[CONDITION] \u{1F4CA} RIGHT (ref): ${rightLabel} = ${rightValue}`);
   } else if (when.right?.value !== void 0) {
     rightValue = String(when.right.value);
     rightLabel = rightValue;
-    console.log(`[CONDITION] \u{1F4CA} RIGHT (value): ${rightValue}`);
   }
   const operator = when.op;
   const conditionMet = evaluateOperator(operator, leftValue, rightValue);
-  console.log(`[CONDITION] \u2696\uFE0F \xC9valuation: ${leftValue} ${operator} ${rightValue} = ${conditionMet}`);
   const _selectedBranch = conditionMet ? branch : condSet.fallback;
   const branchName = conditionMet ? "ALORS" : "SINON";
-  console.log(`[CONDITION] \u{1F3AF} Branche s\xE9lectionn\xE9e: ${branchName}`);
-  let alorsResult = { result: "\u2205", humanText: "Aucune action" };
+  let alorsResult = { result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6", humanText: "Aucune action" };
   if (branch && branch.actions && branch.actions.length > 0) {
     const alorsAction = branch.actions[0];
     const alorsNodeId = alorsAction.nodeIds?.[0];
     if (alorsNodeId) {
-      console.log(`[CONDITION] \u{1F504} Interpr\xE9tation branche ALORS: ${alorsNodeId}`);
       alorsResult = await interpretReference(
         alorsNodeId,
         submissionId,
-        prisma69,
+        prisma70,
         valuesCache,
         depth + 1,
         valueMap,
         labelMap
       );
-      console.log(`[CONDITION] \u2705 R\xE9sultat ALORS: ${alorsResult.result}`);
     }
   }
-  let sinonResult = { result: "\u2205", humanText: "Aucune action" };
+  let sinonResult = { result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6", humanText: "Aucune action" };
   if (condSet.fallback && condSet.fallback.actions && condSet.fallback.actions.length > 0) {
     const sinonAction = condSet.fallback.actions[0];
     const sinonNodeId = sinonAction.nodeIds?.[0];
     if (sinonNodeId) {
-      console.log(`[CONDITION] \u{1F504} Interpr\xE9tation branche SINON: ${sinonNodeId}`);
       sinonResult = await interpretReference(
         sinonNodeId,
         submissionId,
-        prisma69,
+        prisma70,
         valuesCache,
         depth + 1,
         valueMap,
         labelMap
       );
-      console.log(`[CONDITION] \u2705 R\xE9sultat SINON: ${sinonResult.result}`);
     }
   }
   const operatorText = getOperatorText(operator);
-  const leftDisplay = `${leftLabel}(${leftValue || "\u2205"})`;
+  const leftDisplay = `${leftLabel}(${leftValue || "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6"})`;
   const rightDisplay = rightLabel !== "Inconnu" ? `${rightLabel}` : "";
   const conditionText = rightDisplay ? `Si ${leftDisplay} ${operatorText} ${rightDisplay}` : `Si ${leftDisplay} ${operatorText}`;
-  const humanText = `${conditionText}; ALORS: ${alorsResult.humanText}; SINON: ${sinonResult.humanText} \u2192 [${branchName} S\xC9LECTIONN\xC9] Result = ${conditionMet ? alorsResult.result : sinonResult.result}`;
-  console.log(`[CONDITION] \u{1F4DD} Texte g\xE9n\xE9r\xE9: ${humanText}`);
+  const humanText = `${conditionText}; ALORS: ${alorsResult.humanText}; SINON: ${sinonResult.humanText} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 [${branchName} S\xC3\u0192\xE2\u20AC\xB0LECTIONN\xC3\u0192\xE2\u20AC\xB0] Result = ${conditionMet ? alorsResult.result : sinonResult.result}`;
   const finalResult = conditionMet ? alorsResult.result : sinonResult.result;
   return {
     result: finalResult,
@@ -2722,12 +2669,12 @@ function evaluateOperator(op, left, right) {
     case "ne":
     case "!=":
       return left !== right;
-    // 🔥 NOUVEAU: Opérateur 'contains' pour vérifier si une chaîne contient une autre
+    // Ã°Å¸â€Â¥ NOUVEAU: OpÃƒÂ©rateur 'contains' pour vÃƒÂ©rifier si une chaÃƒÂ®ne contient une autre
     case "contains":
       if (left === null || left === void 0) return false;
       if (right === null || right === void 0) return false;
       return String(left).toLowerCase().includes(String(right).toLowerCase());
-    // 🔥 NOUVEAU: Opérateur 'startsWith' pour vérifier si une chaîne commence par une autre
+    // Ã°Å¸â€Â¥ NOUVEAU: OpÃƒÂ©rateur 'startsWith' pour vÃƒÂ©rifier si une chaÃƒÂ®ne commence par une autre
     case "startsWith":
     case "commence par":
       if (left === null || left === void 0) return false;
@@ -2746,7 +2693,7 @@ function evaluateOperator(op, left, right) {
     case "<=":
       return Number(left) <= Number(right);
     default:
-      console.warn(`[CONDITION] \u26A0\uFE0F Op\xE9rateur inconnu: ${op}`);
+      console.warn(`[CONDITION] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Op\xC3\u0192\xC2\xA9rateur inconnu: ${op}`);
       return false;
   }
 }
@@ -2829,13 +2776,13 @@ function getOperatorText(op) {
     "isEmpty": "est vide",
     "isNotEmpty": "n'est pas vide",
     "eq": "=",
-    "ne": "\u2260",
+    "ne": "\xC3\xA2\xE2\u20AC\xB0\xC2\xA0",
     "gt": ">",
-    "gte": "\u2265",
+    "gte": "\xC3\xA2\xE2\u20AC\xB0\xC2\xA5",
     "lt": "<",
-    "lte": "\u2264",
+    "lte": "\xC3\xA2\xE2\u20AC\xB0\xC2\xA4",
     "==": "=",
-    "!=": "\u2260"
+    "!=": "\xC3\xA2\xE2\u20AC\xB0\xC2\xA0"
   };
   return texts[op] || op;
 }
@@ -2944,10 +2891,9 @@ function buildFormulaExpression(tokens2) {
   const expression = exprSegments.join(" ");
   return { expression, parts, roleToEncoded, encodedMeta };
 }
-async function interpretFormula(formulaId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
-  console.log(`[FORMULE] \u{1F9EE} D\xE9but interpr\xE9tation formule: ${formulaId}`);
+async function interpretFormula(formulaId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
   const cleanId = formulaId.replace("node-formula:", "");
-  let formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+  let formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2957,35 +2903,31 @@ async function interpretFormula(formulaId, submissionId, prisma69, valuesCache, 
     }
   });
   if (!formula) {
-    console.log(`[FORMULE] \u{1F50D} Formule introuvable par ID, tentative r\xE9solution par nodeId: ${cleanId}`);
     try {
-      const byNode = await prisma69.treeBranchLeafNodeFormula.findFirst({
+      const byNode = await prisma70.treeBranchLeafNodeFormula.findFirst({
         where: { nodeId: cleanId },
         select: { id: true, name: true, tokens: true, nodeId: true },
         orderBy: { isDefault: "desc" }
       });
       if (byNode) {
         formula = byNode;
-        console.log(`[FORMULE] \u2705 Formule r\xE9solue via nodeId \u2192 formula:${formula.id}`);
       }
     } catch (e) {
-      console.warn("[FORMULE] \u26A0\uFE0F R\xE9solution implicite \xE9chou\xE9e:", e instanceof Error ? e.message : e);
+      console.warn("[FORMULE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
     }
   }
   if (!formula) {
-    console.error(`[FORMULE] \u274C Formule introuvable: ${formulaId}`);
+    console.error(`[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Formule introuvable: ${formulaId}`);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Formule introuvable: ${formulaId}`,
       details: { type: "formula", error: "Not found" }
     };
   }
-  console.log(`[FORMULE] \u2705 Formule trouv\xE9e: ${formula.name}`);
   const tokens2 = Array.isArray(formula.tokens) ? formula.tokens : [];
-  console.log(`[FORMULE] \u{1F4CB} Tokens:`, JSON.stringify(tokens2));
   const buildResult = buildFormulaExpression(tokens2);
   if (!buildResult.expression.trim()) {
-    console.warn("[FORMULE] \u26A0\uFE0F Expression vide, retour 0");
+    console.warn("[FORMULE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Expression vide, retour 0");
     return {
       result: "0",
       humanText: "0",
@@ -3017,7 +2959,7 @@ async function interpretFormula(formulaId, submissionId, prisma69, valuesCache, 
       const refResult = await interpretReference(
         meta.refId,
         submissionId,
-        prisma69,
+        prisma70,
         valuesCache,
         depth + 1,
         valueMap,
@@ -3032,12 +2974,12 @@ async function interpretFormula(formulaId, submissionId, prisma69, valuesCache, 
         const label = refResult.details?.formulaName || refResult.details?.label || `Formule ${meta.refId}`;
         labelCacheByEncoded.set(encoded, label);
       } else {
-        const label = await getNodeLabel(meta.refId, prisma69, labelMap).catch(() => meta.refId);
+        const label = await getNodeLabel(meta.refId, prisma70, labelMap).catch(() => meta.refId);
         labelCacheByEncoded.set(encoded, label || meta.refId);
       }
       return safeValue;
     } catch (error) {
-      console.error("[FORMULE] \u274C Erreur r\xE9solution variable:", { encoded, error });
+      console.error("[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur r\xC3\u0192\xC2\xA9solution variable:", { encoded, error });
       valueCacheByEncoded.set(encoded, 0);
       labelCacheByEncoded.set(encoded, meta?.rawToken || encoded);
       return 0;
@@ -3051,9 +2993,9 @@ async function interpretFormula(formulaId, submissionId, prisma69, valuesCache, 
       strictVariables: false
     });
   } catch (error) {
-    console.error("[FORMULE] \u274C Erreur evaluateExpression:", error);
+    console.error("[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur evaluateExpression:", error);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: "Erreur de calcul de la formule",
       details: {
         type: "formula",
@@ -3104,16 +3046,12 @@ async function interpretFormula(formulaId, submissionId, prisma69, valuesCache, 
     }
   };
 }
-async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
+async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeValue(fieldId, submissionId, prisma69, valueMap) : null;
+    return fieldId ? await getNodeValue(fieldId, submissionId, prisma70, valueMap) : null;
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
-    console.log(`[TABLE] \u{1F50D} DEBUG CHAMP: sourceOption=`, JSON.stringify(sourceOption, null, 2));
-    console.log(`[TABLE] \u{1F50D} DEBUG CHAMP: submissionId=${submissionId}, sourceField=${sourceOption.sourceField}`);
-    console.log(`[TABLE] \u{1F50D} DEBUG CHAMP: valueMap has ${valueMap?.size || 0} entries:`, valueMap ? Array.from(valueMap.keys()).slice(0, 5) : "NO_VALUE_MAP");
-    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma69, valueMap);
-    console.log(`[TABLE] \u{1F525} Option 2 CHAMP: sourceField=${sourceOption.sourceField} \u2192 ${result}`);
+    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma70, valueMap);
     return result;
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
@@ -3121,41 +3059,39 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
       const capacityResult = await interpretReference(
         sourceOption.capacityRef,
         submissionId,
-        prisma69,
+        prisma70,
         valuesCache,
         depth + 1,
         valueMap,
         labelMap
       );
-      console.log(`[TABLE] \u{1F525} Option 3 CAPACIT\xC9: capacityRef=${sourceOption.capacityRef} \u2192 ${capacityResult.result}`);
       return capacityResult.result;
     } catch (error) {
-      console.error(`[TABLE] \u274C Erreur ex\xE9cution capacit\xE9 ${sourceOption.capacityRef}:`, error);
+      console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur ex\xC3\u0192\xC2\xA9cution capacit\xC3\u0192\xC2\xA9 ${sourceOption.capacityRef}:`, error);
       return null;
     }
   }
   return null;
 }
-async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma69, labelMap) {
+async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma70, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeLabel(fieldId, prisma69, labelMap) : "Source";
+    return fieldId ? await getNodeLabel(fieldId, prisma70, labelMap) : "Source";
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
-    return await getNodeLabel(sourceOption.sourceField, prisma69, labelMap);
+    return await getNodeLabel(sourceOption.sourceField, prisma70, labelMap);
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
     const capacityId = sourceOption.capacityRef.replace("@value.", "").replace("formula:", "").replace("condition:", "").replace("table:", "");
     if (labelMap && labelMap.has(capacityId)) {
       return labelMap.get(capacityId) || capacityId;
     }
-    return `Capacit\xE9: ${sourceOption.capacityRef}`;
+    return `Capacit\xC3\u0192\xC2\xA9: ${sourceOption.capacityRef}`;
   }
   return "Source";
 }
-async function interpretTable(tableId, submissionId, prisma69, valuesCache, depth, valueMap, labelMap) {
-  console.log(`[TABLE] \u{1F4CA} D\xE9but interpr\xE9tation table: ${tableId}`);
+async function interpretTable(tableId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
   const cleanId = tableId.replace("@table.", "").replace("node-table:", "");
-  let table = await prisma69.treeBranchLeafNodeTable.findUnique({
+  let table = await prisma70.treeBranchLeafNodeTable.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -3188,9 +3124,8 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
     }
   });
   if (!table) {
-    console.log(`[TABLE] \u{1F50D} Table introuvable par ID, tentative r\xE9solution par nodeId: ${cleanId}`);
     try {
-      const byNode = await prisma69.treeBranchLeafNodeTable.findFirst({
+      const byNode = await prisma70.treeBranchLeafNodeTable.findFirst({
         where: { nodeId: cleanId },
         select: {
           id: true,
@@ -3211,26 +3146,22 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
         },
         orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }]
       });
-      console.log(`[TABLE] \u{1F50D} R\xE9sultat findFirst par nodeId:`, byNode ? `TROUV\xC9 id=${byNode.id}` : "NULL");
       if (byNode) {
         table = byNode;
-        console.log(`[TABLE] \u2705 Table r\xE9solue via nodeId \u2192 table:${table.id}`);
       } else {
-        console.log(`[TABLE] \u26A0\uFE0F Aucune table avec nodeId="${cleanId}" trouv\xE9e`);
       }
     } catch (e) {
-      console.warn("[TABLE] \u26A0\uFE0F R\xE9solution implicite \xE9chou\xE9e:", e instanceof Error ? e.message : e);
+      console.warn("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
     }
   }
   if (!table) {
-    console.error(`[TABLE] \u274C Table introuvable: ${tableId}`);
+    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Table introuvable: ${tableId}`);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Table introuvable: ${tableId}`,
       details: { type: "table", error: "Not found" }
     };
   }
-  console.log(`[TABLE] \u2705 Table trouv\xE9e: ${table.name} (type: ${table.type})`);
   const columns = table.tableColumns.map((col) => col.name);
   const rows = [];
   const data = [];
@@ -3247,7 +3178,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
         cellsData = row.cells || [];
       }
       if (row.rowIndex === 0) {
-        console.log(`[TABLE] \u{1F50D} Header row d\xE9tect\xE9 (rowIndex=0), ignor\xE9. Cells:`, JSON.stringify(cellsData).substring(0, 100));
         return;
       }
       if (Array.isArray(cellsData) && cellsData.length > 0) {
@@ -3260,7 +3190,7 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
         data.push([]);
       }
     } catch (error) {
-      console.error("[TABLE] \u26A0\uFE0F Erreur parsing cells:", error);
+      console.error("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur parsing cells:", error);
       rows.push(`Row ${row.rowIndex}`);
       data.push([]);
     }
@@ -3269,10 +3199,10 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
   const lookup = meta?.lookup;
   const isLookupActive = lookup && (lookup.enabled === true || lookup.columnLookupEnabled === true || lookup.rowLookupEnabled === true);
   if (!isLookupActive) {
-    console.error(`[TABLE] \u274C Lookup non configur\xE9 ou d\xE9sactiv\xE9`);
+    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Lookup non configur\xC3\u0192\xC2\xA9 ou d\xC3\u0192\xC2\xA9sactiv\xC3\u0192\xC2\xA9`);
     return {
-      result: "\u2205",
-      humanText: `Lookup non configur\xE9 pour table ${table.name}`,
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
+      humanText: `Lookup non configur\xC3\u0192\xC2\xA9 pour table ${table.name}`,
       details: { type: "table", error: "Lookup not enabled" }
     };
   }
@@ -3285,43 +3215,39 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
   const hasRowSelector = Boolean(rowFieldId || rowSourceOption && rowSourceOption.type && rowSourceOption.type !== "select");
   const hasColSelector = Boolean(colFieldId || colSourceOption && colSourceOption.type && colSourceOption.type !== "select");
   if (rowEnabled && colEnabled && hasRowSelector && hasColSelector) {
-    console.log(`[TABLE] \u{1F3AF} MODE 3 d\xE9tect\xE9: Croisement dynamique COLONNE \xD7 LIGNE`);
   } else if (colEnabled && (colFieldId || colSourceOption) && lookup.displayColumn && !(rowEnabled && colEnabled && hasRowSelector && hasColSelector)) {
-    console.log(`[TABLE] \u{1F3AF} MODE 1 d\xE9tect\xE9: COLONNE \xD7 displayColumn fixe (rowEnabled=${rowEnabled}, rowFieldId=${rowFieldId})`);
     const colSelectorValue2 = await getSourceValue(
       colSourceOption,
       lookup,
       colFieldId,
       submissionId,
-      prisma69,
+      prisma70,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma69, labelMap);
+    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma70, labelMap);
     const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
     if (!colSelectorValue2) {
       return {
-        result: "\u2205",
-        humanText: `Table "${table.name}" - Aucune s\xE9lection colonne`,
+        result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
+        humanText: `Table "${table.name}" - Aucune s\xC3\u0192\xC2\xA9lection colonne`,
         details: { type: "table", mode: 1, error: "No column selection" }
       };
     }
     let validRowIndices = Array.from({ length: rows.length }, (_, i) => i);
     if (colSourceOption?.filterColumn && colSourceOption?.filterOperator && colSourceOption?.filterValueRef) {
-      console.log(`[TABLE] \u{1F525} \xC9TAPE 2.5 - Filtrage d\xE9tect\xE9: colonne="${colSourceOption.filterColumn}", op="${colSourceOption.filterOperator}", ref="${colSourceOption.filterValueRef}"`);
       const filterRefResult = await interpretReference(
         colSourceOption.filterValueRef,
         submissionId,
-        prisma69,
+        prisma70,
         valuesCache,
         depth + 1,
         valueMap,
         labelMap
       );
       const filterComparisonValue = filterRefResult.result;
-      console.log(`[TABLE] \u{1F525} \xC9TAPE 2.5 - Valeur de comparaison: "${colSourceOption.filterValueRef}" \u2192 ${filterComparisonValue}`);
       const normalizedFilterColName = String(colSourceOption.filterColumn).trim().toLowerCase();
       const filterColInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedFilterColName);
       const filterColInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedFilterColName);
@@ -3334,21 +3260,17 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
           const cellValue = filterColIndex === 0 ? rows[rowIdx] : data[rowIdx]?.[dataColIndexForFilter];
           const matches = compareValuesByOperator(colSourceOption.filterOperator, cellValue, filterComparisonValue);
           if (matches) {
-            console.log(`[TABLE] \u2705 \xC9TAPE 2.5 - Ligne ${rowIdx} ("${rows[rowIdx]}"): ${cellValue} ${colSourceOption.filterOperator} ${filterComparisonValue} = TRUE`);
           } else {
-            console.log(`[TABLE] \u274C \xC9TAPE 2.5 - Ligne ${rowIdx} ("${rows[rowIdx]}"): ${cellValue} ${colSourceOption.filterOperator} ${filterComparisonValue} = FALSE (EXCLUE)`);
           }
           return matches;
         });
-        console.log(`[TABLE] \u{1F525} \xC9TAPE 2.5 - R\xE9sultat du filtrage: ${validRowIndices.length} lignes sur ${rows.length} conserv\xE9es`);
       } else {
-        console.warn(`[TABLE] \u26A0\uFE0F \xC9TAPE 2.5 - Colonne de filtrage non trouv\xE9e: "${colSourceOption.filterColumn}"`);
+        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0TAPE 2.5 - Colonne de filtrage non trouv\xC3\u0192\xC2\xA9e: "${colSourceOption.filterColumn}"`);
       }
     }
     const results = [];
     if (lookup.extractValueRef) {
-      console.log(`[TABLE] \u{1F50E} MODE 1 - extractValueRef d\xE9tect\xE9: ${lookup.extractValueRef}, op=${lookup.extractOperator}`);
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma69, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma70, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedColSelector2 = String(colSelectorValue2 || "").trim().toLowerCase();
       const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedColSelector2);
@@ -3357,7 +3279,7 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
       if (colSelectorInCols2 !== -1) finalColIndex2 = colSelectorInCols2;
       else finalColIndex2 = colSelectorInRows2;
       if (finalColIndex2 === -1) {
-        console.warn(`[TABLE] \u26A0\uFE0F MODE 1 extract - colonne non trouv\xE9e pour selector ${colSelectorValue2}`);
+        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 extract - colonne non trouv\xC3\u0192\xC2\xA9e pour selector ${colSelectorValue2}`);
       } else {
         const dataColIndex2 = finalColIndex2 - 1;
         let foundRowIndex = -1;
@@ -3381,7 +3303,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
               const dataColIndexForDisplay = finalColIndex2 - 1;
               const result2 = data[dataRowIndex2]?.[dataColIndexForDisplay];
               results.push({ row: fixedRowValue, value: result2 });
-              console.log(`[TABLE] \u2705 MODE 1 - extract result ${fixedRowValue}: ${result2}`);
             }
           }
           const resultText2 = results.map((r) => `${r.row}=${r.value}`).join(", ");
@@ -3408,7 +3329,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
     }
     let targetColIndex = -1;
     if ((colSourceOption?.type === "field" || colSourceOption?.type === "capacity") && colSourceOption?.operator && colSourceOption?.comparisonColumn) {
-      console.log(`[TABLE] \u{1F525} MODE 1 - Option ${colSourceOption.type === "field" ? "2" : "3"} avec op\xE9rateur: ${colSourceOption.operator} sur colonne "${colSourceOption.comparisonColumn}"`);
       const comparisonColName = colSourceOption.comparisonColumn;
       const normalizedComparisonCol = String(comparisonColName).trim().toLowerCase();
       const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedComparisonCol);
@@ -3423,7 +3343,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
           const cellValue = colSelectorIndex === 0 ? rows[rIdx] : data[rIdx]?.[dataColIndex2];
           if (compareValuesByOperator(colSourceOption.operator, cellValue, colSelectorValue2)) {
             foundRowIndex = rIdx;
-            console.log(`[TABLE] \u2705 MODE 1 Option ${colSourceOption.type === "field" ? "2" : "3"} - Trouv\xE9 \xE0 ligne ${rIdx}: ${cellValue} ${colSourceOption.operator} ${colSelectorValue2}`);
             break;
           }
         }
@@ -3439,13 +3358,12 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
               const dataColIndexForDisplay = colIndexForDisplay - 1;
               const result2 = data[foundRowIndex]?.[dataColIndexForDisplay];
               results.push({ row: fixedColValue, value: result2 });
-              console.log(`[TABLE] \u2705 MODE 1 Option ${colSourceOption.type === "field" ? "2" : "3"} - R\xE9sultat ${fixedColValue}: ${result2} (\xE0 partir de ligne trouv\xE9e ${foundRowIndex})`);
             }
           }
           targetColIndex = colSelectorIndex;
         }
       } else {
-        console.warn(`[TABLE] \u26A0\uFE0F MODE 1 - Colonne de comparaison non trouv\xE9e: ${comparisonColName}`);
+        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 - Colonne de comparaison non trouv\xC3\u0192\xC2\xA9e: ${comparisonColName}`);
       }
     }
     if (targetColIndex === -1) {
@@ -3453,11 +3371,9 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
       const isNumericSourceWithoutOperator = (colSourceOption?.type === "capacity" || colSourceOption?.type === "field") && !hasOperatorConfig;
       if (isNumericSourceWithoutOperator) {
         const optionLabel = colSourceOption?.type === "field" ? "Option 2" : "Option 3";
-        console.log(`[TABLE] \u{1F525} MODE 1 ${optionLabel} SANS op\xE9rateur - Recherche intelligente de ligne pour ${colSelectorValue2}`);
         const match = findClosestIndexInLabels(colSelectorValue2, rows, validRowIndices);
         if (match) {
           const foundRowIndex = match.index;
-          console.log(`[TABLE] \u2705 MODE 1 ${optionLabel} - Ligne trouv\xE9e ${foundRowIndex} (${rows[foundRowIndex]}) via ${match.matchType}`);
           for (const fixedColValue of displayColumns) {
             const normalizedFixedCol = normalizeLookupValue(fixedColValue);
             const fixedColInCols = columns.findIndex((c) => normalizeLookupValue(c) === normalizedFixedCol);
@@ -3469,12 +3385,11 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
               const dataColIndexForDisplay = colIndexForDisplay - 1;
               const result2 = data[foundRowIndex]?.[dataColIndexForDisplay];
               results.push({ row: fixedColValue, value: result2 });
-              console.log(`[TABLE] \u2705 MODE 1 ${optionLabel} - R\xE9sultat ${fixedColValue}: ${result2} (ligne ${foundRowIndex})`);
             }
           }
           targetColIndex = 0;
         } else {
-          console.warn(`[TABLE] \u26A0\uFE0F MODE 1 ${optionLabel} - Impossible de trouver une ligne pour ${colSelectorValue2}`);
+          console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 ${optionLabel} - Impossible de trouver une ligne pour ${colSelectorValue2}`);
         }
       }
       if (targetColIndex === -1) {
@@ -3494,7 +3409,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
           } else if (colSelectorInRows2 !== -1 && fixedRowInCols !== -1) {
             colIndex = fixedRowInCols;
             rowIndex = colSelectorInRows2;
-            console.log(`[TABLE] \u{1F504} MODE 1 - Inversion d\xE9tect\xE9e et corrig\xE9e pour ${fixedRowValue}`);
           } else {
             colIndex = colSelectorInCols2 !== -1 ? colSelectorInCols2 : colSelectorInRows2;
             rowIndex = fixedRowInRows !== -1 ? fixedRowInRows : fixedRowInCols;
@@ -3504,7 +3418,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
             const dataColIndex2 = colIndex - 1;
             const result2 = data[dataRowIndex2]?.[dataColIndex2];
             results.push({ row: fixedRowValue, value: result2 });
-            console.log(`[TABLE] \u2705 MODE 1 - ${fixedRowValue}: ${result2}`);
           }
         }
       }
@@ -3528,32 +3441,29 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
       }
     };
   } else if (rowEnabled && !colEnabled && hasRowSelector && lookup.displayRow) {
-    console.log(`[TABLE] \u{1F3AF} MODE 2 d\xE9tect\xE9: displayRow fixe \xD7 LIGNE`);
     const rowSelectorValue2 = await getSourceValue(
       rowSourceOption,
       lookup,
       rowFieldId,
       submissionId,
-      prisma69,
+      prisma70,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma69, labelMap);
+    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma70, labelMap);
     const displayRows = Array.isArray(lookup.displayRow) ? lookup.displayRow : [lookup.displayRow];
-    console.log(`[TABLE] \u{1F4CA} MODE 2 - Croisement: ligne=${rowLabel2}(${rowSelectorValue2}) \xD7 colonnes=${displayRows.join(", ")} (fixes)`);
     if (!rowSelectorValue2) {
       return {
-        result: "\u2205",
-        humanText: `Table "${table.name}" - Aucune s\xE9lection ligne`,
+        result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
+        humanText: `Table "${table.name}" - Aucune s\xC3\u0192\xC2\xA9lection ligne`,
         details: { type: "table", mode: 2, error: "No row selection" }
       };
     }
     const results = [];
     if (lookup.extractValueRef) {
-      console.log(`[TABLE] \u{1F50E} MODE 2 - extractValueRef detected: ${lookup.extractValueRef}, op=${lookup.extractOperator}`);
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma69, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma70, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedRowSelector2 = String(rowSelectorValue2 || "").trim().toLowerCase();
       const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedRowSelector2);
@@ -3562,7 +3472,7 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
       if (rowSelectorInRows2 !== -1) finalRowIndex2 = rowSelectorInRows2;
       else finalRowIndex2 = rowSelectorInCols2;
       if (finalRowIndex2 === -1) {
-        console.warn(`[TABLE] \u26A0\uFE0F MODE 2 extract - ligne non trouv\xE9e pour selector ${rowSelectorValue2}`);
+        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 extract - ligne non trouv\xC3\u0192\xC2\xA9e pour selector ${rowSelectorValue2}`);
       } else {
         const dataRowIndex2 = finalRowIndex2;
         let foundColIndex = -1;
@@ -3585,7 +3495,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
               const dataColIndex2 = colIndex - 1;
               const result2 = data[dataRowIndex2]?.[dataColIndex2];
               results.push({ column: fixedColValue, value: result2 });
-              console.log(`[TABLE] \u2705 MODE 2 - extract result ${fixedColValue}: ${result2}`);
             }
           }
           const resultText2 = results.map((r) => `${r.column}=${r.value}`).join(", ");
@@ -3612,7 +3521,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
     }
     let targetRowIndex = -1;
     if ((rowSourceOption?.type === "field" || rowSourceOption?.type === "capacity") && rowSourceOption?.operator && rowSourceOption?.comparisonColumn) {
-      console.log(`[TABLE] \u{1F525} MODE 2 - Option ${rowSourceOption.type === "field" ? "2" : "3"} avec op\xE9rateur: ${rowSourceOption.operator} sur ligne "${rowSourceOption.comparisonColumn}"`);
       const comparisonRowName = rowSourceOption.comparisonColumn;
       const normalizedComparisonRow = String(comparisonRowName).trim().toLowerCase();
       const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedComparisonRow);
@@ -3626,7 +3534,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
           const cellValue = rowSelectorIndex === 0 ? columns[cIdx] : data[rowSelectorIndex - 1]?.[cIdx - 1];
           if (compareValuesByOperator(rowSourceOption.operator, cellValue, rowSelectorValue2)) {
             foundColIndex = cIdx;
-            console.log(`[TABLE] \u2705 MODE 2 Option ${rowSourceOption.type === "field" ? "2" : "3"} - Trouv\xE9 \xE0 colonne ${cIdx}: ${cellValue} ${rowSourceOption.operator} ${rowSelectorValue2}`);
             break;
           }
         }
@@ -3642,13 +3549,12 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
             if (rowIndexForDisplay !== -1) {
               const result2 = rowIndexForDisplay === 0 ? columns[foundColIndex] : data[rowIndexForDisplay - 1]?.[dataColIndexForFound];
               results.push({ column: fixedRowValue, value: result2 });
-              console.log(`[TABLE] \u2705 MODE 2 Option ${rowSourceOption.type === "field" ? "2" : "3"} - R\xE9sultat ${fixedRowValue}: ${result2} (depuis colonne trouv\xE9e ${foundColIndex})`);
             }
           }
           targetRowIndex = rowSelectorIndex;
         }
       } else {
-        console.warn(`[TABLE] \u26A0\uFE0F MODE 2 - Ligne de comparaison non trouv\xE9e: ${comparisonRowName}`);
+        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 - Ligne de comparaison non trouv\xC3\u0192\xC2\xA9e: ${comparisonRowName}`);
       }
     }
     if (targetRowIndex === -1) {
@@ -3656,11 +3562,9 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
       const isRowNumericSource = (rowSourceOption?.type === "field" || rowSourceOption?.type === "capacity") && !hasRowOperatorConfig;
       if (isRowNumericSource) {
         const optionLabel = rowSourceOption?.type === "field" ? "Option 2" : "Option 3";
-        console.log(`[TABLE] \u{1F525} MODE 2 ${optionLabel} SANS op\xE9rateur - Recherche intelligente de colonne pour ${rowSelectorValue2}`);
         const match = findClosestIndexInLabels(rowSelectorValue2, rows);
         if (match) {
           const foundRowIndex = match.index;
-          console.log(`[TABLE] \u2705 MODE 2 ${optionLabel} - Ligne trouv\xE9e ${foundRowIndex} (${rows[foundRowIndex]}) via ${match.matchType}`);
           for (const fixedColValue of displayRows) {
             const normalizedFixedCol = normalizeLookupValue(fixedColValue);
             const fixedColInCols = columns.findIndex((c) => normalizeLookupValue(c) === normalizedFixedCol);
@@ -3672,7 +3576,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
               const dataColIndexForDisplay = colIndexForDisplay - 1;
               const result2 = data[foundRowIndex]?.[dataColIndexForDisplay];
               results.push({ column: fixedColValue, value: result2 });
-              console.log(`[TABLE] \u2705 MODE 2 ${optionLabel} - R\xE9sultat ${fixedColValue}: ${result2} (ligne ${foundRowIndex})`);
             }
           }
           const resultText2 = results.map((r) => `${r.column}=${r.value}`).join(", ");
@@ -3694,7 +3597,7 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
             }
           };
         } else {
-          console.warn(`[TABLE] \u26A0\uFE0F MODE 2 ${optionLabel} - Impossible de trouver une ligne pour ${rowSelectorValue2}`);
+          console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 ${optionLabel} - Impossible de trouver une ligne pour ${rowSelectorValue2}`);
         }
       }
       for (const fixedColValue of displayRows) {
@@ -3712,7 +3615,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
         } else if (rowSelectorInCols2 !== -1 && fixedColInRows !== -1) {
           rowIndex = fixedColInRows;
           colIndex = rowSelectorInCols2;
-          console.log(`[TABLE] \u{1F504} MODE 2 - Inversion d\xE9tect\xE9e et corrig\xE9e pour ${fixedColValue}`);
         } else {
           rowIndex = rowSelectorInRows2 !== -1 ? rowSelectorInRows2 : rowSelectorInCols2;
           colIndex = fixedColInCols !== -1 ? fixedColInCols : fixedColInRows;
@@ -3722,7 +3624,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
           const dataColIndex2 = colIndex - 1;
           const result2 = data[dataRowIndex2]?.[dataColIndex2];
           results.push({ column: fixedColValue, value: result2 });
-          console.log(`[TABLE] \u2705 MODE 2 - ${fixedColValue}: ${result2}`);
         }
       }
     }
@@ -3745,20 +3646,19 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
       }
     };
   } else {
-    console.error(`[TABLE] \u274C Configuration lookup invalide`);
+    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Configuration lookup invalide`);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Configuration lookup invalide pour table ${table.name}`,
       details: { type: "table", error: "Invalid configuration" }
     };
   }
-  console.log(`[TABLE] \u{1F4CB} Selectors MODE 3: row=${rowFieldId}, col=${colFieldId}`);
   let rowSelectorValue = await getSourceValue(
     rowSourceOption,
     lookup,
     rowFieldId,
     submissionId,
-    prisma69,
+    prisma70,
     valuesCache,
     depth,
     valueMap,
@@ -3769,44 +3669,25 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
     lookup,
     colFieldId,
     submissionId,
-    prisma69,
+    prisma70,
     valuesCache,
     depth,
     valueMap,
     labelMap
   );
-  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma69, labelMap);
-  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma69, labelMap);
+  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma70, labelMap);
+  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma70, labelMap);
   const rowSourceType = rowSourceOption?.type || (rowFieldId ? "select" : void 0);
   const colSourceType = colSourceOption?.type || (colFieldId ? "select" : void 0);
-  console.log(`[TABLE] \u{1F4CA} Valeurs s\xE9lectionn\xE9es: row=${rowLabel}(${rowSelectorValue}), col=${colLabel}(${colSelectorValue})`);
   if (!rowSelectorValue || !colSelectorValue) {
     return {
-      result: "\u2205",
-      humanText: `Table "${table.name}"[${rowLabel}(${rowSelectorValue || "?"}), ${colLabel}(${colSelectorValue || "?"})] = aucune s\xE9lection`,
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
+      humanText: `Table "${table.name}"[${rowLabel}(${rowSelectorValue || "?"}), ${colLabel}(${colSelectorValue || "?"})] = aucune s\xC3\u0192\xC2\xA9lection`,
       details: { type: "table", error: "Missing selection" }
     };
   }
-  console.log(`[TABLE] \u{1F50D} DEBUG rowSelectorValue:`, {
-    raw: rowSelectorValue,
-    type: typeof rowSelectorValue,
-    stringified: JSON.stringify(rowSelectorValue),
-    asString: String(rowSelectorValue),
-    length: String(rowSelectorValue).length
-  });
-  console.log(`[TABLE] \u{1F50D} DEBUG colSelectorValue:`, {
-    raw: colSelectorValue,
-    type: typeof colSelectorValue,
-    stringified: JSON.stringify(colSelectorValue),
-    asString: String(colSelectorValue),
-    length: String(colSelectorValue).length
-  });
   const normalizedRowSelector = String(rowSelectorValue).trim().toLowerCase();
   const normalizedColSelector = String(colSelectorValue).trim().toLowerCase();
-  console.log(`[TABLE] \u{1F50D} Recherche normalis\xE9e:`, {
-    normalizedRowSelector,
-    normalizedColSelector
-  });
   let rowSelectorInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedRowSelector);
   let rowSelectorInCols = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedRowSelector);
   let colSelectorInRows = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedColSelector);
@@ -3839,10 +3720,6 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
       }
     }
   }
-  console.log(`[TABLE] \u{1F50D} Auto-d\xE9tection positions:`, {
-    rowSelector: { value: rowSelectorValue, inRows: rowSelectorInRows, inCols: rowSelectorInCols },
-    colSelector: { value: colSelectorValue, inRows: colSelectorInRows, inCols: colSelectorInCols }
-  });
   let finalRowIndex = -1;
   let finalColIndex = -1;
   let actualRowValue = "";
@@ -3852,46 +3729,36 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
     finalColIndex = colSelectorInCols;
     actualRowValue = String(rowSelectorValue);
     actualColValue = String(colSelectorValue);
-    console.log(`[TABLE] \u2705 Configuration normale d\xE9tect\xE9e`);
   } else if (rowSelectorInCols !== -1 && colSelectorInRows !== -1) {
     finalRowIndex = colSelectorInRows;
     finalColIndex = rowSelectorInCols;
     actualRowValue = String(colSelectorValue);
     actualColValue = String(rowSelectorValue);
-    console.log(`[TABLE] \u{1F504} INVERSION D\xC9TECT\xC9E ET CORRIG\xC9E AUTOMATIQUEMENT`);
-    console.log(`[TABLE] \u{1F504} rowSelector (${rowSelectorValue}) \xE9tait dans columns \u2192 devient colValue`);
-    console.log(`[TABLE] \uFFFD colSelector (${colSelectorValue}) \xE9tait dans rows \u2192 devient rowValue`);
   } else {
     finalRowIndex = rowSelectorInRows !== -1 ? rowSelectorInRows : colSelectorInRows;
     finalColIndex = rowSelectorInCols !== -1 ? rowSelectorInCols : colSelectorInCols;
     actualRowValue = String(rowSelectorValue);
     actualColValue = String(colSelectorValue);
   }
-  console.log(`[TABLE] \u{1F4CB} Lignes disponibles (${rows.length}):`, rows.map((r, i) => `[${i}]"${r}"`).join(", "));
-  console.log(`[TABLE] \u{1F4CB} Colonnes disponibles (${columns.length}):`, columns.map((c, i) => `[${i}]"${c}"`).join(", "));
-  console.log(`[TABLE] \u{1F3AF} Index finaux apr\xE8s auto-d\xE9tection: rowIndex=${finalRowIndex}, colIndex=${finalColIndex}`);
-  console.log(`[TABLE] \u{1F3AF} Index finaux apr\xE8s auto-d\xE9tection: rowIndex=${finalRowIndex}, colIndex=${finalColIndex}`);
   if (finalRowIndex === -1 || finalColIndex === -1) {
-    console.error(`[TABLE] \u274C Valeur introuvable dans rows/columns`);
+    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Valeur introuvable dans rows/columns`);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Table "${table.name}"[${actualRowValue}, ${actualColValue}] = valeur introuvable`,
       details: { type: "table", error: "Value not found in rows/columns" }
     };
   }
   const dataRowIndex = finalRowIndex;
   const dataColIndex = finalColIndex - 1;
-  console.log(`[TABLE] \u{1F4CD} Index dans data[][]: [${dataRowIndex}][${dataColIndex}] (finalRow=${finalRowIndex}, finalCol=${finalColIndex})`);
   if (dataRowIndex < 0 || dataColIndex < 0 || !data[dataRowIndex]) {
-    console.error(`[TABLE] \u274C Index hors limites`);
+    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Index hors limites`);
     return {
-      result: "\u2205",
+      result: "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
       humanText: `Table "${table.name}"[${actualRowValue}, ${actualColValue}] = hors limites`,
       details: { type: "table", error: "Index out of bounds" }
     };
   }
   const result = data[dataRowIndex][dataColIndex];
-  console.log(`[TABLE] \u2705 R\xE9sultat du lookup: ${result}`);
   const humanText = `Table "${table.name}"[${rowLabel}=${actualRowValue}, ${colLabel}=${actualColValue}] = ${result}`;
   return {
     result: String(result),
@@ -3918,26 +3785,21 @@ async function interpretTable(tableId, submissionId, prisma69, valuesCache, dept
     }
   };
 }
-async function interpretField(fieldId, submissionId, prisma69, valueMap, labelMap) {
-  console.log(`[CHAMP] \u{1F4DD} D\xE9but interpr\xE9tation champ: ${fieldId}`);
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+async function interpretField(fieldId, submissionId, prisma70, valueMap, labelMap) {
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: fieldId },
     select: { type: true, label: true }
   });
-  console.log(`[CHAMP] \u{1F50D} N\u0153ud trouv\xE9: ${node ? `type=${node.type}, label=${node.label}` : "INTROUVABLE"}`);
   if (node && node.type) {
     if (node.type.startsWith("leaf_table_")) {
-      console.log(`[CHAMP] \u2705 REDIRECTION - Le n\u0153ud est une TABLE (type: ${node.type})`);
-      return await interpretTable(fieldId, submissionId, prisma69, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma70, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
     if (node.type.includes("table")) {
-      console.log(`[CHAMP] \u2705 REDIRECTION - Le n\u0153ud contient 'table' dans son type (type: ${node.type})`);
-      return await interpretTable(fieldId, submissionId, prisma69, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma70, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
   }
-  const value = await getNodeValue(fieldId, submissionId, prisma69, valueMap);
-  const label = await getNodeLabel(fieldId, prisma69, labelMap);
-  console.log(`[CHAMP] \u{1F4CA} ${label} = ${value}`);
+  const value = await getNodeValue(fieldId, submissionId, prisma70, valueMap);
+  const label = await getNodeLabel(fieldId, prisma70, labelMap);
   const humanText = `${label}(${value})`;
   return {
     result: value || "0",
@@ -3950,23 +3812,16 @@ async function interpretField(fieldId, submissionId, prisma69, valueMap, labelMa
     }
   };
 }
-async function evaluateVariableOperation(variableNodeId, submissionId, prisma69, valueMap) {
-  console.log(`
-${"\u2550".repeat(80)}`);
-  console.log(`\u{1F3AF} \xC9VALUATION VARIABLE: ${variableNodeId}`);
-  console.log(`   Submission: ${submissionId}`);
-  console.log(`${"\u2550".repeat(80)}
-`);
-  const variableNode = await prisma69.treeBranchLeafNode.findUnique({
+async function evaluateVariableOperation(variableNodeId, submissionId, prisma70, valueMap) {
+  const variableNode = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: variableNodeId },
     select: { treeId: true }
   });
   const treeId = variableNode?.treeId;
   const localValueMap = valueMap || /* @__PURE__ */ new Map();
   const labelMap = /* @__PURE__ */ new Map();
-  await enrichDataFromSubmission(submissionId, prisma69, localValueMap, labelMap, treeId);
-  console.log(`\u2705 Maps enrichies: ${localValueMap.size} valeurs, ${labelMap.size} labels`);
-  const variable = await prisma69.treeBranchLeafNodeVariable.findUnique({
+  await enrichDataFromSubmission(submissionId, prisma70, localValueMap, labelMap, treeId);
+  const variable = await prisma70.treeBranchLeafNodeVariable.findUnique({
     where: { nodeId: variableNodeId },
     select: {
       id: true,
@@ -3980,14 +3835,10 @@ ${"\u2550".repeat(80)}`);
     }
   });
   if (!variable) {
-    console.error(`\u274C Variable introuvable: ${variableNodeId}`);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Variable introuvable: ${variableNodeId}`);
     throw new Error(`Variable introuvable: ${variableNodeId}`);
   }
-  console.log(`\u2705 Variable trouv\xE9e: ${variable.displayName}`);
-  console.log(`   SourceType: ${variable.sourceType}`);
-  console.log(`   SourceRef: ${variable.sourceRef}`);
   if (variable.sourceType === "fixed" && variable.fixedValue) {
-    console.log(`\u{1F4CC} Valeur fixe: ${variable.fixedValue}`);
     return {
       value: variable.fixedValue,
       operationDetail: { type: "fixed", value: variable.fixedValue },
@@ -3997,25 +3848,17 @@ ${"\u2550".repeat(80)}`);
     };
   }
   if (variable.sourceType === "tree" && variable.sourceRef) {
-    console.log(`\u{1F332} Source tree, interpr\xE9tation de: ${variable.sourceRef}`);
     const valuesCache = /* @__PURE__ */ new Map();
     const result = await interpretReference(
       variable.sourceRef,
       submissionId,
-      prisma69,
+      prisma70,
       valuesCache,
       0,
       // Profondeur initiale = 0
       localValueMap,
       labelMap
     );
-    console.log(`
-${"\u2500".repeat(80)}`);
-    console.log(`\u2705 R\xC9SULTAT FINAL:`);
-    console.log(`   Value: ${result.result}`);
-    console.log(`   HumanText: ${result.humanText}`);
-    console.log(`${"\u2500".repeat(80)}
-`);
     let operationSource = "field";
     if (variable.sourceRef.includes("condition:")) operationSource = "condition";
     else if (variable.sourceRef.includes("node-formula:")) operationSource = "formula";
@@ -4029,25 +3872,17 @@ ${"\u2500".repeat(80)}`);
     };
   }
   if (variable.sourceType === "formula" && variable.sourceRef) {
-    console.log(`\u{1F9EE} Source FORMULA directe, interpr\xE9tation de: ${variable.sourceRef}`);
     const valuesCache = /* @__PURE__ */ new Map();
     const result = await interpretReference(
       variable.sourceRef,
       submissionId,
-      prisma69,
+      prisma70,
       valuesCache,
       0,
       // Profondeur initiale = 0
       localValueMap,
       labelMap
     );
-    console.log(`
-${"\u2500".repeat(80)}`);
-    console.log(`\u2705 R\xC9SULTAT FORMULE:`);
-    console.log(`   Value: ${result.result}`);
-    console.log(`   HumanText: ${result.humanText}`);
-    console.log(`${"\u2500".repeat(80)}
-`);
     return {
       value: result.result,
       operationDetail: result.details,
@@ -4056,11 +3891,10 @@ ${"\u2500".repeat(80)}`);
       sourceRef: variable.sourceRef
     };
   }
-  console.log(`\u{1F4CB} Utilisation valeur par d\xE9faut: ${variable.defaultValue || "\u2205"}`);
   return {
-    value: variable.defaultValue || "\u2205",
+    value: variable.defaultValue || "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6",
     operationDetail: { type: "default", value: variable.defaultValue },
-    operationResult: `Valeur par d\xE9faut: ${variable.defaultValue || "aucune"}`,
+    operationResult: `Valeur par d\xC3\u0192\xC2\xA9faut: ${variable.defaultValue || "aucune"}`,
     operationSource: "field",
     sourceRef: variable.sourceRef || ""
   };
@@ -4091,7 +3925,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express86 = __toESM(require("express"), 1);
+var import_express87 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -4134,7 +3968,9 @@ function buildDatabaseUrl() {
 }
 var globalForPrisma = global;
 var prismaClient = globalForPrisma.prisma ?? new import_client.PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["query", "info", "warn", "error"] : [],
+  // ⚠️ Désactivé les logs 'query' en dev car TBL génère des centaines de requêtes
+  // Pour réactiver: ['query', 'info', 'warn', 'error']
+  log: process.env.NODE_ENV === "development" ? ["warn", "error"] : [],
   // 🚀 Configuration optimisée du connection pool
   datasources: {
     db: {
@@ -5141,9 +4977,9 @@ var GoogleGmailService = class _GoogleGmailService {
    */
   async loadOrganizationInfo() {
     try {
-      const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-      const prisma69 = new PrismaClient71();
-      const organization = await prisma69.organization.findUnique({
+      const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+      const prisma70 = new PrismaClient72();
+      const organization = await prisma70.organization.findUnique({
         where: { id: this.organizationId },
         include: {
           GoogleWorkspaceConfig: true
@@ -5155,7 +4991,7 @@ var GoogleGmailService = class _GoogleGmailService {
       } else {
         console.warn(`[GoogleGmailService] \u26A0\uFE0F Email admin non trouv\xE9 pour l'organisation ${this.organizationId}`);
       }
-      await prisma69.$disconnect();
+      await prisma70.$disconnect();
     } catch (error) {
       console.error("[GoogleGmailService] Erreur lors du chargement des infos organisation:", error);
     }
@@ -5247,167 +5083,51 @@ var GoogleGmailService = class _GoogleGmailService {
     }
   }
   /**
-   * Envoie un email (avec support des pièces jointes) - VERSION ANTI-SPAM
+   * Envoie un email - COMME GMAIL FAIT
    */
   async sendEmail(options) {
-    console.log(`[GoogleGmailService] \u{1F4E7} Envoi professionnel d'un email \xE0: ${options.to} avec ${options.attachments?.length || 0} pi\xE8ces jointes`);
+    console.log(`[GoogleGmailService] \u{1F4E7} Envoi email \xE0: ${options.to}`);
     try {
-      let message = "";
-      const boundary = "boundary_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-      if (this.adminEmail) {
-        const fromName = options.fromName || "2Thier CRM";
-        message += `From: "${fromName}" <${this.adminEmail}>\r
-`;
-      }
-      message += `To: ${options.to}\r
-`;
-      message += `Subject: ${options.subject}\r
-`;
-      if (options.cc) {
-        message += `Cc: ${options.cc}\r
-`;
-      }
-      if (options.bcc) {
-        message += `Bcc: ${options.bcc}\r
-`;
-      }
-      message += `Date: ${(/* @__PURE__ */ new Date()).toUTCString()}\r
-`;
-      message += `Message-ID: <${Date.now()}.${Math.random().toString(36).substr(2)}.crm@2thier.be>\r
-`;
-      message += `MIME-Version: 1.0\r
-`;
-      message += `X-Mailer: 2Thier CRM v2.0\r
-`;
-      message += `X-Priority: 3\r
-`;
-      message += `X-MSMail-Priority: Normal\r
-`;
-      message += `Importance: Normal\r
-`;
-      message += `X-Auto-Response-Suppress: All\r
-`;
-      message += `List-Unsubscribe-Post: List-Unsubscribe=One-Click\r
-`;
+      const boundary = "----=_Part_" + Date.now();
+      let messageParts = [];
+      messageParts.push(`From: ${options.fromName || "2Thier CRM"} <${this.adminEmail}>`);
+      messageParts.push(`To: ${options.to}`);
+      messageParts.push(`Subject: ${options.subject}`);
+      if (options.cc) messageParts.push(`Cc: ${options.cc}`);
+      if (options.bcc) messageParts.push(`Bcc: ${options.bcc}`);
+      messageParts.push(`MIME-Version: 1.0`);
       if (options.attachments && options.attachments.length > 0) {
-        message += `Content-Type: multipart/mixed; boundary="${boundary}"\r
-\r
-`;
-        message += `This is a multi-part message in MIME format.\r
-\r
-`;
-        message += `--${boundary}\r
-`;
-        const contentType = options.isHtml ? "text/html" : "text/plain";
-        message += `Content-Type: ${contentType}; charset=utf-8\r
-`;
-        message += `Content-Transfer-Encoding: quoted-printable\r
-\r
-`;
-        const professionalBody = this.formatProfessionalBody(options.body, options.isHtml);
-        message += professionalBody + "\r\n\r\n";
-        for (const attachment of options.attachments) {
-          message += `--${boundary}\r
-`;
-          message += `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"\r
-`;
-          message += `Content-Disposition: attachment; filename="${attachment.filename}"\r
-`;
-          message += `Content-Transfer-Encoding: base64\r
-`;
-          message += `Content-ID: <${attachment.filename.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}>\r
-\r
-`;
-          const base64Content = attachment.content.toString("base64");
-          const chunkedContent = base64Content.match(/.{1,76}/g)?.join("\r\n") || base64Content;
-          message += chunkedContent + "\r\n\r\n";
+        messageParts.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+        messageParts.push("");
+        messageParts.push(`--${boundary}`);
+        messageParts.push(`Content-Type: ${options.isHtml ? "text/html" : "text/plain"}; charset="UTF-8"`);
+        messageParts.push("");
+        messageParts.push(options.body);
+        for (const att of options.attachments) {
+          messageParts.push(`--${boundary}`);
+          messageParts.push(`Content-Type: ${att.mimeType}; name="${att.filename}"`);
+          messageParts.push(`Content-Disposition: attachment; filename="${att.filename}"`);
+          messageParts.push(`Content-Transfer-Encoding: base64`);
+          messageParts.push("");
+          messageParts.push(att.content.toString("base64"));
         }
-        message += `--${boundary}--\r
-`;
+        messageParts.push(`--${boundary}--`);
       } else {
-        const contentType = options.isHtml ? "text/html" : "text/plain";
-        message += `Content-Type: ${contentType}; charset=utf-8\r
-`;
-        message += `Content-Transfer-Encoding: quoted-printable\r
-\r
-`;
-        const professionalBody = this.formatProfessionalBody(options.body, options.isHtml);
-        message += professionalBody;
+        messageParts.push(`Content-Type: ${options.isHtml ? "text/html" : "text/plain"}; charset="UTF-8"`);
+        messageParts.push("");
+        messageParts.push(options.body);
       }
-      const encodedMessage = Buffer.from(message).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      console.log("[GoogleGmailService] \u{1F4E4} Envoi du message encod\xE9...");
+      const rawMessage = messageParts.join("\r\n");
+      const encodedMessage = Buffer.from(rawMessage).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
       const response = await this.gmail.users.messages.send({
         userId: "me",
-        requestBody: {
-          raw: encodedMessage
-        }
+        requestBody: { raw: encodedMessage }
       });
-      console.log(`[GoogleGmailService] \u2705 Email envoy\xE9 avec l'ID: ${response.data.id}`);
+      console.log(`[GoogleGmailService] \u2705 Email envoy\xE9: ${response.data.id}`);
       return { messageId: response.data.id };
     } catch (error) {
-      console.error("[GoogleGmailService] \u274C Erreur lors de l'envoi de l'email:", error);
+      console.error("[GoogleGmailService] \u274C Erreur envoi:", error);
       return null;
-    }
-  }
-  /**
-   * 🆕 Formate le corps de l'email de manière professionnelle avec signature
-   */
-  formatProfessionalBody(body2, isHtml = false) {
-    if (isHtml) {
-      return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email de 2Thier CRM</title>
-</head>
-<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; background-color: #f9f9f9;">
-    <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 20px;">
-        <!-- En-t\xEAte professionnel -->
-        <div style="border-bottom: 3px solid #0066cc; padding-bottom: 20px; margin-bottom: 30px;">
-            <h2 style="color: #0066cc; margin: 0; font-size: 24px;">2Thier CRM</h2>
-            <p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">Solution de gestion client professionnelle</p>
-        </div>
-        
-        <!-- Contenu principal -->
-        <div style="margin-bottom: 40px;">
-            ${body2}
-        </div>
-        
-        <!-- Signature professionnelle -->
-        <div style="border-top: 1px solid #eee; padding-top: 20px; margin-top: 30px;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="vertical-align: top; padding-right: 20px;">
-                        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #0066cc;">\xC9quipe 2Thier CRM</p>
-                        <p style="margin: 5px 0; font-size: 14px; color: #666;">Solution de gestion client int\xE9gr\xE9e</p>
-                        <p style="margin: 5px 0; font-size: 14px; color: #666;">
-                            <a href="mailto:support@2thier.be" style="color: #0066cc; text-decoration: none;">support@2thier.be</a>
-                        </p>
-                    </td>
-                </tr>
-            </table>
-        </div>
-        
-        <!-- Footer de confidentialit\xE9 -->
-        <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 20px; font-size: 12px; color: #999; text-align: center;">
-            <p style="margin: 0;">Ce message est confidentiel et destin\xE9 uniquement au destinataire indiqu\xE9.</p>
-            <p style="margin: 5px 0 0 0;">Si vous n'\xEAtes pas le destinataire pr\xE9vu, veuillez supprimer ce message.</p>
-        </div>
-    </div>
-</body>
-</html>`.trim();
-    } else {
-      return `${body2}
-
---
-\xC9quipe 2Thier CRM
-Solution de gestion client int\xE9gr\xE9e
-Email: support@2thier.be
-
-Ce message est confidentiel et destin\xE9 uniquement au destinataire indiqu\xE9.
-Si vous n'\xEAtes pas le destinataire pr\xE9vu, veuillez supprimer ce message.`;
     }
   }
   /**
@@ -5969,6 +5689,730 @@ Si vous n'\xEAtes pas le destinataire pr\xE9vu, veuillez supprimer ce message.`;
   }
 };
 
+// src/google-auth/services/GoogleDriveService.ts
+var import_googleapis4 = require("googleapis");
+var GoogleDriveService = class _GoogleDriveService {
+  static instance;
+  constructor() {
+  }
+  static getInstance() {
+    if (!_GoogleDriveService.instance) {
+      _GoogleDriveService.instance = new _GoogleDriveService();
+    }
+    return _GoogleDriveService.instance;
+  }
+  /**
+   * Obtient une instance de l'API Google Drive pour une organisation
+   */
+  async getDriveAPI(organizationId) {
+    console.log(`[GoogleDriveService] \u{1F4C1} Cr\xE9ation instance API Drive pour organisation: ${organizationId}`);
+    const authClient = await googleAuthManager.getAuthenticatedClient(organizationId);
+    if (!authClient) {
+      throw new Error("Connexion Google non configur\xE9e.");
+    }
+    return import_googleapis4.google.drive({ version: "v3", auth: authClient });
+  }
+  /**
+   * Récupère les fichiers et dossiers du Drive
+   */
+  async getFiles(organizationId, folderId = "root", pageSize = 50, pageToken) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers pour folder: ${folderId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      const query = folderId === "root" ? "'root' in parents and trashed = false" : `'${folderId}' in parents and trashed = false`;
+      const response = await drive.files.list({
+        q: query,
+        pageSize,
+        pageToken,
+        fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime, createdTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared, ownedByMe)",
+        orderBy: "folder, name",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+      const files = (response.data.files || []).map((file) => ({
+        id: file.id || "",
+        name: file.name || "Sans nom",
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size || void 0,
+        modifiedTime: file.modifiedTime || void 0,
+        createdTime: file.createdTime || void 0,
+        webViewLink: file.webViewLink || void 0,
+        webContentLink: file.webContentLink || void 0,
+        iconLink: file.iconLink || void 0,
+        thumbnailLink: file.thumbnailLink || void 0,
+        parents: file.parents || void 0,
+        shared: file.shared || false,
+        ownedByMe: file.ownedByMe || false
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cup\xE9r\xE9s`);
+      return {
+        files,
+        nextPageToken: response.data.nextPageToken || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupère les fichiers partagés avec l'utilisateur
+   */
+  async getSharedFiles(organizationId, pageSize = 50, pageToken) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers partag\xE9s`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.list({
+        q: "sharedWithMe = true and trashed = false",
+        pageSize,
+        pageToken,
+        fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime, createdTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared, ownedByMe, sharingUser)",
+        orderBy: "folder, modifiedTime desc",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+      const files = (response.data.files || []).map((file) => ({
+        id: file.id || "",
+        name: file.name || "Sans nom",
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size || void 0,
+        modifiedTime: file.modifiedTime || void 0,
+        createdTime: file.createdTime || void 0,
+        webViewLink: file.webViewLink || void 0,
+        webContentLink: file.webContentLink || void 0,
+        iconLink: file.iconLink || void 0,
+        thumbnailLink: file.thumbnailLink || void 0,
+        parents: file.parents || void 0,
+        shared: true,
+        ownedByMe: false
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers partag\xE9s r\xE9cup\xE9r\xE9s`);
+      return {
+        files,
+        nextPageToken: response.data.nextPageToken || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers partag\xE9s:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupère les drives partagés (Team Drives)
+   */
+  async getSharedDrives(organizationId, pageSize = 50) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des drives partag\xE9s`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.drives.list({
+        pageSize,
+        fields: "drives(id, name)"
+      });
+      const drives = (response.data.drives || []).map((d) => ({
+        id: d.id || "",
+        name: d.name || "Drive partag\xE9"
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${drives.length} drives partag\xE9s r\xE9cup\xE9r\xE9s`);
+      return { drives };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des drives partag\xE9s:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupère les fichiers d'un Drive partagé (Team Drive)
+   */
+  async getSharedDriveFiles(organizationId, driveId, folderId, pageSize = 50, pageToken) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers du drive partag\xE9: ${driveId}, folder: ${folderId || "root"}`);
+      const drive = await this.getDriveAPI(organizationId);
+      const parentId = folderId || driveId;
+      const query = `'${parentId}' in parents and trashed = false`;
+      const response = await drive.files.list({
+        q: query,
+        pageSize,
+        pageToken,
+        driveId,
+        corpora: "drive",
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
+        fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime, createdTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared, ownedByMe)",
+        orderBy: "folder, name"
+      });
+      const files = (response.data.files || []).map((file) => ({
+        id: file.id || "",
+        name: file.name || "Sans nom",
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size || void 0,
+        modifiedTime: file.modifiedTime || void 0,
+        createdTime: file.createdTime || void 0,
+        webViewLink: file.webViewLink || void 0,
+        webContentLink: file.webContentLink || void 0,
+        iconLink: file.iconLink || void 0,
+        thumbnailLink: file.thumbnailLink || void 0,
+        parents: file.parents || void 0,
+        shared: true,
+        ownedByMe: false
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cup\xE9r\xE9s du drive partag\xE9`);
+      return {
+        files,
+        nextPageToken: response.data.nextPageToken || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers du drive partag\xE9:", error);
+      throw error;
+    }
+  }
+  /**
+   * Recherche des fichiers dans le Drive
+   */
+  async searchFiles(organizationId, searchQuery, pageSize = 50) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F50E} Recherche: "${searchQuery}"`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.list({
+        q: `name contains '${searchQuery}' and trashed = false`,
+        pageSize,
+        fields: "files(id, name, mimeType, size, modifiedTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared)",
+        orderBy: "modifiedTime desc"
+      });
+      const files = (response.data.files || []).map((file) => ({
+        id: file.id || "",
+        name: file.name || "Sans nom",
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size || void 0,
+        modifiedTime: file.modifiedTime || void 0,
+        webViewLink: file.webViewLink || void 0,
+        webContentLink: file.webContentLink || void 0,
+        iconLink: file.iconLink || void 0,
+        thumbnailLink: file.thumbnailLink || void 0,
+        parents: file.parents || void 0,
+        shared: file.shared || false
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers trouv\xE9s`);
+      return files;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la recherche:", error);
+      throw error;
+    }
+  }
+  /**
+   * Crée un nouveau dossier
+   */
+  async createFolder(organizationId, name, parentId = "root") {
+    try {
+      console.log(`[GoogleDriveService] \u{1F4C2} Cr\xE9ation du dossier: "${name}"`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.create({
+        requestBody: {
+          name,
+          mimeType: "application/vnd.google-apps.folder",
+          parents: [parentId]
+        },
+        fields: "id, name, mimeType, modifiedTime, webViewLink"
+      });
+      console.log(`[GoogleDriveService] \u2705 Dossier cr\xE9\xE9: ${response.data.id}`);
+      return {
+        id: response.data.id || "",
+        name: response.data.name || name,
+        mimeType: response.data.mimeType || "application/vnd.google-apps.folder",
+        modifiedTime: response.data.modifiedTime || void 0,
+        webViewLink: response.data.webViewLink || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la cr\xE9ation du dossier:", error);
+      throw error;
+    }
+  }
+  /**
+   * Supprime un fichier ou dossier (mise à la corbeille)
+   */
+  async deleteFile(organizationId, fileId) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F Suppression du fichier: ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      await drive.files.update({
+        fileId,
+        supportsAllDrives: true,
+        requestBody: {
+          trashed: true
+        }
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier mis \xE0 la corbeille`);
+      return true;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la suppression:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupère les informations d'un fichier
+   */
+  async getFileInfo(organizationId, fileId) {
+    try {
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.get({
+        fileId,
+        fields: "id, name, mimeType, size, modifiedTime, createdTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared, ownedByMe"
+      });
+      return {
+        id: response.data.id || "",
+        name: response.data.name || "Sans nom",
+        mimeType: response.data.mimeType || "application/octet-stream",
+        size: response.data.size || void 0,
+        modifiedTime: response.data.modifiedTime || void 0,
+        createdTime: response.data.createdTime || void 0,
+        webViewLink: response.data.webViewLink || void 0,
+        webContentLink: response.data.webContentLink || void 0,
+        iconLink: response.data.iconLink || void 0,
+        thumbnailLink: response.data.thumbnailLink || void 0,
+        parents: response.data.parents || void 0,
+        shared: response.data.shared || false,
+        ownedByMe: response.data.ownedByMe || false
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des infos:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupère les informations de stockage
+   */
+  async getStorageInfo(organizationId) {
+    try {
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.about.get({
+        fields: "storageQuota"
+      });
+      const quota = response.data.storageQuota;
+      return {
+        limit: quota?.limit || "0",
+        usage: quota?.usage || "0",
+        usageInDrive: quota?.usageInDrive || "0",
+        usageInTrash: quota?.usageInTrash || "0"
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration du stockage:", error);
+      throw error;
+    }
+  }
+  /**
+   * Upload un fichier vers Google Drive
+   */
+  async uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId = "root") {
+    try {
+      console.log(`[GoogleDriveService] \u{1F4E4} Upload du fichier: "${fileName}"`);
+      const drive = await this.getDriveAPI(organizationId);
+      const { Readable } = await import("stream");
+      const stream = Readable.from(fileBuffer);
+      const response = await drive.files.create({
+        requestBody: {
+          name: fileName,
+          parents: [parentId]
+        },
+        media: {
+          mimeType,
+          body: stream
+        },
+        fields: "id, name, mimeType, size, modifiedTime, webViewLink, webContentLink, iconLink, thumbnailLink"
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier upload\xE9: ${response.data.id}`);
+      return {
+        id: response.data.id || "",
+        name: response.data.name || fileName,
+        mimeType: response.data.mimeType || mimeType,
+        size: response.data.size || void 0,
+        modifiedTime: response.data.modifiedTime || void 0,
+        webViewLink: response.data.webViewLink || void 0,
+        webContentLink: response.data.webContentLink || void 0,
+        iconLink: response.data.iconLink || void 0,
+        thumbnailLink: response.data.thumbnailLink || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de l'upload:", error);
+      throw error;
+    }
+  }
+  /**
+   * Renommer un fichier ou dossier
+   */
+  async renameFile(organizationId, fileId, newName) {
+    try {
+      console.log(`[GoogleDriveService] \u270F\uFE0F Renommer fichier ${fileId} en "${newName}"`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.update({
+        fileId,
+        supportsAllDrives: true,
+        requestBody: {
+          name: newName
+        },
+        fields: "id, name, mimeType, size, modifiedTime, webViewLink"
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier renomm\xE9`);
+      return {
+        id: response.data.id || "",
+        name: response.data.name || newName,
+        mimeType: response.data.mimeType || "",
+        modifiedTime: response.data.modifiedTime || void 0,
+        webViewLink: response.data.webViewLink || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors du renommage:", error);
+      throw error;
+    }
+  }
+  /**
+   * Déplacer un fichier vers un autre dossier
+   */
+  async moveFile(organizationId, fileId, newParentId) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F4E6} D\xE9placer fichier ${fileId} vers ${newParentId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      const file = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        fields: "parents"
+      });
+      const previousParents = file.data.parents?.join(",") || "";
+      const response = await drive.files.update({
+        fileId,
+        supportsAllDrives: true,
+        addParents: newParentId,
+        removeParents: previousParents,
+        fields: "id, name, mimeType, parents, webViewLink"
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier d\xE9plac\xE9`);
+      return {
+        id: response.data.id || "",
+        name: response.data.name || "",
+        mimeType: response.data.mimeType || "",
+        parents: response.data.parents || void 0,
+        webViewLink: response.data.webViewLink || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors du d\xE9placement:", error);
+      throw error;
+    }
+  }
+  /**
+   * Copier un fichier
+   */
+  async copyFile(organizationId, fileId, newName) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F4CB} Copier fichier ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.copy({
+        fileId,
+        supportsAllDrives: true,
+        requestBody: newName ? { name: newName } : {},
+        fields: "id, name, mimeType, size, modifiedTime, webViewLink"
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier copi\xE9: ${response.data.id}`);
+      return {
+        id: response.data.id || "",
+        name: response.data.name || "",
+        mimeType: response.data.mimeType || "",
+        size: response.data.size || void 0,
+        modifiedTime: response.data.modifiedTime || void 0,
+        webViewLink: response.data.webViewLink || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la copie:", error);
+      throw error;
+    }
+  }
+  /**
+   * Obtenir le lien de partage d'un fichier
+   */
+  async getShareLink(organizationId, fileId) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F517} Obtenir lien de partage pour ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        fields: "webViewLink, webContentLink"
+      });
+      return {
+        webViewLink: response.data.webViewLink || "",
+        webContentLink: response.data.webContentLink || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration du lien:", error);
+      throw error;
+    }
+  }
+  /**
+   * Rendre un fichier accessible à tous avec un lien
+   */
+  async makePublic(organizationId, fileId) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F310} Rendre public ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      await drive.permissions.create({
+        fileId,
+        supportsAllDrives: true,
+        requestBody: {
+          type: "anyone",
+          role: "reader"
+        }
+      });
+      const response = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        fields: "webViewLink"
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier rendu public`);
+      return {
+        webViewLink: response.data.webViewLink || ""
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors du partage:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupérer les fichiers récents
+   */
+  async getRecentFiles(organizationId, pageSize = 50) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F550} R\xE9cup\xE9ration des fichiers r\xE9cents`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.list({
+        pageSize,
+        orderBy: "viewedByMeTime desc",
+        q: "trashed = false",
+        fields: "files(id, name, mimeType, size, modifiedTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared, viewedByMeTime)"
+      });
+      const files = (response.data.files || []).map((file) => ({
+        id: file.id || "",
+        name: file.name || "Sans nom",
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size || void 0,
+        modifiedTime: file.modifiedTime || void 0,
+        webViewLink: file.webViewLink || void 0,
+        webContentLink: file.webContentLink || void 0,
+        iconLink: file.iconLink || void 0,
+        thumbnailLink: file.thumbnailLink || void 0,
+        parents: file.parents || void 0,
+        shared: file.shared || false
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cents r\xE9cup\xE9r\xE9s`);
+      return files;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers r\xE9cents:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupérer les fichiers favoris (étoilés)
+   */
+  async getStarredFiles(organizationId, pageSize = 50) {
+    try {
+      console.log(`[GoogleDriveService] \u2B50 R\xE9cup\xE9ration des fichiers favoris`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.list({
+        pageSize,
+        q: "starred = true and trashed = false",
+        fields: "files(id, name, mimeType, size, modifiedTime, webViewLink, webContentLink, iconLink, thumbnailLink, parents, shared, starred)",
+        orderBy: "modifiedTime desc"
+      });
+      const files = (response.data.files || []).map((file) => ({
+        id: file.id || "",
+        name: file.name || "Sans nom",
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size || void 0,
+        modifiedTime: file.modifiedTime || void 0,
+        webViewLink: file.webViewLink || void 0,
+        webContentLink: file.webContentLink || void 0,
+        iconLink: file.iconLink || void 0,
+        thumbnailLink: file.thumbnailLink || void 0,
+        parents: file.parents || void 0,
+        shared: file.shared || false
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers favoris r\xE9cup\xE9r\xE9s`);
+      return files;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers favoris:", error);
+      throw error;
+    }
+  }
+  /**
+   * Ajouter/retirer un fichier des favoris
+   */
+  async toggleStar(organizationId, fileId, starred) {
+    try {
+      console.log(`[GoogleDriveService] \u2B50 ${starred ? "Ajouter aux" : "Retirer des"} favoris: ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      await drive.files.update({
+        fileId,
+        supportsAllDrives: true,
+        requestBody: {
+          starred
+        }
+      });
+      console.log(`[GoogleDriveService] \u2705 Favori mis \xE0 jour`);
+      return true;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la mise \xE0 jour du favori:", error);
+      throw error;
+    }
+  }
+  /**
+   * Récupérer les fichiers dans la corbeille
+   */
+  async getTrash(organizationId, pageSize = 50) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F R\xE9cup\xE9ration de la corbeille`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.list({
+        pageSize,
+        q: "trashed = true",
+        fields: "files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, thumbnailLink, trashedTime)",
+        orderBy: "modifiedTime desc"
+      });
+      const files = (response.data.files || []).map((file) => ({
+        id: file.id || "",
+        name: file.name || "Sans nom",
+        mimeType: file.mimeType || "application/octet-stream",
+        size: file.size || void 0,
+        modifiedTime: file.modifiedTime || void 0,
+        webViewLink: file.webViewLink || void 0,
+        iconLink: file.iconLink || void 0,
+        thumbnailLink: file.thumbnailLink || void 0
+      }));
+      console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers dans la corbeille`);
+      return files;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration de la corbeille:", error);
+      throw error;
+    }
+  }
+  /**
+   * Restaurer un fichier de la corbeille
+   */
+  async restoreFile(organizationId, fileId) {
+    try {
+      console.log(`[GoogleDriveService] \u267B\uFE0F Restaurer fichier: ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      await drive.files.update({
+        fileId,
+        supportsAllDrives: true,
+        requestBody: {
+          trashed: false
+        }
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier restaur\xE9`);
+      return true;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la restauration:", error);
+      throw error;
+    }
+  }
+  /**
+   * Supprimer définitivement un fichier
+   */
+  async deleteFilePermanently(organizationId, fileId) {
+    try {
+      console.log(`[GoogleDriveService] \u274C Suppression d\xE9finitive: ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      await drive.files.delete({
+        fileId,
+        supportsAllDrives: true
+      });
+      console.log(`[GoogleDriveService] \u2705 Fichier supprim\xE9 d\xE9finitivement`);
+      return true;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la suppression d\xE9finitive:", error);
+      throw error;
+    }
+  }
+  /**
+   * Vider la corbeille
+   */
+  async emptyTrash(organizationId) {
+    try {
+      console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F Vider la corbeille`);
+      const drive = await this.getDriveAPI(organizationId);
+      await drive.files.emptyTrash();
+      console.log(`[GoogleDriveService] \u2705 Corbeille vid\xE9e`);
+      return true;
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors du vidage de la corbeille:", error);
+      throw error;
+    }
+  }
+  /**
+   * Télécharger un fichier (obtenir l'URL de téléchargement)
+   */
+  async getDownloadUrl(organizationId, fileId) {
+    try {
+      console.log(`[GoogleDriveService] \u2B07\uFE0F Obtenir URL de t\xE9l\xE9chargement: ${fileId}`);
+      const drive = await this.getDriveAPI(organizationId);
+      const response = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        fields: "name, mimeType, webContentLink"
+      });
+      const googleDocsMimeTypes = {
+        "application/vnd.google-apps.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.google-apps.spreadsheet": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.google-apps.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      };
+      const mimeType = response.data.mimeType || "";
+      const exportMimeType = googleDocsMimeTypes[mimeType];
+      if (exportMimeType) {
+        return {
+          downloadUrl: `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent(exportMimeType)}`,
+          fileName: response.data.name || "file",
+          mimeType: exportMimeType
+        };
+      }
+      return {
+        downloadUrl: response.data.webContentLink || `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        fileName: response.data.name || "file",
+        mimeType
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration de l'URL:", error);
+      throw error;
+    }
+  }
+  /**
+   * Créer un document Google (Docs, Sheets, Slides)
+   */
+  async createGoogleDoc(organizationId, name, type, parentId = "root") {
+    try {
+      console.log(`[GoogleDriveService] \u{1F4C4} Cr\xE9er ${type}: "${name}"`);
+      const drive = await this.getDriveAPI(organizationId);
+      const mimeTypes = {
+        document: "application/vnd.google-apps.document",
+        spreadsheet: "application/vnd.google-apps.spreadsheet",
+        presentation: "application/vnd.google-apps.presentation"
+      };
+      const response = await drive.files.create({
+        requestBody: {
+          name,
+          mimeType: mimeTypes[type],
+          parents: [parentId]
+        },
+        fields: "id, name, mimeType, modifiedTime, webViewLink"
+      });
+      console.log(`[GoogleDriveService] \u2705 ${type} cr\xE9\xE9: ${response.data.id}`);
+      return {
+        id: response.data.id || "",
+        name: response.data.name || name,
+        mimeType: response.data.mimeType || mimeTypes[type],
+        modifiedTime: response.data.modifiedTime || void 0,
+        webViewLink: response.data.webViewLink || void 0
+      };
+    } catch (error) {
+      console.error("[GoogleDriveService] \u274C Erreur lors de la cr\xE9ation:", error);
+      throw error;
+    }
+  }
+};
+var googleDriveService = GoogleDriveService.getInstance();
+
 // src/google-auth/controllers/GmailController.ts
 var getThreads = async (req2, res) => {
   try {
@@ -6036,6 +6480,9 @@ var getMessages = async (req2, res) => {
           break;
         case "spam":
           finalLabelIds = ["SPAM"];
+          break;
+        case "all":
+          finalLabelIds = void 0;
           break;
         default:
           finalLabelIds = [mailboxStr];
@@ -6119,15 +6566,16 @@ var sendMessage = async (req2, res) => {
     const to = req2.body.to;
     const subject = req2.body.subject;
     const body2 = req2.body.body || "";
-    const isHtml = req2.body.isHtml === "true";
+    const isHtml = req2.body.isHtml === true || req2.body.isHtml === "true";
     const cc = req2.body.cc;
     const bcc = req2.body.bcc;
     const fromName = req2.body.fromName;
     console.log("[Gmail Controller] \u{1F4E7} Donn\xE9es extraites:", {
       to,
       subject,
-      body: body2?.substring(0, 50),
+      body: body2?.substring(0, 100),
       isHtml,
+      isHtmlRaw: req2.body.isHtml,
       cc,
       bcc,
       fromName: fromName || "Par d\xE9faut: 2Thier CRM"
@@ -9763,6 +10211,63 @@ var organizations_default = router9;
 var import_express11 = require("express");
 var router10 = (0, import_express11.Router)();
 var connectCache = /* @__PURE__ */ new Map();
+router10.get("/status", authMiddleware, async (req2, res) => {
+  console.log("[ROUTE] /api/auto-google-auth/status atteint");
+  const { userId, organizationId } = req2.query;
+  if (!userId || !organizationId) {
+    return res.json({
+      success: true,
+      data: {
+        connected: false,
+        email: null,
+        scopes: [],
+        lastSync: null,
+        error: !organizationId ? "Organization ID requis" : "User ID requis"
+      }
+    });
+  }
+  try {
+    const tokens2 = await prisma.googleToken.findUnique({
+      where: { organizationId }
+    });
+    if (!tokens2 || !tokens2.accessToken) {
+      return res.json({
+        success: true,
+        data: {
+          connected: false,
+          email: null,
+          scopes: tokens2?.scope?.split(" ") || [],
+          lastSync: null
+        }
+      });
+    }
+    const gwConfig = await prisma.googleWorkspaceConfig.findUnique({
+      where: { organizationId }
+    });
+    return res.json({
+      success: true,
+      data: {
+        connected: true,
+        email: gwConfig?.adminEmail || null,
+        scopes: tokens2.scope?.split(" ") || [],
+        lastSync: tokens2.updatedAt || null,
+        expiresAt: tokens2.expiresAt
+      }
+    });
+  } catch (error) {
+    console.error("[AutoGoogleAuth] Erreur status:", error);
+    return res.json({
+      success: true,
+      data: {
+        connected: false,
+        email: null,
+        scopes: [],
+        lastSync: null,
+        error: "Erreur serveur"
+      }
+    });
+  }
+});
 router10.post("/connect", authMiddleware, async (req2, res) => {
   console.log("[ROUTE] /api/auto-google-auth/connect atteint");
   const { userId, organizationId } = req2.body;
@@ -9848,10 +10353,10 @@ var autoGoogleAuthRoutes_default = router10;
 // src/routes/google-auth.ts
 var import_express13 = require("express");
 init_crypto();
-var import_googleapis5 = require("googleapis");
+var import_googleapis6 = require("googleapis");
 
 // src/utils/googleTokenRefresh.ts
-var import_googleapis4 = require("googleapis");
+var import_googleapis5 = require("googleapis");
 async function refreshGoogleTokenIfNeeded(organizationId) {
   try {
     console.log("[REFRESH-TOKEN] \u{1F50D} V\xE9rification token pour organisation:", organizationId);
@@ -9903,7 +10408,7 @@ async function refreshGoogleTokenIfNeeded(organizationId) {
       return { success: false, error: "missing_oauth_config" };
     }
     console.log("[REFRESH-TOKEN] \u{1F527} Configuration OAuth client...");
-    const oauth2Client = new import_googleapis4.google.auth.OAuth2(
+    const oauth2Client = new import_googleapis5.google.auth.OAuth2(
       googleConfig.clientId,
       googleConfig.clientSecret,
       googleConfig.redirectUri
@@ -10476,7 +10981,7 @@ router12.get("/callback", async (req2, res) => {
     }
     console.log("[GOOGLE-AUTH] \u2705 Configuration trouv\xE9e, email admin cible:", config.adminEmail);
     console.log("[GOOGLE-AUTH] \u{1F504} \xC9change du code contre les tokens...");
-    const oauth2Client = new import_googleapis5.google.auth.OAuth2(
+    const oauth2Client = new import_googleapis6.google.auth.OAuth2(
       config.clientId,
       config.clientSecret,
       config.redirectUri
@@ -10490,7 +10995,7 @@ router12.get("/callback", async (req2, res) => {
         scope: tokens2.scope
       });
       oauth2Client.setCredentials(tokens2);
-      const oauth2 = import_googleapis5.google.oauth2({ version: "v2", auth: oauth2Client });
+      const oauth2 = import_googleapis6.google.oauth2({ version: "v2", auth: oauth2Client });
       const userInfo = await oauth2.userinfo.get();
       console.log("[GOOGLE-AUTH] \u2705 Informations du compte Google connect\xE9:", {
         email: userInfo.data.email,
@@ -10617,13 +11122,13 @@ router12.get("/status", authMiddleware, async (req2, res) => {
     let tokenValid = false;
     let scopes = [];
     try {
-      const oauth2Client = new import_googleapis5.google.auth.OAuth2();
+      const oauth2Client = new import_googleapis6.google.auth.OAuth2();
       oauth2Client.setCredentials({
         access_token: refreshResult.accessToken,
         refresh_token: refreshResult.refreshToken,
         expiry_date: refreshResult.expiresAt?.getTime()
       });
-      const oauth2 = import_googleapis5.google.oauth2({ version: "v2", auth: oauth2Client });
+      const oauth2 = import_googleapis6.google.oauth2({ version: "v2", auth: oauth2Client });
       const userInfo = await oauth2.userinfo.get();
       userEmail = userInfo.data.email;
       tokenValid = true;
@@ -10693,7 +11198,7 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
     if (googleToken) {
       try {
         console.log("[GOOGLE-AUTH] \u{1F6AB} R\xE9vocation du token c\xF4t\xE9 Google...");
-        const oauth2Client = new import_googleapis5.google.auth.OAuth2();
+        const oauth2Client = new import_googleapis6.google.auth.OAuth2();
         oauth2Client.setCredentials({
           access_token: googleToken.accessToken
         });
@@ -16075,7 +16580,7 @@ router28.get("/events", async (req2, res) => {
       organizationId,
       OR: [
         { ownerId: userIdToSearch },
-        { participants: { some: { userId: userIdToSearch } } }
+        { CalendarParticipant: { some: { userId: userIdToSearch } } }
       ]
     };
     if (startDate && endDate) {
@@ -16084,8 +16589,8 @@ router28.get("/events", async (req2, res) => {
     let events = await prisma25.calendarEvent.findMany({
       where: whereClause,
       include: {
-        participants: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } },
-        owner: { select: { id: true, firstName: true, lastName: true, email: true } }
+        CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+        User: { select: { id: true, firstName: true, lastName: true, email: true } }
       },
       orderBy: { startDate: "asc" }
     });
@@ -16110,8 +16615,8 @@ router28.get("/events", async (req2, res) => {
         events = await prisma25.calendarEvent.findMany({
           where: whereClause,
           include: {
-            participants: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } },
-            owner: { select: { id: true, firstName: true, lastName: true, email: true } }
+            CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+            User: { select: { id: true, firstName: true, lastName: true, email: true } }
           },
           orderBy: { startDate: "asc" }
         });
@@ -16131,9 +16636,10 @@ router28.get("/events", async (req2, res) => {
           const gId = gEvent.id;
           if (!gId || !gEvent.start?.dateTime || !gEvent.end?.dateTime) continue;
           const existing = await prisma25.calendarEvent.findFirst({
-            where: { organizationId, googleEventId: gId }
+            where: { organizationId, externalCalendarId: gId }
           });
           const baseData = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             title: gEvent.summary || "Sans titre",
             description: gEvent.description || null,
             startDate: new Date(gEvent.start.dateTime),
@@ -16142,7 +16648,8 @@ router28.get("/events", async (req2, res) => {
             status: "synced",
             organizationId,
             ownerId: userIdToSearch,
-            googleEventId: gId
+            externalCalendarId: gId,
+            updatedAt: /* @__PURE__ */ new Date()
           };
           if (existing) {
             await prisma25.calendarEvent.update({ where: { id: existing.id }, data: baseData });
@@ -16153,8 +16660,8 @@ router28.get("/events", async (req2, res) => {
         events = await prisma25.calendarEvent.findMany({
           where: whereClause,
           include: {
-            participants: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } },
-            owner: { select: { id: true, firstName: true, lastName: true, email: true } }
+            CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+            User: { select: { id: true, firstName: true, lastName: true, email: true } }
           },
           orderBy: { startDate: "asc" }
         });
@@ -16279,19 +16786,23 @@ router28.post("/sync", async (req2, res) => {
     const userId = req2.user.userId;
     const organizationId = req2.user.organizationId;
     const { startDate, endDate } = req2.body;
+    const syncStart = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 3600 * 1e3);
+    const syncEnd = endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 3600 * 1e3);
+    console.log("[CALENDAR SYNC] D\xE9but sync pour org:", organizationId, "du", syncStart, "au", syncEnd);
     const googleEvents = await googleCalendarService.syncEvents(
       organizationId,
-      new Date(startDate),
-      new Date(endDate)
+      syncStart,
+      syncEnd
     );
     let createdCount = 0;
     let updatedCount = 0;
     for (const gEvent of googleEvents) {
       if (!gEvent.start?.dateTime || !gEvent.end?.dateTime) continue;
       const existingEvent = gEvent.id ? await prisma25.calendarEvent.findFirst({
-        where: { organizationId, googleEventId: gEvent.id }
+        where: { organizationId, externalCalendarId: gEvent.id }
       }) : null;
       const eventData = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         title: gEvent.summary || "Sans titre",
         description: gEvent.description || null,
         startDate: new Date(gEvent.start.dateTime),
@@ -16300,7 +16811,8 @@ router28.post("/sync", async (req2, res) => {
         status: "synced",
         organizationId,
         ownerId: userId,
-        googleEventId: gEvent.id || null
+        externalCalendarId: gEvent.id || null,
+        updatedAt: /* @__PURE__ */ new Date()
       };
       if (existingEvent) {
         await prisma25.calendarEvent.update({ where: { id: existingEvent.id }, data: eventData });
@@ -16328,6 +16840,7 @@ router28.post("/events", async (req2, res) => {
     console.log("[CALENDAR ROUTES] organizationId:", organizationId);
     console.log("[CALENDAR ROUTES] eventData BRUT:", eventData);
     const prismaData = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: eventData.title,
       description: eventData.description || null,
       startDate: eventData.start || eventData.startDate,
@@ -16340,7 +16853,8 @@ router28.post("/events", async (req2, res) => {
       notes: eventData.notes || null,
       location: eventData.location || null,
       ownerId: userId,
-      organizationId
+      organizationId,
+      updatedAt: /* @__PURE__ */ new Date()
     };
     console.log("[CALENDAR ROUTES] Donn\xE9es pr\xE9par\xE9es pour Prisma:", prismaData);
     console.log("[CALENDAR ROUTES] Champs mapp\xE9s correctement:", {
@@ -16365,11 +16879,11 @@ router28.post("/events", async (req2, res) => {
           timeZone: "Europe/Brussels"
         }
       };
-      const googleEventId = await googleCalendarService.createEvent(organizationId, googleEventData);
+      const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData);
       const updatedEvent = await prisma25.calendarEvent.update({
         where: { id: event.id },
         data: {
-          googleEventId
+          externalCalendarId
         },
         include: {
           project: { select: { id: true, name: true, clientName: true } },
@@ -16428,6 +16942,7 @@ router28.post("/notes", async (req2, res) => {
     }
     console.log("[CALENDAR ROUTES] \u2714 Donn\xE9es normalis\xE9es:", { title, hasDescription: !!description, parsedDue, normalizedPriority, safeCategory, organizationId, ownerId });
     const data = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title,
       description: description || null,
       startDate: today,
@@ -16439,7 +16954,8 @@ router28.post("/notes", async (req2, res) => {
       priority: normalizedPriority,
       category: safeCategory,
       organizationId,
-      ownerId
+      ownerId,
+      updatedAt: /* @__PURE__ */ new Date()
     };
     console.log("[CALENDAR ROUTES] \u2795 Cr\xE9ation Prisma calendarEvent avec data:", data);
     let note;
@@ -16551,7 +17067,7 @@ router28.put("/events/:id", async (req2, res) => {
       where: { id, organizationId },
       data: eventData
     });
-    if (updatedEvent.googleEventId) {
+    if (updatedEvent.externalCalendarId) {
       try {
         const googleEventData = {
           summary: updatedEvent.title,
@@ -16565,7 +17081,7 @@ router28.put("/events/:id", async (req2, res) => {
             timeZone: "Europe/Brussels"
           }
         };
-        await googleCalendarService.updateEvent(organizationId, updatedEvent.googleEventId, googleEventData);
+        await googleCalendarService.updateEvent(organizationId, updatedEvent.externalCalendarId, googleEventData);
       } catch (googleError) {
         console.warn("[CALENDAR ROUTES] Erreur mise \xE0 jour Google Calendar:", googleError);
       }
@@ -16592,10 +17108,10 @@ router28.delete("/events/:id", async (req2, res) => {
     console.log("[CALENDAR ROUTES] \u{1F5D1}\uFE0F Suppression de l'\xE9v\xE9nement...");
     await prisma25.calendarEvent.delete({ where: { id } });
     console.log("[CALENDAR ROUTES] \u2705 \xC9v\xE9nement supprim\xE9 de la base de donn\xE9es");
-    if (eventToDelete.googleEventId) {
+    if (eventToDelete.externalCalendarId) {
       try {
         console.log("[CALENDAR ROUTES] \u{1F504} Suppression de Google Calendar...");
-        await googleCalendarService.deleteEvent(organizationId, eventToDelete.googleEventId);
+        await googleCalendarService.deleteEvent(organizationId, eventToDelete.externalCalendarId);
         console.log("[CALENDAR ROUTES] \u2705 \xC9v\xE9nement supprim\xE9 de Google Calendar");
       } catch (googleError) {
         console.warn("[CALENDAR ROUTES] \u26A0\uFE0F Erreur suppression Google Calendar:", googleError);
@@ -16974,7 +17490,7 @@ var projects_default = router30;
 var import_express32 = require("express");
 
 // src/services/GmailService.ts
-var import_googleapis6 = require("googleapis");
+var import_googleapis7 = require("googleapis");
 
 // src/services/AutoGoogleAuthService.ts
 var import_client28 = require("@prisma/client");
@@ -17216,7 +17732,7 @@ var GmailService = class {
   }
   async getGmailClient(userId) {
     const oauth2Client = this.getOAuthClientForUser(userId);
-    return import_googleapis6.google.gmail({ version: "v1", auth: oauth2Client });
+    return import_googleapis7.google.gmail({ version: "v1", auth: oauth2Client });
   }
   // Extrait un header spécifique d'une liste de headers
   extractHeader(headers, name) {
@@ -19391,40 +19907,402 @@ var import_express37 = require("express");
 var router36 = (0, import_express37.Router)();
 router36.get("/files", authMiddleware, async (req2, res) => {
   try {
-    res.json({
-      files: [],
-      message: "Google Drive integration \xE0 impl\xE9menter"
-    });
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const folderId = req2.query.folderId || "root";
+    const pageSize = parseInt(req2.query.pageSize) || 50;
+    const pageToken = req2.query.pageToken;
+    console.log(`[Google Drive Routes] \u{1F4C1} GET /files - folderId: ${folderId}`);
+    const result = await googleDriveService.getFiles(organizationId, folderId, pageSize, pageToken);
+    res.json(result);
   } catch (error) {
-    console.error("Erreur Google Drive:", error);
+    console.error("[Google Drive Routes] \u274C Erreur GET /files:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers Drive" });
   }
 });
-router36.post("/files/create", authMiddleware, async (req2, res) => {
+router36.get("/shared", authMiddleware, async (req2, res) => {
   try {
-    const { name, mimeType } = req2.body;
-    res.json({
-      id: "temp-file-id",
-      name,
-      mimeType,
-      message: "Cr\xE9ation Google Drive \xE0 impl\xE9menter"
-    });
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const pageSize = parseInt(req2.query.pageSize) || 50;
+    const pageToken = req2.query.pageToken;
+    console.log(`[Google Drive Routes] \u{1F4E4} GET /shared - Fichiers partag\xE9s avec moi`);
+    const result = await googleDriveService.getSharedFiles(organizationId, pageSize, pageToken);
+    res.json(result);
   } catch (error) {
-    console.error("Erreur cr\xE9ation Google Drive:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xE9ation du fichier Drive" });
+    console.error("[Google Drive Routes] \u274C Erreur GET /shared:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers partag\xE9s" });
+  }
+});
+router36.get("/shared-drives", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    console.log(`[Google Drive Routes] \u{1F3E2} GET /shared-drives - Drives partag\xE9s`);
+    const result = await googleDriveService.getSharedDrives(organizationId);
+    res.json(result);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /shared-drives:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des drives partag\xE9s" });
+  }
+});
+router36.get("/shared-drives/:driveId/files", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { driveId } = req2.params;
+    const folderId = req2.query.folderId;
+    const pageSize = parseInt(req2.query.pageSize) || 50;
+    const pageToken = req2.query.pageToken;
+    console.log(`[Google Drive Routes] \u{1F3E2} GET /shared-drives/${driveId}/files - folderId: ${folderId || "root"}`);
+    const result = await googleDriveService.getSharedDriveFiles(organizationId, driveId, folderId, pageSize, pageToken);
+    res.json(result);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /shared-drives/:driveId/files:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers du drive partag\xE9" });
+  }
+});
+router36.get("/search", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const query = req2.query.q;
+    if (!query) {
+      return res.status(400).json({ error: "Param\xE8tre de recherche requis" });
+    }
+    console.log(`[Google Drive Routes] \u{1F50E} GET /search - query: "${query}"`);
+    const files = await googleDriveService.searchFiles(organizationId, query);
+    res.json({ files });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /search:", error);
+    res.status(500).json({ error: "Erreur lors de la recherche de fichiers" });
+  }
+});
+router36.get("/storage", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    console.log(`[Google Drive Routes] \u{1F4BE} GET /storage`);
+    const storageInfo = await googleDriveService.getStorageInfo(organizationId);
+    res.json(storageInfo);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /storage:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des infos de stockage" });
+  }
+});
+router36.get("/files/:fileId", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    console.log(`[Google Drive Routes] \u{1F4C4} GET /files/${fileId}`);
+    const fileInfo = await googleDriveService.getFileInfo(organizationId, fileId);
+    res.json(fileInfo);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /files/:fileId:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des infos du fichier" });
+  }
+});
+router36.post("/folders", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { name, parentId } = req2.body;
+    if (!name) {
+      return res.status(400).json({ error: "Nom du dossier requis" });
+    }
+    console.log(`[Google Drive Routes] \u{1F4C2} POST /folders - name: "${name}"`);
+    const folder = await googleDriveService.createFolder(organizationId, name, parentId || "root");
+    res.status(201).json(folder);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur POST /folders:", error);
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation du dossier" });
   }
 });
 router36.delete("/files/:fileId", authMiddleware, async (req2, res) => {
   try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
     const { fileId } = req2.params;
-    res.json({
-      success: true,
-      fileId,
-      message: "Suppression Google Drive \xE0 impl\xE9menter"
+    console.log(`[Google Drive Routes] \u{1F5D1}\uFE0F DELETE /files/${fileId}`);
+    await googleDriveService.deleteFile(organizationId, fileId);
+    res.json({ success: true, message: "Fichier mis \xE0 la corbeille" });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur DELETE /files/:fileId:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression du fichier" });
+  }
+});
+router36.post("/upload", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const chunks = [];
+    let fileName = "uploaded-file";
+    let mimeType = "application/octet-stream";
+    let parentId = "root";
+    if (req2.headers["x-file-name"]) {
+      fileName = decodeURIComponent(req2.headers["x-file-name"]);
+    }
+    if (req2.headers["x-mime-type"]) {
+      mimeType = req2.headers["x-mime-type"];
+    }
+    if (req2.headers["x-parent-id"]) {
+      parentId = req2.headers["x-parent-id"];
+    }
+    req2.on("data", (chunk) => chunks.push(chunk));
+    req2.on("end", async () => {
+      try {
+        const fileBuffer = Buffer.concat(chunks);
+        console.log(`[Google Drive Routes] \u{1F4E4} POST /upload - file: "${fileName}", size: ${fileBuffer.length}`);
+        const file = await googleDriveService.uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId);
+        res.status(201).json(file);
+      } catch (error) {
+        console.error("[Google Drive Routes] \u274C Erreur POST /upload:", error);
+        res.status(500).json({ error: "Erreur lors de l'upload du fichier" });
+      }
     });
   } catch (error) {
-    console.error("Erreur suppression Google Drive:", error);
-    res.status(500).json({ error: "Erreur lors de la suppression du fichier Drive" });
+    console.error("[Google Drive Routes] \u274C Erreur POST /upload:", error);
+    res.status(500).json({ error: "Erreur lors de l'upload du fichier" });
+  }
+});
+router36.patch("/files/:fileId/rename", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    const { name } = req2.body;
+    if (!name) {
+      return res.status(400).json({ error: "Nouveau nom requis" });
+    }
+    console.log(`[Google Drive Routes] \u270F\uFE0F PATCH /files/${fileId}/rename - name: "${name}"`);
+    const file = await googleDriveService.renameFile(organizationId, fileId, name);
+    res.json(file);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur PATCH /files/:fileId/rename:", error);
+    res.status(500).json({ error: "Erreur lors du renommage" });
+  }
+});
+router36.patch("/files/:fileId/move", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    const { newParentId } = req2.body;
+    if (!newParentId) {
+      return res.status(400).json({ error: "Dossier de destination requis" });
+    }
+    console.log(`[Google Drive Routes] \u{1F4E6} PATCH /files/${fileId}/move - to: ${newParentId}`);
+    const file = await googleDriveService.moveFile(organizationId, fileId, newParentId);
+    res.json(file);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur PATCH /files/:fileId/move:", error);
+    res.status(500).json({ error: "Erreur lors du d\xE9placement" });
+  }
+});
+router36.post("/files/:fileId/copy", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    const { newName } = req2.body;
+    console.log(`[Google Drive Routes] \u{1F4CB} POST /files/${fileId}/copy`);
+    const file = await googleDriveService.copyFile(organizationId, fileId, newName);
+    res.status(201).json(file);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur POST /files/:fileId/copy:", error);
+    res.status(500).json({ error: "Erreur lors de la copie" });
+  }
+});
+router36.get("/files/:fileId/share", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    console.log(`[Google Drive Routes] \u{1F517} GET /files/${fileId}/share`);
+    const links = await googleDriveService.getShareLink(organizationId, fileId);
+    res.json(links);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /files/:fileId/share:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du lien" });
+  }
+});
+router36.post("/files/:fileId/make-public", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    console.log(`[Google Drive Routes] \u{1F310} POST /files/${fileId}/make-public`);
+    const result = await googleDriveService.makePublic(organizationId, fileId);
+    res.json(result);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur POST /files/:fileId/make-public:", error);
+    res.status(500).json({ error: "Erreur lors du partage" });
+  }
+});
+router36.get("/recent", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    console.log(`[Google Drive Routes] \u{1F550} GET /recent`);
+    const files = await googleDriveService.getRecentFiles(organizationId);
+    res.json({ files });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /recent:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers r\xE9cents" });
+  }
+});
+router36.get("/starred", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    console.log(`[Google Drive Routes] \u2B50 GET /starred`);
+    const files = await googleDriveService.getStarredFiles(organizationId);
+    res.json({ files });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /starred:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des fichiers favoris" });
+  }
+});
+router36.patch("/files/:fileId/star", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    const { starred } = req2.body;
+    console.log(`[Google Drive Routes] \u2B50 PATCH /files/${fileId}/star - starred: ${starred}`);
+    await googleDriveService.toggleStar(organizationId, fileId, starred);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur PATCH /files/:fileId/star:", error);
+    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour du favori" });
+  }
+});
+router36.get("/trash", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    console.log(`[Google Drive Routes] \u{1F5D1}\uFE0F GET /trash`);
+    const files = await googleDriveService.getTrash(organizationId);
+    res.json({ files });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /trash:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la corbeille" });
+  }
+});
+router36.post("/files/:fileId/restore", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    console.log(`[Google Drive Routes] \u267B\uFE0F POST /files/${fileId}/restore`);
+    await googleDriveService.restoreFile(organizationId, fileId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur POST /files/:fileId/restore:", error);
+    res.status(500).json({ error: "Erreur lors de la restauration" });
+  }
+});
+router36.delete("/files/:fileId/permanent", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    console.log(`[Google Drive Routes] \u274C DELETE /files/${fileId}/permanent`);
+    await googleDriveService.deleteFilePermanently(organizationId, fileId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur DELETE /files/:fileId/permanent:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression d\xE9finitive" });
+  }
+});
+router36.delete("/trash", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    console.log(`[Google Drive Routes] \u{1F5D1}\uFE0F DELETE /trash`);
+    await googleDriveService.emptyTrash(organizationId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur DELETE /trash:", error);
+    res.status(500).json({ error: "Erreur lors du vidage de la corbeille" });
+  }
+});
+router36.get("/files/:fileId/download", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { fileId } = req2.params;
+    console.log(`[Google Drive Routes] \u2B07\uFE0F GET /files/${fileId}/download`);
+    const result = await googleDriveService.getDownloadUrl(organizationId, fileId);
+    res.json(result);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur GET /files/:fileId/download:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de l'URL" });
+  }
+});
+router36.post("/create-doc", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    if (!organizationId) {
+      return res.status(401).json({ error: "Organisation non trouv\xE9e" });
+    }
+    const { name, type, parentId } = req2.body;
+    if (!name || !type) {
+      return res.status(400).json({ error: "Nom et type requis" });
+    }
+    console.log(`[Google Drive Routes] \u{1F4C4} POST /create-doc - type: ${type}, name: "${name}"`);
+    const file = await googleDriveService.createGoogleDoc(organizationId, name, type, parentId || "root");
+    res.status(201).json(file);
+  } catch (error) {
+    console.error("[Google Drive Routes] \u274C Erreur POST /create-doc:", error);
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation du document" });
   }
 });
 var google_drive_default = router36;
@@ -23144,17 +24022,13 @@ var import_client37 = require("@prisma/client");
 // src/global-mock-formulas.ts
 if (!global._globalFormulasStore) {
   global._globalFormulasStore = /* @__PURE__ */ new Map();
-  console.log("[MOCK] \u{1F195} Initialisation du stockage global principal des formules");
   global._backupFormulasStore = /* @__PURE__ */ new Map();
-  console.log("[MOCK] \u{1F195} Initialisation du stockage de secours des formules");
 }
 if (!global._backupFormulasStore) {
   global._backupFormulasStore = /* @__PURE__ */ new Map();
-  console.log("[MOCK] \u{1F195} Initialisation tardive du stockage de secours");
 }
 if (!global._formulasOperationLog) {
   global._formulasOperationLog = [];
-  console.log("[MOCK] \u{1F4DD} Initialisation du journal des op\xE9rations de formules");
 }
 var logOperation = (operation, fieldId, formulaId = null, status = "success", details = null) => {
   const logEntry = {
@@ -23178,27 +24052,22 @@ var getFormulasForField = (fieldId) => {
       logOperation("getFormulasForField", "unknown", null, "error", "fieldId manquant");
       return [];
     }
-    console.log("[MOCK] getFormulasForField - \xC9tat du store global:", global._globalFormulasStore.size, "champs stock\xE9s");
-    console.log("[MOCK] getFormulasForField - Cl\xE9s actuelles:", Array.from(global._globalFormulasStore.keys()).join(", "));
     if (!global._globalFormulasStore.has(fieldId)) {
-      console.log("[MOCK] Initialisation du stockage pour le champ " + fieldId);
       global._globalFormulasStore.set(fieldId, []);
       logOperation("initStorage", fieldId);
     }
     const storedData = global._globalFormulasStore.get(fieldId);
     if (!storedData) {
-      console.warn("[MOCK] Donn\xE9es manquantes apr\xE8s v\xE9rification, cr\xE9ation d'un tableau vide");
+      console.warn("[MOCK] Donn\xC3\u0192\xC2\xA9es manquantes apr\xC3\u0192\xC2\xA8s v\xC3\u0192\xC2\xA9rification, cr\xC3\u0192\xC2\xA9ation d'un tableau vide");
       global._globalFormulasStore.set(fieldId, []);
       return [];
     }
-    console.log("[MOCK] R\xE9cup\xE9ration de " + storedData.length + " formules pour le champ " + fieldId);
     if (storedData.length > 0) {
-      console.log("[MOCK] Exemple de donn\xE9es:", JSON.stringify(storedData[0]));
     }
     logOperation("getFormulasForField", fieldId, null, "success", { count: storedData.length });
     return JSON.parse(JSON.stringify(storedData));
   } catch (error) {
-    console.error("[MOCK] Erreur lors de la r\xE9cup\xE9ration des formules pour le champ " + fieldId + ":", error);
+    console.error("[MOCK] Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration des formules pour le champ " + fieldId + ":", error);
     logOperation("getFormulasForField", fieldId, null, "error", error.message || String(error));
     return [];
   }
@@ -23207,10 +24076,9 @@ var updateFormula = (fieldId, formulaId, data) => {
   try {
     if (!fieldId || !formulaId) {
       console.error("[MOCK] Erreur: fieldId ou formulaId manquant");
-      logOperation("updateFormula", fieldId || "unknown", formulaId || null, "error", "Param\xE8tres manquants");
+      logOperation("updateFormula", fieldId || "unknown", formulaId || null, "error", "Param\xC3\u0192\xC2\xA8tres manquants");
       return null;
     }
-    console.log("[MOCK] Mise \xE0 jour formule " + formulaId + " pour champ " + fieldId, data);
     const formulas = JSON.parse(JSON.stringify(getFormulasForField(fieldId)));
     const index = formulas.findIndex((f) => f.id === formulaId);
     const formula = {
@@ -23223,11 +24091,9 @@ var updateFormula = (fieldId, formulaId, data) => {
     };
     if (index >= 0) {
       formulas[index] = { ...formulas[index], ...formula };
-      console.log("[MOCK] Formule " + formulaId + " mise \xE0 jour");
       logOperation("updateFormula", fieldId, formulaId, "success", { type: "update" });
     } else {
       formulas.push(formula);
-      console.log("[MOCK] Formule " + formulaId + " ajout\xE9e au stockage");
       logOperation("updateFormula", fieldId, formulaId, "success", { type: "create" });
     }
     const formulasCopy = JSON.parse(JSON.stringify(formulas));
@@ -23236,20 +24102,15 @@ var updateFormula = (fieldId, formulaId, data) => {
     try {
       const backupCopy = JSON.parse(JSON.stringify(sortedFormulas));
       global._backupFormulasStore.set(fieldId, backupCopy);
-      console.log("[MOCK] \u2705 Double sauvegarde r\xE9ussie pour le champ " + fieldId);
     } catch (backupError) {
-      console.error("[MOCK] \u274C \xC9chec de la sauvegarde de secours:", backupError);
+      console.error("[MOCK] \xC3\xA2\xC2\x9D\xC5\u2019 \xC3\u0192\xE2\u20AC\xB0chec de la sauvegarde de secours:", backupError);
     }
-    console.log("[MOCK] \u{1F504} Stockage mis \xE0 jour pour le champ " + fieldId + ", maintenant " + formulas.length + " formules");
-    console.log("[MOCK] \u2713 V\xE9rification apr\xE8s mise \xE0 jour: " + (global._globalFormulasStore.get(fieldId)?.length || 0) + " formules dans le store principal");
-    console.log("[MOCK] \u2713 V\xE9rification du store de secours: " + (global._backupFormulasStore.get(fieldId)?.length || 0) + " formules");
     const storedFormulas = global._globalFormulasStore.get(fieldId);
     if (storedFormulas && storedFormulas.length > 0) {
-      console.log("[MOCK] \u{1F4C4} V\xE9rification principale - premier \xE9l\xE9ment:", JSON.stringify(storedFormulas[0]));
       storedFormulas.forEach((f, idx) => {
         if (!f.id || !f.sequence) {
           console.warn(
-            `[MOCK] \u26A0\uFE0F Formule #${idx} potentiellement corrompue:`,
+            `[MOCK] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Formule #${idx} potentiellement corrompue:`,
             JSON.stringify({ id: f.id, hasSequence: !!f.sequence, sequenceType: typeof f.sequence })
           );
         }
@@ -23257,7 +24118,7 @@ var updateFormula = (fieldId, formulaId, data) => {
     }
     return formula;
   } catch (error) {
-    console.error("[MOCK] Erreur lors de la mise \xE0 jour de la formule " + formulaId + ":", error);
+    console.error("[MOCK] Erreur lors de la mise \xC3\u0192\xC2\xA0 jour de la formule " + formulaId + ":", error);
     logOperation("updateFormula", fieldId, formulaId, "error", error.message || String(error));
     return null;
   }
@@ -25754,7 +26615,6 @@ router53.get("/configurations", async (req2, res) => {
     const engine = new DynamicFormulaEngine_default();
     const configurations = await engine.loadFieldConfigurations(organizationId);
     await engine.cleanup();
-    console.log("\u2705 [DynamicFormulaAPI] Configurations r\xE9cup\xE9r\xE9es:", Object.keys(configurations).length);
     res.json({
       success: true,
       data: {
@@ -25767,10 +26627,10 @@ router53.get("/configurations", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [DynamicFormulaAPI] Erreur r\xE9cup\xE9ration configurations:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration configurations:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xE9cup\xE9ration des configurations",
+      error: "Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration des configurations",
       details: error.message
     });
   }
@@ -25788,11 +26648,9 @@ router53.post("/calculate", async (req2, res) => {
     if (!fieldValues || typeof fieldValues !== "object") {
       return res.status(400).json({
         success: false,
-        error: "fieldValues requis dans le body de la requ\xEAte"
+        error: "fieldValues requis dans le body de la requ\xC3\u0192\xC2\xAAte"
       });
     }
-    console.log("\u{1F9EE} [DynamicFormulaAPI] D\xE9but calculs pour org:", organizationId);
-    console.log("\u{1F4DD} Valeurs re\xE7ues:", Object.keys(fieldValues).length);
     const engine = new DynamicFormulaEngine_default();
     const fieldConfigs = await engine.loadFieldConfigurations(organizationId);
     const context = {
@@ -25802,7 +26660,6 @@ router53.post("/calculate", async (req2, res) => {
     };
     const results = await engine.executeCalculations(context);
     await engine.cleanup();
-    console.log("\u2705 [DynamicFormulaAPI] Calculs termin\xE9s:", Object.keys(results).length);
     res.json({
       success: true,
       data: {
@@ -25815,7 +26672,7 @@ router53.post("/calculate", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [DynamicFormulaAPI] Erreur calculs:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur calculs:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors des calculs dynamiques",
@@ -25830,17 +26687,14 @@ router53.post("/calculate-prix-kwh", async (req2, res) => {
       selectedOption,
       // 'prix-kwh' ou 'calcul-du-prix-kwh'
       prixDefini,
-      // Valeur actuelle Prix Kw/h - Défini
+      // Valeur actuelle Prix Kw/h - DÃƒÂ©fini
       consommation,
       // Consommation annuelle Kw/h
       calculBase,
-      // Base de calcul si nécessaire
+      // Base de calcul si nÃƒÂ©cessaire
       directValue
       // Valeur directe si saisie
     } = req2.body;
-    console.log("\u26A1 [Prix Kw/h API] Calcul sp\xE9cifique - Option:", selectedOption);
-    console.log("\u26A1 [Prix Kw/h API] Prix d\xE9fini:", prixDefini);
-    console.log("\u26A1 [Prix Kw/h API] Consommation:", consommation);
     const engine = new DynamicFormulaEngine_default();
     const fieldConfigs = await engine.loadFieldConfigurations(organizationId);
     const fieldMapping = getFieldMapping();
@@ -25849,7 +26703,7 @@ router53.post("/calculate-prix-kwh", async (req2, res) => {
         [fieldMapping.prix_kwh]: selectedOption,
         // Prix Kw/h (advanced_select)
         [fieldMapping.prix_mois]: prixDefini,
-        // Prix Kw/h - Défini
+        // Prix Kw/h - DÃƒÂ©fini
         [fieldMapping.consommation_kwh]: consommation,
         // Consommation annuelle
         "direct_prix_kwh_input": directValue,
@@ -25861,7 +26715,6 @@ router53.post("/calculate-prix-kwh", async (req2, res) => {
     const results = await engine.executeCalculations(context);
     await engine.cleanup();
     const finalPrixKwh = results["52c7f63b-7e57-4ba8-86da-19a176f09220"];
-    console.log("\u2705 [Prix Kw/h API] R\xE9sultat final:", finalPrixKwh);
     res.json({
       success: true,
       data: {
@@ -25878,7 +26731,7 @@ router53.post("/calculate-prix-kwh", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [Prix Kw/h API] Erreur:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [Prix Kw/h API] Erreur:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors du calcul Prix Kw/h",
@@ -25890,7 +26743,6 @@ router53.put("/configurations/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { advancedConfig, formulas, dependencies } = req2.body;
-    console.log("\u{1F504} [DynamicFormulaAPI] Mise \xE0 jour configuration:", fieldId);
     const engine = new DynamicFormulaEngine_default();
     await engine.updateFieldConfiguration(fieldId, {
       advancedConfig,
@@ -25898,7 +26750,6 @@ router53.put("/configurations/:fieldId", async (req2, res) => {
       dependencies
     });
     await engine.cleanup();
-    console.log("\u2705 [DynamicFormulaAPI] Configuration mise \xE0 jour");
     res.json({
       success: true,
       data: {
@@ -25908,10 +26759,10 @@ router53.put("/configurations/:fieldId", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [DynamicFormulaAPI] Erreur mise \xE0 jour:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur mise \xC3\u0192\xC2\xA0 jour:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la mise \xE0 jour de la configuration",
+      error: "Erreur lors de la mise \xC3\u0192\xC2\xA0 jour de la configuration",
       details: error.message
     });
   }
@@ -25920,14 +26771,13 @@ router53.get("/field/:fieldId/logic", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    console.log("\u{1F3AF} [DynamicFormulaAPI] Analyse logique pour champ:", fieldId);
     const engine = new DynamicFormulaEngine_default();
     const configurations = await engine.loadFieldConfigurations(organizationId);
     const fieldConfig = configurations[fieldId];
     if (!fieldConfig) {
       return res.status(404).json({
         success: false,
-        error: "Champ non trouv\xE9"
+        error: "Champ non trouv\xC3\u0192\xC2\xA9"
       });
     }
     const logics = engine.analyzeConditionalLogic(fieldConfig);
@@ -25946,7 +26796,7 @@ router53.get("/field/:fieldId/logic", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [DynamicFormulaAPI] Erreur analyse logique:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur analyse logique:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de l'analyse de la logique",
@@ -25973,16 +26823,15 @@ router53.get("/analytics", async (req2, res) => {
       organizationId,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     };
-    console.log("\u{1F4CA} [DynamicFormulaAPI] Statistiques:", analytics);
     res.json({
       success: true,
       data: analytics
     });
   } catch (error) {
-    console.error("\u274C [DynamicFormulaAPI] Erreur analytics:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur analytics:", error);
     res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xE9cup\xE9ration des statistiques",
+      error: "Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration des statistiques",
       details: error.message
     });
   }
@@ -26781,7 +27630,7 @@ async function getNodeLinkedField(client, nodeId, field) {
     if (Array.isArray(value)) return value.filter(Boolean);
     return [];
   } catch (e) {
-    console.warn(`\u26A0\uFE0F Impossible de lire ${field} pour n\u0153ud ${nodeId}:`, e.message);
+    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Impossible de lire ${field} pour n\xC3\u2026\xE2\u20AC\u0153ud ${nodeId}:`, e.message);
     return [];
   }
 }
@@ -26793,7 +27642,7 @@ async function setNodeLinkedField(client, nodeId, field, values) {
       data: { [field]: uniqueValues }
     });
   } catch (e) {
-    console.warn(`\u26A0\uFE0F Impossible de d\xE9finir ${field} pour n\u0153ud ${nodeId}:`, e.message);
+    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Impossible de d\xC3\u0192\xC2\xA9finir ${field} pour n\xC3\u2026\xE2\u20AC\u0153ud ${nodeId}:`, e.message);
   }
 }
 async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE__ */ new Set()) {
@@ -26867,93 +27716,64 @@ async function addToNodeLinkedField(client, nodeId, field, idsToAdd) {
   await setNodeLinkedField(client, nodeId, field, updated);
 }
 async function linkConditionToAllNodes(client, conditionId, conditionSet) {
-  console.log(`
-\u{1F517} LIAISON AUTOMATIQUE: Condition ${conditionId}`);
   const nodeIds = extractNodeIdsFromCondition(conditionSet);
-  console.log(`   \u{1F4CB} ${nodeIds.size} n\u0153ud(s) trouv\xE9(s):`, Array.from(nodeIds));
   let successCount = 0;
   let errorCount = 0;
   for (const nodeId of nodeIds) {
     try {
       await addToNodeLinkedField(client, nodeId, "linkedConditionIds", [conditionId]);
       successCount++;
-      console.log(`   \u2705 ${nodeId} \u2192 linkedConditionIds += ${conditionId}`);
     } catch (e) {
       errorCount++;
-      console.error(`   \u274C ${nodeId} \u2192 \xC9CHEC:`, e.message);
+      console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
     }
   }
-  console.log(`   \u{1F4CA} R\xE9sultat: ${successCount} r\xE9ussites, ${errorCount} \xE9checs`);
-  console.log(`\u{1F517} LIAISON AUTOMATIQUE: Termin\xE9e
-`);
 }
 async function linkFormulaToAllNodes(client, formulaId, tokens2) {
-  console.log(`
-\u{1F517} LIAISON AUTOMATIQUE: Formule ${formulaId}`);
   const nodeIds = extractNodeIdsFromFormula(tokens2);
-  console.log(`   \u{1F4CB} ${nodeIds.size} n\u0153ud(s) trouv\xE9(s):`, Array.from(nodeIds));
   let successCount = 0;
   let errorCount = 0;
   for (const nodeId of nodeIds) {
     try {
       await addToNodeLinkedField(client, nodeId, "linkedFormulaIds", [formulaId]);
       successCount++;
-      console.log(`   \u2705 ${nodeId} \u2192 linkedFormulaIds += ${formulaId}`);
     } catch (e) {
       errorCount++;
-      console.error(`   \u274C ${nodeId} \u2192 \xC9CHEC:`, e.message);
+      console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
     }
   }
-  console.log(`   \u{1F4CA} R\xE9sultat: ${successCount} r\xE9ussites, ${errorCount} \xE9checs`);
-  console.log(`\u{1F517} LIAISON AUTOMATIQUE: Termin\xE9e
-`);
 }
 async function linkTableToAllNodes(client, tableId, tableData) {
-  console.log(`
-\u{1F517} LIAISON AUTOMATIQUE: Table ${tableId}`);
   const nodeIds = extractNodeIdsFromTable(tableData);
-  console.log(`   \u{1F4CB} ${nodeIds.size} n\u0153ud(s) trouv\xE9(s):`, Array.from(nodeIds));
   let successCount = 0;
   let errorCount = 0;
   for (const nodeId of nodeIds) {
     try {
       await addToNodeLinkedField(client, nodeId, "linkedTableIds", [tableId]);
       successCount++;
-      console.log(`   \u2705 ${nodeId} \u2192 linkedTableIds += ${tableId}`);
     } catch (e) {
       errorCount++;
-      console.error(`   \u274C ${nodeId} \u2192 \xC9CHEC:`, e.message);
+      console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
     }
   }
-  console.log(`   \u{1F4CA} R\xE9sultat: ${successCount} r\xE9ussites, ${errorCount} \xE9checs`);
-  console.log(`\u{1F517} LIAISON AUTOMATIQUE: Termin\xE9e
-`);
 }
 async function linkVariableToAllCapacityNodes(client, variableId, sourceRef) {
-  console.log(`
-\u{1F517} LIAISON AUTOMATIQUE VARIABLE: ${variableId}`);
-  console.log(`   \u{1F4CD} sourceRef: ${sourceRef}`);
   try {
     const nodeIds = await gatherNodeIdsRecursively(client, sourceRef);
-    console.log(`   \u{1F4CB} ${nodeIds.size} n\u0153ud(s) trouv\xE9(s):`, Array.from(nodeIds));
     let successCount = 0;
     let errorCount = 0;
     for (const nodeId of nodeIds) {
       try {
         await addToNodeLinkedField(client, nodeId, "linkedVariableIds", [variableId]);
         successCount++;
-        console.log(`   \u2705 ${nodeId} \u2192 linkedVariableIds += ${variableId}`);
       } catch (e) {
         errorCount++;
-        console.error(`   \u274C ${nodeId} \u2192 \xC9CHEC:`, e.message);
+        console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
       }
     }
-    console.log(`   \u{1F4CA} R\xE9sultat: ${successCount} r\xE9ussites, ${errorCount} \xE9checs`);
   } catch (e) {
-    console.error(`   \u274C Erreur lors de la liaison variable:`, e.message);
+    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la liaison variable:`, e.message);
   }
-  console.log(`\u{1F517} LIAISON AUTOMATIQUE VARIABLE: Termin\xE9e
-`);
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/shared/hierarchyRules.ts
@@ -27364,17 +28184,16 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router83) {
-  router83.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router84) {
+  router84.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
-      console.log(`\u{1F4CA} [SUM DISPLAY] Cr\xE9ation champ Total pour nodeId=${nodeId}, treeId=${treeId}, orgId=${organizationId}`);
       const tree = await prisma45.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
       if (!tree) {
-        return res.status(404).json({ error: "Arbre non trouv\xE9" });
+        return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xA9" });
       }
       const node = await prisma45.treeBranchLeafNode.findFirst({
         where: { id: nodeId, treeId },
@@ -27389,7 +28208,7 @@ function registerSumDisplayFieldRoutes(router83) {
         }
       });
       if (!node) {
-        return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+        return res.status(404).json({ error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
       }
       const mainVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId },
@@ -27403,7 +28222,7 @@ function registerSumDisplayFieldRoutes(router83) {
         }
       });
       if (!mainVariable) {
-        return res.status(404).json({ error: "Variable non trouv\xE9e pour ce n\u0153ud" });
+        return res.status(404).json({ error: "Variable non trouv\xC3\u0192\xC2\xA9e pour ce n\xC3\u2026\xE2\u20AC\u0153ud" });
       }
       const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
       const allCopies = await prisma45.treeBranchLeafNodeVariable.findMany({
@@ -27415,14 +28234,12 @@ function registerSumDisplayFieldRoutes(router83) {
         },
         select: { id: true, exposedKey: true, nodeId: true }
       });
-      console.log(`\u{1F4CA} [SUM DISPLAY] ${allCopies.length} copie(s) trouv\xE9e(s) pour ${baseExposedKey}`);
       const copyNodeIds = allCopies.map((c) => c.nodeId);
       const copyNodes = await prisma45.treeBranchLeafNode.findMany({
         where: { id: { in: copyNodeIds } },
         select: { id: true, order: true }
       });
       const maxCopyOrder = copyNodes.reduce((max, n) => Math.max(max, n.order ?? 0), 0);
-      console.log(`\u{1F4CA} [SUM DISPLAY] Max order des copies: ${maxCopyOrder}, Total sera \xE0 order: ${maxCopyOrder + 1}`);
       const sumFieldNodeId = `${nodeId}-sum-total`;
       const sumFieldVariableId = `${mainVariable.id}-sum-total`;
       const sumDisplayName = `${mainVariable.displayName} - Total`;
@@ -27453,13 +28270,13 @@ function registerSumDisplayFieldRoutes(router83) {
         label: sumDisplayName,
         field_label: sumDisplayName,
         fieldType: null,
-        // 🔧 UNIFIÉ: null comme M² toiture - Total
+        // Ã°Å¸â€Â§ UNIFIÃƒâ€°: null comme MÃ‚Â² toiture - Total
         subType: null,
         fieldSubType: null,
         hasData: true,
         hasFormula: true,
         data_visibleToUser: false,
-        // 🔧 UNIFIÉ: false comme M² toiture - Total
+        // Ã°Å¸â€Â§ UNIFIÃƒâ€°: false comme MÃ‚Â² toiture - Total
         formula_activeId: sumFormulaId,
         formula_instances: { [sumFormulaId]: formulaInstance },
         formula_tokens: sumTokens,
@@ -27475,8 +28292,8 @@ function registerSumDisplayFieldRoutes(router83) {
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
-          // 🚫 PAS de capabilities.datas ici - le frontend utilise formula_instances directement
-          // C'est le chemin qui fonctionne pour M² toiture - Total
+          // Ã°Å¸Å¡Â« PAS de capabilities.datas ici - le frontend utilise formula_instances directement
+          // C'est le chemin qui fonctionne pour MÃ‚Â² toiture - Total
           updatedAt: now.toISOString()
         },
         updatedAt: now
@@ -27486,7 +28303,6 @@ function registerSumDisplayFieldRoutes(router83) {
           where: { id: sumFieldNodeId },
           data: sumNodeData
         });
-        console.log(`\u{1F4CA} [SUM DISPLAY] N\u0153ud Total mis \xE0 jour: ${sumFieldNodeId}`);
       } else {
         try {
           await prisma45.treeBranchLeafNode.create({
@@ -27494,12 +28310,12 @@ function registerSumDisplayFieldRoutes(router83) {
               id: sumFieldNodeId,
               treeId,
               parentId: node.parentId,
-              // Même section que le nœud original
+              // MÃƒÂªme section que le nÃ…â€œud original
               type: "leaf_field",
               label: sumDisplayName,
               field_label: sumDisplayName,
               order: maxCopyOrder + 1,
-              // 🔥 APRÈS le dernier nœud copié (Mur-1, Mur-2, etc.)
+              // Ã°Å¸â€Â¥ APRÃƒË†S le dernier nÃ…â€œud copiÃƒÂ© (Mur-1, Mur-2, etc.)
               isVisible: true,
               isActive: true,
               subtab: node.subtab,
@@ -27511,11 +28327,10 @@ function registerSumDisplayFieldRoutes(router83) {
               ...sumNodeData
             }
           });
-          console.log(`\u{1F4CA} [SUM DISPLAY] N\u0153ud Total cr\xE9\xE9: ${sumFieldNodeId}`);
         } catch (err) {
           if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma45.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
-            console.warn(`\u26A0\uFE0F [SUM DISPLAY] N\u0153ud Total d\xE9j\xE0 existant, mise \xE0 jour forc\xE9e: ${sumFieldNodeId}`);
+            console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] N\xC3\u2026\xE2\u20AC\u0153ud Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existant, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
@@ -27561,7 +28376,7 @@ function registerSumDisplayFieldRoutes(router83) {
         } catch (err) {
           if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma45.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
-            console.warn(`\u26A0\uFE0F [SUM DISPLAY] Variable Total d\xE9j\xE0 existante, mise \xE0 jour forc\xE9e: ${sumFieldNodeId}`);
+            console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Variable Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
@@ -27594,7 +28409,7 @@ function registerSumDisplayFieldRoutes(router83) {
         } catch (err) {
           if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma45.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
-            console.warn(`\u26A0\uFE0F [SUM DISPLAY] Formule Total d\xE9j\xE0 existante, mise \xE0 jour forc\xE9e: ${sumFormulaId}`);
+            console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Formule Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFormulaId}`);
           } else {
             throw err;
           }
@@ -27611,7 +28426,6 @@ function registerSumDisplayFieldRoutes(router83) {
           }
         }
       });
-      console.log(`\u2705 [SUM DISPLAY] Champ Total cr\xE9\xE9 avec succ\xE8s`);
       return res.json({
         success: true,
         sumFieldNodeId,
@@ -27623,28 +28437,27 @@ function registerSumDisplayFieldRoutes(router83) {
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const errStack = error instanceof Error ? error.stack : "";
-      console.error("\u274C [SUM DISPLAY] Erreur:", errMsg);
-      console.error("\u274C [SUM DISPLAY] Stack:", errStack);
-      res.status(500).json({ error: "Erreur lors de la cr\xE9ation du champ Total", details: errMsg });
+      console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Erreur:", errMsg);
+      console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Stack:", errStack);
+      res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router83.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router84.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
-      console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] Suppression champ Total pour nodeId=${nodeId}`);
       const tree = await prisma45.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
       if (!tree) {
-        return res.status(404).json({ error: "Arbre non trouv\xE9" });
+        return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xA9" });
       }
       const node = await prisma45.treeBranchLeafNode.findFirst({
         where: { id: nodeId, treeId },
         select: { id: true, metadata: true }
       });
       if (!node) {
-        return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+        return res.status(404).json({ error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
       }
       const sumFieldNodeId = `${nodeId}-sum-total`;
       const mainVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
@@ -27657,7 +28470,6 @@ function registerSumDisplayFieldRoutes(router83) {
           await prisma45.treeBranchLeafNodeFormula.delete({
             where: { id: sumFormulaId }
           });
-          console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] Formule supprim\xE9e: ${sumFormulaId}`);
         } catch {
         }
       }
@@ -27665,14 +28477,12 @@ function registerSumDisplayFieldRoutes(router83) {
         await prisma45.treeBranchLeafNodeVariable.delete({
           where: { nodeId: sumFieldNodeId }
         });
-        console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] Variable supprim\xE9e`);
       } catch {
       }
       try {
         await prisma45.treeBranchLeafNode.delete({
           where: { id: sumFieldNodeId }
         });
-        console.log(`\u{1F5D1}\uFE0F [SUM DISPLAY] N\u0153ud supprim\xE9: ${sumFieldNodeId}`);
       } catch {
       }
       const existingMeta = node.metadata || {};
@@ -27686,10 +28496,9 @@ function registerSumDisplayFieldRoutes(router83) {
           }
         }
       });
-      console.log(`\u2705 [SUM DISPLAY] Champ Total supprim\xE9 avec succ\xE8s`);
       return res.json({ success: true });
     } catch (error) {
-      console.error("\u274C [SUM DISPLAY] Erreur suppression:", error);
+      console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Erreur suppression:", error);
       res.status(500).json({ error: "Erreur lors de la suppression du champ Total" });
     }
   });
@@ -27710,7 +28519,6 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
     const hasSum = metadata?.createSumDisplayField === true;
     const sumFieldNodeId = metadata?.sumDisplayFieldNodeId;
     if (!hasSum || !sumFieldNodeId) {
-      console.log(`\u{1F4CA} [SUM UPDATE] N\u0153ud ${sourceNodeId} n'a pas de champ Total activ\xE9`);
       return;
     }
     const mainVariable = await db.treeBranchLeafNodeVariable.findUnique({
@@ -27755,7 +28563,6 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
     for (const node of copyNodes) {
       newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
     }
-    console.log(`\u{1F4CA} [SUM UPDATE] Nouvelle valeur calcul\xE9e: ${newCalculatedValue} (${copyNodes.length} n\u0153uds)`);
     const sumNode = await db.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { metadata: true }
@@ -27768,7 +28575,7 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
           formula_instances: { [sumFormulaId]: formulaInstance },
           formula_tokens: sumTokens,
           calculatedValue: String(newCalculatedValue),
-          // 🔥 NOUVEAU: Mettre à jour la valeur
+          // Ã°Å¸â€Â¥ NOUVEAU: Mettre ÃƒÂ  jour la valeur
           metadata: {
             ...sumNode.metadata || {},
             sumTokens,
@@ -27778,9 +28585,8 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
         }
       });
     }
-    console.log(`\u2705 [SUM UPDATE] Champ Total mis \xE0 jour: ${allCopies.length} copies, valeur: ${newCalculatedValue}, formule: ${sumTokens.join(" ")}`);
   } catch (error) {
-    console.error("\u274C [SUM UPDATE] Erreur mise \xE0 jour champ Total:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM UPDATE] Erreur mise \xC3\u0192\xC2\xA0 jour champ Total:", error);
   }
 }
 
@@ -27799,21 +28605,17 @@ function rewriteReferences(text, maps, suffix) {
   const mapOrSuffix = (id, map, isSharedRef = false) => {
     if (map.has(id)) {
       const mapped = map.get(id);
-      console.log(`\u{1F504} [REWRITE] Mapping trouv\xE9: ${id} \u2192 ${mapped}`);
       return mapped;
     }
     if (isSharedRef) {
       if (!suffixStr) {
-        console.log(`\u26AA [REWRITE] Shared-ref conserv\xE9e (pas de suffixe): ${id}`);
         return id;
       }
       const suffixed2 = applySuffix(id);
-      console.log(`\u2795 [REWRITE] \u2B50 SHARED-REF SUFFIX\xC9E: ${id} \u2192 ${suffixed2}`);
       return suffixed2;
     }
     const suffixed = applySuffix(id);
     if (suffixed !== id) {
-      console.log(`\u2795 [REWRITE] Suffixe ajout\xE9: ${id} \u2192 ${suffixed}`);
     }
     return suffixed;
   };
@@ -27953,10 +28755,8 @@ function rewriteJsonReferences(obj, maps, suffix) {
 }
 function forceSharedRefSuffixes(tokens2, suffix) {
   if (!Array.isArray(tokens2)) {
-    console.log(`\u{1F525} [forceSharedRefSuffixes] INPUT NOT ARRAY - Type: ${typeof tokens2}, Value:`, tokens2);
     return tokens2;
   }
-  console.log(`\u{1F525} [forceSharedRefSuffixes] START - ${tokens2.length} tokens, suffix=${suffix}`);
   let modified = 0;
   let matchCount = 0;
   const result = tokens2.map((token, idx) => {
@@ -27969,29 +28769,25 @@ function forceSharedRefSuffixes(tokens2, suffix) {
         const alreadySuffixed = /-\d+$/.test(token);
         if (!alreadySuffixed) {
           const suffixed = `${baseRef}-${suffix}`;
-          console.log(`\u{1F525} [idx ${idx}] MATCHED ET MODIFI\xC9: "${token}" \u2192 "${suffixed}"`);
           modified++;
           return suffixed;
         } else {
-          console.log(`\u{1F525} [idx ${idx}] MATCHED MAIS D\xC9J\xC0 SUFFIX\xC9: "${token}"`);
         }
       } else if (token.includes("shared-ref")) {
-        console.warn(`\u{1F525} [idx ${idx}] \u26A0\uFE0F CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
+        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
       }
     } else {
       if (String(token).includes("shared-ref")) {
-        console.warn(`\u{1F525} [idx ${idx}] \u26A0\uFE0F Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
+        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
       }
     }
     return token;
   });
-  console.log(`\u{1F525} [forceSharedRefSuffixes] END - ${matchCount} matched, ${modified} modified sur ${tokens2.length}`);
   return result;
 }
 function forceSharedRefSuffixesInJson(obj, suffix) {
   if (obj === null || obj === void 0) return obj;
   if (Array.isArray(obj)) {
-    console.log(`   \u{1F525} [forceSharedRefSuffixesInJson] Processing array of ${obj.length} items`);
     return obj.map((item) => forceSharedRefSuffixesInJson(item, suffix));
   }
   if (typeof obj === "string") {
@@ -28002,7 +28798,6 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
       const alreadySuffixed = /-\d+$/.test(obj);
       if (!alreadySuffixed) {
         const suffixed = `${baseRef}-${suffix}`;
-        console.log(`   \u{1F525} JSON string FORC\xC9: ${obj} \u2192 ${suffixed}`);
         return suffixed;
       }
     }
@@ -28019,7 +28814,6 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
       }
     }
     if (modified > 0) {
-      console.log(`   \u{1F525} JSON object: ${modified} propri\xE9t\xE9s modifi\xE9es`);
     }
     return result;
   }
@@ -28027,14 +28821,7 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
-async function copyFormulaCapacity2(originalFormulaId, newNodeId, suffix, prisma69, options = {}) {
-  console.log(`
-${"\u2550".repeat(80)}`);
-  console.log(`\u{1F9EE} COPIE FORMULE: ${originalFormulaId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau n\u0153ud: ${newNodeId}`);
-  console.log(`${"\u2550".repeat(80)}
-`);
+async function copyFormulaCapacity2(originalFormulaId, newNodeId, suffix, prisma70, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaCopyCache = /* @__PURE__ */ new Map()
@@ -28042,8 +28829,7 @@ ${"\u2550".repeat(80)}`);
   try {
     if (formulaCopyCache.has(originalFormulaId)) {
       const cachedId = formulaCopyCache.get(originalFormulaId);
-      console.log(`\u267B\uFE0F Formule d\xE9j\xE0 copi\xE9e (cache): ${originalFormulaId} \u2192 ${cachedId}`);
-      const cached = await prisma69.treeBranchLeafNodeFormula.findUnique({
+      const cached = await prisma70.treeBranchLeafNodeFormula.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -28056,12 +28842,11 @@ ${"\u2550".repeat(80)}`);
       }
     }
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, "");
-    console.log(`\u{1F50D} Recherche formule avec id: ${cleanFormulaId} (original: ${originalFormulaId})`);
-    const originalFormula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+    const originalFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({
       where: { id: cleanFormulaId }
     });
     if (!originalFormula) {
-      console.error(`\u274C Formule introuvable avec id: ${cleanFormulaId}`);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Formule introuvable avec id: ${cleanFormulaId}`);
       return {
         newFormulaId: "",
         nodeId: "",
@@ -28070,25 +28855,14 @@ ${"\u2550".repeat(80)}`);
         error: `Formule introuvable avec id: ${cleanFormulaId}`
       };
     }
-    console.log(`\u2705 Formule trouv\xE9e: ${originalFormula.name || originalFormula.id}`);
-    console.log(`   NodeId original: ${originalFormula.nodeId}`);
-    console.log(`   Tokens originaux:`, originalFormula.tokens);
     const newFormulaId = `${originalFormula.id}-${suffix}`;
-    console.log(`\u{1F4DD} Nouvel ID formule: ${newFormulaId}`);
     const originalOwnerNodeId = originalFormula.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma69.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
     const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
-    console.log(`\u{1F527} [OWNER FIX] NodeId original propri\xE9taire: ${originalOwnerNodeId}`);
-    console.log(`\u{1F527} [OWNER FIX] NodeId propri\xE9taire suffix\xE9: ${correctOwnerNodeId}`);
-    console.log(`\u{1F527} [OWNER FIX] Propri\xE9taire suffix\xE9 existe: ${ownerNodeExists ? "OUI (" + ownerNodeExists.label + ")" : "NON"}`);
-    console.log(`\u{1F527} [OWNER FIX] NodeId FINAL utilis\xE9: ${finalOwnerNodeId}`);
-    console.log(`
-\u{1F504} R\xE9\xE9criture des tokens...`);
-    console.log(`   Nombre d'IDs dans la map: ${nodeIdMap.size}`);
     const rewriteMaps = {
       nodeIdMap,
       formulaIdMap: formulaCopyCache || /* @__PURE__ */ new Map(),
@@ -28098,62 +28872,54 @@ ${"\u2550".repeat(80)}`);
       // Pas besoin ici mais requis par l'interface
     };
     let rewrittenTokens = rewriteJsonReferences(originalFormula.tokens, rewriteMaps, suffix);
-    console.log(`\u2705 Tokens r\xE9\xE9crits (1\xE8re passe):`, rewrittenTokens);
-    console.log(`
-\u{1F525} AVANT forceSharedRefSuffixes: ${Array.isArray(rewrittenTokens) ? rewrittenTokens.length : "?"} tokens`);
     const sharedRefsCountBefore = rewrittenTokens && Array.isArray(rewrittenTokens) ? rewrittenTokens.filter((t) => typeof t === "string" && t.includes("shared-ref")).length : 0;
-    console.log(`   Shared-refs avant: ${sharedRefsCountBefore}`);
     rewrittenTokens = forceSharedRefSuffixes(rewrittenTokens, suffix);
-    console.log(`\u2705 APR\xC8S forceSharedRefSuffixes:`);
     const sharedRefsCountAfter1 = rewrittenTokens && Array.isArray(rewrittenTokens) ? rewrittenTokens.filter((t) => typeof t === "string" && t.includes("shared-ref")).length : 0;
-    console.log(`   Shared-refs apr\xE8s: ${sharedRefsCountAfter1}`);
-    console.log(`
-\u{1F525} AVANT forceSharedRefSuffixesInJson:`);
     rewrittenTokens = forceSharedRefSuffixesInJson(rewrittenTokens, suffix);
-    console.log(`\u2705 APR\xC8S forceSharedRefSuffixesInJson:`);
     const sharedRefsCountAfter2 = rewrittenTokens && Array.isArray(rewrittenTokens) ? rewrittenTokens.filter((t) => typeof t === "string" && t.includes("shared-ref")).length : 0;
-    console.log(`   Shared-refs final: ${sharedRefsCountAfter2}`);
-    console.log(`\u2705 Tokens r\xE9\xE9crits (2\xE8me passe - shared-refs forc\xE9s):`, rewrittenTokens);
-    console.log(`\u{1F50D} DEBUG: Cherchons shared-refs NON-suffix\xE9s dans les tokens...`);
     if (Array.isArray(rewrittenTokens)) {
       const unsuffixed = rewrittenTokens.filter(
         (t) => typeof t === "string" && t.includes("shared-ref") && !/-\d+$/.test(t)
       );
       if (unsuffixed.length > 0) {
-        console.error(`\u274C ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xE9s:`, unsuffixed);
+        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xC3\u0192\xC2\xA9s:`, unsuffixed);
       } else {
-        console.log(`\u2705 Tous les shared-refs sont suffix\xE9s !`);
       }
     }
-    const newFormula = await prisma69.treeBranchLeafNodeFormula.create({
-      data: {
+    const newFormula = await prisma70.treeBranchLeafNodeFormula.upsert({
+      where: { id: newFormulaId },
+      update: {
+        nodeId: finalOwnerNodeId,
+        name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
+        description: originalFormula.description,
+        tokens: rewrittenTokens,
+        targetProperty: originalFormula.targetProperty,
+        constraintMessage: originalFormula.constraintMessage,
+        isDefault: originalFormula.isDefault,
+        order: originalFormula.order,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      create: {
         id: newFormulaId,
         nodeId: finalOwnerNodeId,
         organizationId: originalFormula.organizationId,
         name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
         description: originalFormula.description,
         tokens: rewrittenTokens,
-        // 🎯 CHAMPS CRITIQUES - Copie de la cible et des propriétés
+        // 🏯 CHAMPS CRITIQUES - Copie de la cible et des propriétés
         targetProperty: originalFormula.targetProperty,
-        // ← CIBLE DE LA FORMULE
+        // → CIBLE DE LA FORMULE
         constraintMessage: originalFormula.constraintMessage,
-        // ← Message de contrainte
+        // → Message de contrainte
         isDefault: originalFormula.isDefault,
-        // ← Formule par défaut
+        // → Formule par défaut
         order: originalFormula.order,
-        // ← Ordre d'affichage
+        // → Ordre d'affichage
         createdAt: /* @__PURE__ */ new Date(),
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] targetProperty: ${originalFormula.targetProperty || "null (valeur directe)"}`);
-    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] constraintMessage: ${originalFormula.constraintMessage || "null"}`);
-    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] isDefault: ${originalFormula.isDefault}`);
-    console.log(`\u{1F3AF} [COPIE COMPL\xC8TE] order: ${originalFormula.order}`);
-    console.log(`\u2705 Formule cr\xE9\xE9e: ${newFormula.id}`);
-    console.log(`
-\u{1F50D} V\xC9RIFICATION POST-CR\xC9ATION:`);
-    const savedFormula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+    const savedFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({
       where: { id: newFormula.id }
     });
     if (savedFormula && Array.isArray(savedFormula.tokens)) {
@@ -28162,30 +28928,23 @@ ${"\u2550".repeat(80)}`);
       );
       const suffixed = savedSharedRefs.filter((s) => /-\d+$/.test(s));
       const nonSuffixed = savedSharedRefs.filter((s) => !/-\d+$/.test(s));
-      console.log(`   Saved tokens: ${savedFormula.tokens.length}`);
-      console.log(`   Shared-refs en BD: ${savedSharedRefs.length}`);
-      console.log(`   \u2705 Suffix\xE9s: ${suffixed.length}`);
-      console.log(`   \u274C Non-suffix\xE9s: ${nonSuffixed.length}`);
       if (nonSuffixed.length > 0) {
-        console.error(`\u{1F6A8} ERREUR! Tokens non-suffix\xE9s en BD:`, nonSuffixed.slice(0, 2));
+        console.error(`\xC3\xB0\xC5\xB8\xC5\xA1\xC2\xA8 ERREUR! Tokens non-suffix\xC3\u0192\xC2\xA9s en BD:`, nonSuffixed.slice(0, 2));
       } else {
-        console.log(`\u2705 SUCC\xC8S! Tous les shared-refs sont suffix\xE9s en BD!`);
       }
     }
-    console.log();
     try {
-      await linkFormulaToAllNodes(prisma69, newFormulaId, rewrittenTokens);
+      await linkFormulaToAllNodes(prisma70, newFormulaId, rewrittenTokens);
     } catch (e) {
-      console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField2(prisma69, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
-      console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${finalOwnerNodeId}`);
+      await addToNodeLinkedField2(prisma70, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur MAJ linkedFormulaIds du propri\xE9taire:`, e.message);
+      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedFormulaIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasFormula: true,
@@ -28194,18 +28953,10 @@ ${"\u2550".repeat(80)}`);
           formula_description: newFormula.description
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (formula) mis \xE0 jour pour n\u0153ud ${finalOwnerNodeId}`);
-      console.log(`   - formula_activeId: ${newFormulaId}`);
-      console.log(`   - formula_name: ${newFormula.name || "null"}`);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur lors de la mise \xE0 jour des param\xE8tres capacit\xE9:`, e.message);
+      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
     }
     formulaCopyCache.set(originalFormulaId, newFormulaId);
-    console.log(`
-${"\u2550".repeat(80)}`);
-    console.log(`\u2705 COPIE FORMULE TERMIN\xC9E`);
-    console.log(`${"\u2550".repeat(80)}
-`);
     return {
       newFormulaId,
       nodeId: finalOwnerNodeId,
@@ -28213,7 +28964,7 @@ ${"\u2550".repeat(80)}`);
       success: true
     };
   } catch (error) {
-    console.error(`\u274C Erreur lors de la copie de la formule:`, error);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la formule:`, error);
     return {
       newFormulaId: "",
       nodeId: "",
@@ -28223,19 +28974,19 @@ ${"\u2550".repeat(80)}`);
     };
   }
 }
-async function addToNodeLinkedField2(prisma69, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField2(prisma70, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\u26A0\uFE0F N\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -28259,7 +29010,6 @@ function regenerateInternalIds(conditionSet, suffix) {
         if (key2 === "id" && typeof value === "string") {
           if (value.match(/^(b|a|bin|fb|cond)_[A-Za-z0-9_-]+$/)) {
             const newId = `${value}-${suffixStr}`;
-            console.log(`   \u{1F500} Renommage ID: ${value} \u2192 ${newId}`);
             newObj[key2] = newId;
           } else {
             newObj[key2] = value;
@@ -28275,7 +29025,7 @@ function regenerateInternalIds(conditionSet, suffix) {
     result = processObject(result);
     return result;
   } catch (error) {
-    console.error(`\u274C Erreur lors de la r\xE9g\xE9n\xE9ration des IDs internes:`, error);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la r\xC3\u0192\xC2\xA9g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9ration des IDs internes:`, error);
     return conditionSet;
   }
 }
@@ -28316,7 +29066,7 @@ function replaceInJson(json, replacements) {
     }
     return JSON.parse(str);
   } catch (error) {
-    console.error(`\u274C Erreur lors du remplacement dans JSON:`, error);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors du remplacement dans JSON:`, error);
     return json;
   }
 }
@@ -28331,14 +29081,7 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet) {
   }
   return ids;
 }
-async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma69, options = {}) {
-  console.log(`
-${"\u2550".repeat(80)}`);
-  console.log(`\u{1F500} COPIE CONDITION: ${originalConditionId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau n\u0153ud: ${newNodeId}`);
-  console.log(`${"\u2550".repeat(80)}
-`);
+async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma70, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaIdMap = /* @__PURE__ */ new Map(),
@@ -28347,8 +29090,7 @@ ${"\u2550".repeat(80)}`);
   try {
     if (conditionCopyCache.has(originalConditionId)) {
       const cachedId = conditionCopyCache.get(originalConditionId);
-      console.log(`\u267B\uFE0F Condition d\xE9j\xE0 copi\xE9e (cache): ${originalConditionId} \u2192 ${cachedId}`);
-      const cached = await prisma69.treeBranchLeafNodeCondition.findUnique({
+      const cached = await prisma70.treeBranchLeafNodeCondition.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -28361,12 +29103,11 @@ ${"\u2550".repeat(80)}`);
       }
     }
     const cleanConditionId = originalConditionId.replace(/-\d+$/, "");
-    console.log(`\u{1F50D} Recherche condition avec id: ${cleanConditionId} (original: ${originalConditionId})`);
-    const originalCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({
+    const originalCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({
       where: { id: cleanConditionId }
     });
     if (!originalCondition) {
-      console.error(`\u274C Condition introuvable avec id: ${cleanConditionId}`);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Condition introuvable avec id: ${cleanConditionId}`);
       return {
         newConditionId: "",
         nodeId: "",
@@ -28375,103 +29116,74 @@ ${"\u2550".repeat(80)}`);
         error: `Condition introuvable avec id: ${cleanConditionId}`
       };
     }
-    console.log(`\u2705 Condition trouv\xE9e: ${originalCondition.name || originalCondition.id}`);
-    console.log(`   NodeId original: ${originalCondition.nodeId}`);
-    console.log(`   conditionSet original:`, originalCondition.conditionSet);
     const newConditionId = `${originalCondition.id}-${suffix}`;
-    console.log(`\u{1F4DD} Nouvel ID condition: ${newConditionId}`);
     const originalOwnerNodeId = originalCondition.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma69.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
     const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
-    console.log(`\u{1F527} [OWNER FIX] NodeId original propri\xE9taire: ${originalOwnerNodeId}`);
-    console.log(`\u{1F527} [OWNER FIX] NodeId propri\xE9taire suffix\xE9: ${correctOwnerNodeId}`);
-    console.log(`\u{1F527} [OWNER FIX] Propri\xE9taire suffix\xE9 existe: ${ownerNodeExists ? "OUI (" + ownerNodeExists.label + ")" : "NON"}`);
-    console.log(`\u{1F527} [OWNER FIX] NodeId FINAL utilis\xE9: ${finalOwnerNodeId}`);
-    console.log(`
-\u{1F504} R\xE9\xE9criture du conditionSet...`);
-    console.log(`   Nombre d'IDs n\u0153uds dans la map: ${nodeIdMap.size}`);
-    console.log(`   Nombre d'IDs formules dans la map: ${formulaIdMap.size}`);
-    console.log(`
-\u{1F517} Extraction automatique des formules li\xE9es du conditionSet...`);
     const linkedFormulaIdsFromSet = extractLinkedFormulaIdsFromConditionSet(originalCondition.conditionSet);
-    console.log(`\u{1F50D} DEBUG: conditionSet original:`, JSON.stringify(originalCondition.conditionSet).substring(0, 300));
-    console.log(`\u{1F50D} DEBUG: ${linkedFormulaIdsFromSet.size} formules trouv\xE9es:`, Array.from(linkedFormulaIdsFromSet));
     if (linkedFormulaIdsFromSet.size > 0) {
-      console.log(`   Formules trouv\xE9es: ${Array.from(linkedFormulaIdsFromSet).join(", ")}`);
-      console.log(`
-\u{1F50D} V\xC9RIFICATION DES FORMULES DANS LA BD:`);
       for (const formId of linkedFormulaIdsFromSet) {
-        const existingForm = await prisma69.treeBranchLeafNodeFormula.findUnique({
+        const existingForm = await prisma70.treeBranchLeafNodeFormula.findUnique({
           where: { id: formId }
         });
         if (existingForm) {
-          console.log(`   \u2705 Formule EXISTE: ${formId}`);
-          console.log(`      Tokens actuels:`, existingForm.tokens);
           if (Array.isArray(existingForm.tokens)) {
             const unsuffixedSharedRefs = existingForm.tokens.filter(
               (t) => typeof t === "string" && t.includes("shared-ref") && !/-\d+$/.test(t)
             );
             if (unsuffixedSharedRefs.length > 0) {
-              console.warn(`   \u26A0\uFE0F ${unsuffixedSharedRefs.length} shared-refs NON-suffix\xE9s:`, unsuffixedSharedRefs);
+              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F ${unsuffixedSharedRefs.length} shared-refs NON-suffix\xC3\u0192\xC2\xA9s:`, unsuffixedSharedRefs);
             }
           }
         } else {
-          console.warn(`   \u274C Formule INTROUVABLE: ${formId}`);
+          console.warn(`   \xC3\xA2\xC2\x9D\xC5\u2019 Formule INTROUVABLE: ${formId}`);
         }
       }
       const enrichedNodeIdMap = new Map(nodeIdMap);
       if (originalCondition.nodeId && finalOwnerNodeId) {
         enrichedNodeIdMap.set(originalCondition.nodeId, finalOwnerNodeId);
-        console.log(`   \u{1F4CD} NodeIdMap enrichie: ${originalCondition.nodeId} \u2192 ${finalOwnerNodeId}`);
       }
       for (const linkedFormId of linkedFormulaIdsFromSet) {
         if (formulaIdMap.has(linkedFormId)) {
-          console.log(`   \u267B\uFE0F Formule li\xE9e d\xE9j\xE0 copi\xE9e: ${linkedFormId} \u2192 ${formulaIdMap.get(linkedFormId)}`);
         } else {
           try {
-            console.log(`   \u{1F500} Copie formule li\xE9e: ${linkedFormId}...`);
             const linkedFormResult = await copyFormulaCapacity(
               linkedFormId,
               finalOwnerNodeId,
-              // Même nœud propriétaire (corrigé)
+              // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma69,
+              prisma70,
               { nodeIdMap: enrichedNodeIdMap, formulaIdMap }
             );
             if (linkedFormResult.success) {
-              console.log(`   \u2705 Formule li\xE9e copi\xE9e: ${linkedFormId} \u2192 ${linkedFormResult.newFormulaId}`);
-              const copiedForm = await prisma69.treeBranchLeafNodeFormula.findUnique({
+              const copiedForm = await prisma70.treeBranchLeafNodeFormula.findUnique({
                 where: { id: linkedFormResult.newFormulaId }
               });
               if (copiedForm) {
-                console.log(`   \u{1F50D} V\xE9rification formule copi\xE9e ${linkedFormResult.newFormulaId}:`);
-                console.log(`      Tokens en BD:`, copiedForm.tokens);
                 if (Array.isArray(copiedForm.tokens)) {
                   const unsuffixed = copiedForm.tokens.filter(
                     (t) => typeof t === "string" && t.includes("shared-ref") && !/-\d+$/.test(t)
                   );
                   if (unsuffixed.length > 0) {
-                    console.error(`   \u274C PROBL\xC8ME: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xE9s en BD:`, unsuffixed);
+                    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 PROBL\xC3\u0192\xCB\u2020ME: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xC3\u0192\xC2\xA9s en BD:`, unsuffixed);
                   } else {
-                    console.log(`   \u2705 Tous les shared-refs sont suffix\xE9s en BD`);
                   }
                 }
               }
               formulaIdMap.set(linkedFormId, linkedFormResult.newFormulaId);
             } else {
-              console.warn(`   \u26A0\uFE0F \xC9chec copie formule li\xE9e: ${linkedFormId}`);
+              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie formule li\xC3\u0192\xC2\xA9e: ${linkedFormId}`);
             }
           } catch (e) {
-            console.error(`   \u274C Exception copie formule li\xE9e:`, e.message);
+            console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule li\xC3\u0192\xC2\xA9e:`, e.message);
           }
         }
       }
     } else {
-      console.log(`   (Aucune formule li\xE9e trouv\xE9e dans le conditionSet)`);
     }
     const rewriteMaps = {
       nodeIdMap,
@@ -28480,45 +29192,31 @@ ${"\u2550".repeat(80)}`);
       tableIdMap: /* @__PURE__ */ new Map()
       // Pas de table dans les conditions normalement
     };
-    console.log(`
-\u{1F50D} DEBUG: formulaIdMap avant r\xE9\xE9criture:`, Object.fromEntries(formulaIdMap));
     let rewrittenConditionSet = rewriteJsonReferences(
       originalCondition.conditionSet,
       rewriteMaps,
       suffix
     );
-    console.log(`
-\u{1F50D} DEBUG: conditionSet apr\xE8s 1\xE8re r\xE9\xE9criture:`, JSON.stringify(rewrittenConditionSet).substring(0, 500));
     const enrichedRewriteMaps = {
       nodeIdMap: new Map([...nodeIdMap, [originalCondition.nodeId, finalOwnerNodeId]]),
-      // Enrichi avec le bon propriétaire
+      // Enrichi avec le bon propriÃƒÂ©taire
       formulaIdMap,
       conditionIdMap: conditionCopyCache || /* @__PURE__ */ new Map(),
       tableIdMap: /* @__PURE__ */ new Map()
     };
     rewrittenConditionSet = rewriteJsonReferences(
       rewrittenConditionSet,
-      // Réécrire le résultat précédent
+      // RÃƒÂ©ÃƒÂ©crire le rÃƒÂ©sultat prÃƒÂ©cÃƒÂ©dent
       enrichedRewriteMaps,
       suffix
     );
-    console.log(`\u2705 conditionSet r\xE9\xE9crit avec nodeIdMap enrichie (2\xE8me pass):`, rewrittenConditionSet);
-    console.log(`
-\u{1F525} R\xC9\xC9CRITURE FORC\xC9E des shared-refs dans conditionSet...`);
     rewrittenConditionSet = forceSharedRefSuffixesInJson(rewrittenConditionSet, suffix);
-    console.log(`
-\u{1F504} R\xE9g\xE9n\xE9ration des IDs internes...`);
     rewrittenConditionSet = regenerateInternalIds(rewrittenConditionSet, suffix);
-    console.log(`\u2705 conditionSet finalis\xE9 avec IDs internes:`, rewrittenConditionSet);
-    console.log(`
-\u{1F517} Extraction automatique des conditions li\xE9es du conditionSet...`);
     const linkedConditionIdsFromSet = extractLinkedConditionIdsFromConditionSet(rewrittenConditionSet);
     if (linkedConditionIdsFromSet.size > 0) {
-      console.log(`   Conditions trouv\xE9es: ${Array.from(linkedConditionIdsFromSet).join(", ")}`);
       for (const linkedCondId of linkedConditionIdsFromSet) {
         if (conditionCopyCache.has(linkedCondId)) {
           const mappedId = conditionCopyCache.get(linkedCondId);
-          console.log(`   \u267B\uFE0F Condition li\xE9e d\xE9j\xE0 copi\xE9e: ${linkedCondId} \u2192 ${mappedId}`);
           rewrittenConditionSet = replaceInJson(
             rewrittenConditionSet,
             /* @__PURE__ */ new Map([
@@ -28528,17 +29226,15 @@ ${"\u2550".repeat(80)}`);
           );
         } else {
           try {
-            console.log(`   \u{1F500} Copie condition li\xE9e: ${linkedCondId}...`);
             const linkedCondResult = await copyConditionCapacity(
               linkedCondId,
               finalOwnerNodeId,
-              // Même nœud propriétaire (corrigé)
+              // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma69,
+              prisma70,
               { nodeIdMap, formulaIdMap, conditionCopyCache }
             );
             if (linkedCondResult.success) {
-              console.log(`   \u2705 Condition li\xE9e copi\xE9e: ${linkedCondId} \u2192 ${linkedCondResult.newConditionId}`);
               rewrittenConditionSet = replaceInJson(
                 rewrittenConditionSet,
                 /* @__PURE__ */ new Map([
@@ -28547,25 +29243,20 @@ ${"\u2550".repeat(80)}`);
                 ])
               );
             } else {
-              console.warn(`   \u26A0\uFE0F \xC9chec copie condition li\xE9e: ${linkedCondId}`);
+              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie condition li\xC3\u0192\xC2\xA9e: ${linkedCondId}`);
             }
           } catch (e) {
-            console.error(`   \u274C Exception copie condition li\xE9e:`, e.message);
+            console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie condition li\xC3\u0192\xC2\xA9e:`, e.message);
           }
         }
       }
     } else {
-      console.log(`   (Aucune condition li\xE9e trouv\xE9e dans le conditionSet)`);
     }
-    console.log(`
-\u{1F517} Extraction automatique des tables li\xE9es du conditionSet...`);
     const linkedTableIdsFromSet = extractLinkedTableIdsFromConditionSet(rewrittenConditionSet);
     if (linkedTableIdsFromSet.size > 0) {
-      console.log(`   Tables trouv\xE9es: ${Array.from(linkedTableIdsFromSet).join(", ")}`);
       for (const linkedTableId of linkedTableIdsFromSet) {
         if (tableIdMap && tableIdMap.has(linkedTableId)) {
           const mappedId = tableIdMap.get(linkedTableId);
-          console.log(`   \u267B\uFE0F Table li\xE9e d\xE9j\xE0 copi\xE9e: ${linkedTableId} \u2192 ${mappedId}`);
           rewrittenConditionSet = replaceInJson(
             rewrittenConditionSet,
             /* @__PURE__ */ new Map([
@@ -28575,17 +29266,15 @@ ${"\u2550".repeat(80)}`);
           );
         } else {
           try {
-            console.log(`   \u{1F500} Copie table li\xE9e: ${linkedTableId}...`);
             const linkedTableResult = await copyTableCapacity(
               linkedTableId,
               finalOwnerNodeId,
-              // Même nœud propriétaire (corrigé)
+              // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma69,
+              prisma70,
               { nodeIdMap, tableIdMap }
             );
             if (linkedTableResult.success) {
-              console.log(`   \u2705 Table li\xE9e copi\xE9e: ${linkedTableId} \u2192 ${linkedTableResult.newTableId}`);
               if (tableIdMap) tableIdMap.set(linkedTableId, linkedTableResult.newTableId);
               rewrittenConditionSet = replaceInJson(
                 rewrittenConditionSet,
@@ -28595,19 +29284,18 @@ ${"\u2550".repeat(80)}`);
                 ])
               );
             } else {
-              console.warn(`   \u26A0\uFE0F \xC9chec copie table li\xE9e: ${linkedTableId}`);
+              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie table li\xC3\u0192\xC2\xA9e: ${linkedTableId}`);
             }
           } catch (e) {
-            console.error(`   \u274C Exception copie table li\xE9e:`, e.message);
+            console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie table li\xC3\u0192\xC2\xA9e:`, e.message);
           }
         }
       }
     } else {
-      console.log(`   (Aucune table li\xE9e trouv\xE9e dans le conditionSet)`);
     }
-    let newCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+    let newCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
     if (newCondition) {
-      newCondition = await prisma69.treeBranchLeafNodeCondition.update({
+      newCondition = await prisma70.treeBranchLeafNodeCondition.update({
         where: { id: newConditionId },
         data: {
           nodeId: finalOwnerNodeId,
@@ -28619,7 +29307,7 @@ ${"\u2550".repeat(80)}`);
         }
       });
     } else {
-      newCondition = await prisma69.treeBranchLeafNodeCondition.create({
+      newCondition = await prisma70.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: finalOwnerNodeId,
@@ -28633,20 +29321,18 @@ ${"\u2550".repeat(80)}`);
         }
       });
     }
-    console.log(`\u2705 Condition cr\xE9\xE9e: ${newCondition.id}`);
     try {
-      await linkConditionToAllNodes(prisma69, newConditionId, rewrittenConditionSet);
+      await linkConditionToAllNodes(prisma70, newConditionId, rewrittenConditionSet);
     } catch (e) {
-      console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField3(prisma69, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
-      console.log(`\u2705 linkedConditionIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${finalOwnerNodeId}`);
+      await addToNodeLinkedField3(prisma70, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur MAJ linkedConditionIds du propri\xE9taire:`, e.message);
+      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedConditionIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasCondition: true,
@@ -28655,18 +29341,10 @@ ${"\u2550".repeat(80)}`);
           condition_description: newCondition.description
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (condition) mis \xE0 jour pour n\u0153ud ${finalOwnerNodeId}`);
-      console.log(`   - condition_activeId: ${newConditionId}`);
-      console.log(`   - condition_name: ${newCondition.name || "null"}`);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur lors de la mise \xE0 jour des param\xE8tres capacit\xE9:`, e.message);
+      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
     }
     conditionCopyCache.set(originalConditionId, newConditionId);
-    console.log(`
-${"\u2550".repeat(80)}`);
-    console.log(`\u2705 COPIE CONDITION TERMIN\xC9E`);
-    console.log(`${"\u2550".repeat(80)}
-`);
     return {
       newConditionId,
       nodeId: finalOwnerNodeId,
@@ -28674,7 +29352,7 @@ ${"\u2550".repeat(80)}`);
       success: true
     };
   } catch (error) {
-    console.error(`\u274C Erreur lors de la copie de la condition:`, error);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la condition:`, error);
     return {
       newConditionId: "",
       nodeId: "",
@@ -28684,19 +29362,19 @@ ${"\u2550".repeat(80)}`);
     };
   }
 }
-async function addToNodeLinkedField3(prisma69, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField3(prisma70, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\u26A0\uFE0F N\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -28711,14 +29389,7 @@ function stripNumericSuffix(value) {
   if (numericOnly.test(value)) return value;
   return value;
 }
-async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma69, options = {}) {
-  console.log(`
-${"\u2550".repeat(80)}`);
-  console.log(`\u{1F4CA} COPIE TABLE: ${originalTableId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau n\u0153ud: ${newNodeId}`);
-  console.log(`${"\u2550".repeat(80)}
-`);
+async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     tableCopyCache = /* @__PURE__ */ new Map(),
@@ -28727,8 +29398,7 @@ ${"\u2550".repeat(80)}`);
   try {
     if (tableCopyCache.has(originalTableId)) {
       const cachedId = tableCopyCache.get(originalTableId);
-      console.log(`\u267B\uFE0F Table d\xE9j\xE0 copi\xE9e (cache): ${originalTableId} \u2192 ${cachedId}`);
-      const cached = await prisma69.treeBranchLeafNodeTable.findUnique({
+      const cached = await prisma70.treeBranchLeafNodeTable.findUnique({
         where: { id: cachedId },
         include: {
           tableColumns: true,
@@ -28752,8 +29422,7 @@ ${"\u2550".repeat(80)}`);
       }
     }
     const cleanTableId = originalTableId.replace(/-\d+$/, "");
-    console.log(`\u{1F50D} Recherche table avec id: ${cleanTableId} (original: ${originalTableId})`);
-    const originalTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+    const originalTable = await prisma70.treeBranchLeafNodeTable.findUnique({
       where: { id: cleanTableId },
       include: {
         tableColumns: { orderBy: { columnIndex: "asc" } },
@@ -28761,7 +29430,7 @@ ${"\u2550".repeat(80)}`);
       }
     });
     if (!originalTable) {
-      console.error(`\u274C Table introuvable avec id: ${cleanTableId}`);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Table introuvable avec id: ${cleanTableId}`);
       return {
         newTableId: "",
         nodeId: "",
@@ -28772,41 +29441,31 @@ ${"\u2550".repeat(80)}`);
         error: `Table introuvable avec id: ${cleanTableId}`
       };
     }
-    console.log(`\u2705 Table trouv\xE9e: ${originalTable.name || originalTable.id}`);
-    console.log(`   NodeId original: ${originalTable.nodeId}`);
-    console.log(`   Colonnes: ${originalTable.tableColumns.length}`);
-    console.log(`   Lignes: ${originalTable.tableRows.length}`);
     let originalTotalCells = 0;
     for (const row of originalTable.tableRows) {
       const cells = row.cells || [];
       originalTotalCells += Array.isArray(cells) ? cells.length : Object.keys(cells).length;
     }
-    console.log(`   Cellules (total): ${originalTotalCells}`);
     const newTableId = `${originalTable.id}-${suffix}`;
-    console.log(`\u{1F4DD} Nouvel ID table: ${newTableId}`);
     const originalOwnerNodeId = originalTable.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma69.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
     const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
-    console.log(`\u{1F527} [OWNER FIX] NodeId original propri\xE9taire: ${originalOwnerNodeId}`);
-    console.log(`\u{1F527} [OWNER FIX] NodeId propri\xE9taire suffix\xE9: ${correctOwnerNodeId}`);
-    console.log(`\u{1F527} [OWNER FIX] Propri\xE9taire suffix\xE9 existe: ${ownerNodeExists ? "OUI (" + ownerNodeExists.label + ")" : "NON"}`);
-    console.log(`\u{1F527} [OWNER FIX] NodeId FINAL utilis\xE9: ${finalOwnerNodeId}`);
     const columnIdMap = /* @__PURE__ */ new Map();
     const rowIdMap = /* @__PURE__ */ new Map();
-    let newTable = await prisma69.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+    let newTable = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
     if (newTable) {
-      newTable = await prisma69.treeBranchLeafNodeTable.update({
+      newTable = await prisma70.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
           nodeId: finalOwnerNodeId,
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
-          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
+          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps2 = { nodeIdMap, formulaIdMap: /* @__PURE__ */ new Map(), conditionIdMap: /* @__PURE__ */ new Map(), tableIdMap: tableIdMap2 };
             const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps2, suffix);
@@ -28839,7 +29498,6 @@ ${"\u2550".repeat(80)}`);
               if (Array.isArray(rewritten.lookup.displayColumn)) {
                 rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col) => {
                   if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}-${suffix}`);
                     return `${col}-${suffix}`;
                   }
                   return col;
@@ -28847,7 +29505,6 @@ ${"\u2550".repeat(80)}`);
               } else if (typeof rewritten.lookup.displayColumn === "string") {
                 const val = rewritten.lookup.displayColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}-${suffix}`);
                   rewritten.lookup.displayColumn = `${val}-${suffix}`;
                 }
               }
@@ -28856,7 +29513,6 @@ ${"\u2550".repeat(80)}`);
               if (Array.isArray(rewritten.lookup.displayRow)) {
                 rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row) => {
                   if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}-${suffix}`);
                     return `${row}-${suffix}`;
                   }
                   return row;
@@ -28864,7 +29520,6 @@ ${"\u2550".repeat(80)}`);
               } else if (typeof rewritten.lookup.displayRow === "string") {
                 const val = rewritten.lookup.displayRow;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayRow: ${val} \u2192 ${val}-${suffix}`);
                   rewritten.lookup.displayRow = `${val}-${suffix}`;
                 }
               }
@@ -28875,7 +29530,7 @@ ${"\u2550".repeat(80)}`);
         }
       });
     } else {
-      newTable = await prisma69.treeBranchLeafNodeTable.create({
+      newTable = await prisma70.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: finalOwnerNodeId,
@@ -28883,7 +29538,7 @@ ${"\u2550".repeat(80)}`);
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
-          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
+          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps2 = { nodeIdMap, formulaIdMap: /* @__PURE__ */ new Map(), conditionIdMap: /* @__PURE__ */ new Map(), tableIdMap: tableIdMap2 };
             const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps2);
@@ -28916,7 +29571,6 @@ ${"\u2550".repeat(80)}`);
               if (Array.isArray(rewritten.lookup.displayColumn)) {
                 rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col) => {
                   if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}-${suffix}`);
                     return `${col}-${suffix}`;
                   }
                   return col;
@@ -28924,7 +29578,6 @@ ${"\u2550".repeat(80)}`);
               } else if (typeof rewritten.lookup.displayColumn === "string") {
                 const val = rewritten.lookup.displayColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}-${suffix}`);
                   rewritten.lookup.displayColumn = `${val}-${suffix}`;
                 }
               }
@@ -28933,7 +29586,6 @@ ${"\u2550".repeat(80)}`);
               if (Array.isArray(rewritten.lookup.displayRow)) {
                 rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row) => {
                   if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}-${suffix}`);
                     return `${row}-${suffix}`;
                   }
                   return row;
@@ -28941,7 +29593,6 @@ ${"\u2550".repeat(80)}`);
               } else if (typeof rewritten.lookup.displayRow === "string") {
                 const val = rewritten.lookup.displayRow;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayRow: ${val} \u2192 ${val}-${suffix}`);
                   rewritten.lookup.displayRow = `${val}-${suffix}`;
                 }
               }
@@ -28953,10 +29604,7 @@ ${"\u2550".repeat(80)}`);
         }
       });
     }
-    console.log(`\u2705 Table cr\xE9\xE9e: ${newTable.id}`);
-    console.log(`
-\u{1F4CB} Copie de ${originalTable.tableColumns.length} colonnes...`);
-    const originalColumnsRaw = await prisma69.$queryRaw`
+    const originalColumnsRaw = await prisma70.$queryRaw`
       SELECT "id", "tableId", "columnIndex", "name", "type", "width", "format", "metadata"
       FROM "TreeBranchLeafNodeTableColumn"
       WHERE "tableId" = ${originalTable.id}
@@ -28973,7 +29621,7 @@ ${"\u2550".repeat(80)}`);
           if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
           return `${raw}-${suffix}`;
         })();
-        await prisma69.treeBranchLeafNodeTableColumn.create({
+        await prisma70.treeBranchLeafNodeTableColumn.create({
           data: {
             id: newColumnId,
             tableId: newTableId,
@@ -28983,19 +29631,15 @@ ${"\u2550".repeat(80)}`);
             width: col.width,
             format: col.format,
             metadata: col.metadata
-            // Copie brute, pas de réécriture
+            // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
           }
         });
         columnsCount++;
-        console.log(`  \u2713 [${col.columnIndex}] "${col.name}" \u2192 ${newColumnId}`);
       } catch (e) {
-        console.warn(`  \u26A0\uFE0F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
+        console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
       }
     }
-    console.log(`\u2705 ${columnsCount} colonnes copi\xE9es`);
-    console.log(`
-\u{1F4C4} Copie de ${originalTable.tableRows.length} lignes...`);
-    const originalRowsRaw = await prisma69.$queryRaw`
+    const originalRowsRaw = await prisma70.$queryRaw`
       SELECT "id", "tableId", "rowIndex", "cells"
       FROM "TreeBranchLeafNodeTableRow"
       WHERE "tableId" = ${originalTable.id}
@@ -29006,43 +29650,40 @@ ${"\u2550".repeat(80)}`);
       try {
         const newRowId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
         rowIdMap.set(row.id, newRowId);
-        await prisma69.treeBranchLeafNodeTableRow.create({
+        await prisma70.treeBranchLeafNodeTableRow.create({
           data: {
             id: newRowId,
             tableId: newTableId,
             rowIndex: row.rowIndex,
             cells: row.cells
-            // Copie brute, pas de réécriture
+            // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
           }
         });
         rowsCount++;
         if (rowsCount % 5 === 0) {
-          console.log(`  \u2713 ${rowsCount}/${originalRowsRaw.length} lignes copi\xE9es...`);
         }
       } catch (e) {
-        console.warn(`  \u26A0\uFE0F [${row.rowIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
+        console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${row.rowIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
       }
     }
-    console.log(`\u2705 ${rowsCount} lignes copi\xE9es`);
     try {
-      const cols = await prisma69.treeBranchLeafNodeTableColumn.findMany({
+      const cols = await prisma70.treeBranchLeafNodeTableColumn.findMany({
         where: { tableId: newTableId },
         select: { id: true, name: true }
       });
       for (const c of cols) {
         const cleaned = stripNumericSuffix(c.name);
         if (cleaned !== c.name) {
-          await prisma69.treeBranchLeafNodeTableColumn.update({
+          await prisma70.treeBranchLeafNodeTableColumn.update({
             where: { id: c.id },
             data: { name: cleaned }
           });
         }
       }
-      console.log(`\u2705 Noms de colonnes normalis\xE9s (suffixes num\xE9riques retir\xE9s)`);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Normalisation des noms de colonnes \xE9chou\xE9e:`, e.message);
+      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Normalisation des noms de colonnes \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:`, e.message);
     }
-    await prisma69.treeBranchLeafNodeTable.update({
+    await prisma70.treeBranchLeafNodeTable.update({
       where: { id: newTableId },
       data: {
         rowCount: rowsCount,
@@ -29050,36 +29691,27 @@ ${"\u2550".repeat(80)}`);
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`\u2705 M\xE9tadonn\xE9es mises \xE0 jour:`);
-    console.log(`   - rowCount: ${rowsCount}`);
-    console.log(`\u2705 Table cr\xE9\xE9e: ${newTable.id}`);
     const rewriteMaps = { nodeIdMap, formulaIdMap: /* @__PURE__ */ new Map(), conditionIdMap: /* @__PURE__ */ new Map(), tableIdMap: tableIdMap2 };
     let rewrittenTableData = rewriteJsonReferences(originalTable.tableData, rewriteMaps, suffix);
-    console.log(`
-\u{1F525} R\xC9\xC9CRITURE FORC\xC9E des shared-refs dans tableData...`);
     rewrittenTableData = forceSharedRefSuffixesInJson(rewrittenTableData, suffix);
     try {
-      await linkTableToAllNodes(prisma69, newTableId, rewrittenTableData);
+      await linkTableToAllNodes(prisma70, newTableId, rewrittenTableData);
     } catch (e) {
-      console.error(`\u274C Erreur LIAISON AUTOMATIQUE:`, e.message);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField4(prisma69, finalOwnerNodeId, "linkedTableIds", [newTableId]);
-      console.log(`\u2705 linkedTableIds mis \xE0 jour pour n\u0153ud propri\xE9taire ${finalOwnerNodeId}`);
+      await addToNodeLinkedField4(prisma70, finalOwnerNodeId, "linkedTableIds", [newTableId]);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur MAJ linkedTableIds du propri\xE9taire:`, e.message);
+      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedTableIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
-      const originalNode = await prisma69.treeBranchLeafNode.findUnique({
+      const originalNode = await prisma70.treeBranchLeafNode.findUnique({
         where: { id: originalTable.nodeId },
         select: {
           table_activeId: true,
           table_instances: true
         }
       });
-      console.log(`\u{1F50D} N\u0153ud original trouv\xE9, r\xE9cup\xE9ration table_instances...`);
-      console.log(`   - table_activeId original: ${originalNode?.table_activeId}`);
-      console.log(`   - table_instances:`, originalNode?.table_instances ? Object.keys(originalNode.table_instances).length + " cl\xE9s" : "null");
       let newTableInstances = {};
       if (originalNode?.table_instances && typeof originalNode.table_instances === "object") {
         const originalInstances = originalNode.table_instances;
@@ -29087,57 +29719,35 @@ ${"\u2550".repeat(80)}`);
           const mappedTableId = tableIdMap2.has(tableId) ? tableIdMap2.get(tableId) : `${tableId}-${suffix}`;
           const remappedConfig = rewriteJsonReferences(config, rewriteMaps, suffix);
           newTableInstances[mappedTableId] = remappedConfig;
-          console.log(`   \u{1F4CB} Instance remapp\xE9e: ${tableId} \u2192 ${mappedTableId}`);
         }
       }
       const oldActiveId = originalNode?.table_activeId;
       let newActiveId = newTableId;
       if (oldActiveId && tableIdMap2.has(oldActiveId)) {
         newActiveId = tableIdMap2.get(oldActiveId);
-        console.log(`   \u{1F504} table_activeId remapp\xE9e: ${oldActiveId} \u2192 ${newActiveId}`);
       } else if (oldActiveId) {
         newActiveId = `${oldActiveId}-${suffix}`;
       }
       if (!newTableInstances[newTableId]) {
         newTableInstances[newTableId] = {};
-        console.log(`   \u2705 Instance ajout\xE9e pour nouvelle table: ${newTableId}`);
       }
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasTable: true,
           table_activeId: newTableId,
-          // ✅ La nouvelle table est l'active
+          // Ã¢Å“â€¦ La nouvelle table est l'active
           table_instances: newTableInstances,
-          // ✅ Copié et remappé
+          // Ã¢Å“â€¦ CopiÃƒÂ© et remappÃƒÂ©
           table_name: newTable.name,
           table_description: newTable.description,
           table_type: newTable.type
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (table) mis \xE0 jour pour n\u0153ud ${finalOwnerNodeId}`);
-      console.log(`   - table_activeId: ${newTableId}`);
-      console.log(`   - table_instances: ${Object.keys(newTableInstances).length} cl\xE9(s) copi\xE9e(s)`);
-      console.log(`   - table_name: ${newTable.name || "null"}`);
-      console.log(`   - table_type: ${newTable.type || "null"}`);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur lors de la mise \xE0 jour des param\xE8tres capacit\xE9:`, e.message);
+      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
     }
-    console.log(`
-${"\u2550".repeat(80)}`);
-    console.log(`\u{1F3AF} \xC9TAPE 10: Activation des selectors avec lookup`);
-    console.log(`${"\u2550".repeat(80)}`);
-    console.log(`\u2705 \xC9TAPE 10: Selectors mis \xE0 jour via l'\xC9TAPE 9`);
     tableCopyCache.set(originalTableId, newTableId);
-    console.log(`
-${"\u2550".repeat(80)}`);
-    console.log(`\u2705 COPIE TABLE TERMIN\xC9E`);
-    console.log(`   \u{1F4CA} Table: ${newTableId}`);
-    console.log(`   \u{1F4CB} Colonnes: ${originalTable.tableColumns.length}`);
-    console.log(`   \u{1F4C4} Lignes: ${originalTable.tableRows.length}`);
-    console.log(`   \u{1F522} Cellules: ${cellsCopied}`);
-    console.log(`${"\u2550".repeat(80)}
-`);
     return {
       newTableId,
       nodeId: finalOwnerNodeId,
@@ -29147,7 +29757,7 @@ ${"\u2550".repeat(80)}`);
       success: true
     };
   } catch (error) {
-    console.error(`\u274C Erreur lors de la copie de la table:`, error);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la table:`, error);
     return {
       newTableId: "",
       nodeId: "",
@@ -29159,42 +29769,26 @@ ${"\u2550".repeat(80)}`);
     };
   }
 }
-async function addToNodeLinkedField4(prisma69, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField4(prisma70, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\u26A0\uFE0F N\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/variable-copy-engine.ts
-async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma69, options = {}) {
-  console.log(`
-${"\u2550".repeat(80)}`);
-  console.log(`\uFFFD\u{1F680}\u{1F680} [ENTRY] copyVariableWithCapacities APPEL\xC9E !`);
-  console.log(`\uFFFD\u{1F517} COPIE VARIABLE: ${originalVarId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau n\u0153ud: ${newNodeId}`);
-  console.log(`   Options:`, {
-    formulaIdMapSize: options.formulaIdMap?.size,
-    conditionIdMapSize: options.conditionIdMap?.size,
-    tableIdMapSize: options.tableIdMap?.size,
-    nodeIdMapSize: options.nodeIdMap?.size,
-    variableCopyCacheSize: options.variableCopyCache?.size,
-    autoCreateDisplayNode: options.autoCreateDisplayNode
-  });
-  console.log(`${"\u2550".repeat(80)}
-`);
+async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma70, options = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionIdMap = /* @__PURE__ */ new Map(),
@@ -29213,8 +29807,7 @@ ${"\u2550".repeat(80)}`);
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
-      console.log(`\u267B\uFE0F Variable d\xE9j\xE0 copi\xE9e pour ce n\u0153ud (cache): ${originalVarId} \u2192 ${cachedId}`);
-      const cached = await prisma69.treeBranchLeafNodeVariable.findUnique({
+      const cached = await prisma70.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -29229,15 +29822,15 @@ ${"\u2550".repeat(80)}`);
         };
       }
     }
-    const originalVar = await prisma69.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
-      console.error(`\u274C Variable introuvable: ${originalVarId}`);
-      console.warn(`\u26A0\uFE0F Cette variable est ORPHELINE - elle ne peut pas \xEAtre copi\xE9e`);
+      console.error(`\xE2\x9D\u0152 Variable introuvable: ${originalVarId}`);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Cette variable est ORPHELINE - elle ne peut pas \xC3\xAAtre copi\xC3\xA9e`);
       if (newNodeId) {
         try {
-          const orphanLinkedVarIds = await prisma69.treeBranchLeafNode.findMany({
+          const orphanLinkedVarIds = await prisma70.treeBranchLeafNode.findMany({
             where: {
               linkedVariableIds: {
                 hasSome: [originalVarId]
@@ -29248,15 +29841,14 @@ ${"\u2550".repeat(80)}`);
           for (const node of orphanLinkedVarIds) {
             const cleaned = (node.linkedVariableIds || []).filter((id) => id !== originalVarId);
             if (cleaned.length !== node.linkedVariableIds?.length) {
-              await prisma69.treeBranchLeafNode.update({
+              await prisma70.treeBranchLeafNode.update({
                 where: { id: node.id },
                 data: { linkedVariableIds: cleaned }
               });
-              console.log(`\u{1F9F9} Nettoy\xE9 linkedVariableIds orphelin de ${node.id}`);
             }
           }
         } catch (cleanErr) {
-          console.warn(`\u26A0\uFE0F Impossible de nettoyer linkedVariableIds orphelins:`, cleanErr.message);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de nettoyer linkedVariableIds orphelins:`, cleanErr.message);
         }
       }
       return {
@@ -29269,10 +29861,6 @@ ${"\u2550".repeat(80)}`);
         error: `Variable introuvable: ${originalVarId}`
       };
     }
-    console.log(`\u2705 Variable trouv\xE9e: ${originalVar.displayName}`);
-    console.log(`   sourceType: ${originalVar.sourceType}`);
-    console.log(`   sourceRef: ${originalVar.sourceRef || "null"}`);
-    console.log(`   \u{1F4CD} DEBUG: newVariable.displayName sera utilis\xE9 pour le label du n\u0153ud d'affichage`);
     const normalizedRepeatContext = repeatContext ? {
       ...repeatContext,
       templateNodeId: repeatContext.templateNodeId ?? originalVar.nodeId ?? void 0,
@@ -29296,9 +29884,6 @@ ${"\u2550".repeat(80)}`);
     };
     let newVarId = appendSuffixOnce(originalVarId);
     let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
-    console.log(`\u{1F4DD} Pr\xE9paration des IDs:`);
-    console.log(`   Variable (pr\xE9liminaire): ${newVarId}`);
-    console.log(`   ExposedKey (pr\xE9liminaire): ${newExposedKey}`);
     let newSourceRef = originalVar.sourceRef;
     let capacityType = null;
     const emitCapacityEvent = (capacityId, capacityKind) => {
@@ -29312,14 +29897,10 @@ ${"\u2550".repeat(80)}`);
         context: normalizedRepeatContext
       });
     };
-    console.log(`
-\u{1F50D} [COPY-VAR] Analyse sourceType="${originalVar.sourceType}" sourceRef="${originalVar.sourceRef}"`);
     if (originalVar.sourceRef) {
       const parsed = parseSourceRef2(originalVar.sourceRef);
       if (parsed) {
         capacityType = parsed.type;
-        console.log(`\u{1F50D} [COPY-VAR] Capacit\xE9 d\xE9tect\xE9e: ${capacityType} (ID: ${parsed.id})`);
-        console.log(`\u{1F4E6} [COPY-VAR] Maps disponibles - formulas: ${formulaIdMap.size}, conditions: ${conditionIdMap.size}, tables: ${tableIdMap2.size}, nodes: ${nodeIdMap.size}`);
         const applySuffixOnceToSourceRef = (ref) => {
           const parsedRef = parseSourceRef2(ref || "");
           if (!parsedRef) return ref;
@@ -29328,34 +29909,28 @@ ${"\u2550".repeat(80)}`);
           return applySuffixToSourceRef(`${parsedRef.prefix}${baseId}`, suffix);
         };
         if (capacityType === "formula") {
-          console.log(`\u{1F9EE} [COPY-VAR] Traitement FORMULE: ${parsed.id}`);
           if (formulaIdMap.has(parsed.id)) {
             const mappedFormulaId = formulaIdMap.get(parsed.id);
             newSourceRef = `${parsed.prefix}${mappedFormulaId}`;
-            console.log(`\u2705 [COPY-VAR] Formule d\xE9j\xE0 mapp\xE9e: ${parsed.id} \u2192 ${mappedFormulaId}`);
             emitCapacityEvent(mappedFormulaId, "formula");
           } else {
-            console.log(`
-\u{1F9EE} [COPY-VAR] Lancement copie formule ${parsed.id}...`);
             try {
               const formulaResult = await copyFormulaCapacity2(
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, formulaCopyCache: formulaIdMap }
               );
               if (formulaResult.success) {
                 formulaIdMap.set(parsed.id, formulaResult.newFormulaId);
                 newSourceRef = `${parsed.prefix}${formulaResult.newFormulaId}`;
-                console.log(`\u2705 [COPY-VAR] Formule copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${formulaResult.newFormulaId}`);
                 emitCapacityEvent(formulaResult.newFormulaId, "formula");
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
-                console.log(`\u26A0\uFE0F [COPY-VAR] \xC9chec copie formule (${formulaResult.error}), suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`\u274C [COPY-VAR] Exception copie formule:`, e.message, e.stack);
+              console.error(`\xE2\x9D\u0152 [COPY-VAR] Exception copie formule:`, e.message, e.stack);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -29363,30 +29938,25 @@ ${"\u2550".repeat(80)}`);
           if (conditionIdMap.has(parsed.id)) {
             const mappedConditionId = conditionIdMap.get(parsed.id);
             newSourceRef = `${parsed.prefix}${mappedConditionId}`;
-            console.log(`\u2705 Condition d\xE9j\xE0 mapp\xE9e: ${parsed.id} \u2192 ${mappedConditionId}`);
             emitCapacityEvent(mappedConditionId, "condition");
           } else {
-            console.log(`
-\u{1F500} Copie de la condition ${parsed.id}...`);
             try {
               const conditionResult = await copyConditionCapacity(
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
               );
               if (conditionResult.success) {
                 conditionIdMap.set(parsed.id, conditionResult.newConditionId);
                 newSourceRef = `${parsed.prefix}${conditionResult.newConditionId}`;
-                console.log(`\u2705 Condition copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${conditionResult.newConditionId}`);
                 emitCapacityEvent(conditionResult.newConditionId, "condition");
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
-                console.log(`\u26A0\uFE0F \xC9chec copie condition, suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`\u274C Exception copie condition:`, e.message);
+              console.error(`\xE2\x9D\u0152 Exception copie condition:`, e.message);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -29394,31 +29964,25 @@ ${"\u2550".repeat(80)}`);
           if (tableIdMap2.has(parsed.id)) {
             const mappedTableId = tableIdMap2.get(parsed.id);
             newSourceRef = `${parsed.prefix}${mappedTableId}`;
-            console.log(`\u2705 Table d\xE9j\xE0 mapp\xE9e: ${parsed.id} \u2192 ${mappedTableId}`);
             emitCapacityEvent(mappedTableId, "table");
           } else {
-            console.log(`
-\u{1F4CA} Copie de la table ${parsed.id}...`);
             try {
               const tableResult = await copyTableCapacity2(
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
                 tableIdMap2.set(parsed.id, tableResult.newTableId);
                 newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
-                console.log(`\u2705 Table copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${tableResult.newTableId}`);
-                console.log(`   \u{1F4CB} ${tableResult.columnsCount} colonnes, ${tableResult.rowsCount} lignes, ${tableResult.cellsCount} cellules`);
                 emitCapacityEvent(tableResult.newTableId, "table");
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
-                console.log(`\u26A0\uFE0F \xC9chec copie table, suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`\u274C Exception copie table:`, e.message);
+              console.error(`\xE2\x9D\u0152 Exception copie table:`, e.message);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -29426,30 +29990,20 @@ ${"\u2550".repeat(80)}`);
           const isSharedRefField = parsed.id.startsWith("shared-ref-");
           if (nodeIdMap.has(parsed.id)) {
             newSourceRef = nodeIdMap.get(parsed.id);
-            console.log(`\u2705 Champ mapp\xE9: ${parsed.id} \u2192 ${newSourceRef}`);
           } else if (isSharedRefField) {
             newSourceRef = parsed.id;
-            console.log(`\u26AA Champ shared-ref conserv\xE9 sans suffixe: ${newSourceRef}`);
           } else {
             newSourceRef = appendSuffixOnce(parsed.id);
-            console.log(`\u26A0\uFE0F Champ non mapp\xE9, suffixe appliqu\xE9: ${newSourceRef}`);
           }
         }
       }
     }
-    console.log(`\u{1F4CD} sourceRef final: ${newSourceRef}`);
     let finalNodeId2 = newNodeId;
-    console.log(`\u{1F50D} [DEBUG-DISPLAY] originalVar.nodeId: ${originalVar.nodeId}`);
-    console.log(`\u{1F50D} [DEBUG-DISPLAY] nodeIdMap exists: ${!!nodeIdMap}`);
-    console.log(`\u{1F50D} [DEBUG-DISPLAY] nodeIdMap.size: ${nodeIdMap?.size || 0}`);
-    console.log(`\u{1F50D} [DEBUG-DISPLAY] nodeIdMap.has(originalVar.nodeId): ${originalVar.nodeId ? nodeIdMap?.has(originalVar.nodeId) : "N/A (no nodeId)"}`);
     if (nodeIdMap && nodeIdMap.size > 0) {
-      console.log(`\u{1F50D} [DEBUG-DISPLAY] nodeIdMap keys (first 5):`, Array.from(nodeIdMap.keys()).slice(0, 5));
     }
     if (autoCreateDisplayNode) {
-      console.log(`\u{1F680}\u{1F680}\u{1F680} [AUTO-CREATE-DISPLAY] D\xC9BUT - Variable: ${originalVar.id} (${originalVar.displayName}), nodeId: ${originalVar.nodeId}`);
       if (!originalVar.nodeId) {
-        console.warn(`\u26A0\uFE0F [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de cr\xE9er display node. Fallback newNodeId.`);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de cr\xC3\xA9er display node. Fallback newNodeId.`);
         finalNodeId2 = newNodeId;
       } else {
         try {
@@ -29467,7 +30021,7 @@ ${"\u2550".repeat(80)}`);
               return value;
             }
           };
-          const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
+          const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
             where: { id: originalVar.nodeId },
             select: {
               id: true,
@@ -29495,7 +30049,7 @@ ${"\u2550".repeat(80)}`);
               hasFormula: true,
               hasLink: true,
               hasMarkers: true,
-              // 🔧 FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
+              // ðŸ”§ FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
               condition_activeId: true,
               formula_activeId: true,
               linkedConditionIds: true,
@@ -29540,7 +30094,7 @@ ${"\u2550".repeat(80)}`);
             hasFormula: true,
             hasLink: true,
             hasMarkers: true,
-            // 🔧 FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
+            // ðŸ”§ FIX 16/12/2025: Ajouter condition_activeId et formula_activeId pour la copie
             condition_activeId: true,
             formula_activeId: true,
             linkedConditionIds: true,
@@ -29573,7 +30127,7 @@ ${"\u2550".repeat(80)}`);
             const withoutRepeater = nodes.find((node) => !hasRepeaterMetadata(node.metadata));
             return withoutRepeater ?? nodes[0];
           };
-          let originalDisplayNode = await prisma69.treeBranchLeafNode.findFirst({
+          let originalDisplayNode = await prisma70.treeBranchLeafNode.findFirst({
             where: {
               metadata: {
                 path: ["fromVariableId"],
@@ -29583,7 +30137,7 @@ ${"\u2550".repeat(80)}`);
             select: displayNodeSelect
           });
           if (!originalDisplayNode) {
-            const templateNodeIds = await prisma69.treeBranchLeafNode.findMany({
+            const templateNodeIds = await prisma70.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
@@ -29592,13 +30146,12 @@ ${"\u2550".repeat(80)}`);
               select: { id: true }
             });
             const templateIds = new Set(templateNodeIds.map((t) => t.id));
-            console.log(`\u{1F50D} [DISPLAY_SEARCH] Template nodes to EXCLUDE: ${templateIds.size}`);
-            const candidates = await prisma69.treeBranchLeafNode.findMany({
+            const candidates = await prisma70.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
                 },
-                // ⚠️ CRITICAL: Exclude the template nodes themselves
+                // âš ï¸ CRITICAL: Exclude the template nodes themselves
                 // This ensures we find TRUE display nodes, not the templates
                 id: {
                   notIn: Array.from(templateIds)
@@ -29615,27 +30168,16 @@ ${"\u2550".repeat(80)}`);
               }
             });
             if (candidates.length === 0) {
-              console.log(`\u26A0\uFE0F [DISPLAY_SEARCH] No display node found after excluding templates`);
             } else {
-              console.log(`\u2705 [DISPLAY_SEARCH] Found ${candidates.length} candidates after excluding templates`);
             }
             originalDisplayNode = pickDisplayCandidate(candidates);
           }
           if (originalDisplayNode) {
-            console.log(
-              `\u2705 [AUTO-CREATE-DISPLAY] Original display trouv\xE9: ${originalDisplayNode.id} (parent=${originalDisplayNode.parentId})`
-            );
           } else {
-            console.log(
-              `\u26A0\uFE0F  [AUTO-CREATE-DISPLAY] Aucun display original trouv\xE9 pour ${originalVar.id}`
-            );
             if (originalVar.nodeId && originalOwnerNode) {
-              console.log(
-                `\u{1F4CC} [AUTO-CREATE-DISPLAY] Fallback: utilisant parent du n\u0153ud propri\xE9taire: ${originalOwnerNode.parentId}`
-              );
             }
           }
-          const duplicatedOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
+          const duplicatedOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
             where: { id: newNodeId },
             select: {
               id: true,
@@ -29645,29 +30187,22 @@ ${"\u2550".repeat(80)}`);
           if (originalOwnerNode && duplicatedOwnerNode) {
             const inheritedDisplayParentId = originalDisplayNode?.parentId ?? null;
             let resolvedParentId = inheritedDisplayParentId ?? originalOwnerNode.parentId ?? displayParentId ?? duplicatedOwnerNode.parentId ?? null;
-            console.log(`\u{1F4CC} [DISPLAY_NODE_PARENT] R\xE9solution du parentId:`);
-            console.log(`   - inheritedDisplayParentId: ${inheritedDisplayParentId}`);
-            console.log(`   - originalOwnerNode.parentId: ${originalOwnerNode.parentId}`);
-            console.log(`   - resolvedParentId final: ${resolvedParentId}`);
-            if (resolvedParentId && prisma69) {
+            if (resolvedParentId && prisma70) {
               try {
-                const parentExists = await prisma69.treeBranchLeafNode.findUnique({
+                const parentExists = await prisma70.treeBranchLeafNode.findUnique({
                   where: { id: resolvedParentId },
                   select: { id: true }
                 });
                 if (!parentExists) {
-                  console.log(`\u26A0\uFE0F  [DISPLAY_NODE_PARENT] Parent ${resolvedParentId} n'existe pas, fallback au parent du n\u0153ud dupliqu\xE9`);
                   resolvedParentId = duplicatedOwnerNode.parentId ?? null;
                 } else {
-                  console.log(`\u2705 [DISPLAY_NODE_PARENT] Parent ${resolvedParentId} existe, utilisation confirm\xE9e`);
                 }
               } catch (parentCheckErr) {
-                console.warn(`\u26A0\uFE0F  [DISPLAY_NODE_PARENT] Erreur lors de la v\xE9rification du parent, fallback:`, parentCheckErr.message);
+                console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F  [DISPLAY_NODE_PARENT] Erreur lors de la v\xC3\xA9rification du parent, fallback:`, parentCheckErr.message);
                 resolvedParentId = duplicatedOwnerNode.parentId ?? null;
               }
             } else if (!resolvedParentId) {
               resolvedParentId = duplicatedOwnerNode.parentId ?? null;
-              console.log(`\u{1F4CC} [DISPLAY_NODE_PARENT] Utilisation du parent du n\u0153ud dupliqu\xE9: ${resolvedParentId}`);
             }
             const displayNodeBaseId = originalVar.nodeId && nodeIdMap.get(originalVar.nodeId) || originalVar.nodeId;
             const baseNormalized = stripTrailingNumeric(displayNodeBaseId);
@@ -29745,7 +30280,7 @@ ${"\u2550".repeat(80)}`);
               return typeof value === "string" ? value : String(value);
             };
             const tableSourceNode = originalDisplayNode ?? originalOwnerNode;
-            const displayLabel = forceSingleSuffix(originalVar.displayName || "Donn\xE9e");
+            const displayLabel = forceSingleSuffix(originalVar.displayName || "Donn\xC3\xA9e");
             const resolvedOrder = originalDisplayNode?.order ?? (originalOwnerNode.order ?? 0) + 1;
             const resolvedSubTabsJson = (() => {
               const resolved = Array.isArray(inheritedSubTabs) && inheritedSubTabs.length ? inheritedSubTabs : ownerSubTabsArray;
@@ -29796,11 +30331,11 @@ ${"\u2550".repeat(80)}`);
               table_rows: tableSourceNode.table_rows,
               table_type: tableSourceNode.table_type,
               linkedTableIds: Array.isArray(tableSourceNode.linkedTableIds) ? tableSourceNode.linkedTableIds.map((id) => appendSuffix(String(id))) : [],
-              // 🔧 FIX 16/12/2025: NE PAS inclure linkedConditionIds et linkedFormulaIds ici
-              // car ils seront mis à jour APRÈS la copie des conditions/formules.
-              // Si on les inclut avec [], ils écraseraient les valeurs ajoutées par copyFormulaCapacity!
-              // linkedConditionIds: [] as any,  // SUPPRIMÉ
-              // linkedFormulaIds: [] as any,    // SUPPRIMÉ
+              // ðŸ”§ FIX 16/12/2025: NE PAS inclure linkedConditionIds et linkedFormulaIds ici
+              // car ils seront mis Ã  jour APRÃˆS la copie des conditions/formules.
+              // Si on les inclut avec [], ils Ã©craseraient les valeurs ajoutÃ©es par copyFormulaCapacity!
+              // linkedConditionIds: [] as any,  // SUPPRIMÃ‰
+              // linkedFormulaIds: [] as any,    // SUPPRIMÃ‰
               linkedVariableIds: [newVarId],
               data_activeId: tableSourceNode.data_activeId ? appendSuffix(String(tableSourceNode.data_activeId)) : null,
               data_displayFormat: tableSourceNode.data_displayFormat,
@@ -29816,31 +30351,26 @@ ${"\u2550".repeat(80)}`);
               fieldSubType: tableSourceNode.fieldSubType,
               field_label: displayLabel
             };
-            const maybeExisting = await prisma69.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+            const maybeExisting = await prisma70.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
             if (maybeExisting) {
-              await prisma69.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
-              console.log(`\u2705\u2705\u2705 [AUTO-CREATE-DISPLAY] N\u0153ud d'affichage existant mis \xE0 jour: ${displayNodeId2} (label: ${originalVar.displayName}-${suffix})`);
+              await prisma70.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
             } else {
-              await prisma69.treeBranchLeafNode.create({ data: displayNodeData });
-              console.log(`\u2705\u2705\u2705 [AUTO-CREATE-DISPLAY] N\u0153ud d'affichage CR\xC9\xC9 AVEC SUCC\xC8S: ${displayNodeId2} (label: ${originalVar.displayName}-${suffix})`);
+              await prisma70.treeBranchLeafNode.create({ data: displayNodeData });
             }
             const copiedFormulaIds = [];
             const copiedConditionIds = [];
             try {
-              const originalFormulas = await prisma69.treeBranchLeafNodeFormula.findMany({
+              const originalFormulas = await prisma70.treeBranchLeafNodeFormula.findMany({
                 where: { nodeId: tableSourceNode.id }
               });
-              console.log(`\u{1F4CB} Formules \xE0 copier depuis ${tableSourceNode.id}: ${originalFormulas.length}`);
               for (const f of originalFormulas) {
                 const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
-                const existingFormula = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
+                const existingFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
                 if (existingFormula) {
                   if (existingFormula.nodeId === displayNodeId2) {
-                    console.log(`   \u267B\uFE0F Formule ${newFormulaId} existe d\xE9j\xE0 pour CE n\u0153ud, skip`);
                     copiedFormulaIds.push(newFormulaId);
                     continue;
                   }
-                  console.log(`   \u26A0\uFE0F Formule ${newFormulaId} existe pour autre n\u0153ud (${existingFormula.nodeId}), skip`);
                   continue;
                 }
                 try {
@@ -29848,34 +30378,30 @@ ${"\u2550".repeat(80)}`);
                     f.id,
                     displayNodeId2,
                     suffix,
-                    prisma69,
+                    prisma70,
                     { formulaIdMap, nodeIdMap }
                   );
                   if (formulaResult.success) {
                     formulaIdMap.set(f.id, formulaResult.newFormulaId);
                     copiedFormulaIds.push(formulaResult.newFormulaId);
-                    console.log(`   \u2705 Formule copi\xE9e (centralis\xE9e): ${f.id} \u2192 ${formulaResult.newFormulaId}`);
                   } else {
-                    console.error(`   \u274C Erreur copie formule: ${f.id}`);
+                    console.error(`   \xE2\x9D\u0152 Erreur copie formule: ${f.id}`);
                   }
                 } catch (error) {
-                  console.error(`   \u274C Exception copie formule ${f.id}:`, error);
+                  console.error(`   \xE2\x9D\u0152 Exception copie formule ${f.id}:`, error);
                 }
               }
-              const originalConditions = await prisma69.treeBranchLeafNodeCondition.findMany({
+              const originalConditions = await prisma70.treeBranchLeafNodeCondition.findMany({
                 where: { nodeId: tableSourceNode.id }
               });
-              console.log(`\u{1F4CB} Conditions \xE0 copier depuis ${tableSourceNode.id}: ${originalConditions.length}`);
               for (const c of originalConditions) {
                 const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
-                const existingCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+                const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
                 if (existingCondition) {
                   if (existingCondition.nodeId === displayNodeId2) {
-                    console.log(`   \u267B\uFE0F Condition ${newConditionId} existe d\xE9j\xE0 pour CE n\u0153ud, skip`);
                     copiedConditionIds.push(newConditionId);
                     continue;
                   }
-                  console.log(`   \u26A0\uFE0F Condition ${newConditionId} existe pour autre n\u0153ud (${existingCondition.nodeId}), skip`);
                   continue;
                 }
                 try {
@@ -29883,18 +30409,17 @@ ${"\u2550".repeat(80)}`);
                     c.id,
                     displayNodeId2,
                     suffix,
-                    prisma69,
+                    prisma70,
                     { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
                   );
                   if (conditionResult.success) {
                     conditionIdMap.set(c.id, conditionResult.newConditionId);
                     copiedConditionIds.push(conditionResult.newConditionId);
-                    console.log(`   \u2705 Condition copi\xE9e (centralis\xE9e): ${c.id} \u2192 ${conditionResult.newConditionId}`);
                   } else {
-                    console.error(`   \u274C Erreur copie condition: ${c.id}`);
+                    console.error(`   \xE2\x9D\u0152 Erreur copie condition: ${c.id}`);
                   }
                 } catch (error) {
-                  console.error(`   \u274C Exception copie condition ${c.id}:`, error);
+                  console.error(`   \xE2\x9D\u0152 Exception copie condition ${c.id}:`, error);
                 }
               }
               const updateData = {};
@@ -29905,16 +30430,12 @@ ${"\u2550".repeat(80)}`);
                   const newFormulaActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.formula_activeId)));
                   if (copiedFormulaIds.includes(newFormulaActiveId)) {
                     updateData.formula_activeId = newFormulaActiveId;
-                    console.log(`   \u{1F4CA} formula_activeId=${newFormulaActiveId}`);
                   } else {
                     updateData.formula_activeId = copiedFormulaIds[0];
-                    console.log(`   \u{1F4CA} formula_activeId=${copiedFormulaIds[0]} (premier disponible)`);
                   }
                 } else if (copiedFormulaIds.length > 0) {
                   updateData.formula_activeId = copiedFormulaIds[0];
-                  console.log(`   \u{1F4CA} formula_activeId=${copiedFormulaIds[0]} (premier par d\xE9faut)`);
                 }
-                console.log(`   \u{1F4CA} hasFormula=true, linkedFormulaIds=${copiedFormulaIds.join(", ")}`);
               }
               if (copiedConditionIds.length > 0) {
                 updateData.hasCondition = true;
@@ -29923,35 +30444,27 @@ ${"\u2550".repeat(80)}`);
                   const newConditionActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.condition_activeId)));
                   if (copiedConditionIds.includes(newConditionActiveId)) {
                     updateData.condition_activeId = newConditionActiveId;
-                    console.log(`   \u{1F4CA} condition_activeId=${newConditionActiveId}`);
                   } else {
                     updateData.condition_activeId = copiedConditionIds[0];
-                    console.log(`   \u{1F4CA} condition_activeId=${copiedConditionIds[0]} (premier disponible)`);
                   }
                 } else if (copiedConditionIds.length > 0) {
                   updateData.condition_activeId = copiedConditionIds[0];
-                  console.log(`   \u{1F4CA} condition_activeId=${copiedConditionIds[0]} (premier par d\xE9faut)`);
                 }
-                console.log(`   \u{1F4CA} hasCondition=true, linkedConditionIds=${copiedConditionIds.join(", ")}`);
               }
               if (Object.keys(updateData).length > 0) {
-                await prisma69.treeBranchLeafNode.update({
+                await prisma70.treeBranchLeafNode.update({
                   where: { id: displayNodeId2 },
                   data: updateData
                 });
-                console.log(`\u2705 N\u0153ud d'affichage ${displayNodeId2} mis \xE0 jour avec formules/conditions`);
               }
               const copiedTableIds = [];
               if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
-                console.log(`
-\u{1F4CA} [COPY-TABLES] N\u0153ud original a ${tableSourceNode.linkedTableIds.length} tables \xE0 copier`);
                 for (const originalTableId of tableSourceNode.linkedTableIds) {
                   const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
-                  const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+                  const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
                     where: { id: newTableId }
                   });
                   if (existingTable) {
-                    console.log(`   \u267B\uFE0F Table ${newTableId} existe d\xE9j\xE0, skip`);
                     copiedTableIds.push(newTableId);
                     tableIdMap2.set(String(originalTableId), newTableId);
                     continue;
@@ -29960,83 +30473,78 @@ ${"\u2550".repeat(80)}`);
                     const tableResult = await copyTableCapacity2(
                       String(originalTableId),
                       displayNodeId2,
-                      // La nouvelle table appartient au display node copié
+                      // La nouvelle table appartient au display node copiÃ©
                       suffix,
-                      prisma69,
+                      prisma70,
                       { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
                     );
                     if (tableResult.success) {
                       tableIdMap2.set(String(originalTableId), tableResult.newTableId);
                       copiedTableIds.push(tableResult.newTableId);
-                      console.log(`   \u2705 Table copi\xE9e: ${originalTableId} \u2192 ${tableResult.newTableId} (${tableResult.columnsCount} cols, ${tableResult.rowsCount} rows)`);
                     } else {
-                      console.warn(`   \u26A0\uFE0F \xC9chec copie table ${originalTableId}: ${tableResult.error}`);
+                      console.warn(`   \xE2\u0161\xA0\xEF\xB8\x8F \xC3\u2030chec copie table ${originalTableId}: ${tableResult.error}`);
                     }
                   } catch (tableErr) {
-                    console.error(`   \u274C Exception copie table ${originalTableId}:`, tableErr.message);
+                    console.error(`   \xE2\x9D\u0152 Exception copie table ${originalTableId}:`, tableErr.message);
                   }
                 }
                 if (copiedTableIds.length > 0) {
-                  await prisma69.treeBranchLeafNode.update({
+                  await prisma70.treeBranchLeafNode.update({
                     where: { id: displayNodeId2 },
                     data: {
                       hasTable: true,
                       linkedTableIds: copiedTableIds
                     }
                   });
-                  console.log(`   \u2705 hasTable=true, linkedTableIds mis \xE0 jour sur ${displayNodeId2}`);
                 }
               }
             } catch (copyCapErr) {
-              console.warn(`\u26A0\uFE0F Erreur lors de la copie des formules/conditions pour display node:`, copyCapErr.message);
+              console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la copie des formules/conditions pour display node:`, copyCapErr.message);
             }
           } else {
-            console.warn(`\u26A0\uFE0F Impossible de r\xE9cup\xE9rer le n\u0153ud propri\xE9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
+            console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de r\xC3\xA9cup\xC3\xA9rer le n\xC5\u201Cud propri\xC3\xA9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
           }
         } catch (e) {
-          console.warn(`\u26A0\uFE0F Erreur lors de la cr\xE9ation du n\u0153ud d'affichage d\xE9di\xE9:`, e.message);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la cr\xC3\xA9ation du n\xC5\u201Cud d'affichage d\xC3\xA9di\xC3\xA9:`, e.message);
         }
       }
-      console.log(`\u{1F389}\u{1F389}\u{1F389} [AUTO-CREATE-DISPLAY] TERMIN\xC9 - Variable: ${originalVar.id} (${originalVar.displayName}), displayNodeId: ${finalNodeId2}`);
     } else {
-      console.log(`\u{1F4CD} nodeId utilis\xE9 (fallback): ${finalNodeId2}`);
     }
     try {
-      const existingById = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      const existingById = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
-        console.warn(`\u26A0\uFE0F Conflit sur id variable (${newVarId}), ajustement \u2192 ${adjusted}`);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur id variable (${newVarId}), ajustement \xE2\u2020\u2019 ${adjusted}`);
         newVarId = adjusted;
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F V\xE9rification collision id variable \xE9chou\xE9e:`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     try {
-      const existingByKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      const existingByKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
-        console.warn(`\u26A0\uFE0F Conflit sur exposedKey (${newExposedKey}), ajustement \u2192 ${adjustedKey}`);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur exposedKey (${newExposedKey}), ajustement \xE2\u2020\u2019 ${adjustedKey}`);
         newExposedKey = adjustedKey;
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F V\xE9rification collision exposedKey \xE9chou\xE9e:`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision exposedKey \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
       if (existingForNode) {
         const expectedVarId = `${originalVarId}-${suffix}`;
         const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
         if (hasSuffixMatch) {
-          console.log(`\u267B\uFE0F Variable existante AVEC BON SUFFIXE pour ${finalNodeId2}, r\xE9utilisation: ${existingForNode.id}`);
           _reusingExistingVariable = true;
           _existingVariableForReuse = existingForNode;
           try {
             const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
-            await prisma69.treeBranchLeafNode.update({
+            await prisma70.treeBranchLeafNode.update({
               where: { id: finalNodeId2 },
               data: {
                 hasData: true,
@@ -30052,47 +30560,37 @@ ${"\u2550".repeat(80)}`);
             });
             const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
             if (!isCopiedNode) {
-              console.warn(`\u26A0\uFE0F SKIP addToNodeLinkedField (r\xE9utilisation): ${finalNodeId2} est un n\u0153ud ORIGINAL, pas une copie`);
+              console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F SKIP addToNodeLinkedField (r\xC3\xA9utilisation): ${finalNodeId2} est un n\xC5\u201Cud ORIGINAL, pas une copie`);
             } else {
-              await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+              await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
             }
           } catch (e) {
-            console.warn(`\u26A0\uFE0F Erreur MAJ display node (r\xE9utilisation):`, e.message);
+            console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
           }
           const cacheKey2 = `${originalVarId}|${finalNodeId2}`;
           variableCopyCache.set(cacheKey2, existingForNode.id);
         } else {
-          console.warn(`\u26A0\uFE0F Variable existante MAIS MAUVAIS SUFFIXE: ${existingForNode.id}, attendu: ${expectedVarId}`);
-          console.warn(`   \u2192 Suppression de l'ancienne ET cr\xE9ation nouvelle variable obligatoire`);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Variable existante MAIS MAUVAIS SUFFIXE: ${existingForNode.id}, attendu: ${expectedVarId}`);
+          console.warn(`   \xE2\u2020\u2019 Suppression de l'ancienne ET cr\xC3\xA9ation nouvelle variable obligatoire`);
           try {
-            await prisma69.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
-            console.log(`\u{1F5D1}\uFE0F Ancienne variable supprim\xE9e: ${existingForNode.id}`);
+            await prisma70.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
-            console.warn(`\u26A0\uFE0F Erreur suppression ancienne variable:`, delError.message);
+            console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur suppression ancienne variable:`, delError.message);
           }
           _reusingExistingVariable = false;
           _existingVariableForReuse = null;
         }
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F V\xE9rification variable existante par nodeId \xE9chou\xE9e:`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification variable existante par nodeId \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let newVariable;
     if (_reusingExistingVariable && _existingVariableForReuse) {
-      console.log(`\u267B\uFE0F [COPY-VAR] Utilisation de variable existante: ${_existingVariableForReuse.id}`);
       newVariable = _existingVariableForReuse;
     } else {
-      console.log(`
-\u{1F528} [COPY-VAR] CR\xC9ATION DE LA VARIABLE EN BASE...`);
-      console.log(`   ID: ${newVarId}`);
-      console.log(`   nodeId: ${finalNodeId2}`);
-      console.log(`   exposedKey: ${newExposedKey}`);
       const normalizedDisplayName = forceSingleSuffix(originalVar.displayName);
-      console.log(`   displayName: ${normalizedDisplayName}`);
-      console.log(`   sourceRef: ${newSourceRef}`);
-      console.log(`   sourceType: ${originalVar.sourceType}`);
       if (!finalNodeId2) {
-        console.error(`\u274C ERREUR CRITIQUE: finalNodeId est NULL/undefined!`);
+        console.error(`\xE2\x9D\u0152 ERREUR CRITIQUE: finalNodeId est NULL/undefined!`);
         console.error(`   autoCreateDisplayNode: ${autoCreateDisplayNode}`);
         console.error(`   originalVar.nodeId: ${originalVar.nodeId}`);
         console.error(`   newNodeId: ${newNodeId}`);
@@ -30101,7 +30599,6 @@ ${"\u2550".repeat(80)}`);
       try {
         if (originalVar.nodeId && finalNodeId2 && !nodeIdMap.has(originalVar.nodeId)) {
           nodeIdMap.set(originalVar.nodeId, finalNodeId2);
-          console.log(`\u{1F4CD} Mapping n\u0153ud ajout\xE9: ${originalVar.nodeId} \u2192 ${finalNodeId2}`);
         }
         const newLinkedFormulaIds = [];
         for (const formulaId of originalVar.linkedFormulaIds || []) {
@@ -30114,18 +30611,17 @@ ${"\u2550".repeat(80)}`);
                 formulaId,
                 finalNodeId2,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (formulaResult.success) {
                 formulaIdMap.set(formulaId, formulaResult.newFormulaId);
                 newLinkedFormulaIds.push(formulaResult.newFormulaId);
-                console.log(`\u2705 Formule copi\xE9e (r\xE9cursive): ${formulaId} \u2192 ${formulaResult.newFormulaId}`);
               } else {
                 newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`\u274C Erreur copie formule r\xE9cursive:`, e.message);
+              console.error(`\xE2\x9D\u0152 Erreur copie formule r\xC3\xA9cursive:`, e.message);
               newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
             }
           }
@@ -30141,18 +30637,17 @@ ${"\u2550".repeat(80)}`);
                 conditionId,
                 finalNodeId2,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (conditionResult.success) {
                 conditionIdMap.set(conditionId, conditionResult.newConditionId);
                 newLinkedConditionIds.push(conditionResult.newConditionId);
-                console.log(`\u2705 Condition copi\xE9e (r\xE9cursive): ${conditionId} \u2192 ${conditionResult.newConditionId}`);
               } else {
                 newLinkedConditionIds.push(`${conditionId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`\u274C Erreur copie condition r\xE9cursive:`, e.message);
+              console.error(`\xE2\x9D\u0152 Erreur copie condition r\xC3\xA9cursive:`, e.message);
               newLinkedConditionIds.push(`${conditionId}-${suffix}`);
             }
           }
@@ -30168,23 +30663,22 @@ ${"\u2550".repeat(80)}`);
                 tableId,
                 finalNodeId2,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, formulaIdMap, conditionIdMap, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
                 tableIdMap2.set(tableId, tableResult.newTableId);
                 newLinkedTableIds.push(tableResult.newTableId);
-                console.log(`\u2705 Table copi\xE9e (r\xE9cursive): ${tableId} \u2192 ${tableResult.newTableId}`);
               } else {
                 newLinkedTableIds.push(`${tableId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`\u274C Erreur copie table r\xE9cursive:`, e.message);
+              console.error(`\xE2\x9D\u0152 Erreur copie table r\xC3\xA9cursive:`, e.message);
               newLinkedTableIds.push(`${tableId}-${suffix}`);
             }
           }
         }
-        newVariable = await prisma69.treeBranchLeafNodeVariable.create({
+        newVariable = await prisma70.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: finalNodeId2,
@@ -30206,12 +30700,12 @@ ${"\u2550".repeat(80)}`);
           }
         });
       } catch (createError) {
-        console.error(`\u274C\u274C\u274C ERREUR LORS DE LA CR\xC9ATION DE LA VARIABLE!`);
+        console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 ERREUR LORS DE LA CR\xC3\u2030ATION DE LA VARIABLE!`);
         console.error(`   Erreur Prisma: ${createError.message}`);
-        console.error(`   Node ID tent\xE9: ${finalNodeId2}`);
+        console.error(`   Node ID tent\xC3\xA9: ${finalNodeId2}`);
         console.error(`   Variable ID: ${newVarId}`);
         console.error(`   ExposedKey: ${newExposedKey}`);
-        console.error(`   D\xE9tails complets:`, createError);
+        console.error(`   D\xC3\xA9tails complets:`, createError);
         throw createError;
       }
     }
@@ -30227,32 +30721,25 @@ ${"\u2550".repeat(80)}`);
         context: normalizedRepeatContext
       });
     }
-    console.log(`\u2705\u2705\u2705 VARIABLE CR\xC9\xC9E AVEC SUCC\xC8S EN BASE !`);
-    console.log(`   ID cr\xE9\xE9: ${newVariable.id}`);
-    console.log(`   nodeId: ${newVariable.nodeId}`);
-    console.log(`   exposedKey: ${newVariable.exposedKey}`);
-    console.log(`   \u{1F4CD} DEBUG displayName cr\xE9\xE9: "${newVariable.displayName}"`);
     if (!isFromRepeaterDuplication) {
       try {
-        await linkVariableToAllCapacityNodes(prisma69, newVariable.id, newVariable.sourceRef);
+        await linkVariableToAllCapacityNodes(prisma70, newVariable.id, newVariable.sourceRef);
       } catch (e) {
-        console.error(`\u274C Erreur LIAISON AUTOMATIQUE VARIABLE:`, e.message);
+        console.error(`\xE2\x9D\u0152 Erreur LIAISON AUTOMATIQUE VARIABLE:`, e.message);
       }
     } else {
-      console.log(`\u23ED\uFE0F SKIP linkVariableToAllCapacityNodes (duplication r\xE9p\xE9teur - linkedVariableIds d\xE9j\xE0 copi\xE9s)`);
     }
-    const verification = await prisma69.treeBranchLeafNodeVariable.findUnique({
+    const verification = await prisma70.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (verification) {
-      console.log(`\u2705 V\xC9RIFICATION OK: Variable ${newVariable.id} existe bien en base`);
     } else {
-      console.error(`\u274C\u274C\u274C PROBL\xC8ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xE8s cr\xE9ation !`);
-      console.error(`\u274C\u274C\u274C PROBL\xC8ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xE8s cr\xE9ation !`);
+      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
+      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
     }
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: finalNodeId2 },
         data: {
           hasData: true,
@@ -30262,23 +30749,22 @@ ${"\u2550".repeat(80)}`);
           data_precision: newVariable.precision,
           data_unit: newVariable.unit,
           data_visibleToUser: newVariable.visibleToUser,
-          // Harmoniser le label du nœud d'affichage sur le displayName de la variable
+          // Harmoniser le label du nÅ“ud d'affichage sur le displayName de la variable
           label: normalizedNodeLabel || void 0,
           field_label: normalizedNodeLabel || void 0
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (data) mis \xE0 jour pour n\u0153ud d'affichage ${finalNodeId2}`);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur lors de la mise \xE0 jour des param\xE8tres capacit\xE9 (display node):`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la mise \xC3\xA0 jour des param\xC3\xA8tres capacit\xC3\xA9 (display node):`, e.message);
     }
     if (linkToDisplaySection) {
       try {
-        const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: { parentId: true, treeId: true }
         });
         if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma69.treeBranchLeafNode.findFirst({
+          const displaySection = await prisma70.treeBranchLeafNode.findFirst({
             where: {
               treeId: originalOwnerNode.treeId,
               parentId: originalOwnerNode.parentId,
@@ -30288,26 +30774,23 @@ ${"\u2550".repeat(80)}`);
             select: { id: true }
           });
           if (displaySection) {
-            await addToNodeLinkedField5(prisma69, displaySection.id, "linkedVariableIds", [newVariable.id]);
-            console.log(`\u2705 Variable li\xE9e \xE0 la section d'affichage ${displaySectionLabel}: ${displaySection.id}`);
+            await addToNodeLinkedField5(prisma70, displaySection.id, "linkedVariableIds", [newVariable.id]);
           } else {
-            console.log(`\u2139\uFE0F Section d'affichage "${displaySectionLabel}" introuvable sous le parent.`);
           }
         }
       } catch (e) {
-        console.warn(`\u26A0\uFE0F Erreur lors du linkage vers la section d'affichage:`, e.message);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors du linkage vers la section d'affichage:`, e.message);
       }
     } else if (autoCreateDisplayNode) {
       try {
         const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
         if (!isCopiedNode) {
-          console.warn(`\u26A0\uFE0F SKIP addToNodeLinkedField: ${finalNodeId2} est un n\u0153ud ORIGINAL (template), pas une copie. On ne doit PAS ajouter ${newVariable.id} \xE0 ses linkedVariableIds.`);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F SKIP addToNodeLinkedField: ${finalNodeId2} est un n\xC5\u201Cud ORIGINAL (template), pas une copie. On ne doit PAS ajouter ${newVariable.id} \xC3\xA0 ses linkedVariableIds.`);
         } else {
-          await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedVariableIds", [newVariable.id]);
-          console.log(`\u2705 Variable ${newVariable.id} ajout\xE9e au linkedVariableIds du n\u0153ud copi\xE9 ${finalNodeId2}`);
+          await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedVariableIds", [newVariable.id]);
         }
       } catch (e) {
-        console.warn(`\u26A0\uFE0F Erreur linkage variable\u2192display node:`, e.message);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
       }
       try {
         if (capacityType && newSourceRef) {
@@ -30315,8 +30798,8 @@ ${"\u2550".repeat(80)}`);
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              const cond = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
-              await prisma69.treeBranchLeafNode.update({
+              const cond = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
@@ -30325,11 +30808,11 @@ ${"\u2550".repeat(80)}`);
                   condition_description: cond?.description || null
                 }
               });
-              await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedConditionIds", [capId]);
               try {
                 if (newNodeId) {
                   const suffixedVarId = `${originalVarId}-${suffix}`;
-                  const targetNode = await prisma69.treeBranchLeafNode.findUnique({
+                  const targetNode = await prisma70.treeBranchLeafNode.findUnique({
                     where: { id: newNodeId },
                     select: { linkedVariableIds: true }
                   });
@@ -30340,48 +30823,46 @@ ${"\u2550".repeat(80)}`);
                     const next = Array.from(/* @__PURE__ */ new Set([...withoutOriginal, ...candidates]));
                     const changed = current.length !== next.length || current.some((id) => !next.includes(id));
                     if (changed) {
-                      await prisma69.treeBranchLeafNode.update({
+                      await prisma70.treeBranchLeafNode.update({
                         where: { id: newNodeId },
                         data: {
                           linkedVariableIds: { set: next }
                         }
                       });
-                      console.log(`\u2705 linkedVariableIds updated on target node ${newNodeId}:`, next);
                     }
                   }
                 }
               } catch (e) {
-                console.warn(`\u26A0\uFE0F Failed to sync linkedVariableIds on target node ${newNodeId}:`, e.message);
+                console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Failed to sync linkedVariableIds on target node ${newNodeId}:`, e.message);
               }
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma69.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
-              await prisma69.treeBranchLeafNode.update({
+              const tbl = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
+              await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
                   table_activeId: capId,
                   table_name: tbl?.name || null,
-                  table_description: tbl?.description || null,
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField5(prisma69, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedTableIds", [capId]);
             }
           }
         }
       } catch (e) {
-        console.warn(`\u26A0\uFE0F Synchronisation capacit\xE9s condition/table sur le n\u0153ud d'affichage:`, e.message);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Synchronisation capacit\xC3\xA9s condition/table sur le n\xC5\u201Cud d'affichage:`, e.message);
       }
     }
     try {
       if (newNodeId) {
-        await replaceLinkedVariableId(prisma69, newNodeId, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma70, newNodeId, originalVarId, newVariable.id, suffix);
       }
       if (finalNodeId2 && finalNodeId2 !== newNodeId) {
-        await replaceLinkedVariableId(prisma69, finalNodeId2, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma70, finalNodeId2, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Failed to replace linkedVariableIds on nodes ${newNodeId} / ${finalNodeId2}:`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Failed to replace linkedVariableIds on nodes ${newNodeId} / ${finalNodeId2}:`, e.message);
     }
     const cacheKeyFinal = `${originalVarId}|${finalNodeId2}`;
     variableCopyCache.set(cacheKeyFinal, newVariable.id);
@@ -30390,55 +30871,47 @@ ${"\u2550".repeat(80)}`);
       if (parsed && parsed.id) {
         try {
           if (capacityType === "formula") {
-            const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+            const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (formula) {
-              await addToNodeLinkedField5(prisma69, formula.nodeId, "linkedFormulaIds", [parsed.id]);
-              console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour formule ${parsed.id}`);
+              await addToNodeLinkedField5(prisma70, formula.nodeId, "linkedFormulaIds", [parsed.id]);
             }
           } else if (capacityType === "condition") {
-            const condition = await prisma69.treeBranchLeafNodeCondition.findUnique({
+            const condition = await prisma70.treeBranchLeafNodeCondition.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (condition) {
-              await addToNodeLinkedField5(prisma69, condition.nodeId, "linkedConditionIds", [parsed.id]);
-              console.log(`\u2705 linkedConditionIds mis \xE0 jour pour condition ${parsed.id}`);
+              await addToNodeLinkedField5(prisma70, condition.nodeId, "linkedConditionIds", [parsed.id]);
             }
           } else if (capacityType === "table") {
-            const table = await prisma69.treeBranchLeafNodeTable.findUnique({
+            const table = await prisma70.treeBranchLeafNodeTable.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (table) {
-              await addToNodeLinkedField5(prisma69, table.nodeId, "linkedTableIds", [parsed.id]);
-              console.log(`\u2705 linkedTableIds mis \xE0 jour pour table ${parsed.id}`);
+              await addToNodeLinkedField5(prisma70, table.nodeId, "linkedTableIds", [parsed.id]);
             }
           }
         } catch (e) {
-          console.warn(`\u26A0\uFE0F Erreur MAJ bidirectionnelle:`, e.message);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ bidirectionnelle:`, e.message);
         }
       }
     }
-    console.log(`
-${"\u2550".repeat(80)}`);
-    console.log(`\u2705 COPIE VARIABLE TERMIN\xC9E`);
-    console.log(`${"\u2550".repeat(80)}
-`);
     try {
-      const originalVariable = await prisma69.treeBranchLeafNodeVariable.findUnique({
+      const originalVariable = await prisma70.treeBranchLeafNodeVariable.findUnique({
         where: { id: originalVarId },
         select: { nodeId: true }
       });
       if (originalVariable?.nodeId) {
-        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma69).catch((err) => {
-          console.warn(`\u26A0\uFE0F Erreur mise \xE0 jour champ Total:`, err);
+        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma70).catch((err) => {
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur mise \xC3\xA0 jour champ Total:`, err);
         });
       }
     } catch (sumErr) {
-      console.warn(`\u26A0\uFE0F Erreur r\xE9cup\xE9ration variable originale pour Total:`, sumErr);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur r\xC3\xA9cup\xC3\xA9ration variable originale pour Total:`, sumErr);
     }
     return {
       variableId: newVariable.id,
@@ -30447,29 +30920,29 @@ ${"\u2550".repeat(80)}`);
       sourceRef: newSourceRef,
       success: true,
       displayNodeId: autoCreateDisplayNode ? finalNodeId2 : void 0,
-      // 🟢 RETOURNER LES MAPS pour que repeat-executor puisse les agréger
+      // ðŸŸ¢ RETOURNER LES MAPS pour que repeat-executor puisse les agrÃ©ger
       formulaIdMap,
       conditionIdMap,
       tableIdMap: tableIdMap2
     };
   } catch (error) {
     console.error(`
-${"\u2550".repeat(80)}`);
-    console.error(`\u274C\u274C\u274C ERREUR FATALE lors de la copie de la variable!`);
+${"\xE2\u2022\x90".repeat(80)}`);
+    console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 ERREUR FATALE lors de la copie de la variable!`);
     console.error(`Variable ID: ${originalVarId}`);
     console.error(`Suffix: ${suffix}`);
     console.error(`Display Node ID: ${finalNodeId || "undefined"}`);
     console.error(`Message d'erreur:`, error instanceof Error ? error.message : String(error));
     console.error(`Stack trace:`, error instanceof Error ? error.stack : "N/A");
-    console.error(`${"\u2550".repeat(80)}
+    console.error(`${"\xE2\u2022\x90".repeat(80)}
 `);
     throw error;
   }
 }
-async function createDisplayNodeForExistingVariable(variableId, prisma69, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
-  const v = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+async function createDisplayNodeForExistingVariable(variableId, prisma70, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
+  const v = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
   if (!v) throw new Error(`Variable introuvable: ${variableId}`);
-  const owner = await prisma69.treeBranchLeafNode.findUnique({
+  const owner = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: v.nodeId },
     select: {
       id: true,
@@ -30481,14 +30954,13 @@ async function createDisplayNodeForExistingVariable(variableId, prisma69, displa
       table_name: true,
       table_activeId: true,
       table_instances: true,
-      // 🔑 IMPORTANT: Récupérer subtab pour que la copie soit dans le bon sous-onglet
+      // ðŸ”‘ IMPORTANT: RÃ©cupÃ©rer subtab pour que la copie soit dans le bon sous-onglet
       subtab: true,
       subtabs: true
     }
   });
-  if (!owner) throw new Error(`N\u0153ud propri\xE9taire introuvable: ${v.nodeId}`);
+  if (!owner) throw new Error(`N\xC5\u201Cud propri\xC3\xA9taire introuvable: ${v.nodeId}`);
   const displayParentId = owner.parentId;
-  console.log(`\u{1F4CC} [createDisplayNodeForExistingVariable] R\xC8GLE: Copie dans le M\xCAME parent que l'original: ${displayParentId}`);
   const now = /* @__PURE__ */ new Date();
   const baseData = {
     id: displayNodeId,
@@ -30496,7 +30968,7 @@ async function createDisplayNodeForExistingVariable(variableId, prisma69, displa
     parentId: displayParentId,
     type: "leaf_field",
     subType: null,
-    label: v.displayName || "Donn\xE9e",
+    label: v.displayName || "Donn\xC3\xA9e",
     description: null,
     value: null,
     order: (owner.order ?? 0) + 1,
@@ -30513,7 +30985,7 @@ async function createDisplayNodeForExistingVariable(variableId, prisma69, displa
     defaultValue: null,
     calculatedValue: null,
     metadata: { fromVariableId: variableId },
-    // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+    // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
     subtab: owner.subtab,
     subtabs: owner.subtabs,
     createdAt: now,
@@ -30524,7 +30996,7 @@ async function createDisplayNodeForExistingVariable(variableId, prisma69, displa
     hasFormula: false,
     hasLink: false,
     hasMarkers: false,
-    // 📊 TABLE: Copier les colonnes table du nœud original
+    // ðŸ“Š TABLE: Copier les colonnes table du nÅ“ud original
     hasTable: owner.hasTable ?? false,
     table_name: owner.table_name,
     table_activeId: owner.table_activeId,
@@ -30540,13 +31012,13 @@ async function createDisplayNodeForExistingVariable(variableId, prisma69, displa
     fieldSubType: null,
     field_label: v.displayName
   };
-  const existing = await prisma69.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
+  const existing = await prisma70.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
   if (existing) {
-    await prisma69.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
+    await prisma70.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
   } else {
-    await prisma69.treeBranchLeafNode.create({ data: baseData });
+    await prisma70.treeBranchLeafNode.create({ data: baseData });
   }
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: displayNodeId },
     data: {
       hasData: true,
@@ -30560,26 +31032,26 @@ async function createDisplayNodeForExistingVariable(variableId, prisma69, displa
   });
   return { displayNodeId, created: !existing };
 }
-async function addToNodeLinkedField5(prisma69, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField5(prisma70, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\u26A0\uFE0F N\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F N\xC5\u201Cud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
-async function replaceLinkedVariableId(prisma69, nodeId, originalVarId, newVarId, suffix) {
+async function replaceLinkedVariableId(prisma70, nodeId, originalVarId, newVarId, suffix) {
   const stripNumericSuffix2 = (raw) => raw.replace(/-\d+(?:-\d+)*$/, "");
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { linkedVariableIds: true }
   });
@@ -30591,20 +31063,14 @@ async function replaceLinkedVariableId(prisma69, nodeId, originalVarId, newVarId
   const next = Array.from(/* @__PURE__ */ new Set([...filtered, newVarId, suffixedId]));
   const changed = current.length !== next.length || current.some((id) => !next.includes(id));
   if (!changed) return;
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { linkedVariableIds: { set: next } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-selector-tables.ts
-async function copySelectorTablesAfterNodeCopy(prisma69, copiedRootNodeId, originalRootNodeId, options, suffix) {
-  console.log(`
-${"\u2550".repeat(80)}`);
-  console.log(`\u{1F3AF} COPIE DES TABLES DES SELECTORS`);
-  console.log(`   copiedRootNodeId: ${copiedRootNodeId}`);
-  console.log(`   suffix: ${suffix}`);
-  console.log(`${"\u2550".repeat(80)}`);
+async function copySelectorTablesAfterNodeCopy(prisma70, copiedRootNodeId, originalRootNodeId, options, suffix) {
   try {
     const getAllDescendants = async (nodeId) => {
       const results = [];
@@ -30612,7 +31078,7 @@ ${"\u2550".repeat(80)}`);
       while (queue.length > 0) {
         const currentId = queue.shift();
         results.push(currentId);
-        const children = await prisma69.treeBranchLeafNode.findMany({
+        const children = await prisma70.treeBranchLeafNode.findMany({
           where: { parentId: currentId },
           select: { id: true }
         });
@@ -30622,9 +31088,7 @@ ${"\u2550".repeat(80)}`);
     };
     const originalNodeIds = await getAllDescendants(originalRootNodeId);
     const copiedNodeIds = await getAllDescendants(copiedRootNodeId);
-    console.log(`\u{1F4CB} ${copiedNodeIds.length} n\u0153uds trouv\xE9s dans l'arborescence copi\xE9e`);
-    console.log(`\u{1F4CB} ${originalNodeIds.length} n\u0153uds trouv\xE9s dans l'arborescence originale`);
-    const selectorsInOriginal = await prisma69.treeBranchLeafNode.findMany({
+    const selectorsInOriginal = await prisma70.treeBranchLeafNode.findMany({
       where: {
         id: { in: originalNodeIds },
         table_activeId: { not: null }
@@ -30637,28 +31101,20 @@ ${"\u2550".repeat(80)}`);
         linkedTableIds: true
       }
     });
-    console.log(`\u{1F50D} ${selectorsInOriginal.length} selector(s) trouv\xE9(s) dans l'ORIGINAL`);
     for (const originalSelector of selectorsInOriginal) {
       const originalTableId = originalSelector.table_activeId;
       if (!originalTableId) continue;
       const copiedSelectorId = options.nodeIdMap.get(originalSelector.id);
       if (!copiedSelectorId) {
-        console.log(`   \u26A0\uFE0F Selector ${originalSelector.label}: pas trouv\xE9 dans nodeIdMap`);
         continue;
       }
-      const hasSelectConfig = await prisma69.treeBranchLeafSelectConfig.findUnique({
+      const hasSelectConfig = await prisma70.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: originalSelector.id }
       });
       if (hasSelectConfig) {
-        console.log(`   \u23ED\uFE0F Selector ${originalSelector.label}: utilise selectConfig (lookup), pas de copie de table`);
         continue;
       }
-      console.log(`
-   \u{1F4CD} Selector: ${originalSelector.label}`);
-      console.log(`      - Original ID: ${originalSelector.id.substring(0, 12)}...`);
-      console.log(`      - Copi\xE9 ID: ${copiedSelectorId.substring(0, 12)}...`);
-      console.log(`      - Table originale: ${originalTableId}`);
-      const originalTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+      const originalTable = await prisma70.treeBranchLeafNodeTable.findUnique({
         where: { id: originalTableId },
         select: {
           id: true,
@@ -30673,22 +31129,16 @@ ${"\u2550".repeat(80)}`);
         }
       });
       if (!originalTable) {
-        console.log(`      \u274C Table ${originalTableId} NOT FOUND`);
         continue;
       }
-      console.log(`      \u2705 Table trouv\xE9e: ${originalTable.name} (${originalTable.tableRows.length} lignes)`);
       try {
-        console.log(`      \u{1F504} Appel copyTableCapacity...`);
-        console.log(`         - originalTableId: ${originalTableId}`);
-        console.log(`         - copiedSelectorId (newNodeId): ${copiedSelectorId}`);
-        console.log(`         - suffix: ${suffix}`);
         const result = await copyTableCapacity2(
           originalTableId,
           // ID de la table originale
           copiedSelectorId,
-          // 👈 Le nœud selector copié sera propriétaire de la table copiée
+          // Ã°Å¸â€˜Ë† Le nÃ…â€œud selector copiÃƒÂ© sera propriÃƒÂ©taire de la table copiÃƒÂ©e
           suffix,
-          prisma69,
+          prisma70,
           {
             nodeIdMap: options.nodeIdMap,
             tableCopyCache: options.tableCopyCache,
@@ -30696,25 +31146,14 @@ ${"\u2550".repeat(80)}`);
           }
         );
         if (result.success) {
-          console.log(`      \u2705 Table copi\xE9e: ${result.newTableId}`);
-          console.log(`         - Colonnes: ${result.columnsCount}`);
-          console.log(`         - Lignes: ${result.rowsCount}`);
-          console.log(`         - Cellules: ${result.cellsCount}`);
-          console.log(`      \u2705 Selector COPI\xC9 automatiquement mis \xE0 jour via copyTableCapacity`);
-          console.log(`         - table_activeId = ${result.newTableId}`);
-          console.log(`         - table_instances peupl\xE9 avec donn\xE9es`);
         } else {
-          console.log(`      \u274C Erreur copie table: ${result.error}`);
         }
       } catch (e) {
-        console.warn(`      \u26A0\uFE0F Erreur lors de la copie:`, e.message);
+        console.warn(`      \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la copie:`, e.message);
       }
     }
-    console.log(`
-\u2705 Copie des tables des selectors termin\xE9e
-`);
   } catch (e) {
-    console.warn(`\u26A0\uFE0F Erreur dans copySelectorTablesAfterNodeCopy:`, e.message);
+    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur dans copySelectorTablesAfterNodeCopy:`, e.message);
   }
 }
 
@@ -30865,10 +31304,9 @@ function buildResponseFromColumns(node) {
       if (node.repeater_templateNodeIds) {
         try {
           const parsed = JSON.parse(node.repeater_templateNodeIds);
-          console.log("\u2705 [buildResponseFromColumns] repeater_templateNodeIds reconstruit:", parsed);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
+          console.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
           return [];
         }
       }
@@ -30884,7 +31322,7 @@ function buildResponseFromColumns(node) {
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === "object" ? parsedLabels : null;
         } catch (e) {
-          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
+          console.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -30924,7 +31362,7 @@ function buildResponseFromColumns(node) {
       min: node.number_min || null,
       max: node.number_max || null,
       step: node.number_step || 1,
-      // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â§ FIX: PrioritÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
       decimals: node.data_precision ?? node.number_decimals ?? 0,
       prefix: node.number_prefix || null,
       suffix: node.number_suffix || null,
@@ -30970,7 +31408,6 @@ function buildResponseFromColumns(node) {
       const parsed = JSON.parse(node.subtabs);
       if (Array.isArray(parsed)) {
         cleanedMetadata.subTabs = parsed;
-        console.log("\u{1F4DD} [buildResponseFromColumns] Reconstruit subTabs depuis colonne subtabs:", parsed);
       }
     } catch {
     }
@@ -30997,21 +31434,13 @@ function buildResponseFromColumns(node) {
     }
     try {
       cleanedMetadata.subTab = parsedSubTab;
-      console.log("\u{1F4DD} [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:", cleanedMetadata.subTab);
     } catch {
     }
   }
   if (node.id === "131a7b51-97d5-4f40-8a5a-9359f38939e8") {
-    console.log("\u{1F4DD} [buildResponseFromColumns][Test - liste] node.metadata BRUT:", node.metadata);
-    console.log("\u{1F4DD} [buildResponseFromColumns][Test - liste] cleanedMetadata:", cleanedMetadata);
-    console.log(
-      "\u{1F4DD} [buildResponseFromColumns][Test - liste] metadata.capabilities:",
-      node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : "N/A"
-    );
   }
   if (cleanedMetadata && cleanedMetadata.subTabs) {
     try {
-      console.log("\u{1F4DD} [buildResponseFromColumns] metadata.subTabs present for node", node.id, JSON.stringify(cleanedMetadata.subTabs));
     } catch {
     }
   }
@@ -31020,16 +31449,7 @@ function buildResponseFromColumns(node) {
     repeater
   };
   if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
-    console.log("\u{1F6A8}\u{1F6A8}\u{1F6A8} [REPEATER NODE FOUND]", {
-      nodeId: node.id,
-      nodeName: node.name,
-      nodeLabel: node.label,
-      nodeType: node.type,
-      parentId: node.parentId,
-      repeaterConfig: repeater
-    });
   }
-  console.log("\u{1F3AF} [buildResponseFromColumns] metadata.repeater final:", metadataWithRepeater.repeater);
   const result = {
     ...node,
     metadata: metadataWithRepeater,
@@ -31092,7 +31512,7 @@ function buildResponseFromColumns(node) {
         min: node.number_min ?? null,
         max: node.number_max ?? null,
         step: node.number_step ?? 1,
-        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage
+        // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â§ FIX: PrioritÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  data_precision pour les champs d'affichage
         decimals: node.data_precision ?? node.number_decimals ?? 0,
         unit: node.number_unit ?? node.data_unit ?? null,
         prefix: node.number_prefix || null,
@@ -31151,26 +31571,11 @@ function buildResponseFromColumns(node) {
     }
     result.capabilities = mergedCaps;
   } catch (e) {
-    console.error("\u274C [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
+    console.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
   }
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
-    console.log("\u{1F4CC} [buildResponseFromColumns] OPTION AVEC SHARED REFS:", {
-      nodeId: node.id,
-      label: node.label || node.option_label,
-      type: node.type,
-      sharedReferenceIds: node.sharedReferenceIds
-    });
   }
   if (node.text_helpTooltipType && node.text_helpTooltipType !== "none") {
-    console.log("\u{1F525} [buildResponseFromColumns] TOOLTIP TROUV\xC9:", {
-      id: node.id,
-      name: node.name,
-      tooltipType: node.text_helpTooltipType,
-      hasTooltipText: !!node.text_helpTooltipText,
-      hasTooltipImage: !!node.text_helpTooltipImage,
-      textLength: node.text_helpTooltipText?.length || 0,
-      imageLength: node.text_helpTooltipImage?.length || 0
-    });
   }
   return result;
 }
@@ -31215,7 +31620,7 @@ function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
-async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
+async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
   const {
     targetParentId,
     suffixNum,
@@ -31226,17 +31631,13 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     isFromRepeaterDuplication = false
   } = opts || {};
   const replaceIdsInTokens = (tokens2, idMap2) => {
-    console.log(`
-[\u{1F525} REPLACE-TOKENS] Called with ${Array.isArray(tokens2) ? tokens2.length : typeof tokens2} tokens`);
     if (!tokens2) return tokens2;
     const mapOne = (s) => s.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => {
       if (idMap2.has(p1)) {
         const newId = idMap2.get(p1);
-        console.log(`[DEBUG-REPLACE] \u2705 Trouv\xE9 dans idMap: @value.${p1} \u2192 @value.${newId}`);
         return `@value.${newId}`;
       }
       const suffixedId = appendSuffix(p1);
-      console.log(`[DEBUG-REPLACE] \u2705 R\xE9f\xE9rence externe suffix\xE9e: @value.${p1} \u2192 @value.${suffixedId}`);
       return `@value.${suffixedId}`;
     });
     if (Array.isArray(tokens2)) return tokens2.map((t) => typeof t === "string" ? mapOne(t) : t);
@@ -31256,16 +31657,13 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_m, p1) => {
         if (idMap2.has(p1)) {
           const newId = idMap2.get(p1);
-          console.log(`[DEBUG-CONDITION] \u2705 @value.${p1} \u2192 @value.${newId}`);
           return `@value.${newId}`;
         }
         const suffixedId = appendSuffix(p1);
-        console.log(`[DEBUG-CONDITION] \u2705 @value.${p1} \u2192 @value.${suffixedId} (auto-suffix externe)`);
         return `@value.${suffixedId}`;
       });
       str = str.replace(/node-formula:([a-f0-9-]{36})/gi, (_m, p1) => {
         const newId = formulaIdMap2.get(p1) || p1;
-        console.log(`[DEBUG-CONDITION] Formula: node-formula:${p1} \u2192 node-formula:${newId}`);
         return `node-formula:${newId}`;
       });
       str = str.replace(/("nodeIds":\s*\["?)([a-zA-Z0-9_:-]+)/g, (_m, prefix, nodeId2) => {
@@ -31275,11 +31673,9 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
         if (nodeId2.startsWith("shared-ref-") || !nodeId2.includes("-")) {
           if (idMap2.has(nodeId2)) {
             const newId = idMap2.get(nodeId2);
-            console.log(`[DEBUG-CONDITION] NodeId in actions: ${nodeId2} \u2192 ${newId}`);
             return prefix + newId;
           }
           const suffixedId = appendSuffix(nodeId2);
-          console.log(`[DEBUG-CONDITION] NodeId in actions (auto-suffix): ${nodeId2} \u2192 ${suffixedId}`);
           return prefix + suffixedId;
         }
         return _m;
@@ -31289,40 +31685,35 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       return conditionSet;
     }
   };
-  const source = await prisma69.treeBranchLeafNode.findUnique({
+  const source = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { organizationId: true } } }
   });
   if (!source) {
-    throw new Error("N\u0153ud source introuvable");
+    throw new Error("N\xC3\u2026\xE2\u20AC\u0153ud source introuvable");
   }
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx(req2);
   if (!isSuperAdmin2 && organizationId && source.TreeBranchLeafTree?.organizationId !== organizationId) {
-    throw new Error("Acc\xE8s non autoris\xE9 \xE0 cet arbre");
+    throw new Error("Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9 \xC3\u0192\xC2\xA0 cet arbre");
   }
   const sanitizedForcedSuffix = (() => {
     if (forcedSuffix === void 0 || forcedSuffix === null) return "";
     const token = `${forcedSuffix}`.trim();
     return token;
   })();
-  console.log(`\u{1F50D} [DEBUG-DEEP-COPY] nodeId: ${nodeId}, forcedSuffix: ${forcedSuffix}, suffixNum: ${suffixNum}`);
   let copySuffixNum = typeof forcedSuffix === "number" && Number.isFinite(forcedSuffix) ? forcedSuffix : suffixNum ?? null;
-  console.log(`\u{1F50D} [DEBUG-DEEP-COPY] copySuffixNum initial: ${copySuffixNum}`);
   if (!sanitizedForcedSuffix) {
     if (suffixNum != null && Number.isFinite(suffixNum)) {
-      console.log(`\u2705 [DEBUG-DEEP-COPY] SuffixNum fourni explicitement: ${suffixNum} - UTILISATION DIRECTE`);
       copySuffixNum = suffixNum;
     } else if (copySuffixNum != null && Number.isFinite(copySuffixNum)) {
-      console.log(`\u2705 [DEBUG-DEEP-COPY] CopySuffixNum valide: ${copySuffixNum} - UTILISATION DIRECTE`);
     } else {
-      console.log(`\u{1F504} [DEBUG-DEEP-COPY] Aucun suffix fourni - calcul automatique n\xE9cessaire`);
       const baseSourceId = source.id.replace(/-\d+(?:-\d+)*$/, "");
-      const existingIdsWithSuffix = await prisma69.treeBranchLeafNode.findMany({
+      const existingIdsWithSuffix = await prisma70.treeBranchLeafNode.findMany({
         where: {
           treeId: source.treeId,
           id: {
             startsWith: `${baseSourceId}-`
-            // Exclure les suffixes composés (on cherche juste -1, -2, -3, pas -1-1)
+            // Exclure les suffixes composÃƒÂ©s (on cherche juste -1, -2, -3, pas -1-1)
           }
         },
         select: { id: true }
@@ -31337,7 +31728,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       }
       copySuffixNum = maxSuffix + 1;
     }
-    console.log(`\u{1F3AF} [DEBUG-DEEP-COPY] copySuffixNum final: ${copySuffixNum}`);
   }
   const suffixToken = sanitizedForcedSuffix || `${copySuffixNum}`;
   const computedLabelSuffix = `-${suffixToken}`;
@@ -31370,7 +31760,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     ...derivedRepeatContext,
     suffix: derivedRepeatContext.suffix ?? suffixToken
   } : void 0;
-  const allNodes = await prisma69.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
+  const allNodes = await prisma70.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
   const byId = new Map(allNodes.map((n) => [n.id, n]));
   const existingNodeIds = new Set(byId.keys());
   const childrenByParent = /* @__PURE__ */ new Map();
@@ -31400,7 +31790,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
   const displayNodeIds = [];
   const directVariableIdByNodeId = /* @__PURE__ */ new Map();
   if (toCopy.size > 0) {
-    const nodeVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
+    const nodeVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: Array.from(toCopy) } },
       select: { nodeId: true, id: true }
     });
@@ -31507,7 +31897,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     hasAPI: oldNode.hasAPI,
     hasLink: oldNode.hasLink,
     hasMarkers: oldNode.hasMarkers,
-    // 🔧 FIX: Copier les propriétés data_* pour hériter de l'unité et de la précision
+    // Ã°Å¸â€Â§ FIX: Copier les propriÃƒÂ©tÃƒÂ©s data_* pour hÃƒÂ©riter de l'unitÃƒÂ© et de la prÃƒÂ©cision
     data_unit: oldNode.data_unit,
     data_precision: oldNode.data_precision,
     data_displayFormat: oldNode.data_displayFormat,
@@ -31632,10 +32022,10 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       return updatedInstances;
     })(),
     table_name: oldNode.table_name,
-    // 🔴 CRITIQUE: Garder TOUJOURS les repeater_templateNodeIds ORIGINAUX (pas de suffixe!)
-    // Les templateNodeIds doivent être les UUIDs purs des templates originaux,
-    // JAMAIS les IDs suffixés des copies (-1, -2, etc.)
-    // Si on mappe vers les suffixés, la 2e duplication trouvera uuid-A-1 au lieu de uuid-A!
+    // Ã°Å¸â€Â´ CRITIQUE: Garder TOUJOURS les repeater_templateNodeIds ORIGINAUX (pas de suffixe!)
+    // Les templateNodeIds doivent ÃƒÂªtre les UUIDs purs des templates originaux,
+    // JAMAIS les IDs suffixÃƒÂ©s des copies (-1, -2, etc.)
+    // Si on mappe vers les suffixÃƒÂ©s, la 2e duplication trouvera uuid-A-1 au lieu de uuid-A!
     repeater_templateNodeIds: (() => {
       if (normalizedRepeatContext) return null;
       if (!oldNode.repeater_templateNodeIds) return oldNode.repeater_templateNodeIds;
@@ -31656,7 +32046,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       }
       return newMeta;
     })(),
-    // 🔧 TRAITER LE fieldConfig: suffix les références aux nodes
+    // Ã°Å¸â€Â§ TRAITER LE fieldConfig: suffix les rÃƒÂ©fÃƒÂ©rences aux nodes
     fieldConfig: (() => {
       if (!oldNode.fieldConfig) {
         return oldNode.fieldConfig;
@@ -31666,11 +32056,9 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
         let replaced = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid) => {
           const mapped = idMap.get(uuid);
           if (mapped) {
-            console.log(`[fieldConfig] UUID remapp\xE9: ${uuid} \u2192 ${mapped}`);
             return mapped;
           }
           if (!uuid.match(/-\d+$/)) {
-            console.log(`[fieldConfig] UUID suffix\xE9: ${uuid} \u2192 ${uuid}-${suffixNum}`);
             return `${uuid}-${suffixNum}`;
           }
           return uuid;
@@ -31689,7 +32077,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     linkedFormulaIds: Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [],
     linkedConditionIds: Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [],
     linkedTableIds: Array.isArray(oldNode.linkedTableIds) ? oldNode.linkedTableIds.map((id) => ensureSuffix(id) || id) : [],
-    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiées
+    // Suffixer aussi les linkedVariableIds pour que les copies pointent vers les variables copiÃƒÂ©es
     linkedVariableIds: Array.isArray(oldNode.linkedVariableIds) ? oldNode.linkedVariableIds.map((id) => ensureSuffix(id) || id) : [],
     updatedAt: /* @__PURE__ */ new Date()
   });
@@ -31704,13 +32092,12 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
         return originalParentId ?? null;
       }
       if (!shouldCloneExternalParents && parentNode.type === "section") {
-        console.log(`\u23ED\uFE0F [deep-copy] Skipping section clone: "${parentNode.label}" (shouldCloneExternalParents=false)`);
         resolvedExternalParents.set(originalParentId, originalParentId ?? null);
         return originalParentId ?? null;
       }
       const parentOfParentId = await ensureExternalParentChain(parentNode.parentId ?? null);
       const parentCloneData = buildCloneData(parentNode, clonedParentId, parentOfParentId);
-      await prisma69.treeBranchLeafNode.create({ data: parentCloneData });
+      await prisma70.treeBranchLeafNode.create({ data: parentCloneData });
       createdNodes.push({ oldId: originalParentId, newId: clonedParentId });
       existingNodeIds.add(clonedParentId);
       resolvedExternalParents.set(originalParentId, clonedParentId);
@@ -31768,20 +32155,17 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     const isRoot = oldId === source.id;
     const newParentId = await resolveParentId(oldNode, isRoot);
     const cloneData = buildCloneData(oldNode, newId, newParentId);
-    await prisma69.treeBranchLeafNode.create({ data: cloneData });
+    await prisma70.treeBranchLeafNode.create({ data: cloneData });
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
     if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
       displayNodeIds.push(newId);
-      console.log(`[DEEP-COPY] \u{1F4CA} Node ${newId} ajout\xE9 \xE0 displayNodeIds (linkedTableIds: ${cloneData.linkedTableIds.length})`);
     }
   }
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
-    console.log(`[DEBUG] Processing node ${oldId}, linkedFormulaIds order: ${JSON.stringify(linkedFormulaIdOrder)}`);
-    const formulas = await prisma69.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
-    console.log(`[DEBUG] Found ${formulas.length} formulas for node ${oldId}`);
+    const formulas = await prisma70.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
     const formulaMap = new Map(formulas.map((f) => [f.id, f]));
     const sortedFormulas = [];
     const validLinkedIds = [];
@@ -31791,14 +32175,12 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
         sortedFormulas.push(formula);
         validLinkedIds.push(formulaId);
         formulaMap.delete(formulaId);
-        console.log(`[DEBUG] Added formula ${formula.id} (${formula.name}) at position ${sortedFormulas.length - 1}`);
       } else {
-        console.warn(`[DEBUG] \u26A0\uFE0F  Formula ID ${formulaId} in linkedFormulaIds not found - skipping`);
+        console.warn(`[DEBUG] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  Formula ID ${formulaId} in linkedFormulaIds not found - skipping`);
       }
     }
     const unlinkedFormulas = Array.from(formulaMap.values());
     const allFormulas = [...sortedFormulas, ...unlinkedFormulas];
-    console.log(`[DEBUG] Final formula order: ${allFormulas.map((f) => f.id).join(", ")}`);
     const newLinkedFormulaIds = [];
     for (const f of allFormulas) {
       try {
@@ -31806,7 +32188,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           f.id,
           newId,
           suffixNum,
-          prisma69,
+          prisma70,
           {
             formulaIdMap,
             nodeIdMap: idMap
@@ -31817,7 +32199,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           formulaIdMap.set(f.id, newFormulaId);
           if (validLinkedIds.includes(f.id)) {
             newLinkedFormulaIds.push(newFormulaId);
-            console.log(`[DEBUG] Linked formula (centralis\xE9): ${newFormulaId} added at position ${newLinkedFormulaIds.length - 1}`);
           }
           if (normalizedRepeatContext) {
             const referencedNodeIds = Array.from(extractNodeIdsFromTokens(formulaResult.tokens || f.tokens));
@@ -31830,22 +32211,20 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
             });
           }
         } else {
-          console.error(`\u274C Erreur copie formule centralis\xE9e: ${f.id}`);
+          console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule centralis\xC3\u0192\xC2\xA9e: ${f.id}`);
         }
       } catch (error) {
-        console.error(`\u274C Exception copie formule ${f.id}:`, error);
+        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${f.id}:`, error);
       }
     }
-    console.log(`[DEBUG] Final newLinkedFormulaIds: ${JSON.stringify(newLinkedFormulaIds)}`);
     if (newLinkedFormulaIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma69, newId, "linkedFormulaIds", newLinkedFormulaIds);
-        console.log(`[DEBUG] Successfully added linkedFormulaIds to node ${newId}`);
+        await addToNodeLinkedField6(prisma70, newId, "linkedFormulaIds", newLinkedFormulaIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:", e.message);
       }
     }
-    const conditions = await prisma69.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
+    const conditions = await prisma70.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
     const copiedNodeIds = new Set(idMap.values());
     const conditionMap = new Map(conditions.map((c) => [c.id, c]));
@@ -31857,9 +32236,8 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
         sortedConditions.push(condition);
         validLinkedConditionIds.push(conditionId);
         conditionMap.delete(conditionId);
-        console.log(`[DEBUG] Added condition ${condition.id} (${condition.name}) at position ${sortedConditions.length - 1}`);
       } else {
-        console.warn(`[DEBUG] \u26A0\uFE0F  Condition ID ${conditionId} in linkedConditionIds not found - skipping`);
+        console.warn(`[DEBUG] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  Condition ID ${conditionId} in linkedConditionIds not found - skipping`);
       }
     }
     const unlinkedConditions = Array.from(conditionMap.values());
@@ -31869,17 +32247,16 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       const newConditionId = appendSuffix(c.id);
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap);
-      const existingCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({
+      const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({
         where: { id: newConditionId }
       });
       if (existingCondition) {
-        console.log(`[DEEP-COPY] \u26A0\uFE0F Condition ${newConditionId} existe d\xE9j\xE0 (nodeId: ${existingCondition.nodeId}), skip cr\xE9ation`);
         if (validLinkedConditionIds.includes(c.id)) {
           newLinkedConditionIds.push(newConditionId);
         }
         continue;
       }
-      await prisma69.treeBranchLeafNodeCondition.create({
+      await prisma70.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: newId,
@@ -31893,7 +32270,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      console.log(`[DEEP-COPY] \u2705 Condition ${newConditionId} cr\xE9\xE9e pour nodeId: ${newId}`);
       if (validLinkedConditionIds.includes(c.id)) {
         newLinkedConditionIds.push(newConditionId);
       }
@@ -31914,7 +32290,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) {
             continue;
           }
-          await addToNodeLinkedField6(prisma69, normalizedRefId, "linkedConditionIds", [newConditionId]);
+          await addToNodeLinkedField6(prisma70, normalizedRefId, "linkedConditionIds", [newConditionId]);
         }
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
@@ -31922,7 +32298,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     }
     if (newLinkedConditionIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma69, newId, "linkedConditionIds", newLinkedConditionIds);
+        await addToNodeLinkedField6(prisma70, newId, "linkedConditionIds", newLinkedConditionIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds for node:", e.message);
       }
@@ -31932,28 +32308,25 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       const newConditionActiveId = conditionIdMap.get(oldNode.condition_activeId);
       if (newConditionActiveId) {
         updateActiveIds.condition_activeId = newConditionActiveId;
-        console.log(`[DEEP-COPY] \u{1F517} condition_activeId remapp\xE9: ${oldNode.condition_activeId} \u2192 ${newConditionActiveId}`);
       }
     }
     if (oldNode.formula_activeId) {
       const newFormulaActiveId = formulaIdMap.get(oldNode.formula_activeId);
       if (newFormulaActiveId) {
         updateActiveIds.formula_activeId = newFormulaActiveId;
-        console.log(`[DEEP-COPY] \u{1F517} formula_activeId remapp\xE9: ${oldNode.formula_activeId} \u2192 ${newFormulaActiveId}`);
       }
     }
     if (Object.keys(updateActiveIds).length > 0) {
       try {
-        await prisma69.treeBranchLeafNode.update({
+        await prisma70.treeBranchLeafNode.update({
           where: { id: newId },
           data: updateActiveIds
         });
-        console.log(`[DEEP-COPY] \u2705 ActiveIds mis \xE0 jour pour ${newId}:`, updateActiveIds);
       } catch (e) {
-        console.warn("[DEEP-COPY] \u26A0\uFE0F Erreur mise \xE0 jour activeIds:", e.message);
+        console.warn("[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur mise \xC3\u0192\xC2\xA0 jour activeIds:", e.message);
       }
     }
-    const tables = await prisma69.treeBranchLeafNodeTable.findMany({
+    const tables = await prisma70.treeBranchLeafNodeTable.findMany({
       where: { nodeId: oldId },
       include: { tableColumns: true, tableRows: true }
     });
@@ -31971,7 +32344,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
       additionalTableIds.push(source.table_activeId);
     }
-    const additionalTables = additionalTableIds.length > 0 ? await prisma69.treeBranchLeafNodeTable.findMany({
+    const additionalTables = additionalTableIds.length > 0 ? await prisma70.treeBranchLeafNodeTable.findMany({
       where: { id: { in: additionalTableIds } },
       include: { tableColumns: true, tableRows: true }
     }) : [];
@@ -31980,30 +32353,21 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     const unlinkedTables = [...tables, ...additionalTables].filter((t) => !linkedTableIdOrder.includes(t.id));
     const allTablesToCopy = [...sortedTables, ...unlinkedTables];
     if (additionalTables.length > 0) {
-      console.log(`[DEEP-COPY] \u{1F4CA} Tables additionnelles trouv\xE9es via table_activeId: ${additionalTables.map((t) => t.id).join(", ")}`);
     }
     const newLinkedTableIds = [];
-    console.log(`
-
-\u{1F534}\u{1F534}\u{1F534} [DEEP-COPY-SERVICE] D\xC9BUT COPIE TABLES - ${allTablesToCopy.length} tables \xE0 copier \u{1F534}\u{1F534}\u{1F534}
-`);
     for (const t of allTablesToCopy) {
       const newTableId = appendSuffix(t.id);
       tableIdMap2.set(t.id, newTableId);
-      console.log(`\u{1F534} [DEEP-COPY-SERVICE] Traitement table: ${t.id} -> ${newTableId}`);
-      console.log(`\u{1F534} [DEEP-COPY-SERVICE] META ORIGINAL:`, JSON.stringify(t.meta)?.substring(0, 200));
-      const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+      const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
         where: { id: newTableId }
       });
       if (existingTable) {
-        console.log(`[DEEP-COPY] \u23E9 Table ${newTableId} existe d\xE9j\xE0, skip`);
         continue;
       }
-      console.log(`[DEEP-COPY] \u{1F4CA} Copie table: ${t.id} -> ${newTableId} (source nodeId: ${t.nodeId}, target nodeId: ${newId})`);
       if (linkedTableIdOrder.includes(t.id)) {
         newLinkedTableIds.push(newTableId);
       }
-      await prisma69.treeBranchLeafNodeTable.create({
+      await prisma70.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: newId,
@@ -32013,16 +32377,14 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           type: t.type,
           rowCount: t.rowCount,
           columnCount: t.columnCount,
-          // 🔧 TRAITER LE meta: suffix les références aux nodes ET comparisonColumn
+          // Ã°Å¸â€Â§ TRAITER LE meta: suffix les rÃƒÂ©fÃƒÂ©rences aux nodes ET comparisonColumn
           meta: (() => {
             if (!t.meta) {
               return t.meta;
             }
             try {
               const metaObj = typeof t.meta === "string" ? JSON.parse(t.meta) : JSON.parse(JSON.stringify(t.meta));
-              console.log(`[table.meta] \u{1F50D} AVANT traitement:`, JSON.stringify(metaObj).substring(0, 300));
               if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${copySuffixNum}`)) {
-                console.log(`[table.meta] columnFieldId: ${metaObj.lookup.selectors.columnFieldId} \u2192 ${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`);
                 metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${copySuffixNum}`;
               }
               if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${copySuffixNum}`)) {
@@ -32050,7 +32412,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
                 if (Array.isArray(metaObj.lookup.displayColumn)) {
                   metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
                     if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(computedLabelSuffix)) {
-                      console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}${computedLabelSuffix}`);
                       return `${col}${computedLabelSuffix}`;
                     }
                     return col;
@@ -32058,7 +32419,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
                 } else if (typeof metaObj.lookup.displayColumn === "string") {
                   const val = metaObj.lookup.displayColumn;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}${computedLabelSuffix}`);
                     metaObj.lookup.displayColumn = `${val}${computedLabelSuffix}`;
                   }
                 }
@@ -32067,7 +32427,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
                 if (Array.isArray(metaObj.lookup.displayRow)) {
                   metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
                     if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(computedLabelSuffix)) {
-                      console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}${computedLabelSuffix}`);
                       return `${row}${computedLabelSuffix}`;
                     }
                     return row;
@@ -32075,12 +32434,10 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
                 } else if (typeof metaObj.lookup.displayRow === "string") {
                   const val = metaObj.lookup.displayRow;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(computedLabelSuffix)) {
-                    console.log(`[table.meta] displayRow: ${val} \u2192 ${val}${computedLabelSuffix}`);
                     metaObj.lookup.displayRow = `${val}${computedLabelSuffix}`;
                   }
                 }
               }
-              console.log(`[table.meta] \u2705 APR\xC8S traitement:`, JSON.stringify(metaObj).substring(0, 300));
               return metaObj;
             } catch (err) {
               console.warn("[table.meta] Erreur traitement meta, copie tel quel:", err);
@@ -32097,7 +32454,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
             create: t.tableColumns.map((col) => ({
               id: appendSuffix(col.id),
               columnIndex: col.columnIndex,
-              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
               name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${computedLabelSuffix}` : col.name,
               type: col.type,
               width: col.width,
@@ -32126,23 +32483,22 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
     }
     if (newLinkedTableIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma69, newId, "linkedTableIds", newLinkedTableIds);
+        await addToNodeLinkedField6(prisma70, newId, "linkedTableIds", newLinkedTableIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedTableIds for node:", e.message);
       }
     }
-    const originalSelectConfig = await prisma69.treeBranchLeafSelectConfig.findUnique({
+    const originalSelectConfig = await prisma70.treeBranchLeafSelectConfig.findUnique({
       where: { nodeId: oldId }
     });
     if (originalSelectConfig) {
-      const existingCopyConfig = await prisma69.treeBranchLeafSelectConfig.findUnique({
+      const existingCopyConfig = await prisma70.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: newId }
       });
       if (!existingCopyConfig) {
         const newTableReference = originalSelectConfig.tableReference ? appendSuffix(originalSelectConfig.tableReference) : null;
-        console.log(`[DEEP-COPY] \u{1F4CA} Duplication SELECT config: ${oldId} -> ${newId} (tableRef: ${newTableReference})`);
         try {
-          await prisma69.treeBranchLeafSelectConfig.create({
+          await prisma70.treeBranchLeafSelectConfig.create({
             data: {
               id: appendSuffix(originalSelectConfig.id),
               nodeId: newId,
@@ -32165,25 +32521,22 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`[DEEP-COPY] \u2705 SELECT config cr\xE9\xE9e pour ${newId}`);
         } catch (selectConfigErr) {
-          console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur cr\xE9ation SELECT config pour ${newId}:`, selectConfigErr.message);
+          console.warn(`[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur cr\xC3\u0192\xC2\xA9ation SELECT config pour ${newId}:`, selectConfigErr.message);
         }
       } else {
-        console.log(`[DEEP-COPY] \u267B\uFE0F SELECT config existe d\xE9j\xE0 pour ${newId}`);
       }
     }
-    const originalNumberConfig = await prisma69.treeBranchLeafNumberConfig.findUnique({
+    const originalNumberConfig = await prisma70.treeBranchLeafNumberConfig.findUnique({
       where: { nodeId: oldId }
     });
     if (originalNumberConfig) {
-      const existingCopyNumberConfig = await prisma69.treeBranchLeafNumberConfig.findUnique({
+      const existingCopyNumberConfig = await prisma70.treeBranchLeafNumberConfig.findUnique({
         where: { nodeId: newId }
       });
       if (!existingCopyNumberConfig) {
-        console.log(`[DEEP-COPY] \u{1F522} Duplication NUMBER config: ${oldId} -> ${newId}`);
         try {
-          await prisma69.treeBranchLeafNumberConfig.create({
+          await prisma70.treeBranchLeafNumberConfig.create({
             data: {
               id: appendSuffix(originalNumberConfig.id),
               nodeId: newId,
@@ -32195,9 +32548,8 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
               prefix: originalNumberConfig.prefix
             }
           });
-          console.log(`[DEEP-COPY] \u2705 NUMBER config cr\xE9\xE9e pour ${newId}`);
         } catch (numberConfigErr) {
-          console.warn(`[DEEP-COPY] \u26A0\uFE0F Erreur cr\xE9ation NUMBER config pour ${newId}:`, numberConfigErr.message);
+          console.warn(`[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur cr\xC3\u0192\xC2\xA9ation NUMBER config pour ${newId}:`, numberConfigErr.message);
         }
       }
     }
@@ -32225,9 +32577,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       return ensured || appendSuffix(id);
     }).filter(Boolean);
     const sourceLinkedVariableIds = /* @__PURE__ */ new Set();
-    console.log(`
-\u{1F537}\u{1F537}\u{1F537} [LINKED_VARS] Traitement n\u0153ud ${oldNodeId} -> ${newNodeId}`);
-    console.log(`\u{1F537} [LINKED_VARS] oldNode.linkedVariableIds = ${JSON.stringify(oldNode.linkedVariableIds)}`);
     if (Array.isArray(oldNode.linkedVariableIds)) {
       for (const rawId of oldNode.linkedVariableIds) {
         if (typeof rawId === "string") {
@@ -32235,7 +32584,6 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           if (normalized) {
             const baseId = stripNumericSuffix2(normalized);
             sourceLinkedVariableIds.add(baseId || normalized);
-            console.log(`\u{1F537} [LINKED_VARS] Ajout\xE9: ${baseId || normalized} (depuis: ${rawId})`);
           }
         }
       }
@@ -32247,21 +32595,16 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
         sourceLinkedVariableIds.add(baseId || directVarIdForNode);
       }
     }
-    console.log(`\u{1F537} [LINKED_VARS] sourceLinkedVariableIds.size = ${sourceLinkedVariableIds.size}`);
-    console.log(`\u{1F537} [LINKED_VARS] Contenu: ${JSON.stringify([...sourceLinkedVariableIds])}`);
     if (sourceLinkedVariableIds.size > 0) {
-      console.log(`\u{1F537} [LINKED_VARS] \u2705 Entr\xE9e dans la boucle de copie de variables!`);
       for (const linkedVarId of sourceLinkedVariableIds) {
-        console.log(`\u{1F537} [LINKED_VARS] Traitement variable: ${linkedVarId}`);
         const isSharedRef = linkedVarId.startsWith("shared-ref-");
         if (!isSharedRef) {
           try {
-            console.log(`\u{1F537} [LINKED_VARS] \u{1F4DE} Appel copyVariableWithCapacities(${linkedVarId}, ${suffixToken}, ${newNodeId})`);
             const copyResult = await copyVariableWithCapacities(
               linkedVarId,
               suffixToken,
               newNodeId,
-              prisma69,
+              prisma70,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -32271,35 +32614,31 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
                 autoCreateDisplayNode: true,
                 displayNodeAlreadyCreated: false,
                 displayParentId: newNodeId,
-                // 🔧 FIX: Le parent doit être le nœud copié (pas son parent)
+                // Ã°Å¸â€Â§ FIX: Le parent doit ÃƒÂªtre le nÃ…â€œud copiÃƒÂ© (pas son parent)
                 isFromRepeaterDuplication,
                 repeatContext: normalizedRepeatContext
               }
             );
-            console.log(`\u{1F537} [LINKED_VARS] \u{1F4E4} R\xE9sultat copyVariableWithCapacities: success=${copyResult.success}, displayNodeId=${copyResult.displayNodeId}`);
             if (copyResult.success && copyResult.displayNodeId) {
               displayNodeIds.push(copyResult.displayNodeId);
-              console.log(`\u{1F537} [LINKED_VARS] \u2705 Display node ajout\xE9: ${copyResult.displayNodeId}`);
             } else {
-              console.log(`\u{1F537} [LINKED_VARS] \u26A0\uFE0F Pas de display node cr\xE9\xE9! error=${copyResult.error}`);
             }
           } catch (e) {
             console.warn(`[DEEP-COPY] Erreur copie variable ${linkedVarId}:`, e.message);
           }
         } else {
-          console.log(`\u{1F537} [LINKED_VARS] \u23ED\uFE0F Variable ignor\xE9e (shared-ref): ${linkedVarId}`);
         }
       }
     }
     if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0) {
       try {
-        await prisma69.treeBranchLeafNode.update({
+        await prisma70.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
             linkedConditionIds: newLinkedConditionIds.length > 0 ? { set: newLinkedConditionIds } : { set: [] },
             linkedTableIds: newLinkedTableIds.length > 0 ? { set: newLinkedTableIds } : { set: [] }
-            // linkedVariableIds: SUPPRIMÉ - ne doit PAS être mis à jour !
+            // linkedVariableIds: SUPPRIMÃƒâ€° - ne doit PAS ÃƒÂªtre mis ÃƒÂ  jour !
           }
         });
       } catch (e) {
@@ -32309,10 +32648,9 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
   }
   const rootNewId = idMap.get(source.id);
   if (displayNodeIds.length > 0) {
-    console.log(`[DEEP-COPY] \u{1F527} Cr\xE9ation variables pour ${displayNodeIds.length} noeuds avec linkedTableIds`);
     for (const nodeId2 of displayNodeIds) {
       try {
-        const copiedNode = await prisma69.treeBranchLeafNode.findUnique({
+        const copiedNode = await prisma70.treeBranchLeafNode.findUnique({
           where: { id: nodeId2 },
           select: { id: true, label: true, field_label: true, linkedTableIds: true }
         });
@@ -32320,19 +32658,16 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
           continue;
         }
         const originalNodeId = nodeId2.replace(/-\d+$/, "");
-        console.log(`[DEEP-COPY] \u{1F50D} Recherche variable pour noeud original ${originalNodeId}`);
-        const originalVar = await prisma69.treeBranchLeafNodeVariable.findFirst({
+        const originalVar = await prisma70.treeBranchLeafNodeVariable.findFirst({
           where: { nodeId: originalNodeId }
         });
         if (!originalVar) {
-          console.warn(`[DEEP-COPY] \u26A0\uFE0F Variable originale non trouv\xE9e pour noeud ${originalNodeId}`);
+          console.warn(`[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Variable originale non trouv\xC3\u0192\xC2\xA9e pour noeud ${originalNodeId}`);
           continue;
         }
-        console.log(`[DEEP-COPY] \u2705 Variable originale trouv\xE9e: ${originalVar.id} (${originalVar.exposedKey})`);
         const newVarId = appendSuffix(originalVar.id);
         const newExposedKey = appendSuffix(originalVar.exposedKey);
-        console.log(`[DEEP-COPY] \u{1F527} Cr\xE9ation variable ${newVarId} avec nodeId=${nodeId2}`);
-        await prisma69.treeBranchLeafNodeVariable.create({
+        await prisma70.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: nodeId2,
@@ -32352,7 +32687,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        await prisma69.treeBranchLeafNode.update({
+        await prisma70.treeBranchLeafNode.update({
           where: { id: nodeId2 },
           data: {
             hasData: true,
@@ -32362,20 +32697,19 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
             data_precision: originalVar.precision,
             data_unit: originalVar.unit,
             data_visibleToUser: originalVar.visibleToUser,
-            // linkedVariableIds doit contenir la variable copiée (suffixée)
+            // linkedVariableIds doit contenir la variable copiÃƒÂ©e (suffixÃƒÂ©e)
             linkedVariableIds: { set: [newVarId] }
           }
         });
-        console.log(`[DEEP-COPY] \u2705 Variable ${newVarId} cr\xE9\xE9e et ${nodeId2} synchronis\xE9`);
       } catch (varError) {
-        console.error(`[DEEP-COPY] \u274C Erreur cr\xE9ation variable pour ${nodeId2}:`, varError);
+        console.error(`[DEEP-COPY] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur cr\xC3\u0192\xC2\xA9ation variable pour ${nodeId2}:`, varError);
       }
     }
   }
   try {
     const newNodeIds = Array.from(idMap.values());
     if (newNodeIds.length > 0) {
-      const copiedVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
+      const copiedVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
         where: { nodeId: { in: newNodeIds } },
         select: {
           nodeId: true,
@@ -32390,7 +32724,7 @@ async function deepCopyNodeInternal(prisma69, req2, nodeId, opts) {
       });
       for (const variable of copiedVariables) {
         try {
-          await prisma69.treeBranchLeafNode.updateMany({
+          await prisma70.treeBranchLeafNode.updateMany({
             where: {
               id: variable.nodeId,
               OR: [{ data_activeId: null }, { hasData: false }]
@@ -32443,16 +32777,14 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
   const { nodeId } = req2.params;
   const { name, description, columns, rows, type = "static" } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-  console.log(`[NEW POST /tables] \u{1F680} D\xE9but cr\xE9ation table pour node ${nodeId}`);
-  console.log(`[NEW POST /tables] \u{1F4CA} Donn\xE9es re\xE7ues: ${Array.isArray(columns) ? columns.length : 0} colonnes, ${Array.isArray(rows) ? rows.length : 0} lignes`);
   if (!name) {
     return res.status(400).json({ error: "Le nom de la table est requis" });
   }
   if (!Array.isArray(columns)) {
-    return res.status(400).json({ error: "La d\xE9finition des colonnes est requise (array)" });
+    return res.status(400).json({ error: "La d\xC3\u0192\xC2\xA9finition des colonnes est requise (array)" });
   }
   if (!Array.isArray(rows)) {
-    return res.status(400).json({ error: "Les donn\xE9es (rows) sont requises (array)" });
+    return res.status(400).json({ error: "Les donn\xC3\u0192\xC2\xA9es (rows) sont requises (array)" });
   }
   try {
     const node = await prisma46.treeBranchLeafNode.findUnique({
@@ -32460,10 +32792,10 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       include: { TreeBranchLeafTree: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
     }
     if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 ce n\u0153ud" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9 \xC3\u0192\xC2\xA0 ce n\xC3\u2026\xE2\u20AC\u0153ud" });
     }
     let finalName = name;
     const existingTable = await prisma46.treeBranchLeafNodeTable.findFirst({
@@ -32474,10 +32806,8 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
         where: { nodeId }
       });
       finalName = `${name} (${existingCount + 1})`;
-      console.log(`[NEW POST /tables] \u26A0\uFE0F Nom d\xE9j\xE0 utilis\xE9, nouveau nom: ${finalName}`);
     }
     const tableId = (0, import_crypto9.randomUUID)();
-    console.log(`[NEW POST /tables] \u{1F194} Nouvel ID de table g\xE9n\xE9r\xE9: ${tableId}`);
     const tableData = {
       id: tableId,
       nodeId,
@@ -32511,67 +32841,40 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       rowIndex: index,
       cells: row
     }));
-    console.log(`[NEW POST /tables] \u{1F4E6} Transaction pr\xE9par\xE9e: 1 table + ${tableColumnsData.length} colonnes + ${tableRowsData.length} lignes`);
     if (rows.length > 0) {
-      console.log(`[NEW POST /tables] \u{1F50D} ANALYSE D\xC9TAILL\xC9E DES ROWS:`);
-      console.log(`[NEW POST /tables]    - Type de rows re\xE7u: ${Array.isArray(rows) ? "array" : typeof rows}`);
-      console.log(`[NEW POST /tables]    - rows.length: ${rows.length}`);
-      console.log(`[NEW POST /tables]    - rows[0] (premi\xE8re ligne):`, rows[0]);
-      console.log(`[NEW POST /tables]    - rows[0][0] (A1):`, rows[0]?.[0]);
-      console.log(`[NEW POST /tables]    - rows[0][1-3] (premi\xE8res donn\xE9es):`, rows[0]?.slice(1, 4));
       if (rows.length > 1) {
-        console.log(`[NEW POST /tables]    - rows[1] (deuxi\xE8me ligne):`, rows[1]);
-        console.log(`[NEW POST /tables]    - rows[1][0] (label ligne 2):`, rows[1]?.[0]);
       }
-      console.log(`[NEW POST /tables]    - rows[derni\xE8re]:`, rows[rows.length - 1]);
-      console.log(`[NEW POST /tables] \u{1F50D} ANALYSE TABLEROWSDATA (apr\xE8s map):`);
-      console.log(`[NEW POST /tables]    - tableRowsData[0].cells:`, tableRowsData[0]?.cells);
       if (tableRowsData.length > 1) {
-        console.log(`[NEW POST /tables]    - tableRowsData[1].cells:`, tableRowsData[1]?.cells);
       }
-      console.log(`[NEW POST /tables]    - tableRowsData[derni\xE8re].cells:`, tableRowsData[tableRowsData.length - 1]?.cells);
     } else {
-      console.log(`[NEW POST /tables] \u2139\uFE0F Table vide cr\xE9\xE9e (aucune ligne)`);
     }
     const result = await prisma46.$transaction(async (tx) => {
-      console.log(`[NEW POST /tables] \u{1F504} \xC9tape 1/3: Cr\xE9ation de la table principale...`);
       const newTable = await tx.treeBranchLeafNodeTable.create({
         data: tableData
       });
       if (tableColumnsData.length > 0) {
-        console.log(`[NEW POST /tables] \u{1F504} \xC9tape 2/3: Insertion de ${tableColumnsData.length} colonnes...`);
         await tx.treeBranchLeafNodeTableColumn.createMany({
           data: tableColumnsData
         });
       }
       if (tableRowsData.length > 0) {
-        console.log(`[NEW POST /tables] \u{1F504} \xC9tape 3/3: Insertion de ${tableRowsData.length} lignes...`);
         for (const rowData of tableRowsData) {
           await tx.treeBranchLeafNodeTableRow.create({
             data: rowData
           });
         }
-        console.log(`[NEW POST /tables] \u2705 Lignes ins\xE9r\xE9es ! V\xE9rification...`);
         const verif = await tx.treeBranchLeafNodeTableRow.findMany({
           where: { tableId },
           orderBy: { rowIndex: "asc" },
           take: 3
         });
-        console.log(`[NEW POST /tables] \u{1F50D} V\xC9RIFICATION POST-INSERTION:`);
         verif.forEach((row, idx) => {
-          console.log(`[NEW POST /tables]    - Ligne ${idx} (rowIndex=${row.rowIndex}):`);
-          console.log(`[NEW POST /tables]      cells type:`, typeof row.cells);
-          console.log(`[NEW POST /tables]      cells value:`, row.cells);
           if (typeof row.cells === "string") {
             try {
               const parsed = JSON.parse(row.cells);
-              console.log(`[NEW POST /tables]      cells[0] apr\xE8s parse:`, parsed[0]);
             } catch (e) {
-              console.log(`[NEW POST /tables]      \u274C Erreur parse:`, e.message);
             }
           } else if (Array.isArray(row.cells)) {
-            console.log(`[NEW POST /tables]      cells[0]:`, row.cells[0]);
-            console.log(`[NEW POST /tables]      cells.length:`, row.cells.length);
           }
         });
       }
@@ -32580,12 +32883,10 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       timeout: 6e4
       // 60 secondes pour les gros fichiers (43k+ lignes)
     });
-    console.log(`[NEW POST /tables] \u2705 Transaction termin\xE9e avec succ\xE8s ! Table ${result.id} cr\xE9\xE9e.`);
     await prisma46.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { hasTable: true }
     });
-    console.log(`[NEW POST /tables] \u2705 hasTable mis \xE0 jour pour node ${nodeId}`);
     try {
       const node2 = await prisma46.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
       const current = node2?.linkedTableIds ?? [];
@@ -32595,7 +32896,6 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       console.warn("[NEW POST /tables] Warning updating linkedTableIds:", e.message);
     }
     try {
-      console.log(`[NEW POST /tables] \u{1F50D} Recherche des SelectConfigs \xE0 mettre \xE0 jour pour nodeId: ${nodeId}`);
       const selectConfig = await prisma46.treeBranchLeafSelectConfig.findFirst({
         where: { nodeId }
       });
@@ -32605,19 +32905,15 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
           where: { id: selectConfig.id },
           data: { tableReference: result.id }
         });
-        console.log(`[NEW POST /tables] \u2705 SelectConfig mis \xE0 jour: ${selectConfig.id}`);
-        console.log(`[NEW POST /tables]    - Ancien tableau: ${oldTableRef}`);
-        console.log(`[NEW POST /tables]    - Nouveau tableau: ${result.id}`);
         if (oldTableRef) {
           const otherConfigs = await prisma46.treeBranchLeafSelectConfig.findMany({
             where: {
               tableReference: oldTableRef,
               nodeId: { not: nodeId }
-              // Exclure celui qu'on vient de mettre à jour
+              // Exclure celui qu'on vient de mettre ÃƒÂ  jour
             }
           });
           if (otherConfigs.length > 0) {
-            console.log(`[NEW POST /tables] \u{1F50D} ${otherConfigs.length} autres SelectConfigs r\xE9f\xE9rencent l'ancien tableau`);
             const updateResult = await prisma46.treeBranchLeafSelectConfig.updateMany({
               where: {
                 tableReference: oldTableRef,
@@ -32625,17 +32921,14 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
               },
               data: { tableReference: result.id }
             });
-            console.log(`[NEW POST /tables] \u2705 ${updateResult.count} SelectConfigs suppl\xE9mentaires mis \xE0 jour`);
             otherConfigs.forEach((cfg) => {
-              console.log(`[NEW POST /tables]    - NodeId: ${cfg.nodeId} (keyColumn: ${cfg.keyColumn}, keyRow: ${cfg.keyRow})`);
             });
           }
         }
       } else {
-        console.log(`[NEW POST /tables] \u2139\uFE0F Pas de SelectConfig trouv\xE9e pour ce n\u0153ud`);
       }
     } catch (updateError) {
-      console.error(`[NEW POST /tables] \u26A0\uFE0F Erreur lors de la mise \xE0 jour des SelectConfigs:`, updateError);
+      console.error(`[NEW POST /tables] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des SelectConfigs:`, updateError);
     }
     const createdTable = await prisma46.treeBranchLeafNodeTable.findUnique({
       where: { id: result.id },
@@ -32649,7 +32942,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       }
     });
     if (!createdTable) {
-      throw new Error("Table cr\xE9\xE9e mais introuvable lors de la relecture");
+      throw new Error("Table cr\xC3\u0192\xC2\xA9\xC3\u0192\xC2\xA9e mais introuvable lors de la relecture");
     }
     res.status(201).json({
       id: createdTable.id,
@@ -32683,21 +32976,21 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       updatedAt: createdTable.updatedAt
     });
   } catch (error) {
-    console.error(`\u274C [NEW POST /tables] Erreur lors de la cr\xE9ation de la table:`, error);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW POST /tables] Erreur lors de la cr\xC3\u0192\xC2\xA9ation de la table:`, error);
     if (error instanceof import_client47.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         return res.status(409).json({
-          error: "Une table avec ce nom existe d\xE9j\xE0 pour ce champ. Veuillez choisir un autre nom.",
+          error: "Une table avec ce nom existe d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 pour ce champ. Veuillez choisir un autre nom.",
           code: error.code
         });
       }
       return res.status(500).json({
-        error: "Erreur de base de donn\xE9es lors de la cr\xE9ation de la table.",
+        error: "Erreur de base de donn\xC3\u0192\xC2\xA9es lors de la cr\xC3\u0192\xC2\xA9ation de la table.",
         code: error.code,
         meta: error.meta
       });
     }
-    res.status(500).json({ error: "Impossible de cr\xE9er la table" });
+    res.status(500).json({ error: "Impossible de cr\xC3\u0192\xC2\xA9er la table" });
   }
 });
 router55.get("/tables/:id", async (req2, res) => {
@@ -32706,7 +32999,6 @@ router55.get("/tables/:id", async (req2, res) => {
   const page = parseInt(req2.query.page) || 1;
   const limit = parseInt(req2.query.limit) || 100;
   const offset = (page - 1) * limit;
-  console.log(`[NEW GET /tables/:id] \u{1F4D6} R\xE9cup\xE9ration table ${id} (page ${page}, limit ${limit})`);
   try {
     const table = await prisma46.treeBranchLeafNodeTable.findUnique({
       where: { id },
@@ -32722,11 +33014,11 @@ router55.get("/tables/:id", async (req2, res) => {
       }
     });
     if (!table) {
-      return res.status(404).json({ error: "Table non trouv\xE9e" });
+      return res.status(404).json({ error: "Table non trouv\xC3\u0192\xC2\xA9e" });
     }
     const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 cette table" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9 \xC3\u0192\xC2\xA0 cette table" });
     }
     const columns = await prisma46.treeBranchLeafNodeTableColumn.findMany({
       where: { tableId: id },
@@ -32738,7 +33030,6 @@ router55.get("/tables/:id", async (req2, res) => {
       take: limit,
       skip: offset
     });
-    console.log(`[NEW GET /tables/:id] \u2705 R\xE9cup\xE9r\xE9: ${columns.length} colonnes et ${rows.length} lignes (sur ${table.rowCount} total)`);
     res.json({
       id: table.id,
       nodeId: table.nodeId,
@@ -32761,17 +33052,14 @@ router55.get("/tables/:id", async (req2, res) => {
       updatedAt: table.updatedAt
     });
   } catch (error) {
-    console.error(`\u274C [NEW GET /tables/:id] Erreur lors de la r\xE9cup\xE9ration de la table:`, error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer la table" });
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /tables/:id] Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration de la table:`, error);
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9rer la table" });
   }
 });
 router55.put("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
   const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-  console.log(`[NEW PUT /tables/:id] \u{1F504} Mise \xE0 jour table ${id}`);
-  console.log(`[NEW PUT /tables/:id] Nouvelles donn\xE9es: ${Array.isArray(columns) ? columns.length : "N/A"} colonnes, ${Array.isArray(rows) ? rows.length : "N/A"} lignes`);
-  console.log(`[NEW PUT /tables/:id] Lookup config: selectColumn=${lookupSelectColumn}, displayColumns=${JSON.stringify(lookupDisplayColumns)}`);
   try {
     const updatedTable = await prisma46.$transaction(async (tx) => {
       const table = await tx.treeBranchLeafNodeTable.findUnique({
@@ -32783,11 +33071,11 @@ router55.put("/tables/:id", async (req2, res) => {
         }
       });
       if (!table) {
-        throw new Error("Table non trouv\xE9e");
+        throw new Error("Table non trouv\xC3\u0192\xC2\xA9e");
       }
       const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-        throw new Error("Acc\xE8s non autoris\xE9");
+        throw new Error("Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9");
       }
       const updateData = {
         updatedAt: /* @__PURE__ */ new Date()
@@ -32803,9 +33091,7 @@ router55.put("/tables/:id", async (req2, res) => {
         where: { id },
         data: updateData
       });
-      console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 1: Table principale mise \xE0 jour`);
       if (Array.isArray(columns)) {
-        console.log(`[NEW PUT /tables/:id] \u{1F504} Remplacement des colonnes...`);
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         if (columns.length > 0) {
           const newColumnsData = columns.map((col, index) => ({
@@ -32819,13 +33105,10 @@ router55.put("/tables/:id", async (req2, res) => {
           }));
           await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
         }
-        console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 2: ${columns.length} colonnes remplac\xE9es`);
       }
       if (Array.isArray(rows)) {
-        console.log(`[NEW PUT /tables/:id] \u{1F504} Remplacement des lignes...`);
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: id } });
         if (rows.length > 0) {
-          console.log(`[NEW PUT /tables/:id] \u{1F504} Cr\xE9ation de ${rows.length} lignes (boucle create)...`);
           for (let index = 0; index < rows.length; index++) {
             const row = rows[index];
             await tx.treeBranchLeafNodeTableRow.create({
@@ -32835,29 +33118,25 @@ router55.put("/tables/:id", async (req2, res) => {
                 cells: row
               }
             });
-            console.log(`[PUT /tables/:id] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : "N/A");
           }
         }
-        console.log(`[NEW PUT /tables/:id] \u2705 \xC9tape 3: ${rows.length} lignes remplac\xE9es`);
       }
       return tableUpdated;
     });
-    console.log(`[NEW PUT /tables/:id] \u{1F389} Transaction de mise \xE0 jour termin\xE9e avec succ\xE8s`);
     const finalTableData = await prisma46.treeBranchLeafNodeTable.findUnique({ where: { id } });
     res.json(finalTableData);
   } catch (error) {
-    console.error(`\u274C [NEW PUT /tables/:id] Erreur lors de la mise \xE0 jour:`, error);
-    if (error instanceof Error && (error.message === "Table non trouv\xE9e" || error.message === "Acc\xE8s non autoris\xE9")) {
-      const status = error.message === "Table non trouv\xE9e" ? 404 : 403;
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /tables/:id] Erreur lors de la mise \xC3\u0192\xC2\xA0 jour:`, error);
+    if (error instanceof Error && (error.message === "Table non trouv\xC3\u0192\xC2\xA9e" || error.message === "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9")) {
+      const status = error.message === "Table non trouv\xC3\u0192\xC2\xA9e" ? 404 : 403;
       return res.status(status).json({ error: error.message });
     }
-    res.status(500).json({ error: "Impossible de mettre \xE0 jour la table" });
+    res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC2\xA0 jour la table" });
   }
 });
 router55.delete("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-  console.log(`[NEW DELETE /tables/:id] \u{1F5D1}\uFE0F Suppression table ${id}`);
   try {
     const table = await prisma46.treeBranchLeafNodeTable.findUnique({
       where: { id },
@@ -32868,21 +33147,19 @@ router55.delete("/tables/:id", async (req2, res) => {
       }
     });
     if (!table) {
-      return res.status(404).json({ error: "Table non trouv\xE9e" });
+      return res.status(404).json({ error: "Table non trouv\xC3\u0192\xC2\xA9e" });
     }
     const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9" });
     }
     await prisma46.treeBranchLeafNodeTable.delete({ where: { id } });
-    console.log(`[NEW DELETE /tables/:id] \u2705 Table ${id} supprim\xE9e (+ colonnes/lignes en cascade)`);
     try {
       const selectConfigsUsingTable = await prisma46.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: id },
         select: { nodeId: true }
       });
       if (selectConfigsUsingTable.length > 0) {
-        console.log(`[NEW DELETE /tables/:id] \u{1F9F9} ${selectConfigsUsingTable.length} champ(s) Select/Cascader r\xE9f\xE9rencent cette table - D\xC9SACTIVATION LOOKUP`);
         for (const config of selectConfigsUsingTable) {
           const selectNode = await prisma46.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
@@ -32892,7 +33169,6 @@ router55.delete("/tables/:id", async (req2, res) => {
             }
           });
           if (selectNode) {
-            console.log(`[NEW DELETE /tables/:id] \u{1F527} D\xE9sactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
             const oldMetadata = selectNode.metadata || {};
             const oldCapabilities = oldMetadata.capabilities || {};
             const newCapabilities = {
@@ -32928,13 +33204,11 @@ router55.delete("/tables/:id", async (req2, res) => {
             await prisma46.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
-            console.log(`[NEW DELETE /tables/:id] \u2705 Lookup d\xE9sactiv\xE9 pour "${selectNode.label}" - champ d\xE9bloqu\xE9`);
           }
         }
-        console.log(`[NEW DELETE /tables/:id] \u2705 ${selectConfigsUsingTable.length} champ(s) Select D\xC9BLOQU\xC9S (lookup d\xE9sactiv\xE9)`);
       }
     } catch (selectConfigError) {
-      console.error(`[NEW DELETE /tables/:id] \u26A0\uFE0F Erreur d\xE9sactivation lookups:`, selectConfigError);
+      console.error(`[NEW DELETE /tables/:id] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur d\xC3\u0192\xC2\xA9sactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
       const node = await prisma46.treeBranchLeafNode.findUnique({
@@ -32965,9 +33239,9 @@ router55.delete("/tables/:id", async (req2, res) => {
           hasTable: remainingTables > 0,
           linkedTableIds: { set: nextLinkedIds },
           table_activeId: wasActiveTable ? null : void 0,
-          // Réinitialiser si c'était la table active
+          // RÃƒÂ©initialiser si c'ÃƒÂ©tait la table active
           table_instances: cleanedInstances,
-          // Réinitialiser les autres champs si plus de tables
+          // RÃƒÂ©initialiser les autres champs si plus de tables
           ...remainingTables === 0 && {
             table_name: null,
             table_type: null,
@@ -32980,18 +33254,10 @@ router55.delete("/tables/:id", async (req2, res) => {
           }
         }
       });
-      console.log(`[NEW DELETE /tables/:id] \u2705 N\u0153ud ${table.nodeId} nettoy\xE9:`, {
-        hasTable: remainingTables > 0,
-        linkedTableIds: nextLinkedIds.length,
-        table_activeId_reset: wasActiveTable,
-        table_instances_cleaned: true,
-        all_fields_reset: remainingTables === 0
-      });
     }
-    console.log(`[NEW DELETE /tables/:id] \u2705 Table ${id} supprim\xE9e avec succ\xE8s (+ colonnes et lignes en cascade)`);
-    res.json({ success: true, message: "Table supprim\xE9e avec succ\xE8s" });
+    res.json({ success: true, message: "Table supprim\xC3\u0192\xC2\xA9e avec succ\xC3\u0192\xC2\xA8s" });
   } catch (error) {
-    console.error(`\u274C [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
     res.status(500).json({ error: "Impossible de supprimer la table" });
   }
 });
@@ -32999,16 +33265,8 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { tableId } = req2.params;
   const { name, description, columns, rows, type, meta } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Alias route - redirection vers PUT /tables/${tableId}`);
-  console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F4CA} Donn\xE9es re\xE7ues:`, {
-    hasColumns: !!columns,
-    hasRows: !!rows,
-    hasMeta: !!meta,
-    type
-  });
   try {
     if (meta && !columns && !rows) {
-      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2699\uFE0F Mise \xE0 jour m\xE9tadonn\xE9es uniquement (lookup config)`);
       const table = await prisma46.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
         include: {
@@ -33018,11 +33276,11 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         }
       });
       if (!table) {
-        return res.status(404).json({ error: "Table non trouv\xE9e" });
+        return res.status(404).json({ error: "Table non trouv\xC3\u0192\xC2\xA9e" });
       }
       const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-        return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+        return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9" });
       }
       const updatedTable2 = await prisma46.treeBranchLeafNodeTable.update({
         where: { id: tableId },
@@ -33031,7 +33289,6 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 M\xE9tadonn\xE9es mises \xE0 jour - repeater cr\xE9era les champs d'affichage`);
       return res.json(updatedTable2);
     }
     const updatedTable = await prisma46.$transaction(async (tx) => {
@@ -33044,11 +33301,11 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         }
       });
       if (!table) {
-        throw new Error("Table non trouv\xE9e");
+        throw new Error("Table non trouv\xC3\u0192\xC2\xA9e");
       }
       const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
       if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-        throw new Error("Acc\xE8s non autoris\xE9");
+        throw new Error("Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9");
       }
       const updateData = {
         updatedAt: /* @__PURE__ */ new Date()
@@ -33064,7 +33321,6 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         data: updateData
       });
       if (Array.isArray(columns) && columns.length > 0) {
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Remplacement des colonnes...`);
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId } });
         const newColumnsData = columns.map((col, index) => ({
           tableId,
@@ -33076,25 +33332,13 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           metadata: typeof col === "object" && col.metadata ? col.metadata : {}
         }));
         await tx.treeBranchLeafNodeTableColumn.createMany({ data: newColumnsData });
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 ${columns.length} colonnes remplac\xE9es`);
       }
       if (Array.isArray(rows) && rows.length > 0) {
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Remplacement des lignes...`);
-        console.log(`[PUT ALIAS] \u{1F50D} ANALYSE ROWS RE\xC7UES DU FRONTEND:`);
-        console.log(`[PUT ALIAS]    - rows.length:`, rows.length);
-        console.log(`[PUT ALIAS]    - rows[0] type:`, typeof rows[0]);
-        console.log(`[PUT ALIAS]    - rows[0] isArray:`, Array.isArray(rows[0]));
-        console.log(`[PUT ALIAS]    - rows[0] value:`, rows[0]);
         if (rows.length > 1) {
-          console.log(`[PUT ALIAS]    - rows[1] type:`, typeof rows[1]);
-          console.log(`[PUT ALIAS]    - rows[1] isArray:`, Array.isArray(rows[1]));
-          console.log(`[PUT ALIAS]    - rows[1] value:`, rows[1]);
         }
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId } });
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F504} Cr\xE9ation de ${rows.length} lignes (boucle create)...`);
         for (let index = 0; index < rows.length; index++) {
           const row = rows[index];
-          console.log(`[PUT ALIAS] Row ${index} AVANT create - type:`, typeof row, "isArray:", Array.isArray(row), "value:", row);
           await tx.treeBranchLeafNodeTableRow.create({
             data: {
               tableId,
@@ -33102,37 +33346,33 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
               cells: row
             }
           });
-          console.log(`[PUT ALIAS] Row ${index} created, cells.length:`, Array.isArray(row) ? row.length : "N/A");
         }
-        console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u2705 ${rows.length} lignes remplac\xE9es`);
       }
       return tableUpdated;
     });
-    console.log(`[NEW PUT /nodes/:nodeId/tables/:tableId] \u{1F389} Mise \xE0 jour termin\xE9e avec succ\xE8s`);
     res.json(updatedTable);
   } catch (error) {
-    console.error(`\u274C [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
-    if (error instanceof Error && (error.message === "Table non trouv\xE9e" || error.message === "Acc\xE8s non autoris\xE9")) {
-      const status = error.message === "Table non trouv\xE9e" ? 404 : 403;
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
+    if (error instanceof Error && (error.message === "Table non trouv\xC3\u0192\xC2\xA9e" || error.message === "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9")) {
+      const status = error.message === "Table non trouv\xC3\u0192\xC2\xA9e" ? 404 : 403;
       return res.status(status).json({ error: error.message });
     }
-    res.status(500).json({ error: "Impossible de mettre \xE0 jour la table" });
+    res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC2\xA0 jour la table" });
   }
 });
 router55.get("/nodes/:nodeId/tables", async (req2, res) => {
   const { nodeId } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
-  console.log(`[NEW GET /nodes/:nodeId/tables] \u{1F4CB} R\xE9cup\xE9ration des tables pour node ${nodeId}`);
   try {
     const node = await prisma46.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
     }
     if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 ce n\u0153ud" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9 \xC3\u0192\xC2\xA0 ce n\xC3\u2026\xE2\u20AC\u0153ud" });
     }
     const tables = await prisma46.treeBranchLeafNodeTable.findMany({
       where: { nodeId },
@@ -33146,7 +33386,6 @@ router55.get("/nodes/:nodeId/tables", async (req2, res) => {
       },
       orderBy: { createdAt: "asc" }
     });
-    console.log(`[NEW GET /nodes/:nodeId/tables] \u2705 ${tables.length} table(s) trouv\xE9e(s)`);
     const formattedTables = tables.map((table) => ({
       id: table.id,
       name: table.name,
@@ -33178,8 +33417,8 @@ router55.get("/nodes/:nodeId/tables", async (req2, res) => {
     }));
     res.json(formattedTables);
   } catch (error) {
-    console.error(`\u274C [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les tables" });
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9rer les tables" });
   }
 });
 var table_routes_new_default = router55;
@@ -33419,7 +33658,7 @@ async function removeFromNodeLinkedField(client, nodeId, field, idsToRemove) {
   await setNodeLinkedField3(client, nodeId, field, next);
 }
 function fmtLV(label, value) {
-  return `${label ?? "\u2014"}(${value ?? "\u2205"})`;
+  return `${label ?? "\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC2\x9D"}(${value ?? "\xC3\u0192\xC2\xA2\xC3\u2039\xE2\u20AC\xA0\xC3\xA2\xE2\u201A\xAC\xC2\xA6"})`;
 }
 function getTestValueForNode(nodeId, fixedValue, defaultValue) {
   if (fixedValue && fixedValue.trim() !== "") return fixedValue;
@@ -33429,15 +33668,15 @@ function getTestValueForNode(nodeId, fixedValue, defaultValue) {
     "702d1b09-abc9-4096-9aaa-77155ac5294f": "0.35",
     // Calcul du prix Kw/h (devrait avoir 4000)
     "d6212e5e-3fe9-4cce-b380-e6745524d011": "4000",
-    // Consommation annuelle électricité (devrait avoir 1000)
+    // Consommation annuelle ÃƒÆ’Ã‚Â©lectricitÃƒÆ’Ã‚Â© (devrait avoir 1000)
     "node_1757366229534_x6jxzmvmu": "1000",
     // Consommation annuelle (valeur test)
     "node_1757366229561_dyfsa3p7n": "2500",
     // Cout Annuelle chauffage (valeur test)  
     "node_1757366229564_z28kl0eb4": "1200",
-    // Longueur façade avant (valeur test)
+    // Longueur faÃƒÆ’Ã‚Â§ade avant (valeur test)
     "node_1757366229578_c9yf18eho": "12",
-    // Hauteur façade avant (valeur test)
+    // Hauteur faÃƒÆ’Ã‚Â§ade avant (valeur test)
     "4fd0bb1d-836b-4cd0-9c2d-2f48808732eb": "3"
   };
   return testValues[nodeId] || null;
@@ -33493,16 +33732,14 @@ function buildResultText(prefixExpr, resultValue, unit) {
   if (prefixExpr) return prefixExpr;
   return right ? `${right}${u}` : "";
 }
-async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma69, submissionId, organizationId, userId) {
-  console.log("\u{1F6AB} [LEGACY DISABLED] buildDetailAndResultForOperation est d\xE9sactiv\xE9e - utilisez TBL Prisma !");
-  console.log("\u{1F504} Redirection vers endpoints TBL Prisma: /api/tbl/submissions/create-and-evaluate");
+async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma70, submissionId, organizationId, userId) {
   return {
     detail: {
       type: "legacy-disabled",
-      message: "\u{1F504} Fonction d\xE9sactiv\xE9e - utilisez TBL Prisma exclusivement",
+      message: "\xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\xA2\xE2\u201A\xAC\xC5\xBE Fonction d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9sactiv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e - utilisez TBL Prisma exclusivement",
       tblPrismaEndpoint: "/api/tbl/submissions/create-and-evaluate"
     },
-    result: "\u{1F504} \xC9valuation via TBL Prisma uniquement"
+    result: "\xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\xA2\xE2\u201A\xAC\xC5\xBE \xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0valuation via TBL Prisma uniquement"
   };
 }
 function calculateResult(expression) {
@@ -33537,18 +33774,12 @@ router56.use((req2, res, next) => {
     isSuperAdmin: true,
     role: "super_admin"
   };
-  console.log("[TreeBranchLeaf API] \u{1F6A9} Mock auth user assign\xE9 pour tests");
   next();
 });
 router56.get("/trees", async (req2, res) => {
   try {
-    console.log("\u{1F50D} [TBL-ROUTES] GET /trees - D\xC9BUT de la route");
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\u{1F50D} [TBL-ROUTES] Organization ID:", organizationId);
-    console.log("\u{1F50D} [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
     const whereFilter = isSuperAdmin2 || !organizationId ? {} : { organizationId };
-    console.log("\u{1F50D} [TBL-ROUTES] Where filter:", whereFilter);
-    console.log("\u{1F50D} [TBL-ROUTES] Recherche des arbres TreeBranchLeaf...");
     const trees = await prisma47.treeBranchLeafTree.findMany({
       where: whereFilter,
       include: {
@@ -33561,20 +33792,12 @@ router56.get("/trees", async (req2, res) => {
       },
       orderBy: { createdAt: "desc" }
     });
-    console.log("\u{1F50D} [TBL-ROUTES] Arbres trouv\xE9s:", trees.length);
-    console.log("\u{1F50D} [TBL-ROUTES] Premier arbre:", trees[0] ? `${trees[0].id} - ${trees[0].name}` : "Aucun");
     if (trees.length > 0) {
-      console.log("\u{1F50D} [TBL-ROUTES] D\xE9tails premier arbre:", {
-        id: trees[0].id,
-        name: trees[0].name,
-        organizationId: trees[0].organizationId,
-        nodeCount: trees[0]._count?.TreeBranchLeafNode || 0
-      });
     }
     res.json(trees);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching trees:", error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les arbres" });
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les arbres" });
   }
 });
 router56.get("/trees/:id", async (req2, res) => {
@@ -33593,12 +33816,12 @@ router56.get("/trees/:id", async (req2, res) => {
       }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     res.json(tree);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching tree:", error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer l'arbre" });
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer l'arbre" });
   }
 });
 router56.post("/trees", async (req2, res) => {
@@ -33621,7 +33844,7 @@ router56.post("/trees", async (req2, res) => {
     }
     const targetOrgId = getAuthCtx3(req2).organizationId || (typeof bodyOrgId === "string" ? bodyOrgId : null);
     if (!targetOrgId) {
-      return res.status(400).json({ error: "organizationId requis (en-t\xEAte x-organization-id ou dans le corps)" });
+      return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
     const id = (0, import_crypto10.randomUUID)();
     const tree = await prisma47.treeBranchLeafTree.create({
@@ -33644,7 +33867,7 @@ router56.post("/trees", async (req2, res) => {
     res.status(201).json(tree);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating tree:", error);
-    res.status(500).json({ error: "Impossible de cr\xE9er l'arbre" });
+    res.status(500).json({ error: "Impossible de cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9er l'arbre" });
   }
 });
 router56.put("/trees/:id", async (req2, res) => {
@@ -33666,7 +33889,7 @@ router56.put("/trees/:id", async (req2, res) => {
       }
     });
     if (tree.count === 0) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const updatedTree = await prisma47.treeBranchLeafTree.findFirst({
       where: { id, organizationId }
@@ -33674,7 +33897,7 @@ router56.put("/trees/:id", async (req2, res) => {
     res.json(updatedTree);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating tree:", error);
-    res.status(500).json({ error: "Impossible de mettre \xE0 jour l'arbre" });
+    res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour l'arbre" });
   }
 });
 router56.delete("/trees/:id", async (req2, res) => {
@@ -33691,9 +33914,9 @@ router56.delete("/trees/:id", async (req2, res) => {
       }
     });
     if (result.count === 0) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    res.json({ success: true, message: "Arbre supprim\xE9 avec succ\xE8s" });
+    res.json({ success: true, message: "Arbre supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting tree:", error);
     res.status(500).json({ error: "Impossible de supprimer l'arbre" });
@@ -33701,20 +33924,14 @@ router56.delete("/trees/:id", async (req2, res) => {
 });
 router56.get("/trees/:treeId/nodes", async (req2, res) => {
   try {
-    console.log("\u{1F50D} [TBL-ROUTES] GET /trees/:treeId/nodes - D\xC9BUT");
     const { treeId } = req2.params;
-    console.log("\u{1F50D} [TBL-ROUTES] TreeId:", treeId);
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\u{1F50D} [TBL-ROUTES] Organization ID:", organizationId);
-    console.log("\u{1F50D} [TBL-ROUTES] Is Super Admin:", isSuperAdmin2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    console.log("\u{1F50D} [TBL-ROUTES] Tree where filter:", treeWhereFilter);
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
-    console.log("\u{1F50D} [TBL-ROUTES] Arbre trouv\xE9:", tree ? `${tree.id} - ${tree.name}` : "null");
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const nodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId },
@@ -33740,33 +33957,20 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
         { createdAt: "asc" }
       ]
     });
-    console.log("\u{1F50D} [TBL-ROUTES] N\u0153uds trouv\xE9s:", nodes.length);
-    console.log("\u{1F504} [GET /trees/:treeId/nodes] Reconstruction depuis colonnes pour", nodes.length, "n\u0153uds");
     const reconstructedNodes = nodes.map((node) => buildResponseFromColumns2(node));
     const nodesWithTooltips = reconstructedNodes.filter(
       (node) => node.text_helpTooltipType && node.text_helpTooltipType !== "none"
     );
     if (nodesWithTooltips.length > 0) {
-      console.log(
-        "\u{1F3AF} [GET /trees/:treeId/nodes] ENVOI AU CLIENT - N\u0153uds avec tooltips:",
-        nodesWithTooltips.map((node) => ({
-          id: node.id,
-          name: node.name,
-          tooltipType: node.text_helpTooltipType,
-          hasTooltipText: !!node.text_helpTooltipText,
-          hasTooltipImage: !!node.text_helpTooltipImage
-        }))
-      );
     }
     res.json(reconstructedNodes);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching nodes:", error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les n\u0153uds" });
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cuds" });
   }
 });
 router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
   try {
-    console.log("\u{1F501} [TBL-ROUTES] GET /trees/:treeId/repeater-fields - D\xC9BUT");
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
@@ -33774,12 +33978,11 @@ router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
       where: treeWhereFilter
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const allNodesRaw = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId }
     });
-    console.log(`\u{1F501} [TBL-ROUTES] ${allNodesRaw.length} n\u0153uds bruts r\xE9cup\xE9r\xE9s depuis la base`);
     const allNodes = allNodesRaw.map((node) => buildResponseFromColumns2(node));
     const _nodesById = new Map(allNodes.map((n) => [n.id, n]));
     const repeaterFields = [];
@@ -33789,45 +33992,39 @@ router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
       const repeaterMeta = metadata.repeater;
       const templateNodeIds = repeaterMeta.templateNodeIds || [];
       const _templateNodeLabels = repeaterMeta.templateNodeLabels || {};
-      console.log(`\u{1F501} [TBL-ROUTES] N\u0153ud repeater "${node.label}" a ${templateNodeIds.length} templates configur\xE9s`);
       const physicalChildren = allNodes.filter((child) => {
         if (child.parentId !== node.id) return false;
         const childMeta = child.metadata;
         return childMeta?.sourceTemplateId && templateNodeIds.includes(childMeta.sourceTemplateId);
       });
-      console.log(`\u{1F501} [TBL-ROUTES] \u2192 ${physicalChildren.length} enfants physiques avec sourceTemplateId trouv\xE9s`);
       if (physicalChildren.length === 0) {
-        console.log(`\u26A0\uFE0F [TBL-ROUTES] Aucun enfant physique pour "${node.label}", il faut dupliquer les templates d'abord`);
         continue;
       }
       for (const child of physicalChildren) {
-        console.log(`\u2705 [TBL-ROUTES] Enfant physique ajout\xE9: "${child.label}" (${child.id})`);
         repeaterFields.push({
           id: child.id,
-          // ✅ VRAI UUID de l'enfant physique
+          // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ VRAI UUID de l'enfant physique
           label: `${node.label} / ${child.label}`,
-          // Label complet affiché
+          // Label complet affichÃƒÆ’Ã‚Â©
           repeaterLabel: node.label,
           // Label du repeater parent
           repeaterParentId: node.id,
-          // ID du nœud repeater
+          // ID du nÃƒâ€¦Ã¢â‚¬Å“ud repeater
           nodeLabel: child.label,
           // Label de l'enfant
           nodeId: child.id
-          // ✅ VRAI UUID de l'enfant
+          // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ VRAI UUID de l'enfant
         });
       }
     }
-    console.log(`\u{1F501} [TBL-ROUTES] ${repeaterFields.length} champs r\xE9p\xE9titeurs trouv\xE9s`);
     res.json(repeaterFields);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching repeater fields:", error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les champs r\xE9p\xE9titeurs" });
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les champs r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9p\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9titeurs" });
   }
 });
 router56.get("/trees/:treeId/shared-references", async (req2, res) => {
   try {
-    console.log("\u{1F517} [TBL-ROUTES] GET /trees/:treeId/shared-references - D\xC9BUT");
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
@@ -33835,7 +34032,7 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
       where: treeWhereFilter
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const sharedReferencesRaw = await prisma47.treeBranchLeafNode.findMany({
       where: {
@@ -33843,12 +34040,11 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
         isSharedReference: true
       }
     });
-    console.log(`\u{1F517} [TBL-ROUTES] ${sharedReferencesRaw.length} r\xE9f\xE9rences partag\xE9es trouv\xE9es`);
     const sharedReferences = sharedReferencesRaw.map((node) => {
       const response = buildResponseFromColumns2(node);
       return {
         id: response.id,
-        label: response.label || response.sharedReferenceName || "R\xE9f\xE9rence sans nom",
+        label: response.label || response.sharedReferenceName || "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence sans nom",
         category: response.sharedReferenceCategory,
         description: response.sharedReferenceDescription,
         type: response.type,
@@ -33856,39 +34052,35 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
         nodeId: response.id
       };
     });
-    console.log(`\u{1F517} [TBL-ROUTES] R\xE9f\xE9rences partag\xE9es format\xE9es:`, sharedReferences.map((r) => ({ id: r.id, label: r.label, category: r.category })));
     res.json(sharedReferences);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching shared references:", error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les r\xE9f\xE9rences partag\xE9es" });
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
 router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { templateNodeIds } = req2.body;
-    console.log("\u{1F501} [DUPLICATE-TEMPLATES] Duplication des templates:", { nodeId, templateNodeIds });
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     if (!Array.isArray(templateNodeIds) || templateNodeIds.length === 0) {
-      return res.status(400).json({ error: "templateNodeIds doit \xEAtre un tableau non vide" });
+      return res.status(400).json({ error: "templateNodeIds doit \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre un tableau non vide" });
     }
     const parentNode = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
     if (!parentNode) {
-      return res.status(404).json({ error: "N\u0153ud parent non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud parent non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     if (!isSuperAdmin2 && organizationId && parentNode.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 cet arbre" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cet arbre" });
     }
     const existingChildrenByParent = await prisma47.treeBranchLeafNode.findMany({
       where: { parentId: nodeId },
       select: { id: true, metadata: true, parentId: true }
     });
-    console.log("\uFFFD [DUPLICATE-TEMPLATES] Cr\xE9ation de nouvelles copies autoris\xE9e pour repeater");
     const newTemplateIds = templateNodeIds;
-    console.log("\u{1F195} [DUPLICATE-TEMPLATES] Templates \xE0 dupliquer:", newTemplateIds);
     const requestedNodes = await prisma47.treeBranchLeafNode.findMany({
       where: {
         id: { in: newTemplateIds },
@@ -33897,7 +34089,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       select: { id: true, label: true, type: true, metadata: true }
     });
     if (requestedNodes.length === 0) {
-      return res.status(404).json({ error: "Aucun template trouv\xE9" });
+      return res.status(404).json({ error: "Aucun template trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const resolveBaseTemplateId = (n) => {
       const md = n.metadata ?? {};
@@ -33919,9 +34111,8 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     const baseById = new Map(baseTemplateNodes.map((n) => [n.id, n]));
     const templatesToDuplicateInOrder = baseTemplateIdsInOrder.map((baseId) => baseById.get(baseId)).filter((n) => Boolean(n));
     if (templatesToDuplicateInOrder.length === 0) {
-      return res.status(404).json({ error: "Aucun template de base trouv\xE9" });
+      return res.status(404).json({ error: "Aucun template de base trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    console.log(`\u{1F501} [DUPLICATE-TEMPLATES] ${templatesToDuplicateInOrder.length} duplication(s) demand\xE9e(s) (base templates: ${uniqueBaseTemplateIds.length})`);
     const duplicatedSummaries = [];
     const extractNumericSuffix2 = (candidate) => {
       if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate;
@@ -33942,9 +34133,6 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       },
       select: { id: true, parentId: true }
     });
-    console.log(
-      `?? [DUPLICATE-TEMPLATES] Racines de copies d\uFFFDtect\uFFFDes (repeater=${nodeId}) parentChildren=${existingChildrenByParent.length} rootCandidates=${copyRootCandidates.length}`
-    );
     let globalMax = 0;
     for (const root of copyRootCandidates) {
       const fromId = extractSuffixFromId3(root.id);
@@ -33957,11 +34145,8 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
         const fromId = extractSuffixFromId3(c.id);
         return { id: c.id, parentId: c.parentId, fromId };
       });
-      console.log("?? [DUPLICATE-TEMPLATES] Sample racines candidates (id/suffix):", sample);
     } catch {
     }
-    console.log("?? [DUPLICATE-TEMPLATES] Suffixe global calcul\uFFFD (depuis enfants existants):");
-    console.log(`   max global existant: ${globalMax} ? prochain suffixe: ${nextSuffix}`);
     for (const template of templatesToDuplicateInOrder) {
       const baseTemplateId = template.id;
       const copyNumber = nextSuffix;
@@ -33973,7 +34158,6 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
         isFromRepeaterDuplication: true
       });
       const newRootId = result.root.newId;
-      console.log(`?? [DUPLICATE-TEMPLATES] deepCopyNodeInternalService newRootId:`, newRootId, `(type: ${typeof newRootId})`);
       const normalizedCopyLabel = `${template.label || baseTemplateId}-${copyNumber}`;
       await prisma47.treeBranchLeafNode.update({
         where: { id: newRootId },
@@ -33993,7 +34177,6 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
         where: { id: newRootId },
         select: { id: true, label: true, type: true, parentId: true }
       });
-      console.log(`?? [DUPLICATE-TEMPLATES] findUnique result for ${newRootId}:`, created ? { id: created.id, label: created.label } : "NULL");
       if (created) {
         duplicatedSummaries.push({
           id: created.id,
@@ -34002,19 +34185,17 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
           parentId: created.parentId,
           sourceTemplateId: baseTemplateId
         });
-        console.log(`\u2705 [DUPLICATE-TEMPLATES] Template "${template.label}" dupliqu\xE9 en profondeur \u2192 "${created.label}" (${created.id})`);
         try {
           const r = await applySharedReferencesFromOriginalInternal(req2, newRootId);
-          console.log(`\u{1F517} [DUPLICATE-TEMPLATES] R\xE9f\xE9rences partag\xE9es appliqu\xE9es (suffixe -${r.suffix}) pour`, newRootId);
         } catch (e) {
-          console.warn("\u26A0\uFE0F [DUPLICATE-TEMPLATES] \xC9chec application des r\xE9f\xE9rences partag\xE9es pour", newRootId, e);
+          console.warn("\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [DUPLICATE-TEMPLATES] \xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0chec application des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es pour", newRootId, e);
         }
         try {
           const selectorCopyOptions = {
             nodeIdMap: result.idMap,
             tableCopyCache: /* @__PURE__ */ new Map(),
             tableIdMap: new Map(Object.entries(result.tableIdMap))
-            // ? Utiliser le tableIdMap peupl�
+            // ? Utiliser le tableIdMap peuplÃƒÂ¯Ã‚Â¿Ã‚Â½
           };
           await copySelectorTablesAfterNodeCopy(
             prisma47,
@@ -34023,20 +34204,17 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
             selectorCopyOptions,
             copyNumber
           );
-          console.log(`? [DUPLICATE-TEMPLATES] Tables des s\uFFFDlecteurs copi\uFFFDes pour ${newRootId}`);
         } catch (selectorErr) {
-          console.warn("??  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s\uFFFDlecteurs pour", newRootId, selectorErr);
+          console.warn("??  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDlecteurs pour", newRootId, selectorErr);
         }
-        console.log(`?? [DUPLICATE-TEMPLATES] Variables li\uFFFDes d\uFFFDj\uFFFD copi\uFFFDes par deepCopyNodeInternal pour ${newRootId}`);
       }
     }
-    console.log(`\u{1F389} [DUPLICATE-TEMPLATES] ${duplicatedSummaries.length} n\u0153uds dupliqu\xE9s (deep) avec succ\xE8s`);
     res.status(201).json({
       duplicated: duplicatedSummaries.map((n) => ({ id: n.id, label: n.label, type: n.type, parentId: n.parentId, sourceTemplateId: n.sourceTemplateId })),
       count: duplicatedSummaries.length
     });
   } catch (error) {
-    console.error("\u274C [DUPLICATE-TEMPLATES] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [DUPLICATE-TEMPLATES] Erreur:", error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: "Erreur lors de la duplication des templates", details: msg });
   }
@@ -34048,7 +34226,7 @@ router56.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
     const result = await deepCopyNodeInternal(prisma47, req2, nodeId, { targetParentId });
     res.json(result);
   } catch (error) {
-    console.error("\u274C [/nodes/:nodeId/deep-copy] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/deep-copy] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de la copie profonde" });
   }
 });
@@ -34057,49 +34235,48 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
     const { treeId } = req2.params;
     const { organizationId } = req2.user;
     const nodeData = req2.body;
-    console.log("[TreeBranchLeaf API] Creating node:", { treeId, nodeData });
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: { id: treeId, organizationId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     if (!nodeData.type || !nodeData.label) {
       return res.status(400).json({ error: "Les champs type et label sont obligatoires" });
     }
     const allowedTypes = [
       "branch",
-      // Branche = conteneur hiérarchique
+      // Branche = conteneur hiÃƒÆ’Ã‚Â©rarchique
       "section",
-      // Section = groupe de champs calculés
+      // Section = groupe de champs calculÃƒÆ’Ã‚Â©s
       "leaf_field",
       // Champ standard (text, email, etc.)
       "leaf_option",
       // Option pour un champ SELECT
       "leaf_option_field",
-      // Option + Champ (combiné) ← ajouté pour débloquer O+C
+      // Option + Champ (combinÃƒÆ’Ã‚Â©) ÃƒÂ¢Ã¢â‚¬Â Ã‚Â ajoutÃƒÆ’Ã‚Â© pour dÃƒÆ’Ã‚Â©bloquer O+C
       "leaf_text",
       // Champ texte simple
       "leaf_email",
       // Champ email
       "leaf_phone",
-      // Champ téléphone
+      // Champ tÃƒÆ’Ã‚Â©lÃƒÆ’Ã‚Â©phone
       "leaf_date",
       // Champ date
       "leaf_number",
-      // Champ numérique
+      // Champ numÃƒÆ’Ã‚Â©rique
       "leaf_checkbox",
-      // Case à cocher
+      // Case ÃƒÆ’Ã‚Â  cocher
       "leaf_select",
-      // Liste déroulante
+      // Liste dÃƒÆ’Ã‚Â©roulante
       "leaf_radio",
       // Boutons radio
       "leaf_repeater"
-      // Bloc répétable (conteneur de champs répétables)
+      // Bloc rÃƒÆ’Ã‚Â©pÃƒÆ’Ã‚Â©table (conteneur de champs rÃƒÆ’Ã‚Â©pÃƒÆ’Ã‚Â©tables)
     ];
     if (!allowedTypes.includes(nodeData.type)) {
       return res.status(400).json({
-        error: `Type de n\u0153ud non autoris\xE9: ${nodeData.type}. Types autoris\xE9s: ${allowedTypes.join(", ")}`
+        error: `Type de n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9: ${nodeData.type}. Types autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9s: ${allowedTypes.join(", ")}`
       });
     }
     if (nodeData.parentId) {
@@ -34107,7 +34284,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
         where: { id: nodeData.parentId, treeId }
       });
       if (!parentNode) {
-        return res.status(400).json({ error: "N\u0153ud parent non trouv\xE9" });
+        return res.status(400).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud parent non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
       }
       const parentType = parentNode.type;
       const parentSubType = parentNode.subType;
@@ -34126,12 +34303,10 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
           childType,
           childSubType
         );
-        console.log(`[TreeBranchLeaf API] Validation failed: ${errorMessage}`);
         return res.status(400).json({
           error: errorMessage
         });
       }
-      console.log(`[TreeBranchLeaf API] Validation passed: ${parentType}(${parentSubType}) -> ${childType}(${childSubType})`);
     } else {
       const childType = nodeData.type;
       const childSubType = nodeData.subType || nodeData.fieldType || "data";
@@ -34148,12 +34323,10 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
           childType,
           childSubType
         );
-        console.log(`[TreeBranchLeaf API] Root validation failed: ${errorMessage}`);
         return res.status(400).json({
           error: errorMessage
         });
       }
-      console.log(`[TreeBranchLeaf API] Root validation passed: tree -> ${childType}(${childSubType})`);
     }
     const { randomUUID: randomUUID9 } = await import("crypto");
     const nodeId = randomUUID9();
@@ -34169,7 +34342,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
         order: nodeData.order ?? 0,
         isVisible: nodeData.isVisible ?? true,
         isActive: nodeData.isActive ?? true,
-        // Par défaut, AUCUNE capacité n'est activée automatiquement
+        // Par dÃƒÆ’Ã‚Â©faut, AUCUNE capacitÃƒÆ’Ã‚Â© n'est activÃƒÆ’Ã‚Â©e automatiquement
         hasData: nodeData.hasData ?? false,
         hasFormula: nodeData.hasFormula ?? false,
         hasCondition: nodeData.hasCondition ?? false,
@@ -34181,32 +34354,21 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("[TreeBranchLeaf API] Node created successfully:", node.id);
     res.status(201).json(node);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating node:", error);
-    res.status(500).json({ error: "Impossible de cr\xE9er le n\u0153ud" });
+    res.status(500).json({ error: "Impossible de cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9er le n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 function mapJSONToColumns(updateData) {
   const columnData = {};
   if (!updateData || typeof updateData !== "object") {
-    console.log("\u{1F504} [mapJSONToColumns] \u274C updateData invalide:", updateData);
     return columnData;
   }
   const metadata = updateData.metadata && typeof updateData.metadata === "object" ? updateData.metadata : {};
   const fieldConfig = updateData.fieldConfig && typeof updateData.fieldConfig === "object" ? updateData.fieldConfig : {};
   const appearanceConfig = updateData.appearanceConfig && typeof updateData.appearanceConfig === "object" ? updateData.appearanceConfig : {};
-  console.log("\u{1F504} [mapJSONToColumns] Entr\xE9es d\xE9tect\xE9es:", {
-    hasMetadata: Object.keys(metadata).length > 0,
-    hasFieldConfig: Object.keys(fieldConfig).length > 0,
-    hasAppearanceConfig: Object.keys(appearanceConfig).length > 0,
-    metadataKeys: Object.keys(metadata),
-    fieldConfigKeys: Object.keys(fieldConfig),
-    appearanceConfigKeys: Object.keys(appearanceConfig)
-  });
   if (Object.keys(appearanceConfig).length > 0) {
-    console.log("\u{1F504} [mapJSONToColumns] Traitement appearanceConfig:", appearanceConfig);
     if (appearanceConfig.size) columnData.appearance_size = appearanceConfig.size;
     if (appearanceConfig.width) columnData.appearance_width = appearanceConfig.width;
     if (appearanceConfig.variant) columnData.appearance_variant = appearanceConfig.variant;
@@ -34238,26 +34400,21 @@ function mapJSONToColumns(updateData) {
   }
   if (metadata.appearance && typeof metadata.appearance === "object") {
     const metaAppearance = metadata.appearance;
-    console.log("\u{1F504} [mapJSONToColumns] Traitement metadata.appearance:", metaAppearance);
     if (metaAppearance.size && !columnData.appearance_size) columnData.appearance_size = metaAppearance.size;
     if (metaAppearance.width && !columnData.appearance_width) columnData.appearance_width = metaAppearance.width;
     if (metaAppearance.variant && !columnData.appearance_variant) columnData.appearance_variant = metaAppearance.variant;
   }
   if (metadata.repeater && typeof metadata.repeater === "object") {
     const repeaterMeta = metadata.repeater;
-    console.log("\u{1F504} [mapJSONToColumns] \u{1F525} Traitement metadata.repeater:", repeaterMeta);
     if ("templateNodeIds" in repeaterMeta) {
       if (Array.isArray(repeaterMeta.templateNodeIds)) {
         columnData.repeater_templateNodeIds = repeaterMeta.templateNodeIds.length > 0 ? JSON.stringify(repeaterMeta.templateNodeIds) : null;
-        console.log("\u2705 [mapJSONToColumns] repeater_templateNodeIds sauvegard\xE9:", repeaterMeta.templateNodeIds);
       } else {
         columnData.repeater_templateNodeIds = null;
-        console.log("\u2705 [mapJSONToColumns] repeater_templateNodeIds remis \xE0 NULL (valeur non-array)");
       }
     }
     if (repeaterMeta.templateNodeLabels && typeof repeaterMeta.templateNodeLabels === "object") {
       columnData.repeater_templateNodeLabels = JSON.stringify(repeaterMeta.templateNodeLabels);
-      console.log("\u2705 [mapJSONToColumns] \u{1F3F7}\uFE0F repeater_templateNodeLabels sauvegard\xE9:", repeaterMeta.templateNodeLabels);
     } else if ("templateNodeLabels" in repeaterMeta) {
       columnData.repeater_templateNodeLabels = null;
     }
@@ -34271,23 +34428,18 @@ function mapJSONToColumns(updateData) {
   if ("subTabs" in metadata) {
     if (Array.isArray(metadata.subTabs) && metadata.subTabs.length > 0) {
       columnData.subtabs = JSON.stringify(metadata.subTabs);
-      console.log("?? [mapJSONToColumns] ? metadata.subTabs sauvegard\uFFFD en colonne subtabs:", metadata.subTabs);
     } else {
       columnData.subtabs = null;
-      console.log("?? [mapJSONToColumns] ? metadata.subTabs vid\uFFFD : colonne subtabs remise \uFFFD NULL");
     }
   }
   if ("subTab" in metadata) {
     const subTabValue = metadata.subTab;
     if (typeof subTabValue === "string" && subTabValue.trim().length > 0) {
       columnData.subtab = subTabValue;
-      console.log("?? [mapJSONToColumns] ? metadata.subTab (string assignment) sauvegard\uFFFD en colonne subtab:", subTabValue);
     } else if (Array.isArray(subTabValue) && subTabValue.length > 0) {
       columnData.subtab = JSON.stringify(subTabValue);
-      console.log("?? [mapJSONToColumns] ? metadata.subTab (array assignment) sauvegard\uFFFD en colonne subtab:", subTabValue);
     } else {
       columnData.subtab = null;
-      console.log("?? [mapJSONToColumns] ? metadata.subTab vid\uFFFD : colonne subtab remise \uFFFD NULL");
     }
   }
   const textConfig = metadata.textConfig || fieldConfig.text || fieldConfig.textConfig || {};
@@ -34347,11 +34499,6 @@ function mapJSONToColumns(updateData) {
   if (updateData.fieldSubType) columnData.fieldSubType = updateData.fieldSubType;
   if (updateData.subType) columnData.fieldSubType = updateData.subType;
   if (updateData.type) columnData.fieldType = updateData.type;
-  console.log("\u{1F504} [mapJSONToColumns] Migration JSON vers colonnes:", {
-    input: { metadata: !!metadata, fieldConfig: !!fieldConfig },
-    output: Object.keys(columnData),
-    columnDataPreview: columnData
-  });
   return columnData;
 }
 function buildResponseFromColumns2(node) {
@@ -34359,7 +34506,7 @@ function buildResponseFromColumns2(node) {
     size: node.appearance_size || "md",
     width: node.appearance_width || null,
     variant: node.appearance_variant || null,
-    // 🔥 TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
+    // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TOOLTIP FIX : Inclure les champs tooltip dans metadata.appearance
     helpTooltipType: node.text_helpTooltipType || "none",
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null
@@ -34376,10 +34523,9 @@ function buildResponseFromColumns2(node) {
       if (node.repeater_templateNodeIds) {
         try {
           const parsed = JSON.parse(node.repeater_templateNodeIds);
-          console.log("\u2705 [buildResponseFromColumns] repeater_templateNodeIds reconstruit:", parsed);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
+          console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
           return [];
         }
       }
@@ -34395,7 +34541,7 @@ function buildResponseFromColumns2(node) {
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === "object" ? parsedLabels : null;
         } catch (e) {
-          console.error("\u274C [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
+          console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -34435,7 +34581,7 @@ function buildResponseFromColumns2(node) {
       min: node.number_min || null,
       max: node.number_max || null,
       step: node.number_step || 1,
-      // ?? FIX: Priorit� � data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      // ?? FIX: PrioritÃƒÂ¯Ã‚Â¿Ã‚Â½ ÃƒÂ¯Ã‚Â¿Ã‚Â½ data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
       decimals: node.data_precision ?? node.number_decimals ?? 0,
       prefix: node.number_prefix || null,
       suffix: node.number_suffix || null,
@@ -34445,9 +34591,9 @@ function buildResponseFromColumns2(node) {
     select: {
       multiple: node.select_multiple || false,
       searchable: node.select_searchable !== false,
-      // true par défaut
+      // true par dÃƒÆ’Ã‚Â©faut
       allowClear: node.select_allowClear !== false,
-      // true par défaut
+      // true par dÃƒÆ’Ã‚Â©faut
       defaultValue: node.select_defaultValue || null,
       options: node.select_options || []
     },
@@ -34479,31 +34625,15 @@ function buildResponseFromColumns2(node) {
     appearance
   };
   if (node.id === "131a7b51-97d5-4f40-8a5a-9359f38939e8") {
-    console.log("\u{1F50D} [buildResponseFromColumns][Test - liste] node.metadata BRUT:", node.metadata);
-    console.log("\u{1F50D} [buildResponseFromColumns][Test - liste] cleanedMetadata:", cleanedMetadata);
-    console.log(
-      "\u{1F50D} [buildResponseFromColumns][Test - liste] metadata.capabilities:",
-      node.metadata && typeof node.metadata === "object" ? node.metadata.capabilities : "N/A"
-    );
   }
   const metadataWithRepeater = repeater.templateNodeIds && repeater.templateNodeIds.length > 0 ? { ...cleanedMetadata, repeater } : cleanedMetadata;
   if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
-    console.log("\u{1F501}\u{1F501}\u{1F501} [REPEATER NODE FOUND]", {
-      nodeId: node.id,
-      nodeName: node.name,
-      nodeLabel: node.label,
-      nodeType: node.type,
-      parentId: node.parentId,
-      repeaterConfig: repeater
-    });
   }
-  console.log("[buildResponseFromColumns] metadata.repeater final:", metadataWithRepeater.repeater);
   if (node.subtabs) {
     try {
       const parsedSubTabs = JSON.parse(node.subtabs);
       if (Array.isArray(parsedSubTabs)) {
         metadataWithRepeater.subTabs = parsedSubTabs;
-        console.log("[buildResponseFromColumns] OK subTabs reconstruits:", parsedSubTabs);
       }
     } catch (e) {
       console.error("[buildResponseFromColumns] Erreur parse subtabs:", e);
@@ -34517,7 +34647,6 @@ function buildResponseFromColumns2(node) {
       }
       if (subTabValue && typeof subTabValue === "string") {
         metadataWithRepeater.subTab = subTabValue;
-        console.log("[buildResponseFromColumns] OK subTab (assignment) reconstruit:", subTabValue);
       }
     } catch (e) {
       console.error("[buildResponseFromColumns] Erreur parse subtab:", e);
@@ -34527,20 +34656,20 @@ function buildResponseFromColumns2(node) {
     ...node,
     metadata: metadataWithRepeater,
     fieldConfig,
-    // Ajouter les champs d'interface pour compatibilité
+    // Ajouter les champs d'interface pour compatibilitÃƒÆ’Ã‚Â©
     appearance,
     appearanceConfig,
-    // 🎯 CORRECTION : Ajouter appearanceConfig pour l'interface Parameters
-    // ⚠️ IMPORTANT : fieldType depuis les colonnes dédiées
+    // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ CORRECTION : Ajouter appearanceConfig pour l'interface Parameters
+    // ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â IMPORTANT : fieldType depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
     fieldType: node.fieldType || node.type,
     fieldSubType: node.fieldSubType || node.subType,
-    // 🔥 TOOLTIP FIX : Ajouter les propriétés tooltip au niveau racine pour TBL
+    // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TOOLTIP FIX : Ajouter les propriÃƒÆ’Ã‚Â©tÃƒÆ’Ã‚Â©s tooltip au niveau racine pour TBL
     text_helpTooltipType: node.text_helpTooltipType,
     text_helpTooltipText: node.text_helpTooltipText,
     text_helpTooltipImage: node.text_helpTooltipImage,
-    // 🔥 TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
+    // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ TABLES : Inclure les tables avec leurs colonnes/lignes pour le lookup
     tables: node.TreeBranchLeafNodeTable || [],
-    // 🔗 SHARED REFERENCES : Inclure les références partagées pour les cascades
+    // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬â€ SHARED REFERENCES : Inclure les rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences partagÃƒÆ’Ã‚Â©es pour les cascades
     sharedReferenceIds: node.sharedReferenceIds || void 0
   };
   try {
@@ -34551,7 +34680,7 @@ function buildResponseFromColumns2(node) {
       return void 0;
     };
     const capabilities = {
-      // Donn�es dynamiques / variables
+      // DonnÃƒÂ¯Ã‚Â¿Ã‚Â½es dynamiques / variables
       data: node.hasData || node.data_activeId || node.data_instances ? {
         enabled: !!node.hasData,
         activeId: node.data_activeId || null,
@@ -34583,7 +34712,7 @@ function buildResponseFromColumns2(node) {
         columns: Array.isArray(node.table_columns) ? node.table_columns : null,
         rows: Array.isArray(node.table_rows) ? node.table_rows : null
       } : void 0,
-      // Select (options statiques ou dynamiques d�j� r�solues)
+      // Select (options statiques ou dynamiques dÃƒÂ¯Ã‚Â¿Ã‚Â½jÃƒÂ¯Ã‚Â¿Ã‚Â½ rÃƒÂ¯Ã‚Â¿Ã‚Â½solues)
       select: node.select_options || node.select_defaultValue ? {
         options: Array.isArray(node.select_options) ? node.select_options : [],
         allowClear: node.select_allowClear !== false,
@@ -34596,14 +34725,14 @@ function buildResponseFromColumns2(node) {
         min: node.number_min ?? null,
         max: node.number_max ?? null,
         step: node.number_step ?? 1,
-        // ?? FIX: Priorit� � data_precision pour les champs d'affichage
+        // ?? FIX: PrioritÃƒÂ¯Ã‚Â¿Ã‚Â½ ÃƒÂ¯Ã‚Â¿Ã‚Â½ data_precision pour les champs d'affichage
         decimals: node.data_precision ?? node.number_decimals ?? 0,
         unit: node.number_unit ?? node.data_unit ?? null,
         prefix: node.number_prefix || null,
         suffix: node.number_suffix || null,
         defaultValue: node.number_defaultValue || null
       } : void 0,
-      // Bool�en
+      // BoolÃƒÂ¯Ã‚Â¿Ã‚Â½en
       bool: node.bool_trueLabel || node.bool_falseLabel || node.bool_defaultValue !== void 0 ? {
         trueLabel: node.bool_trueLabel || null,
         falseLabel: node.bool_falseLabel || null,
@@ -34623,7 +34752,7 @@ function buildResponseFromColumns2(node) {
         crop: node.image_crop === true,
         thumbnails: node.image_thumbnails || null
       } : void 0,
-      // Linking / navigation (simplifi�)
+      // Linking / navigation (simplifiÃƒÂ¯Ã‚Â¿Ã‚Â½)
       link: node.link_activeId || node.link_instances ? {
         enabled: !!node.hasLink,
         activeId: node.link_activeId || null,
@@ -34664,23 +34793,8 @@ function buildResponseFromColumns2(node) {
     console.error("? [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
   }
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
-    console.log("\u{1F517} [buildResponseFromColumns] OPTION AVEC SHARED REFS:", {
-      nodeId: node.id,
-      label: node.label || node.option_label,
-      type: node.type,
-      sharedReferenceIds: node.sharedReferenceIds
-    });
   }
   if (node.text_helpTooltipType && node.text_helpTooltipType !== "none") {
-    console.log("\u{1F525} [buildResponseFromColumns] TOOLTIP TROUV\xC9:", {
-      id: node.id,
-      name: node.name,
-      tooltipType: node.text_helpTooltipType,
-      hasTooltipText: !!node.text_helpTooltipText,
-      hasTooltipImage: !!node.text_helpTooltipImage,
-      textLength: node.text_helpTooltipText?.length || 0,
-      imageLength: node.text_helpTooltipImage?.length || 0
-    });
   }
   return result;
 }
@@ -34694,11 +34808,9 @@ function removeJSONFromUpdate(updateData) {
     }
     if ("subTabs" in metaObj) {
       preservedMeta.subTabs = metaObj.subTabs;
-      console.log("?? [removeJSONFromUpdate] Pr\uFFFDservation de metadata.subTabs:", metaObj.subTabs);
     }
     if ("subTab" in metaObj) {
       preservedMeta.subTab = metaObj.subTab;
-      console.log("?? [removeJSONFromUpdate] Pr\uFFFDservation de metadata.subTab:", metaObj.subTab);
     }
     if (Object.keys(preservedMeta).length > 0) {
       return {
@@ -34739,27 +34851,9 @@ var updateOrMoveNode = async (req2, res) => {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
     const updateData = req2.body || {};
-    console.log("\u{1F504} [updateOrMoveNode] AVANT migration - donn\xE9es re\xE7ues:", {
-      hasMetadata: !!updateData.metadata,
-      hasFieldConfig: !!updateData.fieldConfig,
-      hasAppearanceConfig: !!updateData.appearanceConfig,
-      keys: Object.keys(updateData),
-      appearanceConfig: updateData.appearanceConfig,
-      "metadata.repeater": updateData.metadata?.repeater,
-      "metadata complet": JSON.stringify(updateData.metadata, null, 2)
-    });
     const columnData = mapJSONToColumns(updateData);
     const cleanUpdateData = removeJSONFromUpdate(updateData);
     const updateObj = { ...cleanUpdateData, ...columnData };
-    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S migration - donn\xE9es finales:", {
-      originalKeys: Object.keys(updateData),
-      cleanedKeys: Object.keys(cleanUpdateData),
-      columnKeys: Object.keys(columnData),
-      finalKeys: Object.keys(updateObj),
-      hasMetadataInFinal: !!updateObj.metadata,
-      hasFieldConfigInFinal: !!updateObj.fieldConfig,
-      columnData
-    });
     normalizeSharedRefsForCopy(nodeId, updateObj);
     for (const k of ["markers", "hasMarkers"]) {
       if (k in updateObj) delete updateObj[k];
@@ -34768,12 +34862,11 @@ var updateOrMoveNode = async (req2, res) => {
       where: { id: treeId, organizationId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     delete updateObj.id;
     delete updateObj.treeId;
     delete updateObj.createdAt;
-    console.log("\u{1F50D} [updateOrMoveNode] Recherche n\u0153ud:", { nodeId, treeId, organizationId });
     const existingNode = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId }
     });
@@ -34781,7 +34874,7 @@ var updateOrMoveNode = async (req2, res) => {
       const nodeAnyTree = await prisma47.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
       });
-      console.error("? [updateOrMoveNode] N\uFFFDud non trouv\uFFFD - DEBUG:", {
+      console.error("? [updateOrMoveNode] N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD - DEBUG:", {
         nodeId,
         treeId,
         organizationId,
@@ -34790,7 +34883,7 @@ var updateOrMoveNode = async (req2, res) => {
         allNodesInTree: await prisma47.treeBranchLeafNode.count({ where: { treeId } })
       });
       return res.status(404).json({
-        error: "N\uFFFDud non trouv\uFFFD",
+        error: "N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD",
         debug: {
           nodeId,
           treeId,
@@ -34806,7 +34899,7 @@ var updateOrMoveNode = async (req2, res) => {
     if (targetId) {
       const targetNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: targetId, treeId } });
       if (!targetNode) {
-        return res.status(400).json({ error: "Cible de d\xE9placement non trouv\xE9e" });
+        return res.status(400).json({ error: "Cible de d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9placement non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
       }
       if (position === "child") {
         newParentId = targetNode.id;
@@ -34822,33 +34915,33 @@ var updateOrMoveNode = async (req2, res) => {
           where: { id: newParentId, treeId }
         });
         if (!newParentNode) {
-          return res.status(400).json({ error: "Parent non trouv\xE9" });
+          return res.status(400).json({ error: "Parent non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
         }
         if (existingNode.type === "leaf_option") {
           const isSelectField = newParentNode.type.startsWith("leaf_") && newParentNode.subType === "SELECT";
           const isSelectBranch = newParentNode.type === "branch" && newParentNode.parentId !== null;
           if (!isSelectField && !isSelectBranch) {
             return res.status(400).json({
-              error: "Les options ne peuvent \xEAtre d\xE9plac\xE9es que sous des champs SELECT ou des branches de niveau 2+"
+              error: "Les options ne peuvent \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9plac\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es que sous des champs SELECT ou des branches de niveau 2+"
             });
           }
         } else if (existingNode.type.startsWith("leaf_")) {
           if (newParentNode.type !== "branch" && !newParentNode.type.startsWith("leaf_")) {
             return res.status(400).json({
-              error: "Les champs ne peuvent \xEAtre d\xE9plac\xE9s que sous des branches ou d'autres champs"
+              error: "Les champs ne peuvent \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9plac\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9s que sous des branches ou d'autres champs"
             });
           }
         } else if (existingNode.type === "branch") {
           if (!(newParentNode.type === "tree" || newParentNode.type === "branch")) {
             return res.status(400).json({
-              error: "Les branches doivent \xEAtre sous l'arbre ou sous une autre branche"
+              error: "Les branches doivent \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre sous l'arbre ou sous une autre branche"
             });
           }
         }
       } else {
         if (existingNode.type !== "branch") {
           return res.status(400).json({
-            error: "Seules les branches peuvent \xEAtre d\xE9plac\xE9es directement sous l'arbre racine (niveau 2)"
+            error: "Seules les branches peuvent \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9plac\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es directement sous l'arbre racine (niveau 2)"
           });
         }
       }
@@ -34895,7 +34988,6 @@ var updateOrMoveNode = async (req2, res) => {
         }
       });
       const updatedNode2 = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
-      console.log("\u{1F504} [updateOrMoveNode] APR\xC8S d\xE9placement - reconstruction depuis colonnes");
       const responseData2 = updatedNode2 ? buildResponseFromColumns2(updatedNode2) : updatedNode2;
       return res.json(responseData2);
     }
@@ -34914,7 +35006,7 @@ var updateOrMoveNode = async (req2, res) => {
         ...currentMetadata,
         repeater: updatedRepeaterMetadata
       };
-      console.warn("\u{1F525} [updateOrMoveNode] Synchronisation metadata.repeater:", updatedRepeaterMetadata);
+      console.warn("\xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\xA5 [updateOrMoveNode] Synchronisation metadata.repeater:", updatedRepeaterMetadata);
     }
     if ("repeater_templateNodeIds" in updateObj && updateObj.repeater_templateNodeIds === null) {
       const currentMetadata = existingNode.metadata || {};
@@ -34929,19 +35021,10 @@ var updateOrMoveNode = async (req2, res) => {
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
     });
     const updatedNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
-    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S mise \xE0 jour - n\u0153ud brut Prisma:", {
-      "updatedNode.metadata": updatedNode?.metadata,
-      "updatedNode.metadata typeof": typeof updatedNode?.metadata
-    });
-    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S mise \xE0 jour - reconstruction depuis colonnes");
     const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
-    console.log("\u{1F504} [updateOrMoveNode] APR\xC8S buildResponseFromColumns:", {
-      "responseData.metadata": responseData?.metadata,
-      "responseData.metadata.repeater": responseData?.metadata?.repeater
-    });
     return res.json(responseData);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \u274C ERREUR D\xC9TAILL\xC9E lors de updateOrMoveNode:", {
+    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR D\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0TAILL\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0E lors de updateOrMoveNode:", {
       error,
       message: error.message,
       stack: error.stack,
@@ -34950,7 +35033,7 @@ var updateOrMoveNode = async (req2, res) => {
       updateDataKeys: Object.keys(req2.body || {}),
       organizationId: req2.user?.organizationId
     });
-    res.status(500).json({ error: "Impossible de mettre \xE0 jour le n\u0153ud", details: error.message });
+    res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour le n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud", details: error.message });
   }
 };
 router56.put("/trees/:treeId/nodes/:nodeId", updateOrMoveNode);
@@ -34963,10 +35046,10 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       where: { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     if (!isSuperAdmin2 && organizationId && tree.organizationId && tree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const allNodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
     const childrenByParent = /* @__PURE__ */ new Map();
@@ -34978,7 +35061,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     }
     const exists = allNodes.find((n) => n.id === nodeId);
     if (!exists) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const toDelete = [];
     const queue = [nodeId];
@@ -35072,7 +35155,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         const l = String(label);
         const m1 = /\(Copie\s*([0-9]+)\)$/i.exec(l);
         if (m1 && m1[1]) return m1[1];
-        const m2 = /[-��]\s*(\d+)$/i.exec(l);
+        const m2 = /[-ÃƒÂ¯Ã‚Â¿Ã‚Â½ÃƒÂ¯Ã‚Â¿Ã‚Â½]\s*(\d+)$/i.exec(l);
         if (m2 && m2[1]) return m2[1];
         return null;
       };
@@ -35096,7 +35179,6 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       const extraCandidates = nodesToScan.filter((n) => {
         const meta = n.metadata || {};
         if (meta?.isSumDisplayField === true || n.id.endsWith("-sum-total")) {
-          if (debugDelete) console.log("[DELETE DEBUG] ??? N\uFFFDud Total PROT\uFFFDG\uFFFD (extraCandidates):", n.id);
           return false;
         }
         const looksLikeDisplay = !!(meta?.autoCreateDisplayNode || meta?.copiedFromNodeId || meta?.fromVariableId || meta?.sourceTemplateId);
@@ -35126,13 +35208,11 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
             }
             for (const rid of Array.from(removedSet)) {
               if (normalizedCopiedFrom.includes(String(rid))) {
-                if (debugDelete) console.log("[DELETE DEBUG] matched via copiedFromNodeId include", { candidateId: n.id, removedId: rid });
                 return true;
               }
             }
           } catch {
             if (removedSet.has(String(meta.copiedFromNodeId))) {
-              if (debugDelete) console.log("[DELETE DEBUG] matched via copiedFromNodeId direct", { candidateId: n.id, copiedFrom: meta.copiedFromNodeId });
               return true;
             }
           }
@@ -35146,7 +35226,6 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
                 if (typeof v === "object" && v.id) normalizedCopiedFromIds.push(String(v.id));
                 else normalizedCopiedFromIds.push(String(v));
                 if (debugDelete && looksLikeDisplay && !shouldDelete) {
-                  console.log("[DELETE DEBUG] Candidate not deleted, metadata:", { id: n.id, meta });
                 }
               });
             } else if (typeof meta.copiedFromNodeId === "string") {
@@ -35168,13 +35247,11 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
             }
             for (const rid of Array.from(removedSet)) {
               if (normalizedCopiedFromIds.includes(String(rid))) {
-                if (debugDelete) console.log("[DELETE DEBUG] matched via normalizedCopiedFromIds", { candidateId: n.id, removedId: rid });
                 return true;
               }
             }
           } catch {
             if (removedSet.has(String(meta.copiedFromNodeId))) {
-              if (debugDelete) console.log("[DELETE DEBUG] matched via copiedFromNodeId simple", { candidateId: n.id, copiedFrom: meta.copiedFromNodeId });
               return true;
             }
           }
@@ -35182,14 +35259,12 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         if (meta.copiedFromNodeId && meta.duplicatedFromRepeater && (meta.copySuffix != null || meta.suffixNum != null)) {
           const key2 = `${meta.duplicatedFromRepeater}|${String(meta.copySuffix ?? meta.suffixNum)}`;
           if (removedRepeaterCopyPairs.has(key2)) {
-            if (debugDelete) console.log("[DELETE DEBUG] matched via removedRepeaterCopyPairs", { candidateId: n.id, key: key2 });
             return true;
           }
         }
         if (meta?.duplicatedFromRepeater && (meta?.copySuffix != null || meta?.suffixNum != null)) {
           const key2 = `${meta.duplicatedFromRepeater}|${String(meta.copySuffix ?? meta.suffixNum)}`;
           if (removedRepeaterCopyPairs.has(key2)) {
-            if (debugDelete) console.log("[DELETE DEBUG] matched via removedRepeaterCopyPairs (fallback)", { candidateId: n.id, key: key2 });
             return true;
           }
         }
@@ -35223,14 +35298,12 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
             }
             for (const rid of Array.from(removedSet)) {
               if (normalizedFromVariableIds.some((v) => String(v).includes(String(rid)))) {
-                if (debugDelete) console.log("[DELETE DEBUG] matched via fromVariableId normalized", { candidateId: n.id, removedId: rid });
                 return true;
               }
             }
           } catch {
             for (const rid of Array.from(removedSet)) {
               if (String(meta.fromVariableId).includes(String(rid))) {
-                if (debugDelete) console.log("[DELETE DEBUG] matched via fromVariableId string include", { candidateId: n.id, removedId: rid });
                 return true;
               }
             }
@@ -35244,7 +35317,6 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
               const reCopie = new RegExp(`\\\\(Copie\\\\s*${obj.copySuffix}\\\\)$`, "i");
               const reDash = new RegExp(`-${obj.copySuffix}$`);
               if (reCopie.test(label) || reDash.test(label)) {
-                if (debugDelete) console.log("[DELETE DEBUG] matched via label suffix heuristic", { candidateId: n.id, label, obj });
                 return true;
               }
             }
@@ -35279,8 +35351,6 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         const ordered = Array.from(delSet).sort((a, b) => ddepth.get(b) - ddepth.get(a));
         await prisma47.$transaction(async (tx) => {
           for (const id of ordered) {
-            const candidateNode = remainingNodes.find((x) => x.id === id);
-            if (debugDelete && candidateNode) console.log("[DELETE DEBUG] Extra candidate to delete:", { id: candidateNode.id, label: candidateNode.label, metadata: candidateNode.metadata });
             try {
               await tx.treeBranchLeafNode.delete({ where: { id } });
               deletedExtra++;
@@ -35290,8 +35360,6 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
             }
           }
         });
-        console.log("[DELETE] Extra display nodes deleted:", deletedExtra);
-        console.log("[DELETE] Extra display node IDs deleted:", deletedExtraIds);
       }
     } catch (e) {
       console.warn("[DELETE] Extra cleanup failed", e.message);
@@ -35303,31 +35371,26 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         where: {
           OR: [
             { nodeId: { in: allDeletedIds } },
-            // Variables attach�es aux nodes supprim�s
+            // Variables attachÃƒÂ¯Ã‚Â¿Ã‚Â½es aux nodes supprimÃƒÂ¯Ã‚Â¿Ã‚Â½s
             { sourceNodeId: { in: allDeletedIds } }
-            // Variables pointant depuis les nodes supprim�s
+            // Variables pointant depuis les nodes supprimÃƒÂ¯Ã‚Â¿Ã‚Â½s
           ]
         },
         select: { id: true, name: true, nodeId: true }
       });
-      console.log(`[DELETE] Trouv\uFFFD ${variablesToCheck.length} variable(s) potentiellement orpheline(s)`);
       const varIdsToDelete = [];
       const suffixPattern = /-\d+$/;
       for (const variable of variablesToCheck) {
         if (suffixPattern.test(variable.id)) {
-          console.log(`[DELETE] ??? Variable suffix\uFFFDe sera supprim\uFFFDe: ${variable.name} (${variable.id})`);
           varIdsToDelete.push(variable.id);
         } else {
-          console.log(`[DELETE] ??? Variable ORIGINALE sera PR\uFFFDSERV\uFFFDE: ${variable.name} (${variable.id})`);
         }
       }
       if (varIdsToDelete.length > 0) {
         const deletedVarCount = await prisma47.treeBranchLeafNodeVariable.deleteMany({
           where: { id: { in: varIdsToDelete } }
         });
-        console.log(`[DELETE] ? ${deletedVarCount.count} variable(s) suffix\uFFFDe(s) supprim\uFFFDe(s)`);
       } else {
-        console.log(`[DELETE] ?? Aucune variable suffix\uFFFDe \uFFFD supprimer (variables originales pr\uFFFDserv\uFFFDes)`);
       }
     } catch (varCleanError) {
       console.warn("[DELETE] Impossible de nettoyer les variables orphelines:", varCleanError.message);
@@ -35340,18 +35403,17 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       for (const node of remainingNodes) {
         const meta = node.metadata;
         if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
-          console.log(`[DELETE] ?? Mise \uFFFD jour du champ Total: ${node.id}`);
           updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma47).catch((err) => {
-            console.warn(`[DELETE] ?? Erreur mise \uFFFD jour champ Total ${node.id}:`, err);
+            console.warn(`[DELETE] ?? Erreur mise \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD jour champ Total ${node.id}:`, err);
           });
         }
       }
     } catch (sumUpdateError) {
-      console.warn("[DELETE] Erreur lors de la mise \uFFFD jour des champs Total:", sumUpdateError.message);
+      console.warn("[DELETE] Erreur lors de la mise \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD jour des champs Total:", sumUpdateError.message);
     }
     res.json({
       success: true,
-      message: `Sous-arbre supprim\uFFFD (${deletedSubtreeIds.length} n\uFFFDud(s)), orphelines supprim\uFFFDes: ${deletedOrphans}`,
+      message: `Sous-arbre supprim\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD (${deletedSubtreeIds.length} n\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud(s)), orphelines supprim\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDes: ${deletedOrphans}`,
       deletedCount: deletedSubtreeIds.length,
       deletedIds: allDeletedIds,
       // merged: subtree + orphan + extra display nodes
@@ -35386,11 +35448,9 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         if (!n.metadata) return false;
         const meta = n.metadata;
         if (meta?.isSumDisplayField === true) {
-          console.log(`[AGGRESSIVE CLEANUP] ??? N\uFFFDud Total PROT\uFFFDG\uFFFD: ${n.id} (${n.label})`);
           return false;
         }
         if (n.id.endsWith("-sum-total")) {
-          console.log(`[AGGRESSIVE CLEANUP] ??? N\uFFFDud Total PROT\uFFFDG\uFFFD (par ID): ${n.id}`);
           return false;
         }
         try {
@@ -35412,7 +35472,6 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
           }
         });
         if (dd.length > 0) {
-          console.log("[AGGRESSIVE CLEANUP] Additional deleted nodes (by metadata scan):", dd);
         }
       }
     } catch (e) {
@@ -35420,7 +35479,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     }
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node subtree:", error);
-    res.status(500).json({ error: "Impossible de supprimer le n\u0153ud et ses descendants" });
+    res.status(500).json({ error: "Impossible de supprimer le n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud et ses descendants" });
   }
 });
 router56.get("/nodes/:nodeId", async (req2, res) => {
@@ -35440,11 +35499,11 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
         TreeBranchLeafTree: { select: { organizationId: true } }
       }
     });
-    if (!node) return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+    if (!node) return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     return res.json({
       id: node.id,
@@ -35457,7 +35516,7 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node info:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.get("/nodes/:nodeId/full", async (req2, res) => {
@@ -35468,9 +35527,9 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!root) return res.status(404).json({ error: "N\u0153ud introuvable" });
+    if (!root) return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable" });
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
@@ -35527,8 +35586,8 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
       nodes
     });
   } catch (error) {
-    console.error("\u274C [/nodes/:nodeId/full] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors de l\u2019analyse compl\xE8te de la branche" });
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/full] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de l\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u20AC\u017E\xC2\xA2analyse compl\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8te de la branche" });
   }
 });
 router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
@@ -35539,9 +35598,9 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!node) return res.status(404).json({ error: "N\u0153ud introuvable" });
+    if (!node) return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable" });
     if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const ids = /* @__PURE__ */ new Set();
     if (node.sharedReferenceId) ids.add(node.sharedReferenceId);
@@ -35574,8 +35633,8 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [/nodes/:nodeId/shared-references] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors de l\u2019analyse des r\xE9f\xE9rences partag\xE9es" });
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/shared-references] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de l\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u20AC\u017E\xC2\xA2analyse des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
 async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
@@ -35584,9 +35643,9 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
-  if (!copyRoot) throw new Error("N\u0153ud introuvable");
+  if (!copyRoot) throw new Error("N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable");
   if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
-    throw new Error("Acc\xE8s non autoris\xE9");
+    throw new Error("Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9");
   }
   const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const byId = new Map(all.map((n) => [n.id, n]));
@@ -35695,7 +35754,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
         sharedReferenceIds: [],
         sharedReferenceName: orig.sharedReferenceName ?? orig.label ?? null,
         sharedReferenceDescription: orig.sharedReferenceDescription ?? orig.description ?? null,
-        // ?? COLONNES LINKED*** : Copier les r�f�rences depuis le n�ud original avec IDs suffix�s
+        // ?? COLONNES LINKED*** : Copier les rÃƒÂ¯Ã‚Â¿Ã‚Â½fÃƒÂ¯Ã‚Â¿Ã‚Â½rences depuis le nÃƒÂ¯Ã‚Â¿Ã‚Â½ud original avec IDs suffixÃƒÂ¯Ã‚Â¿Ã‚Â½s
         linkedFormulaIds: Array.isArray(orig.linkedFormulaIds) ? orig.linkedFormulaIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
         linkedConditionIds: Array.isArray(orig.linkedConditionIds) ? orig.linkedConditionIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
         linkedTableIds: Array.isArray(orig.linkedTableIds) ? orig.linkedTableIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
@@ -35705,7 +35764,6 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
       };
       await prisma47.treeBranchLeafNode.create({ data: toCreate });
       if (Array.isArray(orig.linkedVariableIds) && orig.linkedVariableIds.length > 0) {
-        console.log(`?? [SHARED-REF] Copie de ${orig.linkedVariableIds.length} variable(s) pour ${newId}`);
         const variableCopyCache = /* @__PURE__ */ new Map();
         const formulaIdMap = /* @__PURE__ */ new Map();
         const conditionIdMap = /* @__PURE__ */ new Map();
@@ -35717,7 +35775,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
               originalVarId,
               chosenSuffix,
               newId,
-              // Le nouveau n�ud qui poss�de cette variable
+              // Le nouveau nÃƒÂ¯Ã‚Â¿Ã‚Â½ud qui possÃƒÂ¯Ã‚Â¿Ã‚Â½de cette variable
               prisma47,
               {
                 formulaIdMap,
@@ -35730,9 +35788,8 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
               }
             );
             if (copyResult.success) {
-              console.log(`  ? [SHARED-REF] Variable copi\uFFFDe: ${copyResult.variableId}`);
             } else {
-              console.warn(`  ?? [SHARED-REF] \uFFFDchec copie variable ${originalVarId}: ${copyResult.error}`);
+              console.warn(`  ?? [SHARED-REF] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec copie variable ${originalVarId}: ${copyResult.error}`);
             }
           } catch (e) {
             console.warn(`  ?? [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
@@ -35777,8 +35834,8 @@ router56.post("/nodes/:nodeId/apply-shared-references-from-original", async (req
     const result = await applySharedReferencesFromOriginalInternal(req2, nodeId);
     return res.json(result);
   } catch (error) {
-    console.error("\u274C [/nodes/:nodeId/apply-shared-references-from-original] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors de l'application des r\xE9f\xE9rences partag\xE9es" });
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/apply-shared-references-from-original] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de l'application des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
 router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
@@ -35790,9 +35847,9 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!root) return res.status(404).json({ error: "N\u0153ud introuvable" });
+    if (!root) return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable" });
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
@@ -35865,20 +35922,19 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     }
     return res.json({ success: true, unlinked: collected.size, orphanCandidates, deletedOrphans: deletedCount });
   } catch (error) {
-    console.error("\u274C [/nodes/:nodeId/unlink-shared-references] Erreur:", error);
-    res.status(500).json({ error: "Erreur lors du d\xE9lier/suppression des r\xE9f\xE9rences partag\xE9es" });
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/unlink-shared-references] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors du d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9lier/suppression des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
 router56.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
-    console.log("??? [TBL NEW ROUTE][GET /data] treeId=%s nodeId=%s", treeId, nodeId);
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\uFFFD" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD" });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
@@ -35890,21 +35946,9 @@ router56.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
     if (variable) {
       const { sourceType, sourceRef, fixedValue, selectedNodeId, exposedKey } = variable;
-      console.log(
-        "?? [TBL NEW ROUTE][GET /data] payload keys=%s hasSource=%s ref=%s fixed=%s selNode=%s (owner=%s proxied=%s)",
-        Object.keys(variable).join(","),
-        !!sourceType,
-        sourceRef,
-        fixedValue,
-        selectedNodeId,
-        ownerNodeId,
-        proxiedFromNodeId
-      );
       if (!sourceType && !sourceRef) {
-        console.log("?? [TBL NEW ROUTE][GET /data] Aucune sourceType/sourceRef retournee pour nodeId=%s (exposedKey=%s)", nodeId, exposedKey);
       }
     } else {
-      console.log("?? [TBL NEW ROUTE][GET /data] variable inexistante nodeId=%s -> {} (owner=%s proxied=%s)", nodeId, ownerNodeId, proxiedFromNodeId);
     }
     const usedVariableId = node.data_activeId || variable?.id || null;
     if (variable) {
@@ -35929,18 +35973,17 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       isReadonly,
       defaultValue,
       metadata,
-      // 🎯 NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
+      // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS pour sourceType/sourceRef/fixedValue
       sourceType,
       sourceRef,
       fixedValue,
       selectedNodeId
     } = req2.body || {};
-    console.log("\u{1F6F0}\uFE0F [TBL NEW ROUTE][PUT /data] nodeId=%s body=%o", nodeId, { exposedKey, sourceType, sourceRef, fixedValue, selectedNodeId });
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
@@ -35950,7 +35993,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       select: { id: true, label: true, linkedVariableIds: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const safeExposedKey = typeof exposedKey === "string" && exposedKey.trim() ? exposedKey.trim() : null;
     const displayName = safeExposedKey || node.label || `var_${String(nodeId).slice(0, 4)}`;
@@ -35961,7 +36004,6 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const targetNodeId = ownerNodeId ?? nodeId;
     const proxiedTargetNodeId = nodeId === targetNodeId ? null : nodeId;
     if (proxiedTargetNodeId) {
-      console.log("?? [TBL NEW ROUTE][PUT /data] node %s proxied vers variable du noeud %s", nodeId, targetNodeId);
     }
     const updated = await prisma47.$transaction(async (tx) => {
       const variable = await tx.treeBranchLeafNodeVariable.upsert({
@@ -35976,7 +36018,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           isReadonly: typeof isReadonly === "boolean" ? isReadonly : void 0,
           defaultValue: typeof defaultValue === "string" ? defaultValue : void 0,
           metadata: metadata && typeof metadata === "object" ? metadata : void 0,
-          // 🎯 NOUVEAUX CHAMPS source
+          // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS source
           sourceType: typeof sourceType === "string" ? sourceType : void 0,
           sourceRef: typeof sourceRef === "string" ? sourceRef : void 0,
           fixedValue: typeof fixedValue === "string" ? fixedValue : void 0,
@@ -35995,7 +36037,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           isReadonly: typeof isReadonly === "boolean" ? isReadonly : false,
           defaultValue: typeof defaultValue === "string" ? defaultValue : null,
           metadata: metadata && typeof metadata === "object" ? metadata : {},
-          // 🎯 NOUVEAUX CHAMPS source
+          // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS source
           sourceType: typeof sourceType === "string" ? sourceType : "fixed",
           sourceRef: typeof sourceRef === "string" ? sourceRef : null,
           fixedValue: typeof fixedValue === "string" ? fixedValue : null,
@@ -36012,7 +36054,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           isReadonly: true,
           defaultValue: true,
           metadata: true,
-          // 🎯 NOUVEAUX CHAMPS source
+          // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAUX CHAMPS source
           sourceType: true,
           sourceRef: true,
           fixedValue: true,
@@ -36022,7 +36064,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       const nodeUpdateData = {
         hasData: true,
         updatedAt: /* @__PURE__ */ new Date(),
-        // ?? FIX: Toujours synchroniser unit et precision de la variable vers le n�ud
+        // ?? FIX: Toujours synchroniser unit et precision de la variable vers le nÃƒÂ¯Ã‚Â¿Ã‚Â½ud
         data_unit: variable.unit ?? null,
         data_precision: variable.precision ?? null,
         data_displayFormat: variable.displayFormat ?? null,
@@ -36032,7 +36074,6 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       };
       if (variable.sourceRef && variable.sourceRef.startsWith("@table.")) {
         const tableId = variable.sourceRef.replace("@table.", "");
-        console.log(`[TBL] ?? Configuration lookup pour table ${tableId}`);
         const instanceConfig = {
           sourceType: variable.sourceType || "tree",
           sourceRef: variable.sourceRef,
@@ -36054,7 +36095,6 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         nodeUpdateData.table_activeId = tableId;
         nodeUpdateData.table_instances = { [tableId]: instanceConfig };
         nodeUpdateData.hasTable = true;
-        console.log(`[TBL] ? data_activeId/table_activeId="${tableId}" configur\uFFFDs`);
       }
       const nodesToUpdate = /* @__PURE__ */ new Set([targetNodeId]);
       if (nodeId !== targetNodeId) {
@@ -36078,7 +36118,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         try {
           await linkVariableToAllCapacityNodes(tx, variable.id, variable.sourceRef);
         } catch (e) {
-          console.warn(`?? [TreeBranchLeaf API] \uFFFDchec liaison automatique linkedVariableIds pour ${variable.id}:`, e.message);
+          console.warn(`?? [TreeBranchLeaf API] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec liaison automatique linkedVariableIds pour ${variable.id}:`, e.message);
         }
       }
       try {
@@ -36114,13 +36154,11 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         const idsToAdd = [...newIds].filter((id) => !oldIds.has(id));
         const idsToRemove = [...oldIds].filter((id) => !newIds.has(id));
         if (idsToAdd.length > 0) {
-          console.log(`[TBL] Adding variable ref ${variable.id} to ${idsToAdd.length} nodes.`);
           for (const refId of idsToAdd) {
             await addToNodeLinkedField7(tx, refId, "linkedVariableIds", [variable.id]);
           }
         }
         if (idsToRemove.length > 0) {
-          console.log(`[TBL] Removing variable ref ${variable.id} from ${idsToRemove.length} nodes.`);
           for (const refId of idsToRemove) {
             await removeFromNodeLinkedField(tx, refId, "linkedVariableIds", [variable.id]);
           }
@@ -36144,11 +36182,9 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         const variableIdsToAdd = [...newVariableRefs].filter((id) => !oldVariableRefs.has(id));
         const variableIdsToRemove = [...oldVariableRefs].filter((id) => !newVariableRefs.has(id));
         if (variableIdsToAdd.length > 0) {
-          console.log(`[TBL] Adding ${variableIdsToAdd.length} variable references to node ${targetNodeId}.`);
           await addToNodeLinkedField7(tx, targetNodeId, "linkedVariableIds", variableIdsToAdd);
         }
         if (variableIdsToRemove.length > 0) {
-          console.log(`[TBL] Removing ${variableIdsToRemove.length} variable references from node ${targetNodeId}.`);
           await removeFromNodeLinkedField(tx, targetNodeId, "linkedVariableIds", variableIdsToRemove);
         }
         try {
@@ -36157,7 +36193,6 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
             select: { linkedTableIds: true }
           });
           if (nodeData && nodeData.linkedTableIds && nodeData.linkedTableIds.length > 0) {
-            console.log(`[TBL] ?? Traitement des lookups pour ${nodeData.linkedTableIds.length} table(s)...`);
             for (const tableId of nodeData.linkedTableIds) {
               const table = await tx.treeBranchLeafNodeTable.findUnique({
                 where: { id: tableId },
@@ -36170,13 +36205,11 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
                 }
               });
               if (table) {
-                console.log(`[TBL] ?? Table trouv\uFFFDe: "${table.name}" (ID: ${table.id})`);
                 const selectConfigsUsingTable = await tx.treeBranchLeafSelectConfig.findMany({
                   where: { tableReference: table.id },
                   select: { nodeId: true }
                 });
                 if (selectConfigsUsingTable.length > 0) {
-                  console.log(`[TBL] ? ${selectConfigsUsingTable.length} champ(s) Select/Cascader utilise(nt) cette table`);
                   for (const config of selectConfigsUsingTable) {
                     const selectNode = await tx.treeBranchLeafNode.findUnique({
                       where: { id: config.nodeId },
@@ -36197,9 +36230,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
                             updatedAt: /* @__PURE__ */ new Date()
                           }
                         });
-                        console.log(`[TBL] ? linkedVariableIds mis \uFFFD jour pour "${selectNode.label}" (${selectNode.id})`);
                       } else {
-                        console.log(`[TBL] ?? linkedVariableIds d\uFFFDj\uFFFD \uFFFD jour pour "${selectNode.label}"`);
                       }
                     }
                   }
@@ -36230,37 +36261,33 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   } catch (error) {
     const err = error;
     if (err && err.code === "P2002") {
-      return res.status(409).json({ error: "La variable expos\xE9e (exposedKey) existe d\xE9j\xE0" });
+      return res.status(409).json({ error: "La variable expos\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e (exposedKey) existe d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9j\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0" });
     }
     console.error("[TreeBranchLeaf API] Error updating node data:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la donn\xE9e du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la donn\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
-    console.log(`\u{1F5D1}\uFE0F [DELETE Variable] D\xE9but suppression pour nodeId=${nodeId}`);
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
       select: { id: true, linkedVariableIds: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const { variable, ownerNodeId, proxiedFromNodeId } = await resolveNodeVariable(nodeId, node.linkedVariableIds);
     if (!variable || !ownerNodeId) {
-      return res.status(404).json({ error: "Variable non trouv\xE9e" });
+      return res.status(404).json({ error: "Variable non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    console.log(`\u{1F50D} [DELETE Variable] Variable trouv\xE9e avec sourceRef: ${variable.sourceRef}`);
-    console.log(`\u{1F50D} [DELETE Variable] Variable trouv\xE9e avec sourceRef: ${variable.sourceRef}`);
-    console.log(`\u{1F4CC} [DELETE Variable] La capacit\xE9 r\xE9f\xE9renc\xE9e sera conserv\xE9e`);
     await prisma47.treeBranchLeafNodeVariable.delete({
       where: { nodeId: ownerNodeId }
     });
@@ -36276,26 +36303,23 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         where: {
           treeId,
           linkedVariableIds: { has: variable.id }
-          // On cherche les nœuds qui ont l'ID de notre variable
+          // On cherche les nÃƒâ€¦Ã¢â‚¬Å“uds qui ont l'ID de notre variable
         },
         select: { id: true, linkedVariableIds: true }
       });
-      console.log(`\u{1F9F9} [DELETE Variable] ${dependentNodes.length} n\u0153ud(s) d\xE9pendant(s) trouv\xE9(s) \xE0 nettoyer.`);
       for (const nodeToClean of dependentNodes) {
         const updatedLinkedIds = nodeToClean.linkedVariableIds.filter((id) => id !== variable.id);
         await prisma47.treeBranchLeafNode.update({
           where: { id: nodeToClean.id },
           data: { linkedVariableIds: updatedLinkedIds }
         });
-        console.log(`\u2705 [DELETE Variable] Nettoyage de linkedVariableIds termin\xE9 pour le n\u0153ud ${nodeToClean.id}`);
       }
     } catch (e) {
       console.warn("[DELETE Variable] Avertissement lors du nettoyage des linkedVariableIds:", e.message);
     }
-    console.log(`\u2705 [DELETE Variable] Variable ${variable.id} supprim\xE9e avec succ\xE8s (+ capacit\xE9 associ\xE9e si existante)`);
-    return res.json({ success: true, message: "Variable supprim\xE9e avec succ\xE8s" });
+    return res.json({ success: true, message: "Variable supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
-    console.error("\u274C [DELETE Variable] Erreur lors de la suppression:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [DELETE Variable] Erreur lors de la suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la variable" });
   }
 });
@@ -36313,12 +36337,12 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -36332,7 +36356,7 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
     return res.json(updated.conditionConfig || {});
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node conditions:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour des conditions du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour des conditions du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.get("/nodes/:nodeId/formula", async (req2, res) => {
@@ -36347,17 +36371,17 @@ router56.get("/nodes/:nodeId/formula", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     return res.json(node.formulaConfig || {});
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la formule du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la formule du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.put("/nodes/:nodeId/formula", async (req2, res) => {
@@ -36374,12 +36398,12 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const nodeOrg = node.TreeBranchLeafTree?.organizationId;
     const hasOrgCtx = typeof organizationId === "string" && organizationId.length > 0;
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -36393,7 +36417,7 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
     return res.json(updated.formulaConfig || {});
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la formule du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la formule du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.get("/nodes/:nodeId/formulas", async (req2, res) => {
@@ -36406,11 +36430,10 @@ router56.get("/nodes/:nodeId/formulas", async (req2, res) => {
       where: { nodeId },
       orderBy: { createdAt: "asc" }
     });
-    console.log(`[TreeBranchLeaf API] Formulas for node ${nodeId}:`, formulas.length);
     return res.json({ formulas });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node formulas:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des formules du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
@@ -36418,13 +36441,6 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, tokens: tokens2, description, targetProperty, constraintMessage } = req2.body || {};
-    console.log("\u{1F50D} Formula creation auth debug:", {
-      nodeId,
-      organizationId,
-      isSuperAdmin: isSuperAdmin2,
-      reqUser: req2.user,
-      headers: req2.headers["x-organization-id"]
-    });
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     if (!name || !Array.isArray(tokens2)) {
@@ -36446,7 +36462,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
         uniqueName = `${name} (${counter})`;
         counter++;
       } catch (error) {
-        console.error("Erreur lors de la v\xE9rification du nom de formule:", error);
+        console.error("Erreur lors de la v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification du nom de formule:", error);
         break;
       }
     }
@@ -36459,19 +36475,18 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
         tokens: tokens2,
         description: description ? String(description) : null,
         targetProperty: targetProperty ? String(targetProperty) : null,
-        // 🆕 Propriété cible
+        // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ PropriÃƒÆ’Ã‚Â©tÃƒÆ’Ã‚Â© cible
         constraintMessage: constraintMessage ? String(constraintMessage) : null,
-        // 🆕 Message de contrainte
+        // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ Message de contrainte
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] Activation automatique de la formule cr\xE9\xE9e pour le n\u0153ud ${nodeId}`);
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasFormula: true,
         formula_activeId: formula.id
-        // 🎯 NOUVEAU : Activer automatiquement la formule
+        // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAU : Activer automatiquement la formule
       }
     });
     try {
@@ -36483,11 +36498,10 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds after create:", e.message);
     }
-    console.log(`[TreeBranchLeaf API] Created formula for node ${nodeId}:`, formula.name);
     return res.status(201).json(formula);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la formule" });
+    res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la formule" });
   }
 });
 router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
@@ -36501,7 +36515,7 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
-      return res.status(404).json({ error: "Formule non trouv\xE9e" });
+      return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const updated = await prisma47.treeBranchLeafNodeFormula.update({
       where: { id: formulaId },
@@ -36510,13 +36524,12 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
         tokens: Array.isArray(tokens2) ? tokens2 : void 0,
         description: description !== void 0 ? description ? String(description) : null : void 0,
         targetProperty: targetProperty !== void 0 ? targetProperty ? String(targetProperty) : null : void 0,
-        // 🆕 Propriété cible
+        // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ PropriÃƒÆ’Ã‚Â©tÃƒÆ’Ã‚Â© cible
         constraintMessage: constraintMessage !== void 0 ? constraintMessage ? String(constraintMessage) : null : void 0,
-        // 🆕 Message de contrainte
+        // ÃƒÂ°Ã…Â¸Ã¢â‚¬Â Ã¢â‚¬Â¢ Message de contrainte
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] Updated formula ${formulaId} for node ${nodeId}`);
     try {
       const oldRefs = extractNodeIdsFromTokens2(existingFormula.tokens);
       const newRefs = extractNodeIdsFromTokens2(Array.isArray(tokens2) ? tokens2 : existingFormula.tokens);
@@ -36537,7 +36550,7 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
     return res.json(updated);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node formula:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la formule" });
+    res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la formule" });
   }
 });
 router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
@@ -36550,12 +36563,11 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
-      return res.status(404).json({ error: "Formule non trouv\xE9e" });
+      return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     await prisma47.treeBranchLeafNodeFormula.delete({
       where: { id: formulaId }
     });
-    console.log(`[TreeBranchLeaf API] Deleted formula ${formulaId} for node ${nodeId}`);
     try {
       const variableWithFormula = await prisma47.treeBranchLeafNodeVariable.findFirst({
         where: {
@@ -36567,7 +36579,6 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
         await prisma47.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
-        console.log(`\u2705 [TreeBranchLeaf API] Variable associ\xE9e supprim\xE9e pour formule ${formulaId}`);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
@@ -36586,8 +36597,7 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       where: { id: nodeId },
       data: { hasFormula: remainingFormulas > 0 }
     });
-    console.log(`[TreeBranchLeaf API] Updated hasFormula to ${remainingFormulas > 0} for node ${nodeId}`);
-    return res.json({ success: true, message: "Formule supprim\xE9e avec succ\xE8s" });
+    return res.json({ success: true, message: "Formule supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node formula:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la formule" });
@@ -36618,18 +36628,13 @@ router56.get("/reusables/formulas", async (req2, res) => {
     const items = allFormulas.map((f) => ({
       ...f,
       type: "node",
-      nodeLabel: f.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+      nodeLabel: f.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
       treeId: f.TreeBranchLeafNode?.treeId || null
     }));
-    console.log("[TreeBranchLeaf API] All formulas listing", {
-      org: organizationId,
-      isSuperAdmin: isSuperAdmin2,
-      totalCount: allFormulas.length
-    });
     return res.json({ items });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error listing all formulas:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des formules" });
   }
 });
 router56.get("/reusables/formulas/:id", async (req2, res) => {
@@ -36647,21 +36652,21 @@ router56.get("/reusables/formulas/:id", async (req2, res) => {
         }
       }
     });
-    if (!item) return res.status(404).json({ error: "Formule non trouv\xE9e" });
+    if (!item) return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     if (!isSuperAdmin2) {
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+        return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
       }
     }
     return res.json({
       ...item,
       type: "node",
-      nodeLabel: item.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+      nodeLabel: item.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
       treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting formula:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la formule" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la formule" });
   }
 });
 router56.get("/reusables/conditions", async (req2, res) => {
@@ -36689,19 +36694,14 @@ router56.get("/reusables/conditions", async (req2, res) => {
     const items = allConditions.map((c) => ({
       ...c,
       type: "node",
-      nodeLabel: c.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+      nodeLabel: c.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
       treeId: c.TreeBranchLeafNode?.treeId || null,
       nodeId: c.nodeId
     }));
-    console.log("[TreeBranchLeaf API] All conditions listing", {
-      org: organizationId,
-      isSuperAdmin: isSuperAdmin2,
-      totalCount: items.length
-    });
     return res.json({ items });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error listing reusable conditions:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des conditions r\xE9utilisables" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des conditions r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9utilisables" });
   }
 });
 router56.get("/reusables/conditions/:id", async (req2, res) => {
@@ -36719,21 +36719,21 @@ router56.get("/reusables/conditions/:id", async (req2, res) => {
         }
       }
     });
-    if (!item) return res.status(404).json({ error: "Condition non trouv\xE9e" });
+    if (!item) return res.status(404).json({ error: "Condition non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     if (!isSuperAdmin2) {
       if (item.organizationId && item.organizationId !== organizationId) {
-        return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+        return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
       }
     }
     return res.json({
       ...item,
       type: "node",
-      nodeLabel: item.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+      nodeLabel: item.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
       treeId: item.TreeBranchLeafNode?.treeId || null
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting condition:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la condition" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la condition" });
   }
 });
 router56.get("/reusables/tables", async (req2, res) => {
@@ -36763,47 +36763,36 @@ router56.get("/reusables/tables", async (req2, res) => {
       name: t.name,
       type: t.type,
       description: t.description,
-      nodeLabel: t.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+      nodeLabel: t.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
       treeId: t.TreeBranchLeafNode?.treeId || null,
       nodeId: t.nodeId,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt
     }));
-    console.log("[TreeBranchLeaf API] All tables listing", {
-      org: organizationId,
-      isSuperAdmin: isSuperAdmin2,
-      totalCount: items.length
-    });
     return res.json({ items });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error listing reusable tables:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des tables r\xE9utilisables" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des tables r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9utilisables" });
   }
 });
 router56.get("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F50D} GET conditions for node ${nodeId}:`);
-    console.log(`[TreeBranchLeaf API] - organizationId: ${organizationId}`);
-    console.log(`[TreeBranchLeaf API] - isSuperAdmin: ${isSuperAdmin2}`);
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const whereClause = { nodeId };
     if (!isSuperAdmin2 && organizationId) {
       whereClause.organizationId = organizationId;
     }
-    console.log(`[TreeBranchLeaf API] - whereClause:`, whereClause);
     const conditions = await prisma47.treeBranchLeafNodeCondition.findMany({
       where: whereClause,
       orderBy: { createdAt: "asc" }
     });
-    console.log(`[TreeBranchLeaf API] Conditions for node ${nodeId} (org: ${organizationId}):`, conditions.length);
-    console.log(`[TreeBranchLeaf API] Details:`, conditions.map((c) => ({ id: c.id, name: c.name, organizationId: c.organizationId })));
     return res.json({ conditions });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node conditions:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des conditions du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des conditions du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
@@ -36812,7 +36801,6 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
     const { fieldValues = {}, values = {}, submissionId, testMode = true } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const allValues = { ...fieldValues, ...values };
-    console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9valuation condition ${conditionId}:`, { allValues, submissionId, testMode });
     const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
@@ -36825,10 +36813,10 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       }
     });
     if (!condition) {
-      return res.status(404).json({ error: "Condition non trouv\xE9e" });
+      return res.status(404).json({ error: "Condition non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     if (!isSuperAdmin2 && condition.organizationId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette condition" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette condition" });
     }
     try {
       const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
@@ -36836,18 +36824,16 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       Object.entries(allValues).forEach(([nodeId, value]) => {
         valueMapLocal.set(nodeId, value);
       });
-      console.log("[TBL-PRISMA] \u{1F9EE} \xC9valuation avec operation-interpreter:", { conditionId, values: Object.fromEntries(valueMapLocal) });
       const calculationResult = await evaluateVariableOperation2(
         condition.nodeId,
         submissionId || conditionId,
         prisma47,
         valueMapLocal
       );
-      console.log("[TBL-PRISMA] \u2705 R\xE9sultat \xE9valuation:", calculationResult);
       const result = {
         conditionId: condition.id,
         conditionName: condition.name,
-        nodeLabel: condition.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+        nodeLabel: condition.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
         operationSource: calculationResult.operationSource,
         operationDetail: calculationResult.operationDetail,
         operationResult: calculationResult.operationResult,
@@ -36860,15 +36846,15 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       };
       return res.json(result);
     } catch (error) {
-      console.error("[TBL-PRISMA] \u274C Erreur \xE9valuation TBL-prisma:", error);
+      console.error("[TBL-PRISMA] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation TBL-prisma:", error);
       return res.status(500).json({
-        error: "Erreur lors de l'\xE9valuation TBL-prisma",
+        error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation TBL-prisma",
         details: error instanceof Error ? error.message : "Erreur inconnue"
       });
     }
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error evaluating condition:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xE9valuation de la condition" });
+    res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la condition" });
   }
 });
 router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
@@ -36876,13 +36862,6 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, conditionSet, description } = req2.body || {};
-    console.log("\u{1F50D} Condition creation auth debug:", {
-      nodeId,
-      organizationId,
-      isSuperAdmin: isSuperAdmin2,
-      reqUser: req2.user,
-      headers: req2.headers["x-organization-id"]
-    });
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     if (!name || !conditionSet) {
@@ -36908,7 +36887,6 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
         break;
       }
     }
-    console.log(`[TreeBranchLeaf API] Nom unique g\xE9n\xE9r\xE9: "${uniqueName}" (original: "${name}")`);
     const condition = await prisma47.treeBranchLeafNodeCondition.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
@@ -36920,16 +36898,14 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] Activation automatique de la condition cr\xE9\xE9e pour le n\u0153ud ${nodeId}`);
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasCondition: true,
         condition_activeId: condition.id
-        // 🎯 NOUVEAU : Activer automatiquement la condition
+        // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ NOUVEAU : Activer automatiquement la condition
       }
     });
-    console.log(`[TreeBranchLeaf API] Created condition for node ${nodeId}:`, condition.name);
     try {
       await addToNodeLinkedField7(prisma47, nodeId, "linkedConditionIds", [condition.id]);
       const refIds = Array.from(extractNodeIdsFromConditionSet2(conditionSet));
@@ -36942,7 +36918,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     return res.status(201).json(condition);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating node condition:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la condition" });
+    res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la condition" });
   }
 });
 router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
@@ -36956,7 +36932,7 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
-      return res.status(404).json({ error: "Condition non trouv\xE9e" });
+      return res.status(404).json({ error: "Condition non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const updated = await prisma47.treeBranchLeafNodeCondition.update({
       where: { id: conditionId },
@@ -36967,7 +36943,6 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] Updated condition ${conditionId} for node ${nodeId}`);
     try {
       const oldRefs = extractNodeIdsFromConditionSet2(existingCondition.conditionSet);
       const newRefs = extractNodeIdsFromConditionSet2(conditionSet ?? existingCondition.conditionSet);
@@ -36988,7 +36963,7 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
     return res.json(updated);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node condition:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la condition" });
+    res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la condition" });
   }
 });
 router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
@@ -37001,12 +36976,11 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
-      return res.status(404).json({ error: "Condition non trouv\xE9e" });
+      return res.status(404).json({ error: "Condition non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     await prisma47.treeBranchLeafNodeCondition.delete({
       where: { id: conditionId }
     });
-    console.log(`[TreeBranchLeaf API] Deleted condition ${conditionId} for node ${nodeId}`);
     try {
       const variableWithCondition = await prisma47.treeBranchLeafNodeVariable.findFirst({
         where: {
@@ -37018,7 +36992,6 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
         await prisma47.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
-        console.log(`\u2705 [TreeBranchLeaf API] Variable associ\xE9e supprim\xE9e pour condition ${conditionId}`);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
@@ -37037,8 +37010,7 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       where: { id: nodeId },
       data: { hasCondition: remainingConditions > 0 }
     });
-    console.log(`[TreeBranchLeaf API] Updated hasCondition to ${remainingConditions > 0} for node ${nodeId}`);
-    return res.json({ success: true, message: "Condition supprim\xE9e avec succ\xE8s" });
+    return res.json({ success: true, message: "Condition supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting node condition:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la condition" });
@@ -37050,7 +37022,6 @@ router56.get("/tables/:id", async (req2, res) => {
   const page = parseInt(req2.query.page) || 1;
   const limit = parseInt(req2.query.limit) || 100;
   const offset = (page - 1) * limit;
-  console.log(`[GET /tables/:id] R\xE9cup\xE9ration de la table ${id} avec pagination (page: ${page}, limit: ${limit})`);
   try {
     const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id },
@@ -37068,11 +37039,11 @@ router56.get("/tables/:id", async (req2, res) => {
       }
     });
     if (!table) {
-      return res.status(404).json({ error: "Table non trouv\xE9e" });
+      return res.status(404).json({ error: "Table non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const tableOrgId = table.node?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s non autoris\xE9 \xE0 cette table" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette table" });
     }
     const rows = await prisma47.treeBranchLeafNodeTableRow.findMany({
       where: { tableId: id },
@@ -37080,19 +37051,18 @@ router56.get("/tables/:id", async (req2, res) => {
       take: limit,
       skip: offset
     });
-    console.log(`[GET /tables/:id] ${rows.length} lignes r\xE9cup\xE9r\xE9es pour la table ${id}.`);
     res.json({
       ...table,
       rows: rows.map((r) => r.cells),
-      // Renvoyer uniquement les données des cellules
+      // Renvoyer uniquement les donnÃƒÆ’Ã‚Â©es des cellules
       page,
       limit,
       totalRows: table.rowCount,
       totalPages: Math.ceil(table.rowCount / limit)
     });
   } catch (error) {
-    console.error(`\u274C [GET /tables/:id] Erreur lors de la r\xE9cup\xE9ration de la table ${id}:`, error);
-    res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer la table" });
+    console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [GET /tables/:id] Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la table ${id}:`, error);
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer la table" });
   }
 });
 var isJsonObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
@@ -37103,9 +37073,6 @@ var readMeta = (value) => {
   return jsonClone(value);
 };
 var buildRecordRows = (columns, matrix) => {
-  console.log("[buildRecordRows] \u{1F50D} ENTR\xC9E:");
-  console.log("[buildRecordRows] columns:", columns.length);
-  console.log("[buildRecordRows] matrix:", matrix.length, "lignes");
   const result = matrix.map((row) => {
     const obj = {};
     columns.forEach((col, index) => {
@@ -37113,15 +37080,10 @@ var buildRecordRows = (columns, matrix) => {
     });
     return obj;
   });
-  console.log("[buildRecordRows] \u{1F3AF} SORTIE:", result.length, "records");
   return result;
 };
 var normalizeTableInstance = (table) => {
   try {
-    console.log("[normalizeTableInstance] \u{1F504} ARCHITECTURE NORMALIS\xC9E");
-    console.log("[normalizeTableInstance] table.id:", table.id);
-    console.log("[normalizeTableInstance] tableColumns:", table.tableColumns?.length || 0);
-    console.log("[normalizeTableInstance] tableRows:", table.tableRows?.length || 0);
     const columns = (table.tableColumns || []).sort((a, b) => a.columnIndex - b.columnIndex).map((col) => col.name);
     const rows = (table.tableRows || []).sort((a, b) => a.rowIndex - b.rowIndex).map((row) => {
       let cells;
@@ -37147,9 +37109,6 @@ var normalizeTableInstance = (table) => {
       }
       return Array.isArray(cells) ? cells.slice(1) : [];
     });
-    console.log("[normalizeTableInstance] \u2705 columns:", columns.length, columns);
-    console.log("[normalizeTableInstance] \u2705 rows:", rows.length, rows);
-    console.log("[normalizeTableInstance] \u2705 matrix:", matrix.length);
     const meta = readMeta(table.meta);
     const result = {
       id: table.id,
@@ -37165,14 +37124,9 @@ var normalizeTableInstance = (table) => {
       order: table.order ?? 0,
       isDefault: Boolean(table.isDefault)
     };
-    console.log("[normalizeTableInstance] \u{1F3AF} SORTIE:");
-    console.log("[normalizeTableInstance] result.columns:", result.columns.length);
-    console.log("[normalizeTableInstance] result.rows:", result.rows.length);
-    console.log("[normalizeTableInstance] result.matrix:", result.matrix.length);
-    console.log("[normalizeTableInstance] result.records:", result.records.length);
     return result;
   } catch (error) {
-    console.error("[normalizeTableInstance] \u274C ERREUR FATALE:", error);
+    console.error("[normalizeTableInstance] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR FATALE:", error);
     console.error("[normalizeTableInstance] table.id:", table?.id);
     console.error("[normalizeTableInstance] table structure:", JSON.stringify(table, null, 2));
     throw error;
@@ -37206,24 +37160,19 @@ async function applyTableFilters(matrix, columns, filters, formValues) {
   }
   const validFilters = filters.filter((f) => f.column && f.valueRef && f.operator);
   if (validFilters.length === 0) {
-    console.log(`[applyTableFilters] \u26A0\uFE0F Aucun filtre valide (${filters.length} filtre(s) incomplet(s))`);
     return matrix.map((_, i) => i);
   }
-  console.log(`[applyTableFilters] \u{1F525} Application de ${validFilters.length} filtre(s) valide(s) sur ${filters.length} configur\xE9(s)`);
   const resolvedFilters = await Promise.all(
     validFilters.map(async (filter) => {
       const value = await resolveFilterValueRef(filter.valueRef, formValues);
-      console.log(`[applyTableFilters] Filtre "${filter.column}" ${filter.operator} "${filter.valueRef}" \u2192 valeur r\xE9solue: "${value}"`);
       return { ...filter, resolvedValue: value };
     })
   );
   const activeFilters = resolvedFilters.filter((f) => f.resolvedValue !== null && f.resolvedValue !== void 0);
   if (activeFilters.length === 0) {
-    console.log(`[applyTableFilters] \u26A0\uFE0F Toutes les valeurs de r\xE9f\xE9rence sont null/undefined \u2192 pas de filtrage`);
     return matrix.map((_, i) => i);
   }
   if (activeFilters.length < resolvedFilters.length) {
-    console.log(`[applyTableFilters] \u2139\uFE0F ${resolvedFilters.length - activeFilters.length} filtre(s) ignor\xE9(s) (valeur non d\xE9finie)`);
   }
   const matchingIndices = [];
   for (let rowIndex = 0; rowIndex < matrix.length; rowIndex++) {
@@ -37232,13 +37181,12 @@ async function applyTableFilters(matrix, columns, filters, formValues) {
     for (const filter of activeFilters) {
       const columnIndex = columns.indexOf(filter.column);
       if (columnIndex === -1) {
-        console.warn(`[applyTableFilters] \u26A0\uFE0F Colonne "${filter.column}" introuvable dans:`, columns);
+        console.warn(`[applyTableFilters] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Colonne "${filter.column}" introuvable dans:`, columns);
         passesAllFilters = false;
         break;
       }
       const cellValue = row[columnIndex];
       const passes = compareFilterValues(cellValue, filter.operator, filter.resolvedValue);
-      console.log(`[applyTableFilters] Ligne ${rowIndex}: cellule[${filter.column}]="${cellValue}" ${filter.operator} "${filter.resolvedValue}" \u2192 ${passes ? "\u2705" : "\u274C"}`);
       if (!passes) {
         passesAllFilters = false;
         break;
@@ -37248,22 +37196,18 @@ async function applyTableFilters(matrix, columns, filters, formValues) {
       matchingIndices.push(rowIndex);
     }
   }
-  console.log(`[applyTableFilters] \u2705 ${matchingIndices.length}/${matrix.length} lignes passent les filtres`);
   return matchingIndices;
 }
 async function resolveFilterValueRef(valueRef, formValues) {
   if (!valueRef) return null;
   if (valueRef.startsWith("@calculated.") || valueRef.startsWith("@calculated:")) {
     const nodeId = valueRef.replace(/^@calculated[.:]/, "");
-    console.log(`[resolveFilterValueRef] \u{1F9EE} R\xE9solution @calculated pour nodeId: ${nodeId}`);
     if (formValues[nodeId] !== void 0 && formValues[nodeId] !== null) {
       let value = formValues[nodeId];
       if (value && typeof value === "object" && "value" in value) {
         const objValue = value.value;
-        console.log(`[resolveFilterValueRef] \u{1F527} Valeur objet d\xE9tect\xE9e, extraction .value: ${objValue}`);
         value = objValue;
       }
-      console.log(`[resolveFilterValueRef] \u2705 Valeur trouv\xE9e dans formValues: ${value}`);
       return value;
     }
     const node = await prisma47.treeBranchLeafNode.findUnique({
@@ -37271,48 +37215,37 @@ async function resolveFilterValueRef(valueRef, formValues) {
       select: { id: true, label: true, calculatedValue: true }
     });
     if (node) {
-      console.log(`[resolveFilterValueRef] \u2705 Node trouv\xE9: "${node.label}", calculatedValue: ${node.calculatedValue}`);
       return node.calculatedValue ?? null;
     }
-    console.log(`[resolveFilterValueRef] \u26A0\uFE0F Node non trouv\xE9 pour ${nodeId}`);
     return null;
   }
   if (valueRef.startsWith("@select.") || valueRef.startsWith("@select:")) {
     const nodeId = valueRef.replace(/^@select[.:]/, "");
-    console.log(`[resolveFilterValueRef] \u{1F518} R\xE9solution @select pour nodeId: ${nodeId}`);
     let value = formValues[nodeId] ?? null;
     if (value && typeof value === "object" && "value" in value) {
       const objValue = value.value;
-      console.log(`[resolveFilterValueRef] \u{1F527} Valeur objet d\xE9tect\xE9e, extraction .value: ${objValue}`);
       value = objValue;
     }
     if (value && typeof value === "string" && value.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      console.log(`[resolveFilterValueRef] \u{1F50D} La valeur "${value}" est un UUID, recherche du label de l'option...`);
       const optionNode = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: value },
         select: { id: true, label: true, value: true }
       });
       if (optionNode) {
         const labelValue = optionNode.label || optionNode.value || value;
-        console.log(`[resolveFilterValueRef] \u2705 Option trouv\xE9e! UUID "${value}" \u2192 Label "${labelValue}"`);
         value = labelValue;
       } else {
-        console.log(`[resolveFilterValueRef] \u26A0\uFE0F Option UUID "${value}" non trouv\xE9e en base, utilisation telle quelle`);
       }
     }
-    console.log(`[resolveFilterValueRef] \u2705 Valeur select finale: ${value}`);
     return value;
   }
   if (valueRef.startsWith("@value.") || valueRef.startsWith("@value:")) {
     const nodeId = valueRef.replace(/^@value[.:]/, "");
-    console.log(`[resolveFilterValueRef] \u{1F4DD} R\xE9solution @value pour nodeId: ${nodeId}`);
     let value = formValues[nodeId] ?? null;
     if (value && typeof value === "object" && "value" in value) {
       const objValue = value.value;
-      console.log(`[resolveFilterValueRef] \u{1F527} Valeur objet d\xE9tect\xE9e, extraction .value: ${objValue}`);
       value = objValue;
     }
-    console.log(`[resolveFilterValueRef] \u2705 Valeur field finale: ${value}`);
     return value;
   }
   return valueRef;
@@ -37370,7 +37303,7 @@ function compareFilterValues(cellValue, operator, compareValue) {
     case "endsWith":
       return String(normalizedCell).toLowerCase().endsWith(String(normalizedCompare).toLowerCase());
     default:
-      console.warn(`[compareFilterValues] \u26A0\uFE0F Op\xE9rateur inconnu: ${operator}`);
+      console.warn(`[compareFilterValues] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rateur inconnu: ${operator}`);
       return false;
   }
 }
@@ -37401,16 +37334,14 @@ router56.get("/nodes/:nodeId/tables", async (req2, res) => {
       orderBy: [{ order: "asc" }, { createdAt: "asc" }]
     });
     const normalized = tables.map(normalizeTableInstance);
-    console.log(`[TreeBranchLeaf API] Retrieved ${normalized.length} tables for node ${nodeId}`);
     return res.json(normalized);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching node tables:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des tableaux" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des tableaux" });
   }
 });
 router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { tableId } = req2.params;
-  console.log(`[DELETE /nodes/:nodeId/tables/:tableId] ??? Suppression table ${tableId} avec nettoyage complet`);
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const table = await prisma47.treeBranchLeafNodeTable.findUnique({
@@ -37422,21 +37353,19 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       }
     });
     if (!table) {
-      return res.status(404).json({ error: "Table non trouv\uFFFDe" });
+      return res.status(404).json({ error: "Table non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDe" });
     }
     const tableOrgId = table.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
-      return res.status(403).json({ error: "Acc\uFFFDs non autoris\uFFFD" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDs non autoris\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD" });
     }
     await prisma47.treeBranchLeafNodeTable.delete({ where: { id: tableId } });
-    console.log(`[DELETE Table] ? Table ${tableId} supprim\uFFFDe (+ colonnes/lignes en cascade)`);
     try {
       const selectConfigsUsingTable = await prisma47.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: tableId },
         select: { nodeId: true }
       });
       if (selectConfigsUsingTable.length > 0) {
-        console.log(`[DELETE Table] ?? ${selectConfigsUsingTable.length} champ(s) Select/Cascader r\uFFFDf\uFFFDrencent cette table - D\uFFFDSACTIVATION LOOKUP`);
         for (const config of selectConfigsUsingTable) {
           const selectNode = await prisma47.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
@@ -37446,7 +37375,6 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
             }
           });
           if (selectNode) {
-            console.log(`[DELETE Table] ?? D\uFFFDsactivation lookup pour "${selectNode.label}" (${config.nodeId})`);
             const oldMetadata = selectNode.metadata || {};
             const oldCapabilities = oldMetadata.capabilities || {};
             const newCapabilities = {
@@ -37482,13 +37410,11 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
             await prisma47.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
-            console.log(`[DELETE Table] ? Lookup d\uFFFDsactiv\uFFFD pour "${selectNode.label}" - champ d\uFFFDbloqu\uFFFD`);
           }
         }
-        console.log(`[DELETE Table] ? ${selectConfigsUsingTable.length} champ(s) Select D\uFFFDBLOQU\uFFFDS (lookup d\uFFFDsactiv\uFFFD)`);
       }
     } catch (selectConfigError) {
-      console.error(`[DELETE Table] ?? Erreur d\uFFFDsactivation lookups:`, selectConfigError);
+      console.error(`[DELETE Table] ?? Erreur d\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDsactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
       const node = await prisma47.treeBranchLeafNode.findUnique({
@@ -37532,15 +37458,8 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           }
         }
       });
-      console.log(`[DELETE Table] ? N\uFFFDud ${table.nodeId} enti\uFFFDrement nettoy\uFFFD`, {
-        hasTable: remainingTables > 0,
-        linkedTableIds: nextLinkedIds.length,
-        table_activeId_reset: wasActiveTable,
-        table_instances_cleaned: true,
-        all_fields_reset: remainingTables === 0
-      });
     }
-    return res.json({ success: true, message: "Tableau supprim\uFFFD avec succ\uFFFDs" });
+    return res.json({ success: true, message: "Tableau supprim\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD avec succ\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDs" });
   } catch (error) {
     console.error("[DELETE Table] ? Erreur lors de la suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression du tableau" });
@@ -37575,7 +37494,7 @@ router56.get("/nodes/:nodeId/tables/options", async (req2, res) => {
     return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching table options:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des options du tableau" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des options du tableau" });
   }
 });
 router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
@@ -37597,7 +37516,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       tableId: tableId && tableId.length ? tableId : void 0
     });
     if (!normalized) {
-      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\u0153ud" });
+      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
     }
     const { table } = normalized;
     const rawLookup = table.meta && typeof table.meta.lookup === "object" ? table.meta.lookup : void 0;
@@ -37605,7 +37524,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       const colLabel = column || (valueColumn && valueColumn === "column" ? valueColumn : void 0);
       const rowLabel = row;
       if (!colLabel || !rowLabel) {
-        return res.status(400).json({ error: "Param\xE8tres column et row requis pour un tableau crois\xE9" });
+        return res.status(400).json({ error: "Param\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8tres column et row requis pour un tableau crois\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
       }
       const columnIndex = table.columns.findIndex((c) => c === colLabel);
       const rowIndex = table.rows.findIndex((r) => r === rowLabel);
@@ -37628,15 +37547,15 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
     }
     const resolvedKeyColumn = (keyColumn && keyColumn.length ? keyColumn : void 0) ?? (rawLookup && typeof rawLookup.keyColumn === "string" ? rawLookup.keyColumn : void 0);
     if (!resolvedKeyColumn) {
-      return res.status(400).json({ error: "Colonne cl\xE9 non d\xE9finie pour ce tableau" });
+      return res.status(400).json({ error: "Colonne cl\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 non d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9finie pour ce tableau" });
     }
     const lookupValue = (keyValue && keyValue.length ? keyValue : void 0) ?? (key2 && key2.length ? key2 : void 0) ?? (column && !table.columns.includes(column) ? column : void 0);
     if (lookupValue === void 0) {
-      return res.status(400).json({ error: "Valeur de cl\xE9 requise" });
+      return res.status(400).json({ error: "Valeur de cl\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 requise" });
     }
     const keyIndex = table.columns.findIndex((colName) => colName === resolvedKeyColumn);
     if (keyIndex === -1) {
-      return res.status(404).json({ error: `Colonne cl\xE9 "${resolvedKeyColumn}" introuvable` });
+      return res.status(404).json({ error: `Colonne cl\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 "${resolvedKeyColumn}" introuvable` });
     }
     let matchedIndex = -1;
     for (let i = 0; i < table.matrix.length; i += 1) {
@@ -37647,7 +37566,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       }
     }
     if (matchedIndex === -1) {
-      return res.status(404).json({ error: "Aucune ligne correspondant \xE0 cette cl\xE9" });
+      return res.status(404).json({ error: "Aucune ligne correspondant \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette cl\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const matchedRow = table.matrix[matchedIndex] ?? [];
     const matchedRecord = table.records[matchedIndex] ?? null;
@@ -37691,7 +37610,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       tableId: typeof requestedTableId === "string" && requestedTableId.trim().length ? requestedTableId.trim() : void 0
     });
     if (!normalized) {
-      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\u0153ud" });
+      return res.status(404).json({ error: "Aucun tableau disponible pour ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
     }
     const { table } = normalized;
     if (!table.columns.length) {
@@ -37702,7 +37621,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       select: { id: true, treeId: true, parentId: true }
     });
     if (!baseNode) {
-      return res.status(404).json({ error: "N\u0153ud de base introuvable" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud de base introuvable" });
     }
     const parentId = baseNode.parentId ?? null;
     const siblingsCount = await prisma47.treeBranchLeafNode.count({
@@ -37721,7 +37640,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       toCreate.push({ label: fallbackRowsLabel, dimension: "rows" });
     }
     if (!toCreate.length) {
-      return res.status(400).json({ error: "Aucune dimension exploitable pour g\xE9n\xE9rer des champs SELECT" });
+      return res.status(400).json({ error: "Aucune dimension exploitable pour g\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9n\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer des champs SELECT" });
     }
     const created = [];
     let insertOrder = siblingsCount;
@@ -37788,7 +37707,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error generating selects from table:", error);
-    res.status(500).json({ error: "Erreur lors de la g\xE9n\xE9ration des champs d\xE9pendants" });
+    res.status(500).json({ error: "Erreur lors de la g\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9n\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des champs d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pendants" });
   }
 });
 router56.get("/effective-values", async (req2, res) => {
@@ -37812,7 +37731,7 @@ router56.get("/effective-values", async (req2, res) => {
     return res.json({ success: true, data: result });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting effective values:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des valeurs effectives" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des valeurs effectives" });
   }
 });
 router56.get("/debug/formula-vars", async (req2, res) => {
@@ -37835,7 +37754,7 @@ router56.get("/debug/formula-vars", async (req2, res) => {
     return res.json(vars);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching formula variables:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des variables de formule" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des variables de formule" });
   }
 });
 router56.get("/debug/formula-eval", async (req2, res) => {
@@ -37848,14 +37767,14 @@ router56.get("/debug/formula-eval", async (req2, res) => {
       where: { id: formulaId }
     });
     if (!formula) {
-      return res.status(404).json({ error: "Formule non trouv\xE9e" });
+      return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const node = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafNodeVariable: true }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const fieldValues = {
       ...node.TreeBranchLeafNodeVariable?.reduce((acc, v) => {
@@ -37864,9 +37783,8 @@ router56.get("/debug/formula-eval", async (req2, res) => {
         }
         return acc;
       }, {})
-      // Ajouter des valeurs de test supplémentaires si nécessaire
+      // Ajouter des valeurs de test supplÃƒÆ’Ã‚Â©mentaires si nÃƒÆ’Ã‚Â©cessaire
     };
-    console.log("\u{1F9EA} [DEBUG] \xC9valuation de la formule avec les fieldValues suivants:", fieldValues);
     const { value, errors } = await evaluateTokens(formula.tokens, {
       resolveVariable: async (nodeId2) => {
         const found = Object.values(fieldValues).find((v) => v.nodeId === nodeId2);
@@ -37877,14 +37795,14 @@ router56.get("/debug/formula-eval", async (req2, res) => {
     return res.json({ value, errors });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error evaluating formula in debug:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xE9valuation de la formule en mode d\xE9bogage" });
+    res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule en mode d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9bogage" });
   }
 });
 router56.get("/formulas-version", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[TBL LEGACY] /api/treebranchleaf/formulas-version appel\xE9 (d\xE9pr\xE9ci\xE9). Utiliser /api/tbl/evaluate avec futur cache d\xE9pendances.");
+      console.warn("[TBL LEGACY] /api/treebranchleaf/formulas-version appel\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 (d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ci\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9). Utiliser /api/tbl/evaluate avec futur cache d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pendances.");
     }
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const version = {
@@ -37893,11 +37811,10 @@ router56.get("/formulas-version", async (req2, res) => {
       organizationId: organizationId || null,
       isSuperAdmin: Boolean(isSuperAdmin2)
     };
-    console.log("[TreeBranchLeaf API] Formulas version requested:", version);
     return res.json(version);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting formulas version:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la version des formules" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la version des formules" });
   }
 });
 router56.post("/formulas/validate", (req2, res) => {
@@ -37964,19 +37881,18 @@ router56.post("/evaluate/formula", async (req2, res) => {
       return res.status(400).json({ error: "Parse error", details: error.message });
     }
     console.error("[TreeBranchLeaf API] Error evaluating inline formula:", error);
-    return res.status(500).json({ error: "Erreur \xE9valuation inline" });
+    return res.status(500).json({ error: "Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation inline" });
   }
 });
 router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appel\xE9 (d\xE9pr\xE9ci\xE9). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.");
+      console.warn("[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appel\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 (d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ci\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.");
     }
     const { formulaId } = req2.params;
     const { fieldValues = {}, testMode = true } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9valuation formule ${formulaId}:`, { fieldValues, testMode });
     const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
@@ -37992,45 +37908,24 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
       }
     });
     if (!formula) {
-      return res.status(404).json({ error: "Formule non trouv\xE9e" });
+      return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette formule" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette formule" });
     }
     try {
-      console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9VALUATION FORMULE ULTRA-D\xC9TAILL\xC9E:`, {
-        formulaId: formula.id,
-        formulaName: formula.name,
-        tokens: formula.tokens,
-        fieldValues
-      });
-      console.log(`[TreeBranchLeaf API] \u{1F50D} FIELDVALUES RE\xC7UES:`, Object.entries(fieldValues));
       const isDebugMode = process.env.NODE_ENV === "development";
       if (isDebugMode && formula) {
-        console.log(`[TreeBranchLeaf API] \uFFFD === FORMULE EN COURS D'ANALYSE ===`);
-        console.log(`[TreeBranchLeaf API] \uFFFD ID:`, formula.id);
-        console.log(`[TreeBranchLeaf API] \u{1F50D} Expression:`, formula.expression || "undefined");
-        console.log(`[TreeBranchLeaf API] \uFFFD Tokens BRUTS:`, JSON.stringify(formula.tokens, null, 2));
         if (Array.isArray(formula.tokens)) {
           formula.tokens.forEach((token, index) => {
-            console.log(`[TreeBranchLeaf API] \uFFFD Token ${index}:`, {
-              type: token.type,
-              value: token.value,
-              name: token.name,
-              variableId: token.variableId,
-              allProps: Object.keys(token)
-            });
           });
         }
-        console.log(`[TreeBranchLeaf API] \uFFFD FieldValues pour cette formule:`);
         Object.entries(fieldValues).forEach(([k, v]) => {
-          console.log(`[TreeBranchLeaf API] \uFFFD   ${k}: "${v}" (${typeof v})`);
         });
       }
       const tokens2 = Array.isArray(formula.tokens) ? formula.tokens : [];
       const tokenVariables = tokens2.filter((t) => Boolean(t) && t.type === "variable").map((t) => t.name).filter(Boolean);
-      console.log("[TreeBranchLeaf API] Variables dans les tokens:", tokenVariables);
       const rawExpression = formula?.expression || formula?.rawExpression || "";
       let orchestrated2 = null;
       try {
@@ -38042,23 +37937,15 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
           hasOperatorsOverride: req2.body?.hasOperators
         });
         if (process.env.NODE_ENV === "development") {
-          console.log(`[TreeBranchLeaf API] \u{1F6A8} === R\xC9SULTAT ORCHESTRATEUR ===`);
-          console.log(`[TreeBranchLeaf API] \u{1F6A8} resolvedVariables:`, orchestrated2.resolvedVariables);
-          console.log(`[TreeBranchLeaf API] \u{1F6A8} strategy:`, orchestrated2.strategy);
-          console.log(`[TreeBranchLeaf API] \u{1F6A8} operatorsDetected:`, orchestrated2.operatorsDetected);
           const variableCount = Object.keys(orchestrated2.resolvedVariables).filter((k) => orchestrated2.resolvedVariables[k] !== 0).length;
-          console.log(`[TreeBranchLeaf API] \u{1F6A8} Variable count (non-zero):`, variableCount);
           if (variableCount === 1) {
             const singleValue = Object.values(orchestrated2.resolvedVariables).find((v) => v !== 0);
-            console.log(`[TreeBranchLeaf API] \u{1F6A8} \u274C UNE SEULE VARIABLE \u2192 RETOUR DIRECT: ${singleValue}`);
           } else if (variableCount >= 2) {
             const values = Object.values(orchestrated2.resolvedVariables);
-            console.log(`[TreeBranchLeaf API] \u{1F6A8} \u2705 PLUSIEURS VARIABLES \u2192 CALCUL: ${values[0]} / ${values[1]} = ${values[0] / values[1]}`);
           }
-          console.log(`[TreeBranchLeaf API] \u{1F6A8} Trace orchestrateur:`, orchestrated2.trace);
         }
       } catch (orchestratorError) {
-        console.error("[TreeBranchLeaf API] \u274C Erreur orchestrateur:", orchestratorError);
+        console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur orchestrateur:", orchestratorError);
         return res.status(500).json({
           error: "Erreur orchestrateur formule",
           details: orchestratorError.message || "unknown",
@@ -38071,13 +37958,7 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         });
       }
       const resolvedVariables = orchestrated2.resolvedVariables;
-      console.log("[TreeBranchLeaf API] \u{1F3AF} Variables finales r\xE9solues (orchestrateur):", resolvedVariables);
-      console.log("[TreeBranchLeaf API] \u{1F3AF} Strat\xE9gie orchestrateur:", orchestrated2.strategy, "operatorsDetected=", orchestrated2.operatorsDetected);
-      console.log("[TreeBranchLeaf API] \u{1F4CB} FieldValues disponibles:", Object.keys(fieldValues));
-      console.log("[TreeBranchLeaf API] \u{1F4CB} Valeurs FieldValues:", fieldValues);
       const universalAnalyzer = (fieldValues2) => {
-        console.log(`[TreeBranchLeaf API] \u{1F9E0} === ANALYSE INTELLIGENTE UNIVERSELLE ===`);
-        console.log(`[TreeBranchLeaf API] \u{1F9E0} Donn\xE9es re\xE7ues:`, fieldValues2);
         const classified2 = {
           userInputs: {},
           systemRefs: {},
@@ -38088,55 +37969,33 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         Object.entries(fieldValues2).forEach(([key2, value]) => {
           if (value == null || value === "") return;
           const strValue = String(value);
-          console.log(`[TreeBranchLeaf API] \u{1F50D} Analyse "${key2}": "${strValue}"`);
           if (key2.includes("_field")) {
             classified2.userInputs[key2] = value;
-            console.log(`[TreeBranchLeaf API] \u{1F464} INPUT UTILISATEUR: "${key2}" = "${value}"`);
           } else if (key2.startsWith("node_") || key2.includes("-") && key2.length > 10) {
             classified2.systemRefs[key2] = value;
-            console.log(`[TreeBranchLeaf API] \u{1F517} R\xC9F\xC9RENCE SYST\xC8ME: "${key2}" = "${value}"`);
           } else if (key2.startsWith("__mirror_")) {
             classified2.metadata[key2] = value;
-            console.log(`[TreeBranchLeaf API] \u{1FA9E} M\xC9TADONN\xC9E: "${key2}" = "${value}"`);
           } else {
             classified2.calculations[key2] = value;
-            console.log(`[TreeBranchLeaf API] \u{1F9EE} CALCUL/CONDITION: "${key2}" = "${value}"`);
           }
         });
         return classified2;
       };
       const intelligentStrategy = (classified2, resolvedVariables2, context) => {
-        console.log(`[TreeBranchLeaf API] \u{1F3AF} === STRAT\xC9GIE INTELLIGENTE ===`);
         const userInputCount = Object.keys(classified2.userInputs).length;
         const systemRefCount = Object.keys(classified2.systemRefs).length;
         const calculationCount = Object.keys(classified2.calculations).length;
         const tokenVariableCount = context.tokenVariablesCount;
         const variableCount = Object.keys(resolvedVariables2).filter((k) => resolvedVariables2[k] !== 0).length;
-        console.log(`[TreeBranchLeaf API] \u{1F4CA} COMPTAGE:`, {
-          userInputs: userInputCount,
-          systemRefs: systemRefCount,
-          calculations: calculationCount,
-          variables: variableCount,
-          tokenVariables: tokenVariableCount,
-          // 🔧 UTILISER CETTE VALEUR
-          tokens: context.tokensCount
-        });
         if (userInputCount > 0 && context.tokenVariablesCount === 0) {
           const userValue = Object.values(classified2.userInputs)[0];
-          console.log(`[TreeBranchLeaf API] \u2705 STRAT\xC9GIE: PRIORIT\xC9 UTILISATEUR`);
-          console.log(`[TreeBranchLeaf API] \u{1F50D} D\xC9TAIL VALEUR UTILISATEUR:`);
-          console.log(`[TreeBranchLeaf API] \u{1F50D} - Type: ${typeof userValue}`);
-          console.log(`[TreeBranchLeaf API] \u{1F50D} - Valeur brute: "${userValue}"`);
-          console.log(`[TreeBranchLeaf API] \u{1F50D} - String conversion: "${String(userValue)}"`);
-          console.log(`[TreeBranchLeaf API] \u{1F50D} - Longueur: ${String(userValue).length}`);
           return {
             strategy: "USER_PRIORITY",
             value: userValue,
-            reason: "L'utilisateur a entr\xE9 une valeur directe"
+            reason: "L'utilisateur a entr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 une valeur directe"
           };
         }
         if (tokenVariableCount >= 2) {
-          console.log(`[TreeBranchLeaf API] \u2705 STRAT\xC9GIE: CALCUL AUTOMATIQUE (${tokenVariableCount} variables dans les tokens, ${variableCount} r\xE9solues non-nulles)`);
           return {
             strategy: "AUTO_CALCULATION",
             value: null,
@@ -38145,39 +38004,25 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         }
         if (tokenVariableCount === 1) {
           const singleValue = Object.values(resolvedVariables2).find((v) => v !== 0);
-          console.log(`[TreeBranchLeaf API] \u2705 STRAT\xC9GIE: VALEUR UNIQUE (valeur: ${singleValue})`);
           return {
             strategy: "SINGLE_VALUE",
             value: singleValue,
             reason: "Une seule variable dans les tokens"
           };
         }
-        console.log(`[TreeBranchLeaf API] \u26A0\uFE0F STRAT\xC9GIE: NEUTRE (aucune donn\xE9e significative)`);
         return {
           strategy: "NEUTRAL",
           value: 0,
-          reason: "Aucune donn\xE9e disponible"
+          reason: "Aucune donn\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e disponible"
         };
       };
       const classified = universalAnalyzer(fieldValues);
       const strategy = intelligentStrategy(classified, resolvedVariables, { tokenVariablesCount: tokenVariables.length, tokensCount: tokens2.length });
-      console.log(`[TreeBranchLeaf API] \u{1F680} === EX\xC9CUTION INTELLIGENTE ===`);
-      console.log(`[TreeBranchLeaf API] \u{1F680} Strat\xE9gie choisie: ${strategy.strategy}`);
-      console.log(`[TreeBranchLeaf API] \u{1F680} Raison: ${strategy.reason}`);
       if (strategy.strategy === "USER_PRIORITY" || strategy.strategy === "SINGLE_VALUE") {
         const rawValue = strategy.value;
-        console.log(`[TreeBranchLeaf API] \u2705 === RETOUR DIRECT ===`);
-        console.log(`[TreeBranchLeaf API] \u{1F50D} ANALYSE CONVERSION:`);
-        console.log(`[TreeBranchLeaf API] \u{1F50D} - Valeur strategy.value: "${rawValue}"`);
-        console.log(`[TreeBranchLeaf API] \u{1F50D} - Type de strategy.value: ${typeof rawValue}`);
-        console.log(`[TreeBranchLeaf API] \u{1F50D} - String(rawValue): "${String(rawValue)}"`);
         const cleanedString = String(rawValue).replace(/\s+/g, "").replace(/,/g, ".");
-        console.log(`[TreeBranchLeaf API] \u{1F50D} - Apr\xE8s nettoyage: "${cleanedString}"`);
         const numValue = parseFloat(cleanedString);
-        console.log(`[TreeBranchLeaf API] \u{1F50D} - parseFloat r\xE9sultat: ${numValue}`);
-        console.log(`[TreeBranchLeaf API] \u{1F50D} - isNaN(numValue): ${isNaN(numValue)}`);
         const finalValue = isNaN(numValue) ? 0 : numValue;
-        console.log(`[TreeBranchLeaf API] \u2705 Valeur finale: ${finalValue}`);
         return res.json({
           success: true,
           result: finalValue,
@@ -38194,7 +38039,6 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         });
       }
       if (strategy.strategy === "NEUTRAL") {
-        console.log(`[TreeBranchLeaf API] \u26A0\uFE0F === RETOUR NEUTRE ===`);
         return res.json({
           success: true,
           result: 0,
@@ -38210,27 +38054,14 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
         });
       }
       if (strategy.strategy === "AUTO_CALCULATION") {
-        console.log(`[TreeBranchLeaf API] \u{1F9EE} === MODE CALCUL AUTOMATIQUE ===`);
-        console.log(`[TreeBranchLeaf API] \u{1F9EE} Variables pour calcul:`, resolvedVariables);
-        console.log(`[TreeBranchLeaf API] \u{1F9EE} Proc\xE9dure automatique de calcul activ\xE9e`);
       }
-      console.log(`[TreeBranchLeaf API] \u{1F9EE} === MODE CALCUL ===`);
-      console.log(`[TreeBranchLeaf API] \u{1F9EE} Formule \xE0 \xE9valuer avec variables:`, resolvedVariables);
       const evaluateTokens2 = (tokens3) => {
-        console.log(`[TreeBranchLeaf API] \u{1F9EE} === D\xC9BUT \xC9VALUATION COMPL\xC8TE ===`);
-        console.log(`[TreeBranchLeaf API] \u{1F9EE} Tokens \xE0 \xE9valuer:`, tokens3);
-        console.log(`[TreeBranchLeaf API] \u{1F9EE} Variables disponibles:`, resolvedVariables);
         const stack = [];
         const operations = [];
-        console.log(
-          `[TreeBranchLeaf API] \u{1F9EE} D\xE9but \xE9valuation avec ${tokens3.length} tokens:`,
-          tokens3.map((t) => `${t.type}:${t.value || t.name}`).join(" ")
-        );
         const convertToPostfix = (tokens4) => {
           const outputQueue = [];
           const operatorStack = [];
           const precedence = { "+": 1, "-": 1, "*": 2, "/": 2 };
-          console.log(`[TreeBranchLeaf API] \u{1F504} Conversion infix \u2192 postfix pour:`, tokens4.map((t) => t.value || t.name).join(" "));
           for (const token of tokens4) {
             if (token.type === "value" || token.type === "variable") {
               outputQueue.push(token);
@@ -38244,7 +38075,6 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
           while (operatorStack.length > 0) {
             outputQueue.push(operatorStack.pop());
           }
-          console.log(`[TreeBranchLeaf API] \u2705 Postfix converti:`, outputQueue.map((t) => t.value || t.variableId || t.name || "unknown").join(" "));
           return outputQueue;
         };
         const postfixTokens = convertToPostfix(tokens3);
@@ -38256,13 +38086,11 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
             const finalValue = isNaN(value) ? 0 : value;
             stack.push(finalValue);
             operations.push(`PUSH(${finalValue})`);
-            console.log(`[TreeBranchLeaf API] \u{1F4CA} Valeur: ${finalValue}`);
           } else if (token.type === "variable") {
             const varName = token.variableId || token.name || "";
             const value = resolvedVariables[varName] || 0;
             stack.push(value);
             operations.push(`PUSH(${varName}=${value})`);
-            console.log(`[TreeBranchLeaf API] \u{1F522} Variable: ${varName} = ${value} (propri\xE9t\xE9: ${token.variableId ? "variableId" : "name"})`);
           } else if (token.type === "operator" && ["+", "-", "*", "/"].includes(String(token.value))) {
             if (stack.length >= 2) {
               const b = stack.pop();
@@ -38288,24 +38116,18 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
                     operations.push(`${a} / ${b} = ${result2}`);
                   } else {
                     result2 = 0;
-                    operations.push(`${a} / ${b} = 0 (division par z\xE9ro \xE9vit\xE9e)`);
-                    console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Division par z\xE9ro \xE9vit\xE9e: ${a} / ${b}`);
+                    operations.push(`${a} / ${b} = 0 (division par z\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ro \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9vit\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e)`);
                   }
                   break;
               }
               stack.push(result2);
-              console.log(`[TreeBranchLeaf API] \u26A1 Op\xE9ration: ${a} ${operator} ${b} = ${result2}`);
             } else {
-              console.log(`[TreeBranchLeaf API] \u274C Pile insuffisante pour l'op\xE9rateur ${token.value}, pile actuelle:`, stack);
               operations.push(`ERREUR: Pile insuffisante pour ${token.value}`);
             }
           } else {
-            console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Token ignor\xE9:`, token);
           }
         }
         const finalResult = stack.length > 0 ? stack[0] : 0;
-        console.log(`[TreeBranchLeaf API] \u{1F3AF} R\xE9sultat final: ${finalResult}`);
-        console.log(`[TreeBranchLeaf API] \u{1F4DD} Op\xE9rations effectu\xE9es:`, operations);
         return finalResult;
       };
       let result = null;
@@ -38314,11 +38136,10 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
       } else {
         result = 0;
       }
-      console.log(`[TreeBranchLeaf API] \u{1F9EE} R\xE9sultat du calcul:`, result);
       const responseData = {
         formulaId: formula.id,
         formulaName: formula.name,
-        nodeLabel: formula.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+        nodeLabel: formula.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
         evaluation: {
           success: result !== null,
           result,
@@ -38341,9 +38162,9 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
       };
       return res.json(responseData);
     } catch (evaluationError) {
-      console.error(`[TreeBranchLeaf API] Erreur lors de l'\xE9valuation:`, evaluationError);
+      console.error(`[TreeBranchLeaf API] Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation:`, evaluationError);
       return res.status(500).json({
-        error: "Erreur lors de l'\xE9valuation de la formule",
+        error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule",
         details: evaluationError.message,
         debug: {
           formulaId,
@@ -38359,19 +38180,17 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
     }
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error evaluating formula:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xE9valuation de la formule" });
+    res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule" });
   }
 });
 router56.post("/evaluate/batch", async (req2, res) => {
   try {
     const { requests = [], nodeIds = [], fieldValues = {} } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F9EE} \xC9valuation batch - requests: ${requests.length}, nodeIds: ${nodeIds.length}`);
     let finalRequests = [];
     if (Array.isArray(requests) && requests.length > 0) {
       finalRequests = requests;
     } else if (Array.isArray(nodeIds) && nodeIds.length > 0) {
-      console.log(`[TreeBranchLeaf API] \u{1F50D} R\xE9cup\xE9ration formules pour nodeIds:`, nodeIds);
       for (const nodeId of nodeIds) {
         const nodeFormulas = await prisma47.treeBranchLeafNodeFormula.findMany({
           where: { nodeId },
@@ -38385,10 +38204,9 @@ router56.post("/evaluate/batch", async (req2, res) => {
           });
         }
       }
-      console.log(`[TreeBranchLeaf API] \u{1F50D} Formules trouv\xE9es: ${finalRequests.length} pour ${nodeIds.length} n\u0153uds`);
     }
     if (finalRequests.length === 0) {
-      return res.status(400).json({ error: "Aucune formule \xE0 \xE9valuer dans la requ\xEAte batch" });
+      return res.status(400).json({ error: "Aucune formule \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuer dans la requ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte batch" });
     }
     const results = [];
     for (const request of finalRequests) {
@@ -38419,7 +38237,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         if (!formula) {
           results.push({
             formulaId,
-            error: "Formule non trouv\xE9e",
+            error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e",
             success: false
           });
           continue;
@@ -38428,7 +38246,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
           results.push({
             formulaId,
-            error: "Acc\xE8s refus\xE9 \xE0 cette formule",
+            error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette formule",
             success: false
           });
           continue;
@@ -38486,7 +38304,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         results.push({
           formulaId: formula.id,
           formulaName: formula.name,
-          nodeLabel: formula.TreeBranchLeafNode?.label || "N\u0153ud inconnu",
+          nodeLabel: formula.TreeBranchLeafNode?.label || "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud inconnu",
           success: true,
           evaluation: {
             success: result !== null,
@@ -38503,15 +38321,14 @@ router56.post("/evaluate/batch", async (req2, res) => {
           }
         });
       } catch (evaluationError) {
-        console.error(`[TreeBranchLeaf API] Erreur \xE9valuation batch formule ${formulaId}:`, evaluationError);
+        console.error(`[TreeBranchLeaf API] Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation batch formule ${formulaId}:`, evaluationError);
         results.push({
           formulaId,
-          error: `Erreur d'\xE9valuation: ${evaluationError.message}`,
+          error: `Erreur d'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation: ${evaluationError.message}`,
           success: false
         });
       }
     }
-    console.log(`[TreeBranchLeaf API] \u{1F9EE} Batch termin\xE9: ${results.filter((r) => r.success).length}/${results.length} succ\xE8s`);
     return res.json({
       success: true,
       totalRequests: finalRequests.length,
@@ -38520,42 +38337,41 @@ router56.post("/evaluate/batch", async (req2, res) => {
     });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error in batch evaluation:", error);
-    res.status(500).json({ error: "Erreur lors de l'\xE9valuation batch" });
+    res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation batch" });
   }
 });
-async function ensureNodeOrgAccess(prisma69, nodeId, auth) {
+async function ensureNodeOrgAccess(prisma70, nodeId, auth) {
   try {
-    const node = await prisma69.treeBranchLeafNode.findFirst({
+    const node = await prisma70.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { treeId: true }
     });
     if (!node) {
-      return { ok: false, status: 404, error: "N\u0153ud non trouv\xE9" };
+      return { ok: false, status: 404, error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" };
     }
     if (auth.isSuperAdmin) {
       return { ok: true };
     }
-    const tree = await prisma69.treeBranchLeafTree.findFirst({
+    const tree = await prisma70.treeBranchLeafTree.findFirst({
       where: { id: node.treeId },
       select: { organizationId: true }
     });
     if (!tree) {
-      return { ok: false, status: 404, error: "Arbre non trouv\xE9" };
+      return { ok: false, status: 404, error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" };
     }
     if (tree.organizationId && tree.organizationId !== auth.organizationId) {
-      return { ok: false, status: 403, error: "Acc\xE8s refus\xE9" };
+      return { ok: false, status: 403, error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" };
     }
     return { ok: true };
   } catch (error) {
     console.error("Error checking node org access:", error);
-    return { ok: false, status: 500, error: "Erreur de v\xE9rification d'acc\xE8s" };
+    return { ok: false, status: 500, error: "Erreur de v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification d'acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" };
   }
 }
 router56.get("/conditions/:conditionId", async (req2, res) => {
   try {
     const { conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F50D} GET condition par ID: ${conditionId}`);
     const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
@@ -38571,26 +38387,22 @@ router56.get("/conditions/:conditionId", async (req2, res) => {
       }
     });
     if (!condition) {
-      console.log(`[TreeBranchLeaf API] \u274C Condition ${conditionId} non trouv\xE9e`);
-      return res.status(404).json({ error: "Condition non trouv\xE9e" });
+      return res.status(404).json({ error: "Condition non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const nodeOrg = condition.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] \u274C Acc\xE8s refus\xE9 \xE0 condition ${conditionId} (org: ${nodeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette condition" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette condition" });
     }
-    console.log(`[TreeBranchLeaf API] \u2705 Condition ${conditionId} trouv\xE9e et autoris\xE9e`);
     return res.json(condition);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting condition by ID:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la condition" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la condition" });
   }
 });
 router56.get("/formulas/:formulaId", async (req2, res) => {
   try {
     const { formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F50D} GET formule par ID: ${formulaId}`);
     const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
@@ -38606,26 +38418,22 @@ router56.get("/formulas/:formulaId", async (req2, res) => {
       }
     });
     if (!formula) {
-      console.log(`[TreeBranchLeaf API] \u274C Formule ${formulaId} non trouv\xE9e`);
-      return res.status(404).json({ error: "Formule non trouv\xE9e" });
+      return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const nodeOrg = formula.TreeBranchLeafNode?.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && nodeOrg && nodeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] \u274C Acc\xE8s refus\xE9 \xE0 formule ${formulaId} (org: ${nodeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette formule" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette formule" });
     }
-    console.log(`[TreeBranchLeaf API] \u2705 Formule ${formulaId} trouv\xE9e et autoris\xE9e`);
     return res.json(formula);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting formula by ID:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la formule" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la formule" });
   }
 });
 router56.get("/submissions", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { treeId, leadId, userId } = req2.query;
-    console.log(`[TreeBranchLeaf API] \u{1F4CB} GET submissions avec filtres:`, { treeId, leadId, userId });
     const whereClause = {};
     if (treeId) whereClause.treeId = treeId;
     if (leadId) whereClause.leadId = leadId;
@@ -38676,11 +38484,10 @@ router56.get("/submissions", async (req2, res) => {
       },
       orderBy: { createdAt: "desc" }
     });
-    console.log(`[TreeBranchLeaf API] \u2705 ${submissions.length} soumissions trouv\xE9es`);
     res.json(submissions);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching submissions:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des soumissions" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des soumissions" });
   }
 });
 router56.get("/submissions/by-leads", async (req2, res) => {
@@ -38688,7 +38495,6 @@ router56.get("/submissions/by-leads", async (req2, res) => {
     const authCtx = getAuthCtx3(req2);
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
     const { treeId, search, leadId } = req2.query;
-    console.log(`[TreeBranchLeaf API] \u{1F4CB} GET devis par leads - TreeId: ${treeId}, Search: ${search}, LeadId: ${leadId}`);
     const submissionWhere = {};
     if (treeId) {
       submissionWhere.treeId = treeId;
@@ -38743,7 +38549,6 @@ router56.get("/submissions/by-leads", async (req2, res) => {
         { lastName: "asc" }
       ]
     });
-    console.log(`[TreeBranchLeaf API] \u{1F4CA} Trouv\xE9 ${leadsWithSubmissions.length} leads avec devis`);
     const formattedData = leadsWithSubmissions.map((lead) => ({
       id: lead.id,
       firstName: lead.firstName,
@@ -38762,14 +38567,13 @@ router56.get("/submissions/by-leads", async (req2, res) => {
     res.json(formattedData);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error getting submissions by leads:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des devis par leads" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des devis par leads" });
   }
 });
 router56.get("/submissions/:id", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
-    console.log(`[TreeBranchLeaf API] \u{1F4CB} GET submission par ID: ${id}`);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
@@ -38800,37 +38604,55 @@ router56.get("/submissions/:id", async (req2, res) => {
             company: true
           }
         },
-        User: {
+        User_TreeBranchLeafSubmission_userIdToUser: {
           select: {
             id: true,
             email: true,
             firstName: true,
             lastName: true
           }
+        },
+        User_TreeBranchLeafSubmission_lastEditedByToUser: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        User_TreeBranchLeafSubmission_lockedByToUser: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        Organization: {
+          select: {
+            id: true,
+            name: true
+          }
         }
       }
     });
     if (!submission) {
-      console.log(`[TreeBranchLeaf API] \u274C Soumission ${id} non trouv\xE9e`);
-      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      console.log(`[TreeBranchLeaf API] \u274C Acc\xE8s refus\xE9 \xE0 soumission ${id} (org: ${treeOrg} vs ${organizationId})`);
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
-    console.log(`[TreeBranchLeaf API] \u2705 Soumission ${id} trouv\xE9e et autoris\xE9e`);
     res.json(submission);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching submission:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la soumission" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la soumission" });
   }
 });
 router56.get("/submissions/:id/fields", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
-    console.log(`[TreeBranchLeaf API] \u{1F5C2}\uFE0F GET /submissions/${id}/fields - R\xE9cup\xE9ration de tous les champs`);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
@@ -38852,11 +38674,11 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
       }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
@@ -38887,7 +38709,7 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
         fieldType: node.fieldType,
         fieldSubType: node.fieldSubType,
         value: row.value,
-        // Valeur parsée (JSON)
+        // Valeur parsÃƒÆ’Ã‚Â©e (JSON)
         rawValue: row.rawValue
         // Valeur brute (string)
       };
@@ -38923,11 +38745,10 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
       // Tous les champs de la soumission
       totalFields: Object.keys(fieldsMap).length
     };
-    console.log(`[TreeBranchLeaf API] \u2705 ${response.totalFields} champs r\xE9cup\xE9r\xE9s pour soumission ${id}`);
     res.json(response);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \u274C Erreur GET /submissions/:id/fields:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des champs" });
+    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/fields:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des champs" });
   }
 });
 router56.get("/submissions/:id/summary", async (req2, res) => {
@@ -38939,11 +38760,11 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
     const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
@@ -38980,8 +38801,8 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
       completion
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \u274C Erreur GET /submissions/:id/summary:", error);
-    return res.status(500).json({ error: "Erreur lors du calcul du r\xE9sum\xE9 de la soumission" });
+    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/summary:", error);
+    return res.status(500).json({ error: "Erreur lors du calcul du r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9sum\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 de la soumission" });
   }
 });
 router56.get("/submissions/:id/operations", async (req2, res) => {
@@ -38996,10 +38817,10 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
         TreeBranchLeafTree: { select: { id: true, organizationId: true } }
       }
     });
-    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
     const rows = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
@@ -39013,7 +38834,6 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       ]
     });
     if (rows.length === 0) {
-      console.log(`[TBL Operations] Aucune donn\xE9e de soumission trouv\xE9e pour ${id}, r\xE9cup\xE9ration des variables configur\xE9es...`);
       if (submission?.treeId) {
         const treeVariables = await prisma47.treeBranchLeafNodeVariable.findMany({
           where: { TreeBranchLeafNode: { treeId: submission.treeId } },
@@ -39038,8 +38858,8 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
           variableKey: v.exposedKey,
           variableUnit: v.unit,
           sourceRef: v.sourceRef,
-          // 🎯 CORRECTION: Utiliser fixedValue ou defaultValue comme valeur
-          // 🚧 TEMPORAIRE: Valeurs de test hardcodées pour validation
+          // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ CORRECTION: Utiliser fixedValue ou defaultValue comme valeur
+          // ÃƒÂ°Ã…Â¸Ã…Â¡Ã‚Â§ TEMPORAIRE: Valeurs de test hardcodÃƒÆ’Ã‚Â©es pour validation
           value: getTestValueForNode(v.nodeId, v.fixedValue, v.defaultValue),
           operationSource: null,
           operationDetail: null,
@@ -39048,9 +38868,6 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
           createdAt: /* @__PURE__ */ new Date(),
           TreeBranchLeafNode: v.TreeBranchLeafNode
         }));
-        console.log(`[TBL Operations] ${pseudoRows.length} variables configur\xE9es trouv\xE9es`);
-        console.log(`[TBL Operations] Variables avec valeurs:`, pseudoRows.map((r) => ({ nodeId: r.nodeId, label: r.fieldLabel, value: r.value })));
-        console.log(`[TBL Operations] Variables brutes:`, treeVariables.map((v) => ({ nodeId: v.nodeId, displayName: v.displayName, fixedValue: v.fixedValue, defaultValue: v.defaultValue })));
         rows.push(...pseudoRows);
       }
     }
@@ -39063,7 +38880,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     };
     const treeId = submission?.treeId;
     if (!treeId) {
-      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const allTreeNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId },
@@ -39126,7 +38943,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       const response = val;
       const source = r.isVariable ? inferSource(r.sourceRef) : "neutral";
       const operationDetail = r.operationDetail ?? (r.isVariable ? r.sourceRef || void 0 : nodeLabel || void 0);
-      const labelForResult = displayName || nodeLabel || labelMap.get(r.nodeId) || r.TreeBranchLeafNode?.id || "\u2014";
+      const labelForResult = displayName || nodeLabel || labelMap.get(r.nodeId) || r.TreeBranchLeafNode?.id || "\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC2\x9D";
       const operationResult = unit && response ? `${labelForResult}: ${response} ${unit}` : `${labelForResult}: ${response ?? ""}`;
       const detNormalized = await resolveDetailForRow(r);
       let operationDetailResolved = void 0;
@@ -39170,7 +38987,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
               actions: resolveActionsLabels(actions, labelsForText)
             };
           });
-          operationHumanText = "\u{1F504} Condition \xE9valu\xE9e via TBL Prisma (ligne 4755)";
+          operationHumanText = "\xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\xA2\xE2\u201A\xAC\xC5\xBE Condition \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valu\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e via TBL Prisma (ligne 4755)";
           const { detail, result } = buildDetailAndResultForOperation(det, operationHumanText, unit, labelForResult, response);
           operationDetailResolved = detail;
           operationResultResolved = result;
@@ -39215,7 +39032,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
         operationSource: source,
         operationDetail: operationDetailResolved || detNormalized || operationDetail,
         operationResult: operationResultResolved || operationResult,
-        // Pour les conditions, operationHumanText contient déjà l'expression complète souhaitée
+        // Pour les conditions, operationHumanText contient dÃƒÆ’Ã‚Â©jÃƒÆ’Ã‚Â  l'expression complÃƒÆ’Ã‚Â¨te souhaitÃƒÆ’Ã‚Â©e
         operationResultText: operationHumanText ? operationHumanText : null,
         operationResultResolved,
         operationDetailResolved,
@@ -39225,8 +39042,8 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     }));
     return res.json({ submissionId: id, items });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \u274C Erreur GET /submissions/:id/operations:", error);
-    return res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des op\xE9rations" });
+    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/operations:", error);
+    return res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations" });
   }
 });
 router56.post("/submissions/:id/repair-ops", async (req2, res) => {
@@ -39237,11 +39054,11 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
-    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+    if (!submission) return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     const treeId = submission.treeId;
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
     const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
@@ -39308,7 +39125,7 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
         where: { submissionId: id, nodeId: row.nodeId },
         data: {
           operationSource: opSrc,
-          // Fallback prioritaire: row.sourceRef (présent côté submissionData), puis meta.sourceRef, sinon label
+          // Fallback prioritaire: row.sourceRef (prÃƒÆ’Ã‚Â©sent cÃƒÆ’Ã‚Â´tÃƒÆ’Ã‚Â© submissionData), puis meta.sourceRef, sinon label
           operationDetail: isVar ? opDetail ?? (row.sourceRef || meta?.sourceRef || void 0) : label || void 0,
           operationResult: opRes,
           lastResolved: now
@@ -39317,8 +39134,8 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
     }
     return res.json({ success: true, updated: rows.length });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \u274C Erreur POST /submissions/:id/repair-ops:", error);
-    return res.status(500).json({ error: "Erreur lors du backfill des op\xE9rations" });
+    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur POST /submissions/:id/repair-ops:", error);
+    return res.status(500).json({ error: "Erreur lors du backfill des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations" });
   }
 });
 router56.post("/submissions", async (req2, res) => {
@@ -39335,24 +39152,14 @@ router56.post("/submissions", async (req2, res) => {
         return 0;
       }
     })();
-    console.log(`[TreeBranchLeaf API] \u{1F4CB} POST nouvelle soumission (entr\xE9e)`, {
-      treeId: normalizedTreeId,
-      leadId: normalizedLeadId,
-      providedName: name,
-      dataKeys: Object.keys(data),
-      approxBytes,
-      userId,
-      organizationId,
-      isSuperAdmin: isSuperAdmin2
-    });
     if (!normalizedTreeId) {
       return res.status(400).json({ error: "treeId est requis" });
     }
     if (!userId) {
-      console.warn("[TreeBranchLeaf API] \u26A0\uFE0F Aucun userId dans la requ\xEAte (mode anonyme/mock) \u2013 poursuite sans liaison utilisateur");
+      console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Aucun userId dans la requ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte (mode anonyme/mock) \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C poursuite sans liaison utilisateur");
     }
     if (!name || typeof name !== "string") {
-      return res.status(400).json({ error: "name est requis et doit \xEAtre une cha\xEEne" });
+      return res.status(400).json({ error: "name est requis et doit \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre une cha\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAEne" });
     }
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: {
@@ -39361,8 +39168,7 @@ router56.post("/submissions", async (req2, res) => {
       }
     });
     if (!tree) {
-      console.log(`[TreeBranchLeaf API] \u274C Arbre ${treeId} non trouv\xE9 ou acc\xE8s refus\xE9`);
-      return res.status(404).json({ error: "Arbre non trouv\xE9 ou acc\xE8s refus\xE9" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 ou acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     let lead = null;
     if (normalizedLeadId) {
@@ -39373,18 +39179,15 @@ router56.post("/submissions", async (req2, res) => {
         }
       });
       if (!lead) {
-        console.log(`[TreeBranchLeaf API] \u274C Lead ${leadId} non trouv\xE9 ou acc\xE8s refus\xE9`);
-        return res.status(404).json({ error: "Lead non trouv\xE9 ou acc\xE8s refus\xE9" });
+        return res.status(404).json({ error: "Lead non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 ou acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
       }
     } else {
-      console.log(`[TreeBranchLeaf API] \u2139\uFE0F Cr\xE9ation de soumission sans lead associ\xE9`);
     }
     const validNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { treeId: normalizedTreeId },
       select: { id: true }
     });
     const validNodeIds = new Set(validNodes.map((node) => node.id));
-    console.log(`[TreeBranchLeaf API] \u{1F4CB} N\u0153uds valides trouv\xE9s: ${validNodeIds.size}`);
     const rawEntries = (() => {
       if (Array.isArray(data)) {
         return data.map((it) => {
@@ -39402,11 +39205,8 @@ router56.post("/submissions", async (req2, res) => {
     })();
     const filteredEntries = rawEntries.filter(({ nodeId }) => {
       const isValid = validNodeIds.has(nodeId);
-      if (!isValid) console.log(`[TreeBranchLeaf API] \u26A0\uFE0F NodeId invalide ignor\xE9: ${nodeId}`);
       return isValid;
     });
-    console.log(`[TreeBranchLeaf API] \u{1F4CB} Donn\xE9es filtr\xE9es: ${filteredEntries.length}/${rawEntries.length}`);
-    console.log(`[TreeBranchLeaf API] \u{1F527} Cr\xE9ation Prisma de la soumission`);
     try {
       let safeUserId = null;
       if (userId) {
@@ -39415,10 +39215,10 @@ router56.post("/submissions", async (req2, res) => {
           if (existingUser) {
             safeUserId = userId;
           } else {
-            console.warn("[TreeBranchLeaf API] \u26A0\uFE0F userId fourni mais introuvable en base \u2013 cr\xE9ation avec userId NULL");
+            console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F userId fourni mais introuvable en base \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation avec userId NULL");
           }
         } catch (checkErr) {
-          console.warn("[TreeBranchLeaf API] \u26A0\uFE0F \xC9chec de v\xE9rification userId \u2013 cr\xE9ation avec userId NULL:", checkErr?.message);
+          console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F \xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0chec de v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification userId \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation avec userId NULL:", checkErr?.message);
         }
       }
       const now = /* @__PURE__ */ new Date();
@@ -39432,7 +39232,6 @@ router56.post("/submissions", async (req2, res) => {
           updatedAt: now
         }
       });
-      console.log(`[TreeBranchLeaf API] \u2705 Soumission cr\xE9\xE9e: ${created.id}`);
       if (filteredEntries.length > 0) {
         const keys = filteredEntries.map(({ nodeId }) => nodeId);
         const nodesForLabels = await prisma47.treeBranchLeafNode.findMany({
@@ -39476,9 +39275,7 @@ router56.post("/submissions", async (req2, res) => {
             }
           }
         });
-        console.log(`[TreeBranchLeaf API] \u2705 Champs persist\xE9s: create=${toCreate.length}, update=${toUpdate.length}`);
       } else {
-        console.log("[TreeBranchLeaf API] \u2139\uFE0F Aucun champ utilisateur \xE0 persister (payload data vide apr\xE8s filtrage)");
       }
       try {
         const treeIdForBackfill = created.treeId;
@@ -39548,7 +39345,7 @@ router56.post("/submissions", async (req2, res) => {
           });
         }
       } catch (enrichErr) {
-        console.warn("[TreeBranchLeaf API] \u26A0\uFE0F Backfill post-cr\xE9ation des op\xE9rations non critique a \xE9chou\xE9:", enrichErr?.message);
+        console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Backfill post-cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations non critique a \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9chou\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9:", enrichErr?.message);
       }
       const full = await prisma47.treeBranchLeafSubmission.findUnique({
         where: { id: created.id },
@@ -39563,7 +39360,7 @@ router56.post("/submissions", async (req2, res) => {
         }
       });
       if (!full) {
-        throw new Error("Soumission non trouv\xE9e apr\xE8s cr\xE9ation");
+        throw new Error("Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e apr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation");
       }
       const responsePayload = {
         id: full.id,
@@ -39577,30 +39374,29 @@ router56.post("/submissions", async (req2, res) => {
         Lead: full.Lead || null,
         TreeBranchLeafSubmissionData: full.TreeBranchLeafSubmissionData
       };
-      console.log(`[TreeBranchLeaf API] \u2705 Devis cr\xE9\xE9 et recharg\xE9: ${full.id}`);
       res.status(201).json(responsePayload);
     } catch (error) {
       const err = error;
-      console.error("[TreeBranchLeaf API] \u274C ERREUR D\xC9TAILL\xC9E lors de la cr\xE9ation:", {
+      console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR D\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0TAILL\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0E lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation:", {
         message: err?.message,
         code: err?.code,
         meta: err?.meta
       });
       if (err?.stack) console.error(err.stack);
       if (err && err.code) {
-        console.error("[TreeBranchLeaf API] \u{1F50D} Code erreur Prisma:", err.code);
+        console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\x8D Code erreur Prisma:", err.code);
         if (err.meta) {
-          console.error("[TreeBranchLeaf API] \u{1F50D} M\xE9tadonn\xE9es:", err.meta);
+          console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\x8D M\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9tadonn\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es:", err.meta);
         }
       }
       return res.status(500).json({
-        error: "Erreur lors de la cr\xE9ation de la soumission",
+        error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la soumission",
         details: process.env.NODE_ENV === "development" ? err?.message : void 0
       });
     }
   } catch (outerErr) {
     const e = outerErr;
-    console.error("[TreeBranchLeaf API] \u274C Erreur inattendue en entr\xE9e de route /submissions:", e?.message);
+    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur inattendue en entr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e de route /submissions:", e?.message);
     return res.status(500).json({ error: "Erreur interne inattendue" });
   }
 });
@@ -39608,7 +39404,6 @@ router56.delete("/submissions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F5D1}\uFE0F DELETE submission ${id}`);
     const submission = await prisma47.treeBranchLeafSubmission.findFirst({
       where: {
         id,
@@ -39621,8 +39416,7 @@ router56.delete("/submissions/:id", async (req2, res) => {
       }
     });
     if (!submission) {
-      console.log(`[TreeBranchLeaf API] \u274C Submission ${id} non trouv\xE9e ou acc\xE8s refus\xE9`);
-      return res.status(404).json({ error: "Soumission non trouv\xE9e ou acc\xE8s refus\xE9" });
+      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e ou acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     await prisma47.treeBranchLeafSubmissionData.deleteMany({
       where: { submissionId: id }
@@ -39630,8 +39424,7 @@ router56.delete("/submissions/:id", async (req2, res) => {
     await prisma47.treeBranchLeafSubmission.delete({
       where: { id }
     });
-    console.log(`[TreeBranchLeaf API] \u2705 Submission ${id} supprim\xE9e avec succ\xE8s`);
-    res.json({ success: true, message: "Soumission supprim\xE9e avec succ\xE8s" });
+    res.json({ success: true, message: "Soumission supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error deleting submission:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la soumission" });
@@ -39641,7 +39434,6 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F50D} GET select-config for field: ${fieldId}`);
     const access = await ensureNodeOrgAccess(prisma47, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -39650,7 +39442,6 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
       where: { nodeId: fieldId }
     });
     if (!selectConfig) {
-      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Pas de configuration SELECT pour le champ ${fieldId}`);
       const node = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: fieldId },
         select: {
@@ -39666,7 +39457,6 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
         const isRowBased = activeInstance?.rowBased === true;
         const isColumnBased = activeInstance?.columnBased === true;
         if (isRowBased || isColumnBased) {
-          console.log(`[TreeBranchLeaf API] \u{1F527} Cr\xE9ation dynamique de la config SELECT pour lookup ${isRowBased ? "LIGNE" : "COLONNE"}`);
           selectConfig = await prisma47.treeBranchLeafSelectConfig.create({
             data: {
               id: (0, import_crypto10.randomUUID)(),
@@ -39685,18 +39475,16 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`[TreeBranchLeaf API] \u2705 Configuration SELECT cr\xE9\xE9e dynamiquement:`, selectConfig.id);
         }
       }
       if (!selectConfig) {
         return res.status(404).json({ error: "Configuration SELECT introuvable" });
       }
     }
-    console.log(`[TreeBranchLeaf API] \u2705 Configuration SELECT trouv\xE9e:`, selectConfig);
     return res.json(selectConfig);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching select config:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la configuration SELECT" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la configuration SELECT" });
   }
 });
 router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
@@ -39714,14 +39502,6 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
       displayRow,
       dependsOnNodeId
     } = req2.body;
-    console.log(`[TreeBranchLeaf API] \u{1F4DD} POST select-config for field: ${fieldId}`, {
-      keyColumn,
-      keyRow,
-      valueColumn,
-      valueRow,
-      displayColumn,
-      displayRow
-    });
     const access = await ensureNodeOrgAccess(prisma47, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -39760,11 +39540,10 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] \u2705 Configuration SELECT cr\xE9\xE9e/mise \xE0 jour:`, selectConfig);
     return res.json(selectConfig);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error creating select config:", error);
-    res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la configuration SELECT" });
+    res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la configuration SELECT" });
   }
 });
 router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
@@ -39776,12 +39555,10 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
     if (formValuesParam) {
       try {
         formValues = JSON.parse(formValuesParam);
-        console.log(`[TreeBranchLeaf API] \u{1F4CA} formValues re\xE7ues pour filtrage:`, Object.keys(formValues).length, "cl\xE9s");
       } catch (e) {
-        console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Erreur parsing formValues:`, e);
+        console.warn(`[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Erreur parsing formValues:`, e);
       }
     }
-    console.log(`[TreeBranchLeaf API] \u{1F50D} GET active table/lookup for node: ${nodeId}`);
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -39798,9 +39575,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         displayRow: true
       }
     });
-    console.log(`[TreeBranchLeaf API] \u{1F4CB} Configuration SELECT:`, selectConfig);
     if (!selectConfig?.tableReference) {
-      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Pas de tableReference dans la config SELECT \u2192 tentative de fallback via capabilities.table`);
       const node = await prisma47.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { hasTable: true, table_activeId: true, table_instances: true }
@@ -39845,12 +39620,10 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             displayRow: true
           }
         });
-        console.log(`[TreeBranchLeaf API] \u2705 Fallback SELECT config cr\xE9\xE9 depuis capabilities.table:`, selectConfig);
       }
     }
     if (!selectConfig?.tableReference) {
-      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Pas de tableReference dans la config SELECT (apr\xE8s fallback)`);
-      return res.status(404).json({ error: "Pas de tableau r\xE9f\xE9renc\xE9 pour ce lookup" });
+      return res.status(404).json({ error: "Pas de tableau r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9renc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 pour ce lookup" });
     }
     const table = await prisma47.treeBranchLeafNodeTable.findUnique({
       where: { id: selectConfig.tableReference },
@@ -39871,7 +39644,6 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       }
     });
     if (!table) {
-      console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Tableau introuvable: ${selectConfig.tableReference}`);
       return res.status(404).json({ error: "Tableau introuvable" });
     }
     const columns = table.tableColumns.map((col) => col.name);
@@ -39902,15 +39674,6 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         data.push([]);
       }
     });
-    console.log(`[TreeBranchLeaf API] \u2705 Tableau charg\xE9 (normalis\xE9):`, {
-      id: table.id,
-      name: table.name,
-      type: table.type,
-      columnsCount: columns.length,
-      rowsCount: rows.length,
-      firstColumns: columns.slice(0, 3),
-      firstRows: rows.slice(0, 3)
-    });
     const rawLookup = table.meta && typeof table.meta === "object" && "lookup" in table.meta ? table.meta.lookup : void 0;
     const fullMatrix = rows.map((rowLabel, idx) => [rowLabel, ...data[idx] || []]);
     let filters = [];
@@ -39919,10 +39682,8 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       const rowSourceOption = rawLookup.rowSourceOption;
       if (columnSourceOption?.filters && Array.isArray(columnSourceOption.filters)) {
         filters = columnSourceOption.filters;
-        console.log(`[TreeBranchLeaf API] \u{1F525} ${filters.length} filtre(s) trouv\xE9(s) dans columnSourceOption`);
       } else if (rowSourceOption?.filters && Array.isArray(rowSourceOption.filters)) {
         filters = rowSourceOption.filters;
-        console.log(`[TreeBranchLeaf API] \u{1F525} ${filters.length} filtre(s) trouv\xE9(s) dans rowSourceOption`);
       }
     }
     const fullMatrixForFilters = table.tableRows.map((row) => {
@@ -39942,19 +39703,15 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         return [];
       }
     });
-    console.log(`[TreeBranchLeaf API] \u{1F527} Filtrage - columns:`, columns.slice(0, 5), "filters columns:", filters.map((f) => f.column));
-    console.log(`[TreeBranchLeaf API] \u{1F527} Filtrage - fullMatrixForFilters[1] sample:`, fullMatrixForFilters[1]?.slice(0, 4));
     let filteredRowIndices = fullMatrix.map((_, i) => i);
     if (filters.length > 0 && Object.keys(formValues).length > 0) {
-      console.log(`[TreeBranchLeaf API] \u{1F525} Application de ${filters.length} filtre(s)...`);
       filteredRowIndices = await applyTableFilters(fullMatrixForFilters, columns, filters, formValues);
-      console.log(`[TreeBranchLeaf API] \u2705 Filtrage: ${filteredRowIndices.length}/${fullMatrix.length} lignes passent les filtres`);
     }
     if (table.type === "matrix") {
       if (selectConfig?.keyRow) {
         const rowIndex = rows.indexOf(selectConfig.keyRow);
         if (rowIndex === -1) {
-          console.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
+          console.warn(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TreeBranchLeaf API] Ligne "${selectConfig.keyRow}" introuvable`);
           return res.json({ options: [] });
         }
         let options;
@@ -39976,18 +39733,12 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             };
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         }
-        console.log(`[TreeBranchLeaf API] \u2705 Options extraites depuis ligne "${selectConfig.keyRow}":`, {
-          rowIndex,
-          isRowA1: rowIndex === 0,
-          optionsCount: options.length,
-          sample: options.slice(0, 3)
-        });
         return res.json({ options });
       }
       if (selectConfig?.keyColumn) {
         const colIndex = columns.indexOf(selectConfig.keyColumn);
         if (colIndex === -1) {
-          console.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
+          console.warn(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
           return res.json({ options: [] });
         }
         let options;
@@ -40011,13 +39762,6 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             };
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         }
-        console.log(`[TreeBranchLeaf API] \u2705 Options extraites depuis colonne "${selectConfig.keyColumn}" (index ${colIndex}):`, {
-          colIndex,
-          isColumnA: colIndex === 0,
-          optionsCount: options.length,
-          filteredFromTotal: `${filteredRowIndices.length}/${fullMatrix.length}`,
-          sample: options.slice(0, 3)
-        });
         return res.json({ options });
       }
     }
@@ -40027,12 +39771,6 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       const firstColHeader = columns[0];
       if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
         const autoOptions = filteredRowIndices.filter((idx) => idx > 0).map((idx) => rows[idx]).filter((r) => r && r !== "undefined" && r !== "null").map((r) => ({ value: r, label: r }));
-        console.log(`[TreeBranchLeaf API] \u{1F3AF} AUTO-DEFAULT lookup (matrix, colonne A) g\xE9n\xE9r\xE9`, {
-          nodeId,
-          autoCount: autoOptions.length,
-          filteredFromTotal: `${filteredRowIndices.length}/${fullMatrix.length}`,
-          sample: autoOptions.slice(0, 5)
-        });
         try {
           await prisma47.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
@@ -40067,25 +39805,22 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`[TreeBranchLeaf API] ? AUTO-UPSERT select-config: nodeId=${nodeId}, table=${table.id}, keyColumn=${firstColHeader}`);
         } catch (e) {
-          console.warn(`[TreeBranchLeaf API] ?? Auto-upsert select-config a \uFFFDchou\uFFFD (non bloquant):`, e);
+          console.warn(`[TreeBranchLeaf API] ?? Auto-upsert select-config a \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchou\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD (non bloquant):`, e);
         }
         return res.json({ options: autoOptions, autoDefault: { source: "columnA", keyColumnCandidate: firstColHeader } });
       }
     }
-    console.log(`[TreeBranchLeaf API] \u26A0\uFE0F Aucun keyRow/keyColumn configur\xE9, retour tableau brut (pas d'auto-default applicable)`);
     return res.json(table);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching table for lookup:", error);
-    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du tableau" });
+    res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration du tableau" });
   }
 });
 router56.patch("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log(`[TreeBranchLeaf API] \u{1F527} PATCH node: ${nodeId}`, req2.body);
     const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
@@ -40097,18 +39832,16 @@ router56.patch("/nodes/:nodeId", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`[TreeBranchLeaf API] \u2705 N\u0153ud mis \xE0 jour:`, updatedNode.id);
     return res.json(updatedNode);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error updating node:", error);
-    res.status(500).json({ error: "Erreur lors de la mise \xE0 jour du n\u0153ud" });
+    res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
 router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { enabled, activeId, currentTable } = req2.body;
-    console.log(`\u{1F3AF} [TablePanel API] PUT /nodes/${nodeId}/capabilities/table`, { enabled, activeId, currentTable });
     const node = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
@@ -40118,7 +39851,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
     const oldMetadata = node.metadata || {};
     const oldCapabilities = oldMetadata.capabilities || {};
@@ -40138,7 +39871,6 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       ...oldMetadata,
       capabilities: newCapabilities
     };
-    console.log(`\u2705 [TablePanel API] Nouvelle metadata.capabilities.table:`, newCapabilities.table);
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
@@ -40150,7 +39882,6 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`\u2705 [TablePanel API] Capacit\xE9 Table mise \xE0 jour pour n\u0153ud ${nodeId}`);
     if (enabled && activeId) {
       const keyColumn = currentTable?.keyColumn || null;
       const keyRow = currentTable?.keyRow || null;
@@ -40158,16 +39889,6 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       const valueRow = currentTable?.valueRow || null;
       const displayColumn = currentTable?.displayColumn || null;
       const displayRow = currentTable?.displayRow || null;
-      console.log(`\u{1F527} [TablePanel API] Upsert configuration SELECT`, {
-        nodeId,
-        activeId,
-        keyColumn,
-        keyRow,
-        valueColumn,
-        valueRow,
-        displayColumn,
-        displayRow
-      });
       try {
         await prisma47.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
@@ -40201,34 +39922,21 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        console.log(`\u2705 [TablePanel API] Configuration SELECT upsert\xE9e pour ${nodeId}`, {
-          keyColumn,
-          keyRow,
-          displayColumn,
-          displayRow
-        });
       } catch (selectConfigError) {
-        console.error(`\u26A0\uFE0F [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
+        console.error(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
       }
     } else if (!enabled) {
-      console.log(`\u{1F534} [TablePanel API] Suppression configuration SELECT pour ${nodeId}`);
       try {
         await prisma47.treeBranchLeafSelectConfig.deleteMany({
           where: { nodeId }
         });
-        console.log(`\u2705 [TablePanel API] Configuration SELECT supprim\xE9e pour ${nodeId}`);
       } catch (deleteError) {
-        console.error(`\u26A0\uFE0F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
+        console.error(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
       }
     }
     const verifyNode = await prisma47.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true, hasTable: true }
-    });
-    console.log(`\u{1F50D} [TablePanel API] V\xC9RIFICATION apr\xE8s UPDATE:`, {
-      nodeId,
-      hasTable: verifyNode?.hasTable,
-      metadataCapabilitiesTable: verifyNode?.metadata?.capabilities?.table
     });
     return res.json({
       success: true,
@@ -40238,8 +39946,8 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[TablePanel API] \u274C Erreur PUT /nodes/:nodeId/capabilities/table:", error);
-    return res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la capacit\xE9 Table" });
+    console.error("[TablePanel API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur PUT /nodes/:nodeId/capabilities/table:", error);
+    return res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la capacit\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 Table" });
   }
 });
 router56.put("/submissions/:id", async (req2, res) => {
@@ -40252,12 +39960,12 @@ router56.put("/submissions/:id", async (req2, res) => {
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
     if (!submission) {
-      return res.status(404).json({ error: "Soumission non trouv\xE9e" });
+      return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
     const treeId = submission.treeId;
     const treeOrg = submission.TreeBranchLeafTree?.organizationId;
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
-      return res.status(403).json({ error: "Acc\xE8s refus\xE9 \xE0 cette soumission" });
+      return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
     const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const validNodeIds = new Set(nodes.map((n) => n.id));
@@ -40365,7 +40073,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                 valuesMapTx.set(nodeId, valueStr);
                 const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                 const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
-                const expr = "\u{1F504} Condition \xE9valu\xE9e via TBL Prisma (ligne 5456)";
+                const expr = "\xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\xA2\xE2\u201A\xAC\xC5\xBE Condition \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valu\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e via TBL Prisma (ligne 5456)";
                 opRes = { type: "condition", label: display, value: valueStr, unit: meta?.unit || null, refs, text: expr };
               } else if (parsed?.type === "formula") {
                 const rec = await tx.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { tokens: true } });
@@ -40445,7 +40153,7 @@ router56.put("/submissions/:id", async (req2, res) => {
                       const ids = extractNodeIdsFromConditionSet2(rec?.conditionSet);
                       const refsRaw = buildResolvedRefs(ids, labelMap, valuesMapTx);
                       const refs = refsRaw.map((r) => ({ label: r.label ?? null, value: r.value ?? null }));
-                      const expr = "\u{1F504} Condition \xE9valu\xE9e via TBL Prisma (ligne 5545)";
+                      const expr = "\xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\xA2\xE2\u201A\xAC\xC5\xBE Condition \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valu\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e via TBL Prisma (ligne 5545)";
                       return { type: "condition", label: display, value: valueStr, unit: meta?.unit || null, refs, text: expr };
                     })();
                   }
@@ -40635,7 +40343,6 @@ router56.put("/submissions/:id", async (req2, res) => {
         const opDetail = isVar ? await resolveOperationDetail(row.sourceRef || null) : label;
         if (isVar && (row.sourceRef || meta?.sourceRef)) {
           try {
-            console.log(`[UNIVERSAL] \u{1F504} \xC9valuation de la variable: ${row.nodeId} (${display})`);
             const evaluation = await evaluateVariableOperation(
               row.nodeId,
               id,
@@ -40643,14 +40350,13 @@ router56.put("/submissions/:id", async (req2, res) => {
               tx
               // Utiliser la transaction Prisma
             );
-            console.log(`[UNIVERSAL] \u2705 R\xE9sultat: ${evaluation.value}`);
             opRes = evaluation.operationResult;
             await tx.treeBranchLeafSubmissionData.updateMany({
               where: { submissionId: id, nodeId: row.nodeId },
               data: { value: evaluation.value }
             });
           } catch (error) {
-            console.error(`[UNIVERSAL] \u274C Erreur \xE9valuation variable ${row.nodeId}:`, error);
+            console.error(`[UNIVERSAL] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation variable ${row.nodeId}:`, error);
             const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
             if (parsed?.type === "condition") {
               const rec = await tx.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { conditionSet: true } });
@@ -40705,8 +40411,8 @@ router56.put("/submissions/:id", async (req2, res) => {
     });
     return res.json(full);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \u274C Erreur PUT /submissions/:id:", error);
-    return res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la soumission" });
+    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur PUT /submissions/:id:", error);
+    return res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la soumission" });
   }
 });
 router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
@@ -40714,24 +40420,15 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     const { variableNodeId } = req2.params;
     const { submissionId } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\n" + "\u2550".repeat(80));
-    console.log("\u{1F3AF} [V2 API] \xC9VALUATION VARIABLE UNIVERSELLE");
-    console.log("\u2550".repeat(80));
-    console.log("\u{1F4CB} Param\xE8tres:");
-    console.log("   - variableNodeId:", variableNodeId);
-    console.log("   - submissionId:", submissionId);
-    console.log("   - organizationId:", organizationId);
-    console.log("   - isSuperAdmin:", isSuperAdmin2);
-    console.log("\u2550".repeat(80) + "\n");
     if (!variableNodeId) {
-      console.error("\u274C [V2 API] variableNodeId manquant");
+      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] variableNodeId manquant");
       return res.status(400).json({
         success: false,
         error: "variableNodeId requis"
       });
     }
     if (!submissionId) {
-      console.error("\u274C [V2 API] submissionId manquant");
+      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] submissionId manquant");
       return res.status(400).json({
         success: false,
         error: "submissionId requis dans le body"
@@ -40762,32 +40459,27 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       }
     });
     if (!node) {
-      console.error("\u274C [V2 API] N\u0153ud introuvable:", variableNodeId);
+      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable:", variableNodeId);
       return res.status(404).json({
         success: false,
-        error: "N\u0153ud introuvable"
+        error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable"
       });
     }
-    console.log("\u2705 [V2 API] N\u0153ud trouv\xE9:", node.label);
     if (!isSuperAdmin2 && node.TreeBranchLeafTree?.organizationId !== organizationId) {
-      console.error("\u274C [V2 API] Acc\xE8s refus\xE9 - mauvaise organisation");
+      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 - mauvaise organisation");
       return res.status(403).json({
         success: false,
-        error: "Acc\xE8s refus\xE9 \xE0 ce n\u0153ud"
+        error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud"
       });
     }
-    console.log("\u2705 [V2 API] Permissions valid\xE9es");
     const variable = node.TreeBranchLeafNodeVariable?.[0];
     if (!variable) {
-      console.error("\u274C [V2 API] Pas de variable associ\xE9e \xE0 ce n\u0153ud");
+      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Pas de variable associ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud");
       return res.status(400).json({
         success: false,
-        error: "Ce n\u0153ud ne contient pas de variable"
+        error: "Ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud ne contient pas de variable"
       });
     }
-    console.log("\u2705 [V2 API] Variable trouv\xE9e:", variable.displayName);
-    console.log("   - sourceType:", variable.sourceType);
-    console.log("   - sourceRef:", variable.sourceRef);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       select: {
@@ -40798,16 +40490,12 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       }
     });
     if (!submission) {
-      console.error("\u274C [V2 API] Soumission introuvable:", submissionId);
+      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Soumission introuvable:", submissionId);
       return res.status(404).json({
         success: false,
         error: "Soumission introuvable"
       });
     }
-    console.log("\u2705 [V2 API] Soumission trouv\xE9e:", submissionId);
-    console.log("\n" + "\u2500".repeat(80));
-    console.log("\u{1F680} [V2 API] D\xE9marrage \xE9valuation universelle...");
-    console.log("\u2500".repeat(80) + "\n");
     const startTime = Date.now();
     const evaluationResult = await evaluateVariableOperation(
       variableNodeId,
@@ -40815,13 +40503,6 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       prisma47
     );
     const duration = Date.now() - startTime;
-    console.log("\n" + "\u2500".repeat(80));
-    console.log("\u2705 [V2 API] \xC9valuation termin\xE9e avec succ\xE8s !");
-    console.log("   - Dur\xE9e:", duration, "ms");
-    console.log("   - R\xE9sultat:", evaluationResult.value);
-    console.log("   - OperationSource:", evaluationResult.operationSource);
-    console.log("\u2500".repeat(80) + "\n");
-    console.log("\u{1F4BE} [V2 API] Sauvegarde dans SubmissionData...");
     await prisma47.treeBranchLeafSubmissionData.upsert({
       where: {
         submissionId_nodeId: {
@@ -40849,7 +40530,6 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("\u2705 [V2 API] Sauvegarde effectu\xE9e\n");
     const response = {
       success: true,
       variable: {
@@ -40875,19 +40555,16 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
         nodeLabel: node.label
       }
     };
-    console.log("\u2550".repeat(80));
-    console.log("\u{1F4E4} [V2 API] R\xE9ponse envoy\xE9e avec succ\xE8s");
-    console.log("\u2550".repeat(80) + "\n");
     return res.json(response);
   } catch (error) {
-    console.error("\n" + "\u2550".repeat(80));
-    console.error("\u274C [V2 API] ERREUR CRITIQUE");
-    console.error("\u2550".repeat(80));
+    console.error("\n" + "\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80));
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] ERREUR CRITIQUE");
+    console.error("\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80));
     console.error(error);
-    console.error("\u2550".repeat(80) + "\n");
+    console.error("\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80) + "\n");
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de l'\xE9valuation de la variable",
+      error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la variable",
       details: error instanceof Error ? error.message : "Erreur inconnue",
       stack: process.env.NODE_ENV === "development" && error instanceof Error ? error.stack : void 0
     });
@@ -40897,7 +40574,6 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    console.log("\n\u{1F50D} [V2 API] R\xC9CUP\xC9RATION VARIABLES:", submissionId);
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: {
@@ -40919,7 +40595,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
     if (!isSuperAdmin2 && submission.TreeBranchLeafTree?.organizationId !== organizationId) {
       return res.status(403).json({
         success: false,
-        error: "Acc\xE8s refus\xE9 \xE0 cette soumission"
+        error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission"
       });
     }
     const variables = await prisma47.treeBranchLeafNodeVariable.findMany({
@@ -40938,7 +40614,6 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
         }
       }
     });
-    console.log("\u2705 [V2 API] Variables trouv\xE9es:", variables.length);
     const submissionData = await prisma47.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
@@ -40967,7 +40642,6 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
         nodeType: variable.TreeBranchLeafNode?.type || "unknown"
       };
     });
-    console.log("\u2705 [V2 API] R\xE9ponse construite\n");
     return res.json({
       success: true,
       submissionId,
@@ -40982,10 +40656,10 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [V2 API] Erreur r\xE9cup\xE9ration variables:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Erreur r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration variables:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xE9cup\xE9ration des variables",
+      error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des variables",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -40994,7 +40668,6 @@ router56.post("/submissions/stage", async (req2, res) => {
   try {
     const { stageId, treeId, submissionId, leadId, formData, baseVersion } = req2.body;
     const userId = req2.user?.id || "system";
-    console.log("\u{1F4DD} [STAGE] Cr\xE9ation/Update brouillon:", { stageId, treeId, submissionId, leadId, userId });
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     let stage;
     if (stageId) {
@@ -41007,12 +40680,11 @@ router56.post("/submissions/stage", async (req2, res) => {
           // Renouvelle l'expiration
         }
       });
-      console.log("\u2705 [STAGE] Brouillon mis \xE0 jour:", stage.id);
     } else {
       if (!treeId || !leadId) {
         return res.status(400).json({
           success: false,
-          error: "treeId et leadId sont requis pour cr\xE9er un stage"
+          error: "treeId et leadId sont requis pour cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9er un stage"
         });
       }
       let currentBaseVersion = baseVersion || 1;
@@ -41035,7 +40707,6 @@ router56.post("/submissions/stage", async (req2, res) => {
           expiresAt
         }
       });
-      console.log("\u2705 [STAGE] Nouveau brouillon cr\xE9\xE9:", stage.id);
     }
     return res.json({
       success: true,
@@ -41046,7 +40717,7 @@ router56.post("/submissions/stage", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [STAGE] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la gestion du brouillon",
@@ -41063,14 +40734,13 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    console.log("\u{1F50D} [STAGE PREVIEW] Pr\xE9visualisation pour:", stageId);
     const stage = await prisma47.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
       return res.status(404).json({
         success: false,
-        error: "Stage non trouv\xE9"
+        error: "Stage non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9"
       });
     }
     const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
@@ -41103,7 +40773,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
             operationDetail: evalResult.operationDetail
           };
         } catch (error) {
-          console.error(`\u274C Erreur \xE9valuation ${node.id}:`, error);
+          console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
           return {
             nodeId: node.id,
             nodeLabel: node.label,
@@ -41115,7 +40785,6 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
         }
       })
     );
-    console.log("\u2705 [STAGE PREVIEW] R\xE9sultats:", results.length, "noeuds \xE9valu\xE9s");
     return res.json({
       success: true,
       stageId: stage.id,
@@ -41129,10 +40798,10 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\u274C [STAGE PREVIEW] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE PREVIEW] Erreur:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la pr\xE9visualisation",
+      error: "Erreur lors de la pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9visualisation",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -41147,27 +40816,25 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    console.log("\u{1F4BE} [STAGE COMMIT] Commit brouillon:", { stageId, asNew, userId });
     const stage = await prisma47.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
       return res.status(404).json({
         success: false,
-        error: "Stage non trouv\xE9"
+        error: "Stage non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9"
       });
     }
     if (stage.expiresAt < /* @__PURE__ */ new Date()) {
       return res.status(410).json({
         success: false,
-        error: "Ce brouillon a expir\xE9",
+        error: "Ce brouillon a expir\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9",
         expired: true
       });
     }
     let submissionId;
     let newVersion = 1;
     if (asNew || !stage.submissionId) {
-      console.log("\u{1F195} [STAGE COMMIT] Cr\xE9ation nouvelle submission");
       const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
       const variableNodes = await prisma47.treeBranchLeafNode.findMany({
         where: {
@@ -41198,7 +40865,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
               operationDetail: evalResult.operationDetail
             };
           } catch (error) {
-            console.error(`\u274C Erreur \xE9valuation ${node.id}:`, error);
+            console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
             return null;
           }
         })
@@ -41250,9 +40917,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       });
       submissionId = result.id;
       newVersion = 1;
-      console.log("\u2705 [STAGE COMMIT] Nouvelle submission cr\xE9\xE9e:", submissionId);
     } else {
-      console.log("\u{1F504} [STAGE COMMIT] Mise \xE0 jour submission existante:", stage.submissionId);
       const currentSubmission = await prisma47.treeBranchLeafSubmission.findUnique({
         where: { id: stage.submissionId },
         select: {
@@ -41267,14 +40932,10 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       if (!currentSubmission) {
         return res.status(404).json({
           success: false,
-          error: "Submission originale non trouv\xE9e"
+          error: "Submission originale non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e"
         });
       }
       if (currentSubmission.currentVersion > stage.baseVersion) {
-        console.log("\u26A0\uFE0F [STAGE COMMIT] Conflit d\xE9tect\xE9!", {
-          baseVersion: stage.baseVersion,
-          currentVersion: currentSubmission.currentVersion
-        });
         const currentData = await prisma47.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: stage.submissionId },
           select: { nodeId: true, value: true }
@@ -41293,17 +40954,15 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           }
         }
         if (conflicts.length > 0) {
-          console.log("\u274C [STAGE COMMIT] Conflits \xE0 r\xE9soudre:", conflicts.length);
           return res.status(409).json({
             success: false,
             conflict: true,
             conflicts,
             lastEditedBy: currentSubmission.lastEditedBy,
             lastEditedAt: currentSubmission.updatedAt,
-            message: "Des modifications ont \xE9t\xE9 faites par un autre utilisateur"
+            message: "Des modifications ont \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 faites par un autre utilisateur"
           });
         }
-        console.log("\u2705 [STAGE COMMIT] Pas de conflit r\xE9el - merge automatique");
       }
       if (currentSubmission.lockedBy && currentSubmission.lockedBy !== userId) {
         const lockAge = currentSubmission.lockedAt ? Date.now() - new Date(currentSubmission.lockedAt).getTime() : 0;
@@ -41312,7 +40971,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
             success: false,
             locked: true,
             lockedBy: currentSubmission.lockedBy,
-            message: "Ce devis est en cours d'\xE9dition par un autre utilisateur"
+            message: "Ce devis est en cours d'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9dition par un autre utilisateur"
           });
         }
       }
@@ -41347,7 +41006,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
                 operationDetail: evalResult.operationDetail
               };
             } catch (error) {
-              console.error(`\u274C Erreur \xE9valuation ${node.id}:`, error);
+              console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
               return null;
             }
           })
@@ -41359,7 +41018,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
             currentVersion: nextVersion,
             lastEditedBy: userId,
             lockedBy: null,
-            // Libérer le lock
+            // LibÃƒÆ’Ã‚Â©rer le lock
             lockedAt: null,
             updatedAt: /* @__PURE__ */ new Date()
           }
@@ -41402,7 +41061,6 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           await tx.treeBranchLeafSubmissionVersion.deleteMany({
             where: { id: { in: versions.map((v) => v.id) } }
           });
-          console.log(`\u{1F5D1}\uFE0F [STAGE COMMIT] ${versions.length} anciennes versions supprim\xE9es`);
         }
         await tx.treeBranchLeafStage.delete({
           where: { id: stageId }
@@ -41411,16 +41069,15 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       });
       submissionId = result.submission.id;
       newVersion = result.version;
-      console.log("\u2705 [STAGE COMMIT] Submission mise \xE0 jour:", submissionId, "v" + newVersion);
     }
     return res.json({
       success: true,
       submissionId,
       version: newVersion,
-      message: "Devis enregistr\xE9 avec succ\xE8s"
+      message: "Devis enregistr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s"
     });
   } catch (error) {
-    console.error("\u274C [STAGE COMMIT] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE COMMIT] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la sauvegarde",
@@ -41437,17 +41094,15 @@ router56.post("/submissions/stage/discard", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    console.log("\u{1F5D1}\uFE0F [STAGE DISCARD] Suppression brouillon:", stageId);
     await prisma47.treeBranchLeafStage.delete({
       where: { id: stageId }
     });
-    console.log("\u2705 [STAGE DISCARD] Brouillon supprim\xE9");
     return res.json({
       success: true,
-      message: "Brouillon supprim\xE9"
+      message: "Brouillon supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9"
     });
   } catch (error) {
-    console.error("\u274C [STAGE DISCARD] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE DISCARD] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la suppression du brouillon",
@@ -41459,11 +41114,10 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
   try {
     const userId = req2.user?.id || "system";
     const { leadId, treeId } = req2.query;
-    console.log("\u{1F4CB} [MY DRAFTS] R\xE9cup\xE9ration brouillons:", { userId, leadId, treeId });
     const where = {
       userId,
       expiresAt: { gt: /* @__PURE__ */ new Date() }
-      // Seulement les non-expirés
+      // Seulement les non-expirÃƒÆ’Ã‚Â©s
     };
     if (leadId) where.leadId = leadId;
     if (treeId) where.treeId = treeId;
@@ -41481,7 +41135,6 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
         }
       }
     });
-    console.log("\u2705 [MY DRAFTS] Trouv\xE9:", drafts.length, "brouillons");
     return res.json({
       success: true,
       drafts: drafts.map((d) => ({
@@ -41496,10 +41149,10 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\u274C [MY DRAFTS] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [MY DRAFTS] Erreur:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xE9cup\xE9ration des brouillons",
+      error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des brouillons",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -41507,7 +41160,6 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
 router56.get("/submissions/:id/versions", async (req2, res) => {
   try {
     const { id } = req2.params;
-    console.log("\u{1F4DC} [VERSIONS] R\xE9cup\xE9ration historique:", id);
     const versions = await prisma47.treeBranchLeafSubmissionVersion.findMany({
       where: { submissionId: id },
       orderBy: { version: "desc" },
@@ -41522,7 +41174,6 @@ router56.get("/submissions/:id/versions", async (req2, res) => {
         }
       }
     });
-    console.log("\u2705 [VERSIONS] Trouv\xE9:", versions.length, "versions");
     return res.json({
       success: true,
       submissionId: id,
@@ -41538,10 +41189,10 @@ router56.get("/submissions/:id/versions", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\u274C [VERSIONS] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [VERSIONS] Erreur:", error);
     return res.status(500).json({
       success: false,
-      error: "Erreur lors de la r\xE9cup\xE9ration de l'historique",
+      error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de l'historique",
       details: error instanceof Error ? error.message : "Erreur inconnue"
     });
   }
@@ -41550,7 +41201,6 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
   try {
     const { id, version } = req2.params;
     const userId = req2.user?.id || "system";
-    console.log("\u{1F519} [RESTORE] Restauration version:", { id, version, userId });
     const versionToRestore = await prisma47.treeBranchLeafSubmissionVersion.findUnique({
       where: {
         submissionId_version: {
@@ -41562,7 +41212,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     if (!versionToRestore) {
       return res.status(404).json({
         success: false,
-        error: "Version non trouv\xE9e"
+        error: "Version non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e"
       });
     }
     const submission = await prisma47.treeBranchLeafSubmission.findUnique({
@@ -41572,7 +41222,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
     if (!submission) {
       return res.status(404).json({
         success: false,
-        error: "Submission non trouv\xE9e"
+        error: "Submission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e"
       });
     }
     const stage = await prisma47.treeBranchLeafStage.create({
@@ -41587,14 +41237,13 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1e3)
       }
     });
-    console.log("\u2705 [RESTORE] Stage cr\xE9\xE9 pour restauration:", stage.id);
     return res.json({
       success: true,
       stageId: stage.id,
-      message: `Version ${version} charg\xE9e en brouillon. Enregistrez pour confirmer la restauration.`
+      message: `Version ${version} charg\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e en brouillon. Enregistrez pour confirmer la restauration.`
     });
   } catch (error) {
-    console.error("\u274C [RESTORE] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [RESTORE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la restauration",
@@ -41609,10 +41258,10 @@ router56.get("/shared-references", async (req2, res) => {
       where: {
         isSharedReference: true,
         sharedReferenceId: null,
-        // C'est une source, pas une référence
+        // C'est une source, pas une rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rence
         type: {
           not: "leaf_option"
-          // ❌ Exclure les options de SELECT
+          // ÃƒÂ¢Ã‚ÂÃ…â€™ Exclure les options de SELECT
         },
         TreeBranchLeafTree: {
           organizationId
@@ -41622,7 +41271,7 @@ router56.get("/shared-references", async (req2, res) => {
         id: true,
         label: true,
         sharedReferenceName: true,
-        // ✅ sharedReferenceCategory SUPPRIMÉ
+        // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ sharedReferenceCategory SUPPRIMÃƒÆ’Ã¢â‚¬Â°
         sharedReferenceDescription: true,
         referenceUsages: {
           select: {
@@ -41637,14 +41286,12 @@ router56.get("/shared-references", async (req2, res) => {
         }
       }
     });
-    console.log(`\u{1F4CA} [SHARED REF] ${templates.length} r\xE9f\xE9rences trouv\xE9es en base`);
     templates.forEach((t, i) => {
-      console.log(`  ${i + 1}. ID: ${t.id}, Nom: ${t.sharedReferenceName}, Label: ${t.label}`);
     });
     const formatted = templates.map((template) => ({
       id: template.id,
       label: template.sharedReferenceName || template.label,
-      // ✅ category SUPPRIMÉ
+      // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ category SUPPRIMÃƒÆ’Ã¢â‚¬Â°
       description: template.sharedReferenceDescription,
       usageCount: template.referenceUsages.length,
       usages: template.referenceUsages.map((usage) => ({
@@ -41652,10 +41299,9 @@ router56.get("/shared-references", async (req2, res) => {
         path: `${usage.TreeBranchLeafTree.name}`
       }))
     }));
-    console.log(`\u{1F4E4} [SHARED REF] Retour au frontend: ${JSON.stringify(formatted, null, 2)}`);
     res.json(formatted);
   } catch (error) {
-    console.error("\u274C [SHARED REF] Erreur liste:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur liste:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41676,7 +41322,7 @@ router56.get("/shared-references/:refId", async (req2, res) => {
         id: true,
         label: true,
         sharedReferenceName: true,
-        // ✅ sharedReferenceCategory SUPPRIMÉ
+        // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ sharedReferenceCategory SUPPRIMÃƒÆ’Ã¢â‚¬Â°
         sharedReferenceDescription: true,
         referenceUsages: {
           select: {
@@ -41692,12 +41338,12 @@ router56.get("/shared-references/:refId", async (req2, res) => {
       }
     });
     if (!template) {
-      return res.status(404).json({ error: "R\xE9f\xE9rence introuvable" });
+      return res.status(404).json({ error: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence introuvable" });
     }
     res.json({
       id: template.id,
       label: template.sharedReferenceName || template.label,
-      // ✅ category SUPPRIMÉ
+      // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ category SUPPRIMÃƒÆ’Ã¢â‚¬Â°
       description: template.sharedReferenceDescription,
       usageCount: template.referenceUsages.length,
       usages: template.referenceUsages.map((usage) => ({
@@ -41706,7 +41352,7 @@ router56.get("/shared-references/:refId", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\u274C [SHARED REF] Erreur d\xE9tails:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9tails:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41726,7 +41372,7 @@ router56.put("/shared-references/:refId", async (req2, res) => {
       }
     });
     if (!template) {
-      return res.status(404).json({ error: "R\xE9f\xE9rence introuvable" });
+      return res.status(404).json({ error: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence introuvable" });
     }
     const updated = await prisma47.treeBranchLeafNode.update({
       where: { id: refId },
@@ -41743,10 +41389,9 @@ router56.put("/shared-references/:refId", async (req2, res) => {
         sharedReferenceDescription: true
       }
     });
-    console.log(`\u2705 [SHARED REF] R\xE9f\xE9rence ${refId} modifi\xE9e:`, updated);
     res.json({ success: true, reference: updated });
   } catch (error) {
-    console.error("\u274C [SHARED REF] Erreur modification:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur modification:", error);
     res.status(500).json({ error: "Erreur lors de la modification" });
   }
 });
@@ -41768,10 +41413,9 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
       }
     });
     if (!template) {
-      return res.status(404).json({ error: "R\xE9f\xE9rence introuvable" });
+      return res.status(404).json({ error: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence introuvable" });
     }
     if (template.referenceUsages.length > 0) {
-      console.log(`\u26A0\uFE0F [SHARED REF] D\xE9tachement de ${template.referenceUsages.length} usage(s) avant suppression`);
       await prisma47.treeBranchLeafNode.updateMany({
         where: {
           sharedReferenceId: refId
@@ -41787,10 +41431,9 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
     await prisma47.treeBranchLeafNode.delete({
       where: { id: refId }
     });
-    console.log(`\u{1F5D1}\uFE0F [SHARED REF] R\xE9f\xE9rence ${refId} supprim\xE9e`);
-    res.json({ success: true, message: "R\xE9f\xE9rence supprim\xE9e avec succ\xE8s" });
+    res.json({ success: true, message: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
-    console.error("\u274C [SHARED REF] Erreur suppression:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -41799,7 +41442,6 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
     const { treeId } = req2.params;
     const { name, description, fieldType, label } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    console.log("\u{1F4DD} [SHARED REF] Cr\xE9ation nouveau n\u0153ud r\xE9f\xE9rence:", { treeId, name, description, fieldType, label });
     const tree = await prisma47.treeBranchLeafTree.findFirst({
       where: {
         id: treeId,
@@ -41815,23 +41457,22 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
         id: newNodeId,
         treeId,
         type: "leaf_field",
-        // ✅ OBLIGATOIRE : type du nœud
+        // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ OBLIGATOIRE : type du nÃƒâ€¦Ã¢â‚¬Å“ud
         label: label || name,
         fieldType: fieldType || "TEXT",
         parentId: null,
-        // ✅ CORRECTION: null au lieu de 'ROOT' (contrainte de clé étrangère)
+        // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ CORRECTION: null au lieu de 'ROOT' (contrainte de clÃƒÆ’Ã‚Â© ÃƒÆ’Ã‚Â©trangÃƒÆ’Ã‚Â¨re)
         order: 9999,
-        // Ordre élevé pour les mettre à la fin
+        // Ordre ÃƒÆ’Ã‚Â©levÃƒÆ’Ã‚Â© pour les mettre ÃƒÆ’Ã‚Â  la fin
         isSharedReference: true,
         sharedReferenceId: null,
         // C'est une source
         sharedReferenceName: name,
         sharedReferenceDescription: description,
         updatedAt: /* @__PURE__ */ new Date()
-        // ✅ OBLIGATOIRE : timestamp de mise à jour
+        // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ OBLIGATOIRE : timestamp de mise ÃƒÆ’Ã‚Â  jour
       }
     });
-    console.log("\u2705 [SHARED REF] Nouveau n\u0153ud r\xE9f\xE9rence cr\xE9\xE9:", newNode.id);
     res.json({
       success: true,
       id: newNode.id,
@@ -41842,10 +41483,10 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
         sharedReferenceName: newNode.sharedReferenceName,
         sharedReferenceDescription: newNode.sharedReferenceDescription
       },
-      message: "R\xE9f\xE9rence partag\xE9e cr\xE9\xE9e avec succ\xE8s"
+      message: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s"
     });
   } catch (error) {
-    console.error("\u274C [SHARED REF] Erreur cr\xE9ation:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41854,7 +41495,6 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
     const { nodeId } = req2.params;
     const { referenceIds } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    console.log("\u{1F517} [SHARED REF] Liaison r\xE9f\xE9rences:", { nodeId, referenceIds });
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -41864,7 +41504,7 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud introuvable" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable" });
     }
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -41872,13 +41512,12 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
         sharedReferenceIds: referenceIds
       }
     });
-    console.log("\u2705 [SHARED REF] R\xE9f\xE9rences li\xE9es avec succ\xE8s:", nodeId);
     res.json({
       success: true,
-      message: `${referenceIds.length} r\xE9f\xE9rence(s) li\xE9e(s) avec succ\xE8s`
+      message: `${referenceIds.length} r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence(s) li\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e(s) avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s`
     });
   } catch (error) {
-    console.error("\u274C [SHARED REF] Erreur liaison:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur liaison:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41887,7 +41526,6 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
     const { nodeId } = req2.params;
     const { name, description } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    console.log("\u{1F4DD} [SHARED REF] Conversion n\u0153ud en r\xE9f\xE9rence:", { nodeId, name, description });
     const node = await prisma47.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
@@ -41897,7 +41535,7 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
       }
     });
     if (!node) {
-      return res.status(404).json({ error: "N\u0153ud introuvable" });
+      return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable" });
     }
     await prisma47.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -41906,18 +41544,17 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
         sharedReferenceId: null,
         // C'est une source
         sharedReferenceName: name,
-        // ✅ sharedReferenceCategory SUPPRIMÉ
+        // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ sharedReferenceCategory SUPPRIMÃƒÆ’Ã¢â‚¬Â°
         sharedReferenceDescription: description
       }
     });
-    console.log("\u2705 [SHARED REF] R\xE9f\xE9rence cr\xE9\xE9e avec succ\xE8s:", nodeId);
     res.json({
       success: true,
       id: nodeId,
-      message: "R\xE9f\xE9rence cr\xE9\xE9e avec succ\xE8s"
+      message: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s"
     });
   } catch (error) {
-    console.error("\u274C [SHARED REF] Erreur conversion:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur conversion:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -41927,15 +41564,14 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     const { variableId, newSuffix, duplicateNode, targetNodeId: bodyTargetNodeId } = req2.body;
     console.warn("?? [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.");
     res.set("X-Deprecated-API", "/api/repeat");
-    console.log("\u{1F504} [COPY-LINKED-VAR] D\xE9but - nodeId:", nodeId, "variableId:", variableId, "newSuffix:", newSuffix);
     if (!variableId || newSuffix === void 0) {
       return res.status(400).json({
-        error: "variableId et newSuffix requis dans le corps de la requ\xEAte"
+        error: "variableId et newSuffix requis dans le corps de la requ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte"
       });
     }
     if (!Number.isInteger(newSuffix) || newSuffix < 1) {
       return res.status(400).json({
-        error: "newSuffix doit \xEAtre un nombre entier positif"
+        error: "newSuffix doit \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre un nombre entier positif"
       });
     }
     const node = await prisma47.treeBranchLeafNode.findFirst({
@@ -41950,7 +41586,6 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     if (!node) {
       return res.status(404).json({ error: "Noeud introuvable" });
     }
-    console.log("? Noeud trouv\uFFFD:", node.label || nodeId);
     let targetNodeId = nodeId;
     const shouldDuplicateNode = duplicateNode === void 0 ? true : Boolean(duplicateNode);
     let ownerNodeIdForMap = null;
@@ -41960,10 +41595,9 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
         return res.status(404).json({ error: "targetNodeId introuvable" });
       }
       if (targetNode.treeId !== node.treeId) {
-        return res.status(400).json({ error: "targetNodeId doit appartenir au m\uFFFDme arbre" });
+        return res.status(400).json({ error: "targetNodeId doit appartenir au m\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDme arbre" });
       }
       targetNodeId = targetNode.id;
-      console.log(`?? [COPY-LINKED-VAR] Cible explicite fournie: ${targetNodeId}`);
       if (variableId) {
         const originalVarForMap = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
         if (originalVarForMap) ownerNodeIdForMap = originalVarForMap.nodeId;
@@ -41975,7 +41609,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       }
       const ownerNode = await prisma47.treeBranchLeafNode.findUnique({ where: { id: originalVar.nodeId } });
       if (!ownerNode) {
-        return res.status(404).json({ error: "N\uFFFDud propri\uFFFDtaire introuvable" });
+        return res.status(404).json({ error: "N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud propri\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDtaire introuvable" });
       }
       ownerNodeIdForMap = ownerNode.id;
       const candidateId = `${ownerNode.id}-${newSuffix}`;
@@ -42002,7 +41636,6 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      console.log(`?? [COPY-LINKED-VAR] N\uFFFDud dupliqu\uFFFD: ${ownerNode.id} -> ${targetNodeId}`);
     }
     const nodeIdMap = /* @__PURE__ */ new Map();
     if (ownerNodeIdForMap) nodeIdMap.set(ownerNodeIdForMap, targetNodeId);
@@ -42028,12 +41661,11 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     try {
       await addToNodeLinkedField7(prisma47, targetNodeId, "linkedVariableIds", [result.variableId]);
     } catch (e) {
-      console.warn("?? [COPY-LINKED-VAR] \uFFFDchec MAJ linkedVariableIds:", e.message);
+      console.warn("?? [COPY-LINKED-VAR] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec MAJ linkedVariableIds:", e.message);
     }
-    console.log("? [COPY-LINKED-VAR] Copie r\uFFFDussie:", { ...result, targetNodeId });
     res.status(201).json({ ...result, targetNodeId });
   } catch (error) {
-    console.error("\u274C [COPY-LINKED-VAR] Erreur:", error);
+    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [COPY-LINKED-VAR] Erreur:", error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: msg });
   }
@@ -42066,7 +41698,6 @@ router56.get("/variables/search", async (req2, res) => {
 });
 router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
-    console.log("?? [TBL-ROUTES] GET /trees/:treeId/calculated-values - D\uFFFDBUT");
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
@@ -42074,7 +41705,7 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
       where: treeWhereFilter
     });
     if (!tree) {
-      return res.status(404).json({ error: "Arbre non trouv\uFFFD" });
+      return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD" });
     }
     const nodesWithCalculatedValue = await prisma47.treeBranchLeafNode.findMany({
       where: {
@@ -42092,7 +41723,6 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
         parentId: true
       }
     });
-    console.log(`?? [TBL-ROUTES] ${nodesWithCalculatedValue.length} champs avec calculatedValue trouv\uFFFDs`);
     const parentIds = nodesWithCalculatedValue.map((n) => n.parentId).filter((id) => !!id);
     const parentNodes = await prisma47.treeBranchLeafNode.findMany({
       where: { id: { in: parentIds } },
@@ -42107,16 +41737,10 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
       type: node.type,
       parentLabel: node.parentId ? parentLabelsMap.get(node.parentId) : void 0
     }));
-    console.log(`?? [TBL-ROUTES] Valeurs calcul\uFFFDes format\uFFFDes:`, calculatedValues.map((cv) => ({
-      id: cv.id,
-      label: cv.label,
-      value: cv.calculatedValue,
-      source: cv.calculatedBy
-    })));
     res.json(calculatedValues);
   } catch (error) {
     console.error("[TreeBranchLeaf API] Error fetching calculated values:", error);
-    res.status(500).json({ error: "Impossible de r\uFFFDcup\uFFFDrer les valeurs calcul\uFFFDes" });
+    res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDcup\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDrer les valeurs calcul\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDes" });
   }
 });
 var treebranchleaf_routes_default = router56;
@@ -43853,8 +43477,8 @@ function logRouteHit(route) {
 }
 router58.post("/evaluate", async (req2, res) => {
   logRouteHit("POST /api/tbl/evaluate");
-  const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-  const prisma69 = new PrismaClient71();
+  const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+  const prisma70 = new PrismaClient72();
   try {
     const { elementId, elementIds, contextData = {}, evalType } = req2.body || {};
     if (Array.isArray(elementIds) && elementIds.length > 0) {
@@ -43867,7 +43491,7 @@ router58.post("/evaluate", async (req2, res) => {
           continue;
         }
         try {
-          const single = await resolveSingleEvaluation(prisma69, id, contextData);
+          const single = await resolveSingleEvaluation(prisma70, id, contextData);
           results[id] = single.payload;
           traces[id] = single.trace;
         } catch (e) {
@@ -43890,7 +43514,7 @@ router58.post("/evaluate", async (req2, res) => {
     const trace = [];
     let resolvedNodeId = null;
     let variable = null;
-    const byKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const byKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (byKey) {
       resolvedNodeId = byKey.nodeId;
       variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -43899,7 +43523,7 @@ router58.post("/evaluate", async (req2, res) => {
       trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
     }
     if (!resolvedNodeId) {
-      const node = await prisma69.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+      const node = await prisma70.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
       if (node) {
         resolvedNodeId = node.id;
         trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -43908,7 +43532,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+      const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
         where: { id: elementId },
         select: { id: true, nodeId: true, name: true, tokens: true }
       });
@@ -43916,8 +43540,8 @@ router58.post("/evaluate", async (req2, res) => {
         resolvedNodeId = formula.nodeId;
         trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
         try {
-          const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-          const prismaInstance = new PrismaClient72();
+          const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+          const prismaInstance = new PrismaClient73();
           const submissionId = contextData.submissionId || "temp-evaluation";
           const valueMap = /* @__PURE__ */ new Map();
           for (const [key2, value] of Object.entries(contextData)) {
@@ -43958,7 +43582,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceFormula = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceFormula = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceFormula) {
         resolvedNodeId = viaSourceFormula.nodeId;
         variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -43968,7 +43592,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceRaw = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceRaw = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceRaw) {
         resolvedNodeId = viaSourceRaw.nodeId;
         variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -43987,7 +43611,7 @@ router58.post("/evaluate", async (req2, res) => {
       });
     }
     if (!variable) {
-      const v = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+      const v = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
       if (v) {
         variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
         trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -44025,15 +43649,15 @@ router58.post("/evaluate", async (req2, res) => {
     console.error("\u{1F4A5} [TBL INTELLIGENCE] Erreur /evaluate:", e);
     return res.status(500).json({ success: false, error: "Erreur interne /evaluate", details: e instanceof Error ? e.message : "unknown" });
   } finally {
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
   }
 });
-async function resolveSingleEvaluation(prisma69, elementId, contextData) {
+async function resolveSingleEvaluation(prisma70, elementId, contextData) {
   const evaluationEngine2 = new TBLEvaluationEngine_default();
   const trace = [];
   let resolvedNodeId = null;
   let variable = null;
-  const byKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+  const byKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
   if (byKey) {
     resolvedNodeId = byKey.nodeId;
     variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -44042,7 +43666,7 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
     trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
   }
   if (!resolvedNodeId) {
-    const node = await prisma69.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+    const node = await prisma70.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
     if (node) {
       resolvedNodeId = node.id;
       trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -44051,7 +43675,7 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
       where: { id: elementId },
       select: { id: true, nodeId: true, name: true, tokens: true }
     });
@@ -44059,8 +43683,8 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
       resolvedNodeId = formula.nodeId;
       trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
       try {
-        const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-        const prismaInstance = new PrismaClient71();
+        const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+        const prismaInstance = new PrismaClient72();
         const submissionId = contextData.submissionId || "temp-evaluation";
         const valueMap = /* @__PURE__ */ new Map();
         for (const [key2, value] of Object.entries(contextData)) {
@@ -44103,7 +43727,7 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceFormula = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceFormula = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceFormula) {
       resolvedNodeId = viaSourceFormula.nodeId;
       variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -44113,7 +43737,7 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceRaw = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceRaw = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceRaw) {
       resolvedNodeId = viaSourceRaw.nodeId;
       variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -44126,7 +43750,7 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
     return { payload: { success: false, error: "Impossible de r\xE9soudre elementId", trace }, trace };
   }
   if (!variable) {
-    const v = await prisma69.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+    const v = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
     if (v) {
       variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
       trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -44143,8 +43767,8 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
   trace.push({ step: "capacity_detect", info: `Capacit\xE9 d\xE9tect\xE9e=${capacity}`, success: true });
   if (capacity === "2") {
     try {
-      const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-      const prismaInstance = new PrismaClient71();
+      const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+      const prismaInstance = new PrismaClient72();
       const formulaId = sr.replace(/^(formula:|node-formula:)/, "");
       const submissionId = contextData.submissionId || "temp-evaluation";
       const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
@@ -44210,8 +43834,8 @@ async function resolveSingleEvaluation(prisma69, elementId, contextData) {
   }
   if (capacity === "3") {
     try {
-      const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-      const prismaInstance = new PrismaClient71();
+      const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+      const prismaInstance = new PrismaClient72();
       const conditionId = sr.replace(/^condition:/, "");
       const submissionId = contextData.submissionId || "temp-evaluation";
       const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
@@ -44337,10 +43961,10 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     });
   }
   console.log("\u{1F527} [TBL EVALUATE CONDITION] \xC9valuation avec operation-interpreter:", tblCode);
-  const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-  const prisma69 = new PrismaClient71();
+  const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+  const prisma70 = new PrismaClient72();
   try {
-    const conditionRecord = await prisma69.treeBranchLeafNodeCondition.findUnique({
+    const conditionRecord = await prisma70.treeBranchLeafNodeCondition.findUnique({
       where: { id: tblCode },
       select: { nodeId: true }
     });
@@ -44353,7 +43977,7 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     const result = await evaluateVariableOperation(
       conditionRecord.nodeId,
       submissionId || tblCode,
-      prisma69
+      prisma70
     );
     console.log("\u2705 [TBL EVALUATE CONDITION] R\xE9sultat operation-interpreter:", result);
     return res.json({
@@ -44373,7 +43997,7 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
       details: error instanceof Error ? error.message : "unknown"
     });
   } finally {
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
   }
 });
 router58.post("/evaluate/table/:tblCode", async (req2, res) => {
@@ -44390,9 +44014,9 @@ router58.post("/update-database-results", async (req2, res) => {
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F504} [TBL UPDATE] D\xE9but mise \xE0 jour base de donn\xE9es avec CapacityCalculator");
-    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-    const prisma69 = new PrismaClient71();
-    const submissionData = await prisma69.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+    const prisma70 = new PrismaClient72();
+    const submissionData = await prisma70.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: "condition"
@@ -44430,7 +44054,7 @@ router58.post("/update-database-results", async (req2, res) => {
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           method: "CapacityCalculator"
         };
-        await prisma69.treeBranchLeafSubmissionData.update({
+        await prisma70.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: newOperationResult
@@ -44447,7 +44071,7 @@ router58.post("/update-database-results", async (req2, res) => {
         console.error(`\u274C [TBL UPDATE] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
     return res.json({
       success: true,
       updated,
@@ -44468,9 +44092,9 @@ router58.post("/check-submission-data", async (req2, res) => {
   logRouteHit("POST /api/tbl/check-submission-data");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
-    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-    const prisma69 = new PrismaClient71();
-    const allData = await prisma69.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+    const prisma70 = new PrismaClient72();
+    const allData = await prisma70.treeBranchLeafSubmissionData.findMany({
       where: { submissionId }
     });
     const grouped = allData.reduce((acc, item) => {
@@ -44483,7 +44107,7 @@ router58.post("/check-submission-data", async (req2, res) => {
       });
       return acc;
     }, {});
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
     return res.json({
       success: true,
       submissionId,
@@ -44505,8 +44129,8 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F9E0} [TBL INTELLIGENT UPDATE] D\xE9but mise \xE0 jour avec traductions intelligentes");
-    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-    const prisma69 = new PrismaClient71();
+    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+    const prisma70 = new PrismaClient72();
     let TBLIntelligentTranslator;
     try {
       const translatorModule = await import("../../../../../../tbl-intelligent-translator.cjs");
@@ -44518,8 +44142,8 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         error: "TBLIntelligentTranslator non disponible"
       });
     }
-    const translator = new TBLIntelligentTranslator(prisma69);
-    const submissionData = await prisma69.treeBranchLeafSubmissionData.findMany({
+    const translator = new TBLIntelligentTranslator(prisma70);
+    const submissionData = await prisma70.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -44546,7 +44170,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
           data.submissionId
         );
         console.log(`\u2705 [TBL INTELLIGENT] Traduction g\xE9n\xE9r\xE9e: ${intelligentResult.substring(0, 100)}...`);
-        await prisma69.treeBranchLeafSubmissionData.update({
+        await prisma70.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: intelligentResult,
@@ -44564,7 +44188,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         console.error(`\u274C [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
     return res.json({
       success: true,
       message: "Traductions intelligentes appliqu\xE9es",
@@ -44586,9 +44210,9 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
   logRouteHit("GET /api/tbl/check-intelligent-translations");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.query;
-    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-    const prisma69 = new PrismaClient71();
-    const recentData = await prisma69.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+    const prisma70 = new PrismaClient72();
+    const recentData = await prisma70.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -44606,7 +44230,7 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
       },
       take: 10
     });
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
     const translations = recentData.map((data) => ({
       id: data.id,
       nodeLabel: data.TreeBranchLeafNode?.label,
@@ -44640,12 +44264,12 @@ router58.get("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log("\u{1F504} [TBL NODES] R\xE9cup\xE9ration node via TBL:", nodeId);
-    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-    const prisma69 = new PrismaClient71();
-    const node = await prisma69.treeBranchLeafNode.findUnique({
+    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+    const prisma70 = new PrismaClient72();
+    const node = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: nodeId }
     });
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
     if (!node) {
       return res.status(404).json({ success: false, error: "Node non trouv\xE9" });
     }
@@ -44663,14 +44287,14 @@ router58.get("/reusables/conditions", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/conditions");
   try {
     console.log("\u{1F504} [TBL CONDITIONS] R\xE9cup\xE9ration conditions via TBL");
-    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-    const prisma69 = new PrismaClient71();
-    const conditions = await prisma69.treeBranchLeafNodeCondition.findMany({
+    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+    const prisma70 = new PrismaClient72();
+    const conditions = await prisma70.treeBranchLeafNodeCondition.findMany({
       include: {
         node: true
       }
     });
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
     return res.json({
       success: true,
       conditions,
@@ -44689,14 +44313,14 @@ router58.get("/reusables/formulas", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/formulas");
   try {
     console.log("\u{1F504} [TBL FORMULAS] R\xE9cup\xE9ration formules via TBL");
-    const { PrismaClient: PrismaClient71 } = await import("@prisma/client");
-    const prisma69 = new PrismaClient71();
-    const formulas = await prisma69.treeBranchLeafNodeFormula.findMany({
+    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
+    const prisma70 = new PrismaClient72();
+    const formulas = await prisma70.treeBranchLeafNodeFormula.findMany({
       include: {
         node: true
       }
     });
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
     return res.json({
       success: true,
       formulas,
@@ -47417,21 +47041,21 @@ router67.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const [google8, telnyx, adPlatforms] = await Promise.all([
+    const [google9, telnyx, adPlatforms] = await Promise.all([
       prisma56.googleWorkspaceConfig.findUnique({ where: { organizationId } }),
       prisma56.telnyxConnection.findMany({ where: { organizationId } }),
       prisma56.adPlatformIntegration.findMany({ where: { organizationId } })
     ]);
     const status = {
       google: {
-        enabled: !!google8?.enabled || !!google8?.isActive,
-        gmail: !!google8?.gmailEnabled,
-        calendar: !!google8?.calendarEnabled,
-        drive: !!google8?.driveEnabled,
-        meet: !!google8?.meetEnabled,
-        sheets: !!google8?.sheetsEnabled,
-        voice: !!google8?.voiceEnabled,
-        lastSync: google8?.updatedAt ?? null
+        enabled: !!google9?.enabled || !!google9?.isActive,
+        gmail: !!google9?.gmailEnabled,
+        calendar: !!google9?.calendarEnabled,
+        drive: !!google9?.driveEnabled,
+        meet: !!google9?.meetEnabled,
+        sheets: !!google9?.sheetsEnabled,
+        voice: !!google9?.voiceEnabled,
+        lastSync: google9?.updatedAt ?? null
       },
       telnyx: {
         connections: telnyx.map((t) => ({ id: t.id, name: t.name, status: t.status, type: t.type })),
@@ -47525,7 +47149,7 @@ var integrationsStatus_default = router67;
 var import_express69 = require("express");
 var import_client59 = require("@prisma/client");
 var import_axios2 = __toESM(require("axios"), 1);
-var import_googleapis7 = require("googleapis");
+var import_googleapis8 = require("googleapis");
 var import_crypto12 = require("crypto");
 
 // src/services/adPlatformService.ts
@@ -48465,7 +48089,7 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
         await upsertIntegration({ name: "Google Ads (OAuth pending)", credentials: { authCode: code, error: "missing_client_creds", userId } });
       } else {
         try {
-          const oauth2 = new import_googleapis7.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+          const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
           const { tokens: tokens2 } = await oauth2.getToken(code);
           console.log("\u2705 Google Ads OAuth tokens received successfully");
           await upsertIntegration({ name: "Google Ads OAuth", credentials: { tokens: tokens2, userId } });
@@ -48827,7 +48451,7 @@ router68.get("/advertising/oauth/:platform/url", async (req2, res) => {
         return res.json({ success: true, platform, demo: true, requiredEnv: missing, authUrl: demoUrl, message: "Mode d\xE9mo: variables d'environnement manquantes" });
       }
       try {
-        const oauth2 = new import_googleapis7.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+        const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
         const authUrl = oauth2.generateAuthUrl({
           access_type: "offline",
           prompt: "consent",
@@ -48903,7 +48527,7 @@ router68.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
     try {
       if (clientId) {
         const stateRaw = JSON.stringify({ platform: "google_ads", organizationId, userId: user.userId, ts: Date.now() });
-        const oauth2 = new import_googleapis7.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+        const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
         authUrl = oauth2.generateAuthUrl({ access_type: "offline", prompt: "consent", scope: defaultScopes, state: stateRaw });
         testAuthUrl = oauth2.generateAuthUrl({ access_type: "offline", prompt: "consent", scope: testScopes, state: stateRaw });
       }
@@ -49071,7 +48695,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
       const refreshToken = storedTokens.refresh_token;
       try {
         if ((!accessToken || storedTokens.expiry_date) && clientId && clientSecret && (refreshToken || storedTokens.expiry_date)) {
-          const oauth2 = new import_googleapis7.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+          const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
           oauth2.setCredentials({
             access_token: storedTokens.access_token,
             refresh_token: storedTokens.refresh_token,
@@ -49671,7 +49295,7 @@ router68.get("/advertising/google_ads/test/customers-get", async (req2, res) => 
     const refreshToken = storedTokens.refresh_token;
     try {
       if ((!accessToken || storedTokens.expiry_date) && clientId && clientSecret && (refreshToken || storedTokens.expiry_date)) {
-        const oauth2 = new import_googleapis7.google.auth.OAuth2(clientId, clientSecret, redirectUri);
+        const oauth2 = new import_googleapis8.google.auth.OAuth2(clientId, clientSecret, redirectUri);
         oauth2.setCredentials({
           access_token: storedTokens.access_token,
           refresh_token: storedTokens.refresh_token,
@@ -50534,6 +50158,18 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   if (!formData || typeof formData !== "object") return 0;
   let saved = 0;
   const entries = /* @__PURE__ */ new Map();
+  const displayNodes = treeId ? await prisma59.treeBranchLeafNode.findMany({
+    where: {
+      treeId,
+      calculatedBy: { contains: "preview-unknown-user" }
+      // ✅ Seulement les displays avec preview-unknown-user
+    },
+    select: { id: true, calculatedBy: true, label: true }
+  }) : [];
+  const displayNodeIds = new Set(displayNodes.map((n) => n.id));
+  if (displayNodeIds.size > 0) {
+    console.log(`\u{1F6AB} [SAVE] ${displayNodeIds.size} DISPLAY fields (preview-unknown-user) identifi\xE9s - ne seront PAS sauvegard\xE9s`);
+  }
   const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
   const sharedRefAliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
   for (const [key2, value] of Object.entries(formData)) {
@@ -50541,6 +50177,13 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
       continue;
     }
     if (!isAcceptedNodeId(key2)) continue;
+    if (displayNodeIds.has(key2)) {
+      console.log(`\u{1F6AB} [SAVE] Display field ignor\xE9: ${key2} (preview-unknown-user dans calculatedBy)`);
+      continue;
+    }
+    if (value === null || value === void 0 || value === "") {
+      continue;
+    }
     const storageIds = isSharedReferenceId(key2) ? [key2, ...sharedRefAliasMap.get(key2) || []] : [key2];
     for (const nodeId of storageIds) {
       if (!isAcceptedNodeId(nodeId)) continue;
@@ -50557,10 +50200,6 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
           action: "user_input",
           sourceNodeId: key2,
           aliasResolved: nodeId !== key2
-        },
-        operationResult: {
-          processedValue: value,
-          status: "stored"
         }
       };
       entries.set(nodeId, entry);
@@ -50586,8 +50225,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
           data: {
             value: entry.value,
             operationSource: "neutral",
-            operationDetail: entry.operationDetail,
-            operationResult: entry.operationResult
+            operationDetail: entry.operationDetail
           }
         });
         saved++;
@@ -50602,7 +50240,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
 async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId) {
   const capacities = await prisma59.treeBranchLeafNodeVariable.findMany({
     where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
-    include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
+    include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
   });
   const _tblContext = {
     submissionId,
@@ -50616,6 +50254,11 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   const calculatedValuesToStore = [];
   for (const capacity of capacities) {
     const sourceRef = capacity.sourceRef;
+    const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "DISPLAY";
+    if (isDisplayField) {
+      console.log(`\u{1F6AB} [TBL CAPACITY] Display field ignor\xE9: ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label})`);
+      continue;
+    }
     try {
       const capacityResult = await evaluateVariableOperation(
         capacity.nodeId,
@@ -50641,7 +50284,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       };
       if (existing) {
-        const changed = (existing.sourceRef || null) !== (sourceRef || null) || (existing.operationSource || null) !== (normalizedOperationSource || null) || (existing.fieldLabel || null) !== (capacity.TreeBranchLeafNode?.label || null) || normalize2(existing.operationDetail) !== normalize2(parsedDetail) || normalize2(existing.operationResult) !== normalize2(capacityResult.operationResult);
+        const changed = (existing.sourceRef || null) !== (sourceRef || null) || (existing.operationSource || null) !== (normalizedOperationSource || null) || (existing.fieldLabel || null) !== (capacity.TreeBranchLeafNode?.label || null) || normalize2(existing.operationDetail) !== normalize2(parsedDetail);
         if (changed) {
           await prisma59.treeBranchLeafSubmissionData.update({
             where: key2,
@@ -50651,7 +50294,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
               operationSource: normalizedOperationSource,
               fieldLabel: capacity.TreeBranchLeafNode?.label || null,
               operationDetail: parsedDetail,
-              operationResult: capacityResult.operationResult,
               lastResolved: /* @__PURE__ */ new Date()
             }
           });
@@ -50668,7 +50310,6 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             operationSource: normalizedOperationSource,
             fieldLabel: capacity.TreeBranchLeafNode?.label || null,
             operationDetail: parsedDetail,
-            operationResult: capacityResult.operationResult,
             lastResolved: /* @__PURE__ */ new Date()
           }
         });
@@ -50695,10 +50336,28 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   }
   if (calculatedValuesToStore.length > 0) {
     try {
-      const storeResult = await storeCalculatedValues(calculatedValuesToStore, submissionId);
-      results.stored = storeResult.stored;
-      if (!storeResult.success && storeResult.errors.length > 0) {
-        console.warn("[TBL CAPACITY STORE] Certaines valeurs n'ont pas pu \xEAtre enregistr\xE9es:", storeResult.errors);
+      const nodeIds = calculatedValuesToStore.map((v) => v.nodeId);
+      const nodesInfo = await prisma59.treeBranchLeafNode.findMany({
+        where: { id: { in: nodeIds } },
+        select: { id: true, fieldType: true, type: true }
+      });
+      const displayFieldIds = new Set(
+        nodesInfo.filter((n) => n.fieldType === "DISPLAY" || n.type === "DISPLAY").map((n) => n.id)
+      );
+      const valuesToStoreFiltered = calculatedValuesToStore.filter((v) => {
+        if (displayFieldIds.has(v.nodeId)) {
+          console.log(`\u{1F6AB} [TBL CAPACITY STORE] Display field exclu de la persistence: ${v.nodeId}`);
+          return false;
+        }
+        return true;
+      });
+      if (valuesToStoreFiltered.length > 0) {
+        const storeResult = await storeCalculatedValues(valuesToStoreFiltered, submissionId);
+        results.stored = storeResult.stored;
+        console.log(`[TBL CAPACITY STORE] \u2705 ${results.stored} valeurs stock\xE9es (${displayFieldIds.size} display fields exclus)`);
+        if (!storeResult.success && storeResult.errors.length > 0) {
+          console.warn("[TBL CAPACITY STORE] Certaines valeurs n'ont pas pu \xEAtre enregistr\xE9es:", storeResult.errors);
+        }
       }
     } catch (storeError) {
       console.error("[TBL CAPACITY STORE] Erreur lors du stockage des valeurs calcul\xE9es:", storeError);
@@ -50782,15 +50441,12 @@ router70.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
             return calculationResult.operationDetail;
           }
         })();
-        const nextResult = calculationResult.operationResult;
-        const changed = (data.operationSource || null) !== (normalizedSource || null) || normalize2(data.operationDetail) !== normalize2(nextDetail) || normalize2(data.operationResult) !== normalize2(nextResult);
+        const changed = (data.operationSource || null) !== (normalizedSource || null) || normalize2(data.operationDetail) !== normalize2(nextDetail);
         if (changed) {
           await prisma59.treeBranchLeafSubmissionData.update({
             where: { id: data.id },
             data: {
               operationDetail: nextDetail,
-              operationResult: nextResult,
-              // 🔥 TRADUCTION INTELLIGENTE !
               operationSource: normalizedSource,
               lastResolved: /* @__PURE__ */ new Date()
             }
@@ -50938,33 +50594,37 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
         console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Arbre valid\xE9: ${effectiveTreeId} (${treeExists.name})`);
       }
     }
-    let effectiveLeadId = clientId;
-    if (effectiveLeadId) {
-      const leadExists = await prisma59.lead.findUnique({
-        where: { id: effectiveLeadId },
-        select: { id: true, firstName: true, lastName: true, email: true }
+    if (!clientId) {
+      console.log("\u274C [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS");
+      return res.status(400).json({
+        success: false,
+        error: "Lead obligatoire",
+        message: "Un lead doit \xEAtre s\xE9lectionn\xE9 pour cr\xE9er un devis. Veuillez s\xE9lectionner ou cr\xE9er un lead."
       });
-      if (!leadExists) {
-        console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable, cr\xE9ation d'un lead par d\xE9faut...`);
-        const defaultLead = await prisma59.lead.create({
-          data: {
-            id: `lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            firstName: "Client",
-            lastName: "D\xE9faut",
-            email: `client-${Date.now()}@example.com`,
-            phone: "",
-            organizationId,
-            updatedAt: /* @__PURE__ */ new Date()
-          }
-        });
-        effectiveLeadId = defaultLead.id;
-        console.log(`\u{1F464} [TBL CREATE-AND-EVALUATE] Lead par d\xE9faut cr\xE9\xE9: ${effectiveLeadId} (${defaultLead.firstName} ${defaultLead.lastName})`);
-      } else {
-        console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Lead valid\xE9: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
-      }
-    } else {
-      console.log("\u2139\uFE0F [TBL CREATE-AND-EVALUATE] Aucun leadId fourni, soumission sans lead associ\xE9");
     }
+    let effectiveLeadId = clientId;
+    const leadExists = await prisma59.lead.findUnique({
+      where: { id: effectiveLeadId },
+      select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
+    });
+    if (!leadExists) {
+      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable`);
+      return res.status(404).json({
+        success: false,
+        error: "Lead introuvable",
+        message: `Le lead ${effectiveLeadId} n'existe pas. Veuillez s\xE9lectionner un lead valide.`
+      });
+    }
+    if (leadExists.organizationId !== organizationId) {
+      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Le lead ${effectiveLeadId} n'appartient pas \xE0 l'organisation ${organizationId}`);
+      return res.status(403).json({
+        success: false,
+        error: "Lead non autoris\xE9",
+        message: "Le lead s\xE9lectionn\xE9 n'appartient pas \xE0 votre organisation."
+      });
+    }
+    console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Lead valid\xE9: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
+    effectiveLeadId = leadExists.id;
     let effectiveUserId = userId;
     if (effectiveUserId) {
       const userExists = await prisma59.user.findUnique({
@@ -50984,6 +50644,22 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
       if (!existing) submissionId = void 0;
     }
     if (!submissionId) {
+      const existingDraft = await prisma59.treeBranchLeafSubmission.findFirst({
+        where: {
+          treeId: effectiveTreeId,
+          leadId: effectiveLeadId,
+          organizationId,
+          status: "draft"
+        },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true }
+      });
+      if (existingDraft) {
+        submissionId = existingDraft.id;
+        console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] R\xE9utilisation du draft existant: ${submissionId} (leadId: ${effectiveLeadId})`);
+      }
+    }
+    if (!submissionId) {
       submissionId = `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       await prisma59.treeBranchLeafSubmission.create({
         data: {
@@ -50991,16 +50667,28 @@ router70.post("/submissions/create-and-evaluate", async (req2, res) => {
           treeId: effectiveTreeId,
           userId: effectiveUserId,
           leadId: effectiveLeadId,
-          status: status || "completed",
+          organizationId,
+          // 🔥 IMPORTANT pour retrouver les drafts
+          status: status || "draft",
           summary: { name: providedName || `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` },
           exportData: cleanFormData || {},
           completedAt: status === "completed" ? /* @__PURE__ */ new Date() : null,
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Soumission cr\xE9\xE9e: ${submissionId}`);
+      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Soumission cr\xE9\xE9e: ${submissionId} pour organization ${organizationId}`);
     } else {
-      console.log(`\uFFFD [TBL CREATE-AND-EVALUATE] R\xE9utilisation de la soumission: ${submissionId}`);
+      await prisma59.treeBranchLeafSubmission.update({
+        where: { id: submissionId },
+        data: {
+          status: status || "draft",
+          summary: { name: providedName || `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` },
+          exportData: cleanFormData || {},
+          completedAt: status === "completed" ? /* @__PURE__ */ new Date() : null,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] Soumission mise \xE0 jour: ${submissionId}`);
     }
     if (cleanFormData && typeof cleanFormData === "object") {
       const savedCount = await saveUserEntriesNeutral(submissionId, cleanFormData, effectiveTreeId);
@@ -51355,10 +51043,22 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
       console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value="${r.value}" (calculatedValue="${r.calculatedValue}")`);
     });
     try {
+      const nodeIds = results.map((r) => r.nodeId);
+      const nodesInfo = await prisma59.treeBranchLeafNode.findMany({
+        where: { id: { in: nodeIds } },
+        select: { id: true, fieldType: true, type: true }
+      });
+      const displayFieldIds = new Set(
+        nodesInfo.filter((n) => n.fieldType === "DISPLAY" || n.type === "DISPLAY").map((n) => n.id)
+      );
       const calculatedValues = results.map((r) => {
         const candidate = r.value ?? r.calculatedValue;
         return { ...r, candidate };
       }).filter((r) => {
+        if (displayFieldIds.has(r.nodeId)) {
+          console.log(`\u{1F6AB} [PREVIEW-EVALUATE] Display field exclu de la persistence: ${r.nodeId}`);
+          return false;
+        }
         if (r.candidate === null || r.candidate === void 0) return false;
         const strValue = String(r.candidate).trim();
         if (strValue === "" || strValue === "\u2205") return false;
@@ -51370,7 +51070,7 @@ router70.post("/submissions/preview-evaluate", async (req2, res) => {
       }));
       if (calculatedValues.length > 0) {
         await storeCalculatedValues(calculatedValues, submissionId);
-        console.log(`[PREVIEW-EVALUATE] \u2705 ${calculatedValues.length} valeurs stock\xE9es dans Prisma`);
+        console.log(`[PREVIEW-EVALUATE] \u2705 ${calculatedValues.length} valeurs stock\xE9es dans Prisma (${displayFieldIds.size} display fields exclus)`);
       }
     } catch (storeError) {
       console.error(`[PREVIEW-EVALUATE] \u26A0\uFE0F Erreur stockage valeurs calcul\xE9es:`, storeError);
@@ -51750,38 +51450,39 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
             const recomputedValue = evaluation.value ?? evaluation.operationResult ?? null;
             const persistedValue = recomputedValue === null || recomputedValue === void 0 ? null : String(recomputedValue);
             const resolvedAt = /* @__PURE__ */ new Date();
-            await prisma.treeBranchLeafSubmissionData.upsert({
-              where: { submissionId_nodeId: { submissionId, nodeId } },
-              update: {
-                value: persistedValue,
-                operationDetail: evaluation.operationDetail,
-                operationResult: evaluation.operationResult,
-                operationSource: evaluation.operationSource,
-                sourceRef: evaluation.sourceRef,
-                fieldLabel: node.label,
-                isVariable: true,
-                variableDisplayName: variableMeta.displayName,
-                variableKey: variableMeta.exposedKey,
-                variableUnit: variableMeta.unit,
-                lastResolved: resolvedAt
-              },
-              create: {
-                id: (0, import_crypto13.randomUUID)(),
-                submissionId,
-                nodeId,
-                value: persistedValue,
-                operationDetail: evaluation.operationDetail,
-                operationResult: evaluation.operationResult,
-                operationSource: evaluation.operationSource,
-                sourceRef: evaluation.sourceRef,
-                fieldLabel: node.label,
-                isVariable: true,
-                variableDisplayName: variableMeta.displayName,
-                variableKey: variableMeta.exposedKey,
-                variableUnit: variableMeta.unit,
-                lastResolved: resolvedAt
-              }
-            });
+            const isDisplayField = node.fieldType === "DISPLAY" || node.type === "DISPLAY";
+            if (!isDisplayField) {
+              await prisma.treeBranchLeafSubmissionData.upsert({
+                where: { submissionId_nodeId: { submissionId, nodeId } },
+                update: {
+                  value: persistedValue,
+                  operationDetail: evaluation.operationDetail,
+                  operationSource: evaluation.operationSource,
+                  sourceRef: evaluation.sourceRef,
+                  fieldLabel: node.label,
+                  isVariable: true,
+                  variableDisplayName: variableMeta.displayName,
+                  variableKey: variableMeta.exposedKey,
+                  variableUnit: variableMeta.unit,
+                  lastResolved: resolvedAt
+                },
+                create: {
+                  id: (0, import_crypto13.randomUUID)(),
+                  submissionId,
+                  nodeId,
+                  value: persistedValue,
+                  operationDetail: evaluation.operationDetail,
+                  operationSource: evaluation.operationSource,
+                  sourceRef: evaluation.sourceRef,
+                  fieldLabel: node.label,
+                  isVariable: true,
+                  variableDisplayName: variableMeta.displayName,
+                  variableKey: variableMeta.exposedKey,
+                  variableUnit: variableMeta.unit,
+                  lastResolved: resolvedAt
+                }
+              });
+            }
             return res.json({
               success: true,
               nodeId: node.id,
@@ -51794,7 +51495,6 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
               submissionId,
               sourceRef: evaluation.sourceRef,
               operationDetail: evaluation.operationDetail,
-              operationResult: evaluation.operationResult,
               freshCalculation: true
             });
           } catch (recomputeErr) {
@@ -51815,7 +51515,6 @@ router71.get("/:nodeId/calculated-value", async (req2, res) => {
           submissionId,
           sourceRef: submissionDataEntry.sourceRef,
           operationDetail: submissionDataEntry.operationDetail,
-          operationResult: submissionDataEntry.operationResult,
           fromSubmission: true
         });
       }
@@ -53173,6 +52872,49 @@ var upload2 = (0, import_multer2.default)({
   limits: {
     fileSize: 5 * 1024 * 1024
     // 5MB max
+  }
+});
+router79.post("/upload", upload2.single("file"), async (req2, res) => {
+  try {
+    if (!req2.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Aucun fichier fourni"
+      });
+    }
+    console.log("\u{1F4F8} [IMAGE-UPLOAD] Fichier re\xE7u:", {
+      originalName: req2.file.originalname,
+      size: req2.file.size,
+      mimetype: req2.file.mimetype,
+      filename: req2.file.filename
+    });
+    const fileUrl = `/uploads/websites/${req2.file.filename}`;
+    const fullUrl = `http://localhost:4000${fileUrl}`;
+    console.log("\u{1F4F8} \u2705 Upload r\xE9ussi:", {
+      fileName: req2.file.originalname,
+      url: fullUrl,
+      size: `${(req2.file.size / 1024).toFixed(2)} KB`
+    });
+    res.json({
+      success: true,
+      message: "Image upload\xE9e avec succ\xE8s",
+      url: fullUrl,
+      // URL complète utilisable dans le frontend
+      fileUrl,
+      // Chemin relatif
+      file: {
+        fileName: req2.file.originalname,
+        size: req2.file.size,
+        mimetype: req2.file.mimetype
+      }
+    });
+  } catch (error) {
+    console.error("\u274C [IMAGE-UPLOAD] Erreur:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de l'upload",
+      error: error instanceof Error ? error.message : "Erreur inconnue"
+    });
   }
 });
 router79.post("/upload-image", upload2.single("image"), async (req2, res) => {
@@ -54749,29 +54491,24 @@ var parseJsonArray = (value) => {
     return [];
   }
 };
-async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
-  console.log(`[repeat-blueprint-builder] \u{1F50D} Building blueprint for repeater: ${repeaterNodeId}`);
+async function buildBlueprintForRepeater(prisma70, repeaterNodeId) {
   if (!repeaterNodeId) {
     console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
     return null;
   }
   const cached = captureRepeatTemplate(repeaterNodeId);
   if (cached) {
-    console.log(`[repeat-blueprint-builder] Found cached blueprint`);
-    const repeaterNodeForCache = await prisma69.treeBranchLeafNode.findUnique({
+    const repeaterNodeForCache = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: repeaterNodeId },
       select: { metadata: true, repeater_templateNodeIds: true }
     });
     const candidateTemplateIds = repeaterNodeForCache ? extractTemplateIds(repeaterNodeForCache) : [];
-    console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] Candidate IDs from metadata (NOT cache derivation): ${JSON.stringify(candidateTemplateIds)}`);
     const { validIds: cachedTemplateIds } = await filterExistingTemplateNodeIds(
-      prisma69,
+      prisma70,
       repeaterNodeId,
       candidateTemplateIds
     );
-    console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] Valid IDs after filter: ${JSON.stringify(cachedTemplateIds)}`);
     if (cachedTemplateIds.length) {
-      console.log(`[repeat-blueprint-builder] \u2705 Using cached blueprint with ${cachedTemplateIds.length} templates`);
       const validTemplateSet = new Set(cachedTemplateIds);
       return {
         ...cached,
@@ -54787,8 +54524,7 @@ async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
       candidateTemplateIds
     });
   }
-  console.log(`[repeat-blueprint-builder] Querying Prisma for repeater node...`);
-  const repeaterNode = await prisma69.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: {
       id: true,
@@ -54798,30 +54534,18 @@ async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
     }
   });
   if (!repeaterNode) {
-    console.warn(`[repeat-blueprint-builder] \u274C Repeater node not found: ${repeaterNodeId}`);
+    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC2\x9D\xC5\u2019 Repeater node not found: ${repeaterNodeId}`);
     return null;
   }
-  console.log(`[repeat-blueprint-builder] \u2705 Repeater node found:`, {
-    id: repeaterNode.id,
-    repeater_templateNodeIds: repeaterNode.repeater_templateNodeIds,
-    treeId: repeaterNode.treeId,
-    hasMetadata: !!repeaterNode.metadata
-  });
-  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] repeater_templateNodeIds RAW: ${JSON.stringify(repeaterNode.repeater_templateNodeIds)}`);
   const extractedIds = extractTemplateIds(repeaterNode);
-  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] extractTemplateIds result: ${JSON.stringify(extractedIds)}`);
   const candidateTemplateNodeIds = extractedIds;
-  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] Candidate IDs (SANS enrichissement): ${JSON.stringify(candidateTemplateNodeIds)}`);
-  console.log(`[repeat-blueprint-builder] Candidate templates: ${candidateTemplateNodeIds.length}`);
   const { validIds: templateNodeIds } = await filterExistingTemplateNodeIds(
-    prisma69,
+    prisma70,
     repeaterNodeId,
     candidateTemplateNodeIds
   );
-  console.log(`\u{1F6A8}\u{1F6A8}\u{1F6A8} [BLUEPRINT-DEBUG] After filterExistingTemplateNodeIds: ${JSON.stringify(templateNodeIds)}`);
-  console.log(`[repeat-blueprint-builder] Valid templates after filtering: ${templateNodeIds.length}`);
   if (!templateNodeIds.length) {
-    console.warn(`[repeat-blueprint-builder] \u26A0\uFE0F No valid templates found!`);
+    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F No valid templates found!`);
     return {
       repeaterNodeId,
       templateNodeIds: [],
@@ -54831,7 +54555,7 @@ async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
       lastUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
-  const directVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
+  const directVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
     where: { nodeId: { in: templateNodeIds } },
     select: {
       id: true,
@@ -54841,7 +54565,7 @@ async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
     }
   });
   const linkedVarsByNode = /* @__PURE__ */ new Map();
-  const templateNodesWithLinks = await prisma69.treeBranchLeafNode.findMany({
+  const templateNodesWithLinks = await prisma70.treeBranchLeafNode.findMany({
     where: { id: { in: templateNodeIds } },
     select: {
       id: true,
@@ -54862,7 +54586,7 @@ async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
     (id) => !directVariables.some((v) => v.id === id)
     // Avoid duplicates
   );
-  const linkedVariables = linkedVariableIds.length > 0 ? await prisma69.treeBranchLeafNodeVariable.findMany({
+  const linkedVariables = linkedVariableIds.length > 0 ? await prisma70.treeBranchLeafNodeVariable.findMany({
     where: { id: { in: linkedVariableIds } },
     select: {
       id: true,
@@ -54889,21 +54613,21 @@ async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
         linkedToNodeIds: [nodeId],
         // This variable is linked to this template node
         primaryTargetNodeId: nodeId
-        // ← The node that should receive the copied variable's display node
+        // Ã¢â€ Â The node that should receive the copied variable's display node
       });
     }
   }
   const variables = expandedVariables;
   const [formulas, conditions, tables] = await Promise.all([
-    prisma69.treeBranchLeafNodeFormula.findMany({
+    prisma70.treeBranchLeafNodeFormula.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     }),
-    prisma69.treeBranchLeafNodeCondition.findMany({
+    prisma70.treeBranchLeafNodeCondition.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     }),
-    prisma69.treeBranchLeafNodeTable.findMany({
+    prisma70.treeBranchLeafNodeTable.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     })
@@ -54919,7 +54643,7 @@ async function buildBlueprintForRepeater(prisma69, repeaterNodeId) {
       sourceType: v.sourceType,
       displayNodeId: null,
       metadata: void 0,
-      // 🔧 PRESERVE: primaryTargetNodeId for linked variables
+      // Ã°Å¸â€Â§ PRESERVE: primaryTargetNodeId for linked variables
       primaryTargetNodeId: v.primaryTargetNodeId || void 0
     })),
     capacities: [
@@ -54950,16 +54674,14 @@ function extractTemplateIds(node) {
     const fromMetadata = metaRepeater.templateNodeIds;
     if (Array.isArray(fromMetadata) && fromMetadata.length > 0) {
       const filtered = fromMetadata.filter((id) => typeof id === "string");
-      console.log(`\u2705 [extractTemplateIds] Lecture depuis metadata: ${filtered.length} IDs`);
       return filtered;
     }
   }
   const fromColumn = parseJsonArray(node.repeater_templateNodeIds);
   if (fromColumn.length) {
-    console.log(`\u26A0\uFE0F [extractTemplateIds] Fallback vers colonne: ${fromColumn.length} IDs`);
     return fromColumn;
   }
-  console.warn(`\u274C [extractTemplateIds] Aucun template trouv\xE9 !`);
+  console.warn(`\xC3\xA2\xC2\x9D\xC5\u2019 [extractTemplateIds] Aucun template trouv\xC3\u0192\xC2\xA9 !`);
   return [];
 }
 function extractTotalFieldConfig(metadata) {
@@ -54978,12 +54700,12 @@ function extractTotalFieldConfig(metadata) {
     metadata: typed.metadata ?? null
   };
 }
-async function filterExistingTemplateNodeIds(prisma69, repeaterNodeId, candidateIds) {
+async function filterExistingTemplateNodeIds(prisma70, repeaterNodeId, candidateIds) {
   const normalized = Array.from(new Set(candidateIds.filter((id) => typeof id === "string" && !!id)));
   if (!normalized.length) {
     return { validIds: [], missingIds: [] };
   }
-  const existing = await prisma69.treeBranchLeafNode.findMany({
+  const existing = await prisma70.treeBranchLeafNode.findMany({
     where: { id: { in: normalized } },
     select: { id: true }
   });
@@ -55026,7 +54748,7 @@ function createInstantiationPlan(blueprint, options) {
       templateVariableId: variable.variableId,
       plannedSuffix: variableSuffix,
       targetNodeId: plannedTargetNodeId,
-      // ← NOW uses the template node that REFERENCES the variable
+      // Ã¢â€ Â NOW uses the template node that REFERENCES the variable
       plannedVariableId
     };
   });
@@ -55062,21 +54784,21 @@ function extractSuffixFromId(id) {
   const parsed = Number(match[1]);
   return Number.isFinite(parsed) ? parsed : null;
 }
-async function computeTemplateCopySuffixMax(prisma69, treeId, templateNodeIds) {
+async function computeTemplateCopySuffixMax(prisma70, treeId, templateNodeIds) {
   if (!treeId || !templateNodeIds.length) {
     return /* @__PURE__ */ new Map();
   }
   const templateSet = new Set(templateNodeIds);
   const templateIds = Array.from(templateSet);
   const orStartsWith = templateIds.map((templateId) => ({ id: { startsWith: `${templateId}-` } }));
-  const copies = await prisma69.treeBranchLeafNode.findMany({
+  const copies = await prisma70.treeBranchLeafNode.findMany({
     where: {
       treeId,
       OR: orStartsWith
     },
     select: { id: true, metadata: true }
   });
-  const metaCopies = await prisma69.treeBranchLeafNode.findMany({
+  const metaCopies = await prisma70.treeBranchLeafNode.findMany({
     where: {
       treeId,
       OR: templateIds.map((templateId) => ({
@@ -55134,11 +54856,11 @@ var makeScopeId = (repeaterNodeId, suffix) => {
   const trimmedSuffix = typeof suffix === "string" ? suffix.trim() : String(suffix);
   return `${repeaterNodeId}:${trimmedSuffix}`;
 };
-async function planRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
+async function planRepeatDuplication(prisma70, repeaterNodeId, options = {}) {
   if (!repeaterNodeId) {
     throw new RepeatOperationError("Missing repeaterNodeId in request path.", 400);
   }
-  const blueprint = await buildBlueprintForRepeater(prisma69, repeaterNodeId);
+  const blueprint = await buildBlueprintForRepeater(prisma70, repeaterNodeId);
   if (!blueprint) {
     throw new RepeatOperationError(`No blueprint available for repeater ${repeaterNodeId}.`, 404);
   }
@@ -55148,7 +54870,7 @@ async function planRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
       422
     );
   }
-  const repeaterNode = await prisma69.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: { treeId: true }
   });
@@ -55158,13 +54880,9 @@ async function planRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
   const cleanedTemplateIds = blueprint.templateNodeIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id, idx, arr) => arr.indexOf(id) === idx);
   const needsCleaning = blueprint.templateNodeIds.length !== cleanedTemplateIds.length;
   if (needsCleaning) {
-    console.log(`\u{1F9F9} [repeat-service] NETTOYAGE DES IDs D\xC9TECT\xC9:`);
-    console.log(`   Avant: ${blueprint.templateNodeIds.length} IDs`);
-    console.log(`   Apr\xE8s: ${cleanedTemplateIds.length} IDs`);
     blueprint.templateNodeIds.forEach((id, idx) => {
       const cleaned = id.replace(/(-\d+)+$/, "");
       if (id !== cleaned) {
-        console.log(`      "${id}" \u2192 "${cleaned}"`);
       }
     });
   }
@@ -55181,20 +54899,15 @@ async function planRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
     );
   } else {
     const existingMax = await computeTemplateCopySuffixMax(
-      prisma69,
+      prisma70,
       repeaterNode.treeId,
       cleanedTemplateIds
     );
     const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
     actualSuffix = globalMax + 1;
-    console.log(`\u{1F4CA} [repeat-service] Calcul du suffixe (execute)`);
-    console.log(`   Templates \xE9valu\xE9s: ${cleanedTemplateIds.length}`);
     cleanedTemplateIds.forEach((id) => {
       const mx = existingMax.get(id) ?? 0;
-      console.log(`   - ${id} => max ${mx}`);
     });
-    console.log(`   Max global: ${globalMax}`);
-    console.log(`   \u27A1\uFE0F  Prochain suffixe appliqu\xE9 \xE0 tous: ${actualSuffix}`);
     perTemplateSuffixes = {};
     for (const templateId of cleanedTemplateIds) {
       perTemplateSuffixes[templateId] = actualSuffix;
@@ -55216,13 +54929,9 @@ async function planRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
     plan
   };
 }
-async function executeRepeatDuplication(prisma69, repeaterNodeId, options = {}) {
-  console.log(`[repeat-service] \u{1F504} executeRepeatDuplication called for ${repeaterNodeId}`, { options });
+async function executeRepeatDuplication(prisma70, repeaterNodeId, options = {}) {
   try {
-    const planned = await planRepeatDuplication(prisma69, repeaterNodeId, options);
-    console.log(`[repeat-service] \u2705 Plan created successfully`);
-    console.log(`
-\u{1F525} [repeat-service] PLANNED VARIABLES:`, JSON.stringify(planned.plan.variables.slice(0, 2), null, 2));
+    const planned = await planRepeatDuplication(prisma70, repeaterNodeId, options);
     const operations = [
       ...planned.plan.nodes.map((nodePlan) => ({
         type: "node-copy",
@@ -55235,14 +54944,13 @@ async function executeRepeatDuplication(prisma69, repeaterNodeId, options = {}) 
         targetId: variablePlan.plannedVariableId
       }))
     ];
-    console.log(`[repeat-service] Operations count: ${operations.length} (nodes: ${planned.plan.nodes.length}, variables: ${planned.plan.variables.length})`);
     return {
       ...planned,
       status: "pending-execution",
       operations
     };
   } catch (error) {
-    console.error(`[repeat-service] \u274C ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
+    console.error(`[repeat-service] \xC3\xA2\xC2\x9D\xC5\u2019 ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
     throw error;
   }
 }
@@ -55310,23 +55018,7 @@ function applySuffixToSourceRef2(sourceRef, suffix) {
   const newId = `${parsed.id}-${suffix}`;
   return `${parsed.prefix}${newId}`;
 }
-async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma69, options = {}) {
-  console.log(`
-${"=".repeat(80)}`);
-  console.log(`[ENTRY] copyVariableWithCapacities called`);
-  console.log(`[COPY] variable: ${originalVarId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau n\u0153ud: ${newNodeId}`);
-  console.log(`   Options:`, {
-    formulaIdMapSize: options.formulaIdMap?.size,
-    conditionIdMapSize: options.conditionIdMap?.size,
-    tableIdMapSize: options.tableIdMap?.size,
-    nodeIdMapSize: options.nodeIdMap?.size,
-    variableCopyCacheSize: options.variableCopyCache?.size,
-    autoCreateDisplayNode: options.autoCreateDisplayNode
-  });
-  console.log(`${"=".repeat(80)}
-`);
+async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma70, options = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionIdMap = /* @__PURE__ */ new Map(),
@@ -55343,14 +55035,12 @@ ${"=".repeat(80)}`);
     let cachedVariable = null;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
-      console.log(`\u267B\uFE0F Variable d\xE9j\xE0 copi\xE9e (cache): ${cacheKey} \u2192 ${cachedId}`);
-      const cached = await prisma69.treeBranchLeafNodeVariable.findUnique({
+      const cached = await prisma70.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
         const parsed = parseSourceRef3(cached.sourceRef);
         if (autoCreateDisplayNode) {
-          console.log(`\u2705 [CACHE] Variable trouv\xE9e. Cr\xE9ation du display node m\xEAme si variable en cache...`);
           cachedVariable = cached;
         } else {
           return {
@@ -55363,11 +55053,11 @@ ${"=".repeat(80)}`);
         }
       }
     }
-    const originalVar = await prisma69.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
-      console.error(`\u274C Variable introuvable: ${originalVarId}`);
+      console.error(`\xE2\x9D\u0152 Variable introuvable: ${originalVarId}`);
       return {
         variableId: "",
         exposedKey: "",
@@ -55377,10 +55067,6 @@ ${"=".repeat(80)}`);
         error: `Variable introuvable: ${originalVarId}`
       };
     }
-    console.log(`\u2705 Variable trouv\xE9e: ${originalVar.displayName}`);
-    console.log(`   sourceType: ${originalVar.sourceType}`);
-    console.log(`   sourceRef: ${originalVar.sourceRef || "null"}`);
-    console.log(`   \u{1F4CD} DEBUG: newVariable.displayName sera utilis\xE9 pour le label du n\u0153ud d'affichage`);
     const stripTrailingNumeric = (raw) => {
       if (!raw) return "";
       const trimmed = raw.trim();
@@ -55393,46 +55079,33 @@ ${"=".repeat(80)}`);
     };
     let newVarId = appendSuffixOnce(originalVarId);
     let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
-    console.log(`\u{1F4DD} Pr\xE9paration des IDs:`);
-    console.log(`   Variable (pr\xE9liminaire): ${newVarId}`);
-    console.log(`   ExposedKey (pr\xE9liminaire): ${newExposedKey}`);
     let newSourceRef = originalVar.sourceRef;
     let capacityType = null;
-    console.log(`
-\u{1F50D} [COPY-VAR] Analyse sourceType="${originalVar.sourceType}" sourceRef="${originalVar.sourceRef}"`);
     if (originalVar.sourceRef) {
       const parsed = parseSourceRef3(originalVar.sourceRef);
       if (parsed) {
         capacityType = parsed.type;
-        console.log(`\u{1F50D} [COPY-VAR] Capacit\xE9 d\xE9tect\xE9e: ${capacityType} (ID: ${parsed.id})`);
-        console.log(`\u{1F4E6} [COPY-VAR] Maps disponibles - formulas: ${formulaIdMap.size}, conditions: ${conditionIdMap.size}, tables: ${tableIdMap2.size}, nodes: ${nodeIdMap.size}`);
         if (capacityType === "formula") {
-          console.log(`\u{1F9EE} [COPY-VAR] Traitement FORMULE: ${parsed.id}`);
           if (formulaIdMap.has(parsed.id)) {
             const mappedFormulaId = formulaIdMap.get(parsed.id);
             newSourceRef = `${parsed.prefix}${mappedFormulaId}`;
-            console.log(`\u2705 [COPY-VAR] Formule d\xE9j\xE0 mapp\xE9e: ${parsed.id} \u2192 ${mappedFormulaId}`);
           } else {
-            console.log(`
-\u{1F9EE} [COPY-VAR] Lancement copie formule ${parsed.id}...`);
             try {
               const formulaResult = await copyFormulaCapacity2(
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, formulaCopyCache: formulaIdMap }
               );
               if (formulaResult.success) {
                 formulaIdMap.set(parsed.id, formulaResult.newFormulaId);
                 newSourceRef = `${parsed.prefix}${formulaResult.newFormulaId}`;
-                console.log(`\u2705 [COPY-VAR] Formule copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${formulaResult.newFormulaId}`);
               } else {
                 newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
-                console.log(`\u26A0\uFE0F [COPY-VAR] \xC9chec copie formule (${formulaResult.error}), suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`\u274C [COPY-VAR] Exception copie formule:`, e.message, e.stack);
+              console.error(`\xE2\x9D\u0152 [COPY-VAR] Exception copie formule:`, e.message, e.stack);
               newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
             }
           }
@@ -55440,28 +55113,23 @@ ${"=".repeat(80)}`);
           if (conditionIdMap.has(parsed.id)) {
             const mappedConditionId = conditionIdMap.get(parsed.id);
             newSourceRef = `${parsed.prefix}${mappedConditionId}`;
-            console.log(`\u2705 Condition d\xE9j\xE0 mapp\xE9e: ${parsed.id} \u2192 ${mappedConditionId}`);
           } else {
-            console.log(`
-\u{1F500} Copie de la condition ${parsed.id}...`);
             try {
               const conditionResult = await copyConditionCapacity(
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
               );
               if (conditionResult.success) {
                 conditionIdMap.set(parsed.id, conditionResult.newConditionId);
                 newSourceRef = `${parsed.prefix}${conditionResult.newConditionId}`;
-                console.log(`\u2705 Condition copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${conditionResult.newConditionId}`);
               } else {
                 newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
-                console.log(`\u26A0\uFE0F \xC9chec copie condition, suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`\u274C Exception copie condition:`, e.message);
+              console.error(`\xE2\x9D\u0152 Exception copie condition:`, e.message);
               newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
             }
           }
@@ -55469,52 +55137,41 @@ ${"=".repeat(80)}`);
           if (tableIdMap2.has(parsed.id)) {
             const mappedTableId = tableIdMap2.get(parsed.id);
             newSourceRef = `${parsed.prefix}${mappedTableId}`;
-            console.log(`\u2705 Table d\xE9j\xE0 mapp\xE9e: ${parsed.id} \u2192 ${mappedTableId}`);
           } else {
-            console.log(`
-\u{1F4CA} Copie de la table ${parsed.id}...`);
             try {
               const tableResult = await copyTableCapacity2(
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma69,
+                prisma70,
                 { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
                 tableIdMap2.set(parsed.id, tableResult.newTableId);
                 newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
-                console.log(`\u2705 Table copi\xE9e et mapp\xE9e: ${parsed.id} \u2192 ${tableResult.newTableId}`);
-                console.log(`   \u{1F4CB} ${tableResult.columnsCount} colonnes, ${tableResult.rowsCount} lignes, ${tableResult.cellsCount} cellules`);
               } else {
                 newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
-                console.log(`\u26A0\uFE0F \xC9chec copie table, suffixe appliqu\xE9: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`\u274C Exception copie table:`, e.message);
+              console.error(`\xE2\x9D\u0152 Exception copie table:`, e.message);
               newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
             }
           }
         } else if (capacityType === "field") {
           if (nodeIdMap.has(parsed.id)) {
             newSourceRef = nodeIdMap.get(parsed.id);
-            console.log(`\u2705 Champ mapp\xE9: ${parsed.id} \u2192 ${newSourceRef}`);
           } else {
             newSourceRef = `${parsed.id}-${suffix}`;
-            console.log(`\u26A0\uFE0F Champ non mapp\xE9, suffixe appliqu\xE9: ${newSourceRef}`);
           }
         }
       }
     }
-    console.log(`\u{1F4CD} sourceRef final: ${newSourceRef}`);
     let finalNodeId2 = newNodeId;
     if (originalVar.nodeId && nodeIdMap.has(originalVar.nodeId)) {
       finalNodeId2 = nodeIdMap.get(originalVar.nodeId);
-      console.log(`\u{1F4CD} nodeId mapp\xE9: ${originalVar.nodeId} \u2192 ${finalNodeId2}`);
     } else if (autoCreateDisplayNode) {
-      console.log(`\u{1F537} [DISPLAY_NODE_CREATE] ENTRANT dans cr\xE9ation display node. originalVar.nodeId="${originalVar.nodeId}", autoCreateDisplayNode=${autoCreateDisplayNode}, cachedVariable=${cachedVariable ? "YES" : "NO"}`);
       try {
-        const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: {
             id: true,
@@ -55526,7 +55183,7 @@ ${"=".repeat(80)}`);
             table_name: true,
             table_activeId: true,
             table_instances: true,
-            // 🔑 IMPORTANT: Récupérer subtab pour que la copie soit dans le bon sous-onglet
+            // ðŸ”‘ IMPORTANT: RÃ©cupÃ©rer subtab pour que la copie soit dans le bon sous-onglet
             subtab: true,
             subtabs: true,
             metadata: true
@@ -55537,10 +55194,8 @@ ${"=".repeat(80)}`);
           let displayParentId;
           if (isLinkedVariable) {
             displayParentId = newNodeId;
-            console.log(`\u{1F4CC} [LINKED_VAR] Display node pour variable li\xE9e sera enfant de: ${newNodeId}`);
           } else {
             displayParentId = originalOwnerNode.parentId || null;
-            console.log(`\u{1F4CC} [DIRECT_VAR] Display node pour variable directe sera dans m\xEAme parent: ${displayParentId}`);
           }
           const baseDisplayNodeId = stripTrailingNumeric(originalVar.nodeId) || originalVar.nodeId;
           const displayNodeId2 = `${baseDisplayNodeId}-${suffix}`;
@@ -55552,7 +55207,7 @@ ${"=".repeat(80)}`);
             parentId: displayParentId,
             type: "leaf_field",
             subType: null,
-            label: originalVar.displayName || "Donn\xE9e",
+            label: originalVar.displayName || "Donn\xC3\xA9e",
             description: null,
             value: null,
             order: (originalOwnerNode.order ?? 0) + 1,
@@ -55569,7 +55224,7 @@ ${"=".repeat(80)}`);
             defaultValue: null,
             calculatedValue: null,
             metadata: { fromVariableId: appendSuffixOnce(originalVar.id) },
-            // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+            // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
             subtab: originalOwnerNode.subtab,
             subtabs: originalOwnerNode.subtabs,
             createdAt: now,
@@ -55580,8 +55235,8 @@ ${"=".repeat(80)}`);
             hasFormula: false,
             hasLink: false,
             hasMarkers: false,
-            // 📊 TABLE: Copier les colonnes table du nœud original
-            // ✅ IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiées
+            // ðŸ“Š TABLE: Copier les colonnes table du nÅ“ud original
+            // âœ… IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiÃ©es
             hasTable: originalOwnerNode.hasTable ?? false,
             table_name: originalOwnerNode.table_name,
             table_activeId: originalOwnerNode.table_activeId ? `${originalOwnerNode.table_activeId}-${suffix}` : null,
@@ -55629,24 +55284,19 @@ ${"=".repeat(80)}`);
             fieldSubType: null,
             field_label: originalVar.displayName
           };
-          const maybeExisting = await prisma69.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+          const maybeExisting = await prisma70.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
           if (maybeExisting) {
-            await prisma69.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
-            console.log("[CREATE DISPLAY] N\u0153ud d'affichage existant mis \xE0 jour:", { id: displayNodeId2, parentId: displayParentId, metadata: displayNodeData.metadata });
+            await prisma70.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
           } else {
-            await prisma69.treeBranchLeafNode.create({ data: displayNodeData });
-            console.log("[CREATE DISPLAY] N\u0153ud d'affichage cr\xE9\xE9:", { id: displayNodeId2, parentId: displayParentId, metadata: displayNodeData.metadata });
+            await prisma70.treeBranchLeafNode.create({ data: displayNodeData });
           }
           if (originalOwnerNode.hasTable && Array.isArray(originalOwnerNode.linkedTableIds) && originalOwnerNode.linkedTableIds.length > 0) {
-            console.log(`
-\u{1F4CA} [COPY-TABLES] N\u0153ud original a ${originalOwnerNode.linkedTableIds.length} tables \xE0 copier`);
             for (const originalTableId of originalOwnerNode.linkedTableIds) {
               const newTableId = `${originalTableId}-${suffix}`;
-              const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+              const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
                 where: { id: newTableId }
               });
               if (existingTable) {
-                console.log(`\u{1F4CA} [COPY-TABLES] Table ${newTableId} existe d\xE9j\xE0, skip`);
                 tableIdMap2.set(originalTableId, newTableId);
                 continue;
               }
@@ -55654,69 +55304,64 @@ ${"=".repeat(80)}`);
                 const tableResult = await copyTableCapacity2(
                   originalTableId,
                   displayNodeId2,
-                  // La nouvelle table appartient au display node copié
+                  // La nouvelle table appartient au display node copiÃ©
                   Number(suffix),
-                  prisma69,
+                  prisma70,
                   { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
                 );
                 if (tableResult.success) {
                   tableIdMap2.set(originalTableId, tableResult.newTableId);
-                  console.log(`\u2705 [COPY-TABLES] Table copi\xE9e: ${originalTableId} \u2192 ${tableResult.newTableId} (${tableResult.columnsCount} cols, ${tableResult.rowsCount} rows)`);
                 } else {
-                  console.warn(`\u26A0\uFE0F [COPY-TABLES] \xC9chec copie table ${originalTableId}: ${tableResult.error}`);
+                  console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [COPY-TABLES] \xC3\u2030chec copie table ${originalTableId}: ${tableResult.error}`);
                 }
               } catch (e) {
-                console.error(`\u274C [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
+                console.error(`\xE2\x9D\u0152 [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
               }
             }
-            await prisma69.treeBranchLeafNode.update({
+            await prisma70.treeBranchLeafNode.update({
               where: { id: displayNodeId2 },
               data: { hasTable: true }
             });
-            console.log(`\u2705 [COPY-TABLES] hasTable mis \xE0 true sur ${displayNodeId2}`);
           }
         } else {
-          console.warn(`\u26A0\uFE0F Impossible de r\xE9cup\xE9rer le n\u0153ud propri\xE9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de r\xC3\xA9cup\xC3\xA9rer le n\xC5\u201Cud propri\xC3\xA9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
         }
       } catch (e) {
-        console.warn(`\u26A0\uFE0F Erreur lors de la cr\xE9ation du n\u0153ud d'affichage d\xE9di\xE9:`, e.message);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la cr\xC3\xA9ation du n\xC5\u201Cud d'affichage d\xC3\xA9di\xC3\xA9:`, e.message);
       }
-      console.log(`\u{1F4CD} nodeId utilis\xE9 (display auto): ${finalNodeId2}`);
     } else {
-      console.log(`\u{1F4CD} nodeId utilis\xE9 (fallback): ${finalNodeId2}`);
     }
     try {
-      const existingById = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      const existingById = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
-        console.warn(`\u26A0\uFE0F Conflit sur id variable (${newVarId}), ajustement \u2192 ${adjusted}`);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur id variable (${newVarId}), ajustement \xE2\u2020\u2019 ${adjusted}`);
         newVarId = adjusted;
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F V\xE9rification collision id variable \xE9chou\xE9e:`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     try {
-      const existingByKey = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      const existingByKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
-        console.warn(`\u26A0\uFE0F Conflit sur exposedKey (${newExposedKey}), ajustement \u2192 ${adjustedKey}`);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Conflit sur exposedKey (${newExposedKey}), ajustement \xE2\u2020\u2019 ${adjustedKey}`);
         newExposedKey = adjustedKey;
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F V\xE9rification collision exposedKey \xE9chou\xE9e:`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision exposedKey \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma69.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
       if (existingForNode) {
-        console.log(`\u267B\uFE0F Variable d\xE9j\xE0 existante pour display node ${finalNodeId2}, r\xE9utilisation: ${existingForNode.id}`);
         _reusingExistingVariable = true;
         _existingVariableForReuse = existingForNode;
         try {
-          await prisma69.treeBranchLeafNode.update({
+          await prisma70.treeBranchLeafNode.update({
             where: { id: finalNodeId2 },
             data: {
               hasData: true,
@@ -55730,32 +55375,22 @@ ${"=".repeat(80)}`);
               field_label: existingForNode.displayName || void 0
             }
           });
-          await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+          await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
         } catch (e) {
-          console.warn(`\u26A0\uFE0F Erreur MAJ display node (r\xE9utilisation):`, e.message);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
         }
         variableCopyCache.set(originalVarId, existingForNode.id);
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F V\xE9rification variable existante par nodeId \xE9chou\xE9e:`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification variable existante par nodeId \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let newVariable;
     if (cachedVariable) {
-      console.log(`\u267B\uFE0F [COPY-VAR] R\xE9utilisation de variable du cache: ${cachedVariable.id} pour cr\xE9er display node`);
       newVariable = cachedVariable;
     } else if (_reusingExistingVariable && _existingVariableForReuse) {
-      console.log(`\u267B\uFE0F [COPY-VAR] Utilisation de variable existante: ${_existingVariableForReuse.id}`);
       newVariable = _existingVariableForReuse;
     } else {
-      console.log(`
-\u{1F528} [COPY-VAR] CR\xC9ATION DE LA VARIABLE EN BASE...`);
-      console.log(`   ID: ${newVarId}`);
-      console.log(`   nodeId: ${finalNodeId2}`);
-      console.log(`   exposedKey: ${newExposedKey}`);
-      console.log(`   displayName: ${originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName}`);
-      console.log(`   sourceRef: ${newSourceRef}`);
-      console.log(`   sourceType: ${originalVar.sourceType}`);
-      newVariable = await prisma69.treeBranchLeafNodeVariable.create({
+      newVariable = await prisma70.treeBranchLeafNodeVariable.create({
         data: {
           id: newVarId,
           nodeId: finalNodeId2,
@@ -55777,21 +55412,15 @@ ${"=".repeat(80)}`);
         }
       });
     }
-    console.log(`\u2705\u2705\u2705 VARIABLE CR\xC9\xC9E AVEC SUCC\xC8S EN BASE !`);
-    console.log(`   ID cr\xE9\xE9: ${newVariable.id}`);
-    console.log(`   nodeId: ${newVariable.nodeId}`);
-    console.log(`   exposedKey: ${newVariable.exposedKey}`);
-    console.log(`   \u{1F4CD} DEBUG displayName cr\xE9\xE9: "${newVariable.displayName}"`);
-    const verification = await prisma69.treeBranchLeafNodeVariable.findUnique({
+    const verification = await prisma70.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (verification) {
-      console.log(`\u2705 V\xC9RIFICATION OK: Variable ${newVariable.id} existe bien en base`);
     } else {
-      console.error(`\u274C\u274C\u274C PROBL\xC8ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xE8s cr\xE9ation !`);
+      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
     }
     try {
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: finalNodeId2 },
         data: {
           hasData: true,
@@ -55801,23 +55430,22 @@ ${"=".repeat(80)}`);
           data_precision: newVariable.precision,
           data_unit: newVariable.unit,
           data_visibleToUser: newVariable.visibleToUser,
-          // Harmoniser le label du nœud d'affichage sur le displayName de la variable
+          // Harmoniser le label du nÅ“ud d'affichage sur le displayName de la variable
           label: newVariable.displayName || void 0,
           field_label: newVariable.displayName || void 0
         }
       });
-      console.log(`\u2705 Param\xE8tres capacit\xE9 (data) mis \xE0 jour pour n\u0153ud d'affichage ${finalNodeId2}`);
     } catch (e) {
-      console.warn(`\u26A0\uFE0F Erreur lors de la mise \xE0 jour des param\xE8tres capacit\xE9 (display node):`, e.message);
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la mise \xC3\xA0 jour des param\xC3\xA8tres capacit\xC3\xA9 (display node):`, e.message);
     }
     if (linkToDisplaySection) {
       try {
-        const originalOwnerNode = await prisma69.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: { parentId: true, treeId: true }
         });
         if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma69.treeBranchLeafNode.findFirst({
+          const displaySection = await prisma70.treeBranchLeafNode.findFirst({
             where: {
               treeId: originalOwnerNode.treeId,
               parentId: originalOwnerNode.parentId,
@@ -55827,20 +55455,18 @@ ${"=".repeat(80)}`);
             select: { id: true }
           });
           if (displaySection) {
-            await addToNodeLinkedField8(prisma69, displaySection.id, "linkedVariableIds", [newVariable.id]);
-            console.log(`\u2705 Variable li\xE9e \xE0 la section d'affichage ${displaySectionLabel}: ${displaySection.id}`);
+            await addToNodeLinkedField8(prisma70, displaySection.id, "linkedVariableIds", [newVariable.id]);
           } else {
-            console.log(`\u2139\uFE0F Section d'affichage "${displaySectionLabel}" introuvable sous le parent.`);
           }
         }
       } catch (e) {
-        console.warn(`\u26A0\uFE0F Erreur lors du linkage vers la section d'affichage:`, e.message);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors du linkage vers la section d'affichage:`, e.message);
       }
     } else if (autoCreateDisplayNode) {
       try {
-        await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+        await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedVariableIds", [newVariable.id]);
       } catch (e) {
-        console.warn(`\u26A0\uFE0F Erreur linkage variable\u2192display node:`, e.message);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
       }
       try {
         if (capacityType && newSourceRef) {
@@ -55848,8 +55474,8 @@ ${"=".repeat(80)}`);
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              const cond = await prisma69.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
-              await prisma69.treeBranchLeafNode.update({
+              const cond = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
@@ -55858,10 +55484,10 @@ ${"=".repeat(80)}`);
                   condition_description: cond?.description || null
                 }
               });
-              await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedConditionIds", [capId]);
             } else if (parsedCap.type === "formula") {
-              const frm = await prisma69.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true, description: true } });
-              await prisma69.treeBranchLeafNode.update({
+              const frm = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasFormula: true,
@@ -55870,10 +55496,10 @@ ${"=".repeat(80)}`);
                   formula_description: frm?.description || null
                 }
               });
-              await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedFormulaIds", [capId]);
+              await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedFormulaIds", [capId]);
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma69.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
-              await prisma69.treeBranchLeafNode.update({
+              const tbl = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
+              await prisma70.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
@@ -55883,12 +55509,12 @@ ${"=".repeat(80)}`);
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField8(prisma69, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedTableIds", [capId]);
             }
           }
         }
       } catch (e) {
-        console.warn(`\u26A0\uFE0F Synchronisation capacit\xE9s condition/table sur le n\u0153ud d'affichage:`, e.message);
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Synchronisation capacit\xC3\xA9s condition/table sur le n\xC5\u201Cud d'affichage:`, e.message);
       }
     }
     variableCopyCache.set(cacheKey, newVariable.id);
@@ -55897,43 +55523,35 @@ ${"=".repeat(80)}`);
       if (parsed && parsed.id) {
         try {
           if (capacityType === "formula") {
-            const formula = await prisma69.treeBranchLeafNodeFormula.findUnique({
+            const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (formula) {
-              await addToNodeLinkedField8(prisma69, formula.nodeId, "linkedFormulaIds", [parsed.id]);
-              console.log(`\u2705 linkedFormulaIds mis \xE0 jour pour formule ${parsed.id}`);
+              await addToNodeLinkedField8(prisma70, formula.nodeId, "linkedFormulaIds", [parsed.id]);
             }
           } else if (capacityType === "condition") {
-            const condition = await prisma69.treeBranchLeafNodeCondition.findUnique({
+            const condition = await prisma70.treeBranchLeafNodeCondition.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (condition) {
-              await addToNodeLinkedField8(prisma69, condition.nodeId, "linkedConditionIds", [parsed.id]);
-              console.log(`\u2705 linkedConditionIds mis \xE0 jour pour condition ${parsed.id}`);
+              await addToNodeLinkedField8(prisma70, condition.nodeId, "linkedConditionIds", [parsed.id]);
             }
           } else if (capacityType === "table") {
-            const table = await prisma69.treeBranchLeafNodeTable.findUnique({
+            const table = await prisma70.treeBranchLeafNodeTable.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (table) {
-              await addToNodeLinkedField8(prisma69, table.nodeId, "linkedTableIds", [parsed.id]);
-              console.log(`\u2705 linkedTableIds mis \xE0 jour pour table ${parsed.id}`);
+              await addToNodeLinkedField8(prisma70, table.nodeId, "linkedTableIds", [parsed.id]);
             }
           }
         } catch (e) {
-          console.warn(`\u26A0\uFE0F Erreur MAJ bidirectionnelle:`, e.message);
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ bidirectionnelle:`, e.message);
         }
       }
     }
-    console.log(`
-${"\u2550".repeat(80)}`);
-    console.log(`\u2705 COPIE VARIABLE TERMIN\xC9E`);
-    console.log(`${"\u2550".repeat(80)}
-`);
     return {
       variableId: newVariable.id,
       exposedKey: newExposedKey,
@@ -55941,10 +55559,10 @@ ${"\u2550".repeat(80)}`);
       sourceRef: newSourceRef,
       success: true,
       displayNodeId: finalNodeId2
-      // 🔑 IMPORTANT: Retourner l'ID du display node créé!
+      // ðŸ”‘ IMPORTANT: Retourner l'ID du display node crÃ©Ã©!
     };
   } catch (error) {
-    console.error(`\u274C Erreur lors de la copie de la variable:`, error);
+    console.error(`\xE2\x9D\u0152 Erreur lors de la copie de la variable:`, error);
     return {
       variableId: "",
       exposedKey: "",
@@ -55957,19 +55575,19 @@ ${"\u2550".repeat(80)}`);
     };
   }
 }
-async function addToNodeLinkedField8(prisma69, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField8(prisma70, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma69.treeBranchLeafNode.findUnique({
+  const node = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\u26A0\uFE0F N\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F N\xC5\u201Cud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -55977,9 +55595,9 @@ async function addToNodeLinkedField8(prisma69, nodeId, field, idsToAdd) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/shared/shared-reference-helpers.ts
 async function applySharedReferencesFromOriginalInternal2(params) {
-  const { prisma: prisma69, nodeId, authCtx } = params;
+  const { prisma: prisma70, nodeId, authCtx } = params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
-  const copyRoot = await prisma69.treeBranchLeafNode.findFirst({
+  const copyRoot = await prisma70.treeBranchLeafNode.findFirst({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
@@ -55987,10 +55605,10 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
     throw new Error("Acc\xE8s non autoris\xE9");
   }
-  const all = await prisma69.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
+  const all = await prisma70.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const nodeVariableIdByNodeId = /* @__PURE__ */ new Map();
   if (all.length > 0) {
-    const nodeVariables = await prisma69.treeBranchLeafNodeVariable.findMany({
+    const nodeVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: all.map((n) => n.id) } },
       select: { nodeId: true, id: true }
     });
@@ -56026,7 +55644,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   }
   if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
   const originalIds = Array.from(originalToCopy.keys());
-  const originals = await prisma69.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
+  const originals = await prisma70.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
   const allRefIds = /* @__PURE__ */ new Set();
   for (const orig of originals) {
     if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
@@ -56045,11 +55663,11 @@ async function applySharedReferencesFromOriginalInternal2(params) {
       }
     }
     chosenSuffix = maxSuffix + 1 || 1;
-    await prisma69.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
+    await prisma70.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
   }
   const refCopyIdByOriginal = /* @__PURE__ */ new Map();
   const desiredIds = Array.from(allRefIds).map((id) => `${id}-${chosenSuffix}`);
-  const existingRefCopies = desiredIds.length > 0 ? await prisma69.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
+  const existingRefCopies = desiredIds.length > 0 ? await prisma70.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
   const existingSet = new Set(existingRefCopies.map((n) => n.id));
   const ensureRefCopy = async (origRefId) => {
     const desiredRootId = `${origRefId}-${chosenSuffix}`;
@@ -56071,7 +55689,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     const origSubtree = subtreeIds.map((id) => byId.get(id)).filter(Boolean);
     const desired = new Set(subtreeIds.map((id) => `${id}-${chosenSuffix}`));
     if (desired.size > 0) {
-      const already = await prisma69.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
+      const already = await prisma70.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
       for (const n of already) desired.delete(n.id);
     }
     const idMap = /* @__PURE__ */ new Map();
@@ -56113,7 +55731,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
         metadata: { ...orig.metadata || {}, copiedFromNodeId: orig.id },
         updatedAt: /* @__PURE__ */ new Date()
       };
-      await prisma69.treeBranchLeafNode.create({ data: toCreate });
+      await prisma70.treeBranchLeafNode.create({ data: toCreate });
       const sourceVariableIds = /* @__PURE__ */ new Set();
       if (Array.isArray(orig.linkedVariableIds)) {
         for (const rawId of orig.linkedVariableIds) {
@@ -56141,7 +55759,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
               originalVarId,
               chosenSuffix,
               newId,
-              prisma69,
+              prisma70,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -56174,7 +55792,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     const mappedSingle = origSingle ? refCopyIdByOriginal.get(origSingle) || `${origSingle}-${chosenSuffix}` : null;
     const finalArray = mappedMultiple.length > 0 ? mappedMultiple : mappedSingle ? [mappedSingle] : [];
     const finalSingle = finalArray.length > 0 ? finalArray[0] : null;
-    updates.push(prisma69.treeBranchLeafNode.update({
+    updates.push(prisma70.treeBranchLeafNode.update({
       where: { id: copyId },
       data: {
         sharedReferenceId: finalSingle,
@@ -56188,16 +55806,13 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     }));
     applied++;
   }
-  await prisma69.$transaction(updates);
+  await prisma70.$transaction(updates);
   return { success: true, applied, suffix: chosenSuffix };
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-values-service.ts
-async function resetCalculatedValuesAfterCopy(prisma69, copiedNodeIds) {
-  console.log(`\u{1F504} [RESET] === D\xC9BUT RESET DES VALEURS CALCUL\xC9ES ===`);
-  console.log(`\u{1F504} [RESET] N\u0153uds \xE0 traiter: ${copiedNodeIds.length}`);
-  console.log(`\u{1F504} [RESET] IDs des n\u0153uds:`, copiedNodeIds.slice(0, 3), "...");
-  const nodesWithCapacities = await prisma69.treeBranchLeafNode.findMany({
+async function resetCalculatedValuesAfterCopy(prisma70, copiedNodeIds) {
+  const nodesWithCapacities = await prisma70.treeBranchLeafNode.findMany({
     where: {
       id: { in: copiedNodeIds },
       OR: [
@@ -56215,11 +55830,9 @@ async function resetCalculatedValuesAfterCopy(prisma69, copiedNodeIds) {
       hasTable: true
     }
   });
-  console.log(`\u{1F504} [RESET] Trouv\xE9 ${nodesWithCapacities.length} n\u0153uds avec capacit\xE9s:`);
   for (const node of nodesWithCapacities) {
-    console.log(`  - ${node.label} (${node.id}): calculatedValue=${node.calculatedValue}, hasFormula=${node.hasFormula}, hasCondition=${node.hasCondition}, hasTable=${node.hasTable}`);
   }
-  const result = await prisma69.treeBranchLeafNode.updateMany({
+  const result = await prisma70.treeBranchLeafNode.updateMany({
     where: {
       id: { in: copiedNodeIds },
       OR: [
@@ -56232,15 +55845,11 @@ async function resetCalculatedValuesAfterCopy(prisma69, copiedNodeIds) {
       calculatedValue: null
     }
   });
-  console.log(`\u2705 [RESET] ${result.count} valeurs calcul\xE9es remises \xE0 null`);
-  console.log(`\u{1F504} [RESET] === FIN RESET DES VALEURS CALCUL\xC9ES ===`);
   return result.count;
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/strict-isolation-service.ts
-async function enforceStrictIsolation(prisma69, copiedNodeIds) {
-  console.log(`\u{1F6AB} [ISOLATION] === D\xC9BUT ISOLATION STRICTE ===`);
-  console.log(`\u{1F6AB} [ISOLATION] Isolation de ${copiedNodeIds.length} n\u0153uds copi\xE9s`);
+async function enforceStrictIsolation(prisma70, copiedNodeIds) {
   const result = {
     isolatedNodes: [],
     errors: []
@@ -56248,9 +55857,7 @@ async function enforceStrictIsolation(prisma69, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
     try {
       const changes = [];
-      console.log(`
-\u{1F6AB} [ISOLATION] Traitement ${nodeId}...`);
-      const node = await prisma69.treeBranchLeafNode.findUnique({
+      const node = await prisma70.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
           TreeBranchLeafNodeFormula: true,
@@ -56260,42 +55867,38 @@ async function enforceStrictIsolation(prisma69, copiedNodeIds) {
         }
       });
       if (!node) {
-        result.errors.push({ nodeId, error: "N\u0153ud non trouv\xE9" });
+        result.errors.push({ nodeId, error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
         continue;
       }
       if (node.hasFormula || node.hasCondition || node.hasTable) {
         if (node.calculatedValue !== null) {
-          await prisma69.treeBranchLeafNode.update({
+          await prisma70.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
-          changes.push(`calculatedValue: ${node.calculatedValue} \u2192 null`);
-          console.log(`\u{1F6AB} [ISOLATION] ${node.label}: calculatedValue forc\xE9 \xE0 null`);
+          changes.push(`calculatedValue: ${node.calculatedValue} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 null`);
         }
       }
       if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
-        await prisma69.treeBranchLeafNode.update({
+        await prisma70.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasFormula: false }
         });
-        changes.push("hasFormula: true \u2192 false (aucune formule trouv\xE9e)");
-        console.log(`\u{1F6AB} [ISOLATION] ${node.label}: hasFormula corrig\xE9 \xE0 false`);
+        changes.push("hasFormula: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune formule trouv\xC3\u0192\xC2\xA9e)");
       }
       if (node.hasCondition && node.TreeBranchLeafNodeCondition.length === 0) {
-        await prisma69.treeBranchLeafNode.update({
+        await prisma70.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasCondition: false }
         });
-        changes.push("hasCondition: true \u2192 false (aucune condition trouv\xE9e)");
-        console.log(`\u{1F6AB} [ISOLATION] ${node.label}: hasCondition corrig\xE9 \xE0 false`);
+        changes.push("hasCondition: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune condition trouv\xC3\u0192\xC2\xA9e)");
       }
       if (node.hasTable && node.TreeBranchLeafNodeTable.length === 0) {
-        await prisma69.treeBranchLeafNode.update({
+        await prisma70.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasTable: false }
         });
-        changes.push("hasTable: true \u2192 false (aucune table trouv\xE9e)");
-        console.log(`\u{1F6AB} [ISOLATION] ${node.label}: hasTable corrig\xE9 \xE0 false`);
+        changes.push("hasTable: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune table trouv\xC3\u0192\xC2\xA9e)");
       }
       const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
       const updatedMetadata = {
@@ -56305,34 +55908,27 @@ async function enforceStrictIsolation(prisma69, copiedNodeIds) {
         calculatedValueReset: true,
         independentCalculation: true
       };
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
-      changes.push("metadata: marqu\xE9 comme strictement isol\xE9");
+      changes.push("metadata: marqu\xC3\u0192\xC2\xA9 comme strictement isol\xC3\u0192\xC2\xA9");
       result.isolatedNodes.push({
         nodeId: node.id,
         label: node.label,
         changes
       });
-      console.log(`\u2705 [ISOLATION] ${node.label}: ${changes.length} changements appliqu\xE9s`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       result.errors.push({ nodeId, error: errorMsg });
-      console.error(`\u274C [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
     }
   }
-  console.log(`
-\u{1F6AB} [ISOLATION] === R\xC9SULTATS ISOLATION ===`);
-  console.log(`  N\u0153uds isol\xE9s: ${result.isolatedNodes.length}`);
-  console.log(`  Erreurs: ${result.errors.length}`);
-  console.log(`\u{1F6AB} [ISOLATION] === FIN ISOLATION STRICTE ===`);
   return result;
 }
-async function verifyIsolation(prisma69, copiedNodeIds) {
-  console.log(`\u{1F50D} [VERIFY-ISOLATION] V\xE9rification de ${copiedNodeIds.length} n\u0153uds`);
+async function verifyIsolation(prisma70, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
-    const node = await prisma69.treeBranchLeafNode.findUnique({
+    const node = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -56348,25 +55944,18 @@ async function verifyIsolation(prisma69, copiedNodeIds) {
     const metadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
     const isIsolated = metadata.strictlyIsolated === true;
     const hasCapacity = node.hasFormula || node.hasCondition || node.hasTable;
-    console.log(`\u{1F4CA} [VERIFY] ${node.label}:`);
-    console.log(`  - calculatedValue: ${node.calculatedValue}`);
-    console.log(`  - hasCapacity: ${hasCapacity}`);
-    console.log(`  - strictlyIsolated: ${isIsolated}`);
     if (hasCapacity && node.calculatedValue !== null) {
-      console.log(`\u26A0\uFE0F [VERIFY] PROBL\xC8ME: ${node.label} a une capacit\xE9 mais calculatedValue != null`);
     }
     if (!isIsolated) {
-      console.log(`\u26A0\uFE0F [VERIFY] PROBL\xC8ME: ${node.label} n'est pas marqu\xE9 comme isol\xE9`);
     }
   }
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-independent-calculation.ts
-async function forceIndependentCalculation(prisma69, copiedNodeIds) {
-  console.log(`\u{1F504} [FORCE-CALC] === FOR\xC7AGE CALCUL IND\xC9PENDANT ===`);
+async function forceIndependentCalculation(prisma70, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
     try {
-      const node = await prisma69.treeBranchLeafNode.findUnique({
+      const node = await prisma70.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
           TreeBranchLeafNodeFormula: true,
@@ -56376,48 +55965,41 @@ async function forceIndependentCalculation(prisma69, copiedNodeIds) {
         }
       });
       if (!node) continue;
-      console.log(`\u{1F504} [FORCE-CALC] Traitement ${node.label} (${nodeId})`);
       if (node.hasFormula || node.hasCondition || node.hasTable) {
-        console.log(`\u{1F4CA} [FORCE-CALC] ${node.label}: champ de donn\xE9es d'affichage d\xE9tect\xE9`);
         const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
         const updatedMetadata = {
           ...currentMetadata,
           lastForceRecalc: (/* @__PURE__ */ new Date()).toISOString(),
           forceIndependentCalc: true,
-          // Marquer comme devant être recalculé côté frontend
+          // Marquer comme devant ÃƒÂªtre recalculÃƒÂ© cÃƒÂ´tÃƒÂ© frontend
           requiresFreshCalculation: true,
           calculationInvalidated: Date.now()
         };
-        await prisma69.treeBranchLeafNode.update({
+        await prisma70.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             calculatedValue: null,
             metadata: updatedMetadata
           }
         });
-        console.log(`\u2705 [FORCE-CALC] ${node.label}: m\xE9tadonn\xE9es de recalcul mises \xE0 jour`);
       } else if (!node.hasFormula && !node.hasCondition && !node.hasTable) {
-        console.log(`\u{1F4DD} [FORCE-CALC] ${node.label}: champ de saisie - s'assurer qu'il est vide`);
         if (node.calculatedValue !== null) {
-          await prisma69.treeBranchLeafNode.update({
+          await prisma70.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
-          console.log(`\u{1F9F9} [FORCE-CALC] ${node.label}: valeur de saisie remise \xE0 null`);
         }
       }
     } catch (error) {
-      console.error(`\u274C [FORCE-CALC] Erreur pour ${nodeId}:`, error);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [FORCE-CALC] Erreur pour ${nodeId}:`, error);
     }
   }
-  console.log(`\u{1F504} [FORCE-CALC] === FIN FOR\xC7AGE CALCUL ===`);
 }
-async function createRecalculationTriggers(prisma69, copiedNodeIds) {
-  console.log(`\u{1F3AF} [TRIGGERS] Cr\xE9ation de triggers de recalcul pour ${copiedNodeIds.length} n\u0153uds`);
+async function createRecalculationTriggers(prisma70, copiedNodeIds) {
   const triggerTimestamp = Date.now();
   for (const nodeId of copiedNodeIds) {
     try {
-      const currentMetadata = await prisma69.treeBranchLeafNode.findUnique({
+      const currentMetadata = await prisma70.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { metadata: true, label: true }
       });
@@ -56425,26 +56007,24 @@ async function createRecalculationTriggers(prisma69, copiedNodeIds) {
       const metadata = currentMetadata.metadata && typeof currentMetadata.metadata === "object" ? currentMetadata.metadata : {};
       const updatedMetadata = {
         ...metadata,
-        // Marqueurs pour forcer le recalcul côté frontend
+        // Marqueurs pour forcer le recalcul cÃƒÂ´tÃƒÂ© frontend
         recalcTrigger: triggerTimestamp,
         mustRecalculate: true,
         independentNode: true,
         noFallbackToOriginal: true
       };
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
-      console.log(`\u{1F3AF} [TRIGGERS] ${currentMetadata.label}: trigger cr\xE9\xE9 (${triggerTimestamp})`);
     } catch (error) {
-      console.error(`\u274C [TRIGGERS] Erreur pour ${nodeId}:`, error);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TRIGGERS] Erreur pour ${nodeId}:`, error);
     }
   }
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/complete-duplication-fix.ts
-async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, suffix = "-1") {
-  console.log(`\u{1F504} [COMPLETE-FIX] Correction compl\xE8te: ${originalNodeId} \u2192 ${copiedNodeId}`);
+async function fixCompleteDuplication(prisma70, originalNodeId, copiedNodeId, suffix = "-1") {
   const result = {
     nodeId: copiedNodeId,
     nodeLabel: null,
@@ -56458,7 +56038,7 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
     calculatedValueReset: false
   };
   const [originalNode, copiedNode] = await Promise.all([
-    prisma69.treeBranchLeafNode.findUnique({
+    prisma70.treeBranchLeafNode.findUnique({
       where: { id: originalNodeId },
       include: {
         TreeBranchLeafNodeFormula: true,
@@ -56471,15 +56051,15 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
         }
       }
     }),
-    prisma69.treeBranchLeafNode.findUnique({
+    prisma70.treeBranchLeafNode.findUnique({
       where: { id: copiedNodeId }
     })
   ]);
   if (!originalNode) {
-    throw new Error(`N\u0153ud original ${originalNodeId} non trouv\xE9`);
+    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud original ${originalNodeId} non trouv\xC3\u0192\xC2\xA9`);
   }
   if (!copiedNode) {
-    throw new Error(`N\u0153ud copi\xE9 ${copiedNodeId} non trouv\xE9`);
+    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
   }
   result.nodeLabel = copiedNode.label;
   const formulaIdMap = /* @__PURE__ */ new Map();
@@ -56487,7 +56067,7 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
   const nodeIdMap = /* @__PURE__ */ new Map();
   const treeId = copiedNode.treeId;
   if (treeId) {
-    const allNodesInTree = await prisma69.treeBranchLeafNode.findMany({
+    const allNodesInTree = await prisma70.treeBranchLeafNode.findMany({
       where: { treeId },
       select: { id: true }
     });
@@ -56506,27 +56086,27 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
         formula.id,
         copiedNodeId,
         suffixNum,
-        prisma69,
+        prisma70,
         { formulaIdMap, nodeIdMap }
       );
       if (formulaResult.success) {
         formulaIdMap.set(formula.id, formulaResult.newFormulaId);
         result.capacitiesFixed.formulas++;
       } else {
-        console.error(`\u274C Erreur copie formule: ${formula.id}`);
+        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule: ${formula.id}`);
       }
     } catch (error) {
-      console.error(`\u274C Exception copie formule ${formula.id}:`, error);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${formula.id}:`, error);
     }
   }
   for (const condition of originalNode.TreeBranchLeafNodeCondition) {
     const newConditionId = `${condition.id}${suffix}`;
-    const existingCondition = await prisma69.treeBranchLeafNodeCondition.findUnique({
+    const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({
       where: { id: newConditionId }
     });
     if (!existingCondition) {
       const adaptedConditionSet = adaptReferencesForCopiedNode(condition.conditionSet, suffix);
-      await prisma69.treeBranchLeafNodeCondition.create({
+      await prisma70.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: copiedNodeId,
@@ -56543,11 +56123,11 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
   }
   for (const table of originalNode.TreeBranchLeafNodeTable) {
     const newTableId = `${table.id}${suffix}`;
-    const existingTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+    const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
       where: { id: newTableId }
     });
     if (!existingTable) {
-      await prisma69.treeBranchLeafNodeTable.create({
+      await prisma70.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: copiedNodeId,
@@ -56557,7 +56137,7 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
           type: table.type,
           rowCount: table.rowCount,
           columnCount: table.columnCount,
-          // 🔢 COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
+          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
           meta: (() => {
             if (!table.meta) return table.meta;
             try {
@@ -56600,12 +56180,12 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
       });
       await Promise.all([
         ...table.tableColumns.map(
-          (col) => prisma69.treeBranchLeafNodeTableColumn.create({
+          (col) => prisma70.treeBranchLeafNodeTableColumn.create({
             data: {
               id: `${col.id}${suffix}`,
               tableId: newTableId,
               columnIndex: col.columnIndex,
-              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
               name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
               type: col.type,
               width: col.width,
@@ -56615,7 +56195,7 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
           })
         ),
         ...table.tableRows.map(
-          (row) => prisma69.treeBranchLeafNodeTableRow.create({
+          (row) => prisma70.treeBranchLeafNodeTableRow.create({
             data: {
               id: `${row.id}${suffix}`,
               tableId: newTableId,
@@ -56628,19 +56208,19 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
       result.capacitiesFixed.tables++;
     }
   }
-  await fixAssociatedLookups(prisma69, originalNode, copiedNode, suffix);
+  await fixAssociatedLookups(prisma70, originalNode, copiedNode, suffix);
   result.capacitiesFixed.lookups = 1;
   if (copiedNode.fieldConfig) {
     const newFieldConfig = updateFieldConfigReferences(copiedNode.fieldConfig, suffix);
     if (newFieldConfig !== copiedNode.fieldConfig) {
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: copiedNodeId },
         data: { fieldConfig: newFieldConfig }
       });
       result.fieldConfigUpdated = true;
     }
   }
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
@@ -56654,8 +56234,8 @@ async function fixCompleteDuplication(prisma69, originalNodeId, copiedNodeId, su
   result.calculatedValueReset = true;
   return result;
 }
-async function fixAssociatedLookups(prisma69, originalNode, copiedNode, suffix) {
-  const measureNodes = await prisma69.treeBranchLeafNode.findMany({
+async function fixAssociatedLookups(prisma70, originalNode, copiedNode, suffix) {
+  const measureNodes = await prisma70.treeBranchLeafNode.findMany({
     where: {
       AND: [
         { label: { contains: "Mesure" } },
@@ -56679,18 +56259,17 @@ async function fixAssociatedLookups(prisma69, originalNode, copiedNode, suffix) 
         (t) => t.name.includes("Lookup") && (t.name.includes(originalNode.label) || t.name === lookupName)
       );
       if (lookupTable && lookupTable.tableRows.length === 0) {
-        console.log(`   \u{1F517} Correction lookup: ${lookupTable.name}`);
         await Promise.all([
-          prisma69.treeBranchLeafNodeTableColumn.deleteMany({
+          prisma70.treeBranchLeafNodeTableColumn.deleteMany({
             where: { tableId: lookupTable.id }
           }),
-          prisma69.treeBranchLeafNodeTableRow.deleteMany({
+          prisma70.treeBranchLeafNodeTableRow.deleteMany({
             where: { tableId: lookupTable.id }
           })
         ]);
         await Promise.all([
           ...originalTable.tableColumns.map(
-            (col) => prisma69.treeBranchLeafNodeTableColumn.create({
+            (col) => prisma70.treeBranchLeafNodeTableColumn.create({
               data: {
                 id: `${col.id}-lookup${suffix}`,
                 tableId: lookupTable.id,
@@ -56704,7 +56283,7 @@ async function fixAssociatedLookups(prisma69, originalNode, copiedNode, suffix) 
             })
           ),
           ...originalTable.tableRows.map(
-            (row) => prisma69.treeBranchLeafNodeTableRow.create({
+            (row) => prisma70.treeBranchLeafNodeTableRow.create({
               data: {
                 id: `${row.id}-lookup${suffix}`,
                 tableId: lookupTable.id,
@@ -56714,7 +56293,7 @@ async function fixAssociatedLookups(prisma69, originalNode, copiedNode, suffix) 
             })
           )
         ]);
-        await prisma69.treeBranchLeafNodeTable.update({
+        await prisma70.treeBranchLeafNodeTable.update({
           where: { id: lookupTable.id },
           data: {
             rowCount: originalTable.rowCount,
@@ -56766,8 +56345,7 @@ function updateFieldConfigReferences(fieldConfig, suffix) {
   }
   return config;
 }
-async function fixAllCompleteDuplications(prisma69, repeaterNodeId) {
-  console.log("\u{1F527} [COMPLETE-DUPLICATION-FIX] Correction compl\xE8te de tous les n\u0153uds...");
+async function fixAllCompleteDuplications(prisma70, repeaterNodeId) {
   const report = {
     totalNodesProcessed: 0,
     nodesFixed: [],
@@ -56787,7 +56365,7 @@ async function fixAllCompleteDuplications(prisma69, repeaterNodeId) {
         }
       });
     }
-    const copiedNodes = await prisma69.treeBranchLeafNode.findMany({
+    const copiedNodes = await prisma70.treeBranchLeafNode.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -56805,7 +56383,7 @@ async function fixAllCompleteDuplications(prisma69, repeaterNodeId) {
         }
         if (!originalNodeId && node.label) {
           const originalLabel = node.label.replace("-1", "");
-          const originalNode = await prisma69.treeBranchLeafNode.findFirst({
+          const originalNode = await prisma70.treeBranchLeafNode.findFirst({
             where: {
               label: originalLabel,
               id: { not: node.id }
@@ -56819,11 +56397,11 @@ async function fixAllCompleteDuplications(prisma69, repeaterNodeId) {
         if (!originalNodeId) {
           report.errors.push({
             nodeId: node.id,
-            error: "Impossible de trouver le n\u0153ud original"
+            error: "Impossible de trouver le n\xC3\u2026\xE2\u20AC\u0153ud original"
           });
           continue;
         }
-        const result = await fixCompleteDuplication(prisma69, originalNodeId, node.id, "-1");
+        const result = await fixCompleteDuplication(prisma70, originalNodeId, node.id, "-1");
         report.nodesFixed.push(result);
       } catch (error) {
         report.errors.push({
@@ -56833,14 +56411,13 @@ async function fixAllCompleteDuplications(prisma69, repeaterNodeId) {
       }
     }
   } catch (error) {
-    console.error("\u274C [COMPLETE-DUPLICATION-FIX] Erreur g\xE9n\xE9rale:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [COMPLETE-DUPLICATION-FIX] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
   }
   return report;
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-recalculation-service.ts
-async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
-  console.log(`\u{1F504} [FORCE-RECALC] Recalcul forc\xE9: ${copiedNodeId}`);
+async function forceNodeRecalculationWithOwnData(prisma70, copiedNodeId) {
   const result = {
     nodeId: copiedNodeId,
     nodeLabel: null,
@@ -56849,7 +56426,7 @@ async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
     recalculationForced: false,
     referencesUpdated: []
   };
-  const copiedNode = await prisma69.treeBranchLeafNode.findUnique({
+  const copiedNode = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: copiedNodeId },
     include: {
       TreeBranchLeafNodeFormula: true,
@@ -56863,7 +56440,7 @@ async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
     }
   });
   if (!copiedNode) {
-    throw new Error(`N\u0153ud copi\xE9 ${copiedNodeId} non trouv\xE9`);
+    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
   }
   result.nodeLabel = copiedNode.label;
   result.oldCalculatedValue = copiedNode.calculatedValue;
@@ -56878,17 +56455,16 @@ async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
             return match;
           }
           updated = true;
-          result.referencesUpdated.push(`Formula ${formula.name}: ${nodeId} \u2192 ${nodeId}-1`);
+          result.referencesUpdated.push(`Formula ${formula.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
           return `@value.${nodeId}-1`;
         }
       );
       if (updated) {
         const newTokens = JSON.parse(updatedTokensStr);
-        await prisma69.treeBranchLeafNodeFormula.update({
+        await prisma70.treeBranchLeafNodeFormula.update({
           where: { id: formula.id },
           data: { tokens: newTokens }
         });
-        console.log(`   \u{1F504} R\xE9f\xE9rences formule "${formula.name}" mises \xE0 jour`);
       }
     }
   }
@@ -56903,17 +56479,16 @@ async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
             return match;
           }
           updated = true;
-          result.referencesUpdated.push(`Condition ${condition.name}: ${nodeId} \u2192 ${nodeId}-1`);
+          result.referencesUpdated.push(`Condition ${condition.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
           return `@value.${nodeId}-1`;
         }
       );
       if (updated) {
         const newConditionSet = JSON.parse(updatedConditionStr);
-        await prisma69.treeBranchLeafNodeCondition.update({
+        await prisma70.treeBranchLeafNodeCondition.update({
           where: { id: condition.id },
           data: { conditionSet: newConditionSet }
         });
-        console.log(`   \u{1F504} R\xE9f\xE9rences condition "${condition.name}" mises \xE0 jour`);
       }
     }
   }
@@ -56925,7 +56500,7 @@ async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
     noFallbackToOriginal: true,
     recalculationReason: "Duplication independence enforcement"
   };
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       calculatedValue: null,
@@ -56936,11 +56511,9 @@ async function forceNodeRecalculationWithOwnData(prisma69, copiedNodeId) {
   });
   result.recalculationForced = true;
   result.newCalculatedValue = null;
-  console.log(`   \u2705 Recalcul forc\xE9 avec ${result.referencesUpdated.length} r\xE9f\xE9rences mises \xE0 jour`);
   return result;
 }
-async function forceAllNodesRecalculationWithOwnData(prisma69, repeaterNodeId) {
-  console.log("\u{1F680} [FORCE-RECALC-ALL] Recalcul forc\xE9 de tous les n\u0153uds copi\xE9s...");
+async function forceAllNodesRecalculationWithOwnData(prisma70, repeaterNodeId) {
   const report = {
     totalNodesProcessed: 0,
     nodesRecalculated: [],
@@ -56960,7 +56533,7 @@ async function forceAllNodesRecalculationWithOwnData(prisma69, repeaterNodeId) {
         }
       });
     }
-    const copiedNodes = await prisma69.treeBranchLeafNode.findMany({
+    const copiedNodes = await prisma70.treeBranchLeafNode.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -56968,16 +56541,13 @@ async function forceAllNodesRecalculationWithOwnData(prisma69, repeaterNodeId) {
         calculatedValue: true
       }
     });
-    console.log(`\u{1F3AF} Trouv\xE9 ${copiedNodes.length} n\u0153uds copi\xE9s \xE0 forcer au recalcul`);
     for (const node of copiedNodes) {
       report.totalNodesProcessed++;
       try {
         if (node.calculatedValue !== null) {
-          console.log(`\u{1F4CA} For\xE7age recalcul: ${node.label} (${node.calculatedValue} \u2192 null)`);
-          const result = await forceNodeRecalculationWithOwnData(prisma69, node.id);
+          const result = await forceNodeRecalculationWithOwnData(prisma70, node.id);
           report.nodesRecalculated.push(result);
         } else {
-          console.log(`\u23ED\uFE0F  Skip: ${node.label} (d\xE9j\xE0 null)`);
         }
       } catch (error) {
         report.errors.push({
@@ -56987,14 +56557,13 @@ async function forceAllNodesRecalculationWithOwnData(prisma69, repeaterNodeId) {
       }
     }
   } catch (error) {
-    console.error("\u274C [FORCE-RECALC-ALL] Erreur g\xE9n\xE9rale:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [FORCE-RECALC-ALL] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
   }
   return report;
 }
-async function blockFallbackToOriginalValues(prisma69, copiedNodeIds) {
-  console.log(`\u{1F6AB} [BLOCK-FALLBACK] Blocage du fallback pour ${copiedNodeIds.length} n\u0153uds...`);
+async function blockFallbackToOriginalValues(prisma70, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
-    const node = await prisma69.treeBranchLeafNode.findUnique({
+    const node = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true }
     });
@@ -57006,7 +56575,7 @@ async function blockFallbackToOriginalValues(prisma69, copiedNodeIds) {
         lastAntiFactbackUpdate: (/* @__PURE__ */ new Date()).toISOString(),
         calculationIsolationLevel: "STRICT"
       };
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: {
           metadata: antiFactbackMetadata,
@@ -57017,16 +56586,15 @@ async function blockFallbackToOriginalValues(prisma69, copiedNodeIds) {
       });
     }
   }
-  console.log(`\u2705 [BLOCK-FALLBACK] Fallback bloqu\xE9 pour ${copiedNodeIds.length} n\u0153uds`);
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
 var TableLookupDuplicationService = class {
   /**
-   * Duplique complètement les tables TBL et leurs configurations SELECT associées
-   * Assure l'indépendance totale des lookups pour les nœuds copiés
+   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
+   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
    */
-  async duplicateTableLookupSystem(prisma69, originalNodeId, arg) {
+  async duplicateTableLookupSystem(prisma70, originalNodeId, arg) {
     let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
     if (!suffixToken) suffixToken = "-1";
     if (!suffixToken.startsWith("-")) {
@@ -57034,32 +56602,29 @@ var TableLookupDuplicationService = class {
     }
     const normalizedOriginalId = normalizeNodeBase(originalNodeId);
     const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
-    console.log(`\u{1F5C2}\uFE0F [TableLookupDuplication] Duplication syst\xE8me table/lookup pour ${originalNodeId} -> ${copiedNodeId}`);
     try {
-      const originalSelectConfigs = await prisma69.treeBranchLeafSelectConfig.findMany({
+      const originalSelectConfigs = await prisma70.treeBranchLeafSelectConfig.findMany({
         where: { nodeId: originalNodeId }
       });
       if (originalSelectConfigs.length === 0) {
-        console.log(`   \u23ED\uFE0F Aucune configuration SELECT pour ${originalNodeId}`);
         return;
       }
       for (const selectConfig of originalSelectConfigs) {
-        await this.duplicateTableAndSelectConfig(prisma69, selectConfig, copiedNodeId, suffixToken);
+        await this.duplicateTableAndSelectConfig(prisma70, selectConfig, copiedNodeId, suffixToken);
       }
-      console.log(`\u2705 [TableLookupDuplication] Syst\xE8me complet dupliqu\xE9 pour ${copiedNodeId}`);
     } catch (error) {
-      console.error(`\u274C [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
       throw error;
     }
   }
   /**
-   * Duplique une table TBL et sa configuration SELECT associée
+   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
    */
-  async duplicateTableAndSelectConfig(prisma69, originalSelectConfig, copiedNodeId, suffix) {
+  async duplicateTableAndSelectConfig(prisma70, originalSelectConfig, copiedNodeId, suffix) {
     const originalTableId = originalSelectConfig.tableReference;
     const copiedTableId = `${originalTableId}${suffix}`;
     try {
-      const originalTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+      const originalTable = await prisma70.treeBranchLeafNodeTable.findUnique({
         where: { id: originalTableId },
         include: {
           tableColumns: true,
@@ -57067,22 +56632,20 @@ var TableLookupDuplicationService = class {
         }
       });
       if (!originalTable) {
-        console.log(`   \u26A0\uFE0F Table originale introuvable: ${originalTableId}`);
         return;
       }
-      const existingCopiedTable = await prisma69.treeBranchLeafNodeTable.findUnique({
+      const existingCopiedTable = await prisma70.treeBranchLeafNodeTable.findUnique({
         where: { id: copiedTableId }
       });
       if (!existingCopiedTable) {
-        console.log(`   \u{1F4CB} Duplication table: ${originalTable.name} -> ${originalTable.name}${suffix}`);
-        await prisma69.treeBranchLeafNodeTable.create({
+        await prisma70.treeBranchLeafNodeTable.create({
           data: {
             id: copiedTableId,
             nodeId: copiedNodeId,
             name: originalTable.name + suffix,
             type: originalTable.type,
             description: originalTable.description,
-            // 🔢 COPIE TABLE META: suffixer UUIDs et comparisonColumn
+            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
             meta: (() => {
               if (!originalTable.meta) return originalTable.meta;
               try {
@@ -57116,7 +56679,6 @@ var TableLookupDuplicationService = class {
                   if (Array.isArray(metaObj.lookup.displayColumn)) {
                     metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
                       if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                        console.log(`[table.meta] displayColumn[]: ${col} \u2192 ${col}${suffix}`);
                         return `${col}${suffix}`;
                       }
                       return col;
@@ -57124,7 +56686,6 @@ var TableLookupDuplicationService = class {
                   } else if (typeof metaObj.lookup.displayColumn === "string") {
                     const val = metaObj.lookup.displayColumn;
                     if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      console.log(`[table.meta] displayColumn: ${val} \u2192 ${val}${suffix}`);
                       metaObj.lookup.displayColumn = `${val}${suffix}`;
                     }
                   }
@@ -57133,7 +56694,6 @@ var TableLookupDuplicationService = class {
                   if (Array.isArray(metaObj.lookup.displayRow)) {
                     metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
                       if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                        console.log(`[table.meta] displayRow[]: ${row} \u2192 ${row}${suffix}`);
                         return `${row}${suffix}`;
                       }
                       return row;
@@ -57141,7 +56701,6 @@ var TableLookupDuplicationService = class {
                   } else if (typeof metaObj.lookup.displayRow === "string") {
                     const val = metaObj.lookup.displayRow;
                     if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      console.log(`[table.meta] displayRow: ${val} \u2192 ${val}${suffix}`);
                       metaObj.lookup.displayRow = `${val}${suffix}`;
                     }
                   }
@@ -57157,7 +56716,7 @@ var TableLookupDuplicationService = class {
             lookupDisplayColumns: originalTable.lookupDisplayColumns,
             lookupSelectColumn: originalTable.lookupSelectColumn,
             // Duplication des colonnes
-            // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
             tableColumns: {
               create: originalTable.tableColumns.map((col) => ({
                 columnIndex: col.columnIndex,
@@ -57177,19 +56736,16 @@ var TableLookupDuplicationService = class {
             }
           }
         });
-        console.log(`   \u2705 Table copi\xE9e cr\xE9\xE9e: ${copiedTableId}`);
       } else {
-        console.log(`   \u267B\uFE0F Table copi\xE9e existe d\xE9j\xE0: ${copiedTableId}`);
       }
-      const existingSelectConfig = await prisma69.treeBranchLeafSelectConfig.findFirst({
+      const existingSelectConfig = await prisma70.treeBranchLeafSelectConfig.findFirst({
         where: {
           nodeId: copiedNodeId,
           tableReference: copiedTableId
         }
       });
       if (!existingSelectConfig) {
-        console.log(`   \u{1F517} Cr\xE9ation config SELECT pour ${copiedNodeId} -> ${copiedTableId}`);
-        await prisma69.treeBranchLeafSelectConfig.create({
+        await prisma70.treeBranchLeafSelectConfig.create({
           data: {
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
@@ -57203,9 +56759,8 @@ var TableLookupDuplicationService = class {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        console.log(`   \u2705 Config SELECT cr\xE9\xE9e pour ${copiedNodeId}`);
         try {
-          const node = await prisma69.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
+          const node = await prisma70.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
           const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
           currentCapabilities.table = currentCapabilities.table || {};
           currentCapabilities.table.enabled = true;
@@ -57214,7 +56769,7 @@ var TableLookupDuplicationService = class {
           currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
           const currentLinked = node?.linkedTableIds || [];
           const newLinked = Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
-          await prisma69.treeBranchLeafNode.update({
+          await prisma70.treeBranchLeafNode.update({
             where: { id: copiedNodeId },
             data: {
               hasTable: true,
@@ -57226,48 +56781,42 @@ var TableLookupDuplicationService = class {
               linkedTableIds: { set: newLinked }
             }
           });
-          console.log(`   \u2705 Node ${copiedNodeId} updated: hasTable=true and capabilities.table.enabled=true`);
         } catch (nodeUpdateErr) {
-          console.warn(`   \u26A0\uFE0F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
+          console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
         }
       } else {
-        console.log(`   \u267B\uFE0F Config SELECT existe d\xE9j\xE0 pour ${copiedNodeId}`);
       }
     } catch (error) {
-      console.error(`\u274C Erreur duplication table/config ${originalTableId}:`, error);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur duplication table/config ${originalTableId}:`, error);
       throw error;
     }
   }
   /**
-   * Répare les configurations SELECT manquantes pour les nœuds copiés existants
+   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
    */
-  async repairMissingSelectConfigs(prisma69) {
-    console.log(`\u{1F527} [TableLookupDuplication] R\xE9paration configurations SELECT manquantes`);
+  async repairMissingSelectConfigs(prisma70) {
     try {
-      const copiedNodes = await prisma69.treeBranchLeafNode.findMany({
+      const copiedNodes = await prisma70.treeBranchLeafNode.findMany({
         where: {
           id: {
             endsWith: "-1"
           }
         }
       });
-      console.log(`   \u{1F4CA} Trouv\xE9 ${copiedNodes.length} n\u0153uds copi\xE9s \xE0 v\xE9rifier`);
       for (const copiedNode of copiedNodes) {
         const originalNodeId = copiedNode.id.replace("-1", "");
-        const copiedSelectConfigs = await prisma69.treeBranchLeafSelectConfig.findMany({
+        const copiedSelectConfigs = await prisma70.treeBranchLeafSelectConfig.findMany({
           where: { nodeId: copiedNode.id }
         });
         if (copiedSelectConfigs.length === 0) {
-          console.log(`   \u{1F527} R\xE9paration n\xE9cessaire pour ${copiedNode.id}`);
-          await this.duplicateTableLookupSystem(prisma69, originalNodeId, {
+          await this.duplicateTableLookupSystem(prisma70, originalNodeId, {
             copiedNodeId: copiedNode.id,
             suffixToken: "-1"
           });
         }
       }
-      console.log(`\u2705 [TableLookupDuplication] R\xE9paration termin\xE9e`);
     } catch (error) {
-      console.error(`\u274C [TableLookupDuplication] Erreur r\xE9paration:`, error);
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
       throw error;
     }
   }
@@ -57279,8 +56828,7 @@ function normalizeNodeBase(value) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
 init_operation_interpreter();
-async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submissionId) {
-  console.log(`\u{1F9EE} [RECALC] Recalculation du n\u0153ud: ${nodeId}`);
+async function recalculateNodeWithOperationInterpreter(prisma70, nodeId, submissionId) {
   const result = {
     nodeId,
     label: null,
@@ -57291,7 +56839,7 @@ async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submiss
     recalculationSuccess: false
   };
   try {
-    const node = await prisma69.treeBranchLeafNode.findUnique({
+    const node = await prisma70.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -57309,7 +56857,7 @@ async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submiss
       }
     });
     if (!node) {
-      result.error = `N\u0153ud non trouv\xE9`;
+      result.error = `N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9`;
       return result;
     }
     result.label = node.field_label;
@@ -57325,7 +56873,6 @@ async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submiss
       result.hasCapacity = true;
     }
     if (!result.hasCapacity) {
-      console.log(`   \u2139\uFE0F  Pas de capacit\xE9 (formule/condition/table)`);
       return result;
     }
     let sourceRef = "";
@@ -57340,14 +56887,12 @@ async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submiss
       result.error = `Impossible de construire sourceRef`;
       return result;
     }
-    console.log(`   \u{1F4CD} sourceRef: ${sourceRef}`);
-    console.log(`   \u{1F504} Appel \xE0 interpretReference...`);
     try {
       const valuesCache = /* @__PURE__ */ new Map();
       const interpretResult = await interpretReference(
         sourceRef,
         submissionId || "",
-        prisma69,
+        prisma70,
         valuesCache,
         0,
         /* @__PURE__ */ new Map(),
@@ -57355,9 +56900,8 @@ async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submiss
       );
       result.newValue = interpretResult.result;
       result.recalculationSuccess = true;
-      console.log(`   \u2705 Nouvelle valeur calcul\xE9e: ${result.newValue}`);
-      if (result.newValue && result.newValue !== "null" && result.newValue !== "\u2205") {
-        await prisma69.treeBranchLeafNode.update({
+      if (result.newValue && result.newValue !== "null" && result.newValue !== "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6") {
+        await prisma70.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             calculatedValue: result.newValue,
@@ -57365,30 +56909,25 @@ async function recalculateNodeWithOperationInterpreter(prisma69, nodeId, submiss
             calculatedBy: `interpreter-${result.capacityType}`
           }
         });
-        console.log(`   \u{1F4BE} Valeur sauvegard\xE9e en BD`);
       }
     } catch (interpretError) {
       result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-      console.warn(`   \u26A0\uFE0F  ${result.error}`);
+      console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  ${result.error}`);
     }
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
-    console.error(`   \u274C Erreur: ${result.error}`);
+    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Erreur: ${result.error}`);
   }
   return result;
 }
-async function recalculateAllCopiedNodesWithOperationInterpreter(prisma69, repeaterNodeId, suffixMarker = "-1") {
-  console.log(`
-\u{1F680} [RECALC-REPORT] Recalculation de TOUS les n\u0153uds copi\xE9s du repeater ${repeaterNodeId}`);
-  console.log(`   Cherchant n\u0153uds avec suffixe: ${suffixMarker}`);
+async function recalculateAllCopiedNodesWithOperationInterpreter(prisma70, repeaterNodeId, suffixMarker = "-1") {
   const report = {
     totalNodes: 0,
     recalculated: [],
     errors: []
   };
   try {
-    console.log(`   \u{1F4CD} Recherche des enfants du repeater: ${repeaterNodeId}`);
-    const repeaterChildren = await prisma69.treeBranchLeafNode.findMany({
+    const repeaterChildren = await prisma70.treeBranchLeafNode.findMany({
       where: {
         parentId: repeaterNodeId
       },
@@ -57397,14 +56936,13 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma69, repea
         field_label: true
       }
     });
-    console.log(`   \u{1F4CB} Trouv\xE9 ${repeaterChildren.length} enfants directs du repeater`);
     const allDescendants = [];
     const queue = [...repeaterChildren];
     while (queue.length > 0) {
       const current = queue.shift();
       if (!current) continue;
       allDescendants.push(current);
-      const children = await prisma69.treeBranchLeafNode.findMany({
+      const children = await prisma70.treeBranchLeafNode.findMany({
         where: {
           parentId: current.id
         },
@@ -57415,40 +56953,30 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma69, repea
       });
       queue.push(...children);
     }
-    console.log(`   \u{1F4CB} Trouv\xE9 ${allDescendants.length} descendants totaux`);
     const copiedNodes = allDescendants.filter((node) => node.id.includes(suffixMarker));
-    console.log(`   \u{1F4CB} Apr\xE8s filtrage par suffixe "${suffixMarker}": ${copiedNodes.length} n\u0153uds copi\xE9s`);
     report.totalNodes = copiedNodes.length;
     for (const node of copiedNodes) {
       try {
-        console.log(`   \u23F3 Recalculation de: ${node.id} (${node.field_label})`);
         const recalcResult = await recalculateNodeWithOperationInterpreter(
-          prisma69,
+          prisma70,
           node.id
         );
         report.recalculated.push(recalcResult);
         if (recalcResult.recalculationSuccess && recalcResult.newValue) {
-          console.log(`   \u2705 ${node.field_label}: ${recalcResult.oldValue || "null"} \u2192 ${recalcResult.newValue}`);
         } else if (!recalcResult.recalculationSuccess) {
-          console.log(`   \u26A0\uFE0F  ${node.field_label}: Pas de capacit\xE9 ou erreur`);
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         report.errors.push({ nodeId: node.id, error: errorMsg });
-        console.error(`   \u274C ${node.field_label}: ${errorMsg}`);
+        console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${node.field_label}: ${errorMsg}`);
       }
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
-    console.error(`\u274C Erreur globale: ${errorMsg}`);
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur globale: ${errorMsg}`);
   }
   const successCount = report.recalculated.filter((r) => r.recalculationSuccess).length;
-  console.log(`
-\u{1F4CA} R\xC9SUM\xC9 RECALCULATION:`);
-  console.log(`   \u2022 Total n\u0153uds descendants: ${report.totalNodes}`);
-  console.log(`   \u2022 Recalcul\xE9s avec succ\xE8s: ${successCount}`);
-  console.log(`   \u2022 Erreurs: ${report.errors.length}`);
   return report;
 }
 
@@ -57480,11 +57008,11 @@ var buildMetadataPayload = (metadata, templateNodeIds) => {
   base.repeater = repeaterMeta;
   return base;
 };
-async function syncRepeaterTemplateIds(prisma69, repeaterNodeId, templateNodeIds) {
+async function syncRepeaterTemplateIds(prisma70, repeaterNodeId, templateNodeIds) {
   if (!repeaterNodeId || !templateNodeIds.length) {
     return;
   }
-  const repeater = await prisma69.treeBranchLeafNode.findUnique({
+  const repeater = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: { repeater_templateNodeIds: true, metadata: true }
   });
@@ -57496,13 +57024,12 @@ async function syncRepeaterTemplateIds(prisma69, repeaterNodeId, templateNodeIds
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
   const allIds = [...columnIds, ...metaIds].filter((id) => typeof id === "string" && !!id).filter((id) => !hasCopySuffix.test(id));
   const nextIds = Array.from(new Set(allIds));
-  console.log(`[syncRepeaterTemplateIds] \u{1F50D} Filtered IDs: ${columnIds.length} + ${metaIds.length} \u2192 ${nextIds.length} (removed suffixed IDs, ignored incoming templateNodeIds)`);
   const columnChanged = columnIds.length !== nextIds.length || columnIds.some((id, idx) => id !== nextIds[idx]);
   const metadataChanged = metaIds.length !== nextIds.length || metaIds.some((id, idx) => id !== nextIds[idx]);
   if (!columnChanged && !metadataChanged) {
     return;
   }
-  await prisma69.treeBranchLeafNode.update({
+  await prisma70.treeBranchLeafNode.update({
     where: { id: repeaterNodeId },
     data: {
       repeater_templateNodeIds: JSON.stringify(nextIds),
@@ -57512,11 +57039,10 @@ async function syncRepeaterTemplateIds(prisma69, repeaterNodeId, templateNodeIds
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-async function runRepeatExecution(prisma69, req2, execution) {
-  console.log(`\u{1F680}\u{1F680}\u{1F680} [REPEAT-EXECUTOR] *** NOUVEAU REPEAT-EXECUTOR EN MARCHE *** D\xE9but duplication`);
+async function runRepeatExecution(prisma70, req2, execution) {
   const { repeaterNodeId, scopeId, plan, blueprint } = execution;
   const authCtx = getAuthCtx(req2);
-  const repeaterNode = await prisma69.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma70.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     include: { TreeBranchLeafTree: true }
   });
@@ -57529,27 +57055,20 @@ async function runRepeatExecution(prisma69, req2, execution) {
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
   const rawIds = blueprint.templateNodeIds;
   const templateNodeIds = rawIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id) => !hasCopySuffix.test(id));
-  console.log(`\u{1F50D} [REPEAT-EXECUTOR] DEBUG templateNodeIds:`);
-  console.log(`   Source: ${plan.nodes.length ? "PLAN" : "BLUEPRINT"}`);
-  console.log(`   Raw IDs: ${rawIds.length}`);
-  console.log(`   Cleaned IDs: ${templateNodeIds.length}`);
   if (rawIds.length !== templateNodeIds.length) {
-    console.log(`   \u26A0\uFE0F  NETTOYAGE: ${rawIds.length - templateNodeIds.length} ID(s) suffix\xE9(s) ont \xE9t\xE9 retir\xE9(s)`);
     rawIds.forEach((id, idx) => {
       const cleaned = id.replace(/(-\d+)+$/, "");
       if (id !== cleaned) {
-        console.log(`      ${idx + 1}. "${id}" \u2192 "${cleaned}"`);
       }
     });
   }
   templateNodeIds.forEach((id, idx) => {
-    console.log(`   ${idx + 1}. ${id} \u2705`);
   });
   if (!templateNodeIds.length) {
     throw new RepeatOperationError(`Repeater ${repeaterNodeId} does not declare template nodes to duplicate.`, 422);
   }
   const templateNodes = await loadTemplateNodesWithFallback(
-    prisma69,
+    prisma70,
     templateNodeIds,
     repeaterNode.treeId,
     authCtx.organizationId,
@@ -57557,21 +57076,15 @@ async function runRepeatExecution(prisma69, req2, execution) {
   );
   const nodesToDuplicate = templateNodes.filter((node) => node.type !== "section");
   const sectionNodes = templateNodes.filter((node) => node.type === "section");
-  console.log(`
-\u{1F4E6} [REPEAT-EXECUTOR] Template analysis:`);
-  console.log(`   - Total template nodes: ${templateNodes.length}`);
-  console.log(`   - Nodes to duplicate: ${nodesToDuplicate.length} (excluding ${sectionNodes.length} sections)`);
-  sectionNodes.forEach((s) => console.log(`   - \u23ED\uFE0F Skipping section: "${s.label}" (${s.id})`));
+  void sectionNodes;
   const templateById = new Map(nodesToDuplicate.map((node) => [node.id, node]));
   const templateIdsForSuffix = Array.from(templateById.keys());
   const existingMax = await computeTemplateCopySuffixMax(
-    prisma69,
+    prisma70,
     repeaterNode.treeId,
     templateIdsForSuffix
   );
-  console.log("\u{1F4CA} [REPEAT-EXECUTOR] Recalcul suffixes juste avant copie");
   templateIdsForSuffix.forEach((id) => {
-    console.log(`   - ${id}: max vu=${existingMax.get(id) ?? 0}`);
   });
   const plannedSuffixByTemplate = /* @__PURE__ */ new Map();
   for (const templateId of templateIdsForSuffix) {
@@ -57615,7 +57128,7 @@ async function runRepeatExecution(prisma69, req2, execution) {
           options.suffixNum = forcedSuffix;
         }
         try {
-          const result = await deepCopyNodeInternal(prisma69, req2, template.id, options);
+          const result = await deepCopyNodeInternal(prisma70, req2, template.id, options);
           return { result, appliedSuffix: forcedSuffix };
         } catch (error) {
           if (forcedSuffix !== void 0 && isUniqueConstraintError(error)) {
@@ -57630,7 +57143,7 @@ async function runRepeatExecution(prisma69, req2, execution) {
       };
       const { result: copyResult, appliedSuffix } = await attemptCopy(plannedSuffix);
       const newRootId = copyResult.root.newId;
-      const created = await prisma69.treeBranchLeafNode.findUnique({
+      const created = await prisma70.treeBranchLeafNode.findUnique({
         where: { id: newRootId }
       });
       if (!created) {
@@ -57639,8 +57152,6 @@ async function runRepeatExecution(prisma69, req2, execution) {
       const createdMetadata = created.metadata && typeof created.metadata === "object" ? created.metadata : {};
       const resolvedSuffix = coerceSuffix(createdMetadata.copySuffix) ?? extractSuffixFromId2(created.id) ?? appliedSuffix ?? null;
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
-      console.log(`\u{1F522} [REPEAT-EXECUTOR] Suffix appliqu\xE9 pour template ${template.id}:`);
-      console.log(`   plannedSuffix=${plannedSuffix}, appliedSuffix=${appliedSuffix}, copySuffix(meta)=${createdMetadata.copySuffix}, idSuffix=${extractSuffixFromId2(created.id)}, effective=${effectiveSuffix}`);
       const updatedMetadata = {
         ...createdMetadata,
         sourceTemplateId: template.id,
@@ -57650,7 +57161,7 @@ async function runRepeatExecution(prisma69, req2, execution) {
         copySuffix: effectiveSuffix,
         repeatScopeId: scopeId
       };
-      await prisma69.treeBranchLeafNode.update({
+      await prisma70.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
           metadata: updatedMetadata
@@ -57663,15 +57174,10 @@ async function runRepeatExecution(prisma69, req2, execution) {
         parentId: created.parentId,
         sourceTemplateId: template.id
       });
-      console.log(`\u2705 [REPEAT-EXECUTOR] N\u0153ud copi\xE9 cr\xE9\xE9 dans la base :`);
-      console.log(`   ID: ${created.id}`);
-      console.log(`   Label: ${created.label}`);
-      console.log(`   Template source: ${template.id}`);
       duplicatedNodeIds.add(created.id);
       originalNodeIdByCopyId.set(created.id, template.id);
       const plannedRootId = `${template.id}-${effectiveSuffix}`;
       plannedNodeIdToRealNodeId.set(plannedRootId, newRootId);
-      console.log(`\u{1F527} [REPEAT-EXECUTOR] NODE MAPPING: Planned "${plannedRootId}" \u2192 Real "${newRootId}"`);
       Object.entries(copyResult.idMap || {}).forEach(([oldId, newId]) => {
         if (!newId) return;
         duplicatedNodeIds.add(newId);
@@ -57706,7 +57212,7 @@ async function runRepeatExecution(prisma69, req2, execution) {
       }
       try {
         await applySharedReferencesFromOriginalInternal2({
-          prisma: prisma69,
+          prisma: prisma70,
           nodeId: newRootId,
           authCtx
         });
@@ -57720,7 +57226,7 @@ async function runRepeatExecution(prisma69, req2, execution) {
           tableIdMap: new Map(Object.entries(copyResult.tableIdMap || {}))
         };
         await copySelectorTablesAfterNodeCopy(
-          prisma69,
+          prisma70,
           newRootId,
           template.id,
           selectorOptions,
@@ -57734,60 +57240,32 @@ async function runRepeatExecution(prisma69, req2, execution) {
       throw nodeExecErr;
     }
   }
-  console.log(`
-\u{1F525}\u{1F525}\u{1F525} [REPEAT-EXECUTOR] VARIABLES COPY BLOCK EXECUTING \u{1F525}\u{1F525}\u{1F525}`);
-  console.log(`
-\u{1F4CA} [REPEAT-EXECUTOR] COPIE DES VARIABLES - D\xE9but`);
-  console.log(`   - plan.variables.length = ${plan.variables.length}`);
-  console.log(`   - plan.variables = `, JSON.stringify(plan.variables.slice(0, 3), null, 2));
-  console.log(`   - repeaterNodeId = ${repeaterNodeId}`);
-  console.log(`   - scopeId = ${scopeId}`);
-  console.log(`   - plannedNodeIdToRealNodeId.size = ${plannedNodeIdToRealNodeId.size}`);
-  console.log(`   - Mapping entries:`, Array.from(plannedNodeIdToRealNodeId.entries()).slice(0, 5));
-  console.log(`
-\u{1F4CB} [REPEAT-EXECUTOR] D\xC9BUT BOUCLE VARIABLES - Total: ${plan.variables.length}`);
   for (const variablePlan of plan.variables) {
-    console.log(`
-\u{1F504} [REPEAT-EXECUTOR] ITERATION BOUCLE VARIABLE - variablePlan:`, JSON.stringify(variablePlan));
     try {
       let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
-      const templateVar = await prisma69.treeBranchLeafNodeVariable.findUnique({
+      const templateVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
         where: { id: templateVariableId },
         select: { displayName: true }
       });
-      console.log(`   \u{1F4DD} Template var displayName: "${templateVar?.displayName}"`);
       const isLookup = templateVar?.displayName?.includes("Lookup Table");
-      console.log(`   \u{1F50D} isLookup check: ${isLookup} (displayName.includes('Lookup Table'))`);
       if (isLookup) {
-        console.log(`\u{1F6D1} [REPEAT-EXECUTOR] *** SKIP LOOKUP VARIABLE ***: ${templateVariableId} (displayName: "${templateVar?.displayName}")`);
         continue;
       }
-      console.log(`\u2705 [REPEAT-EXECUTOR] CONTINUE: Non-lookup variable ${templateVariableId} (displayName: "${templateVar?.displayName}"), va \xEAtre copi\xE9e`);
       const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
       if (realTargetNodeId) {
-        console.log(`\u{1F527} [REPEAT-EXECUTOR] MAPPING CORRECTION: targetNodeId "${targetNodeId}" \u2192 "${realTargetNodeId}"`);
         targetNodeId = realTargetNodeId;
       } else {
-        console.warn(`\u26A0\uFE0F  [REPEAT-EXECUTOR] Aucun mapping trouv\xE9 pour targetNodeId "${targetNodeId}", utilisation directe`);
+        console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  [REPEAT-EXECUTOR] Aucun mapping trouv\xC3\u0192\xC2\xA9 pour targetNodeId "${targetNodeId}", utilisation directe`);
       }
-      console.log(`\u{1F4CA} [REPEAT-EXECUTOR] Copie variable ${templateVariableId} -> ${plannedVariableId} (targetNode: ${targetNodeId})`);
-      console.log(`   - suffix: ${plannedSuffix}`);
-      console.log(`   - repeaterNodeId: ${repeaterNodeId}`);
-      console.log(`\u{1F4CA} [REPEAT-EXECUTOR] APPEL copyVariableWithCapacities...`);
-      console.log(`\u{1F525} [REPEAT-EXECUTOR] Maps globales:`);
-      console.log(`   - globalNodeIdMap.size: ${globalNodeIdMap.size}`);
-      console.log(`   - globalFormulaIdMap.size: ${globalFormulaIdMap.size}`);
-      console.log(`   - globalConditionIdMap.size: ${globalConditionIdMap.size}`);
-      console.log(`   - globalTableIdMap.size: ${globalTableIdMap.size}`);
       const variableResult = await copyVariableWithCapacities(
         templateVariableId,
         plannedSuffix,
         targetNodeId,
-        prisma69,
+        prisma70,
         {
           autoCreateDisplayNode: true,
           isFromRepeaterDuplication: true,
-          // 🔥 PASSER LES MAPS GLOBALES pour que les capacités utilisent les bons IDs
+          // Ã°Å¸â€Â¥ PASSER LES MAPS GLOBALES pour que les capacitÃƒÂ©s utilisent les bons IDs
           nodeIdMap: globalNodeIdMap,
           formulaIdMap: globalFormulaIdMap,
           conditionIdMap: globalConditionIdMap,
@@ -57802,105 +57280,70 @@ async function runRepeatExecution(prisma69, req2, execution) {
           }
         }
       );
-      console.log(`\u2705 [REPEAT-EXECUTOR] Variable copi\xE9e: ${plannedVariableId}`, variableResult);
       if (variableResult.success) {
         if (variableResult.formulaIdMap) {
           for (const [oldId, newId] of variableResult.formulaIdMap.entries()) {
             globalFormulaIdMap.set(oldId, newId);
-            console.log(`\u{1F525} [REPEAT-EXECUTOR] Formule ajout\xE9e \xE0 globalFormulaIdMap: ${oldId} \u2192 ${newId}`);
           }
         }
         if (variableResult.conditionIdMap) {
           for (const [oldId, newId] of variableResult.conditionIdMap.entries()) {
             globalConditionIdMap.set(oldId, newId);
-            console.log(`\u{1F525} [REPEAT-EXECUTOR] Condition ajout\xE9e \xE0 globalConditionIdMap: ${oldId} \u2192 ${newId}`);
           }
         }
         if (variableResult.tableIdMap) {
           for (const [oldId, newId] of variableResult.tableIdMap.entries()) {
             globalTableIdMap.set(oldId, newId);
-            console.log(`\u{1F525} [REPEAT-EXECUTOR] Table ajout\xE9e \xE0 globalTableIdMap: ${oldId} \u2192 ${newId}`);
           }
         }
       }
       if (variableResult.success && variableResult.displayNodeId) {
         const originalDisplayNodeId = variableResult.displayNodeId.replace(/-\d+$/, "");
         globalNodeIdMap.set(originalDisplayNodeId, variableResult.displayNodeId);
-        console.log(`\u{1F525} [REPEAT-EXECUTOR] DisplayNode ajout\xE9 \xE0 globalNodeIdMap: ${originalDisplayNodeId} \u2192 ${variableResult.displayNodeId}`);
       }
     } catch (varErr) {
       console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
     }
   }
-  console.log(`
-\u{1F525}\u{1F525}\u{1F525} [REPEAT-EXECUTOR] COPIE DES VARIABLES - FIN (sortie de boucle) \u{1F525}\u{1F525}\u{1F525}`);
   try {
-    await syncRepeaterTemplateIds(prisma69, repeaterNodeId, templateNodeIds);
+    await syncRepeaterTemplateIds(prisma70, repeaterNodeId, templateNodeIds);
   } catch (syncErr) {
     console.warn("[repeat-executor] Unable to sync repeater template IDs", syncErr);
   }
   if (duplicatedNodeIds.size > 0) {
-    console.log(`\u{1F6AB} [REPEAT-EXECUTOR] ISOLATION STRICTE pour ${duplicatedNodeIds.size} n\u0153uds dupliqu\xE9s`);
     try {
-      console.log(`\u{1F527} [REPEAT-EXECUTOR] CORRECTION COMPL\xC8TE de toutes les duplications...`);
-      const completeDuplicationReport = await fixAllCompleteDuplications(prisma69, repeaterNodeId);
-      console.log(`\u{1F527} [REPEAT-EXECUTOR] Duplications compl\xE8tement corrig\xE9es:`);
-      console.log(`  - N\u0153uds trait\xE9s: ${completeDuplicationReport.totalNodesProcessed}`);
-      console.log(`  - N\u0153uds corrig\xE9s: ${completeDuplicationReport.nodesFixed.length}`);
-      console.log(`  - Erreurs: ${completeDuplicationReport.errors.length}`);
-      console.log(`\u{1F5C2}\uFE0F [REPEAT-EXECUTOR] *** NOUVEAU SYSTEME EN MARCHE *** DUPLICATION des tables et lookups...`);
-      console.log(`\u{1F5C2}\uFE0F [REPEAT-EXECUTOR] duplicatedNodeIds:`, Array.from(duplicatedNodeIds));
+      const completeDuplicationReport = await fixAllCompleteDuplications(prisma70, repeaterNodeId);
       for (const nodeId of duplicatedNodeIds) {
         const originalNodeId = originalNodeIdByCopyId.get(nodeId);
         if (!originalNodeId) continue;
         const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
         if (!suffixToken) continue;
-        console.log(`\u{1F5C2}\uFE0F [REPEAT-EXECUTOR] Duplication table/lookup pour ${originalNodeId} -> ${nodeId} (suffix ${suffixToken})`);
-        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma69, originalNodeId, {
+        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma70, originalNodeId, {
           copiedNodeId: nodeId,
           suffixToken
         });
       }
-      await reassignCopiedNodesToDuplicatedParents(prisma69, duplicatedNodeIds, originalNodeIdByCopyId);
+      await reassignCopiedNodesToDuplicatedParents(prisma70, duplicatedNodeIds, originalNodeIdByCopyId);
       const isolationResult = await enforceStrictIsolation(
-        prisma69,
+        prisma70,
         Array.from(duplicatedNodeIds)
       );
-      console.log(`\u{1F6AB} [REPEAT-EXECUTOR] Isolation termin\xE9e:`);
-      console.log(`  - N\u0153uds isol\xE9s: ${isolationResult.isolatedNodes.length}`);
-      console.log(`  - Erreurs: ${isolationResult.errors.length}`);
-      await verifyIsolation(prisma69, Array.from(duplicatedNodeIds));
+      await verifyIsolation(prisma70, Array.from(duplicatedNodeIds));
       const resetCount = await resetCalculatedValuesAfterCopy(
-        prisma69,
+        prisma70,
         Array.from(duplicatedNodeIds)
       );
-      console.log(`\u2705 [REPEAT-EXECUTOR] ${resetCount} valeurs calcul\xE9es finalement remises \xE0 null`);
-      await forceIndependentCalculation(prisma69, Array.from(duplicatedNodeIds));
-      await createRecalculationTriggers(prisma69, Array.from(duplicatedNodeIds));
-      console.log(`\u{1F680} [REPEAT-EXECUTOR] FOR\xC7AGE RECALCUL avec donn\xE9es propres...`);
-      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma69, repeaterNodeId);
-      console.log(`\u{1F680} [REPEAT-EXECUTOR] Recalculs forc\xE9s:`);
-      console.log(`  - N\u0153uds trait\xE9s: ${forceRecalcReport.totalNodesProcessed}`);
-      console.log(`  - N\u0153uds recalcul\xE9s: ${forceRecalcReport.nodesRecalculated.length}`);
-      console.log(`  - Erreurs: ${forceRecalcReport.errors.length}`);
-      await blockFallbackToOriginalValues(prisma69, Array.from(duplicatedNodeIds));
-      console.log(`\u{1F389} [REPEAT-EXECUTOR] ISOLATION STRICTE TERMIN\xC9E - Les champs copi\xE9s sont maintenant 100% ind\xE9pendants`);
-      console.log(`\u{1F4DD} [REPEAT-EXECUTOR] Les champs de donn\xE9es d'affichage -1 doivent maintenant calculer avec leurs propres donn\xE9es`);
-      console.log(`\u{1F6AB} [REPEAT-EXECUTOR] FALLBACK D\xC9FINITIVEMENT BLOQU\xC9 - Impossible de retomber sur les valeurs originales`);
-      console.log(`
-\u{1F9EE} [REPEAT-EXECUTOR] RECALCUL AVEC OPERATION INTERPRETER - Calcul des vraies valeurs...`);
+      await forceIndependentCalculation(prisma70, Array.from(duplicatedNodeIds));
+      await createRecalculationTriggers(prisma70, Array.from(duplicatedNodeIds));
+      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma70, repeaterNodeId);
+      await blockFallbackToOriginalValues(prisma70, Array.from(duplicatedNodeIds));
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
-        prisma69,
+        prisma70,
         repeaterNodeId,
         "-1"
       );
-      console.log(`\u{1F9EE} [REPEAT-EXECUTOR] Recalculs Operation Interpreter:`);
-      console.log(`  - N\u0153uds trait\xE9s: ${interpreterRecalcReport.totalNodes}`);
-      console.log(`  - N\u0153uds recalcul\xE9s: ${interpreterRecalcReport.recalculated.filter((r) => r.recalculationSuccess).length}`);
-      console.log(`  - Erreurs: ${interpreterRecalcReport.errors.length}`);
       interpreterRecalcReport.recalculated.forEach((r) => {
         if (r.hasCapacity && r.newValue) {
-          console.log(`  \u2705 ${r.label}: ${r.oldValue || "null"} \u2192 ${r.newValue}`);
         }
       });
     } catch (isolationError) {
@@ -57909,7 +57352,7 @@ async function runRepeatExecution(prisma69, req2, execution) {
   }
   let nodesPayload = [];
   if (duplicatedNodeIds.size > 0) {
-    const nodes = await prisma69.treeBranchLeafNode.findMany({
+    const nodes = await prisma70.treeBranchLeafNode.findMany({
       where: {
         treeId: repeaterNode.treeId,
         id: { in: Array.from(duplicatedNodeIds) }
@@ -57931,11 +57374,11 @@ async function runRepeatExecution(prisma69, req2, execution) {
     }
   };
 }
-async function loadTemplateNodesWithFallback(prisma69, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
+async function loadTemplateNodesWithFallback(prisma70, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
   if (!templateNodeIds.length) {
     throw new RepeatOperationError("Repeater does not declare template nodes to duplicate.", 422);
   }
-  const scoped = await prisma69.treeBranchLeafNode.findMany({
+  const scoped = await prisma70.treeBranchLeafNode.findMany({
     where: {
       id: { in: templateNodeIds },
       treeId: repeaterTreeId
@@ -57945,7 +57388,7 @@ async function loadTemplateNodesWithFallback(prisma69, templateNodeIds, repeater
   const missingIds = templateNodeIds.filter((id) => !foundIds.has(id));
   let crossTree = [];
   if (missingIds.length) {
-    crossTree = await prisma69.treeBranchLeafNode.findMany({
+    crossTree = await prisma70.treeBranchLeafNode.findMany({
       where: { id: { in: missingIds } },
       include: {
         TreeBranchLeafTree: { select: { organizationId: true } }
@@ -58010,12 +57453,12 @@ function normalizeNodeBase2(value) {
 function isUniqueConstraintError(error) {
   return error instanceof import_client69.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
-async function reassignCopiedNodesToDuplicatedParents(prisma69, copiedNodeIds, originalNodeIdByCopyId) {
+async function reassignCopiedNodesToDuplicatedParents(prisma70, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {
     return;
   }
   const copyIds = Array.from(copiedNodeIds);
-  const copies = await prisma69.treeBranchLeafNode.findMany({
+  const copies = await prisma70.treeBranchLeafNode.findMany({
     where: { id: { in: copyIds } },
     select: {
       id: true,
@@ -58034,7 +57477,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma69, copiedNodeIds, o
   if (!originalIds.length) {
     return;
   }
-  const originalNodes = await prisma69.treeBranchLeafNode.findMany({
+  const originalNodes = await prisma70.treeBranchLeafNode.findMany({
     where: { id: { in: originalIds } },
     select: { id: true, parentId: true }
   });
@@ -58072,7 +57515,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma69, copiedNodeIds, o
   if (!reassignmentTargets.length) {
     return;
   }
-  const existingParents = await prisma69.treeBranchLeafNode.findMany({
+  const existingParents = await prisma70.treeBranchLeafNode.findMany({
     where: { id: { in: Array.from(parentIdsToCheck) } },
     select: { id: true }
   });
@@ -58083,7 +57526,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma69, copiedNodeIds, o
       continue;
     }
     updates.push(
-      prisma69.treeBranchLeafNode.update({
+      prisma70.treeBranchLeafNode.update({
         where: { id: target.nodeId },
         data: { parentId: target.targetParentId }
       })
@@ -58092,8 +57535,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma69, copiedNodeIds, o
   if (!updates.length) {
     return;
   }
-  await prisma69.$transaction(updates);
-  console.log(`\u{1F9ED} [REPEAT-EXECUTOR] Parents r\xE9align\xE9s pour ${updates.length} copie(s).`);
+  await prisma70.$transaction(updates);
 }
 function getCopySuffixToken(nodeId, metadata) {
   const normalizedMetadata = normalizeMetadata(metadata);
@@ -58132,15 +57574,15 @@ function normalizeMetadata(metadata) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-function createRepeatRouter(prisma69) {
-  const router83 = (0, import_express85.Router)();
+function createRepeatRouter(prisma70) {
+  const router84 = (0, import_express85.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router83.use(authenticateToken);
-  router83.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router84.use(authenticateToken);
+  router84.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
-      const result = await planRepeatDuplication(prisma69, repeaterNodeId, {
+      const result = await planRepeatDuplication(prisma70, repeaterNodeId, {
         suffix: body2.suffix,
         includeTotals: body2.includeTotals,
         targetParentId: body2.targetParentId,
@@ -58168,18 +57610,13 @@ function createRepeatRouter(prisma69) {
       });
     }
   });
-  router83.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router84.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
-    console.log(`
-
-\u{1F525}\u{1F525}\u{1F525} [repeat-route] BOUTON AJOUTER CLIQU\xC9 !`);
-    console.log(`[repeat-route] RepeaterNodeId: ${repeaterNodeId}`);
-    console.log(`[repeat-route] Body:`, JSON.stringify(body2));
     try {
-      const fs9 = require("fs");
+      const fs10 = require("fs");
       const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-      fs9.appendFileSync("repeat-execute-calls.log", `${timestamp} - Repeater: ${repeaterNodeId}
+      fs10.appendFileSync("repeat-execute-calls.log", `${timestamp} - Repeater: ${repeaterNodeId}
 `);
     } catch (e) {
       console.error("[repeat-route] Failed to write log file:", e);
@@ -58192,15 +57629,14 @@ function createRepeatRouter(prisma69) {
     }
     inFlightExecuteByRepeater.add(repeaterNodeId);
     try {
-      console.log(`[repeat-route] Calling executeRepeatDuplication...`);
-      const executionPlan = await executeRepeatDuplication(prisma69, repeaterNodeId, {
+      const executionPlan = await executeRepeatDuplication(prisma70, repeaterNodeId, {
         suffix: body2.suffix,
         includeTotals: body2.includeTotals,
         targetParentId: body2.targetParentId,
         scopeId: body2.scopeId
       });
       const executionSummary = await runRepeatExecution(
-        prisma69,
+        prisma70,
         req2,
         executionPlan
       );
@@ -58234,11 +57670,2725 @@ function createRepeatRouter(prisma69) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  return router83;
+  return router84;
 }
 
-// src/middleware/websiteDetection.ts
+// src/routes/documents.ts
+var import_express86 = require("express");
 var import_client70 = require("@prisma/client");
+var import_nanoid = require("nanoid");
+
+// src/services/documentPdfRenderer.ts
+var import_pdfkit = __toESM(require("pdfkit"), 1);
+var import_stream = require("stream");
+var path7 = __toESM(require("path"), 1);
+var fs8 = __toESM(require("fs"), 1);
+
+// src/services/textAlignmentUtils.ts
+function calculateVerticalCenterOffset(actualHeight, textHeight) {
+  if (!Number.isFinite(actualHeight) || !Number.isFinite(textHeight)) {
+    return 0;
+  }
+  return Math.max(0, (actualHeight - textHeight) / 2);
+}
+
+// src/services/documentPdfRenderer.ts
+var DEFAULT_THEME = {
+  primaryColor: "#1890ff",
+  secondaryColor: "#52c41a",
+  accentColor: "#faad14",
+  textColor: "#333333",
+  backgroundColor: "#ffffff",
+  fontFamily: "Helvetica",
+  fontSize: 11
+};
+var PAGE_BUILDER_WIDTH = 794;
+var PAGE_BUILDER_HEIGHT = 1123;
+var A4_DIMENSION_TOLERANCE = 0.5;
+var TYPE_LABELS = {
+  QUOTE: "Devis",
+  INVOICE: "Facture",
+  ORDER: "Bon de commande",
+  CONTRACT: "Contrat",
+  PRESENTATION: "Pr\xE9sentation"
+};
+var DocumentPdfRenderer = class {
+  doc;
+  ctx;
+  theme;
+  pageWidth = 595.28;
+  // A4
+  pageHeight = 841.89;
+  // A4
+  margin = 50;
+  contentWidth;
+  currentY;
+  imageCache = /* @__PURE__ */ new Map();
+  // Cache pour les images pré-chargées
+  scaleX = 1;
+  scaleY = 1;
+  scaleFactor = 1;
+  isFirstModularPage = true;
+  // 🔥 Flag pour gérer la pagination multi-pages
+  constructor(context) {
+    this.ctx = context;
+    this.theme = { ...DEFAULT_THEME, ...context.template.theme };
+    this.contentWidth = this.pageWidth - this.margin * 2;
+    this.currentY = this.margin;
+    this.doc = new import_pdfkit.default({
+      size: "A4",
+      margins: {
+        top: this.margin,
+        bottom: this.margin,
+        left: this.margin,
+        right: this.margin
+      },
+      autoFirstPage: true,
+      // NE PAS utiliser bufferPages - ça complique la gestion des pages
+      info: {
+        Title: `${TYPE_LABELS[context.template.type] || context.template.type} - ${context.documentNumber || context.template.name}`,
+        Author: context.organization?.name || "2Thier CRM",
+        Subject: TYPE_LABELS[context.template.type] || context.template.type,
+        CreationDate: /* @__PURE__ */ new Date()
+      }
+    });
+    this.ensureDocumentIsA4();
+    this.scaleX = this.pageWidth / PAGE_BUILDER_WIDTH;
+    this.scaleY = this.pageHeight / PAGE_BUILDER_HEIGHT;
+    this.scaleFactor = Math.min(this.scaleX, this.scaleY);
+  }
+  /**
+   * Rend un contenu par défaut quand aucune section n'est configurée
+   * Affiche les données du lead et les données TBL disponibles
+   */
+  renderDefaultContent() {
+    this.doc.fillColor(this.theme.primaryColor || "#1890ff").fontSize(this.scaleFontSize(24)).font("Helvetica-Bold").text(this.ctx.template.name || "Document", this.margin, this.currentY, {
+      align: "center",
+      width: this.contentWidth
+    });
+    this.currentY += 40;
+    this.doc.fillColor(this.theme.textColor || "#333333").fontSize(this.scaleFontSize(14)).font("Helvetica").text(
+      `${TYPE_LABELS[this.ctx.template.type] || this.ctx.template.type} ${this.ctx.documentNumber ? `N\xB0 ${this.ctx.documentNumber}` : ""}`,
+      this.margin,
+      this.currentY,
+      { align: "center", width: this.contentWidth }
+    );
+    this.currentY += 40;
+    this.doc.strokeColor(this.theme.primaryColor || "#1890ff").lineWidth(this.scaleFontSize(2)).moveTo(this.margin, this.currentY).lineTo(this.pageWidth - this.margin, this.currentY).stroke();
+    this.currentY += 30;
+    if (this.ctx.lead && (this.ctx.lead.firstName || this.ctx.lead.lastName || this.ctx.lead.company)) {
+      this.doc.fillColor(this.theme.primaryColor || "#1890ff").fontSize(this.scaleFontSize(16)).font("Helvetica-Bold").text("\u{1F464} Client", this.margin, this.currentY);
+      this.currentY += 25;
+      this.doc.fillColor(this.theme.textColor || "#333333").fontSize(this.scaleFontSize(11)).font("Helvetica");
+      const clientInfo = [];
+      if (this.ctx.lead.company) clientInfo.push(`Soci\xE9t\xE9: ${this.ctx.lead.company}`);
+      const fullName = [this.ctx.lead.firstName, this.ctx.lead.lastName].filter(Boolean).join(" ");
+      if (fullName) clientInfo.push(`Nom: ${fullName}`);
+      if (this.ctx.lead.email) clientInfo.push(`Email: ${this.ctx.lead.email}`);
+      if (this.ctx.lead.phone) clientInfo.push(`T\xE9l: ${this.ctx.lead.phone}`);
+      if (this.ctx.lead.address) clientInfo.push(`Adresse: ${this.ctx.lead.address}`);
+      for (const info of clientInfo) {
+        this.doc.text(info, this.margin, this.currentY, { width: this.contentWidth });
+        this.currentY += 16;
+      }
+      this.currentY += 20;
+    }
+    console.log("\u{1F4C4} [PDF RENDERER] V\xE9rification tblData:", {
+      hasTblData: !!this.ctx.tblData,
+      tblDataKeys: Object.keys(this.ctx.tblData || {}),
+      keysCount: Object.keys(this.ctx.tblData || {}).length
+    });
+    if (this.ctx.tblData && Object.keys(this.ctx.tblData).length > 0) {
+      console.log("\u{1F4C4} [PDF RENDERER] \u2705 Rendu des donn\xE9es TBL...");
+      this.doc.fillColor(this.theme.primaryColor || "#1890ff").fontSize(this.scaleFontSize(16)).font("Helvetica-Bold").text("\u{1F4CA} Donn\xE9es du formulaire", this.margin, this.currentY);
+      this.currentY += 25;
+      this.doc.fillColor(this.theme.textColor || "#333333").fontSize(this.scaleFontSize(10)).font("Helvetica");
+      this.renderTblDataRecursive(this.ctx.tblData, 0);
+    }
+    this.currentY += 30;
+    this.doc.fillColor("#888888").fontSize(this.scaleFontSize(10)).font("Helvetica-Oblique").text(
+      "\u26A0\uFE0F Ce template n'a pas de sections configur\xE9es. Utilisez le Page Builder pour personnaliser la mise en page.",
+      this.margin,
+      this.currentY,
+      { align: "center", width: this.contentWidth }
+    );
+  }
+  /**
+   * Affiche les données TBL de manière récursive
+   */
+  renderTblDataRecursive(data, indent) {
+    const maxIndent = 3;
+    if (indent > maxIndent) return;
+    for (const [key2, value] of Object.entries(data)) {
+      if (key2.startsWith("_") || key2 === "id" || key2 === "createdAt" || key2 === "updatedAt") continue;
+      if (this.currentY > this.pageHeight - 100) {
+        this.doc.addPage();
+        this.currentY = this.margin;
+      }
+      const indentX = this.margin + indent * 15;
+      if (value === null || value === void 0 || value === "") {
+        continue;
+      }
+      if (typeof value === "object" && !Array.isArray(value)) {
+        this.doc.font("Helvetica-Bold").text(`${key2}:`, indentX, this.currentY);
+        this.currentY += 14;
+        this.renderTblDataRecursive(value, indent + 1);
+      } else if (Array.isArray(value)) {
+        this.doc.font("Helvetica-Bold").text(`${key2}: [${value.length} \xE9l\xE9ments]`, indentX, this.currentY);
+        this.currentY += 14;
+      } else {
+        const displayValue = String(value).substring(0, 100);
+        this.doc.font("Helvetica").text(`${key2}: ${displayValue}`, indentX, this.currentY, { width: this.contentWidth - indent * 15 });
+        this.currentY += 14;
+      }
+    }
+  }
+  /**
+   * Collecte toutes les URLs d'images des sections pour les pré-charger
+   */
+  collectImageUrls() {
+    const urls = [];
+    for (const section of this.ctx.template.sections || []) {
+      const config = section.config || {};
+      if (section.type === "MODULAR_PAGE" && config.modules) {
+        for (const mod of config.modules) {
+          const modConfig = mod.config || {};
+          if (mod.moduleType === "IMAGE") {
+            const url = modConfig.image || modConfig.url || modConfig.src;
+            if (url && url.startsWith("http")) urls.push(url);
+          }
+          if (mod.moduleType === "BACKGROUND" && modConfig.type === "image") {
+            const url = modConfig.image || modConfig.url;
+            if (url && url.startsWith("http")) urls.push(url);
+          }
+        }
+      }
+      if (config.image && config.image.startsWith("http")) urls.push(config.image);
+      if (config.backgroundImage && config.backgroundImage.startsWith("http")) urls.push(config.backgroundImage);
+      if (config.logoUrl && config.logoUrl.startsWith("http")) urls.push(config.logoUrl);
+    }
+    if (this.theme.logoUrl && this.theme.logoUrl.startsWith("http")) urls.push(this.theme.logoUrl);
+    if (this.theme.headerImageUrl && this.theme.headerImageUrl.startsWith("http")) urls.push(this.theme.headerImageUrl);
+    return [...new Set(urls)];
+  }
+  /**
+   * Pré-charge les images externes en parallèle
+   */
+  async preloadImages() {
+    const urls = this.collectImageUrls();
+    if (urls.length === 0) return;
+    console.log(`\u{1F4C4} [PDF] Pr\xE9-chargement de ${urls.length} images externes...`);
+    const fetchPromises = urls.map(async (url) => {
+      try {
+        const response = await fetch(url, {
+          signal: AbortSignal.timeout(1e4)
+          // Timeout 10s
+        });
+        if (!response.ok) {
+          console.warn(`\u{1F4C4} [PDF] Image non accessible: ${url} (${response.status})`);
+          return;
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        this.imageCache.set(url, buffer);
+        console.log(`\u{1F4C4} [PDF] \u2705 Image charg\xE9e: ${url.substring(0, 60)}...`);
+      } catch (error) {
+        console.warn(`\u{1F4C4} [PDF] \xC9chec chargement image: ${url}`, error);
+      }
+    });
+    await Promise.all(fetchPromises);
+    console.log(`\u{1F4C4} [PDF] ${this.imageCache.size}/${urls.length} images pr\xE9-charg\xE9es`);
+  }
+  /**
+   * Génère le PDF complet
+   */
+  async render() {
+    await this.preloadImages();
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      const stream = new import_stream.PassThrough();
+      stream.on("data", (chunk) => chunks.push(chunk));
+      stream.on("end", () => resolve(Buffer.concat(chunks)));
+      stream.on("error", reject);
+      this.doc.pipe(stream);
+      try {
+        console.log("\u{1F4C4} [PDF RENDERER] D\xE9but du rendu", {
+          templateId: this.ctx.template.id,
+          templateName: this.ctx.template.name,
+          sectionsCount: this.ctx.template.sections?.length || 0,
+          hasLead: !!this.ctx.lead,
+          hasTblData: !!this.ctx.tblData && Object.keys(this.ctx.tblData).length > 0
+        });
+        const sortedSections = [...this.ctx.template.sections || []].sort((a, b) => a.order - b.order);
+        console.log("\u{1F4C4} [PDF RENDERER] Sections \xE0 rendre:", sortedSections.map((s) => s.type));
+        if (sortedSections.length === 0) {
+          console.log("\u{1F4C4} [PDF RENDERER] \u26A0\uFE0F Aucune section configur\xE9e, rendu par d\xE9faut");
+          this.renderDefaultContent();
+        } else {
+          for (const section of sortedSections) {
+            console.log(`\u{1F4C4} [PDF RENDERER] Rendu section: ${section.type} (${section.id})`);
+            this.renderSection(section);
+          }
+        }
+        console.log("\u{1F4C4} [PDF RENDERER] \u2705 Rendu termin\xE9");
+        this.renderFooter();
+        this.doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+  /**
+   * Rend une section selon son type
+   */
+  renderSection(section) {
+    const config = section.config || {};
+    if (config.visible === false) return;
+    if (config.conditionalDisplay && !this.evaluateCondition(config.conditionalDisplay)) {
+      return;
+    }
+    console.log(`\u{1F4C4} [PDF] Rendering section: ${section.type}`);
+    switch (section.type) {
+      case "MODULAR_PAGE":
+        this.renderModularPage(config);
+        break;
+      case "COVER_PAGE":
+        this.renderCoverPage(config);
+        break;
+      case "COMPANY_PRESENTATION":
+        this.renderCompanyPresentation(config);
+        break;
+      case "PROJECT_SUMMARY":
+        this.renderProjectSummary(config);
+        break;
+      case "PRICING_TABLE":
+        this.renderPricingTable(config);
+        break;
+      case "TEXT_BLOCK":
+        this.renderTextBlock(config);
+        break;
+      case "TERMS_CONDITIONS":
+        this.renderTermsConditions(config);
+        break;
+      case "SIGNATURE_BLOCK":
+        this.renderSignatureBlock(config);
+        break;
+      case "CONTACT_INFO":
+        this.renderContactInfo(config);
+        break;
+      case "TECHNICAL_SPECS":
+        this.renderTechnicalSpecs(config);
+        break;
+      case "TIMELINE":
+        this.renderTimeline(config);
+        break;
+      case "IMAGE":
+        this.renderImage(config);
+        break;
+      case "PAGE_BREAK":
+        this.doc.addPage();
+        this.currentY = this.margin;
+        break;
+      case "CUSTOM_HTML":
+        this.renderCustomContent(config);
+        break;
+      default:
+        console.warn(`\u{1F4C4} [PDF] Unknown section type: ${section.type}`);
+    }
+  }
+  convertPageBuilderRect(position) {
+    const rawX = (position.x ?? 0) * this.scaleX;
+    const rawY = (position.y ?? 0) * this.scaleY;
+    const rawWidth = (position.width ?? 100) * this.scaleX;
+    const rawHeight = (position.height ?? (position.blockHeight ?? 50)) * this.scaleY;
+    const safeX = this.clamp(rawX, 0, this.pageWidth);
+    const safeY = this.clamp(rawY, 0, this.pageHeight);
+    const maxWidth = Math.max(1, this.pageWidth - safeX);
+    const maxHeight = Math.max(1, this.pageHeight - safeY);
+    const safeWidth = this.clamp(rawWidth, 1, maxWidth);
+    const safeHeight = this.clamp(rawHeight, 1, maxHeight);
+    return {
+      x: safeX,
+      y: safeY,
+      width: safeWidth,
+      height: safeHeight
+    };
+  }
+  drawBackgroundImage(buffer, x, y, width, height) {
+    if (!buffer || width <= 0 || height <= 0) return;
+    const openImage = this.doc.openImage?.(buffer);
+    if (openImage) {
+      const imageWidth = openImage.width;
+      const imageHeight = openImage.height;
+      const coverScale = Math.max(width / imageWidth, height / imageHeight);
+      const renderWidth = imageWidth * coverScale;
+      const renderHeight = imageHeight * coverScale;
+      const offsetX = x - Math.max(0, (renderWidth - width) / 2);
+      const offsetY = y - Math.max(0, (renderHeight - height) / 2);
+      this.doc.image(buffer, offsetX, offsetY, {
+        width: renderWidth,
+        height: renderHeight
+      });
+      return;
+    }
+    this.doc.image(buffer, x, y, {
+      fit: [width, height],
+      align: "center",
+      valign: "center"
+    });
+  }
+  clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+  scaleFontSize(size) {
+    const scaled = size * this.scaleFactor;
+    return Math.max(6, scaled);
+  }
+  // ============================================================
+  // 🆕 RENDU DES PAGES MODULAIRES (PAGE BUILDER)
+  // ============================================================
+  /**
+   * Rend une page modulaire complète du Page Builder
+   * Chaque MODULAR_PAGE crée une nouvelle page dans le PDF (sauf la première)
+   */
+  renderModularPage(config) {
+    console.log("\u{1F4C4} [PDF] ========================================");
+    console.log("\u{1F4C4} [PDF] Rendu page modulaire:", config.name);
+    console.log("\u{1F4C4} [PDF] Pages actuelles dans le doc:", this.doc.bufferedPageRange?.()?.count || "N/A");
+    console.log("\u{1F4C4} [PDF] isFirstModularPage:", this.isFirstModularPage);
+    if (!this.isFirstModularPage) {
+      console.log("\u{1F4C4} [PDF] \u{1F4C3} Cr\xE9ation d'une nouvelle page PDF");
+      this.doc.addPage();
+      this.currentY = 0;
+    }
+    this.isFirstModularPage = false;
+    const modules = config.modules || [];
+    console.log("\u{1F4C4} [PDF] Nombre de modules:", modules.length);
+    if (config.backgroundColor) {
+      console.log("\u{1F4C4} [PDF] Fond de page:", config.backgroundColor);
+      this.doc.rect(0, 0, this.pageWidth, this.pageHeight).fill(config.backgroundColor);
+    }
+    const sortedModules = [...modules].sort((a, b) => {
+      const aType = a.moduleId || a.moduleType || a.type;
+      const bType = b.moduleId || b.moduleType || b.type;
+      if (aType === "BACKGROUND" && bType !== "BACKGROUND") return -1;
+      if (bType === "BACKGROUND" && aType !== "BACKGROUND") return 1;
+      const aY = a.position?.y ?? 0;
+      const bY = b.position?.y ?? 0;
+      const aX = a.position?.x ?? 0;
+      const bX = b.position?.x ?? 0;
+      if (Math.abs(aY - bY) > 5) return aY - bY;
+      return aX - bX;
+    });
+    console.log(`\u{1F4C4} [PDF] Rendu de ${sortedModules.length} modules sur la page`);
+    console.log(`\u{1F4C4} [PDF] Ordre des modules:`, sortedModules.map((m) => m.moduleId || m.moduleType || m.type));
+    for (const moduleInstance of sortedModules) {
+      this.renderModuleAbsolute(moduleInstance);
+    }
+    this.currentY = this.pageHeight;
+  }
+  /**
+   * Rend un module à sa position absolue (conversion pixel Page Builder -> points PDF)
+   */
+  renderModuleAbsolute(module2) {
+    const moduleType = module2.moduleId || module2.moduleType || module2.type;
+    const config = module2.config || {};
+    const position = module2.position || {};
+    const rect = this.convertPageBuilderRect(position);
+    const conditionResult = this.evaluateModuleConditions(config);
+    if (!conditionResult.shouldRender) {
+      console.log(`\u{1F4C4} [PDF] Module ${moduleType}: SKIPPED (condition false)`);
+      return;
+    }
+    const effectiveConfig = { ...config };
+    if (conditionResult.content !== void 0) {
+      console.log(`\u{1F4C4} [PDF] Module ${moduleType}: Using conditional content: "${conditionResult.content}"`);
+      if (moduleType === "TITLE" || moduleType === "SUBTITLE" || moduleType === "TEXT_BLOCK") {
+        effectiveConfig.text = conditionResult.content;
+      }
+    }
+    console.log(`\u{1F4C4} [PDF] Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
+    this.doc.save();
+    try {
+      switch (moduleType) {
+        case "TITLE":
+          this.renderModuleTitle(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "SUBTITLE":
+          this.renderModuleSubtitle(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "TEXT_BLOCK":
+          this.renderModuleTextBlock(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "IMAGE":
+          this.renderModuleImage(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "BACKGROUND":
+          this.renderModuleBackground(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
+          break;
+        case "PRICING_TABLE":
+          this.renderModulePricingTable(effectiveConfig, rect.x, rect.y, rect.width);
+          break;
+        case "TESTIMONIAL":
+          this.renderModuleTestimonial(effectiveConfig, rect.x, rect.y, rect.width);
+          break;
+        case "COMPANY_PRESENTATION":
+          this.renderModuleCompanyPresentation(effectiveConfig, rect.x, rect.y, rect.width);
+          break;
+        case "FAQ":
+          this.renderModuleFaq(effectiveConfig, rect.x, rect.y, rect.width);
+          break;
+        case "DIVIDER":
+          this.renderModuleDivider(effectiveConfig, rect.x, rect.y, rect.width);
+          break;
+        case "SPACER":
+          break;
+        default:
+          console.warn(`\u{1F4C4} [PDF] Module type inconnu: ${moduleType}`);
+      }
+    } finally {
+      this.doc.restore();
+    }
+  }
+  // ============================================================
+  // RENDERERS DE MODULES INDIVIDUELS
+  // ============================================================
+  renderModuleTitle(config, x, y, width, height) {
+    const text = this.substituteVariables(config.text || "Titre");
+    const level = config.level || "h1";
+    const alignment = config.alignment || "center";
+    const color = config.color || config.textColor || config.style?.color || "#FFFFFF";
+    const actualHeight = height || 50;
+    console.log(`\u{1F4C4} [PDF] TITLE: config.color=${config.color}, config.textColor=${config.textColor}, final color=${color}`);
+    let fontSize = level === "h1" ? 20 : level === "h2" ? 16 : 14;
+    this.doc.font("Helvetica-Bold");
+    let scaledFontSize = this.scaleFontSize(fontSize);
+    while (fontSize > 8) {
+      this.doc.fontSize(scaledFontSize);
+      const textHeight = this.doc.heightOfString(text, { width });
+      if (textHeight <= actualHeight) break;
+      fontSize -= 2;
+      scaledFontSize = this.scaleFontSize(fontSize);
+    }
+    console.log(`\u{1F4C4} [PDF] TITLE: text="${text}", fontSize=${fontSize}, height=${Math.round(actualHeight)}, color=${color}`);
+    const savedY = this.doc.y;
+    this.doc.save();
+    this.doc.fillColor(color);
+    this.doc.fontSize(scaledFontSize);
+    const titleTextHeight = this.doc.heightOfString(text, { width });
+    const titleYOffset = calculateVerticalCenterOffset(actualHeight, titleTextHeight);
+    this.doc.font("Helvetica-Bold");
+    this.doc.text(text, x, y + titleYOffset, {
+      width,
+      height: actualHeight,
+      align: alignment,
+      lineBreak: true,
+      continued: false
+    });
+    this.doc.restore();
+    this.doc.y = Math.min(savedY, this.margin + 100);
+  }
+  renderModuleSubtitle(config, x, y, width, height) {
+    const text = this.substituteVariables(config.text || "Sous-titre");
+    const alignment = config.alignment || "center";
+    const color = config.color || "#FFFFFF";
+    const actualHeight = height || 30;
+    let fontSize = config.fontSize || 14;
+    this.doc.font("Helvetica");
+    let scaledFontSize = this.scaleFontSize(fontSize);
+    while (fontSize > 6) {
+      this.doc.fontSize(scaledFontSize);
+      const textHeight = this.doc.heightOfString(text, { width });
+      if (textHeight <= actualHeight) break;
+      fontSize -= 1;
+      scaledFontSize = this.scaleFontSize(fontSize);
+    }
+    console.log(`\u{1F4C4} [PDF] SUBTITLE: text="${text}", fontSize=${fontSize}`);
+    const savedY = this.doc.y;
+    this.doc.fontSize(scaledFontSize);
+    const subtitleTextHeight = this.doc.heightOfString(text, { width });
+    const subtitleYOffset = calculateVerticalCenterOffset(actualHeight, subtitleTextHeight);
+    this.doc.fillColor(color).fontSize(scaledFontSize).font("Helvetica").text(text, x, y + subtitleYOffset, {
+      width,
+      height: actualHeight,
+      align: alignment,
+      lineBreak: true,
+      continued: false
+    });
+    this.doc.y = Math.min(savedY, this.margin + 100);
+  }
+  renderModuleTextBlock(config, x, y, width, height) {
+    const text = this.substituteVariables(config.content || config.text || "");
+    const alignment = config.alignment || "left";
+    const color = config.color || "#FFFFFF";
+    const actualHeight = height || 100;
+    let fontSize = config.fontSize || 12;
+    const maxFontSize = Math.floor(actualHeight / 4);
+    fontSize = Math.min(fontSize, Math.max(maxFontSize, 8));
+    const padding = config.backgroundColor ? 10 : 0;
+    const innerWidth = Math.max(1, width - padding * 2);
+    const innerHeight = Math.max(1, actualHeight - padding * 2);
+    this.doc.font("Helvetica");
+    let scaledFontSize = this.scaleFontSize(fontSize);
+    while (fontSize > 6) {
+      this.doc.fontSize(scaledFontSize);
+      const textHeight = this.doc.heightOfString(text, { width: innerWidth });
+      if (textHeight <= innerHeight) break;
+      fontSize -= 1;
+      scaledFontSize = this.scaleFontSize(fontSize);
+    }
+    if (config.backgroundColor) {
+      this.doc.rect(x, y, width, actualHeight).fill(config.backgroundColor);
+    }
+    console.log(`\u{1F4C4} [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}`);
+    const savedY = this.doc.y;
+    const finalTextHeight = this.doc.heightOfString(text, { width: innerWidth });
+    const textYOffset = calculateVerticalCenterOffset(innerHeight, finalTextHeight);
+    const textX = x + padding;
+    const textY = y + padding + textYOffset;
+    this.doc.fillColor(color).fontSize(scaledFontSize).font("Helvetica").text(text, textX, textY, {
+      width: innerWidth,
+      height: actualHeight,
+      align: alignment,
+      lineBreak: true,
+      continued: false
+    });
+    this.doc.y = Math.min(savedY, this.margin + 100);
+  }
+  renderModuleImage(config, x, y, width, height) {
+    const imageUrl = config.image || config.url || config.src;
+    console.log(`\u{1F4C4} [PDF] IMAGE: x=${Math.round(x)}, y=${Math.round(y)}, w=${Math.round(width)}, h=${Math.round(height)}`);
+    console.log(`\u{1F4C4} [PDF] IMAGE: source=${imageUrl ? imageUrl.substring(0, 50) + "..." : "NONE"}`);
+    if (!imageUrl) {
+      console.log(`\u{1F4C4} [PDF] IMAGE: pas d'URL, affichage placeholder`);
+      this.doc.rect(x, y, width, height).fill("#f0f0f0").stroke("#cccccc");
+      this.doc.fontSize(12).fillColor("#999999").text("Image", x, y + height / 2 - 6, { width, align: "center", lineBreak: false });
+      return;
+    }
+    const imageOptions = {
+      fit: [width, height],
+      align: "center",
+      valign: "center"
+    };
+    try {
+      if (imageUrl.startsWith("data:")) {
+        console.log(`\u{1F4C4} [PDF] IMAGE: traitement data URL avec fit pour pr\xE9server proportions`);
+        const base64Data = imageUrl.split(",")[1];
+        if (base64Data) {
+          const buffer = Buffer.from(base64Data, "base64");
+          console.log(`\u{1F4C4} [PDF] IMAGE: buffer cr\xE9\xE9, taille=${buffer.length}`);
+          this.doc.image(buffer, x, y, imageOptions);
+          console.log(`\u{1F4C4} [PDF] IMAGE: \u2705 rendu r\xE9ussi \xE0 x=${Math.round(x)}, y=${Math.round(y)}`);
+        } else {
+          console.warn(`\u{1F4C4} [PDF] IMAGE: \u26A0\uFE0F pas de donn\xE9es base64 trouv\xE9es`);
+          this.renderImagePlaceholder(x, y, width, height, "Base64 vide");
+        }
+      } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
+        const localPath = path7.join(process.cwd(), "public", imageUrl);
+        if (fs8.existsSync(localPath)) {
+          this.doc.image(localPath, x, y, imageOptions);
+        } else {
+          console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
+          this.renderImagePlaceholder(x, y, width, height, "Image non trouv\xE9e");
+        }
+      } else if (imageUrl.startsWith("http")) {
+        const cachedBuffer = this.imageCache.get(imageUrl);
+        if (cachedBuffer) {
+          console.log(`\u{1F4C4} [PDF] \u2705 Utilisation image du cache: ${imageUrl.substring(0, 50)}...`);
+          this.doc.image(cachedBuffer, x, y, imageOptions);
+        } else {
+          console.warn(`\u{1F4C4} [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
+          this.renderImagePlaceholder(x, y, width, height, "Image non charg\xE9e");
+        }
+      } else {
+        console.log(`\u{1F4C4} [PDF] URL non support\xE9e: ${imageUrl.substring(0, 50)}...`);
+        this.renderImagePlaceholder(x, y, width, height, "URL non support\xE9e");
+      }
+    } catch (error) {
+      console.error("\u{1F4C4} [PDF] Erreur chargement image:", error);
+      this.renderImagePlaceholder(x, y, width, height, "Erreur");
+    }
+  }
+  renderImagePlaceholder(x, y, width, height, text) {
+    this.doc.rect(x, y, width, height).fill("#f5f5f5").stroke("#e0e0e0");
+    this.doc.fontSize(10).fillColor("#999999").text(text, x, y + height / 2 - 5, { width, align: "center" });
+  }
+  renderModuleBackground(config, x, y, width, height) {
+    const hasImage = !!config.image;
+    const hasColor = !!config.color;
+    const hasGradient = !!(config.gradientStart && config.gradientEnd);
+    const declaredType = config.type;
+    console.log(`\u{1F4C4} [PDF] BACKGROUND: declaredType=${declaredType}, hasImage=${hasImage}, hasColor=${hasColor}, hasGradient=${hasGradient}`);
+    console.log(`\u{1F4C4} [PDF] BACKGROUND: position x=${x}, y=${y}, w=${width}, h=${height}`);
+    if (hasImage) {
+      console.log(`\u{1F4C4} [PDF] BACKGROUND: rendu image de fond`);
+      try {
+        const imageUrl = config.image;
+        const backgroundColor = config.backgroundColor || config.color || this.theme.backgroundColor;
+        if (backgroundColor) {
+          this.doc.rect(x, y, width, height).fill(backgroundColor);
+        }
+        if (imageUrl.startsWith("data:")) {
+          const base64Data = imageUrl.split(",")[1];
+          if (base64Data) {
+            const buffer = Buffer.from(base64Data, "base64");
+            console.log(`\u{1F4C4} [PDF] BACKGROUND: buffer cr\xE9\xE9, taille=${buffer.length} octets`);
+            this.drawBackgroundImage(buffer, x, y, width, height);
+            console.log(`\u{1F4C4} [PDF] BACKGROUND: \u2705 image rendue avec succ\xE8s (ratio maintenu)`);
+            return;
+          }
+          console.warn(`\u{1F4C4} [PDF] BACKGROUND: \u26A0\uFE0F pas de donn\xE9es base64`);
+        } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
+          const localPath = path7.join(process.cwd(), "public", imageUrl);
+          if (fs8.existsSync(localPath)) {
+            this.drawBackgroundImage(fs8.readFileSync(localPath), x, y, width, height);
+            return;
+          }
+          console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
+          this.renderImagePlaceholder(x, y, width, height, "Image non trouv\xE9e");
+          return;
+        } else if (imageUrl.startsWith("http")) {
+          const cachedBuffer = this.imageCache.get(imageUrl);
+          if (cachedBuffer) {
+            this.drawBackgroundImage(cachedBuffer, x, y, width, height);
+            return;
+          }
+          console.warn(`\u{1F4C4} [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
+          this.renderImagePlaceholder(x, y, width, height, "Image non charg\xE9e");
+          return;
+        } else {
+          console.log(`\u{1F4C4} [PDF] URL non support\xE9e: ${imageUrl.substring(0, 50)}...`);
+          this.renderImagePlaceholder(x, y, width, height, "URL non support\xE9e");
+          return;
+        }
+      } catch (error) {
+        console.error(`\u{1F4C4} [PDF] BACKGROUND: \u274C erreur image:`, error);
+      }
+    }
+    if (hasGradient) {
+      console.log(`\u{1F4C4} [PDF] BACKGROUND: rendu gradient`);
+      const steps = 20;
+      const stepHeight = Math.max(1, height / steps);
+      for (let i = 0; i < steps; i++) {
+        const ratio = i / steps;
+        const color = this.interpolateColor(config.gradientStart, config.gradientEnd, ratio);
+        this.doc.rect(x, y + i * stepHeight, width, stepHeight + 1).fill(color);
+      }
+      return;
+    }
+    if (hasColor) {
+      console.log(`\u{1F4C4} [PDF] BACKGROUND: rendu couleur solide ${config.color}`);
+      this.doc.rect(x, y, width, height).fill(config.color);
+      return;
+    }
+    console.log(`\u{1F4C4} [PDF] BACKGROUND: aucun rendu (pas d'image, pas de couleur, pas de gradient)`);
+  }
+  interpolateColor(color1, color2, ratio) {
+    const hex = (c) => parseInt(c.replace("#", ""), 16);
+    const r1 = hex(color1) >> 16 & 255;
+    const g1 = hex(color1) >> 8 & 255;
+    const b1 = hex(color1) & 255;
+    const r2 = hex(color2) >> 16 & 255;
+    const g2 = hex(color2) >> 8 & 255;
+    const b2 = hex(color2) & 255;
+    const r = Math.round(r1 + (r2 - r1) * ratio);
+    const g = Math.round(g1 + (g2 - g1) * ratio);
+    const b = Math.round(b1 + (b2 - b1) * ratio);
+    return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, "0")}`;
+  }
+  renderModulePricingTable(config, x, y, width) {
+    const title = config.title || "Tarifs";
+    const currency = config.currency || "\u20AC";
+    const tvaRate = config.tvaRate || config.vatRate || 21;
+    const showTotal = config.showTotal !== false;
+    const showTVA = config.showTVA !== false;
+    let items = [];
+    if (config.pricingLines && config.pricingLines.length > 0) {
+      console.log("\u{1F4C4} [PDF] PRICING_TABLE: Utilisation de pricingLines", config.pricingLines.length);
+      items = this.processPricingLines(config.pricingLines, config);
+      console.log("\u{1F4C4} [PDF] PRICING_TABLE: Items r\xE9solus:", items);
+    } else if (config.items && config.items.length > 0) {
+      items = config.items.map((item) => ({
+        description: this.substituteVariables(item.name || item.label || ""),
+        quantity: item.quantity || 1,
+        unitPrice: parseFloat(item.price || item.amount || item.unitPrice || 0),
+        total: parseFloat(item.price || item.amount || 0) * (item.quantity || 1)
+      }));
+    } else if (config.rows && config.rows.length > 0) {
+      items = config.rows.map((row) => ({
+        description: this.substituteVariables(row.designation || row.label || ""),
+        quantity: row.quantity || 1,
+        unitPrice: parseFloat(row.unitPrice || 0),
+        total: (row.quantity || 1) * parseFloat(row.unitPrice || 0)
+      }));
+    }
+    this.doc.fontSize(this.scaleFontSize(16)).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(title, x, y, { width });
+    let currentY = y + 25;
+    const colWidths = [width * 0.5, width * 0.15, width * 0.15, width * 0.2];
+    const headerHeight = 20;
+    this.doc.rect(x, currentY, width, headerHeight).fill(this.theme.primaryColor || "#1890ff");
+    this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor("#FFFFFF");
+    this.doc.text("D\xE9signation", x + 5, currentY + 5, { width: colWidths[0] - 10 });
+    this.doc.text("Qt\xE9", x + colWidths[0], currentY + 5, { width: colWidths[1], align: "center" });
+    this.doc.text("P.U.", x + colWidths[0] + colWidths[1], currentY + 5, { width: colWidths[2], align: "right" });
+    this.doc.text("Total", x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 5, { width: colWidths[3], align: "right" });
+    currentY += headerHeight;
+    let totalHT = 0;
+    if (items.length === 0) {
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Oblique").fillColor("#999999").text("Aucune ligne configur\xE9e", x + 5, currentY + 5, { width: width - 10, align: "center" });
+      currentY += 25;
+    } else {
+      for (const item of items) {
+        const rowHeight = 18;
+        const lineTotal = item.total || item.quantity * item.unitPrice;
+        totalHT += lineTotal;
+        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor(this.theme.textColor || "#333333");
+        this.doc.text(item.description || "-", x + 5, currentY + 4, { width: colWidths[0] - 10 });
+        this.doc.text(String(item.quantity), x + colWidths[0], currentY + 4, { width: colWidths[1], align: "center" });
+        this.doc.text(`${item.unitPrice.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1], currentY + 4, { width: colWidths[2], align: "right" });
+        this.doc.text(`${lineTotal.toFixed(2)} ${currency}`, x + colWidths[0] + colWidths[1] + colWidths[2], currentY + 4, { width: colWidths[3], align: "right" });
+        this.doc.strokeColor("#e8e8e8").lineWidth(0.5).moveTo(x, currentY + rowHeight).lineTo(x + width, currentY + rowHeight).stroke();
+        currentY += rowHeight;
+      }
+    }
+    if (showTotal) {
+      const tva = totalHT * (tvaRate / 100);
+      const totalTTC = totalHT + tva;
+      currentY += 5;
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Total HT", x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: "right" });
+      this.doc.text(`${totalHT.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: "right" });
+      currentY += 15;
+      if (showTVA) {
+        this.doc.font("Helvetica").text(`TVA (${tvaRate}%)`, x + colWidths[0] + colWidths[1], currentY, { width: colWidths[2] + colWidths[3] * 0.5, align: "right" });
+        this.doc.text(`${tva.toFixed(2)} ${currency}`, x + width - colWidths[3], currentY, { width: colWidths[3], align: "right" });
+        currentY += 15;
+        this.doc.rect(x + width * 0.6, currentY - 2, width * 0.4, 20).fill(this.theme.primaryColor || "#1890ff");
+        this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor("#FFFFFF").text("Total TTC", x + width * 0.6 + 5, currentY + 3, { width: width * 0.2 - 10 });
+        this.doc.text(`${totalTTC.toFixed(2)} ${currency}`, x + width * 0.8, currentY + 3, { width: width * 0.2 - 5, align: "right" });
+      }
+    }
+  }
+  renderModuleTestimonial(config, x, y, width) {
+    const quote = this.substituteVariables(config.quote || config.text || "");
+    const author = config.author || "";
+    const role = config.role || config.position || "";
+    this.doc.fontSize(this.scaleFontSize(14)).font("Helvetica-Oblique").fillColor(this.theme.textColor || "#333333").text(`"${quote}"`, x, y, { width });
+    const quoteHeight = this.doc.heightOfString(`"${quote}"`, { width });
+    if (author) {
+      this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").text(`\u2014 ${author}`, x, y + quoteHeight + 10, { width });
+      if (role) {
+        this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor("#666666").text(role, x, y + quoteHeight + 26, { width });
+      }
+    }
+  }
+  renderModuleCompanyPresentation(config, x, y, width) {
+    const title = this.substituteVariables(config.title || "Notre entreprise");
+    const description = this.substituteVariables(config.description || config.text || "");
+    this.doc.fontSize(this.scaleFontSize(18)).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(title, x, y, { width });
+    if (description) {
+      this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica").fillColor(this.theme.textColor || "#333333").text(description, x, y + 30, { width });
+    }
+  }
+  renderModuleFaq(config, x, y, width) {
+    const title = config.title || "FAQ";
+    const items = config.items || [];
+    this.doc.fontSize(this.scaleFontSize(18)).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(title, x, y, { width });
+    let currentY = y + 30;
+    for (const item of items) {
+      const question = this.substituteVariables(item.question || "");
+      const answer = this.substituteVariables(item.answer || "");
+      this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text(`Q: ${question}`, x, currentY, { width });
+      const qHeight = this.doc.heightOfString(`Q: ${question}`, { width });
+      currentY += qHeight + 5;
+      this.doc.fontSize(this.scaleFontSize(11)).font("Helvetica").fillColor("#666666").text(`R: ${answer}`, x, currentY, { width });
+      const aHeight = this.doc.heightOfString(`R: ${answer}`, { width });
+      currentY += aHeight + 15;
+    }
+  }
+  // ============================================================
+  /**
+   * Page de couverture
+   */
+  renderCoverPage(config) {
+    const primaryColor = this.theme.primaryColor || "#1890ff";
+    this.doc.rect(0, 0, this.pageWidth, 200).fill(primaryColor);
+    if (config.companyImage || this.theme.logoUrl) {
+    }
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "Devis")
+    );
+    this.doc.fillColor("#ffffff").fontSize(42).font("Helvetica-Bold").text(title, this.margin, 60, {
+      width: this.contentWidth,
+      align: "center"
+    });
+    if (config.subtitle) {
+      const subtitle = this.substituteVariables(config.subtitle);
+      this.doc.fontSize(18).font("Helvetica").text(subtitle, this.margin, 120, {
+        width: this.contentWidth,
+        align: "center"
+      });
+    }
+    if (config.showDate !== false) {
+      const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+      });
+      this.doc.fontSize(12).fillColor("#ffffff").text(dateStr, this.margin, 160, {
+        width: this.contentWidth,
+        align: "center"
+      });
+    }
+    if (this.ctx.documentNumber) {
+      this.doc.fontSize(14).fillColor(primaryColor).text(`N\xB0 ${this.ctx.documentNumber}`, this.margin, 220, {
+        width: this.contentWidth,
+        align: "right"
+      });
+    }
+    this.currentY = 280;
+    this.renderClientInfoBox();
+    this.doc.addPage();
+    this.currentY = this.margin;
+  }
+  /**
+   * Box d'informations client
+   */
+  renderClientInfoBox() {
+    const lead = this.ctx.lead;
+    if (!lead.firstName && !lead.lastName && !lead.company) return;
+    const boxX = this.pageWidth - this.margin - 250;
+    const boxWidth = 250;
+    let boxY = this.currentY;
+    this.doc.rect(boxX, boxY, boxWidth, 120).stroke("#e8e8e8");
+    this.doc.rect(boxX, boxY, boxWidth, 30).fill(this.theme.primaryColor || "#1890ff");
+    this.doc.fillColor("#ffffff").fontSize(12).font("Helvetica-Bold").text("CLIENT", boxX + 10, boxY + 8);
+    boxY += 40;
+    const fullName = lead.fullName || `${lead.firstName || ""} ${lead.lastName || ""}`.trim();
+    if (fullName) {
+      this.doc.fillColor(this.theme.textColor || "#333333").fontSize(11).font("Helvetica-Bold").text(fullName, boxX + 10, boxY, { width: boxWidth - 20 });
+      boxY += 16;
+    }
+    if (lead.company) {
+      this.doc.font("Helvetica").fontSize(10).fillColor("#666666").text(lead.company, boxX + 10, boxY, { width: boxWidth - 20 });
+      boxY += 14;
+    }
+    if (lead.email) {
+      this.doc.fontSize(9).text(`\u{1F4E7} ${lead.email}`, boxX + 10, boxY, { width: boxWidth - 20 });
+      boxY += 12;
+    }
+    if (lead.phone) {
+      this.doc.text(`\u{1F4DE} ${lead.phone}`, boxX + 10, boxY, { width: boxWidth - 20 });
+      boxY += 12;
+    }
+    if (lead.address) {
+      this.doc.text(`\u{1F4CD} ${lead.address}`, boxX + 10, boxY, { width: boxWidth - 20 });
+    }
+  }
+  /**
+   * Présentation de l'entreprise
+   */
+  renderCompanyPresentation(config) {
+    this.checkPageBreak(150);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "Notre Entreprise")
+    );
+    this.renderSectionTitle(title);
+    if (config.description) {
+      const desc = this.substituteVariables(this.getTranslatedValue(config.description, ""));
+      this.doc.fontSize(this.theme.fontSize || 11).font("Helvetica").fillColor(this.theme.textColor || "#333333").text(desc, this.margin, this.currentY, {
+        width: this.contentWidth,
+        align: "justify",
+        lineGap: 4
+      });
+      this.currentY = this.doc.y + 20;
+    }
+    if (config.highlights && Array.isArray(config.highlights)) {
+      for (const highlight of config.highlights) {
+        this.doc.fontSize(10).text(`\u2713 ${this.substituteVariables(highlight)}`, this.margin + 20, this.currentY);
+        this.currentY += 16;
+      }
+      this.currentY += 10;
+    }
+  }
+  /**
+   * Résumé du projet
+   */
+  renderProjectSummary(config) {
+    this.checkPageBreak(200);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "R\xE9sum\xE9 du Projet")
+    );
+    this.renderSectionTitle(title);
+    if (config.description) {
+      const desc = this.substituteVariables(this.getTranslatedValue(config.description, ""));
+      this.doc.fontSize(this.theme.fontSize || 11).font("Helvetica").fillColor(this.theme.textColor || "#333333").text(desc, this.margin, this.currentY, {
+        width: this.contentWidth,
+        align: "justify",
+        lineGap: 4
+      });
+      this.currentY = this.doc.y + 15;
+    }
+    if (config.linkedFields && Array.isArray(config.linkedFields)) {
+      this.renderLinkedFields(config.linkedFields);
+    }
+    if (config.showTblData !== false) {
+      this.renderTblDataSummary();
+    }
+  }
+  /**
+   * Tableau des prix
+   */
+  renderPricingTable(config) {
+    this.checkPageBreak(250);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title || config.tableTitle, "D\xE9tail de l'offre")
+    );
+    this.renderSectionTitle(title);
+    const pricingLines = config.pricingLines || [];
+    let items = [];
+    if (pricingLines.length > 0) {
+      items = this.processPricingLines(pricingLines, config);
+    } else {
+      items = config.items || this.extractPricingFromTbl();
+    }
+    if (items && items.length > 0) {
+      this.renderPriceTable(items, config);
+    } else {
+      this.doc.fontSize(this.scaleFontSize(10)).fillColor("#666666").text("Aucun \xE9l\xE9ment de tarification configur\xE9", this.margin, this.currentY);
+      this.currentY += 20;
+    }
+    if (config.showTotals !== false) {
+      this.renderPriceTotals(config);
+    }
+  }
+  /**
+   * 🆕 Traite les lignes de pricing configurées
+   * - Évalue les conditions d'affichage
+   * - Résout les références TBL (@value.xxx, @calculated.xxx, node-formula:xxx, etc.)
+   * - Génère N lignes pour les repeaters
+   */
+  processPricingLines(pricingLines, _config) {
+    const results = [];
+    const tblData = this.ctx.tblData || {};
+    for (const line of pricingLines) {
+      if (line.condition && !this.evaluateCondition(line.condition)) {
+        console.log(`\u{1F4C4} [PDF] Ligne "${line.label}" ignor\xE9e (condition non remplie)`);
+        continue;
+      }
+      if (line.type === "repeater" && line.repeaterId) {
+        const repeaterInstances = this.getRepeaterInstances(line.repeaterId, tblData);
+        for (const instance of repeaterInstances) {
+          const resolvedLine = this.resolveLineValues(line, instance);
+          results.push(resolvedLine);
+        }
+      } else {
+        const resolvedLine = this.resolveLineValues(line);
+        results.push(resolvedLine);
+      }
+    }
+    return results;
+  }
+  /**
+   * Résout les valeurs d'une ligne (substitue les tokens TBL)
+   */
+  resolveLineValues(line, repeaterInstance) {
+    console.log("\u{1F4C4} [PDF] resolveLineValues:", {
+      label: line.label,
+      labelSource: line.labelSource,
+      quantity: line.quantity,
+      quantitySource: line.quantitySource,
+      unitPrice: line.unitPrice,
+      unitPriceSource: line.unitPriceSource
+    });
+    const resolvedLine = {
+      description: "",
+      quantity: 1,
+      unitPrice: 0,
+      total: 0
+    };
+    if (line.labelSource) {
+      const resolved = this.resolveVariable(line.labelSource);
+      console.log(`\u{1F4C4} [PDF] Label r\xE9solu: "${resolved}" (source: ${line.labelSource})`);
+      resolvedLine.description = resolved || line.label || "Non d\xE9fini";
+    } else {
+      resolvedLine.description = this.substituteVariables(line.label || "");
+    }
+    if (repeaterInstance && repeaterInstance.instanceLabel) {
+      resolvedLine.description = `${resolvedLine.description} (${repeaterInstance.instanceLabel})`;
+    }
+    if (line.quantitySource) {
+      const qty = this.resolveVariable(line.quantitySource);
+      console.log(`\u{1F4C4} [PDF] Quantit\xE9 r\xE9solue: "${qty}" (source: ${line.quantitySource})`);
+      resolvedLine.quantity = parseFloat(qty) || 1;
+    } else if (typeof line.quantity === "string" && line.quantity.startsWith("@")) {
+      const qty = this.resolveVariable(line.quantity);
+      resolvedLine.quantity = parseFloat(qty) || 1;
+    } else {
+      resolvedLine.quantity = parseFloat(line.quantity) || 1;
+    }
+    if (line.unitPriceSource) {
+      const price = this.resolveVariable(line.unitPriceSource);
+      console.log(`\u{1F4C4} [PDF] Prix r\xE9solu: "${price}" (source: ${line.unitPriceSource})`);
+      resolvedLine.unitPrice = parseFloat(price) || 0;
+    } else if (typeof line.unitPrice === "string" && (line.unitPrice.startsWith("@") || line.unitPrice.startsWith("node-formula:") || line.unitPrice.startsWith("condition:"))) {
+      const price = this.resolveVariable(line.unitPrice);
+      resolvedLine.unitPrice = parseFloat(price) || 0;
+    } else {
+      resolvedLine.unitPrice = parseFloat(line.unitPrice) || 0;
+    }
+    console.log(`\u{1F4C4} [PDF] \u27A1\uFE0F Ligne r\xE9solue:`, resolvedLine);
+    if (line.totalSource) {
+      const tot = this.resolveVariable(line.totalSource);
+      resolvedLine.total = parseFloat(tot) || 0;
+    } else if (typeof line.total === "string" && line.total.startsWith("@")) {
+      const tot = this.resolveVariable(line.total);
+      resolvedLine.total = parseFloat(tot) || 0;
+    } else if (line.total !== void 0) {
+      resolvedLine.total = parseFloat(line.total) || 0;
+    } else {
+      resolvedLine.total = resolvedLine.quantity * resolvedLine.unitPrice;
+    }
+    return resolvedLine;
+  }
+  /**
+   * Récupère les instances d'un repeater depuis les données TBL
+   */
+  getRepeaterInstances(repeaterId, tblData) {
+    const instances = [];
+    const repeaterPattern = new RegExp(`^${repeaterId}-\\d+$`);
+    for (const key2 of Object.keys(tblData)) {
+      if (repeaterPattern.test(key2) || key2.startsWith(`${repeaterId}-`)) {
+        const instanceNumber = key2.split("-").pop();
+        instances.push({
+          id: key2,
+          instanceLabel: `#${instanceNumber}`,
+          data: tblData[key2]
+        });
+      }
+    }
+    if (instances.length === 0 && this.ctx.submission) {
+      const submission = this.ctx.submission;
+      const values = submission.values || {};
+      for (const key2 of Object.keys(values)) {
+        if (key2.includes(repeaterId) && key2.match(/-\d+$/)) {
+          const instanceNumber = key2.split("-").pop();
+          if (!instances.find((i) => i.instanceLabel === `#${instanceNumber}`)) {
+            instances.push({
+              id: key2,
+              instanceLabel: `#${instanceNumber}`,
+              data: values[key2]
+            });
+          }
+        }
+      }
+    }
+    console.log(`\u{1F4C4} [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouv\xE9e(s)`);
+    return instances;
+  }
+  /**
+   * Évalue une condition d'affichage
+   */
+  evaluateCondition(condition) {
+    if (!condition || !condition.rules || condition.rules.length === 0) {
+      return true;
+    }
+    const operator = condition.operator || "AND";
+    const results = [];
+    for (const rule of condition.rules) {
+      const sourceValue = this.resolveVariable(rule.source);
+      const targetValue = rule.value;
+      let ruleResult = false;
+      switch (rule.operator) {
+        case "equals":
+        case "==":
+          ruleResult = String(sourceValue) === String(targetValue);
+          break;
+        case "notEquals":
+        case "!=":
+          ruleResult = String(sourceValue) !== String(targetValue);
+          break;
+        case "contains":
+          ruleResult = String(sourceValue).includes(String(targetValue));
+          break;
+        case "notContains":
+          ruleResult = !String(sourceValue).includes(String(targetValue));
+          break;
+        case "greaterThan":
+        case ">":
+          ruleResult = parseFloat(sourceValue) > parseFloat(targetValue);
+          break;
+        case "lessThan":
+        case "<":
+          ruleResult = parseFloat(sourceValue) < parseFloat(targetValue);
+          break;
+        case "greaterOrEqual":
+        case ">=":
+          ruleResult = parseFloat(sourceValue) >= parseFloat(targetValue);
+          break;
+        case "lessOrEqual":
+        case "<=":
+          ruleResult = parseFloat(sourceValue) <= parseFloat(targetValue);
+          break;
+        case "isEmpty":
+          ruleResult = !sourceValue || sourceValue === "";
+          break;
+        case "isNotEmpty":
+          ruleResult = !!sourceValue && sourceValue !== "";
+          break;
+        case "isTrue":
+          ruleResult = sourceValue === true || sourceValue === "true" || sourceValue === 1;
+          break;
+        case "isFalse":
+          ruleResult = sourceValue === false || sourceValue === "false" || sourceValue === 0;
+          break;
+        default:
+          ruleResult = true;
+      }
+      results.push(ruleResult);
+    }
+    if (operator === "AND") {
+      return results.every((r) => r);
+    } else {
+      return results.some((r) => r);
+    }
+  }
+  /**
+   * Rendu du tableau de prix
+   */
+  renderPriceTable(items, _config) {
+    const colWidths = {
+      description: this.contentWidth * 0.5,
+      quantity: this.contentWidth * 0.1,
+      unitPrice: this.contentWidth * 0.2,
+      total: this.contentWidth * 0.2
+    };
+    const headerY = this.currentY;
+    this.doc.rect(this.margin, headerY, this.contentWidth, 25).fill(this.theme.primaryColor || "#1890ff");
+    this.doc.fillColor("#ffffff").fontSize(10).font("Helvetica-Bold");
+    let xPos = this.margin + 5;
+    this.doc.text("Description", xPos, headerY + 7, { width: colWidths.description - 10 });
+    xPos += colWidths.description;
+    this.doc.text("Qt\xE9", xPos, headerY + 7, { width: colWidths.quantity - 10, align: "center" });
+    xPos += colWidths.quantity;
+    this.doc.text("Prix unit.", xPos, headerY + 7, { width: colWidths.unitPrice - 10, align: "right" });
+    xPos += colWidths.unitPrice;
+    this.doc.text("Total", xPos, headerY + 7, { width: colWidths.total - 10, align: "right" });
+    this.currentY = headerY + 30;
+    this.doc.font("Helvetica").fillColor(this.theme.textColor || "#333333");
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const rowY = this.currentY;
+      if (i % 2 === 1) {
+        this.doc.rect(this.margin, rowY, this.contentWidth, 22).fill("#f9f9f9");
+      }
+      this.doc.fillColor(this.theme.textColor || "#333333").fontSize(9);
+      xPos = this.margin + 5;
+      const desc = this.substituteVariables(item.description || item.name || "");
+      this.doc.text(desc, xPos, rowY + 5, { width: colWidths.description - 10 });
+      xPos += colWidths.description;
+      this.doc.text(String(item.quantity || 1), xPos, rowY + 5, { width: colWidths.quantity - 10, align: "center" });
+      xPos += colWidths.quantity;
+      const unitPrice = typeof item.unitPrice === "number" ? item.unitPrice.toFixed(2) + " \u20AC" : item.unitPrice || "-";
+      this.doc.text(unitPrice, xPos, rowY + 5, { width: colWidths.unitPrice - 10, align: "right" });
+      xPos += colWidths.unitPrice;
+      const total = typeof item.total === "number" ? item.total.toFixed(2) + " \u20AC" : item.total || "-";
+      this.doc.text(total, xPos, rowY + 5, { width: colWidths.total - 10, align: "right" });
+      this.currentY += 22;
+      this.checkPageBreak(25);
+    }
+    this.doc.moveTo(this.margin, this.currentY).lineTo(this.margin + this.contentWidth, this.currentY).stroke("#e8e8e8");
+    this.currentY += 10;
+  }
+  /**
+   * Totaux du tableau de prix
+   */
+  renderPriceTotals(config) {
+    const quote = this.ctx.quote || {};
+    const totalsX = this.pageWidth - this.margin - 200;
+    if (quote.totalHT !== void 0 || config.totalHT !== void 0) {
+      const ht = quote.totalHT ?? config.totalHT ?? 0;
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor("#666666").text("Total HT:", totalsX, this.currentY, { width: 100 });
+      this.doc.font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text(`${ht.toFixed(2)} \u20AC`, totalsX + 100, this.currentY, { width: 90, align: "right" });
+      this.currentY += 18;
+    }
+    if (quote.totalTVA !== void 0 || config.totalTVA !== void 0) {
+      const tva = quote.totalTVA ?? config.totalTVA ?? 0;
+      this.doc.fontSize(this.scaleFontSize(10)).font("Helvetica").fillColor("#666666").text("TVA (21%):", totalsX, this.currentY, { width: 100 });
+      this.doc.font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text(`${tva.toFixed(2)} \u20AC`, totalsX + 100, this.currentY, { width: 90, align: "right" });
+      this.currentY += 18;
+    }
+    if (quote.totalTTC !== void 0 || config.totalTTC !== void 0) {
+      const ttc = quote.totalTTC ?? config.totalTTC ?? 0;
+      this.doc.rect(totalsX - 10, this.currentY - 5, 210, 30).fill(this.theme.primaryColor || "#1890ff");
+      this.doc.fontSize(this.scaleFontSize(12)).font("Helvetica-Bold").fillColor("#ffffff").text("TOTAL TTC:", totalsX, this.currentY + 3, { width: 100 });
+      this.doc.text(`${ttc.toFixed(2)} \u20AC`, totalsX + 100, this.currentY + 3, { width: 90, align: "right" });
+      this.currentY += 40;
+    }
+  }
+  /**
+   * Bloc de texte libre
+   */
+  renderTextBlock(config) {
+    this.checkPageBreak(100);
+    if (config.title) {
+      const title = this.substituteVariables(this.getTranslatedValue(config.title, ""));
+      if (title) {
+        this.renderSectionTitle(title);
+      }
+    }
+    if (config.content) {
+      const content = this.substituteVariables(this.getTranslatedValue(config.content, ""));
+      this.doc.fontSize(config.fontSize || this.theme.fontSize || 11).font("Helvetica").fillColor(this.theme.textColor || "#333333").text(content, this.margin, this.currentY, {
+        width: this.contentWidth,
+        align: config.align || "left",
+        lineGap: 4
+      });
+      this.currentY = this.doc.y + 20;
+    }
+  }
+  /**
+   * Conditions générales
+   */
+  renderTermsConditions(config) {
+    this.checkPageBreak(150);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "Conditions G\xE9n\xE9rales")
+    );
+    this.renderSectionTitle(title);
+    const terms = this.getTranslatedValue(config.terms, config.content || "");
+    if (terms) {
+      this.doc.fontSize(9).font("Helvetica").fillColor("#666666").text(this.substituteVariables(terms), this.margin, this.currentY, {
+        width: this.contentWidth,
+        align: "justify",
+        lineGap: 3
+      });
+      this.currentY = this.doc.y + 20;
+    }
+    if (config.items && Array.isArray(config.items)) {
+      for (const item of config.items) {
+        this.doc.fontSize(9).text(`\u2022 ${this.substituteVariables(item)}`, this.margin + 10, this.currentY);
+        this.currentY += 14;
+      }
+      this.currentY += 10;
+    }
+  }
+  /**
+   * Bloc de signature
+   */
+  renderSignatureBlock(config) {
+    this.checkPageBreak(150);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "Signature")
+    );
+    if (config.showTitle !== false) {
+      this.renderSectionTitle(title);
+    }
+    if (config.acceptanceText) {
+      const text = this.substituteVariables(this.getTranslatedValue(config.acceptanceText, ""));
+      this.doc.fontSize(10).font("Helvetica").fillColor(this.theme.textColor || "#333333").text(text, this.margin, this.currentY, {
+        width: this.contentWidth
+      });
+      this.currentY = this.doc.y + 20;
+    }
+    const colWidth = (this.contentWidth - 40) / 2;
+    const leftX = this.margin;
+    const rightX = this.margin + colWidth + 40;
+    const signatureY = this.currentY;
+    this.doc.fontSize(10).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Le Client", leftX, signatureY);
+    this.doc.fontSize(9).font("Helvetica").fillColor("#666666").text("Date: ____/____/________", leftX, signatureY + 20).text("Signature pr\xE9c\xE9d\xE9e de la mention", leftX, signatureY + 40).text('"Lu et approuv\xE9":', leftX, signatureY + 52);
+    this.doc.rect(leftX, signatureY + 70, colWidth, 60).stroke("#cccccc");
+    this.doc.fontSize(10).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text("Pour l'entreprise", rightX, signatureY);
+    this.doc.fontSize(9).font("Helvetica").fillColor("#666666").text("Date: ____/____/________", rightX, signatureY + 20).text(this.ctx.organization?.name || "", rightX, signatureY + 40);
+    this.doc.rect(rightX, signatureY + 70, colWidth, 60).stroke("#cccccc");
+    this.currentY = signatureY + 150;
+  }
+  /**
+   * Informations de contact
+   */
+  renderContactInfo(config) {
+    this.checkPageBreak(100);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "Contact")
+    );
+    this.renderSectionTitle(title);
+    const org = this.ctx.organization || {};
+    if (org.name) {
+      this.doc.fontSize(11).font("Helvetica-Bold").fillColor(this.theme.textColor || "#333333").text(org.name, this.margin, this.currentY);
+      this.currentY += 18;
+    }
+    this.doc.font("Helvetica").fontSize(10).fillColor("#666666");
+    if (org.address) {
+      this.doc.text(`\u{1F4CD} ${org.address}`, this.margin, this.currentY);
+      this.currentY += 14;
+    }
+    if (org.phone) {
+      this.doc.text(`\u{1F4DE} ${org.phone}`, this.margin, this.currentY);
+      this.currentY += 14;
+    }
+    if (org.email) {
+      this.doc.text(`\u{1F4E7} ${org.email}`, this.margin, this.currentY);
+      this.currentY += 14;
+    }
+    if (org.website) {
+      this.doc.text(`\u{1F310} ${org.website}`, this.margin, this.currentY);
+      this.currentY += 14;
+    }
+    if (org.vatNumber) {
+      this.doc.text(`TVA: ${org.vatNumber}`, this.margin, this.currentY);
+      this.currentY += 14;
+    }
+    this.currentY += 10;
+  }
+  /**
+   * Spécifications techniques (données TBL)
+   */
+  renderTechnicalSpecs(config) {
+    this.checkPageBreak(150);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "Sp\xE9cifications Techniques")
+    );
+    this.renderSectionTitle(title);
+    this.renderTblDataSummary();
+  }
+  /**
+   * Timeline / Calendrier
+   */
+  renderTimeline(config) {
+    this.checkPageBreak(150);
+    const title = this.substituteVariables(
+      this.getTranslatedValue(config.title, "Calendrier")
+    );
+    this.renderSectionTitle(title);
+    if (config.items && Array.isArray(config.items)) {
+      for (const item of config.items) {
+        this.doc.fontSize(10).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(`\u{1F4C5} ${item.date || ""}`, this.margin, this.currentY);
+        this.doc.font("Helvetica").fillColor(this.theme.textColor || "#333333").text(this.substituteVariables(item.description || ""), this.margin + 100, this.currentY);
+        this.currentY += 20;
+      }
+    }
+    this.currentY += 10;
+  }
+  /**
+   * Image
+   */
+  renderImage(config) {
+    if (config.url || config.src) {
+      this.checkPageBreak(100);
+      this.doc.fontSize(10).fillColor("#999999").text(`[Image: ${config.url || config.src}]`, this.margin, this.currentY);
+      this.currentY += 20;
+    }
+  }
+  /**
+   * Contenu personnalisé
+   */
+  renderCustomContent(config) {
+    if (config.content) {
+      const content = this.substituteVariables(config.content);
+      this.doc.fontSize(this.theme.fontSize || 11).font("Helvetica").fillColor(this.theme.textColor || "#333333").text(content, this.margin, this.currentY, {
+        width: this.contentWidth
+      });
+      this.currentY = this.doc.y + 15;
+    }
+  }
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  /**
+   * Rendu d'un titre de section
+   */
+  renderSectionTitle(title) {
+    this.doc.fontSize(16).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(title, this.margin, this.currentY);
+    this.currentY = this.doc.y + 5;
+    this.doc.moveTo(this.margin, this.currentY).lineTo(this.margin + 100, this.currentY).lineWidth(2).stroke(this.theme.primaryColor || "#1890ff");
+    this.currentY += 15;
+  }
+  /**
+   * Rendu des données TBL
+   */
+  renderTblDataSummary() {
+    const tblData = this.ctx.tblData || {};
+    const entries = Object.entries(tblData).filter(([_key, value]) => {
+      if (value === null || value === void 0) return false;
+      if (typeof value === "string" && value.startsWith("data:image")) return false;
+      if (typeof value === "string" && value.length > 500) return false;
+      return true;
+    });
+    if (entries.length === 0) {
+      this.doc.fontSize(10).fillColor("#999999").text("Aucune donn\xE9e technique disponible", this.margin, this.currentY);
+      this.currentY += 20;
+      return;
+    }
+    for (const [key2, value] of entries) {
+      this.checkPageBreak(20);
+      const label = this.formatLabel(key2);
+      const displayValue = this.formatValue(value);
+      this.doc.fontSize(10).font("Helvetica-Bold").fillColor("#666666").text(`${label}:`, this.margin, this.currentY, { continued: true, width: 200 });
+      this.doc.font("Helvetica").fillColor(this.theme.textColor || "#333333").text(` ${displayValue}`, { width: this.contentWidth - 210 });
+      this.currentY = this.doc.y + 5;
+    }
+    this.currentY += 10;
+  }
+  /**
+   * Rendu des champs liés
+   */
+  renderLinkedFields(linkedFields) {
+    for (const fieldRef of linkedFields) {
+      const value = this.resolveVariable(fieldRef);
+      if (value) {
+        this.doc.fontSize(10).font("Helvetica").fillColor(this.theme.textColor || "#333333").text(`\u2022 ${value}`, this.margin + 10, this.currentY);
+        this.currentY += 16;
+      }
+    }
+  }
+  /**
+   * Extraire les données de prix depuis TBL
+   */
+  extractPricingFromTbl() {
+    return [];
+  }
+  /**
+   * Substitue les variables dans un texte
+   */
+  substituteVariables(text) {
+    if (!text || typeof text !== "string") return text || "";
+    let result = text;
+    result = result.replace(/@(value|select)\.([a-zA-Z0-9_.-]+)/g, (match, type, ref) => {
+      return this.resolveVariable(`@${type}.${ref}`) || match;
+    });
+    result = result.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (match, ref) => {
+      return this.resolveVariable(ref) || match;
+    });
+    result = result.replace(/\{(lead|quote|org)\.([a-zA-Z0-9_.]+)\}/g, (match, source, key2) => {
+      const resolved = this.resolveVariable(`${source}.${key2}`);
+      return resolved || match;
+    });
+    return result;
+  }
+  /**
+   * Résout une référence de variable
+   */
+  resolveVariable(ref) {
+    const lead = this.ctx.lead || {};
+    const org = this.ctx.organization || {};
+    const quote = this.ctx.quote || {};
+    const tblData = this.ctx.tblData || {};
+    console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}")`, { tblDataKeys: Object.keys(tblData).slice(0, 10) });
+    if (ref.startsWith("lead.")) {
+      const key2 = ref.replace("lead.", "");
+      return String(lead[key2] || "");
+    }
+    if (ref.startsWith("org.")) {
+      const key2 = ref.replace("org.", "");
+      return String(org[key2] || "");
+    }
+    if (ref.startsWith("quote.")) {
+      const key2 = ref.replace("quote.", "");
+      const value = quote[key2];
+      if (typeof value === "number") return value.toFixed(2);
+      return String(value || "");
+    }
+    if (ref.startsWith("@value.") || ref.startsWith("@select.")) {
+      const nodeRef = ref.replace(/^@(value|select)\./, "");
+      console.log(`\u{1F4C4} [PDF] Cherche TBL ref: "${nodeRef}"`);
+      if (tblData[nodeRef] !== void 0) {
+        console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 exact: ${tblData[nodeRef]}`);
+        return this.formatValue(tblData[nodeRef]);
+      }
+      if (tblData.values && tblData.values[nodeRef] !== void 0) {
+        console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 dans values: ${tblData.values[nodeRef]}`);
+        return this.formatValue(tblData.values[nodeRef]);
+      }
+      for (const [key2, value] of Object.entries(tblData)) {
+        if (key2.includes(nodeRef) || key2.endsWith(nodeRef)) {
+          console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel "${key2}": ${value}`);
+          return this.formatValue(value);
+        }
+      }
+      if (tblData.values) {
+        for (const [key2, value] of Object.entries(tblData.values)) {
+          if (key2.includes(nodeRef) || key2.endsWith(nodeRef)) {
+            console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel dans values "${key2}": ${value}`);
+            return this.formatValue(value);
+          }
+        }
+      }
+    }
+    if (ref.startsWith("calculatedValue:") || ref.startsWith("@calculated.")) {
+      const calcRef = ref.replace(/^(calculatedValue:|@calculated\.)/, "");
+      console.log(`\u{1F4C4} [PDF] Cherche calculatedValue: "${calcRef}"`);
+      if (tblData.calculatedValues && tblData.calculatedValues[calcRef] !== void 0) {
+        return this.formatValue(tblData.calculatedValues[calcRef]);
+      }
+      if (tblData[calcRef] !== void 0) {
+        return this.formatValue(tblData[calcRef]);
+      }
+      for (const [key2, value] of Object.entries(tblData)) {
+        if (key2.includes(calcRef) || key2.endsWith(calcRef)) {
+          return this.formatValue(value);
+        }
+      }
+    }
+    if (ref.startsWith("node-formula:") || ref.startsWith("formula:")) {
+      const formulaRef = ref.replace(/^(node-formula:|formula:)/, "");
+      console.log(`\u{1F4C4} [PDF] Cherche formula: "${formulaRef}"`);
+      if (tblData.formulas && tblData.formulas[formulaRef] !== void 0) {
+        return this.formatValue(tblData.formulas[formulaRef]);
+      }
+      if (tblData[formulaRef] !== void 0) {
+        return this.formatValue(tblData[formulaRef]);
+      }
+      for (const [key2, value] of Object.entries(tblData)) {
+        if (key2.includes(formulaRef) || key2.endsWith(formulaRef)) {
+          return this.formatValue(value);
+        }
+      }
+    }
+    if (ref.startsWith("condition:")) {
+      const condRef = ref.replace("condition:", "");
+      console.log(`\u{1F4C4} [PDF] Cherche condition: "${condRef}"`);
+      if (tblData.conditions && tblData.conditions[condRef] !== void 0) {
+        return this.formatValue(tblData.conditions[condRef]);
+      }
+      if (tblData[condRef] !== void 0) {
+        return this.formatValue(tblData[condRef]);
+      }
+    }
+    if (tblData[ref] !== void 0) {
+      return this.formatValue(tblData[ref]);
+    }
+    for (const [key2, value] of Object.entries(tblData)) {
+      if (key2.includes(ref) || ref.includes(key2)) {
+        console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 par recherche globale "${key2}": ${value}`);
+        return this.formatValue(value);
+      }
+    }
+    console.log(`\u{1F4C4} [PDF] \u274C Variable non trouv\xE9e: "${ref}"`);
+    return "";
+  }
+  /**
+   * Récupère une valeur traduite
+   */
+  getTranslatedValue(value, fallback) {
+    if (!value) return fallback;
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      return value[this.ctx.language] || value["fr"] || value[Object.keys(value)[0]] || fallback;
+    }
+    return fallback;
+  }
+  /**
+   * Évalue une condition d'affichage (legacy - pour sections)
+   */
+  evaluateCondition(_condition) {
+    return true;
+  }
+  /**
+   * Évalue une seule règle de condition
+   */
+  evaluateSingleConditionRule(rule) {
+    const fieldRef = rule.fieldRef;
+    let fieldValue = null;
+    const curlyMatch = fieldRef.match(/^\{(lead|quote|org)\.([a-zA-Z0-9_.]+)\}$/);
+    if (curlyMatch) {
+      const [, source, key2] = curlyMatch;
+      let data = null;
+      if (source === "lead") data = this.ctx.lead;
+      else if (source === "quote") data = this.ctx.quote;
+      else if (source === "org") data = this.ctx.organization;
+      if (data) {
+        const keys = key2.split(".");
+        fieldValue = data;
+        for (const k of keys) {
+          fieldValue = fieldValue?.[k];
+        }
+      }
+    }
+    const tblMatch = fieldRef.match(/^@(value|select)\.([a-zA-Z0-9_.-]+)$/);
+    if (tblMatch) {
+      const [, , key2] = tblMatch;
+      fieldValue = this.ctx.tblData?.[key2];
+    }
+    const compareValue = rule.compareValue;
+    console.log(`\u{1F4CB} [PDF Condition] Rule: ${fieldRef} ${rule.operator} ${compareValue} | fieldValue=${fieldValue}`);
+    switch (rule.operator) {
+      case "IS_EMPTY":
+        return fieldValue === null || fieldValue === void 0 || fieldValue === "";
+      case "IS_NOT_EMPTY":
+        return fieldValue !== null && fieldValue !== void 0 && fieldValue !== "";
+      case "EQUALS":
+        return String(fieldValue) === String(compareValue);
+      case "NOT_EQUALS":
+        return String(fieldValue) !== String(compareValue);
+      case "CONTAINS":
+        return String(fieldValue || "").toLowerCase().includes(String(compareValue).toLowerCase());
+      case "NOT_CONTAINS":
+        return !String(fieldValue || "").toLowerCase().includes(String(compareValue).toLowerCase());
+      case "GREATER_THAN":
+        return Number(fieldValue) > Number(compareValue);
+      case "LESS_THAN":
+        return Number(fieldValue) < Number(compareValue);
+      case "GREATER_OR_EQUAL":
+        return Number(fieldValue) >= Number(compareValue);
+      case "LESS_OR_EQUAL":
+        return Number(fieldValue) <= Number(compareValue);
+      default:
+        return true;
+    }
+  }
+  /**
+   * Évalue les conditions d'un module et retourne le résultat
+   * @returns { shouldRender: boolean, content?: string }
+   */
+  evaluateModuleConditions(config) {
+    const conditionalConfig = config._conditionalDisplay;
+    if (!conditionalConfig || !conditionalConfig.enabled || conditionalConfig.rules.length === 0) {
+      return { shouldRender: true };
+    }
+    console.log(`\u{1F4CB} [PDF] \xC9valuation conditions:`, JSON.stringify(conditionalConfig.rules));
+    let result = this.evaluateSingleConditionRule(conditionalConfig.rules[0]);
+    for (let i = 1; i < conditionalConfig.rules.length; i++) {
+      const rule = conditionalConfig.rules[i];
+      const ruleResult = this.evaluateSingleConditionRule(rule);
+      if (rule.logicOperator === "AND") {
+        result = result && ruleResult;
+      } else if (rule.logicOperator === "OR") {
+        result = result || ruleResult;
+      }
+    }
+    const action2 = conditionalConfig.rules[0]?.action || "SHOW";
+    console.log(`\u{1F4CB} [PDF] Condition result: ${result}, action: ${action2}`);
+    if (action2 === "SHOW") {
+      if (result && conditionalConfig.showContent) {
+        return {
+          shouldRender: true,
+          content: this.substituteVariables(conditionalConfig.showContent)
+        };
+      } else if (!result && conditionalConfig.hideContent) {
+        return {
+          shouldRender: true,
+          content: this.substituteVariables(conditionalConfig.hideContent)
+        };
+      } else if (!result) {
+        return { shouldRender: false };
+      }
+      return { shouldRender: result };
+    } else if (action2 === "HIDE") {
+      if (!result && conditionalConfig.showContent) {
+        return {
+          shouldRender: true,
+          content: this.substituteVariables(conditionalConfig.showContent)
+        };
+      } else if (result && conditionalConfig.hideContent) {
+        return {
+          shouldRender: true,
+          content: this.substituteVariables(conditionalConfig.hideContent)
+        };
+      }
+      return { shouldRender: !result };
+    } else if (action2 === "ADD_CONTENT") {
+      return {
+        shouldRender: true,
+        content: result ? this.substituteVariables(conditionalConfig.addContent || "") : this.substituteVariables(conditionalConfig.hideContent || "")
+      };
+    }
+    return { shouldRender: true };
+  }
+  /**
+   * Formate un label
+   */
+  formatLabel(key2) {
+    if (/^[a-f0-9-]{36}$/i.test(key2)) return "Champ";
+    return key2.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).replace(/_/g, " ").trim();
+  }
+  /**
+   * Formate une valeur
+   */
+  formatValue(value) {
+    if (value === null || value === void 0) return "-";
+    if (typeof value === "boolean") return value ? "Oui" : "Non";
+    if (Array.isArray(value)) return value.join(", ");
+    if (typeof value === "number") return value.toLocaleString("fr-FR");
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+  /**
+   * Vérifie si besoin d'une nouvelle page
+   */
+  checkPageBreak(neededSpace) {
+    if (this.currentY + neededSpace > this.pageHeight - this.margin - 50) {
+      this.doc.addPage();
+      this.currentY = this.margin;
+    }
+  }
+  /**
+   * Pied de page - dessine sur la position absolue en bas de page
+   */
+  renderFooter() {
+    const footerY = this.pageHeight - 40;
+    const footerText = `Document g\xE9n\xE9r\xE9 le ${(/* @__PURE__ */ new Date()).toLocaleDateString("fr-FR")} | ${this.ctx.organization?.name || "2Thier CRM"}`;
+    console.log(`\u{1F4C4} [PDF] FOOTER: y=${footerY}`);
+    this.doc.fontSize(8).font("Helvetica").fillColor("#999999").text(footerText, this.margin, footerY, {
+      width: this.contentWidth,
+      align: "center",
+      lineBreak: false,
+      height: 20
+      // Limiter strictement la hauteur
+    });
+  }
+  ensureDocumentIsA4() {
+    const page = this.doc.page;
+    if (!page) return;
+    const actualWidth = page.width ?? this.pageWidth;
+    const actualHeight = page.height ?? this.pageHeight;
+    const widthDiff = Math.abs(actualWidth - this.pageWidth);
+    const heightDiff = Math.abs(actualHeight - this.pageHeight);
+    if (widthDiff > A4_DIMENSION_TOLERANCE || heightDiff > A4_DIMENSION_TOLERANCE) {
+      console.warn(`\u{1F4C4} [PDF] Taille A4 attendue: ${this.pageWidth.toFixed(2)}x${this.pageHeight.toFixed(2)}, taille r\xE9elle: ${actualWidth.toFixed(2)}x${actualHeight.toFixed(2)}`);
+    }
+    this.pageWidth = actualWidth;
+    this.pageHeight = actualHeight;
+    this.contentWidth = this.pageWidth - this.margin * 2;
+  }
+};
+async function renderDocumentPdf(context) {
+  const renderer = new DocumentPdfRenderer(context);
+  return renderer.render();
+}
+
+// src/routes/documents.ts
+var router83 = (0, import_express86.Router)();
+var prisma67 = new import_client70.PrismaClient();
+function extractAddressComponents(lead) {
+  const data = lead?.data || {};
+  const result = {
+    address: "",
+    street: "",
+    number: "",
+    box: "",
+    postalCode: "",
+    city: "",
+    country: ""
+  };
+  result.address = lead?.address || data?.address || "";
+  result.street = lead?.street || data?.street || "";
+  result.number = lead?.number || data?.number || "";
+  result.box = lead?.box || data?.box || data?.boite || "";
+  result.postalCode = lead?.postalCode || lead?.zipCode || data?.postalCode || data?.zipCode || data?.zip || "";
+  result.city = lead?.city || lead?.ville || data?.city || data?.ville || "";
+  result.country = lead?.country || lead?.pays || data?.country || data?.pays || "";
+  if (result.address && (!result.street || !result.postalCode || !result.city)) {
+    const parsed = parseAddress(result.address);
+    if (!result.street && parsed.street) result.street = parsed.street;
+    if (!result.number && parsed.number) result.number = parsed.number;
+    if (!result.box && parsed.box) result.box = parsed.box;
+    if (!result.postalCode && parsed.postalCode) result.postalCode = parsed.postalCode;
+    if (!result.city && parsed.city) result.city = parsed.city;
+  }
+  if (!result.address && (result.street || result.city)) {
+    const parts = [];
+    if (result.street) {
+      let streetPart = result.street;
+      if (result.number) streetPart += " " + result.number;
+      if (result.box) streetPart += " " + result.box;
+      parts.push(streetPart);
+    }
+    if (result.postalCode || result.city) {
+      parts.push([result.postalCode, result.city].filter(Boolean).join(" "));
+    }
+    result.address = parts.join(", ");
+  }
+  return result;
+}
+function parseAddress(address) {
+  const result = { street: "", number: "", box: "", postalCode: "", city: "" };
+  if (!address || typeof address !== "string") return result;
+  const postalMatch = address.match(/(\d{4})\s*(.+?)$/i);
+  if (postalMatch) {
+    result.postalCode = postalMatch[1];
+    result.city = postalMatch[2].replace(/^,\s*/, "").trim();
+    const streetPart = address.substring(0, postalMatch.index).replace(/,\s*$/, "").trim();
+    const streetNumMatch = streetPart.match(/^(.+?)\s+(\d+[a-zA-Z]?)(?:\s+(?:Bte|boîte|box|b)?\.?\s*(\d+|[a-zA-Z]))?$/i);
+    if (streetNumMatch) {
+      result.street = streetNumMatch[1].trim();
+      result.number = streetNumMatch[2];
+      result.box = streetNumMatch[3] || "";
+    } else {
+      result.street = streetPart;
+    }
+  } else {
+    result.street = address;
+  }
+  return result;
+}
+router83.get("/templates", async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const { treeId, isActive, type } = req2.query;
+    if (!organizationId) {
+      return res.status(400).json({ error: "Organization ID requis" });
+    }
+    const where = { organizationId };
+    if (treeId) {
+      where.OR = [
+        { treeId },
+        { treeId: null }
+        // Templates génériques disponibles pour tous les arbres
+      ];
+    }
+    if (isActive === "true") {
+      where.isActive = true;
+    } else if (isActive === "false") {
+      where.isActive = false;
+    }
+    if (type) {
+      where.type = type;
+    }
+    const templates = await prisma67.documentTemplate.findMany({
+      where,
+      include: {
+        sections: {
+          orderBy: { order: "asc" }
+        },
+        theme: true,
+        tree: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        _count: {
+          select: { generatedDocuments: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(templates);
+  } catch (error) {
+    console.error("Erreur r\xE9cup\xE9ration templates:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.get("/templates/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const template = await prisma67.documentTemplate.findFirst({
+      where: {
+        id,
+        organizationId
+      },
+      include: {
+        sections: {
+          orderBy: { order: "asc" }
+        },
+        theme: true
+      }
+    });
+    if (!template) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    res.json(template);
+  } catch (error) {
+    console.error("Erreur r\xE9cup\xE9ration template:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.post("/templates", async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const userId = req2.headers["x-user-id"];
+    const {
+      name,
+      type,
+      description,
+      translations,
+      defaultLanguage,
+      themeId,
+      sections
+    } = req2.body;
+    if (!name || !type) {
+      return res.status(400).json({ error: "Nom et type requis" });
+    }
+    const template = await prisma67.documentTemplate.create({
+      data: {
+        id: (0, import_nanoid.nanoid)(),
+        name,
+        type,
+        description,
+        organizationId,
+        translations: translations || {},
+        defaultLanguage: defaultLanguage || "fr",
+        themeId,
+        createdBy: userId,
+        sections: {
+          create: (sections || []).map((section, index) => ({
+            id: (0, import_nanoid.nanoid)(),
+            order: section.order || index,
+            type: section.type,
+            config: section.config || {},
+            displayConditions: section.displayConditions,
+            linkedNodeIds: section.linkedNodeIds || [],
+            linkedVariables: section.linkedVariables || [],
+            translations: section.translations || {}
+          }))
+        }
+      },
+      include: {
+        sections: true,
+        theme: true
+      }
+    });
+    res.status(201).json(template);
+  } catch (error) {
+    console.error("Erreur cr\xE9ation template:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.put("/templates/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const {
+      name,
+      type,
+      description,
+      treeId,
+      translations,
+      defaultLanguage,
+      themeId,
+      isActive,
+      sections
+    } = req2.body;
+    console.log("\u{1F4DD} [TEMPLATE UPDATE] Mise \xE0 jour template:", { id, name, treeId, type });
+    const existing = await prisma67.documentTemplate.findFirst({
+      where: { id, organizationId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    if (sections) {
+      await prisma67.documentSection.deleteMany({
+        where: { templateId: id }
+      });
+    }
+    const template = await prisma67.documentTemplate.update({
+      where: { id },
+      data: {
+        name,
+        type,
+        description,
+        treeId: treeId || null,
+        // Permet de mettre à null pour revenir à générique
+        translations,
+        defaultLanguage,
+        themeId,
+        isActive,
+        ...sections && {
+          sections: {
+            create: sections.map((section, index) => ({
+              id: (0, import_nanoid.nanoid)(),
+              order: section.order || index,
+              type: section.type,
+              config: section.config || {},
+              displayConditions: section.displayConditions,
+              linkedNodeIds: section.linkedNodeIds || [],
+              linkedVariables: section.linkedVariables || [],
+              translations: section.translations || {}
+            }))
+          }
+        }
+      },
+      include: {
+        sections: { orderBy: { order: "asc" } },
+        theme: true,
+        tree: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+    res.json(template);
+  } catch (error) {
+    console.error("Erreur mise \xE0 jour template:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.delete("/templates/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const template = await prisma67.documentTemplate.findFirst({
+      where: { id, organizationId }
+    });
+    if (!template) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    const documentsCount = await prisma67.generatedDocument.count({
+      where: { templateId: id }
+    });
+    if (documentsCount > 0) {
+      return res.status(400).json({
+        error: "Impossible de supprimer : des documents utilisent ce template",
+        documentsCount
+      });
+    }
+    await prisma67.documentTemplate.delete({
+      where: { id }
+    });
+    res.json({ success: true, message: "Template supprim\xE9" });
+  } catch (error) {
+    console.error("Erreur suppression template:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.get("/themes", async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const themes = await prisma67.documentTheme.findMany({
+      where: { organizationId },
+      orderBy: [
+        { isDefault: "desc" },
+        { name: "asc" }
+      ]
+    });
+    res.json(themes);
+  } catch (error) {
+    console.error("Erreur r\xE9cup\xE9ration th\xE8mes:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.post("/themes", async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const themeData = req2.body;
+    if (themeData.isDefault) {
+      await prisma67.documentTheme.updateMany({
+        where: { organizationId, isDefault: true },
+        data: { isDefault: false }
+      });
+    }
+    const theme = await prisma67.documentTheme.create({
+      data: {
+        id: (0, import_nanoid.nanoid)(),
+        ...themeData,
+        organizationId
+      }
+    });
+    res.status(201).json(theme);
+  } catch (error) {
+    console.error("Erreur cr\xE9ation th\xE8me:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.put("/themes/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const themeData = req2.body;
+    if (themeData.isDefault) {
+      await prisma67.documentTheme.updateMany({
+        where: {
+          organizationId,
+          isDefault: true,
+          id: { not: id }
+        },
+        data: { isDefault: false }
+      });
+    }
+    const theme = await prisma67.documentTheme.update({
+      where: { id },
+      data: themeData
+    });
+    res.json(theme);
+  } catch (error) {
+    console.error("Erreur mise \xE0 jour th\xE8me:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.delete("/themes/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const templatesCount = await prisma67.documentTemplate.count({
+      where: { themeId: id }
+    });
+    if (templatesCount > 0) {
+      return res.status(400).json({
+        error: "Impossible de supprimer : des templates utilisent ce th\xE8me",
+        templatesCount
+      });
+    }
+    await prisma67.documentTheme.delete({
+      where: { id }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Erreur suppression th\xE8me:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.get("/templates/:templateId/sections", async (req2, res) => {
+  try {
+    const { templateId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const template = await prisma67.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+    if (!template) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    const sections = await prisma67.documentSection.findMany({
+      where: { templateId },
+      orderBy: { order: "asc" }
+    });
+    res.json(sections);
+  } catch (error) {
+    console.error("Erreur r\xE9cup\xE9ration sections:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.post("/templates/:templateId/sections", async (req2, res) => {
+  try {
+    const { templateId } = req2.params;
+    const { type, order, config } = req2.body;
+    const organizationId = req2.headers["x-organization-id"];
+    const template = await prisma67.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+    if (!template) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    const section = await prisma67.documentSection.create({
+      data: {
+        id: (0, import_nanoid.nanoid)(),
+        templateId,
+        type,
+        order: order ?? 0,
+        config: config || {}
+      }
+    });
+    res.json(section);
+  } catch (error) {
+    console.error("Erreur cr\xE9ation section:", error?.message || error);
+    console.error("Stack:", error?.stack);
+    res.status(500).json({ error: "Erreur serveur", details: error?.message });
+  }
+});
+router83.put("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+  try {
+    const { templateId, sectionId } = req2.params;
+    const { order, config } = req2.body;
+    const organizationId = req2.headers["x-organization-id"];
+    const template = await prisma67.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+    if (!template) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    const section = await prisma67.documentSection.update({
+      where: { id: sectionId },
+      data: {
+        ...order !== void 0 && { order },
+        ...config && { config }
+      }
+    });
+    res.json(section);
+  } catch (error) {
+    console.error("Erreur mise \xE0 jour section:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.delete("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+  try {
+    const { templateId, sectionId } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const template = await prisma67.documentTemplate.findFirst({
+      where: { id: templateId, organizationId }
+    });
+    if (!template) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    await prisma67.documentSection.delete({
+      where: { id: sectionId }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Erreur suppression section:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.get("/generated", async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const { leadId, submissionId, templateId } = req2.query;
+    console.log("\u{1F4C4} [GET /generated] Query params:", { leadId, submissionId, templateId, organizationId });
+    if (!organizationId) {
+      return res.status(400).json({ error: "Organization ID requis" });
+    }
+    const where = {
+      organizationId
+    };
+    if (leadId) {
+      where.leadId = leadId;
+    }
+    if (submissionId) {
+      where.submissionId = submissionId;
+    }
+    if (templateId) {
+      where.templateId = templateId;
+    }
+    console.log("\u{1F4C4} [GET /generated] Where clause:", JSON.stringify(where, null, 2));
+    const documents = await prisma67.generatedDocument.findMany({
+      where,
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        },
+        sentByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    console.log("\u{1F4C4} [GET /generated] Found documents:", documents.length);
+    res.json(documents);
+  } catch (error) {
+    console.error("\u274C [GET /generated] Erreur r\xE9cup\xE9ration documents g\xE9n\xE9r\xE9s:", error);
+    console.error("\u274C [GET /generated] Error name:", error?.name);
+    console.error("\u274C [GET /generated] Error code:", error?.code);
+    console.error("\u274C [GET /generated] Error message:", error?.message);
+    res.status(500).json({ error: "Erreur serveur", details: error?.message });
+  }
+});
+router83.get("/generated/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const document = await prisma67.generatedDocument.findFirst({
+      where: {
+        id,
+        organizationId
+      },
+      include: {
+        template: true,
+        sentByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        lead: true
+      }
+    });
+    if (!document) {
+      return res.status(404).json({ error: "Document non trouv\xE9" });
+    }
+    res.json(document);
+  } catch (error) {
+    console.error("Erreur r\xE9cup\xE9ration document:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.post("/generated/generate", async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const userId = req2.headers["x-user-id"];
+    const {
+      templateId,
+      leadId,
+      submissionId,
+      tblData,
+      lead: leadData,
+      language
+    } = req2.body;
+    console.log("\u{1F4C4} [GENERATE DOC] Demande de g\xE9n\xE9ration:", { templateId, leadId, submissionId, organizationId, userId });
+    console.log("\u{1F4C4} [GENERATE DOC] Body complet:", JSON.stringify(req2.body, null, 2));
+    if (!templateId) {
+      return res.status(400).json({ error: "Template ID requis" });
+    }
+    console.log("\u{1F4C4} [GENERATE DOC] Recherche du template...");
+    const template = await prisma67.documentTemplate.findFirst({
+      where: {
+        id: templateId,
+        organizationId
+      },
+      include: {
+        sections: {
+          orderBy: { order: "asc" }
+        },
+        theme: true
+      }
+    });
+    console.log("\u{1F4C4} [GENERATE DOC] Template trouv\xE9:", template ? template.id : "null");
+    if (!template) {
+      return res.status(404).json({ error: "Template non trouv\xE9" });
+    }
+    const documentCount = await prisma67.generatedDocument.count({
+      where: { templateId }
+    });
+    const documentNumber = `${template.type}-${String(documentCount + 1).padStart(6, "0")}`;
+    const generatedDocument = await prisma67.generatedDocument.create({
+      data: {
+        id: (0, import_nanoid.nanoid)(),
+        templateId,
+        organizationId,
+        leadId: leadId || null,
+        submissionId: submissionId || null,
+        type: template.type,
+        status: "DRAFT",
+        language: language || template.defaultLanguage || "fr",
+        documentNumber,
+        pdfUrl: null,
+        // Sera rempli après génération réelle du PDF
+        dataSnapshot: {
+          tblData: tblData || {},
+          lead: leadData || {},
+          generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          generatedBy: userId
+        },
+        createdBy: userId || null
+      },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        }
+      }
+    });
+    console.log("\u{1F4C4} [GENERATE DOC] Document cr\xE9\xE9:", generatedDocument.id);
+    console.log("\u{1F4C4} [GENERATE DOC] Mise \xE0 jour du document avec statut SENT...");
+    const updatedDocument = await prisma67.generatedDocument.update({
+      where: { id: generatedDocument.id },
+      data: {
+        status: "SENT",
+        // Le PDF est "prêt"
+        pdfUrl: `/api/documents/generated/${generatedDocument.id}/download`
+      },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            type: true
+          }
+        },
+        sentByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        lead: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+    console.log("\u{1F4C4} [GENERATE DOC] Document mis \xE0 jour avec succ\xE8s:", updatedDocument.id);
+    res.status(201).json(updatedDocument);
+  } catch (error) {
+    console.error("\u274C [GENERATE DOC] Erreur g\xE9n\xE9ration document:", error);
+    console.error("\u274C [GENERATE DOC] Error name:", error?.name);
+    console.error("\u274C [GENERATE DOC] Error code:", error?.code);
+    console.error("\u274C [GENERATE DOC] Error message:", error?.message);
+    console.error("\u274C [GENERATE DOC] Error meta:", error?.meta);
+    res.status(500).json({ error: "Erreur serveur lors de la g\xE9n\xE9ration", details: error?.message });
+  }
+});
+router83.delete("/generated/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const document = await prisma67.generatedDocument.findFirst({
+      where: {
+        id,
+        organizationId
+      }
+    });
+    if (!document) {
+      return res.status(404).json({ error: "Document non trouv\xE9" });
+    }
+    await prisma67.generatedDocument.delete({
+      where: { id }
+    });
+    res.json({ success: true, message: "Document supprim\xE9" });
+  } catch (error) {
+    console.error("Erreur suppression document:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router83.get("/generated/:id/download", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    console.log("\u{1F4E5} [DOWNLOAD] Demande de t\xE9l\xE9chargement:", { id, organizationId });
+    const document = await prisma67.generatedDocument.findFirst({
+      where: {
+        id,
+        organizationId
+      },
+      include: {
+        template: {
+          include: {
+            sections: {
+              orderBy: { order: "asc" }
+            },
+            theme: true
+          }
+        },
+        lead: true
+      }
+    });
+    if (!document) {
+      console.log("\u{1F4E5} [DOWNLOAD] Document non trouv\xE9");
+      return res.status(404).json({ error: "Document non trouv\xE9" });
+    }
+    console.log("\u{1F4E5} [DOWNLOAD] Document trouv\xE9:", document.documentNumber);
+    const defaultTheme = await prisma67.documentTheme.findFirst({
+      where: {
+        organizationId,
+        isDefault: true
+      }
+    });
+    const organization = await prisma67.organization.findFirst({
+      where: { id: organizationId }
+    });
+    const dataSnapshot = document.dataSnapshot || {};
+    const templateTheme = document.template?.theme;
+    const themeSource = templateTheme || defaultTheme;
+    const theme = themeSource ? {
+      primaryColor: themeSource.primaryColor || "#1890ff",
+      secondaryColor: themeSource.secondaryColor || "#52c41a",
+      accentColor: themeSource.accentColor || "#faad14",
+      textColor: themeSource.textColor || "#333333",
+      backgroundColor: themeSource.backgroundColor || "#ffffff",
+      fontFamily: themeSource.fontFamily || "Helvetica",
+      fontSize: themeSource.fontSize || 12,
+      logoUrl: themeSource.logoUrl || ""
+    } : {
+      primaryColor: "#1890ff",
+      secondaryColor: "#52c41a",
+      accentColor: "#faad14",
+      textColor: "#333333",
+      backgroundColor: "#ffffff",
+      fontFamily: "Helvetica",
+      fontSize: 12,
+      logoUrl: ""
+    };
+    console.log("\u{1F4E5} [DOWNLOAD] Theme utilis\xE9:", {
+      source: templateTheme ? "template" : defaultTheme ? "default" : "fallback",
+      primaryColor: theme.primaryColor,
+      fontFamily: theme.fontFamily
+    });
+    const sections = document.template?.sections?.map((s) => ({
+      id: s.id,
+      type: s.type,
+      name: s.name || s.type,
+      config: s.config || {},
+      translations: s.translations || {},
+      linkedNodeIds: s.linkedNodeIds || [],
+      order: s.order,
+      isActive: s.isActive !== false
+    })) || [];
+    console.log("\u{1F4E5} [DOWNLOAD] Sections mapp\xE9es:", sections.length);
+    for (const sec of sections) {
+      console.log(`\u{1F4E5} [DOWNLOAD] Section ${sec.type}:`, {
+        id: sec.id,
+        configKeys: Object.keys(sec.config || {}),
+        hasModules: !!sec.config?.modules,
+        modulesCount: sec.config?.modules?.length || 0
+      });
+      if (sec.config?.modules?.length > 0) {
+        console.log("\u{1F4E5} [DOWNLOAD] Premier module:", JSON.stringify(sec.config.modules[0], null, 2).substring(0, 500));
+      }
+    }
+    const renderContext = {
+      template: document.template ? {
+        id: document.template.id,
+        name: document.template.name,
+        type: document.template.type,
+        theme,
+        sections
+        // Sections DANS le template comme attendu par le renderer
+      } : {
+        id: "default",
+        name: "Document",
+        type: "QUOTE",
+        theme,
+        sections: []
+      },
+      lead: (() => {
+        const dbLead = document.lead || {};
+        const snapshotLead = dataSnapshot.lead || {};
+        const mergedLead = {
+          ...snapshotLead,
+          ...dbLead,
+          // S'assurer que l'adresse vient de l'une des deux sources
+          address: dbLead.address || snapshotLead.address || "",
+          data: dbLead.data || {}
+        };
+        const addressComponents = extractAddressComponents(mergedLead);
+        return {
+          id: dbLead.id || snapshotLead.id || "",
+          firstName: dbLead.firstName || snapshotLead.firstName || "",
+          lastName: dbLead.lastName || snapshotLead.lastName || "",
+          fullName: [dbLead.firstName || snapshotLead.firstName, dbLead.lastName || snapshotLead.lastName].filter(Boolean).join(" "),
+          email: dbLead.email || snapshotLead.email || "",
+          phone: dbLead.phone || snapshotLead.phone || "",
+          company: dbLead.company || snapshotLead.company || "",
+          // Adresse complète
+          address: addressComponents.address,
+          // Composants séparés
+          street: addressComponents.street,
+          number: addressComponents.number,
+          box: addressComponents.box,
+          postalCode: addressComponents.postalCode,
+          city: addressComponents.city,
+          country: addressComponents.country
+        };
+      })(),
+      organization: organization ? {
+        name: organization.name || "",
+        email: organization.email || "",
+        phone: organization.phone || "",
+        address: organization.address || "",
+        vatNumber: organization.vatNumber || "",
+        logo: organization.logo || ""
+      } : void 0,
+      tblData: dataSnapshot.tblData || dataSnapshot,
+      quote: dataSnapshot.quote || {
+        number: document.documentNumber,
+        date: document.createdAt?.toISOString().split("T")[0] || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+        validUntil: dataSnapshot.validUntil || "",
+        totalHT: dataSnapshot.totalHT || 0,
+        totalTVA: dataSnapshot.totalTVA || 0,
+        totalTTC: dataSnapshot.totalTTC || 0
+      },
+      documentNumber: document.documentNumber || "",
+      language: document.language || "fr"
+    };
+    console.log("\u{1F4E5} [DOWNLOAD] Contexte de rendu:", {
+      templateId: renderContext.template.id,
+      sectionsCount: renderContext.template.sections.length,
+      leadName: renderContext.lead.firstName + " " + renderContext.lead.lastName,
+      language: renderContext.language,
+      tblDataKeys: Object.keys(renderContext.tblData || {}),
+      tblDataKeysCount: Object.keys(renderContext.tblData || {}).length,
+      dataSnapshotKeys: Object.keys(dataSnapshot || {})
+    });
+    console.log("\u{1F4E5} [DOWNLOAD] Lead data (avec adresse pars\xE9e):", {
+      address: renderContext.lead.address,
+      street: renderContext.lead.street,
+      number: renderContext.lead.number,
+      box: renderContext.lead.box,
+      postalCode: renderContext.lead.postalCode,
+      city: renderContext.lead.city,
+      country: renderContext.lead.country
+    });
+    console.log("\u{1F4E5} [DOWNLOAD] tblData complet:", JSON.stringify(renderContext.tblData, null, 2).substring(0, 2e3));
+    const pdfBuffer = await renderDocumentPdf(renderContext);
+    const filename = `${document.documentNumber || document.id}.pdf`;
+    console.log("\u{1F4E5} [DOWNLOAD] PDF g\xE9n\xE9r\xE9, taille:", pdfBuffer.length, "bytes");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", pdfBuffer.length.toString());
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("\u274C [DOWNLOAD] Erreur t\xE9l\xE9chargement:", error);
+    res.status(500).json({ error: "Erreur serveur", details: error?.message });
+  }
+});
+router83.get("/generated/:id/preview", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    console.log("\u{1F441}\uFE0F [PREVIEW] Demande d'aper\xE7u:", { id, organizationId });
+    const document = await prisma67.generatedDocument.findFirst({
+      where: {
+        id,
+        organizationId
+      },
+      include: {
+        template: {
+          include: {
+            sections: {
+              orderBy: { order: "asc" }
+            },
+            theme: true
+          }
+        },
+        lead: true,
+        submission: true
+      }
+    });
+    if (!document) {
+      console.log("\u{1F441}\uFE0F [PREVIEW] Document non trouv\xE9");
+      return res.status(404).json({ error: "Document non trouv\xE9" });
+    }
+    console.log("\u{1F441}\uFE0F [PREVIEW] Document trouv\xE9:", document.documentNumber);
+    res.json({
+      id: document.id,
+      documentNumber: document.documentNumber,
+      type: document.type,
+      status: document.status,
+      language: document.language,
+      title: document.title,
+      notes: document.notes,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt,
+      template: document.template,
+      lead: document.lead,
+      dataSnapshot: document.dataSnapshot,
+      // Informations de signature/paiement
+      signedAt: document.signedAt,
+      signatureUrl: document.signatureUrl,
+      paidAt: document.paidAt,
+      paymentAmount: document.paymentAmount,
+      paymentMethod: document.paymentMethod
+    });
+  } catch (error) {
+    console.error("\u274C [PREVIEW] Erreur aper\xE7u:", error);
+    res.status(500).json({ error: "Erreur serveur", details: error?.message });
+  }
+});
+var documents_default = router83;
+
+// src/middleware/websiteDetection.ts
+var import_client71 = require("@prisma/client");
 
 // src/middleware/websiteRenderer.ts
 function renderSection(section) {
@@ -58471,7 +60621,7 @@ async function renderWebsite(req2, res) {
 }
 
 // src/middleware/websiteDetection.ts
-var prisma67 = new import_client70.PrismaClient();
+var prisma68 = new import_client71.PrismaClient();
 var CRM_DOMAINS = [
   "app.2thier.be",
   "api.2thier.be",
@@ -58493,7 +60643,7 @@ async function detectWebsite(req2, res, next) {
     }
     const cleanDomain = hostname.replace(/^www\./, "");
     console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
-    const website = await prisma67.webSite.findFirst({
+    const website = await prisma68.webSite.findFirst({
       where: {
         OR: [
           { domain: cleanDomain },
@@ -58644,7 +60794,11 @@ var advancedRateLimit = (0, import_express_rate_limit15.default)({
   }
 });
 var requestHistory = /* @__PURE__ */ new Map();
+var isDev = process.env.NODE_ENV !== "production";
 var anomalyDetection = (req2, res, next) => {
+  if (isDev) {
+    return next();
+  }
   const clientIP = req2.ip;
   const currentTime = Date.now();
   const endpoint = req2.path;
@@ -58706,12 +60860,11 @@ var inputSanitization = (req2, res, next) => {
 };
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts
-var import_client71 = require("@prisma/client");
-var prisma68 = new import_client71.PrismaClient();
+var import_client72 = require("@prisma/client");
+var prisma69 = new import_client72.PrismaClient();
 async function syncVariableSourceRefs() {
   try {
-    console.log("\n\u{1F504} [SYNC HOOK] Synchronisation des sourceRef...");
-    const nodes = await prisma68.treeBranchLeafNode.findMany({
+    const nodes = await prisma69.treeBranchLeafNode.findMany({
       where: {
         data_instances: { not: null }
       },
@@ -58742,32 +60895,29 @@ async function syncVariableSourceRefs() {
       if (jsonSourceRef === dbSourceRef) {
         continue;
       }
-      await prisma68.treeBranchLeafNodeVariable.update({
+      await prisma69.treeBranchLeafNodeVariable.update({
         where: { id: node.TreeBranchLeafNodeVariable.id },
         data: { sourceRef: jsonSourceRef }
       });
       syncCount++;
     }
     if (syncCount > 0) {
-      console.log(`\u2705 [SYNC HOOK] ${syncCount} sourceRef synchronis\xE9(s)`);
     }
     if (skipCount > 0) {
-      console.log(`\u26A0\uFE0F  [SYNC HOOK] ${skipCount} table/value prot\xE9g\xE9(s)`);
     }
     if (syncCount === 0 && skipCount === 0) {
-      console.log(`\u2705 [SYNC HOOK] Tout est d\xE9j\xE0 synchronis\xE9`);
     }
   } catch (error) {
-    console.error("\u274C [SYNC HOOK] Erreur:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SYNC HOOK] Erreur:", error);
   }
 }
 async function initializeTreeBranchLeafSync() {
   try {
     await syncVariableSourceRefs();
   } catch (error) {
-    console.error("\u274C [INIT SYNC] Erreur:", error);
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [INIT SYNC] Erreur:", error);
   } finally {
-    await prisma68.$disconnect();
+    await prisma69.$disconnect();
   }
 }
 
@@ -58780,7 +60930,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express86.default)();
+var app = (0, import_express87.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 4e3);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
@@ -58790,15 +60940,32 @@ app.use((req2, res, next) => {
   res.setHeader("X-Git-Sha", GIT_SHA);
   next();
 });
+var isDevelopment = process.env.NODE_ENV !== "production";
 app.use(import_express_winston.default.logger({
   winstonInstance: securityLogger,
-  meta: true,
+  meta: !isDevelopment,
+  // Pas de meta en dev pour réduire la verbosité
   msg: "HTTP {{req.method}} {{req.url}} {{res.statusCode}} {{res.responseTime}}ms",
   expressFormat: false,
   colorize: false,
   requestWhitelist: ["method", "url", "ip"],
   responseWhitelist: ["statusCode"],
   skip: (req2, res) => {
+    if (isDevelopment) {
+      if (res.statusCode < 400) {
+        const skipPatterns = [
+          "/api/tree-nodes/",
+          "/api/treebranchleaf/",
+          "/api/tbl/",
+          "/api/repeat/",
+          "/api/health",
+          "/health"
+        ];
+        if (skipPatterns.some((pattern) => req2.url.startsWith(pattern))) {
+          return true;
+        }
+      }
+    }
     return ["/api/health", "/health"].includes(req2.url) && res.statusCode < 400;
   }
 }));
@@ -58850,7 +61017,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express86.default.json({
+app.use(import_express87.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -58864,7 +61031,7 @@ app.use(import_express86.default.json({
     }
   }
 }));
-app.use(import_express86.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express87.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -58883,8 +61050,19 @@ app.use((0, import_express_session.default)({
 }));
 console.log("\u2705 [ENTERPRISE-SECURITY] Configuration s\xE9curit\xE9 niveau Enterprise activ\xE9e");
 var uploadsDir = import_path7.default.resolve(process.cwd(), "public", "uploads");
-app.use("/uploads", import_express86.default.static(uploadsDir));
-console.log("\u{1F4F8} [UPLOADS] Dossier uploads configur\xE9:", uploadsDir);
+app.use("/uploads", (req2, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, import_express87.default.static(uploadsDir, {
+  maxAge: "1h",
+  // Cache 1 heure
+  etag: true,
+  lastModified: true
+}));
+console.log("\u{1F4F8} [UPLOADS] Dossier uploads configur\xE9 avec CORS:", uploadsDir);
 console.log("\u{1F527} [API-SERVER-CLEAN] Configuration Passport...");
 app.use(import_passport.default.initialize());
 app.use(import_passport.default.session());
@@ -58902,10 +61080,11 @@ app.use("/api/ai-content", ai_content_default);
 app.use("/api/ai", ai_field_generator_default);
 app.use("/api/ai", ai_default2);
 app.use("/api", contact_form_default);
-app.use("/api", image_upload_default);
+app.use("/api/image-upload", image_upload_default);
+app.use("/api/documents", documents_default);
 app.use("/api/tbl", tbl_submission_evaluator_default);
 app.use("/api/tree-nodes", calculatedValueController_default);
-app.use("/api/treebranchleaf", table_routes_new_default);
+app.use("/api/treebranchleaf", treebranchleaf_routes_default);
 var repeatRouter = createRepeatRouter(prisma);
 app.use("/api/treebranchleaf/repeat", repeatRouter);
 app.use("/api/repeat", repeatRouter);
@@ -58933,7 +61112,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express86.default.static(assetsDir, {
+    app.use("/assets", import_express87.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }

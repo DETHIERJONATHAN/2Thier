@@ -1,16 +1,16 @@
 /**
- * 🧮 Système de copie des FORMULES
+ * Ã°Å¸Â§Â® SystÃƒÂ¨me de copie des FORMULES
  * 
- * Ce module gère la copie complète d'une formule (TreeBranchLeafNodeFormula)
- * avec réécriture des tokens pour pointer vers les nouveaux IDs.
+ * Ce module gÃƒÂ¨re la copie complÃƒÂ¨te d'une formule (TreeBranchLeafNodeFormula)
+ * avec rÃƒÂ©ÃƒÂ©criture des tokens pour pointer vers les nouveaux IDs.
  * 
  * PRINCIPES :
  * -----------
  * 1. Copier la formule avec suffixe
- * 2. Réécrire les tokens (@value.ID → @value.ID-suffix)
- * 3. 🔗 LIAISON AUTOMATIQUE OBLIGATOIRE: linkedFormulaIds sur TOUS les nœuds référencés
- * 4. Mettre à jour linkedFormulaIds du nœud propriétaire
- * 5. Synchroniser les paramètres de capacité (hasFormula, formula_activeId, etc.)
+ * 2. RÃƒÂ©ÃƒÂ©crire les tokens (@value.ID Ã¢â€ â€™ @value.ID-suffix)
+ * 3. Ã°Å¸â€â€” LIAISON AUTOMATIQUE OBLIGATOIRE: linkedFormulaIds sur TOUS les nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
+ * 4. Mettre ÃƒÂ  jour linkedFormulaIds du nÃ…â€œud propriÃƒÂ©taire
+ * 5. Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ© (hasFormula, formula_activeId, etc.)
  * 
  * @author System TBL
  * @version 2.0.0 - LIAISON AUTOMATIQUE OBLIGATOIRE
@@ -20,51 +20,51 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { linkFormulaToAllNodes } from './universal-linking-system';
 import { rewriteJsonReferences, forceSharedRefSuffixes, forceSharedRefSuffixesInJson, type RewriteMaps } from './repeat/utils/universal-reference-rewriter.js';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 📋 TYPES ET INTERFACES
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€œâ€¹ TYPES ET INTERFACES
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
  * Options pour la copie de formule
  */
 export interface CopyFormulaOptions {
-  /** Map des nœuds copiés (ancien ID → nouveau ID) pour réécrire les tokens */
+  /** Map des nÃ…â€œuds copiÃƒÂ©s (ancien ID Ã¢â€ â€™ nouveau ID) pour rÃƒÂ©ÃƒÂ©crire les tokens */
   nodeIdMap?: Map<string, string>;
-  /** Map des formules déjà copiées (cache pour éviter doublons) */
+  /** Map des formules dÃƒÂ©jÃƒÂ  copiÃƒÂ©es (cache pour ÃƒÂ©viter doublons) */
   formulaCopyCache?: Map<string, string>;
 }
 
 /**
- * Résultat de la copie d'une formule
+ * RÃƒÂ©sultat de la copie d'une formule
  */
 export interface CopyFormulaResult {
-  /** ID de la formule copiée */
+  /** ID de la formule copiÃƒÂ©e */
   newFormulaId: string;
-  /** ID du nœud propriétaire */
+  /** ID du nÃ…â€œud propriÃƒÂ©taire */
   nodeId: string;
-  /** Tokens réécrits */
+  /** Tokens rÃƒÂ©ÃƒÂ©crits */
   tokens: Prisma.InputJsonValue;
-  /** Succès de l'opération */
+  /** SuccÃƒÂ¨s de l'opÃƒÂ©ration */
   success: boolean;
-  /** Message d'erreur éventuel */
+  /** Message d'erreur ÃƒÂ©ventuel */
   error?: string;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS UTILITAIRES DE RÉÉCRITURE
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€Â§ FONCTIONS UTILITAIRES DE RÃƒâ€°Ãƒâ€°CRITURE
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Réécrire les tokens d'une formule pour remplacer les anciens IDs par les nouveaux
+ * RÃƒÂ©ÃƒÂ©crire les tokens d'une formule pour remplacer les anciens IDs par les nouveaux
  * 
  * Format des tokens :
  * - Array de strings/objets : ["@value.abc-123", "+", "@value.def-456"]
  * - Peut contenir des UUIDs ou des node_xxx
  * 
  * @param tokens - Tokens originaux
- * @param idMap - Map ancien ID → nouveau ID
- * @param suffix - Suffixe à ajouter si ID pas trouvé dans la map
- * @returns Tokens réécrits
+ * @param idMap - Map ancien ID Ã¢â€ â€™ nouveau ID
+ * @param suffix - Suffixe ÃƒÂ  ajouter si ID pas trouvÃƒÂ© dans la map
+ * @returns Tokens rÃƒÂ©ÃƒÂ©crits
  * 
  * @example
  * rewriteFormulaTokens(
@@ -72,7 +72,7 @@ export interface CopyFormulaResult {
  *   new Map([["abc", "abc-1"]]),
  *   1
  * )
- * → ["@value.abc-1", "+", "@value.def-1"]
+ * Ã¢â€ â€™ ["@value.abc-1", "+", "@value.def-1"]
  */
 function rewriteFormulaTokens(
   tokens: unknown,
@@ -82,18 +82,17 @@ function rewriteFormulaTokens(
   if (!tokens) return tokens as Prisma.InputJsonValue;
 
   const rewriteString = (str: string): string => {
-    // ✅ FIX REPEATER REFERENCES (02/12/2025):
-    // PROBLÈME: Les shared-ref du repeater n'étaient pas suffixées
-    // SOLUTION: Traiter TOUTES les références (@value.<ID>) de la même manière
-    // - Si trouvée dans la map → utiliser le mapping
-    // - Sinon si suffixe fourni → ajouter le suffixe
+    // Ã¢Å“â€¦ FIX REPEATER REFERENCES (02/12/2025):
+    // PROBLÃƒË†ME: Les shared-ref du repeater n'ÃƒÂ©taient pas suffixÃƒÂ©es
+    // SOLUTION: Traiter TOUTES les rÃƒÂ©fÃƒÂ©rences (@value.<ID>) de la mÃƒÂªme maniÃƒÂ¨re
+    // - Si trouvÃƒÂ©e dans la map Ã¢â€ â€™ utiliser le mapping
+    // - Sinon si suffixe fourni Ã¢â€ â€™ ajouter le suffixe
     // - Y compris pour les shared-ref!
     return str.replace(/@value\.([A-Za-z0-9_:-]+(?:-[A-Za-z0-9]+)*)/g, (_match, nodeId: string) => {
       
-      // 1. Chercher dans la map des nœuds mappés (y compris les shared-ref mappées)
+      // 1. Chercher dans la map des nÃ…â€œuds mappÃƒÂ©s (y compris les shared-ref mappÃƒÂ©es)
       const mappedId = idMap.get(nodeId);
       if (mappedId) {
-        console.log(`🔄 [FORMULA-TOKENS] Mapping trouvé: ${nodeId} → ${mappedId}`);
         return `@value.${mappedId}`;
       }
       
@@ -101,12 +100,10 @@ function rewriteFormulaTokens(
       if (suffix !== undefined) {
         const suffixStr = `${suffix}`;
         const suffixedId = `${nodeId}-${suffixStr}`;
-        console.log(`➕ [FORMULA-TOKENS] Suffixe ajouté: ${nodeId} → ${suffixedId}`);
         return `@value.${suffixedId}`;
       }
       
       // 3. Sinon garder tel quel
-      console.log(`⚪ [FORMULA-TOKENS] Inchangé: ${nodeId}`);
       return `@value.${nodeId}`;
     });
   };
@@ -150,30 +147,30 @@ function rewriteFormulaTokens(
   return tokens as Prisma.InputJsonValue;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔄 FONCTION PRINCIPALE DE COPIE
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€â€ž FONCTION PRINCIPALE DE COPIE
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Copie une formule avec réécriture des tokens
+ * Copie une formule avec rÃƒÂ©ÃƒÂ©criture des tokens
  * 
  * PROCESSUS :
  * -----------
- * 1. Vérifier le cache (éviter doublons)
- * 2. Récupérer la formule originale
- * 3. Générer le nouvel ID avec suffixe
- * 4. Réécrire les tokens (@value.ID → @value.ID-suffix)
- * 5. Créer la nouvelle formule
- * 6. Mettre à jour linkedFormulaIds du nœud
- * 7. Synchroniser les paramètres de capacité
+ * 1. VÃƒÂ©rifier le cache (ÃƒÂ©viter doublons)
+ * 2. RÃƒÂ©cupÃƒÂ©rer la formule originale
+ * 3. GÃƒÂ©nÃƒÂ©rer le nouvel ID avec suffixe
+ * 4. RÃƒÂ©ÃƒÂ©crire les tokens (@value.ID Ã¢â€ â€™ @value.ID-suffix)
+ * 5. CrÃƒÂ©er la nouvelle formule
+ * 6. Mettre ÃƒÂ  jour linkedFormulaIds du nÃ…â€œud
+ * 7. Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ©
  * 8. Mettre en cache
  * 
- * @param originalFormulaId - ID de la formule à copier
- * @param newNodeId - ID du nouveau nœud propriétaire
- * @param suffix - Suffixe numérique à appliquer
+ * @param originalFormulaId - ID de la formule ÃƒÂ  copier
+ * @param newNodeId - ID du nouveau nÃ…â€œud propriÃƒÂ©taire
+ * @param suffix - Suffixe numÃƒÂ©rique ÃƒÂ  appliquer
  * @param prisma - Instance Prisma Client
  * @param options - Options avec nodeIdMap
- * @returns Résultat de la copie
+ * @returns RÃƒÂ©sultat de la copie
  * 
  * @example
  * const result = await copyFormulaCapacity(
@@ -194,11 +191,6 @@ export async function copyFormulaCapacity(
   options: CopyFormulaOptions = {}
 ): Promise<CopyFormulaResult> {
   
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`🧮 COPIE FORMULE: ${originalFormulaId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau nœud: ${newNodeId}`);
-  console.log(`${'═'.repeat(80)}\n`);
 
   const {
     nodeIdMap = new Map(),
@@ -206,12 +198,11 @@ export async function copyFormulaCapacity(
   } = options;
 
   try {
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔍 ÉTAPE 1 : Vérifier le cache
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â Ãƒâ€°TAPE 1 : VÃƒÂ©rifier le cache
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     if (formulaCopyCache.has(originalFormulaId)) {
       const cachedId = formulaCopyCache.get(originalFormulaId)!;
-      console.log(`♻️ Formule déjà copiée (cache): ${originalFormulaId} → ${cachedId}`);
       
       const cached = await prisma.treeBranchLeafNodeFormula.findUnique({
         where: { id: cachedId }
@@ -227,20 +218,19 @@ export async function copyFormulaCapacity(
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📥 ÉTAPE 2 : Récupérer la formule originale PAR ID (enlever suffixe si présent)
-    // ═══════════════════════════════════════════════════════════════════════
-    // originalFormulaId peut contenir un suffixe si c'est déjà une copie
-    // On enlève le suffixe pour trouver l'original
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œÂ¥ Ãƒâ€°TAPE 2 : RÃƒÂ©cupÃƒÂ©rer la formule originale PAR ID (enlever suffixe si prÃƒÂ©sent)
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // originalFormulaId peut contenir un suffixe si c'est dÃƒÂ©jÃƒÂ  une copie
+    // On enlÃƒÂ¨ve le suffixe pour trouver l'original
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, '');
-    console.log(`🔍 Recherche formule avec id: ${cleanFormulaId} (original: ${originalFormulaId})`);
     
     const originalFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
       where: { id: cleanFormulaId }
     });
 
     if (!originalFormula) {
-      console.error(`❌ Formule introuvable avec id: ${cleanFormulaId}`);
+      console.error(`Ã¢ÂÅ’ Formule introuvable avec id: ${cleanFormulaId}`);
       return {
         newFormulaId: '',
         nodeId: '',
@@ -250,47 +240,40 @@ export async function copyFormulaCapacity(
       };
     }
 
-    console.log(`✅ Formule trouvée: ${originalFormula.name || originalFormula.id}`);
-    console.log(`   NodeId original: ${originalFormula.nodeId}`);
-    console.log(`   Tokens originaux:`, originalFormula.tokens);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🆔 ÉTAPE 3 : Générer le nouvel ID (pour la formule elle-même)
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€ â€ Ãƒâ€°TAPE 3 : GÃƒÂ©nÃƒÂ©rer le nouvel ID (pour la formule elle-mÃƒÂªme)
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // On utilise l'id original de la formule avec suffixe
     const newFormulaId = `${originalFormula.id}-${suffix}`;
-    console.log(`📝 Nouvel ID formule: ${newFormulaId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔧 FIX CRITIQUE: Déterminer le VRAI propriétaire de la formule copiée
-    // ═══════════════════════════════════════════════════════════════════════
-    // Le nodeId passé en paramètre peut être un nœud qui RÉFÉRENCE la formule,
-    // pas le PROPRIÉTAIRE. Le propriétaire de la copie doit être le propriétaire
-    // ORIGINAL avec le suffixe appliqué.
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â§ FIX CRITIQUE: DÃƒÂ©terminer le VRAI propriÃƒÂ©taire de la formule copiÃƒÂ©e
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Le nodeId passÃƒÂ© en paramÃƒÂ¨tre peut ÃƒÂªtre un nÃ…â€œud qui RÃƒâ€°FÃƒâ€°RENCE la formule,
+    // pas le PROPRIÃƒâ€°TAIRE. Le propriÃƒÂ©taire de la copie doit ÃƒÂªtre le propriÃƒÂ©taire
+    // ORIGINAL avec le suffixe appliquÃƒÂ©.
     const originalOwnerNodeId = originalFormula.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
     
-    // Vérifier si le nœud propriétaire copié existe
+    // VÃƒÂ©rifier si le nÃ…â€œud propriÃƒÂ©taire copiÃƒÂ© existe
     const ownerNodeExists = await prisma.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
     
-    // Si le propriétaire suffixé existe, l'utiliser. Sinon fallback sur newNodeId.
-    const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
+    // 🛡️ CRITICAL FIX: TOUJOURS utiliser correctOwnerNodeId pour la formule
+    // JAMAIS de fallback sur newNodeId car cela assignerait la formule au mauvais nœud !
+    // Si le propriétaire n'existe pas encore, on utilise quand même correctOwnerNodeId
+    const finalOwnerNodeId = correctOwnerNodeId;
+    const ownerNodeExistsForUpdate = !!ownerNodeExists;
     
-    console.log(`🔧 [OWNER FIX] NodeId original propriétaire: ${originalOwnerNodeId}`);
-    console.log(`🔧 [OWNER FIX] NodeId propriétaire suffixé: ${correctOwnerNodeId}`);
-    console.log(`🔧 [OWNER FIX] Propriétaire suffixé existe: ${ownerNodeExists ? 'OUI (' + ownerNodeExists.label + ')' : 'NON'}`);
-    console.log(`🔧 [OWNER FIX] NodeId FINAL utilisé: ${finalOwnerNodeId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔄 ÉTAPE 4 : Réécrire les tokens
-    // ═══════════════════════════════════════════════════════════════════════
-    console.log(`\n🔄 Réécriture des tokens...`);
-    console.log(`   Nombre d'IDs dans la map: ${nodeIdMap.size}`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€ž Ãƒâ€°TAPE 4 : RÃƒÂ©ÃƒÂ©crire les tokens
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     
-    // 🔥 UTILISER LE SYSTÈME UNIVERSEL pour traiter TOUS les types de références
+    // Ã°Å¸â€Â¥ UTILISER LE SYSTÃƒË†ME UNIVERSEL pour traiter TOUS les types de rÃƒÂ©fÃƒÂ©rences
     const rewriteMaps: RewriteMaps = {
       nodeIdMap: nodeIdMap,
       formulaIdMap: formulaCopyCache || new Map(),
@@ -299,84 +282,80 @@ export async function copyFormulaCapacity(
     };
     let rewrittenTokens = rewriteJsonReferences(originalFormula.tokens, rewriteMaps, suffix);
     
-    console.log(`✅ Tokens réécrits (1ère passe):`, rewrittenTokens);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔥 RÉÉCRITURE FORCÉE DES SHARED-REFS
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â¥ RÃƒâ€°Ãƒâ€°CRITURE FORCÃƒâ€°E DES SHARED-REFS
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // Utiliser la fonction helper pour forcer les suffixes sur TOUS les shared-refs
-    console.log(`\n🔥 AVANT forceSharedRefSuffixes: ${Array.isArray(rewrittenTokens) ? rewrittenTokens.length : '?'} tokens`);
     const sharedRefsCountBefore = rewrittenTokens && Array.isArray(rewrittenTokens) 
       ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
       : 0;
-    console.log(`   Shared-refs avant: ${sharedRefsCountBefore}`);
     
     rewrittenTokens = forceSharedRefSuffixes(rewrittenTokens, suffix);
     
-    console.log(`✅ APRÈS forceSharedRefSuffixes:`);
     const sharedRefsCountAfter1 = rewrittenTokens && Array.isArray(rewrittenTokens) 
       ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
       : 0;
-    console.log(`   Shared-refs après: ${sharedRefsCountAfter1}`);
     
-    // 🔥 RÉÉCRITURE RÉCURSIVE - Appel AUSSI la version JSON pour traiter les structures imbriquées
-    console.log(`\n🔥 AVANT forceSharedRefSuffixesInJson:`);
+    // Ã°Å¸â€Â¥ RÃƒâ€°Ãƒâ€°CRITURE RÃƒâ€°CURSIVE - Appel AUSSI la version JSON pour traiter les structures imbriquÃƒÂ©es
     rewrittenTokens = forceSharedRefSuffixesInJson(rewrittenTokens, suffix);
     
-    console.log(`✅ APRÈS forceSharedRefSuffixesInJson:`);
     const sharedRefsCountAfter2 = rewrittenTokens && Array.isArray(rewrittenTokens) 
       ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
       : 0;
-    console.log(`   Shared-refs final: ${sharedRefsCountAfter2}`);
     
-    console.log(`✅ Tokens réécrits (2ème passe - shared-refs forcés):`, rewrittenTokens);
-    console.log(`🔍 DEBUG: Cherchons shared-refs NON-suffixés dans les tokens...`);
     if (Array.isArray(rewrittenTokens)) {
       const unsuffixed = rewrittenTokens.filter((t: any) => 
         typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
       );
       if (unsuffixed.length > 0) {
-        console.error(`❌ ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffixés:`, unsuffixed);
+        console.error(`Ã¢ÂÅ’ ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffixÃƒÂ©s:`, unsuffixed);
       } else {
-        console.log(`✅ Tous les shared-refs sont suffixés !`);
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 💾 ÉTAPE 5 : Créer la nouvelle formule
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🎯 COPIE COMPLÈTE: Tous les champs de la formule originale sont copiés
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€™Â¾ Ãƒâ€°TAPE 5 : CrÃƒÂ©er la nouvelle formule
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸Å½Â¯ COPIE COMPLÃƒË†TE: Tous les champs de la formule originale sont copiÃƒÂ©s
     // - targetProperty: Cible de la formule (valeur, number_max, number_min, visible, etc.)
     // - constraintMessage: Message de contrainte
-    // - isDefault: Formule par défaut
+    // - isDefault: Formule par dÃƒÂ©faut
     // - order: Ordre d'affichage
-    const newFormula = await prisma.treeBranchLeafNodeFormula.create({
-      data: {
+    // 🔄 Utiliser upsert pour éviter les conflits d'ID (P2002)
+    const newFormula = await prisma.treeBranchLeafNodeFormula.upsert({
+      where: { id: newFormulaId },
+      update: {
+        nodeId: finalOwnerNodeId,
+        name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
+        description: originalFormula.description,
+        tokens: rewrittenTokens,
+        targetProperty: originalFormula.targetProperty,
+        constraintMessage: originalFormula.constraintMessage,
+        isDefault: originalFormula.isDefault,
+        order: originalFormula.order,
+        updatedAt: new Date()
+      },
+      create: {
         id: newFormulaId,
         nodeId: finalOwnerNodeId,
         organizationId: originalFormula.organizationId,
         name: originalFormula.name ? `${originalFormula.name}-${suffix}` : null,
         description: originalFormula.description,
         tokens: rewrittenTokens,
-        // 🎯 CHAMPS CRITIQUES - Copie de la cible et des propriétés
-        targetProperty: originalFormula.targetProperty,      // ← CIBLE DE LA FORMULE
-        constraintMessage: originalFormula.constraintMessage, // ← Message de contrainte
-        isDefault: originalFormula.isDefault,                 // ← Formule par défaut
-        order: originalFormula.order,                         // ← Ordre d'affichage
+        // 🏯 CHAMPS CRITIQUES - Copie de la cible et des propriétés
+        targetProperty: originalFormula.targetProperty,      // → CIBLE DE LA FORMULE
+        constraintMessage: originalFormula.constraintMessage, // → Message de contrainte
+        isDefault: originalFormula.isDefault,                 // → Formule par défaut
+        order: originalFormula.order,                         // → Ordre d'affichage
         createdAt: new Date(),
         updatedAt: new Date()
       }
     });
     
-    console.log(`🎯 [COPIE COMPLÈTE] targetProperty: ${originalFormula.targetProperty || 'null (valeur directe)'}`);
-    console.log(`🎯 [COPIE COMPLÈTE] constraintMessage: ${originalFormula.constraintMessage || 'null'}`);
-    console.log(`🎯 [COPIE COMPLÈTE] isDefault: ${originalFormula.isDefault}`);
-    console.log(`🎯 [COPIE COMPLÈTE] order: ${originalFormula.order}`);
 
-    console.log(`✅ Formule créée: ${newFormula.id}`);
     
-    // 🔍 VÉRIFICATION POST-CRÉATION: Lire immédiatement ce qui a été sauvegardé
-    console.log(`\n🔍 VÉRIFICATION POST-CRÉATION:`);
+    // Ã°Å¸â€Â VÃƒâ€°RIFICATION POST-CRÃƒâ€°ATION: Lire immÃƒÂ©diatement ce qui a ÃƒÂ©tÃƒÂ© sauvegardÃƒÂ©
     const savedFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
       where: { id: newFormula.id }
     });
@@ -388,68 +367,60 @@ export async function copyFormulaCapacity(
       const suffixed = savedSharedRefs.filter((s: any) => /-\d+$/.test(s));
       const nonSuffixed = savedSharedRefs.filter((s: any) => !/-\d+$/.test(s));
       
-      console.log(`   Saved tokens: ${savedFormula.tokens.length}`);
-      console.log(`   Shared-refs en BD: ${savedSharedRefs.length}`);
-      console.log(`   ✅ Suffixés: ${suffixed.length}`);
-      console.log(`   ❌ Non-suffixés: ${nonSuffixed.length}`);
       
       if (nonSuffixed.length > 0) {
-        console.error(`🚨 ERREUR! Tokens non-suffixés en BD:`, nonSuffixed.slice(0, 2));
+        console.error(`Ã°Å¸Å¡Â¨ ERREUR! Tokens non-suffixÃƒÂ©s en BD:`, nonSuffixed.slice(0, 2));
       } else {
-        console.log(`✅ SUCCÈS! Tous les shared-refs sont suffixés en BD!`);
       }
     }
-    console.log();
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 5 : LIAISON AUTOMATIQUE OBLIGATOIRE
-    // ═══════════════════════════════════════════════════════════════════════
-    // ⚡ UTILISATION DU SYSTÈME UNIVERSEL DE LIAISON
-    // Cette fonction lie automatiquement la formule à TOUS les nœuds référencés
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 5 : LIAISON AUTOMATIQUE OBLIGATOIRE
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã¢Å¡Â¡ UTILISATION DU SYSTÃƒË†ME UNIVERSEL DE LIAISON
+    // Cette fonction lie automatiquement la formule ÃƒÂ  TOUS les nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
     try {
       await linkFormulaToAllNodes(prisma, newFormulaId, rewrittenTokens);
     } catch (e) {
-      console.error(`❌ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
+      console.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 5B : Mettre à jour linkedFormulaIds du nœud propriétaire
-    // ═══════════════════════════════════════════════════════════════════════
-    try {
-      await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedFormulaIds', [newFormulaId]);
-      console.log(`✅ linkedFormulaIds mis à jour pour nœud propriétaire ${finalOwnerNodeId}`);
-    } catch (e) {
-      console.warn(`⚠️ Erreur MAJ linkedFormulaIds du propriétaire:`, (e as Error).message);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 5B : Mettre ÃƒÂ  jour linkedFormulaIds du nÃ…â€œud propriÃƒÂ©taire
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // SEULEMENT si le noeud proprietaire existe parmi les noeuds copies
+    if (ownerNodeExistsForUpdate) {
+      try {
+        await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedFormulaIds', [newFormulaId]);
+      } catch (e) {
+        console.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, (e as Error).message);
+      }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📝 ÉTAPE 7 : Synchroniser les paramètres de capacité
-    // ═══════════════════════════════════════════════════════════════════════
-    try {
-      await prisma.treeBranchLeafNode.update({
-        where: { id: finalOwnerNodeId },
-        data: {
-          hasFormula: true,
-          formula_activeId: newFormulaId,
-          formula_name: newFormula.name,
-          formula_description: newFormula.description
-        }
-      });
-      console.log(`✅ Paramètres capacité (formula) mis à jour pour nœud ${finalOwnerNodeId}`);
-      console.log(`   - formula_activeId: ${newFormulaId}`);
-      console.log(`   - formula_name: ${newFormula.name || 'null'}`);
-    } catch (e) {
-      console.warn(`⚠️ Erreur lors de la mise à jour des paramètres capacité:`, (e as Error).message);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œÂ Ãƒâ€°TAPE 7 : Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ©
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // ETAPE 7 : Synchroniser hasFormula/formula_activeId SEULEMENT si proprietaire existe
+    if (ownerNodeExistsForUpdate) {
+      try {
+        await prisma.treeBranchLeafNode.update({
+          where: { id: finalOwnerNodeId },
+          data: {
+            hasFormula: true,
+            formula_activeId: newFormulaId,
+            formula_name: newFormula.name
+          }
+        });
+      } catch (e) {
+        console.warn(`Erreur lors de la mise a jour des parametres capacite:`, (e as Error).message);
+      }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 8 : Mettre en cache
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 8 : Mettre en cache
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     formulaCopyCache.set(originalFormulaId, newFormulaId);
 
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`✅ COPIE FORMULE TERMINÉE`);
-    console.log(`${'═'.repeat(80)}\n`);
 
     return {
       newFormulaId,
@@ -459,7 +430,7 @@ export async function copyFormulaCapacity(
     };
 
   } catch (error) {
-    console.error(`❌ Erreur lors de la copie de la formule:`, error);
+    console.error(`Ã¢ÂÅ’ Erreur lors de la copie de la formule:`, error);
     return {
       newFormulaId: '',
       nodeId: '',
@@ -470,12 +441,12 @@ export async function copyFormulaCapacity(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS UTILITAIRES POUR LINKED FIELDS
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€Â§ FONCTIONS UTILITAIRES POUR LINKED FIELDS
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Ajoute des IDs à un champ linked... d'un nœud (sans doublons)
+ * Ajoute des IDs ÃƒÂ  un champ linked... d'un nÃ…â€œud (sans doublons)
  */
 async function addToNodeLinkedField(
   prisma: PrismaClient,
@@ -491,12 +462,12 @@ async function addToNodeLinkedField(
   });
 
   if (!node) {
-    console.warn(`⚠️ Nœud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`Ã¢Å¡Â Ã¯Â¸Â NÃ…â€œud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
 
   const current = (node[field] || []) as string[];
-  const newIds = [...new Set([...current, ...idsToAdd])]; // Dédupliquer
+  const newIds = [...new Set([...current, ...idsToAdd])]; // DÃƒÂ©dupliquer
 
   await prisma.treeBranchLeafNode.update({
     where: { id: nodeId },

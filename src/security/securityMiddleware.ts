@@ -131,9 +131,16 @@ export const advancedRateLimit = rateLimit({
 });
 
 // 🛡️ DÉTECTION D'ANOMALIES COMPORTEMENTALES
+// ⚠️ Désactivé en développement car génère trop de logs avec TBL
 const requestHistory = new Map<string, Array<{ timestamp: number; endpoint: string }>>();
+const isDev = process.env.NODE_ENV !== 'production';
 
 export const anomalyDetection = (req: Request, res: Response, next: NextFunction) => {
+  // En développement, skip complètement pour la performance
+  if (isDev) {
+    return next();
+  }
+  
   const clientIP = req.ip;
   const currentTime = Date.now();
   const endpoint = req.path;

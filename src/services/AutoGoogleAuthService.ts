@@ -31,12 +31,12 @@ export class AutoGoogleAuthService {
     message: string;
   }> {
     try {
-      console.log(`🔄 [AutoGoogleAuth] DÉBUT autoConnectToGoogle pour user ${userId} org ${organizationId}...`);
+      
 
       // 1. Vérifier si l'utilisateur a déjà des tokens Google valides
-      console.log(`🔍 [AutoGoogleAuth] Vérification tokens existants pour user ${userId}...`);
+      
       const existingTokens = await googleOAuthService.getUserTokens(userId);
-      console.log(`🔍 [AutoGoogleAuth] Tokens existants pour user ${userId}:`, existingTokens ? 'TROUVÉS' : 'AUCUN');
+      
       
       if (existingTokens) {
         // 🔧 CORRECTIF: Beaucoup moins agressif - on fait confiance aux tokens existants
@@ -44,7 +44,7 @@ export class AutoGoogleAuthService {
         const isExpired = existingTokens.expiresAt && existingTokens.expiresAt <= now;
         
         if (!isExpired) {
-          console.log(`✅ [AutoGoogleAuth] Tokens valides trouvés pour user ${userId} - connexion considérée comme active`);
+          
           return {
             success: true,
             isConnected: true,
@@ -52,7 +52,7 @@ export class AutoGoogleAuthService {
             message: 'Connexion Google automatique réussie (tokens existants)'
           };
         } else {
-          console.log(`⚠️ [AutoGoogleAuth] Tokens expirés pour user ${userId} - mais on laisse le middleware gérer le refresh`);
+          
           return {
             success: true,
             isConnected: true,
@@ -66,7 +66,7 @@ export class AutoGoogleAuthService {
       if (organizationId) {
         const orgConnection = await this.checkOrganizationGoogleConnection(organizationId);
         if (orgConnection.hasConnection) {
-          console.log(`✅ [AutoGoogleAuth] Connexion Google organisation disponible pour user ${userId}`);
+          
           return {
             success: true,
             isConnected: true,
@@ -79,7 +79,7 @@ export class AutoGoogleAuthService {
       // 3. Première connexion nécessaire - générer l'URL d'autorisation
       const authUrl = googleOAuthService.getAuthUrl(userId);
       
-      console.log(`🔐 [AutoGoogleAuth] Première connexion Google nécessaire pour user ${userId}`);
+      
       return {
         success: true,
         isConnected: false,
@@ -109,7 +109,7 @@ export class AutoGoogleAuthService {
       const tokens = await googleOAuthService.getUserTokens(userId);
       
       if (!tokens) {
-        console.log(`[AutoGoogleAuth] Pas de tokens pour user ${userId}`);
+        
         return false;
       }
       
@@ -118,11 +118,11 @@ export class AutoGoogleAuthService {
       const isExpired = tokens.expiresAt && tokens.expiresAt <= now;
       
       if (isExpired) {
-        console.log(`[AutoGoogleAuth] Tokens expirés pour user ${userId}`);
+        
         return false;
       }
       
-      console.log(`[AutoGoogleAuth] ✅ Tokens présents et non expirés pour user ${userId}`);
+      
       return true;
       
     } catch (error) {
@@ -138,7 +138,7 @@ export class AutoGoogleAuthService {
     try {
       // 🔧 CORRECTIF : Moins agressif dans le refresh des tokens
       // On ne fait plus d'appels API automatiques, on laisse le middleware s'en charger
-      console.log(`[AutoGoogleAuth] 🔧 Refresh conservateur pour user ${userId} - délégation au middleware`);
+      
       
       // Juste vérifier que les tokens existent toujours après refresh
       const tokens = await googleOAuthService.getUserTokens(userId);
@@ -190,37 +190,37 @@ export class AutoGoogleAuthService {
    */
   async handleLoginGoogleConnection(userId: string, organizationId?: string): Promise<void> {
     try {
-      console.log(`🚀 [AutoGoogleAuth] DÉBUT handleLoginGoogleConnection pour user ${userId} org ${organizationId}...`);
+      
       
       // Connexion asynchrone en arrière-plan pour ne pas bloquer le login
       setTimeout(async () => {
         try {
-          console.log(`⏰ [AutoGoogleAuth] TIMEOUT DÉCLENCHÉ (5 min) - Exécution autoConnectToGoogle pour user ${userId}...`);
+          
           
           const result = await this.autoConnectToGoogle(userId, organizationId);
-          console.log(`📋 [AutoGoogleAuth] RÉSULTAT autoConnectToGoogle pour user ${userId}:`, result);
+          
           
           if (result.success && result.isConnected) {
-            console.log(`✅ [AutoGoogleAuth] Connexion Google automatique réussie pour user ${userId}`);
+            
             
             // Optionnel: Envoyer une notification WebSocket ou mise à jour en temps réel
             // pour informer le frontend que Google est connecté
             this.notifyFrontendGoogleConnected(userId);
           } else if (result.needsManualAuth) {
-            console.log(`🔐 [AutoGoogleAuth] Connexion manuelle requise pour user ${userId}`);
-            console.log(`🔗 [AutoGoogleAuth] URL d'autorisation: ${result.authUrl}`);
+            
+            
             
             // Optionnel: Envoyer une notification au frontend avec l'URL d'auth
             this.notifyFrontendManualAuthRequired(userId, result.authUrl);
           } else {
-            console.log(`⚠️ [AutoGoogleAuth] Résultat inattendu pour user ${userId}:`, result);
+            
           }
         } catch (timeoutError) {
           console.error(`❌ [AutoGoogleAuth] Erreur dans setTimeout pour user ${userId}:`, timeoutError);
         }
       }, 5 * 60 * 1000); // 🔧 CORRECTIF: Délai de 5 minutes au lieu de 1 seconde pour être moins agressif
 
-      console.log(`📤 [AutoGoogleAuth] handleLoginGoogleConnection terminé pour user ${userId} - timeout 5min programmé`);
+      
     } catch (error) {
       console.error(`❌ [AutoGoogleAuth] Erreur handleLoginGoogleConnection pour user ${userId}:`, error);
     }
@@ -231,7 +231,7 @@ export class AutoGoogleAuthService {
    */
   private notifyFrontendGoogleConnected(userId: string): void {
     // TODO: Implémenter notification WebSocket ou autre mécanisme temps réel
-    console.log(`📢 [AutoGoogleAuth] Google connecté automatiquement pour user ${userId}`);
+    
     
     // Exemple: Vous pourriez utiliser Socket.IO ou Server-Sent Events
     // socketService.notifyUser(userId, {
@@ -245,7 +245,7 @@ export class AutoGoogleAuthService {
    */
   private notifyFrontendManualAuthRequired(userId: string, authUrl?: string): void {
     // TODO: Implémenter notification avec URL d'autorisation
-    console.log(`📢 [AutoGoogleAuth] Connexion manuelle requise pour user ${userId}`, { authUrl });
+    
     
     // Exemple: Notification avec action
     // socketService.notifyUser(userId, {
@@ -263,12 +263,12 @@ export class AutoGoogleAuthService {
    */
   async handleLogoutGoogleDisconnection(userId: string): Promise<void> {
     try {
-      console.log(`🔄 [AutoGoogleAuth] Nettoyage session Google pour user ${userId}...`);
+      
       
       // Ne pas supprimer les tokens (pour permettre la reconnexion automatique)
       // Juste nettoyer les sessions en cours si nécessaire
       
-      console.log(`✅ [AutoGoogleAuth] Session Google nettoyée pour user ${userId}`);
+      
     } catch (error) {
       console.error(`❌ [AutoGoogleAuth] Erreur nettoyage session Google pour user ${userId}:`, error);
     }

@@ -30,9 +30,9 @@ export async function computeTemplateCopySuffixMax(
   const templateSet = new Set(templateNodeIds);
   const templateIds = Array.from(templateSet);
 
-  // IMPORTANT: On veut un comportement 100% stable et conforme à la règle métier
-  // « si <templateId>-1 existe alors le prochain est -2 ».
-  // Pour cela, on se base d'abord sur la présence d'IDs du type `${templateId}-<nombre>`.
+  // IMPORTANT: On veut un comportement 100% stable et conforme ÃƒÂ  la rÃƒÂ¨gle mÃƒÂ©tier
+  // Ã‚Â« si <templateId>-1 existe alors le prochain est -2 Ã‚Â».
+  // Pour cela, on se base d'abord sur la prÃƒÂ©sence d'IDs du type `${templateId}-<nombre>`.
   // (Les filtres JSON `metadata.path` ne sont pas fiables selon le provider.)
   const orStartsWith = templateIds.map(templateId => ({ id: { startsWith: `${templateId}-` } }));
 
@@ -44,10 +44,10 @@ export async function computeTemplateCopySuffixMax(
     select: { id: true, metadata: true }
   });
 
-  // 🔍 Sécurité supplémentaire : certaines copies historiques peuvent ne pas
-  // conserver l'ID de base (ex: ID régénéré après collision) mais exposent
+  // Ã°Å¸â€Â SÃƒÂ©curitÃƒÂ© supplÃƒÂ©mentaire : certaines copies historiques peuvent ne pas
+  // conserver l'ID de base (ex: ID rÃƒÂ©gÃƒÂ©nÃƒÂ©rÃƒÂ© aprÃƒÂ¨s collision) mais exposent
   // metadata.copiedFromNodeId ou metadata.sourceTemplateId. On les compte
-  // aussi pour éviter de retomber systématiquement à -1.
+  // aussi pour ÃƒÂ©viter de retomber systÃƒÂ©matiquement ÃƒÂ  -1.
   const metaCopies = await prisma.treeBranchLeafNode.findMany({
     where: {
       treeId,
@@ -74,8 +74,8 @@ export async function computeTemplateCopySuffixMax(
     if (!templateId || !templateSet.has(templateId)) continue;
 
     // On ne compte que les suffixes "simples": `<templateId>-<digits>`.
-    // On ignore volontairement les IDs composés (ex: `<templateId>-1-1`) issus d'anciens bugs,
-    // car ils ne doivent pas influencer la séquence 1,2,3...
+    // On ignore volontairement les IDs composÃƒÂ©s (ex: `<templateId>-1-1`) issus d'anciens bugs,
+    // car ils ne doivent pas influencer la sÃƒÂ©quence 1,2,3...
     const rest = copy.id.slice(templateId.length + 1);
     const idSuffix = /^\d+$/.test(rest) ? Number(rest) : null;
 
@@ -87,7 +87,7 @@ export async function computeTemplateCopySuffixMax(
     if (resolved > prev) maxMap.set(templateId, resolved);
   }
 
-  // 📦 Appliquer aussi les copies identifiées via metadata
+  // Ã°Å¸â€œÂ¦ Appliquer aussi les copies identifiÃƒÂ©es via metadata
   for (const copy of metaCopies) {
     const meta = (copy.metadata ?? {}) as Record<string, unknown>;
     const metaTemplateId =

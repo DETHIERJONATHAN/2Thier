@@ -1057,16 +1057,12 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
           // Ajouter le code postal s'il existe dans data
           if (leadData.postalCode) {
             valueMap.set('lead.postalCode', leadData.postalCode);
-            console.log(`[PREVIEW-EVALUATE] ✅ Code postal Lead: ${leadData.postalCode}`);
           } else if (leadData.address && typeof leadData.address === 'string') {
             // 🆕 Extraire le code postal depuis l'adresse (format: "Rue..., 5150 Ville, Pays")
             const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
             if (postalCodeMatch) {
               const extractedPostalCode = postalCodeMatch[1];
               valueMap.set('lead.postalCode', extractedPostalCode);
-              console.log(`[PREVIEW-EVALUATE] ✅ Code postal extrait: ${extractedPostalCode} depuis "${leadData.address}"`);
-            } else {
-              console.log(`[PREVIEW-EVALUATE] ⚠️ Aucun code postal trouvé dans l'adresse: "${leadData.address}"`);
             }
           }
           
@@ -1100,10 +1096,9 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       await applySharedReferenceValues(valueMap, overrides as Array<[string, unknown]>, effectiveTreeId);
     }
 
-    // 🔍 [Auto-Clean DEBUG] Logique d'auto-nettoyage pour les sélections Plan/Inclinaison
+    // [Auto-Clean] Logique d'auto-nettoyage pour les sélections Plan/Inclinaison
     if (formData && typeof formData === 'object') {
       const formEntries = Object.entries(formData as Record<string, unknown>);
-      console.log(`🔍 [Auto-Clean DEBUG] Vérification auto-nettoyage sur ${formEntries.length} champs formData`);
       
       // Mapping des références partagées pour chaque option
       const sharedReferenceMapping = {
@@ -1113,8 +1108,6 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
       for (const [nodeId, value] of formEntries) {
         if (!nodeId.startsWith('__') && value !== null && value !== undefined && value !== '') {
-          console.log(`🔍 [Auto-Clean DEBUG] Analyse du champ ${nodeId} = "${value}"`);
-          
           // Récupérer le node pour vérifier s'il a des références partagées
           const nodeInfo = await prisma.treeBranchLeafNode.findUnique({
             where: { id: nodeId },
@@ -1137,13 +1130,9 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
               ? nodeInfo.TreeBranchLeafSelectConfig.options 
               : [];
             
-            console.log(`🔍 [Auto-Clean DEBUG] Node ${nodeId} (${nodeInfo.label}) a ${options.length} options`);
-            
             // Trouver l'option sélectionnée
             const selectedOption = options.find((opt: any) => opt.value === value);
             if (selectedOption?.sharedReferenceIds?.length) {
-              console.log(`🔍 [Auto-Clean DEBUG] Option sélectionnée "${selectedOption.label}" (${selectedOption.value}) a des références partagées:`, selectedOption.sharedReferenceIds);
-              
               // Identifier le type d'option (plan ou inclinaison)
               let optionType: string | null = null;
               if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.plan)) {
@@ -1153,14 +1142,10 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
               }
 
               if (optionType) {
-                console.log(`🔍 [Auto-Clean DEBUG] Option de type "${optionType}" détectée`);
-                
                 // Identifier les références à nettoyer (les autres types)
                 const referencesToClean = optionType === 'plan' 
                   ? sharedReferenceMapping.inclinaison 
                   : sharedReferenceMapping.plan;
-                
-                console.log(`🔍 [Auto-Clean DEBUG] Nettoyage des références:`, referencesToClean);
                 
                 // Trouver tous les nodes qui utilisent ces références dans l'arbre
                 const nodesToClean = await prisma.treeBranchLeafNode.findMany({
@@ -1171,14 +1156,10 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
                   select: { id: true, label: true, sharedReferenceIds: true }
                 });
 
-                console.log(`🔍 [Auto-Clean DEBUG] ${nodesToClean.length} nodes à nettoyer trouvés`);
-                
                 // Nettoyer ces nodes dans le valueMap (données temporaires)
                 for (const nodeToClean of nodesToClean) {
                   if (valueMap.has(nodeToClean.id)) {
-                    const oldValue = valueMap.get(nodeToClean.id);
                     valueMap.delete(nodeToClean.id);
-                    console.log(`🔍 [Auto-Clean DEBUG] ✅ Node ${nodeToClean.id} (${nodeToClean.label}) nettoyé (était: "${oldValue}")`);
                   }
                 }
               }
@@ -1201,16 +1182,12 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       const bIsSumFormula = b.sourceRef?.includes('sum-formula') || b.sourceRef?.includes('sum-total') ? 1 : 0;
       return aIsSumFormula - bIsSumFormula; // Les sum-formulas sont évaluées en dernier
     });
-    console.log(`[UNIVERSAL] 🔄 Ordre d'évaluation:`, capacities.map(c => `${c.TreeBranchLeafNode?.label || c.nodeId} (${c.sourceRef?.includes('sum-formula') ? 'SUM' : 'SIMPLE'})`));
+    // Debug désactivé pour réduire le bruit des logs
 
     // 5) Contexte d'évaluation (submissionId fictif)
     const submissionId = baseSubmissionId || `preview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     
-    // 🔍 DEBUG: Afficher le contenu du valueMap
-    console.log(`[UNIVERSAL] 📦 valueMap contient ${valueMap.size} entrées:`);
-    for (const [key, val] of valueMap.entries()) {
-      console.log(`  - ${key} = ${val}`);
-    }
+    // valueMap initialisé avec les données du formulaire
     
     const context = {
       submissionId,
@@ -1225,7 +1202,6 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     let evaluated = 0;
     for (const cap of capacities) {
       try {
-        console.log(`[UNIVERSAL] 🚀 Évaluation preview pour nodeId: ${cap.nodeId}, sourceRef: ${cap.sourceRef}`);
         
         // NOUVEAU : Utiliser le système universel operation-interpreter
         // La fonction attend maintenant 4 paramètres : (variableNodeId, submissionId, prisma, valueMap)
@@ -1236,13 +1212,9 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
           context.valueMap          // valueMap (données temporaires du formulaire)
         );
         
-        console.log(`[UNIVERSAL] ✅ Résultat: value="${evaluation.value}", operationResult="${evaluation.operationResult}"`);
-        
         // 🔑 CRITIQUE: Ajouter la valeur calculée au valueMap pour que les formules suivantes puissent l'utiliser
-        // Cela permet aux formules composées (ex: sum-total) de récupérer les valeurs des formules simples (ex: Mur)
         if (evaluation.value !== null && evaluation.value !== undefined && evaluation.value !== '∅') {
           context.valueMap.set(cap.nodeId, evaluation.value);
-          console.log(`[UNIVERSAL] 📥 Valeur ajoutée au valueMap: ${cap.nodeId} = ${evaluation.value}`);
         }
         
         results.push({
@@ -1269,8 +1241,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         });
         evaluated++;
       } catch (e) {
-        console.error(`[UNIVERSAL] ❌ Erreur évaluation pour nodeId ${cap.nodeId}:`, e);
-        // Ne bloque pas l'ensemble de la prévisualisation
+        // Erreur d'évaluation silencieuse - ne bloque pas l'ensemble de la prévisualisation
         const errorMessage = e instanceof Error ? e.message : 'Erreur inconnue';
         results.push({
           nodeId: cap.nodeId,
@@ -1296,11 +1267,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       }
     }
 
-    // 🔍 DEBUG: Log final des résultats avant envoi
-    console.log(`[PREVIEW-EVALUATE] 📤 Envoi réponse avec ${results.length} résultats:`);
-    results.forEach((r, i) => {
-      console.log(`  [${i}] nodeId="${r.nodeId}", label="${r.nodeLabel}", value="${r.value}" (calculatedValue="${r.calculatedValue}")`);
-    });
+    // Résultats prêts à envoyer
 
     // 💾 STOCKER LES VALEURS CALCULÉES DANS PRISMA
     try {
@@ -1324,7 +1291,6 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
         .filter(r => {
           // 🚫 EXCLURE les display fields - ils ne doivent JAMAIS être persistés
           if (displayFieldIds.has(r.nodeId)) {
-            console.log(`🚫 [PREVIEW-EVALUATE] Display field exclu de la persistence: ${r.nodeId}`);
             return false;
           }
           // Exclure null, undefined, chaînes vides, et symboles de vide (∅)
@@ -1341,11 +1307,9 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
 
       if (calculatedValues.length > 0) {
         await storeCalculatedValues(calculatedValues, submissionId);
-        console.log(`[PREVIEW-EVALUATE] ✅ ${calculatedValues.length} valeurs stockées dans Prisma (${displayFieldIds.size} display fields exclus)`);
       }
     } catch (storeError) {
-      console.error(`[PREVIEW-EVALUATE] ⚠️ Erreur stockage valeurs calculées:`, storeError);
-      // Ne pas bloquer la réponse si le stockage échoue
+      // Silencieux - ne pas bloquer la réponse si le stockage échoue
     }
 
     return res.json({

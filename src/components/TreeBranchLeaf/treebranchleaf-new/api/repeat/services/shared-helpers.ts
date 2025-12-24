@@ -212,10 +212,9 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
       if (node.repeater_templateNodeIds) {
         try {
           const parsed = JSON.parse(node.repeater_templateNodeIds);
-          console.log('✅ [buildResponseFromColumns] repeater_templateNodeIds reconstruit:', parsed);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error('❌ [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:', e);
+          console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:', e);
           return [];
         }
       }
@@ -231,7 +230,7 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === 'object' ? parsedLabels : null;
         } catch (e) {
-          console.error('❌ [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:', e);
+          console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:', e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -273,7 +272,7 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
       min: node.number_min || null,
       max: node.number_max || null,
       step: node.number_step || 1,
-      // 🔧 FIX: Priorité à data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
+      // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â§ FIX: PrioritÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  data_precision pour les champs d'affichage (cartes bleues), sinon number_decimals
       decimals: node.data_precision ?? node.number_decimals ?? 0,
       prefix: node.number_prefix || null,
       suffix: node.number_suffix || null,
@@ -322,7 +321,6 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
       const parsed = JSON.parse(node.subtabs as string);
       if (Array.isArray(parsed)) {
         (cleanedMetadata as any).subTabs = parsed;
-        console.log('📝 [buildResponseFromColumns] Reconstruit subTabs depuis colonne subtabs:', parsed);
       }
     } catch {
       // noop
@@ -351,22 +349,16 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
     }
     try {
       (cleanedMetadata as any).subTab = parsedSubTab;
-      console.log('📝 [buildResponseFromColumns] Reconstruit subTab depuis colonne subtab:', (cleanedMetadata as any).subTab);
     } catch {
       // noop
     }
   }
 
   if (node.id === '131a7b51-97d5-4f40-8a5a-9359f38939e8') {
-    console.log('📝 [buildResponseFromColumns][Test - liste] node.metadata BRUT:', node.metadata);
-    console.log('📝 [buildResponseFromColumns][Test - liste] cleanedMetadata:', cleanedMetadata);
-    console.log('📝 [buildResponseFromColumns][Test - liste] metadata.capabilities:',
-      (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : 'N/A');
   }
 
   if (cleanedMetadata && (cleanedMetadata as any).subTabs) {
     try {
-      console.log('📝 [buildResponseFromColumns] metadata.subTabs present for node', node.id, JSON.stringify((cleanedMetadata as any).subTabs));
     } catch {
       // noop
     }
@@ -378,17 +370,8 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
   };
 
   if (repeater.templateNodeIds && repeater.templateNodeIds.length > 0) {
-    console.log('🚨🚨🚨 [REPEATER NODE FOUND]', {
-      nodeId: node.id,
-      nodeName: node.name,
-      nodeLabel: (node as any).label,
-      nodeType: (node as any).type,
-      parentId: node.parentId,
-      repeaterConfig: repeater
-    });
   }
 
-  console.log('🎯 [buildResponseFromColumns] metadata.repeater final:', metadataWithRepeater.repeater);
 
   const result = {
     ...node,
@@ -455,7 +438,7 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
         min: node.number_min ?? null,
         max: node.number_max ?? null,
         step: node.number_step ?? 1,
-        // 🔧 FIX: Priorité à data_precision pour les champs d'affichage
+        // ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â§ FIX: PrioritÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  data_precision pour les champs d'affichage
         decimals: node.data_precision ?? node.number_decimals ?? 0,
         unit: node.number_unit ?? node.data_unit ?? null,
         prefix: node.number_prefix || null,
@@ -517,28 +500,13 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
 
     (result as any).capabilities = mergedCaps;
   } catch (e) {
-    console.error('❌ [buildResponseFromColumns] Erreur adaptation legacy capabilities:', e);
+    console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur adaptation legacy capabilities:', e);
   }
 
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
-    console.log('📌 [buildResponseFromColumns] OPTION AVEC SHARED REFS:', {
-      nodeId: node.id,
-      label: node.label || node.option_label,
-      type: node.type,
-      sharedReferenceIds: node.sharedReferenceIds
-    });
   }
 
   if (node.text_helpTooltipType && node.text_helpTooltipType !== 'none') {
-    console.log('🔥 [buildResponseFromColumns] TOOLTIP TROUVÉ:', {
-      id: node.id,
-      name: node.name,
-      tooltipType: node.text_helpTooltipType,
-      hasTooltipText: !!node.text_helpTooltipText,
-      hasTooltipImage: !!node.text_helpTooltipImage,
-      textLength: node.text_helpTooltipText?.length || 0,
-      imageLength: node.text_helpTooltipImage?.length || 0
-    });
   }
 
   return result;

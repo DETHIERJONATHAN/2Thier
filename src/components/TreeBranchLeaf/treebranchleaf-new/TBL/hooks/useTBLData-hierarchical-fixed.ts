@@ -138,10 +138,6 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       }
 
       ddiag('Nodes fetched', nodes.length);
-      if (process.env.NODE_ENV === 'development') {
-        const withDisplayAlways = nodes.filter(r => r.metadata && typeof r.metadata === 'object' && (r.metadata as any).displayAlways === true);
-        console.log('🔎 [TBL Hook - Hierarchical] fetch nodes with displayAlways', withDisplayAlways.map(n => ({ id: n.id, label: n.label })));
-      }
       setRawNodes(nodes);
     } catch (err) {
       console.error('❌ [useTBLDataHierarchicalFixed] fetch error:', err);
@@ -158,7 +154,12 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
   }, [fetchData, disabled]);
 
   const reconcileDuplicatedNodes = useCallback(async (duplicated: Array<{ id: string; parentId?: string; sourceTemplateId?: string }>) => {
+    // 🚀 OPTIMISATION: Simplification radicale pour un repeat instantané
+    // Au lieu de faire des boucles de fetch individuels avec retries (4 tentatives × 300ms chacune),
+    // on fait un seul fetch global silencieux qui récupère tous les nœuds en une fois.
     if (!duplicated || duplicated.length === 0) return;
+    
+    // Vérifier si les nœuds sont déjà présents dans transformed
     const getMissing = () => {
       const t = transformedRef.current;
       if (!t) return duplicated.map(d => d.id);
@@ -166,127 +167,15 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       return duplicated.map(d => d.id).filter(id => !allFields.some(f => f.id === id));
     };
 
-    let missing = getMissing();
+    const missing = getMissing();
     if (missing.length === 0) return;
-    let attempts = 0;
-    while (missing.length > 0 && attempts < 4) {
-      attempts += 1;
-      await Promise.all(missing.map(async id => {
-        try {
-          const res = await apiRef.current.get(`/api/treebranchleaf/nodes/${id}/full`);
-          const nodes: TreeBranchLeafNode[] = Array.isArray(res) ? res as TreeBranchLeafNode[] : (res && typeof res === 'object' ? (res.data || res.nodes || (res.node ? [res.node] : [])) : []);
-          if (nodes.length > 0) {
-            setRawNodes(prev => {
-              const known = new Set(prev.map(n => n.id));
-              const newOnes = nodes.filter(n => !known.has(n.id));
-              if (newOnes.length === 0) return prev;
-              return [...prev, ...newOnes];
-            });
-          }
-        } catch {
-          // ignore
-        }
-      }));
-
-      // wait a bit for transform to recalculated
-      await new Promise(r => setTimeout(r, 200));
-      setFormDataVersion(v => v + 1);
-      await new Promise(r => setTimeout(r, 100));
-      missing = getMissing();
-    }
-
-    if (missing.length > 0) {
-      console.warn('[useTBLDataHierarchicalFixed] Reconciliation incomplete after retry; attempting targeted merge using full tree');
-      try {
-        if (!treeId) {
-          console.warn('[useTBLDataHierarchicalFixed] No treeId available for full tree query; falling back to fetchData()');
-          fetchData();
-          return;
-        }
-        const response = await apiRef.current.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
-        let allNodes: TreeBranchLeafNode[] = [];
-        if (Array.isArray(response)) allNodes = response as TreeBranchLeafNode[];
-        else if (response && typeof response === 'object') allNodes = (response.data || response.nodes || []) as TreeBranchLeafNode[];
-        if (allNodes.length === 0) {
-          console.warn('[useTBLDataHierarchicalFixed] Full tree query returned no nodes, falling back to fetchData()');
-          fetchData();
-          return;
-        }
-        const duplicateIds = new Set(duplicated.map(d => d.id));
-        const duplicateSourceTemplateIds = new Set(duplicated.map(d => d.sourceTemplateId).filter(Boolean));
-        const sourceParentIds: string[] = [];
-        if (duplicateSourceTemplateIds.size > 0) {
-          await Promise.all(Array.from(duplicateSourceTemplateIds).map(async stid => {
-            try {
-              const sr = await apiRef.current.get(`/api/treebranchleaf/nodes/${stid}/full`);
-              const sarr: TreeBranchLeafNode[] = Array.isArray(sr) ? sr as TreeBranchLeafNode[] : (sr && typeof sr === 'object' ? (sr.data || sr.nodes || (sr.node ? [sr.node] : [])) : []);
-              if (sarr.length > 0) {
-                const p = sarr[0].parentId;
-                if (p) sourceParentIds.push(p as string);
-              }
-            } catch (err) {
-              ddiag('[useTBLDataHierarchicalFixed] failed to resolve sourceTemplate parent during reconciliation', stid, err);
-            }
-          }));
-        }
-        const sourceParentSet = new Set(sourceParentIds);
-        const candidates = allNodes.filter(n => {
-          const meta: any = n.metadata || {};
-          const parentMatchesSource = !!(n.parentId && sourceParentSet.has(n.parentId));
-          return (meta.copiedFromNodeId && duplicateIds.has(meta.copiedFromNodeId)) ||
-                 (meta.copiedFromNodeId && duplicateSourceTemplateIds.has(meta.copiedFromNodeId)) ||
-                 (meta.sourceTemplateId && duplicateSourceTemplateIds.has(meta.sourceTemplateId)) ||
-                 (meta.fromVariableId && parentMatchesSource) ||
-                 (meta.autoCreated && parentMatchesSource);
-        });
-        if (candidates.length > 0) {
-          setRawNodes(prev => {
-            const known = new Set(prev.map(n => n.id));
-            const newOnes = candidates.filter(n => !known.has(n.id));
-            if (newOnes.length === 0) return prev;
-            return [...prev, ...newOnes];
-          });
-          ddiag('[useTBLDataHierarchicalFixed] merged nodes from full tree query:', candidates.length);
-          setFormDataVersion(v => v + 1);
-          await new Promise(r => setTimeout(r, 120));
-          missing = getMissing();
-        } else {
-          console.warn('[useTBLDataHierarchicalFixed] No candidate nodes found in full tree query; attempting optimistic injection then fallback to fetchData()');
-          // Attempt optimistic minimal node injection for missing duplicated ids to allow UI rendering
-          try {
-            const missingIds = missing;
-            if (missingIds && missingIds.length > 0) {
-              const minimalNodes: TreeBranchLeafNode[] = missingIds.map(id => ({
-                id,
-                parentId: duplicated.find(d => d.id === id)?.parentId || null,
-                label: `copie-${id.substring(0, 6)}`,
-                type: 'leaf_field',
-                order: 9999,
-                treeId,
-                isVisible: true,
-                isRequired: false,
-                metadata: { copiedFromNodeId: duplicated.find(d => d.id === id)?.sourceTemplateId || duplicated.find(d => d.id === id)?.id }
-              } as TreeBranchLeafNode));
-              setRawNodes(prev => {
-                const known = new Set(prev.map(n => n.id));
-                const newOnes = minimalNodes.filter(n => !known.has(n.id));
-                if (newOnes.length === 0) return prev;
-                return [...prev, ...newOnes];
-              });
-              ddiag('[useTBLDataHierarchicalFixed] Injecté minimal nodes pour duplication (optimistic):', missingIds);
-              setFormDataVersion(v => v + 1);
-            }
-          } catch (e) {
-            ddiag('[useTBLDataHierarchicalFixed] optimistic injection failed', e);
-          }
-          fetchData();
-        }
-      } catch (err) {
-        console.error('[useTBLDataHierarchicalFixed] Failed full tree reconcile query:', err);
-        fetchData();
-      }
-    }
-  }, [apiRef, fetchData, treeId]);
+    
+    // Fetch global silencieux plutôt que des fetches individuels bloquants
+    ddiag('[useTBLDataHierarchicalFixed] Reconciliation needed for', missing.length, 'nodes → scheduling silent global fetch');
+    window.setTimeout(() => {
+      try { fetchData({ silent: true }); } catch { /* ignore */ }
+    }, 100);
+  }, [fetchData, ddiag]);
 
   useEffect(() => {
     if (!treeId || disabled) {
@@ -482,189 +371,15 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
             })();
           }
 
-          // Merge duplicated nodes by fetching full subtree and appending
-          (async () => {
-            try {
-              if (Array.isArray(duplicated) && duplicated.length > 0) {
-                const toFetch = Array.from(new Set(duplicated.map(d => d.id))).filter(Boolean);
-                const fetched: TreeBranchLeafNode[] = [];
-                await Promise.all(toFetch.map(async id => {
-                  try {
-                    // Retry few times if the backend hasn't materialized the subtree yet
-                    let attempts = 0;
-                    let res: any = null;
-                    while (attempts < 3) {
-                      try {
-                        res = await apiRef.current.get(`/api/treebranchleaf/nodes/${id}/full`);
-                        break; // success
-                      } catch {
-                        // wait briefly before retry
-                        attempts += 1;
-                        await new Promise(r => setTimeout(r, 120));
-                      }
-                    }
-                    if (!res) {
-                      throw new Error('no response from /nodes/:id/full');
-                    }
-                    // Normaliser la réponse: le endpoint peut renvoyer soit un tableau, soit { data: [...] }, soit { nodes: [...] }
-                    if (Array.isArray(res)) {
-                      fetched.push(...res as TreeBranchLeafNode[]);
-                    } else if (res && typeof res === 'object') {
-                      const asAny = res as any;
-                      if (Array.isArray(asAny.data)) fetched.push(...asAny.data);
-                      else if (Array.isArray(asAny.nodes)) fetched.push(...asAny.nodes);
-                      else if (asAny.node && typeof asAny.node === 'object') fetched.push(asAny.node);
-                    }
-                  } catch (e) {
-                    ddiag('Failed to fetch duplicated node subtree', id, e);
-                  }
-                }));
-
-                if (fetched.length > 0) {
-                  setRawNodes(prev => {
-                    const known = new Set(prev.map(n => n.id));
-                    const newOnes = fetched.filter(n => !known.has(n.id));
-                    if (newOnes.length === 0) return prev;
-                    return [...prev, ...newOnes];
-                  });
-                  console.log('[useTBLDataHierarchicalFixed] merged duplicated subtree nodes:', fetched.length, fetched.map(n => n.id));
-                  ddiag('[useTBLDataHierarchicalFixed] rawNodes AFTER duplicate merge count:', rawNodesRef.current.length);
-                  // Also fetch parent subtrees for display nodes created under the parent
-                  try {
-                    let parentIds = Array.from(new Set((duplicated as Array<any>).map(d => d.parentId).filter(Boolean)));
-                    // Also attempt to derive parentIds from the original template's parent (sourceTemplateId)
-                    const sourceParentIds: string[] = [];
-                    const sourceTemplateIds = Array.from(new Set((duplicated as Array<any>).map(d => d.sourceTemplateId).filter(Boolean))) as string[];
-                    if (sourceTemplateIds.length > 0) {
-                      await Promise.all(sourceTemplateIds.map(async stid => {
-                        try {
-                          const sr = await apiRef.current.get(`/api/treebranchleaf/nodes/${stid}/full`);
-                          const sarr: TreeBranchLeafNode[] = Array.isArray(sr) ? sr as TreeBranchLeafNode[] : (sr && typeof sr === 'object' ? (sr.data || sr.nodes || (sr.node ? [sr.node] : [])) : []);
-                          if (sarr.length > 0) {
-                            const p = sarr[0].parentId;
-                            if (p) sourceParentIds.push(p);
-                          }
-                        } catch (e) {
-                          ddiag('[useTBLDataHierarchicalFixed] failed to fetch full source template', stid, e);
-                        }
-                      }));
-                      if (sourceParentIds.length > 0) parentIds = [...new Set(parentIds.concat(sourceParentIds))];
-                    }
-                    if (parentIds.length > 0) {
-                      const fetchedParentNodes: TreeBranchLeafNode[] = [];
-                      await Promise.all(parentIds.map(async pid => {
-                        try {
-                          const pr = await apiRef.current.get(`/api/treebranchleaf/nodes/${pid}/full`);
-                          if (Array.isArray(pr)) fetchedParentNodes.push(...pr as TreeBranchLeafNode[]);
-                          else if (pr && typeof pr === 'object') {
-                            const asAny = pr as any;
-                            if (Array.isArray(asAny.data)) fetchedParentNodes.push(...asAny.data);
-                            else if (Array.isArray(asAny.nodes)) fetchedParentNodes.push(...asAny.nodes);
-                            else if (asAny.node && typeof asAny.node === 'object') fetchedParentNodes.push(asAny.node);
-                          }
-                        } catch {
-                          // ignore
-                        }
-                      }));
-                      if (fetchedParentNodes.length > 0) {
-                        setRawNodes(prev => {
-                          const known = new Set(prev.map(n => n.id));
-                          const newOnes = fetchedParentNodes.filter(n => !known.has(n.id));
-                          if (newOnes.length === 0) return prev;
-                          return [...prev, ...newOnes];
-                        });
-                        ddiag('useTBLDataHierarchicalFixed merged parent subtree nodes:', fetchedParentNodes.length, fetchedParentNodes.map(n=>n.id));
-                        ddiag('[useTBLDataHierarchicalFixed] rawNodes AFTER parent merge count:', rawNodesRef.current.length);
-                        // Quick immediate check: are duplicates present in transformed after merge?
-                        try {
-                          const duplicatedIds = (duplicated as Array<any>).map(d=>d.id).filter(Boolean);
-                          const t = transformedRef.current;
-                          const present = duplicatedIds.filter(id => {
-                            if (!t) return false;
-                            return Object.values(t.fieldsByTab || {}).flat().some((f: any) => f.id === id);
-                          });
-                          ddiag('[useTBLDataHierarchicalFixed] IMMEDIATE check after parent merge - duplicated present:', present, { eventDebugId: (detail as any)?.eventDebugId || null });
-                        } catch { /* ignore */ }
-                        // Schedule a quick check whether transformed contains duplicated ids
-                        try {
-                          const duplicatedIds = (duplicated as Array<any>).map(d => d.id).filter(Boolean);
-                          window.setTimeout(() => {
-                            const t = transformedRef.current;
-                            const present = duplicatedIds.filter(id => {
-                              if (!t) return false;
-                              return Object.values(t.fieldsByTab || {}).flat().some((f: any) => f.id === id);
-                            });
-                            console.error('[Hierarchical] After parent merge - duplicated present in transformed:', present);
-                          }, 180);
-                        } catch { /* ignore */ }
-                      }
-                    }
-                  } catch {
-                    // swallow errors to avoid affecting the optimistic local merge
-                  }
-                } else if (Array.isArray(duplicated) && duplicated.length > 0) {
-                  // Fallback: if we expected duplicates but nothing was fetched, do a full refresh only
-                  // if the caller explicitly asked to force a refresh (forceRefresh=true).
-                  console.warn('[useTBLDataHierarchicalFixed] Expected duplicates but fetched 0 nodes → falling back to full fetch (respecting suppressReload)', { duplicated });
-                  if ((detail as any)?.forceRefresh) {
-                    fetchData();
-                  } else {
-                    // If no fetched nodes and we are in suppressReload, proactively attempt reconciliation
-                    // by fetching each duplicate node subtree and merging before resorting to optimistic injection.
-                    ddiag('[useTBLDataHierarchicalFixed] initiating proactive reconciliation for duplicates', duplicated.map(d => d.id));
-                    try {
-                      await reconcileDuplicatedNodes(duplicated as any);
-                    } catch (e) { ddiag('[useTBLDataHierarchicalFixed] proactive reconciliation error', e); }
-                    ddiag('[useTBLDataHierarchicalFixed] suppressReload=true — no fetched duplicates; attempting optimistic minimal injection then skipping full fetch');
-                    // Attempt optimistic minimal injection: build minimal nodes with metadata used by transform to detect copies
-                    try {
-                      const missingIds = duplicated.map(d => d.id);
-                      const minimalNodes = missingIds.map(id => ({
-                        id,
-                        parentId: duplicated.find(d => d.id === id)?.parentId || null,
-                        label: `copie-${id.substring(0,6)}`,
-                        type: 'leaf_field',
-                        order: 9999,
-                        treeId,
-                        isVisible: true,
-                        isRequired: false,
-                        metadata: {
-                          copiedFromNodeId: duplicated.find(d => d.id === id)?.sourceTemplateId || duplicated.find(d => d.id === id)?.id,
-                          sourceTemplateId: duplicated.find(d => d.id === id)?.sourceTemplateId || duplicated.find(d => d.id === id)?.id
-                        }
-                      } as TreeBranchLeafNode));
-                      setRawNodes(prev => {
-                        const known = new Set(prev.map(n => n.id));
-                        const newOnes = minimalNodes.filter(n => !known.has(n.id));
-                        if (newOnes.length === 0) return prev;
-                        return [...prev, ...newOnes];
-                      });
-                      ddiag('[useTBLDataHierarchicalFixed] Optimistic minimal nodes injected for duplicates:', minimalNodes.map(n=>n.id));
-                      // Schedule a silent fetch afterwards to pick up real nodes when backend finishes processing
-                      window.setTimeout(() => {
-                        ddiag('[useTBLDataHierarchicalFixed] scheduling silent fetch after optimistic injection');
-                        try { fetchData({ silent: true }); } catch { /* ignore */ }
-                      }, 180);
-                      setFormDataVersion(v => v + 1);
-                      // Check transformed after optimistic minimal injection
-                      try {
-                        const duplicatedIds = duplicated.map(d=>d.id).filter(Boolean);
-                        window.setTimeout(() => {
-                          const t = transformedRef.current;
-                          const present = duplicatedIds.filter(id => {
-                            if (!t) return false;
-                            return Object.values(t.fieldsByTab || {}).flat().some((f:any) => f.id === id);
-                          });
-                          console.error('[Hierarchical] After optimistic injection - duplicated present in transformed:', present);
-                        }, 220);
-                      } catch { /* ignore */ }
-                    } catch (e) {
-                      ddiag('[useTBLDataHierarchicalFixed] optimistic injection failed', e);
-                    }
-                  }
-                  return;
-                }
-              }
+          // Merge duplicated nodes - simplified: use inlineNodes already provided by the API
+          // No blocking fetch loops - schedule a single silent background fetch for consistency
+          if (Array.isArray(duplicated) && duplicated.length > 0) {
+            ddiag('[useTBLDataHierarchicalFixed] Duplicated nodes detected, using inline nodes directly');
+            // Schedule a single silent fetch to ensure backend consistency (non-blocking)
+            window.setTimeout(() => {
+              try { fetchData({ silent: true }); } catch { /* ignore */ }
+            }, 150);
+          }
 
               if (Array.isArray(deletingIds) && deletingIds.length > 0) {
                 // 0) Handle optimistic deletions (deletingIds) — local, suffix-aware cascade only
@@ -725,9 +440,6 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     }
                   }
                   
-                  console.log('🔢 [DELETE CASCADE LOCAL] Suffixes détectés:', Array.from(deletedSuffixes));
-                  console.log('👨‍👩‍👧 [DELETE CASCADE LOCAL] ParentIds des nœuds supprimés:', Array.from(deletedParentIds));
-                  
                   // Cascade avec vérification du suffixe
                   let added = true;
                   while (added) {
@@ -742,14 +454,10 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                         
                         // ✅ RÈGLE STRICTE: Le nœud doit avoir le MÊME suffixe que son parent supprimé
                         if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
-                          console.log(`✅ [DELETE CASCADE LOCAL MATCH] Nœud ${n.id} (${n.label}) → parent supprimé + suffixe -${nodeSuffix}`);
                           removed.add(n.id);
                           added = true;
-                        } else if (nodeSuffix) {
-                          console.log(`⏭️ [DELETE CASCADE LOCAL SKIP] Nœud ${n.id} (${n.label}) → parent supprimé MAIS suffixe -${nodeSuffix} différent`);
-                        } else {
+                        } else if (!nodeSuffix) {
                           // Pas de suffixe → supprimer (nœud de base)
-                          console.log(`✅ [DELETE CASCADE LOCAL] Nœud ${n.id} (${n.label}) → parent supprimé, pas de suffixe`);
                           removed.add(n.id);
                           added = true;
                         }
@@ -763,7 +471,6 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                 // NOTE: we intentionally avoid a heavy full-tree query here to keep it lightweight.
                 // The Prisma-aware hook performs aggressive enrichment; however, we fallback to
                 // a delayed refresh if deletions didn't remove display nodes locally.
-                console.log('[useTBLDataHierarchicalFixed] deleted nodes merged locally:', deletedIds.length);
                 // Attempt to enrich deletions by scanning the full tree for display nodes
                 // referencing the deleted nodes (via metadata). If we find any, remove them
                 // locally and retransform; otherwise, schedule a gentle fetchData() as fallback.
@@ -890,85 +597,18 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     }
                 })();
               }
-            } catch (e) {
-              ddiag('Error merging duplicated/deleted nodes silently', e);
-            } finally {
-              setFormDataVersion(v => v + 1);
-            }
-          })();
+
           // Recompute local transform based on current window.TBL_FORM_DATA and rawNodes
           if (rawNodesRef.current.length > 0) {
             formDataVersionRef.current += 1;
-            // The useMemo that builds nodes from rawNodes will recompute when formDataVersion changes
             setFormDataVersion((v) => v + 1);
-            // Kick off background reconciliation for cases where some display nodes are not yet visible
-            (async () => {
-              try {
-                if (duplicated && duplicated.length > 0) await reconcileDuplicatedNodes(duplicated);
-              } catch { /* ignore */ }
-            })();
           }
 
-          // Always perform silent refetch to guarantee backend has materialized full subtree
+          // Single silent background fetch for duplication consistency (non-blocking)
           if (duplicated && duplicated.length > 0) {
-            const delay = needsFallbackReload ? 40 : 70;
-            window.setTimeout(() => fetchData({ silent: true }), delay);
-            // Renforcement: effectuer des refetchs supplémentaires si les IDs dupliqués n'apparaissent pas encore
-            try {
-              const duplicatedIds = duplicated.map(d => d.id).filter(Boolean);
-              if (duplicatedIds.length) {
-                // Fonction utilitaire locale pour vérifier la présence des duplications
-                const checkMissing = () => {
-                  const currentIds = new Set(rawNodesRef.current.map(n => n.id));
-                  return duplicatedIds.filter(id => !currentIds.has(id));
-                };
-                // Première vague (après le refetch initial)
-                window.setTimeout(() => {
-                  const stillMissing = checkMissing();
-                  if (stillMissing.length) {
-                    ddiag('[HierarchicalFixed] Duplicates still missing after first silent fetch → second fetch', stillMissing);
-                    fetchData({ silent: true });
-                  } else {
-                    ddiag('[HierarchicalFixed] All duplicates present after first silent fetch');
-                    setFormDataVersion(v => v + 1);
-                  }
-                }, delay + 220);
-                // Deuxième vague (fallback plus tardif) uniquement si encore manquants
-                window.setTimeout(() => {
-                  const stillMissing = checkMissing();
-                  if (stillMissing.length) {
-                    ddiag('[HierarchicalFixed] Duplicates still missing after second fetch → third fetch', stillMissing);
-                    fetchData({ silent: true });
-                  } else {
-                    ddiag('[HierarchicalFixed] All duplicates present after second fetch');
-                    setFormDataVersion(v => v + 1);
-                  }
-                }, delay + 600);
-                // Dernière vague – si encore absent → forcer réconciliation ciblée
-                window.setTimeout(async () => {
-                  const stillMissing = checkMissing();
-                  if (stillMissing.length) {
-                    console.warn('[HierarchicalFixed] Duplicates STILL missing after multi-fetch cycle → invoking reconcileDuplicatedNodes', stillMissing);
-                    try {
-                      await reconcileDuplicatedNodes(duplicated as any);
-                      setFormDataVersion(v => v + 1);
-                    } catch (e) {
-                      console.error('[HierarchicalFixed] reconcileDuplicatedNodes final attempt error', e);
-                    }
-                    // Final fallback in development or when explicitly enabled: perform a full non-silent fetch to re-sync UI
-                    try {
-                      const shouldForce = typeof window !== 'undefined' && localStorage.getItem('TBL_FORCE_REFRESH_ON_MISSING_DUPLICATES') === '1';
-                      if (shouldForce || process.env.NODE_ENV === 'development') {
-                        console.warn('[HierarchicalFixed] Final fallback: performing full fetchData() to ensure duplicates are present (non-silent)');
-                        fetchData();
-                      }
-                    } catch (e) { ddiag('[HierarchicalFixed] final fallback fetchData error', e); }
-                  }
-                }, delay + 1200);
-              }
-            } catch (e) {
-              ddiag('[HierarchicalFixed] multi-stage duplicate presence check failed', e);
-            }
+            window.setTimeout(() => {
+              try { fetchData({ silent: true }); } catch { /* ignore */ }
+            }, 200);
           }
           return;
         }
@@ -1035,19 +675,6 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     return transformNodesToTBLComplete(rawNodes, formData);
   }, [rawNodes, formDataVersion]);
   const transformedTabs = transformed.tabs;
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-    try {
-      const sectionsWithDisplayAlways = Object.values(transformed.sectionsByTab || {})
-        .flat()
-        .filter(s => !!(s as any).metadata?.displayAlways);
-      if (sectionsWithDisplayAlways.length) {
-        console.log('[TBL Hook - Hierarchical] Sections with displayAlways found after transform:', sectionsWithDisplayAlways.map(s => ({ id: s.id, title: s.title })));
-      } else {
-        console.log('[TBL Hook - Hierarchical] No sections with displayAlways after transform');
-      }
-    } catch (e) { console.error('[TBL Hook - Hierarchical] logging transform error', e); }
-  }, [transformed]);
   useEffect(() => { transformedRef.current = transformed; }, [transformed]);
 
   useEffect(() => {
@@ -1065,7 +692,6 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
   
 
   const refetch = useCallback(() => {
-    console.error('🔄 [useTBLData] refetch() called, returning Promise from fetchData()');
     return fetchData();
   }, [fetchData]);
 

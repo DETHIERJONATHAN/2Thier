@@ -642,8 +642,6 @@ router.get('/generated', async (req: Request, res: Response) => {
     const organizationId = req.headers['x-organization-id'] as string;
     const { leadId, submissionId, templateId } = req.query;
     
-    console.log('📄 [GET /generated] Query params:', { leadId, submissionId, templateId, organizationId });
-    
     if (!organizationId) {
       return res.status(400).json({ error: 'Organization ID requis' });
     }
@@ -664,8 +662,6 @@ router.get('/generated', async (req: Request, res: Response) => {
     if (templateId) {
       where.templateId = templateId as string;
     }
-
-    console.log('📄 [GET /generated] Where clause:', JSON.stringify(where, null, 2));
 
     const documents = await prisma.generatedDocument.findMany({
       where,
@@ -697,13 +693,9 @@ router.get('/generated', async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log('📄 [GET /generated] Found documents:', documents.length);
     res.json(documents);
   } catch (error: any) {
-    console.error('❌ [GET /generated] Erreur récupération documents générés:', error);
-    console.error('❌ [GET /generated] Error name:', error?.name);
-    console.error('❌ [GET /generated] Error code:', error?.code);
-    console.error('❌ [GET /generated] Error message:', error?.message);
+    console.error('❌ [GET /generated] Erreur récupération documents générés:', error?.message);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
   }
 });

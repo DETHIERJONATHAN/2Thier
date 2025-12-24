@@ -1,37 +1,37 @@
 /**
- * 🔗 SYSTÈME UNIVERSEL DE LIAISON AUTOMATIQUE
+ * Ã°Å¸â€â€” SYSTÃƒË†ME UNIVERSEL DE LIAISON AUTOMATIQUE
  * 
- * CE FICHIER EST LA SOURCE DE VÉRITÉ POUR TOUTES LES LIAISONS BIDIRECTIONNELLES
+ * CE FICHIER EST LA SOURCE DE VÃƒâ€°RITÃƒâ€° POUR TOUTES LES LIAISONS BIDIRECTIONNELLES
  * 
  * PRINCIPE :
  * ---------
- * Quand une capacité (condition/formule/table) est créée/copiée :
- * 1. On extrait TOUS les nodeIds utilisés dans la capacité
- * 2. On met automatiquement l'ID de la capacité dans linkedXXXIds de CHAQUE nœud
+ * Quand une capacitÃƒÂ© (condition/formule/table) est crÃƒÂ©ÃƒÂ©e/copiÃƒÂ©e :
+ * 1. On extrait TOUS les nodeIds utilisÃƒÂ©s dans la capacitÃƒÂ©
+ * 2. On met automatiquement l'ID de la capacitÃƒÂ© dans linkedXXXIds de CHAQUE nÃ…â€œud
  * 
- * Quand une variable charge une capacité :
- * 1. On extrait TOUS les nodeIds de la capacité
- * 2. On met l'ID de la variable dans linkedVariableIds de CHAQUE nœud
+ * Quand une variable charge une capacitÃƒÂ© :
+ * 1. On extrait TOUS les nodeIds de la capacitÃƒÂ©
+ * 2. On met l'ID de la variable dans linkedVariableIds de CHAQUE nÃ…â€œud
  * 
  * C'EST OBLIGATOIRE ET AUTOMATIQUE - AUCUNE EXCEPTION !
  * 
  * @author DETHIER Jonathan
- * @version 2.0.0 - SYSTÈME COMPLET ET OBLIGATOIRE
+ * @version 2.0.0 - SYSTÃƒË†ME COMPLET ET OBLIGATOIRE
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 📋 TYPES
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€œâ€¹ TYPES
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 type LinkedField = 'linkedFormulaIds' | 'linkedConditionIds' | 'linkedTableIds' | 'linkedVariableIds';
 
 type PrismaLikeClient = PrismaClient | Prisma.TransactionClient;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🧭 AIDES DE PARCOURS
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸Â§Â­ AIDES DE PARCOURS
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 type CapacityType = 'condition' | 'formula' | 'table' | 'unknown';
 
@@ -91,9 +91,9 @@ function extractCapacityRefsFromString(str: string): Set<string> {
   return refs;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔍 EXTRACTION DES NODE IDS
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€Â EXTRACTION DES NODE IDS
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
  * Extrait TOUS les nodeIds d'un conditionSet
@@ -131,14 +131,14 @@ export function extractNodeIdsFromCondition(conditionSet: unknown): Set<string> 
       if (Array.isArray(action.nodeIds)) {
         for (const nodeId of action.nodeIds) {
           if (typeof nodeId === 'string') {
-            // Nettoyer les préfixes si présents
+            // Nettoyer les prÃƒÂ©fixes si prÃƒÂ©sents
             const cleanId = nodeId
               .replace(/^condition:/, '')
               .replace(/^node-formula:/, '')
               .replace(/^node-condition:/, '')
               .replace(/^table:/, '');
             if (cleanId && cleanId !== nodeId) {
-              // Si c'était une référence à une autre capacité, on ne l'ajoute pas
+              // Si c'ÃƒÂ©tait une rÃƒÂ©fÃƒÂ©rence ÃƒÂ  une autre capacitÃƒÂ©, on ne l'ajoute pas
               // car ce n'est pas un vrai nodeId de champ
               continue;
             }
@@ -161,8 +161,8 @@ export function extractNodeIdsFromCondition(conditionSet: unknown): Set<string> 
     extractFromActions(obj.fallback.actions);
   }
 
-  // Fallback: scanner tout le JSON pour des UUID/node_/shared-ref nus (au cas où le @value. est absent)
-  // 🔧 FIX: Capturer les suffixes numériques (-1, -2, etc.)
+  // Fallback: scanner tout le JSON pour des UUID/node_/shared-ref nus (au cas oÃƒÂ¹ le @value. est absent)
+  // Ã°Å¸â€Â§ FIX: Capturer les suffixes numÃƒÂ©riques (-1, -2, etc.)
   const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((match = genericUuid.exec(str)) !== null) {
     ids.add(match[1]);
@@ -281,7 +281,7 @@ export function extractNodeIdsFromFormula(tokens: unknown): Set<string> {
   const str = JSON.stringify(tokensArray);
   let m;
   
-  // 🔧 FIX: Capturer les UUIDs AVEC leurs suffixes numériques (-1, -2, etc.)
+  // Ã°Å¸â€Â§ FIX: Capturer les UUIDs AVEC leurs suffixes numÃƒÂ©riques (-1, -2, etc.)
   // Pattern: @value.UUID-suffix ou @calculated.UUID-suffix ou @select.UUID-suffix
   const refWithSuffixRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((m = refWithSuffixRegex.exec(str)) !== null) ids.add(m[1]);
@@ -328,7 +328,7 @@ function extractNodeAndCapacityRefsFromFormula(tokens: unknown): { nodeIds: Set<
 
   const str = JSON.stringify(tokensArray);
   let m;
-  // 🔧 FIX: Capturer les UUIDs AVEC suffixes numériques
+  // Ã°Å¸â€Â§ FIX: Capturer les UUIDs AVEC suffixes numÃƒÂ©riques
   const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   while ((m = uuidRegex.exec(str)) !== null) nodeIds.add(m[1]);
   const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
@@ -393,12 +393,12 @@ function extractNodeAndCapacityRefsFromTable(tableData: unknown): { nodeIds: Set
   return { nodeIds, capacityRefs };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔗 LIAISON AUTOMATIQUE - FONCTIONS DE BASE
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€â€” LIAISON AUTOMATIQUE - FONCTIONS DE BASE
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Récupère la valeur actuelle d'un champ linked
+ * RÃƒÂ©cupÃƒÂ¨re la valeur actuelle d'un champ linked
  */
 async function getNodeLinkedField(
   client: PrismaLikeClient,
@@ -417,7 +417,7 @@ async function getNodeLinkedField(
     if (Array.isArray(value)) return value.filter(Boolean);
     return [];
   } catch (e) {
-    console.warn(`⚠️ Impossible de lire ${field} pour nœud ${nodeId}:`, (e as Error).message);
+    console.warn(`Ã¢Å¡Â Ã¯Â¸Â Impossible de lire ${field} pour nÃ…â€œud ${nodeId}:`, (e as Error).message);
     return [];
   }
 }
@@ -435,12 +435,23 @@ async function setNodeLinkedField(
     // Dédupliquer et filtrer les valeurs nulles
     const uniqueValues = Array.from(new Set(values.filter(Boolean)));
     
+    // ⚡ Vérifier d'abord si le nœud existe pour éviter l'erreur Prisma
+    const exists = await client.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true }
+    });
+    
+    if (!exists) {
+      // Nœud n'existe pas encore (normal lors de la copie), ignorer silencieusement
+      return;
+    }
+    
     await client.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { [field]: uniqueValues } as any
     });
   } catch (e) {
-    console.warn(`⚠️ Impossible de définir ${field} pour nœud ${nodeId}:`, (e as Error).message);
+    // Silencieux - le noeud peut ne pas exister
   }
 }
 
@@ -462,7 +473,7 @@ async function gatherNodeIdsRecursively(
     return aggregated;
   }
 
-  // Évite les boucles sur les capacités
+  // Ãƒâ€°vite les boucles sur les capacitÃƒÂ©s
   if (visited.has(norm.canonical)) return aggregated;
   visited.add(norm.canonical);
 
@@ -522,7 +533,7 @@ async function gatherNodeIdsRecursively(
 }
 
 /**
- * Ajoute des IDs à un champ linked (sans doublons)
+ * Ajoute des IDs ÃƒÂ  un champ linked (sans doublons)
  */
 export async function addToNodeLinkedField(
   client: PrismaLikeClient,
@@ -535,7 +546,7 @@ export async function addToNodeLinkedField(
   const current = await getNodeLinkedField(client, nodeId, field);
   const updated = Array.from(new Set([...current, ...idsToAdd.filter(Boolean)]));
   
-  if (updated.length === current.length) return; // Rien à ajouter
+  if (updated.length === current.length) return; // Rien ÃƒÂ  ajouter
   
   await setNodeLinkedField(client, nodeId, field, updated);
 }
@@ -555,32 +566,30 @@ export async function removeFromNodeLinkedField(
   const toRemoveSet = new Set(idsToRemove);
   const updated = current.filter(id => !toRemoveSet.has(id));
   
-  if (updated.length === current.length) return; // Rien à retirer
+  if (updated.length === current.length) return; // Rien ÃƒÂ  retirer
   
   await setNodeLinkedField(client, nodeId, field, updated);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🎯 SYSTÈME AUTOMATIQUE DE LIAISON - CAPACITÉS
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸Å½Â¯ SYSTÃƒË†ME AUTOMATIQUE DE LIAISON - CAPACITÃƒâ€°S
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Lie automatiquement une CONDITION à tous ses nœuds référencés
+ * Lie automatiquement une CONDITION ÃƒÂ  tous ses nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
  * 
- * OBLIGATOIRE : Cette fonction DOIT être appelée à chaque création/copie de condition
+ * OBLIGATOIRE : Cette fonction DOIT ÃƒÂªtre appelÃƒÂ©e ÃƒÂ  chaque crÃƒÂ©ation/copie de condition
  */
 export async function linkConditionToAllNodes(
   client: PrismaLikeClient,
   conditionId: string,
   conditionSet: unknown
 ): Promise<void> {
-  console.log(`\n🔗 LIAISON AUTOMATIQUE: Condition ${conditionId}`);
   
   // 1. Extraire TOUS les nodeIds
   const nodeIds = extractNodeIdsFromCondition(conditionSet);
-  console.log(`   📋 ${nodeIds.size} nœud(s) trouvé(s):`, Array.from(nodeIds));
   
-  // 2. Pour CHAQUE nœud, ajouter l'ID de la condition dans linkedConditionIds
+  // 2. Pour CHAQUE nÃ…â€œud, ajouter l'ID de la condition dans linkedConditionIds
   let successCount = 0;
   let errorCount = 0;
   
@@ -588,34 +597,29 @@ export async function linkConditionToAllNodes(
     try {
       await addToNodeLinkedField(client, nodeId, 'linkedConditionIds', [conditionId]);
       successCount++;
-      console.log(`   ✅ ${nodeId} → linkedConditionIds += ${conditionId}`);
     } catch (e) {
       errorCount++;
-      console.error(`   ❌ ${nodeId} → ÉCHEC:`, (e as Error).message);
+      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
     }
   }
   
-  console.log(`   📊 Résultat: ${successCount} réussites, ${errorCount} échecs`);
-  console.log(`🔗 LIAISON AUTOMATIQUE: Terminée\n`);
 }
 
 /**
- * Lie automatiquement une FORMULE à tous ses nœuds référencés
+ * Lie automatiquement une FORMULE ÃƒÂ  tous ses nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
  * 
- * OBLIGATOIRE : Cette fonction DOIT être appelée à chaque création/copie de formule
+ * OBLIGATOIRE : Cette fonction DOIT ÃƒÂªtre appelÃƒÂ©e ÃƒÂ  chaque crÃƒÂ©ation/copie de formule
  */
 export async function linkFormulaToAllNodes(
   client: PrismaLikeClient,
   formulaId: string,
   tokens: unknown
 ): Promise<void> {
-  console.log(`\n🔗 LIAISON AUTOMATIQUE: Formule ${formulaId}`);
   
   // 1. Extraire TOUS les nodeIds
   const nodeIds = extractNodeIdsFromFormula(tokens);
-  console.log(`   📋 ${nodeIds.size} nœud(s) trouvé(s):`, Array.from(nodeIds));
   
-  // 2. Pour CHAQUE nœud, ajouter l'ID de la formule dans linkedFormulaIds
+  // 2. Pour CHAQUE nÃ…â€œud, ajouter l'ID de la formule dans linkedFormulaIds
   let successCount = 0;
   let errorCount = 0;
   
@@ -623,34 +627,29 @@ export async function linkFormulaToAllNodes(
     try {
       await addToNodeLinkedField(client, nodeId, 'linkedFormulaIds', [formulaId]);
       successCount++;
-      console.log(`   ✅ ${nodeId} → linkedFormulaIds += ${formulaId}`);
     } catch (e) {
       errorCount++;
-      console.error(`   ❌ ${nodeId} → ÉCHEC:`, (e as Error).message);
+      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
     }
   }
   
-  console.log(`   📊 Résultat: ${successCount} réussites, ${errorCount} échecs`);
-  console.log(`🔗 LIAISON AUTOMATIQUE: Terminée\n`);
 }
 
 /**
- * Lie automatiquement une TABLE à tous ses nœuds référencés
+ * Lie automatiquement une TABLE ÃƒÂ  tous ses nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
  * 
- * OBLIGATOIRE : Cette fonction DOIT être appelée à chaque création/copie de table
+ * OBLIGATOIRE : Cette fonction DOIT ÃƒÂªtre appelÃƒÂ©e ÃƒÂ  chaque crÃƒÂ©ation/copie de table
  */
 export async function linkTableToAllNodes(
   client: PrismaLikeClient,
   tableId: string,
   tableData: unknown
 ): Promise<void> {
-  console.log(`\n🔗 LIAISON AUTOMATIQUE: Table ${tableId}`);
   
   // 1. Extraire TOUS les nodeIds
   const nodeIds = extractNodeIdsFromTable(tableData);
-  console.log(`   📋 ${nodeIds.size} nœud(s) trouvé(s):`, Array.from(nodeIds));
   
-  // 2. Pour CHAQUE nœud, ajouter l'ID de la table dans linkedTableIds
+  // 2. Pour CHAQUE nÃ…â€œud, ajouter l'ID de la table dans linkedTableIds
   let successCount = 0;
   let errorCount = 0;
   
@@ -658,39 +657,33 @@ export async function linkTableToAllNodes(
     try {
       await addToNodeLinkedField(client, nodeId, 'linkedTableIds', [tableId]);
       successCount++;
-      console.log(`   ✅ ${nodeId} → linkedTableIds += ${tableId}`);
     } catch (e) {
       errorCount++;
-      console.error(`   ❌ ${nodeId} → ÉCHEC:`, (e as Error).message);
+      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
     }
   }
   
-  console.log(`   📊 Résultat: ${successCount} réussites, ${errorCount} échecs`);
-  console.log(`🔗 LIAISON AUTOMATIQUE: Terminée\n`);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🎯 SYSTÈME AUTOMATIQUE DE LIAISON - VARIABLES
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸Å½Â¯ SYSTÃƒË†ME AUTOMATIQUE DE LIAISON - VARIABLES
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Lie automatiquement une VARIABLE à tous les nœuds de SA CAPACITÉ
+ * Lie automatiquement une VARIABLE ÃƒÂ  tous les nÃ…â€œuds de SA CAPACITÃƒâ€°
  * 
- * OBLIGATOIRE : Cette fonction DOIT être appelée quand une variable charge une capacité
+ * OBLIGATOIRE : Cette fonction DOIT ÃƒÂªtre appelÃƒÂ©e quand une variable charge une capacitÃƒÂ©
  */
 export async function linkVariableToAllCapacityNodes(
   client: PrismaLikeClient,
   variableId: string,
   sourceRef: string
 ): Promise<void> {
-  console.log(`\n🔗 LIAISON AUTOMATIQUE VARIABLE: ${variableId}`);
-  console.log(`   📍 sourceRef: ${sourceRef}`);
   
   try {
     const nodeIds = await gatherNodeIdsRecursively(client, sourceRef);
-    console.log(`   📋 ${nodeIds.size} nœud(s) trouvé(s):`, Array.from(nodeIds));
     
-    // 2. Pour CHAQUE nœud, ajouter l'ID de la variable dans linkedVariableIds
+    // 2. Pour CHAQUE nÃ…â€œud, ajouter l'ID de la variable dans linkedVariableIds
     let successCount = 0;
     let errorCount = 0;
     
@@ -698,28 +691,25 @@ export async function linkVariableToAllCapacityNodes(
       try {
         await addToNodeLinkedField(client, nodeId, 'linkedVariableIds', [variableId]);
         successCount++;
-        console.log(`   ✅ ${nodeId} → linkedVariableIds += ${variableId}`);
       } catch (e) {
         errorCount++;
-        console.error(`   ❌ ${nodeId} → ÉCHEC:`, (e as Error).message);
+        console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
       }
     }
     
-    console.log(`   📊 Résultat: ${successCount} réussites, ${errorCount} échecs`);
     
   } catch (e) {
-    console.error(`   ❌ Erreur lors de la liaison variable:`, (e as Error).message);
+    console.error(`   Ã¢ÂÅ’ Erreur lors de la liaison variable:`, (e as Error).message);
   }
   
-  console.log(`🔗 LIAISON AUTOMATIQUE VARIABLE: Terminée\n`);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🧹 NETTOYAGE DES LIAISONS
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸Â§Â¹ NETTOYAGE DES LIAISONS
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Retire une capacité de tous les nœuds liés
+ * Retire une capacitÃƒÂ© de tous les nÃ…â€œuds liÃƒÂ©s
  */
 export async function unlinkCapacityFromAllNodes(
   client: PrismaLikeClient,
@@ -727,7 +717,6 @@ export async function unlinkCapacityFromAllNodes(
   capacityId: string,
   capacityData: unknown
 ): Promise<void> {
-  console.log(`\n🧹 SUPPRESSION LIAISON: ${capacityType} ${capacityId}`);
   
   let nodeIds: Set<string> = new Set();
   let field: LinkedField;
@@ -747,34 +736,29 @@ export async function unlinkCapacityFromAllNodes(
       break;
   }
   
-  console.log(`   📋 ${nodeIds.size} nœud(s) à nettoyer`);
   
   for (const nodeId of nodeIds) {
     try {
       await removeFromNodeLinkedField(client, nodeId, field, [capacityId]);
-      console.log(`   ✅ ${nodeId} → ${field} -= ${capacityId}`);
     } catch (e) {
-      console.error(`   ❌ ${nodeId} → ÉCHEC:`, (e as Error).message);
+      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
     }
   }
   
-  console.log(`🧹 SUPPRESSION LIAISON: Terminée\n`);
 }
 
 /**
- * Retire une variable de tous les nœuds liés
+ * Retire une variable de tous les nÃ…â€œuds liÃƒÂ©s
  */
 export async function unlinkVariableFromAllNodes(
   client: PrismaLikeClient,
   variableId: string,
   sourceRef: string
 ): Promise<void> {
-  console.log(`\n🧹 SUPPRESSION LIAISON VARIABLE: ${variableId}`);
   
-  // On réutilise la même logique d'extraction que pour la création
+  // On rÃƒÂ©utilise la mÃƒÂªme logique d'extraction que pour la crÃƒÂ©ation
   // mais on retire au lieu d'ajouter
   
-  // TODO: Implémenter si nécessaire
+  // TODO: ImplÃƒÂ©menter si nÃƒÂ©cessaire
   
-  console.log(`🧹 SUPPRESSION LIAISON VARIABLE: Terminée\n`);
 }

@@ -13,31 +13,12 @@ router.get('/', async (req, res) => {
   try {
     const authReq = req as AuthenticatedRequest;
     
-    // 🐛 Debug logs pour comprendre le problème SuperAdmin
-    console.log('[LEADS] 🔍 Utilisateur connecté:', {
-      id: authReq.user?.userId || authReq.user?.id,
-      email: authReq.user?.email,
-      role: authReq.user?.role,
-      isSuperAdmin: authReq.user?.isSuperAdmin,
-      organizationId: authReq.user?.organizationId
-    });
-    
-    // SuperAdmin logic: can see ALL leads - amélioration des conditions
+    // SuperAdmin logic: can see ALL leads
     const isSuperAdmin = authReq.user?.role === 'super_admin' || 
                         authReq.user?.isSuperAdmin === true ||
                         authReq.user?.role?.toLowerCase().includes('super');
     
-    console.log('[LEADS] 👑 Vérification SuperAdmin:', { 
-      isSuperAdmin, 
-      conditions: {
-        roleCheck: authReq.user?.role === 'super_admin',
-        booleanCheck: authReq.user?.isSuperAdmin === true,
-        roleIncludesSuper: authReq.user?.role?.toLowerCase().includes('super')
-      }
-    });
-    
     if (isSuperAdmin) {
-      console.log('[LEADS] 🌍 SuperAdmin détecté - récupération de TOUS les leads');
       try {
         const allLeads = await prisma.lead.findMany({
           include: {
@@ -61,13 +42,6 @@ router.get('/', async (req, res) => {
             updatedAt: 'desc'
           }
         });
-        
-        console.log('[LEADS] 📊 Total leads récupérés pour SuperAdmin:', allLeads.length);
-        console.log('[LEADS] 📋 Leads par organisation:', allLeads.reduce((acc, lead) => {
-          const orgName = lead.Organization?.name || 'Sans organisation';
-          acc[orgName] = (acc[orgName] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>));
         
         // Formatter les leads pour SuperAdmin (même logique que les utilisateurs normaux)
         const formattedLeads = allLeads.map(lead => {
@@ -149,15 +123,8 @@ router.get('/', async (req, res) => {
       // Utiliser d'abord les colonnes dédiées, puis fallback sur data JSON si nécessaire
       const data = lead.data || {};
       
-      console.log(`[LEADS] Formatage lead ${lead.id}:`);
-      console.log(`[LEADS] - firstName: "${lead.firstName}" (${typeof lead.firstName})`);
-      console.log(`[LEADS] - lastName: "${lead.lastName}" (${typeof lead.lastName})`);
-      console.log(`[LEADS] - data.name: "${data.name}"`);
-      
       const formattedName = lead.firstName && lead.lastName ? `${lead.firstName} ${lead.lastName}` : 
             (lead.firstName || lead.lastName || data.name || `Lead ${lead.id.slice(0, 8)}`);
-      
-      console.log(`[LEADS] - Nom final: "${formattedName}"`);
       
       return {
         id: lead.id,
@@ -181,7 +148,6 @@ router.get('/', async (req, res) => {
       };
     });
 
-    console.log(`[LEADS] ${leads.length} leads trouvés`);
     res.json({ success: true, data: formattedLeads });
 
   } catch (error) {
@@ -343,32 +309,14 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
     const organizationId = authReq.user?.organizationId;
     
-    console.log('[LEADS] 🔍 Récupération du lead:', id, 'utilisateur:', {
-      id: authReq.user?.userId || authReq.user?.id,
-      email: authReq.user?.email,
-      role: authReq.user?.role,
-      isSuperAdmin: authReq.user?.isSuperAdmin,
-      organizationId: authReq.user?.organizationId
-    });
-    
     // SuperAdmin logic: can access ANY lead
     const isSuperAdmin = authReq.user?.role === 'super_admin' || 
                         authReq.user?.isSuperAdmin === true ||
                         authReq.user?.role?.toLowerCase().includes('super');
     
-    console.log('[LEADS] 👑 Vérification SuperAdmin:', { 
-      isSuperAdmin, 
-      conditions: {
-        roleCheck: authReq.user?.role === 'super_admin',
-        booleanCheck: authReq.user?.isSuperAdmin === true,
-        roleIncludesSuper: authReq.user?.role?.toLowerCase().includes('super')
-      }
-    });
-    
     let whereCondition;
     
     if (isSuperAdmin) {
-      console.log('[LEADS] 🌍 SuperAdmin détecté - accès à TOUS les leads');
       whereCondition = { id }; // SuperAdmin peut accéder à n'importe quel lead
     } else {
       if (!organizationId) {
@@ -376,7 +324,6 @@ router.get('/:id', async (req, res) => {
           error: 'Organisation non spécifiée' 
         });
       }
-      console.log('[LEADS] 🏢 Utilisateur normal - accès limité à l\'organisation:', organizationId);
       whereCondition = {
         id,
         organizationId // Sécurité: s'assurer que le lead appartient à l'organisation
@@ -440,7 +387,6 @@ router.get('/:id', async (req, res) => {
       data: lead.data
     };
     
-    console.log('[LEADS] Lead trouvé et formaté:', formattedLead.name);
     res.json(formattedLead);
     
   } catch (error) {
@@ -465,8 +411,6 @@ router.put('/:id', async (req, res) => {
       });
     }
     
-    console.log('[LEADS] Modification du lead:', id, 'données:', req.body);
-    
     // Vérifier que le lead existe et appartient à l'organisation
     const existingLead = await prisma.lead.findFirst({
       where: {
@@ -476,7 +420,6 @@ router.put('/:id', async (req, res) => {
     });
     
     if (!existingLead) {
-      console.log('[LEADS] Lead non trouvé pour modification:', id);
       return res.status(404).json({ 
         error: 'Lead non trouvé ou non autorisé' 
       });

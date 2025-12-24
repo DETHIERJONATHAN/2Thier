@@ -33,13 +33,9 @@ export class GoogleOAuthService {
   private oauth2Client: OAuth2Client;
 
   constructor() {
-    console.log('[GoogleOAuthService] Initialisation configuration Google OAuth (core)');
     if (!isGoogleOAuthConfigured()) {
       console.warn('[GoogleOAuthService] ⚠️ Configuration Google OAuth incomplète', describeGoogleOAuthConfig());
-    } else {
-      console.log('[GoogleOAuthService] ✅ Configuration détectée', describeGoogleOAuthConfig());
     }
-    console.log('[GoogleOAuthService] GOOGLE_REDIRECT_URI:', GOOGLE_REDIRECT_URI);
 
     this.oauth2Client = new google.auth.OAuth2(
       GOOGLE_CLIENT_ID,
@@ -50,9 +46,6 @@ export class GoogleOAuthService {
 
   // Générer l'URL d'autorisation Google
   getAuthUrl(userId: string, organizationId: string): string {
-    console.log(`[GoogleOAuthService] Génération URL pour userId: ${userId}, organizationId: ${organizationId}`);
-    console.log('[GoogleOAuthService] Scopes:', SCOPES);
-    
     const state = JSON.stringify({ userId, organizationId });
 
     const authUrl = this.oauth2Client.generateAuthUrl({
@@ -62,7 +55,6 @@ export class GoogleOAuthService {
       prompt: 'consent'
     });
     
-    console.log('[GoogleOAuthService] URL générée:', authUrl);
     return authUrl;
   }
 
@@ -152,8 +144,6 @@ export class GoogleOAuthService {
 
   // Client authentifié avec email administrateur Google Workspace
   async getAuthenticatedClientForOrganization(organizationId: string): Promise<OAuth2Client | null> {
-    console.log(`[GoogleOAuthService] ⚡ getAuthenticatedClientForOrganization appelé pour organizationId: ${organizationId}`);
-    
     // Récupérer l'organisation et sa config Google Workspace
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -163,19 +153,14 @@ export class GoogleOAuthService {
     });
 
     if (!organization) {
-      console.log(`[GoogleOAuthService] ❌ Organisation ${organizationId} non trouvée`);
       return null;
     }
 
     const googleConfig = organization.GoogleWorkspaceConfig;
 
     if (!googleConfig || !googleConfig.adminEmail || !googleConfig.domain) {
-      console.log(`[GoogleOAuthService] ❌ Configuration Google Workspace (adminEmail ou domain) manquante pour l'organisation ${organization.name}`);
       return null;
     }
-
-    console.log(`[GoogleOAuthService] 📧 Email administrateur Google Workspace: ${googleConfig.adminEmail}`);
-    console.log(`[GoogleOAuthService] 🏢 Domaine: ${googleConfig.domain}`);
 
     // Récupérer les tokens pour cette organisation
     const tokens = await prisma.googleToken.findUnique({
@@ -183,14 +168,8 @@ export class GoogleOAuthService {
     });
 
     if (!tokens) {
-      console.log(`[GoogleOAuthService] ❌ Aucun token trouvé pour l'organisation ${organization.name}`);
       return null;
     }
-
-    console.log(`[GoogleOAuthService] 🔍 Tokens trouvés pour l'organisation ${organization.name}:`);
-    console.log(`[GoogleOAuthService] - Access token: ${tokens.accessToken ? tokens.accessToken.substring(0, 20) + '...' : 'MANQUANT'}`);
-    console.log(`[GoogleOAuthService] - Refresh token: ${tokens.refreshToken ? tokens.refreshToken.substring(0, 20) + '...' : 'MANQUANT'}`);
-    console.log(`[GoogleOAuthService] - Expires at: ${tokens.expiresAt}`);
 
     // Configuration des credentials
     const credentials = {
@@ -199,15 +178,6 @@ export class GoogleOAuthService {
       token_type: tokens.tokenType,
       expiry_date: tokens.expiresAt?.getTime()
     };
-    
-    console.log(`[GoogleOAuthService] 🔧 Configuration credentials pour ${googleConfig.adminEmail}:`, {
-      hasAccessToken: !!credentials.access_token,
-      accessTokenLength: credentials.access_token?.length,
-      hasRefreshToken: !!credentials.refresh_token,
-      refreshTokenLength: credentials.refresh_token?.length,
-      tokenType: credentials.token_type,
-      expiryDate: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : 'NON_DÉFINI'
-    });
 
     // Créer une nouvelle instance OAuth2Client pour l'admin
     const adminOAuth2Client = new google.auth.OAuth2(
@@ -217,20 +187,14 @@ export class GoogleOAuthService {
     );
 
     adminOAuth2Client.setCredentials(credentials);
-    
-    console.log(`[GoogleOAuthService] 📋 Credentials définies sur OAuth2Client pour admin ${googleConfig.adminEmail}`);
 
     // Vérifier si le token est expiré et le rafraîchir si nécessaire
     const now = new Date();
     const expiryDate = tokens.expiresAt;
     
-    console.log(`[GoogleOAuthService] ⏰ Vérification expiration: maintenant=${now.toISOString()}, expiry=${expiryDate?.toISOString()}`);
-    
     if (expiryDate && expiryDate <= now) {
-      console.log(`[GoogleOAuthService] ⚠️ Token expiré pour l'admin ${googleConfig.adminEmail}, rafraîchissement...`);
       try {
         const { credentials: newCredentials } = await adminOAuth2Client.refreshAccessToken();
-        console.log(`[GoogleOAuthService] ✅ Rafraîchissement réussi pour admin`);
         
         if (newCredentials.access_token && newCredentials.expiry_date) {
           await prisma.googleToken.update({
@@ -251,18 +215,13 @@ export class GoogleOAuthService {
         console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement pour admin ${googleConfig.adminEmail}:`, error);
         return null;
       }
-    } else if (expiryDate) {
-      console.log(`[GoogleOAuthService] ✅ Token encore valide pour admin ${googleConfig.adminEmail} (expire dans ${Math.round((expiryDate.getTime() - now.getTime()) / 1000 / 60)} minutes)`);
     }
 
-    console.log(`[GoogleOAuthService] 🚀 Retour du client OAuth2 configuré pour admin ${googleConfig.adminEmail}`);
     return adminOAuth2Client;
   }
 
   // Client authentifié
   async getAuthenticatedClient(userId: string): Promise<OAuth2Client | null> {
-    console.log(`[GoogleOAuthService] ⚡ getAuthenticatedClient appelé pour userId: ${userId}`);
-    
     const tokens = await this.getUserTokens(userId);
     if (!tokens) {
       console.log(`[GoogleOAuthService] ❌ Aucun token trouvé pour l'utilisateur ${userId}`);

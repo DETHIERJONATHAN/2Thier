@@ -1,8 +1,8 @@
 /**
- * 🚀 API Routes pour l'Architecture Centralisée TreeBranchLeaf
+ * Ã°Å¸Å¡â‚¬ API Routes pour l'Architecture CentralisÃƒÂ©e TreeBranchLeaf
  * 
- * Routes spécialisées pour la gestion des opérations centralisées
- * avec auto-résolution et cache
+ * Routes spÃƒÂ©cialisÃƒÂ©es pour la gestion des opÃƒÂ©rations centralisÃƒÂ©es
+ * avec auto-rÃƒÂ©solution et cache
  */
 
 import { Router } from 'express';
@@ -30,12 +30,12 @@ function getAuthCtx(req: { user?: MinimalReqUser }): { organizationId: string | 
 }
 
 // =============================================================================
-// 📊 SUBMISSION DATA - Gestion centralisée des données de soumission
+// Ã°Å¸â€œÅ  SUBMISSION DATA - Gestion centralisÃƒÂ©e des donnÃƒÂ©es de soumission
 // =============================================================================
 
 /**
  * POST /api/treebranchleaf/submission-data
- * Créer une nouvelle entrée de données de soumission avec auto-résolution
+ * CrÃƒÂ©er une nouvelle entrÃƒÂ©e de donnÃƒÂ©es de soumission avec auto-rÃƒÂ©solution
  */
 router.post('/submission-data', async (req, res) => {
   try {
@@ -48,7 +48,7 @@ router.post('/submission-data', async (req, res) => {
       });
     }
 
-    // Préparer les données avec auto-résolution
+    // PrÃƒÂ©parer les donnÃƒÂ©es avec auto-rÃƒÂ©solution
     const data: Partial<Record<string, unknown>> = {
       id: `${submissionId}-${nodeId}`,
       submissionId,
@@ -60,15 +60,14 @@ router.post('/submission-data', async (req, res) => {
       variableKey: variableKey || null,
       variableDisplayName: variableDisplayName || null,
       variableUnit: variableUnit || null,
-      isVariable: isVariable !== undefined ? isVariable : null // Le trigger déterminera automatiquement
+      isVariable: isVariable !== undefined ? isVariable : null // Le trigger dÃƒÂ©terminera automatiquement
     };
 
-    // Si sourceRef est fourni, le trigger SQL s'occupera de l'auto-résolution
+    // Si sourceRef est fourni, le trigger SQL s'occupera de l'auto-rÃƒÂ©solution
     const submissionData = await prisma.treeBranchLeafSubmissionData.create({
       data
     });
 
-    console.log(`✅ Created submission data with ${sourceRef ? 'auto-resolution' : 'basic mode'} and fieldLabel`);
 
     res.status(201).json({ 
       success: true, 
@@ -76,7 +75,7 @@ router.post('/submission-data', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to create submission data:', error);
+    console.error('Ã¢ÂÅ’ Failed to create submission data:', error);
     res.status(500).json({ 
       error: 'Failed to create submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -86,7 +85,7 @@ router.post('/submission-data', async (req, res) => {
 
 /**
  * PUT /api/treebranchleaf/submission-data/:id
- * Mettre à jour une entrée de données de soumission
+ * Mettre ÃƒÂ  jour une entrÃƒÂ©e de donnÃƒÂ©es de soumission
  */
 router.put('/submission-data/:id', async (req, res) => {
   try {
@@ -103,7 +102,7 @@ router.put('/submission-data/:id', async (req, res) => {
     if (isVariable !== undefined) updateData.isVariable = isVariable;
     if (sourceRef !== undefined) {
       updateData.sourceRef = sourceRef;
-      // Réinitialiser pour forcer la re-résolution
+      // RÃƒÂ©initialiser pour forcer la re-rÃƒÂ©solution
       updateData.operationDetail = null;
       updateData.operationResult = null;
     }
@@ -120,7 +119,7 @@ router.put('/submission-data/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to update submission data:', error);
+    console.error('Ã¢ÂÅ’ Failed to update submission data:', error);
     res.status(500).json({ 
       error: 'Failed to update submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -130,7 +129,7 @@ router.put('/submission-data/:id', async (req, res) => {
 
 /**
  * GET /api/treebranchleaf/submission-data/:id/resolved
- * Récupérer une entrée avec toutes ses données résolues
+ * RÃƒÂ©cupÃƒÂ©rer une entrÃƒÂ©e avec toutes ses donnÃƒÂ©es rÃƒÂ©solues
  */
 router.get('/submission-data/:id/resolved', async (req, res) => {
   try {
@@ -156,7 +155,7 @@ router.get('/submission-data/:id/resolved', async (req, res) => {
       return res.status(404).json({ error: 'Submission data not found' });
     }
 
-    // Force la résolution si demandée ou si pas encore résolu
+    // Force la rÃƒÂ©solution si demandÃƒÂ©e ou si pas encore rÃƒÂ©solu
     if (forceResolve === 'true' || (!submissionData.operationDetail && submissionData.sourceRef)) {
       if (submissionData.sourceRef && submissionData.operationSource) {
         await resolver.updateSubmissionWithResolvedOperation(
@@ -165,7 +164,7 @@ router.get('/submission-data/:id/resolved', async (req, res) => {
           submissionData.operationSource
         );
 
-        // Recharger les données mises à jour
+        // Recharger les donnÃƒÂ©es mises ÃƒÂ  jour
         submissionData = await prisma.treeBranchLeafSubmissionData.findUnique({
           where: { id },
           include: {
@@ -183,11 +182,11 @@ router.get('/submission-data/:id/resolved', async (req, res) => {
       }
     }
 
-    // Calculer le résultat si pas encore fait
+    // Calculer le rÃƒÂ©sultat si pas encore fait
     if (submissionData && !submissionData.operationResult && submissionData.operationDetail) {
       await resolver.calculateAndCacheResult(id);
       
-      // Recharger une dernière fois
+      // Recharger une derniÃƒÂ¨re fois
       submissionData = await prisma.treeBranchLeafSubmissionData.findUnique({
         where: { id },
         include: {
@@ -210,7 +209,7 @@ router.get('/submission-data/:id/resolved', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to get resolved submission data:', error);
+    console.error('Ã¢ÂÅ’ Failed to get resolved submission data:', error);
     res.status(500).json({ 
       error: 'Failed to get resolved submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -220,7 +219,7 @@ router.get('/submission-data/:id/resolved', async (req, res) => {
 
 /**
  * GET /api/treebranchleaf/submission-data/by-submission/:submissionId
- * Récupérer toutes les données d'une soumission avec les libellés
+ * RÃƒÂ©cupÃƒÂ©rer toutes les donnÃƒÂ©es d'une soumission avec les libellÃƒÂ©s
  */
 router.get('/submission-data/by-submission/:submissionId', async (req, res) => {
   try {
@@ -247,7 +246,7 @@ router.get('/submission-data/by-submission/:submissionId', async (req, res) => {
       ]
     });
 
-    // Si demandé, inclure toutes les données résolues
+    // Si demandÃƒÂ©, inclure toutes les donnÃƒÂ©es rÃƒÂ©solues
     if (includeResolved === 'true') {
       for (const item of submissionDataList) {
         if (item.sourceRef && item.operationSource && !item.operationDetail) {
@@ -263,7 +262,7 @@ router.get('/submission-data/by-submission/:submissionId', async (req, res) => {
         }
       }
 
-      // Recharger avec les données résolues
+      // Recharger avec les donnÃƒÂ©es rÃƒÂ©solues
       const resolvedData = await prisma.treeBranchLeafSubmissionData.findMany({
         where: { submissionId },
         include: {
@@ -298,7 +297,7 @@ router.get('/submission-data/by-submission/:submissionId', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('❌ Failed to get submission data:', error);
+    console.error('Ã¢ÂÅ’ Failed to get submission data:', error);
     res.status(500).json({ 
       error: 'Failed to get submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -307,12 +306,12 @@ router.get('/submission-data/by-submission/:submissionId', async (req, res) => {
 });
 
 // =============================================================================
-// 🔧 OPERATIONS - Gestion des opérations et cache
+// Ã°Å¸â€Â§ OPERATIONS - Gestion des opÃƒÂ©rations et cache
 // =============================================================================
 
 /**
  * POST /api/treebranchleaf/operations/invalidate-cache
- * Invalider le cache pour une sourceRef spécifique
+ * Invalider le cache pour une sourceRef spÃƒÂ©cifique
  */
 router.post('/operations/invalidate-cache', async (req, res) => {
   try {
@@ -330,7 +329,7 @@ router.post('/operations/invalidate-cache', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to invalidate cache:', error);
+    console.error('Ã¢ÂÅ’ Failed to invalidate cache:', error);
     res.status(500).json({ 
       error: 'Failed to invalidate cache',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -340,7 +339,7 @@ router.post('/operations/invalidate-cache', async (req, res) => {
 
 /**
  * POST /api/treebranchleaf/operations/resolve-background
- * Déclencher manuellement la résolution en arrière-plan
+ * DÃƒÂ©clencher manuellement la rÃƒÂ©solution en arriÃƒÂ¨re-plan
  */
 router.post('/operations/resolve-background', async (req, res) => {
   try {
@@ -352,7 +351,7 @@ router.post('/operations/resolve-background', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to run background resolution:', error);
+    console.error('Ã¢ÂÅ’ Failed to run background resolution:', error);
     res.status(500).json({ 
       error: 'Failed to run background resolution',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -362,7 +361,7 @@ router.post('/operations/resolve-background', async (req, res) => {
 
 /**
  * GET /api/treebranchleaf/operations/statistics
- * Obtenir les statistiques du système d'opérations
+ * Obtenir les statistiques du systÃƒÂ¨me d'opÃƒÂ©rations
  */
 router.get('/operations/statistics', async (req, res) => {
   try {
@@ -386,7 +385,7 @@ router.get('/operations/statistics', async (req, res) => {
     const recentResolutions = await prisma.treeBranchLeafSubmissionData.count({
       where: {
         lastResolved: {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // dernières 24h
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // derniÃƒÂ¨res 24h
         }
       }
     });
@@ -403,7 +402,7 @@ router.get('/operations/statistics', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to get statistics:', error);
+    console.error('Ã¢ÂÅ’ Failed to get statistics:', error);
     res.status(500).json({ 
       error: 'Failed to get statistics',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -412,12 +411,12 @@ router.get('/operations/statistics', async (req, res) => {
 });
 
 // =============================================================================
-// 🎛️ BACKGROUND JOBS - Gestion des tâches en arrière-plan
+// Ã°Å¸Å½â€ºÃ¯Â¸Â BACKGROUND JOBS - Gestion des tÃƒÂ¢ches en arriÃƒÂ¨re-plan
 // =============================================================================
 
 /**
  * GET /api/treebranchleaf/background-jobs/status
- * Vérifier le statut des tâches en arrière-plan
+ * VÃƒÂ©rifier le statut des tÃƒÂ¢ches en arriÃƒÂ¨re-plan
  */
 router.get('/background-jobs/status', async (req, res) => {
   try {
@@ -432,7 +431,7 @@ router.get('/background-jobs/status', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to get background jobs status:', error);
+    console.error('Ã¢ÂÅ’ Failed to get background jobs status:', error);
     res.status(500).json({ 
       error: 'Failed to get background jobs status',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -442,7 +441,7 @@ router.get('/background-jobs/status', async (req, res) => {
 
 /**
  * POST /api/treebranchleaf/background-jobs/start
- * Démarrer les tâches en arrière-plan
+ * DÃƒÂ©marrer les tÃƒÂ¢ches en arriÃƒÂ¨re-plan
  */
 router.post('/background-jobs/start', async (req, res) => {
   try {
@@ -456,7 +455,7 @@ router.post('/background-jobs/start', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to start background jobs:', error);
+    console.error('Ã¢ÂÅ’ Failed to start background jobs:', error);
     res.status(500).json({ 
       error: 'Failed to start background jobs',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -466,7 +465,7 @@ router.post('/background-jobs/start', async (req, res) => {
 
 /**
  * POST /api/treebranchleaf/background-jobs/stop
- * Arrêter les tâches en arrière-plan
+ * ArrÃƒÂªter les tÃƒÂ¢ches en arriÃƒÂ¨re-plan
  */
 router.post('/background-jobs/stop', async (req, res) => {
   try {
@@ -478,7 +477,7 @@ router.post('/background-jobs/stop', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to stop background jobs:', error);
+    console.error('Ã¢ÂÅ’ Failed to stop background jobs:', error);
     res.status(500).json({ 
       error: 'Failed to stop background jobs',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -488,7 +487,7 @@ router.post('/background-jobs/stop', async (req, res) => {
 
 /**
  * POST /api/treebranchleaf/background-jobs/force-sync
- * Forcer une synchronisation complète (DANGER)
+ * Forcer une synchronisation complÃƒÂ¨te (DANGER)
  */
 router.post('/background-jobs/force-sync', async (req, res) => {
   try {
@@ -508,7 +507,7 @@ router.post('/background-jobs/force-sync', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Failed to force sync:', error);
+    console.error('Ã¢ÂÅ’ Failed to force sync:', error);
     res.status(500).json({ 
       error: 'Failed to force sync',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -518,7 +517,7 @@ router.post('/background-jobs/force-sync', async (req, res) => {
 
 /**
  * GET /api/treebranchleaf/submission-data/by-submission/:submissionId/variables
- * Récupérer toutes les variables d'une soumission (pour les formules)
+ * RÃƒÂ©cupÃƒÂ©rer toutes les variables d'une soumission (pour les formules)
  */
 router.get('/submission-data/by-submission/:submissionId/variables', async (req, res) => {
   try {
@@ -567,7 +566,7 @@ router.get('/submission-data/by-submission/:submissionId/variables', async (req,
     });
 
   } catch (error) {
-    console.error('❌ Failed to get variables:', error);
+    console.error('Ã¢ÂÅ’ Failed to get variables:', error);
     res.status(500).json({ 
       error: 'Failed to get variables',
       details: error instanceof Error ? error.message : 'Unknown error'

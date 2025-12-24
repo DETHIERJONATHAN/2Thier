@@ -1,12 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 
 /**
- * Service pour forcer le recalcul immédiat des nœuds copiés avec leurs propres données
+ * Service pour forcer le recalcul immÃƒÂ©diat des nÃ…â€œuds copiÃƒÂ©s avec leurs propres donnÃƒÂ©es
  * 
  * Ce service s'assure que:
- * 1. Les nœuds copiés ne retombent jamais sur les valeurs originales
- * 2. Tous les calculs utilisent les capacités copiées avec suffixe
- * 3. Les lookups pointent vers les bonnes tables copiées
+ * 1. Les nÃ…â€œuds copiÃƒÂ©s ne retombent jamais sur les valeurs originales
+ * 2. Tous les calculs utilisent les capacitÃƒÂ©s copiÃƒÂ©es avec suffixe
+ * 3. Les lookups pointent vers les bonnes tables copiÃƒÂ©es
  * 4. Aucun fallback n'est possible
  */
 
@@ -26,13 +26,12 @@ export interface ForceRecalculationReport {
 }
 
 /**
- * Force le recalcul d'un nœud copié avec ses propres données
+ * Force le recalcul d'un nÃ…â€œud copiÃƒÂ© avec ses propres donnÃƒÂ©es
  */
 export async function forceNodeRecalculationWithOwnData(
   prisma: PrismaClient,
   copiedNodeId: string
 ): Promise<ForceRecalculationResult> {
-  console.log(`🔄 [FORCE-RECALC] Recalcul forcé: ${copiedNodeId}`);
 
   const result: ForceRecalculationResult = {
     nodeId: copiedNodeId,
@@ -58,19 +57,19 @@ export async function forceNodeRecalculationWithOwnData(
   });
 
   if (!copiedNode) {
-    throw new Error(`Nœud copié ${copiedNodeId} non trouvé`);
+    throw new Error(`NÃ…â€œud copiÃƒÂ© ${copiedNodeId} non trouvÃƒÂ©`);
   }
 
   result.nodeLabel = copiedNode.label;
   result.oldCalculatedValue = copiedNode.calculatedValue;
 
-  // 1. Mettre à jour toutes les références dans les formules pour qu'elles pointent vers les nœuds -1
+  // 1. Mettre ÃƒÂ  jour toutes les rÃƒÂ©fÃƒÂ©rences dans les formules pour qu'elles pointent vers les nÃ…â€œuds -1
   for (const formula of copiedNode.TreeBranchLeafNodeFormula) {
     if (formula.tokens) {
       let tokensStr = JSON.stringify(formula.tokens);
       let updated = false;
 
-      // Remplacer toutes les références qui ne finissent pas par -1
+      // Remplacer toutes les rÃƒÂ©fÃƒÂ©rences qui ne finissent pas par -1
       const updatedTokensStr = tokensStr.replace(
         /@value\.([A-Za-z0-9_:-]+)(?!-1)/g,
         (match, nodeId) => {
@@ -78,7 +77,7 @@ export async function forceNodeRecalculationWithOwnData(
             return match;
           }
           updated = true;
-          result.referencesUpdated.push(`Formula ${formula.name}: ${nodeId} → ${nodeId}-1`);
+          result.referencesUpdated.push(`Formula ${formula.name}: ${nodeId} Ã¢â€ â€™ ${nodeId}-1`);
           return `@value.${nodeId}-1`;
         }
       );
@@ -89,12 +88,11 @@ export async function forceNodeRecalculationWithOwnData(
           where: { id: formula.id },
           data: { tokens: newTokens }
         });
-        console.log(`   🔄 Références formule "${formula.name}" mises à jour`);
       }
     }
   }
 
-  // 2. Mettre à jour toutes les références dans les conditions
+  // 2. Mettre ÃƒÂ  jour toutes les rÃƒÂ©fÃƒÂ©rences dans les conditions
   for (const condition of copiedNode.TreeBranchLeafNodeCondition) {
     if (condition.conditionSet) {
       let conditionStr = JSON.stringify(condition.conditionSet);
@@ -107,7 +105,7 @@ export async function forceNodeRecalculationWithOwnData(
             return match;
           }
           updated = true;
-          result.referencesUpdated.push(`Condition ${condition.name}: ${nodeId} → ${nodeId}-1`);
+          result.referencesUpdated.push(`Condition ${condition.name}: ${nodeId} Ã¢â€ â€™ ${nodeId}-1`);
           return `@value.${nodeId}-1`;
         }
       );
@@ -118,12 +116,11 @@ export async function forceNodeRecalculationWithOwnData(
           where: { id: condition.id },
           data: { conditionSet: newConditionSet }
         });
-        console.log(`   🔄 Références condition "${condition.name}" mises à jour`);
       }
     }
   }
 
-  // 3. Forcer le recalcul en supprimant la valeur calculée et ajoutant des métadonnées de forçage
+  // 3. Forcer le recalcul en supprimant la valeur calculÃƒÂ©e et ajoutant des mÃƒÂ©tadonnÃƒÂ©es de forÃƒÂ§age
   const forceRecalcMetadata = {
     ...(copiedNode.metadata && typeof copiedNode.metadata === 'object' ? copiedNode.metadata : {}),
     forceRecalculation: true,
@@ -144,21 +141,19 @@ export async function forceNodeRecalculationWithOwnData(
   });
 
   result.recalculationForced = true;
-  result.newCalculatedValue = null; // Sera recalculé par le système
+  result.newCalculatedValue = null; // Sera recalculÃƒÂ© par le systÃƒÂ¨me
   
-  console.log(`   ✅ Recalcul forcé avec ${result.referencesUpdated.length} références mises à jour`);
 
   return result;
 }
 
 /**
- * Force le recalcul de tous les nœuds copiés d'un repeater
+ * Force le recalcul de tous les nÃ…â€œuds copiÃƒÂ©s d'un repeater
  */
 export async function forceAllNodesRecalculationWithOwnData(
   prisma: PrismaClient,
   repeaterNodeId?: string
 ): Promise<ForceRecalculationReport> {
-  console.log('🚀 [FORCE-RECALC-ALL] Recalcul forcé de tous les nœuds copiés...');
 
   const report: ForceRecalculationReport = {
     totalNodesProcessed: 0,
@@ -191,19 +186,16 @@ export async function forceAllNodesRecalculationWithOwnData(
       }
     });
 
-    console.log(`🎯 Trouvé ${copiedNodes.length} nœuds copiés à forcer au recalcul`);
 
     for (const node of copiedNodes) {
       report.totalNodesProcessed++;
 
       try {
-        // Ne forcer le recalcul que pour les nœuds qui ont une valeur calculée
+        // Ne forcer le recalcul que pour les nÃ…â€œuds qui ont une valeur calculÃƒÂ©e
         if (node.calculatedValue !== null) {
-          console.log(`📊 Forçage recalcul: ${node.label} (${node.calculatedValue} → null)`);
           const result = await forceNodeRecalculationWithOwnData(prisma, node.id);
           report.nodesRecalculated.push(result);
         } else {
-          console.log(`⏭️  Skip: ${node.label} (déjà null)`);
         }
 
       } catch (error) {
@@ -215,23 +207,22 @@ export async function forceAllNodesRecalculationWithOwnData(
     }
 
   } catch (error) {
-    console.error('❌ [FORCE-RECALC-ALL] Erreur générale:', error);
+    console.error('Ã¢ÂÅ’ [FORCE-RECALC-ALL] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
   }
 
   return report;
 }
 
 /**
- * Bloque complètement le fallback vers les valeurs originales
+ * Bloque complÃƒÂ¨tement le fallback vers les valeurs originales
  */
 export async function blockFallbackToOriginalValues(
   prisma: PrismaClient,
   copiedNodeIds: string[]
 ): Promise<void> {
-  console.log(`🚫 [BLOCK-FALLBACK] Blocage du fallback pour ${copiedNodeIds.length} nœuds...`);
 
   for (const nodeId of copiedNodeIds) {
-    // Ajouter des métadonnées pour empêcher le fallback
+    // Ajouter des mÃƒÂ©tadonnÃƒÂ©es pour empÃƒÂªcher le fallback
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true }
@@ -258,5 +249,4 @@ export async function blockFallbackToOriginalValues(
     }
   }
 
-  console.log(`✅ [BLOCK-FALLBACK] Fallback bloqué pour ${copiedNodeIds.length} nœuds`);
 }

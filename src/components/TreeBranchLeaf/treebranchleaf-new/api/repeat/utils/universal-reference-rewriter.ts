@@ -1,58 +1,58 @@
 /**
- * 🔄 SYSTÈME UNIVERSEL DE RÉÉCRITURE DES RÉFÉRENCES
- * ═══════════════════════════════════════════════════════════════════════════
+ * Ã°Å¸â€â€ž SYSTÃƒË†ME UNIVERSEL DE RÃƒâ€°Ãƒâ€°CRITURE DES RÃƒâ€°FÃƒâ€°RENCES
+ * Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
  * 
- * Ce module gère la réécriture de TOUTES les références TBL avec suffixes.
- * Il traite TOUS les formats possibles identifiés dans operation-interpreter.ts
+ * Ce module gÃƒÂ¨re la rÃƒÂ©ÃƒÂ©criture de TOUTES les rÃƒÂ©fÃƒÂ©rences TBL avec suffixes.
+ * Il traite TOUS les formats possibles identifiÃƒÂ©s dans operation-interpreter.ts
  * 
- * FORMATS SUPPORTÉS :
+ * FORMATS SUPPORTÃƒâ€°S :
  * -------------------
- * 1. @value.UUID                     → @value.UUID-1
- * 2. @value.node_xxx                 → @value.node_xxx-1
- * 3. @value.shared-ref-xxx           → @value.shared-ref-xxx-1 (si mappé)
- * 4. @value.node-formula:xxx         → @value.node-formula:xxx-1
- * 5. @value.node-condition:xxx       → @value.node-condition:xxx-1
- * 6. @value.condition:xxx            → @value.condition:xxx-1
- * 7. @value.node-table:xxx           → @value.node-table:xxx-1
- * 8. @table.xxx                      → @table.xxx-1
- * 9. node-formula:xxx                → node-formula:xxx-1
- * 10. node-condition:xxx / condition:xxx → node-condition:xxx-1 / condition:xxx-1
- * 11. node-table:xxx                 → node-table:xxx-1
- * 12. UUID nu                        → UUID-1
- * 13. node_xxx nu                    → node_xxx-1
- * 14. shared-ref-xxx nu              → shared-ref-xxx-1 (si mappé)
+ * 1. @value.UUID                     Ã¢â€ â€™ @value.UUID-1
+ * 2. @value.node_xxx                 Ã¢â€ â€™ @value.node_xxx-1
+ * 3. @value.shared-ref-xxx           Ã¢â€ â€™ @value.shared-ref-xxx-1 (si mappÃƒÂ©)
+ * 4. @value.node-formula:xxx         Ã¢â€ â€™ @value.node-formula:xxx-1
+ * 5. @value.node-condition:xxx       Ã¢â€ â€™ @value.node-condition:xxx-1
+ * 6. @value.condition:xxx            Ã¢â€ â€™ @value.condition:xxx-1
+ * 7. @value.node-table:xxx           Ã¢â€ â€™ @value.node-table:xxx-1
+ * 8. @table.xxx                      Ã¢â€ â€™ @table.xxx-1
+ * 9. node-formula:xxx                Ã¢â€ â€™ node-formula:xxx-1
+ * 10. node-condition:xxx / condition:xxx Ã¢â€ â€™ node-condition:xxx-1 / condition:xxx-1
+ * 11. node-table:xxx                 Ã¢â€ â€™ node-table:xxx-1
+ * 12. UUID nu                        Ã¢â€ â€™ UUID-1
+ * 13. node_xxx nu                    Ã¢â€ â€™ node_xxx-1
+ * 14. shared-ref-xxx nu              Ã¢â€ â€™ shared-ref-xxx-1 (si mappÃƒÂ©)
  * 
  * @author System TBL
  * @version 1.0.0
  */
 
 export interface RewriteMaps {
-  /** Map des nœuds : ancien ID → nouveau ID */
+  /** Map des nÃ…â€œuds : ancien ID Ã¢â€ â€™ nouveau ID */
   nodeIdMap: Map<string, string>;
-  /** Map des formules : ancien ID → nouveau ID */
+  /** Map des formules : ancien ID Ã¢â€ â€™ nouveau ID */
   formulaIdMap: Map<string, string>;
-  /** Map des conditions : ancien ID → nouveau ID */
+  /** Map des conditions : ancien ID Ã¢â€ â€™ nouveau ID */
   conditionIdMap: Map<string, string>;
-  /** Map des tables : ancien ID → nouveau ID */
+  /** Map des tables : ancien ID Ã¢â€ â€™ nouveau ID */
   tableIdMap: Map<string, string>;
 }
 
 /**
- * 🔄 Réécrit une chaîne contenant N'IMPORTE QUELLE référence TBL avec suffixe
+ * Ã°Å¸â€â€ž RÃƒÂ©ÃƒÂ©crit une chaÃƒÂ®ne contenant N'IMPORTE QUELLE rÃƒÂ©fÃƒÂ©rence TBL avec suffixe
  * 
- * Cette fonction est UNIVERSELLE : elle détecte et transforme TOUS les types
- * de références TBL en appliquant le suffixe approprié.
+ * Cette fonction est UNIVERSELLE : elle dÃƒÂ©tecte et transforme TOUS les types
+ * de rÃƒÂ©fÃƒÂ©rences TBL en appliquant le suffixe appropriÃƒÂ©.
  * 
  * ALGORITHME :
  * ------------
- * 1. Chercher chaque référence dans les maps (priorité absolue)
- * 2. Si pas trouvée et suffixe fourni → ajouter suffixe
- * 3. Cas spécial : shared-ref sans mapping → laisser tel quel
+ * 1. Chercher chaque rÃƒÂ©fÃƒÂ©rence dans les maps (prioritÃƒÂ© absolue)
+ * 2. Si pas trouvÃƒÂ©e et suffixe fourni Ã¢â€ â€™ ajouter suffixe
+ * 3. Cas spÃƒÂ©cial : shared-ref sans mapping Ã¢â€ â€™ laisser tel quel
  * 
- * @param text - Texte contenant les références à réécrire
- * @param maps - Maps de correspondances ancien→nouveau
- * @param suffix - Suffixe à appliquer si pas de mapping trouvé
- * @returns Texte avec références réécrites
+ * @param text - Texte contenant les rÃƒÂ©fÃƒÂ©rences ÃƒÂ  rÃƒÂ©ÃƒÂ©crire
+ * @param maps - Maps de correspondances ancienÃ¢â€ â€™nouveau
+ * @param suffix - Suffixe ÃƒÂ  appliquer si pas de mapping trouvÃƒÂ©
+ * @returns Texte avec rÃƒÂ©fÃƒÂ©rences rÃƒÂ©ÃƒÂ©crites
  * 
  * @example
  * rewriteReferences(
@@ -60,7 +60,7 @@ export interface RewriteMaps {
  *   { nodeIdMap: new Map([['abc', 'abc-1']]), ... },
  *   1
  * )
- * → '["@value.abc-1", "+", "@value.node-formula:def-1"]'
+ * Ã¢â€ â€™ '["@value.abc-1", "+", "@value.node-formula:def-1"]'
  */
 export function rewriteReferences(
   text: string,
@@ -73,11 +73,11 @@ export function rewriteReferences(
   
   // Fonction helper pour nettoyer les suffixes existants
   const stripAllSuffixes = (id: string): string => {
-    // Enlever TOUS les suffixes numériques finaux (ex: "uuid-1-2" → "uuid")
+    // Enlever TOUS les suffixes numÃƒÂ©riques finaux (ex: "uuid-1-2" Ã¢â€ â€™ "uuid")
     return id.replace(/(-\d+)+$/, '');
   };
   
-  // Fonction helper pour ajouter le suffixe de manière SÛRE (sans doublons)
+  // Fonction helper pour ajouter le suffixe de maniÃƒÂ¨re SÃƒâ€ºRE (sans doublons)
   const applySuffix = (id: string): string => {
     if (!suffixStr) return id;
     const cleanId = stripAllSuffixes(id);
@@ -86,40 +86,36 @@ export function rewriteReferences(
   
   // Fonction helper pour mapper ou suffixer
   const mapOrSuffix = (id: string, map: Map<string, string>, isSharedRef = false): string => {
-    // 1. Chercher dans la map (priorité absolue)
+    // 1. Chercher dans la map (prioritÃƒÂ© absolue)
     if (map.has(id)) {
       const mapped = map.get(id)!;
-      console.log(`🔄 [REWRITE] Mapping trouvé: ${id} → ${mapped}`);
       return mapped;
     }
     
-    // 2. Cas spécial : shared-ref DOIT toujours recevoir le suffixe dans un contexte repeat !
-    // Les shared-ref-xxx PARTAGÉES doivent rester pareilles SAUF si on a un suffixe (repeat context)
-    // Dans un repeat, elles DOIVENT être suffixées pour cohérence
+    // 2. Cas spÃƒÂ©cial : shared-ref DOIT toujours recevoir le suffixe dans un contexte repeat !
+    // Les shared-ref-xxx PARTAGÃƒâ€°ES doivent rester pareilles SAUF si on a un suffixe (repeat context)
+    // Dans un repeat, elles DOIVENT ÃƒÂªtre suffixÃƒÂ©es pour cohÃƒÂ©rence
     if (isSharedRef) {
       if (!suffixStr) {
-        console.log(`⚪ [REWRITE] Shared-ref conservée (pas de suffixe): ${id}`);
         return id;
       }
-      // ⭐ TOUJOURS suffixer les shared-ref dans un repeat context
+      // Ã¢Â­Â TOUJOURS suffixer les shared-ref dans un repeat context
       const suffixed = applySuffix(id);
-      console.log(`➕ [REWRITE] ⭐ SHARED-REF SUFFIXÉE: ${id} → ${suffixed}`);
       return suffixed;
     }
     
     // 3. Appliquer suffixe (nettoie les anciens d'abord)
     const suffixed = applySuffix(id);
     if (suffixed !== id) {
-      console.log(`➕ [REWRITE] Suffixe ajouté: ${id} → ${suffixed}`);
     }
     return suffixed;
   };
   
   let result = text;
   
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // PASSE 1 : @value.XXX (TOUS les types)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   
   // 1.1 : @value.node-formula:xxx
   result = result.replace(
@@ -162,16 +158,16 @@ export function rewriteReferences(
   );
   
   // 1.5 : @value.XXX (UUIDs, node_xxx, shared-ref-xxx)
-  // IMPORTANT : Faire ceci APRÈS les autres @value.XXX pour éviter les conflits
+  // IMPORTANT : Faire ceci APRÃƒË†S les autres @value.XXX pour ÃƒÂ©viter les conflits
   result = result.replace(
     /@value\.([A-Za-z0-9_:-]+)/g,
     (_match, nodeIdWithSuffix: string) => {
-      // Ne pas re-traiter les patterns déjà traités ci-dessus
+      // Ne pas re-traiter les patterns dÃƒÂ©jÃƒÂ  traitÃƒÂ©s ci-dessus
       if (nodeIdWithSuffix.startsWith('node-formula:') || 
           nodeIdWithSuffix.startsWith('node-condition:') || 
           nodeIdWithSuffix.startsWith('condition:') ||
           nodeIdWithSuffix.startsWith('node-table:')) {
-        return _match; // Déjà traité
+        return _match; // DÃƒÂ©jÃƒÂ  traitÃƒÂ©
       }
       
       const nodeId = stripAllSuffixes(nodeIdWithSuffix);
@@ -181,9 +177,9 @@ export function rewriteReferences(
     }
   );
   
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // PASSE 2 : @table.XXX
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   
   result = result.replace(
     /@table\.([A-Za-z0-9_-]+)/g,
@@ -194,9 +190,9 @@ export function rewriteReferences(
     }
   );
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PASSE 3 : Références directes (sans @value. ni @table.)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+  // PASSE 3 : RÃƒÂ©fÃƒÂ©rences directes (sans @value. ni @table.)
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   
   // 3.1 : node-formula:xxx
   result = result.replace(
@@ -219,7 +215,7 @@ export function rewriteReferences(
   );
   
   // 3.3 : condition:xxx (standalone)
-  // IMPORTANT : Capturer MÊME les IDs avec suffixes existants, puis les nettoyer
+  // IMPORTANT : Capturer MÃƒÅ ME les IDs avec suffixes existants, puis les nettoyer
   result = result.replace(
     /condition:([A-Za-z0-9_-]+)/g,
     (_match, conditionIdWithSuffix: string) => {
@@ -240,18 +236,18 @@ export function rewriteReferences(
     }
   );
   
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // PASSE 4 : UUIDs NUS et node_xxx NUS (dans les arrays nodeIds, etc.)
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CRITIQUE : Traiter les IDs qui ne sont pas dans un préfixe @value., @table., etc.
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+  // CRITIQUE : Traiter les IDs qui ne sont pas dans un prÃƒÂ©fixe @value., @table., etc.
   // Cela s'applique aux arrays nodeIds, cellules, configurations JSON, etc.
   
   // 4.1 : UUIDs nus (xxxxx-xxxx-xxxx-xxxx-xxxxxxx)
-  // 🔴 CRITIQUE : Capturer AUSSI les suffixes existants pour ne pas les re-traiter !
+  // Ã°Å¸â€Â´ CRITIQUE : Capturer AUSSI les suffixes existants pour ne pas les re-traiter !
   result = result.replace(
     /\b([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(-\d+)?\b/gi,
     (fullMatch: string, uuid: string, existingSuffix?: string) => {
-      // Si suffixe existe déjà, le laisser tel quel (éviter -1-1)
+      // Si suffixe existe dÃƒÂ©jÃƒÂ , le laisser tel quel (ÃƒÂ©viter -1-1)
       if (existingSuffix) {
         return fullMatch;
       }
@@ -261,13 +257,13 @@ export function rewriteReferences(
     }
   );
   
-  // 4.2 : node_xxx nus (références générées)
-  // 🔴 CRITIQUE : Capturer AUSSI les suffixes existants pour ne pas les re-traiter !
-  // Regex : capture `node_` + tout jusqu'au suffixe numérique final optionnel
+  // 4.2 : node_xxx nus (rÃƒÂ©fÃƒÂ©rences gÃƒÂ©nÃƒÂ©rÃƒÂ©es)
+  // Ã°Å¸â€Â´ CRITIQUE : Capturer AUSSI les suffixes existants pour ne pas les re-traiter !
+  // Regex : capture `node_` + tout jusqu'au suffixe numÃƒÂ©rique final optionnel
   result = result.replace(
     /\b(node_[A-Za-z0-9_-]*[A-Za-z0-9])(-\d+)?\b/g,
     (fullMatch: string, baseNodeId: string, existingSuffix?: string) => {
-      // Si suffixe existe déjà, le laisser tel quel
+      // Si suffixe existe dÃƒÂ©jÃƒÂ , le laisser tel quel
       if (existingSuffix) {
         return fullMatch;
       }
@@ -277,13 +273,13 @@ export function rewriteReferences(
     }
   );
   
-  // 4.3 : shared-ref-xxx nus (références partagées)
-  // 🔴 CRITIQUE : Capturer AUSSI les suffixes existants pour ne pas les re-traiter !
-  // Regex : capture `shared-ref-` + tout jusqu'au suffixe numérique final optionnel
+  // 4.3 : shared-ref-xxx nus (rÃƒÂ©fÃƒÂ©rences partagÃƒÂ©es)
+  // Ã°Å¸â€Â´ CRITIQUE : Capturer AUSSI les suffixes existants pour ne pas les re-traiter !
+  // Regex : capture `shared-ref-` + tout jusqu'au suffixe numÃƒÂ©rique final optionnel
   result = result.replace(
     /\b(shared-ref-[A-Za-z0-9_-]*[A-Za-z0-9])(-\d+)?\b/g,
     (fullMatch: string, baseRefId: string, existingSuffix?: string) => {
-      // Si suffixe existe déjà, le laisser tel quel
+      // Si suffixe existe dÃƒÂ©jÃƒÂ , le laisser tel quel
       if (existingSuffix) {
         return fullMatch;
       }
@@ -297,14 +293,14 @@ export function rewriteReferences(
 }
 
 /**
- * 🔄 Réécrit un objet JSON récursivement en appliquant rewriteReferences sur toutes les strings
+ * Ã°Å¸â€â€ž RÃƒÂ©ÃƒÂ©crit un objet JSON rÃƒÂ©cursivement en appliquant rewriteReferences sur toutes les strings
  * 
- * Utilisé pour réécrire des structures complexes comme conditionSet, tokens, etc.
+ * UtilisÃƒÂ© pour rÃƒÂ©ÃƒÂ©crire des structures complexes comme conditionSet, tokens, etc.
  * 
- * @param obj - Objet à réécrire
+ * @param obj - Objet ÃƒÂ  rÃƒÂ©ÃƒÂ©crire
  * @param maps - Maps de correspondances
- * @param suffix - Suffixe à appliquer
- * @returns Objet réécrit
+ * @param suffix - Suffixe ÃƒÂ  appliquer
+ * @returns Objet rÃƒÂ©ÃƒÂ©crit
  */
 export function rewriteJsonReferences<T>(
   obj: T,
@@ -318,12 +314,12 @@ export function rewriteJsonReferences<T>(
     return rewriteReferences(obj, maps, suffix) as unknown as T;
   }
   
-  // Array : traiter récursivement chaque élément
+  // Array : traiter rÃƒÂ©cursivement chaque ÃƒÂ©lÃƒÂ©ment
   if (Array.isArray(obj)) {
     return obj.map(item => rewriteJsonReferences(item, maps, suffix)) as unknown as T;
   }
   
-  // Object : traiter récursivement chaque propriété
+  // Object : traiter rÃƒÂ©cursivement chaque propriÃƒÂ©tÃƒÂ©
   if (typeof obj === 'object') {
     const result: any = {};
     for (const [key, value] of Object.entries(obj)) {
@@ -337,24 +333,22 @@ export function rewriteJsonReferences<T>(
 }
 
 /**
- * 🔥 FORCE TOUS LES SHARED-REFS À ÊTRE SUFFIXÉS
+ * Ã°Å¸â€Â¥ FORCE TOUS LES SHARED-REFS Ãƒâ‚¬ ÃƒÅ TRE SUFFIXÃƒâ€°S
  * 
  * Cette fonction traite les tokens d'une formule et force TOUS les
- * @value.shared-ref-* à recevoir un suffix, même s'ils ne sont pas
- * explicitement mappés. Cela garantit que les formules dans les conditions
- * auront TOUS leurs shared-refs suffixés correctement.
+ * @value.shared-ref-* ÃƒÂ  recevoir un suffix, mÃƒÂªme s'ils ne sont pas
+ * explicitement mappÃƒÂ©s. Cela garantit que les formules dans les conditions
+ * auront TOUS leurs shared-refs suffixÃƒÂ©s correctement.
  * 
- * @param tokens - Tableau de tokens à traiter
- * @param suffix - Suffixe à appliquer
- * @returns Tokens réécrits avec shared-refs forcément suffixés
+ * @param tokens - Tableau de tokens ÃƒÂ  traiter
+ * @param suffix - Suffixe ÃƒÂ  appliquer
+ * @returns Tokens rÃƒÂ©ÃƒÂ©crits avec shared-refs forcÃƒÂ©ment suffixÃƒÂ©s
  */
 export function forceSharedRefSuffixes(tokens: any, suffix: number): any {
   if (!Array.isArray(tokens)) {
-    console.log(`🔥 [forceSharedRefSuffixes] INPUT NOT ARRAY - Type: ${typeof tokens}, Value:`, tokens);
     return tokens;
   }
   
-  console.log(`🔥 [forceSharedRefSuffixes] START - ${tokens.length} tokens, suffix=${suffix}`);
   let modified = 0;
   let matchCount = 0;
   
@@ -371,43 +365,39 @@ export function forceSharedRefSuffixes(tokens: any, suffix: number): any {
         
         if (!alreadySuffixed) {
           const suffixed = `${baseRef}-${suffix}`;
-          console.log(`🔥 [idx ${idx}] MATCHED ET MODIFIÉ: "${token}" → "${suffixed}"`);
           modified++;
           return suffixed;
         } else {
-          console.log(`🔥 [idx ${idx}] MATCHED MAIS DÉJÀ SUFFIXÉ: "${token}"`);
         }
       } else if (token.includes('shared-ref')) {
-        console.warn(`🔥 [idx ${idx}] ⚠️ CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
+        console.warn(`Ã°Å¸â€Â¥ [idx ${idx}] Ã¢Å¡Â Ã¯Â¸Â CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
       }
     } else {
       if (String(token).includes('shared-ref')) {
-        console.warn(`🔥 [idx ${idx}] ⚠️ Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
+        console.warn(`Ã°Å¸â€Â¥ [idx ${idx}] Ã¢Å¡Â Ã¯Â¸Â Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
       }
     }
     return token;
   });
   
-  console.log(`🔥 [forceSharedRefSuffixes] END - ${matchCount} matched, ${modified} modified sur ${tokens.length}`);
   return result;
 }
 
 /**
- * 🔥 FORCE TOUS LES SHARED-REFS DANS UN OBJET JSON RÉCURSIVEMENT
+ * Ã°Å¸â€Â¥ FORCE TOUS LES SHARED-REFS DANS UN OBJET JSON RÃƒâ€°CURSIVEMENT
  * 
- * Parcourt TOUS les objets JSON (structures imbriquées) et force TOUS les
- * @value.shared-ref-* à recevoir un suffix, même s'ils ne sont pas mappés.
+ * Parcourt TOUS les objets JSON (structures imbriquÃƒÂ©es) et force TOUS les
+ * @value.shared-ref-* ÃƒÂ  recevoir un suffix, mÃƒÂªme s'ils ne sont pas mappÃƒÂ©s.
  * Utile pour les configurations des tables, colonnes, cellules, etc.
  * 
- * @param obj - Objet JSON à traiter (peut être profondément imbriqué)
- * @param suffix - Suffixe à appliquer
- * @returns Objet JSON réécrits avec shared-refs forcément suffixés
+ * @param obj - Objet JSON ÃƒÂ  traiter (peut ÃƒÂªtre profondÃƒÂ©ment imbriquÃƒÂ©)
+ * @param suffix - Suffixe ÃƒÂ  appliquer
+ * @returns Objet JSON rÃƒÂ©ÃƒÂ©crits avec shared-refs forcÃƒÂ©ment suffixÃƒÂ©s
  */
 export function forceSharedRefSuffixesInJson<T extends any>(obj: T, suffix: number): T {
   if (obj === null || obj === undefined) return obj;
   
   if (Array.isArray(obj)) {
-    console.log(`   🔥 [forceSharedRefSuffixesInJson] Processing array of ${obj.length} items`);
     return obj.map((item: any) => forceSharedRefSuffixesInJson(item, suffix)) as T;
   }
   
@@ -422,7 +412,6 @@ export function forceSharedRefSuffixesInJson<T extends any>(obj: T, suffix: numb
       
       if (!alreadySuffixed) {
         const suffixed = `${baseRef}-${suffix}`;
-        console.log(`   🔥 JSON string FORCÉ: ${obj} → ${suffixed}`);
         return suffixed as T;
       }
     }
@@ -440,7 +429,6 @@ export function forceSharedRefSuffixesInJson<T extends any>(obj: T, suffix: numb
       }
     }
     if (modified > 0) {
-      console.log(`   🔥 JSON object: ${modified} propriétés modifiées`);
     }
     return result as T;
   }

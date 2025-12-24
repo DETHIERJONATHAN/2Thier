@@ -15,9 +15,9 @@ interface RepeatRequestBody {
 export default function createRepeatRouter(prisma: PrismaClient) {
   const router = Router();
 
-  // Guard serveur (in-memory) : empêche deux exécutions concurrentes pour le même repeater.
-  // Objectif: éviter les doubles exécutions "1 clic => 2 requêtes" qui créent -1 puis -2.
-  // Ce guard ne bloque pas les clics suivants une fois la requête terminée.
+  // Guard serveur (in-memory) : empÃƒÂªche deux exÃƒÂ©cutions concurrentes pour le mÃƒÂªme repeater.
+  // Objectif: ÃƒÂ©viter les doubles exÃƒÂ©cutions "1 clic => 2 requÃƒÂªtes" qui crÃƒÂ©ent -1 puis -2.
+  // Ce guard ne bloque pas les clics suivants une fois la requÃƒÂªte terminÃƒÂ©e.
   const inFlightExecuteByRepeater = new Set<string>();
 
   router.use(authenticateToken);
@@ -61,19 +61,6 @@ export default function createRepeatRouter(prisma: PrismaClient) {
     const { repeaterNodeId } = req.params;
     const body = (req.body || {}) as RepeatRequestBody;
 
-    console.log(`\n\n🔥🔥🔥 [repeat-route] BOUTON AJOUTER CLIQUÉ !`);
-    console.log(`[repeat-route] RepeaterNodeId: ${repeaterNodeId}`);
-    console.log(`[repeat-route] Body:`, JSON.stringify(body));
-    
-    // Écrire dans un fichier pour preuve
-    try {
-      const fs = require('fs');
-      const timestamp = new Date().toISOString();
-      fs.appendFileSync('repeat-execute-calls.log', `${timestamp} - Repeater: ${repeaterNodeId}\n`);
-    } catch (e) {
-      console.error('[repeat-route] Failed to write log file:', e);
-    }
-
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
       return res.status(409).json({
         error: 'Repeat execution already in progress for this repeater.',
@@ -84,7 +71,6 @@ export default function createRepeatRouter(prisma: PrismaClient) {
     inFlightExecuteByRepeater.add(repeaterNodeId);
 
     try {
-      console.log(`[repeat-route] Calling executeRepeatDuplication...`);
       const executionPlan = await executeRepeatDuplication(prisma, repeaterNodeId, {
         suffix: body.suffix,
         includeTotals: body.includeTotals,

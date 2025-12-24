@@ -84,15 +84,35 @@ app.use((req, res, next) => {
 });
 
 // �📊 LOGGING SÉCURISÉ DE TOUTES LES REQUÊTES
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 app.use(expressWinston.logger({
   winstonInstance: securityLogger,
-  meta: true,
+  meta: !isDevelopment, // Pas de meta en dev pour réduire la verbosité
   msg: 'HTTP {{req.method}} {{req.url}} {{res.statusCode}} {{res.responseTime}}ms',
   expressFormat: false,
   colorize: false,
   requestWhitelist: ['method', 'url', 'ip'],
   responseWhitelist: ['statusCode'],
   skip: (req, res) => {
+    // En développement, skip la plupart des logs pour la performance
+    if (isDevelopment) {
+      // Logger seulement les erreurs (400+) et les endpoints critiques
+      if (res.statusCode < 400) {
+        // Skip les TBL/tree-nodes qui génèrent beaucoup de requêtes
+        const skipPatterns = [
+          '/api/tree-nodes/',
+          '/api/treebranchleaf/',
+          '/api/tbl/',
+          '/api/repeat/',
+          '/api/health',
+          '/health'
+        ];
+        if (skipPatterns.some(pattern => req.url.startsWith(pattern))) {
+          return true;
+        }
+      }
+    }
     // Skip les endpoints de santé pour éviter le spam de logs
     return ['/api/health', '/health'].includes(req.url) && res.statusCode < 400;
   }

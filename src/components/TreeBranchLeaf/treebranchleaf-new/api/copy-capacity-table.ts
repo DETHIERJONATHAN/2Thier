@@ -1,8 +1,8 @@
-/**
- * 📊 Système de copie des TABLES
+﻿/**
+ * Ã°Å¸â€œÅ  SystÃƒÂ¨me de copie des TABLES
  * 
- * Ce module gère la copie complète d'une table (TreeBranchLeafNodeTable)
- * avec toutes ses sous-entités : colonnes, lignes et cellules.
+ * Ce module gÃƒÂ¨re la copie complÃƒÂ¨te d'une table (TreeBranchLeafNodeTable)
+ * avec toutes ses sous-entitÃƒÂ©s : colonnes, lignes et cellules.
  * 
  * PRINCIPES :
  * -----------
@@ -10,10 +10,10 @@
  * 2. Copier toutes les colonnes (TreeBranchLeafNodeTableColumn)
  * 3. Copier toutes les lignes (TreeBranchLeafNodeTableRow)
  * 4. Copier toutes les cellules (TreeBranchLeafNodeTableCell)
- * 5. Réécrire les IDs dans les configs JSON
- * 6. 🔗 LIAISON AUTOMATIQUE OBLIGATOIRE: linkedTableIds sur TOUS les nœuds référencés
- * 7. Mettre à jour linkedTableIds du nœud propriétaire
- * 8. Synchroniser les paramètres de capacité (hasTable, table_activeId, etc.)
+ * 5. RÃƒÂ©ÃƒÂ©crire les IDs dans les configs JSON
+ * 6. Ã°Å¸â€â€” LIAISON AUTOMATIQUE OBLIGATOIRE: linkedTableIds sur TOUS les nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
+ * 7. Mettre ÃƒÂ  jour linkedTableIds du nÃ…â€œud propriÃƒÂ©taire
+ * 8. Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ© (hasTable, table_activeId, etc.)
  * 
  * @author System TBL
  * @version 2.0.0 - LIAISON AUTOMATIQUE OBLIGATOIRE
@@ -23,39 +23,39 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { linkTableToAllNodes } from './universal-linking-system';
 import { rewriteJsonReferences, forceSharedRefSuffixes, forceSharedRefSuffixesInJson, type RewriteMaps } from './repeat/utils/universal-reference-rewriter.js';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 📋 TYPES ET INTERFACES
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€œâ€¹ TYPES ET INTERFACES
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
  * Options pour la copie de table
  */
 export interface CopyTableOptions {
-  /** Map des nœuds copiés (ancien ID → nouveau ID) pour réécrire les configs */
+  /** Map des nÃ…â€œuds copiÃƒÂ©s (ancien ID Ã¢â€ â€™ nouveau ID) pour rÃƒÂ©ÃƒÂ©crire les configs */
   nodeIdMap?: Map<string, string>;
-  /** Map des tables déjà copiées (cache pour éviter doublons) */
+  /** Map des tables dÃƒÂ©jÃƒÂ  copiÃƒÂ©es (cache pour ÃƒÂ©viter doublons) */
   tableCopyCache?: Map<string, string>;
-  /** Map des tables copiées (ancien ID → nouveau ID) pour remapper table_instances */
+  /** Map des tables copiÃƒÂ©es (ancien ID Ã¢â€ â€™ nouveau ID) pour remapper table_instances */
   tableIdMap?: Map<string, string>;
 }
 
 /**
- * Résultat de la copie d'une table
+ * RÃƒÂ©sultat de la copie d'une table
  */
 export interface CopyTableResult {
-  /** ID de la table copiée */
+  /** ID de la table copiÃƒÂ©e */
   newTableId: string;
-  /** ID du nœud propriétaire */
+  /** ID du nÃ…â€œud propriÃƒÂ©taire */
   nodeId: string;
-  /** Nombre de colonnes copiées */
+  /** Nombre de colonnes copiÃƒÂ©es */
   columnsCount: number;
-  /** Nombre de lignes copiées */
+  /** Nombre de lignes copiÃƒÂ©es */
   rowsCount: number;
-  /** Nombre de cellules copiées */
+  /** Nombre de cellules copiÃƒÂ©es */
   cellsCount: number;
-  /** Succès de l'opération */
+  /** SuccÃƒÂ¨s de l'opÃƒÂ©ration */
   success: boolean;
-  /** Message d'erreur éventuel */
+  /** Message d'erreur ÃƒÂ©ventuel */
   error?: string;
 }
 
@@ -68,43 +68,43 @@ function stripNumericSuffix(value: string | null | undefined): string | null | u
   return value;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS UTILITAIRES DE RÉÉCRITURE
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€Â§ FONCTIONS UTILITAIRES DE RÃƒâ€°Ãƒâ€°CRITURE
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔄 Réécriture utilise maintenant le système universel rewriteJsonReferences
-// La fonction ancienne rewriteIdsInJson est remplacée par rewriteJsonReferences
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€â€ž RÃƒÂ©ÃƒÂ©criture utilise maintenant le systÃƒÂ¨me universel rewriteJsonReferences
+// La fonction ancienne rewriteIdsInJson est remplacÃƒÂ©e par rewriteJsonReferences
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔄 FONCTION PRINCIPALE DE COPIE
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€â€ž FONCTION PRINCIPALE DE COPIE
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
  * Copie une table avec toutes ses colonnes, lignes et cellules
  * 
  * PROCESSUS :
  * -----------
- * 1. Vérifier le cache (éviter doublons)
- * 2. Récupérer la table originale + colonnes + lignes + cellules
- * 3. Générer les nouveaux IDs avec suffixe
- * 4. Créer la nouvelle table
+ * 1. VÃƒÂ©rifier le cache (ÃƒÂ©viter doublons)
+ * 2. RÃƒÂ©cupÃƒÂ©rer la table originale + colonnes + lignes + cellules
+ * 3. GÃƒÂ©nÃƒÂ©rer les nouveaux IDs avec suffixe
+ * 4. CrÃƒÂ©er la nouvelle table
  * 5. Copier toutes les colonnes
  * 6. Copier toutes les lignes
  * 7. Copier toutes les cellules
- * 8. Mettre à jour linkedTableIds du nœud
- * 9. Synchroniser les paramètres de capacité
+ * 8. Mettre ÃƒÂ  jour linkedTableIds du nÃ…â€œud
+ * 9. Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ©
  * 10. Mettre en cache
  * 
- * @param originalTableId - ID de la table à copier
- * @param newNodeId - ID du nouveau nœud propriétaire
- * @param suffix - Suffixe numérique à appliquer
+ * @param originalTableId - ID de la table ÃƒÂ  copier
+ * @param newNodeId - ID du nouveau nÃ…â€œud propriÃƒÂ©taire
+ * @param suffix - Suffixe numÃƒÂ©rique ÃƒÂ  appliquer
  * @param prisma - Instance Prisma Client
  * @param options - Options avec nodeIdMap
- * @returns Résultat de la copie
+ * @returns RÃƒÂ©sultat de la copie
  * 
  * @example
  * const result = await copyTableCapacity(
@@ -127,11 +127,6 @@ export async function copyTableCapacity(
   options: CopyTableOptions = {}
 ): Promise<CopyTableResult> {
   
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`📊 COPIE TABLE: ${originalTableId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau nœud: ${newNodeId}`);
-  console.log(`${'═'.repeat(80)}\n`);
 
   const {
     nodeIdMap = new Map(),
@@ -140,12 +135,11 @@ export async function copyTableCapacity(
   } = options;
 
   try {
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔍 ÉTAPE 1 : Vérifier le cache
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â Ãƒâ€°TAPE 1 : VÃƒÂ©rifier le cache
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     if (tableCopyCache.has(originalTableId)) {
       const cachedId = tableCopyCache.get(originalTableId)!;
-      console.log(`♻️ Table déjà copiée (cache): ${originalTableId} → ${cachedId}`);
       
       const cached = await prisma.treeBranchLeafNodeTable.findUnique({
         where: { id: cachedId },
@@ -174,13 +168,12 @@ export async function copyTableCapacity(
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📥 ÉTAPE 2 : Récupérer la table originale PAR ID (enlever suffixe si présent) + sous-entités
-    // ═══════════════════════════════════════════════════════════════════════
-    // originalTableId peut contenir un suffixe si c'est déjà une copie
-    // On enlève le suffixe pour trouver l'original
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œÂ¥ Ãƒâ€°TAPE 2 : RÃƒÂ©cupÃƒÂ©rer la table originale PAR ID (enlever suffixe si prÃƒÂ©sent) + sous-entitÃƒÂ©s
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // originalTableId peut contenir un suffixe si c'est dÃƒÂ©jÃƒÂ  une copie
+    // On enlÃƒÂ¨ve le suffixe pour trouver l'original
     const cleanTableId = originalTableId.replace(/-\d+$/, '');
-    console.log(`🔍 Recherche table avec id: ${cleanTableId} (original: ${originalTableId})`);
     
     const originalTable = await prisma.treeBranchLeafNodeTable.findUnique({
       where: { id: cleanTableId },
@@ -191,7 +184,7 @@ export async function copyTableCapacity(
     });
 
     if (!originalTable) {
-      console.error(`❌ Table introuvable avec id: ${cleanTableId}`);
+      console.error(`Ã¢ÂÅ’ Table introuvable avec id: ${cleanTableId}`);
       return {
         newTableId: '',
         nodeId: '',
@@ -203,10 +196,6 @@ export async function copyTableCapacity(
       };
     }
 
-    console.log(`✅ Table trouvée: ${originalTable.name || originalTable.id}`);
-    console.log(`   NodeId original: ${originalTable.nodeId}`);
-    console.log(`   Colonnes: ${originalTable.tableColumns.length}`);
-    console.log(`   Lignes: ${originalTable.tableRows.length}`);
     
     // Compter le total des cellules depuis les rows
     let originalTotalCells = 0;
@@ -214,44 +203,42 @@ export async function copyTableCapacity(
       const cells = (row.cells as any) || [];
       originalTotalCells += Array.isArray(cells) ? cells.length : Object.keys(cells).length;
     }
-    console.log(`   Cellules (total): ${originalTotalCells}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🆔 ÉTAPE 3 : Générer les nouveaux IDs (pour la table elle-même)
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€ â€ Ãƒâ€°TAPE 3 : GÃƒÂ©nÃƒÂ©rer les nouveaux IDs (pour la table elle-mÃƒÂªme)
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // On utilise l'id original de la table avec suffixe
     const newTableId = `${originalTable.id}-${suffix}`;
-    console.log(`📝 Nouvel ID table: ${newTableId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔧 FIX CRITIQUE: Déterminer le VRAI propriétaire de la table copiée
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â§ FIX CRITIQUE: DÃƒÂ©terminer le VRAI propriÃƒÂ©taire de la table copiÃƒÂ©e
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     const originalOwnerNodeId = originalTable.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
     
-    // Vérifier si le nœud propriétaire copié existe
+    // VÃƒÂ©rifier si le nÃ…â€œud propriÃƒÂ©taire copiÃƒÂ© existe
     const ownerNodeExists = await prisma.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
     
-    // Si le propriétaire suffixé existe, l'utiliser. Sinon fallback sur newNodeId.
+    // Si le propriÃƒÂ©taire suffixÃƒÂ© existe, l'utiliser. Sinon fallback sur newNodeId.
     const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
     
-    console.log(`🔧 [OWNER FIX] NodeId original propriétaire: ${originalOwnerNodeId}`);
-    console.log(`🔧 [OWNER FIX] NodeId propriétaire suffixé: ${correctOwnerNodeId}`);
-    console.log(`🔧 [OWNER FIX] Propriétaire suffixé existe: ${ownerNodeExists ? 'OUI (' + ownerNodeExists.label + ')' : 'NON'}`);
-    console.log(`🔧 [OWNER FIX] NodeId FINAL utilisé: ${finalOwnerNodeId}`);
 
-    // Maps pour les sous-entités (colonne/ligne/cellule)
+    // Maps pour les sous-entitÃƒÂ©s (colonne/ligne/cellule)
     const columnIdMap = new Map<string, string>();
     const rowIdMap = new Map<string, string>();
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 💾 ÉTAPE 4 : Créer (ou mettre à jour) la nouvelle table — idempotent
-    // ═══════════════════════════════════════════════════════════════════════
+    //  Flag pour savoir si la table existait déjà (pour éviter de recréer colonnes/lignes)
+    let tableAlreadyExisted = false;
+
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€™Â¾ Ãƒâ€°TAPE 4 : CrÃƒÂ©er (ou mettre ÃƒÂ  jour) la nouvelle table Ã¢â‚¬â€ idempotent
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     let newTable = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
     if (newTable) {
+      tableAlreadyExisted = true; //  Marquer que la table existait déjà
       newTable = await prisma.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
@@ -259,7 +246,7 @@ export async function copyTableCapacity(
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
-          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
+          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
             const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps, suffix) as any;
@@ -291,12 +278,11 @@ export async function copyTableCapacity(
                 rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
               }
             }
-            // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+            // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
             if (rewritten?.lookup?.displayColumn) {
               if (Array.isArray(rewritten.lookup.displayColumn)) {
                 rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col: string) => {
                   if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayColumn[]: ${col} → ${col}-${suffix}`);
                     return `${col}-${suffix}`;
                   }
                   return col;
@@ -304,17 +290,15 @@ export async function copyTableCapacity(
               } else if (typeof rewritten.lookup.displayColumn === 'string') {
                 const val = rewritten.lookup.displayColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayColumn: ${val} → ${val}-${suffix}`);
                   rewritten.lookup.displayColumn = `${val}-${suffix}`;
                 }
               }
             }
-            // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+            // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
             if (rewritten?.lookup?.displayRow) {
               if (Array.isArray(rewritten.lookup.displayRow)) {
                 rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row: string) => {
                   if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayRow[]: ${row} → ${row}-${suffix}`);
                     return `${row}-${suffix}`;
                   }
                   return row;
@@ -322,7 +306,6 @@ export async function copyTableCapacity(
               } else if (typeof rewritten.lookup.displayRow === 'string') {
                 const val = rewritten.lookup.displayRow;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayRow: ${val} → ${val}-${suffix}`);
                   rewritten.lookup.displayRow = `${val}-${suffix}`;
                 }
               }
@@ -341,7 +324,7 @@ export async function copyTableCapacity(
           name: originalTable.name ? `${originalTable.name}-${suffix}` : null,
           description: originalTable.description,
           type: originalTable.type,
-          // 🔢 COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
+          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
             const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps) as any;
@@ -373,12 +356,11 @@ export async function copyTableCapacity(
                 rewritten.lookup.columnSourceOption.comparisonColumn = `${val}-${suffix}`;
               }
             }
-            // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+            // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
             if (rewritten?.lookup?.displayColumn) {
               if (Array.isArray(rewritten.lookup.displayColumn)) {
                 rewritten.lookup.displayColumn = rewritten.lookup.displayColumn.map((col: string) => {
                   if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayColumn[]: ${col} → ${col}-${suffix}`);
                     return `${col}-${suffix}`;
                   }
                   return col;
@@ -386,17 +368,15 @@ export async function copyTableCapacity(
               } else if (typeof rewritten.lookup.displayColumn === 'string') {
                 const val = rewritten.lookup.displayColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayColumn: ${val} → ${val}-${suffix}`);
                   rewritten.lookup.displayColumn = `${val}-${suffix}`;
                 }
               }
             }
-            // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+            // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
             if (rewritten?.lookup?.displayRow) {
               if (Array.isArray(rewritten.lookup.displayRow)) {
                 rewritten.lookup.displayRow = rewritten.lookup.displayRow.map((row: string) => {
                   if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(`-${suffix}`)) {
-                    console.log(`[table.meta] displayRow[]: ${row} → ${row}-${suffix}`);
                     return `${row}-${suffix}`;
                   }
                   return row;
@@ -404,7 +384,6 @@ export async function copyTableCapacity(
               } else if (typeof rewritten.lookup.displayRow === 'string') {
                 const val = rewritten.lookup.displayRow;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(`-${suffix}`)) {
-                  console.log(`[table.meta] displayRow: ${val} → ${val}-${suffix}`);
                   rewritten.lookup.displayRow = `${val}-${suffix}`;
                 }
               }
@@ -417,15 +396,23 @@ export async function copyTableCapacity(
       });
     }
 
-    console.log(`✅ Table créée: ${newTable.id}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📋 ÉTAPE 5 : Copier toutes les colonnes (EXACT comme copy-table-final.cjs)
-    // ═══════════════════════════════════════════════════════════════════════
-    console.log(`\n📋 Copie de ${originalTable.tableColumns.length} colonnes...`);
-    
-    // Utiliser une query brute pour obtenir les colonnes (même pattern que le script)
-    // ⚠️ NE PAS copier config - juste les champs de base !
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œâ€¹ Ãƒâ€°TAPE 5 : Copier toutes les colonnes (EXACT comme copy-table-final.cjs)
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+
+    //  SKIP si la table existait déjà (les colonnes/lignes existent déjà)
+    let columnsCount = 0;
+    let rowsCount = 0;
+    if (tableAlreadyExisted) {
+      // Table déjà existante, pas besoin de recréer colonnes/lignes
+      const existingCols = await prisma.treeBranchLeafNodeTableColumn.count({ where: { tableId: newTableId } });
+      const existingRows = await prisma.treeBranchLeafNodeTableRow.count({ where: { tableId: newTableId } });
+      columnsCount = existingCols;
+      rowsCount = existingRows;
+    } else {    
+    // Utiliser une query brute pour obtenir les colonnes (mÃƒÂªme pattern que le script)
+    // Ã¢Å¡Â Ã¯Â¸Â NE PAS copier config - juste les champs de base !
     const originalColumnsRaw = await prisma.$queryRaw<any[]>`
       SELECT "id", "tableId", "columnIndex", "name", "type", "width", "format", "metadata"
       FROM "TreeBranchLeafNodeTableColumn"
@@ -433,27 +420,26 @@ export async function copyTableCapacity(
       ORDER BY "columnIndex" ASC
     `;
 
-    let columnsCount = 0;
     for (const col of originalColumnsRaw) {
       try {
-        // Générer un ID unique (pas de suffixe)
+        // GÃƒÂ©nÃƒÂ©rer un ID unique (pas de suffixe)
         const newColumnId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
         columnIdMap.set(col.id, newColumnId);
 
         // Normaliser le nom de colonne : 
-        // - Nombres purs ("35", "45", "90") → garder sans suffixe
-        // - Texte ("Orientation") → ajouter le suffixe (-1, -2, etc.)
-        // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+        // - Nombres purs ("35", "45", "90") Ã¢â€ â€™ garder sans suffixe
+        // - Texte ("Orientation") Ã¢â€ â€™ ajouter le suffixe (-1, -2, etc.)
+        // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
         const normalizedName = (() => {
           const raw = col.name as string | null;
           if (!raw) return raw;
           // Si c'est un nombre pur (ex: "35", "90", "0.5"), pas de suffixe
           if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
-          // Sinon c'est du texte → ajouter le suffixe
+          // Sinon c'est du texte Ã¢â€ â€™ ajouter le suffixe
           return `${raw}-${suffix}`;
         })();
 
-        // Créer directement - SANS réécrire le metadata/config (comme le script)
+        // CrÃƒÂ©er directement - SANS rÃƒÂ©ÃƒÂ©crire le metadata/config (comme le script)
         await prisma.treeBranchLeafNodeTableColumn.create({
           data: {
             id: newColumnId,
@@ -463,26 +449,23 @@ export async function copyTableCapacity(
             type: col.type || 'text',
             width: col.width,
             format: col.format,
-            metadata: col.metadata  // Copie brute, pas de réécriture
+            metadata: col.metadata  // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
           }
         });
 
         columnsCount++;
-        console.log(`  ✓ [${col.columnIndex}] "${col.name}" → ${newColumnId}`);
       } catch (e) {
-        console.warn(`  ⚠️ [${col.columnIndex}] Erreur: ${(e as Error).message.split('\n')[0].substring(0, 80)}`);
+        console.warn(`  Ã¢Å¡Â Ã¯Â¸Â [${col.columnIndex}] Erreur: ${(e as Error).message.split('\n')[0].substring(0, 80)}`);
       }
     }
 
-    console.log(`✅ ${columnsCount} colonnes copiées`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📄 ÉTAPE 6 : Copier toutes les lignes (EXACT comme copy-table-final.cjs)
-    // ═══════════════════════════════════════════════════════════════════════
-    console.log(`\n📄 Copie de ${originalTable.tableRows.length} lignes...`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œâ€ž Ãƒâ€°TAPE 6 : Copier toutes les lignes (EXACT comme copy-table-final.cjs)
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     
-    // Utiliser une query brute pour obtenir les lignes (même pattern que le script)
-    // ⚠️ NE PAS copier metadata - juste les cells !
+    // Utiliser une query brute pour obtenir les lignes (mÃƒÂªme pattern que le script)
+    // Ã¢Å¡Â Ã¯Â¸Â NE PAS copier metadata - juste les cells !
     const originalRowsRaw = await prisma.$queryRaw<any[]>`
       SELECT "id", "tableId", "rowIndex", "cells"
       FROM "TreeBranchLeafNodeTableRow"
@@ -490,37 +473,34 @@ export async function copyTableCapacity(
       ORDER BY "rowIndex" ASC
     `;
 
-    let rowsCount = 0;
     for (const row of originalRowsRaw) {
       try {
-        // Générer un ID unique (pas de suffixe)
+        // GÃƒÂ©nÃƒÂ©rer un ID unique (pas de suffixe)
         const newRowId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
         rowIdMap.set(row.id, newRowId);
 
-        // Créer directement - SANS réécrire les cells (comme le script)
+        // CrÃƒÂ©er directement - SANS rÃƒÂ©ÃƒÂ©crire les cells (comme le script)
         await prisma.treeBranchLeafNodeTableRow.create({
           data: {
             id: newRowId,
             tableId: newTableId,
             rowIndex: row.rowIndex,
-            cells: row.cells  // Copie brute, pas de réécriture
+            cells: row.cells  // Copie brute, pas de rÃƒÂ©ÃƒÂ©criture
           }
         });
 
         rowsCount++;
         if (rowsCount % 5 === 0) {
-          console.log(`  ✓ ${rowsCount}/${originalRowsRaw.length} lignes copiées...`);
         }
       } catch (e) {
         console.warn(`  ⚠️ [${row.rowIndex}] Erreur: ${(e as Error).message.split('\n')[0].substring(0, 80)}`);
       }
     }
+    } // ⚡ Fin du else (tableAlreadyExisted === false)
 
-    console.log(`✅ ${rowsCount} lignes copiées`);
-
-    // ═══════════════════════════════════════════════════════════════════════
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 🧹 ÉTAPE 6bis : Normaliser les noms de colonnes pour retirer les suffixes numériques
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     try {
       const cols = await prisma.treeBranchLeafNodeTableColumn.findMany({
         where: { tableId: newTableId },
@@ -535,14 +515,13 @@ export async function copyTableCapacity(
           });
         }
       }
-      console.log(`✅ Noms de colonnes normalisés (suffixes numériques retirés)`);
     } catch (e) {
-      console.warn(`⚠️ Normalisation des noms de colonnes échouée:`, (e as Error).message);
+      console.warn(`Ã¢Å¡Â Ã¯Â¸Â Normalisation des noms de colonnes ÃƒÂ©chouÃƒÂ©e:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔢 ÉTAPE 7 : Mettre à jour les métadonnées rowCount et columnCount
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â¢ Ãƒâ€°TAPE 7 : Mettre ÃƒÂ  jour les mÃƒÂ©tadonnÃƒÂ©es rowCount et columnCount
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     await prisma.treeBranchLeafNodeTable.update({
       where: { id: newTableId },
       data: {
@@ -552,46 +531,41 @@ export async function copyTableCapacity(
       }
     });
 
-    console.log(`✅ Métadonnées mises à jour:`);
-    console.log(`   - rowCount: ${rowsCount}`);
-    console.log(`✅ Table créée: ${newTable.id}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 4 : LIAISON AUTOMATIQUE OBLIGATOIRE
-    // ═══════════════════════════════════════════════════════════════════════
-    // ⚡ UTILISATION DU SYSTÈME UNIVERSEL DE LIAISON
-    // On lie avec la version RÉÉCRITE (ids suffixés) pour couvrir tous les champs
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 4 : LIAISON AUTOMATIQUE OBLIGATOIRE
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã¢Å¡Â¡ UTILISATION DU SYSTÃƒË†ME UNIVERSEL DE LIAISON
+    // On lie avec la version RÃƒâ€°Ãƒâ€°CRITE (ids suffixÃƒÂ©s) pour couvrir tous les champs
     const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
     let rewrittenTableData = rewriteJsonReferences(originalTable.tableData, rewriteMaps, suffix);
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔥 RÉÉCRITURE FORCÉE DES SHARED-REFS DANS LA TABLE
-    // ═══════════════════════════════════════════════════════════════════════
-    // Forcer TOUS les @value.shared-ref-* même imbriqués dans les cellules/colonnes
-    console.log(`\n🔥 RÉÉCRITURE FORCÉE des shared-refs dans tableData...`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â¥ RÃƒâ€°Ãƒâ€°CRITURE FORCÃƒâ€°E DES SHARED-REFS DANS LA TABLE
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Forcer TOUS les @value.shared-ref-* mÃƒÂªme imbriquÃƒÂ©s dans les cellules/colonnes
     rewrittenTableData = forceSharedRefSuffixesInJson(rewrittenTableData, suffix);
     
     try {
       await linkTableToAllNodes(prisma, newTableId, rewrittenTableData);
     } catch (e) {
-      console.error(`❌ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
+      console.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 4B : Mettre à jour linkedTableIds du nœud propriétaire
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 4B : Mettre ÃƒÂ  jour linkedTableIds du nÃ…â€œud propriÃƒÂ©taire
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     try {
       await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedTableIds', [newTableId]);
-      console.log(`✅ linkedTableIds mis à jour pour nœud propriétaire ${finalOwnerNodeId}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur MAJ linkedTableIds du propriétaire:`, (e as Error).message);
+      console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur MAJ linkedTableIds du propriÃƒÂ©taire:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📝 ÉTAPE 9 : Synchroniser les paramètres de capacité + copier table_instances
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œÂ Ãƒâ€°TAPE 9 : Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ© + copier table_instances
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     try {
-      // Récupérer le nœud original pour copier table_instances
+      // RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud original pour copier table_instances
       const originalNode = await prisma.treeBranchLeafNode.findUnique({
         where: { id: originalTable.nodeId },
         select: {
@@ -600,11 +574,8 @@ export async function copyTableCapacity(
         }
       });
 
-      console.log(`🔍 Nœud original trouvé, récupération table_instances...`);
-      console.log(`   - table_activeId original: ${originalNode?.table_activeId}`);
-      console.log(`   - table_instances:`, originalNode?.table_instances ? Object.keys(originalNode.table_instances as any).length + ' clés' : 'null');
 
-      // Copier table_instances en remappant les clés (ancien tableId → nouveau tableId)
+      // Copier table_instances en remappant les clÃƒÂ©s (ancien tableId Ã¢â€ â€™ nouveau tableId)
       let newTableInstances: Record<string, any> = {};
       if (originalNode?.table_instances && typeof originalNode.table_instances === 'object') {
         const originalInstances = originalNode.table_instances as Record<string, any>;
@@ -613,29 +584,26 @@ export async function copyTableCapacity(
           // Remapper l'ID de la table
           const mappedTableId = tableIdMap.has(tableId) ? tableIdMap.get(tableId)! : `${tableId}-${suffix}`;
           
-          // Remapper les IDs dans la config (au cas où il y aurait des références)
+          // Remapper les IDs dans la config (au cas oÃƒÂ¹ il y aurait des rÃƒÂ©fÃƒÂ©rences)
           const remappedConfig = rewriteJsonReferences(config, rewriteMaps, suffix);
           
           newTableInstances[mappedTableId] = remappedConfig;
-          console.log(`   📋 Instance remappée: ${tableId} → ${mappedTableId}`);
         }
       }
 
-      // Déterminer la nouvelle table_activeId
+      // DÃƒÂ©terminer la nouvelle table_activeId
       const oldActiveId = originalNode?.table_activeId;
-      let newActiveId = newTableId; // Par défaut, la nouvelle table devient active
+      let newActiveId = newTableId; // Par dÃƒÂ©faut, la nouvelle table devient active
       
       if (oldActiveId && tableIdMap.has(oldActiveId)) {
         newActiveId = tableIdMap.get(oldActiveId)!;
-        console.log(`   🔄 table_activeId remappée: ${oldActiveId} → ${newActiveId}`);
       } else if (oldActiveId) {
         newActiveId = `${oldActiveId}-${suffix}`;
       }
 
-      // Ajouter la nouvelle table aux instances si pas déjà là
+      // Ajouter la nouvelle table aux instances si pas dÃƒÂ©jÃƒÂ  lÃƒÂ 
       if (!newTableInstances[newTableId]) {
         newTableInstances[newTableId] = {};
-        console.log(`   ✅ Instance ajoutée pour nouvelle table: ${newTableId}`);
       }
 
       // Mettre à jour le nœud copié avec tous les paramètres
@@ -643,55 +611,38 @@ export async function copyTableCapacity(
         where: { id: finalOwnerNodeId },
         data: {
           hasTable: true,
-          table_activeId: newTableId,  // ✅ La nouvelle table est l'active
-          table_instances: newTableInstances as any,  // ✅ Copié et remappé
+          table_activeId: newTableId,
+          table_instances: newTableInstances as any,
           table_name: newTable.name,
-          table_description: newTable.description,
           table_type: newTable.type
         }
       });
-      console.log(`✅ Paramètres capacité (table) mis à jour pour nœud ${finalOwnerNodeId}`);
-      console.log(`   - table_activeId: ${newTableId}`);
-      console.log(`   - table_instances: ${Object.keys(newTableInstances).length} clé(s) copiée(s)`);
-      console.log(`   - table_name: ${newTable.name || 'null'}`);
-      console.log(`   - table_type: ${newTable.type || 'null'}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur lors de la mise à jour des paramètres capacité:`, (e as Error).message);
+      console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des paramÃƒÂ¨tres capacitÃƒÂ©:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🎯 ÉTAPE 10 (NOUVELLE) : Mettre à jour table_activeId + table_instances sur les nœuds selectors
-    // ═══════════════════════════════════════════════════════════════════════
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`🎯 ÉTAPE 10: Activation des selectors avec lookup`);
-    console.log(`${'═'.repeat(80)}`);
-    // Selectors mis à jour automatiquement via ÉTAPE 9
-    console.log(`✅ ÉTAPE 10: Selectors mis à jour via l'ÉTAPE 9`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸Å½Â¯ Ãƒâ€°TAPE 10 (NOUVELLE) : Mettre ÃƒÂ  jour table_activeId + table_instances sur les nÃ…â€œuds selectors
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Selectors mis ÃƒÂ  jour automatiquement via Ãƒâ€°TAPE 9
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 11 : Mettre en cache
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 11 : Mettre en cache
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     tableCopyCache.set(originalTableId, newTableId);
 
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`✅ COPIE TABLE TERMINÉE`);
-    console.log(`   📊 Table: ${newTableId}`);
-    console.log(`   📋 Colonnes: ${originalTable.tableColumns.length}`);
-    console.log(`   📄 Lignes: ${originalTable.tableRows.length}`);
-    console.log(`   🔢 Cellules: ${cellsCopied}`);
-    console.log(`${'═'.repeat(80)}\n`);
 
     return {
       newTableId,
       nodeId: finalOwnerNodeId,
-      columnsCount: originalTable.tableColumns.length,
-      rowsCount: originalTable.tableRows.length,
-      cellsCount: cellsCopied,
+      columnsCount: columnsCount,
+      rowsCount: rowsCount,
+      cellsCount: columnsCount * rowsCount, // Estimation des cellules basée sur colonnes × lignes
       success: true
     };
 
   } catch (error) {
-    console.error(`❌ Erreur lors de la copie de la table:`, error);
+    console.error(`Ã¢ÂÅ’ Erreur lors de la copie de la table:`, error);
     return {
       newTableId: '',
       nodeId: '',
@@ -704,12 +655,12 @@ export async function copyTableCapacity(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS UTILITAIRES POUR LINKED FIELDS
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€Â§ FONCTIONS UTILITAIRES POUR LINKED FIELDS
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Ajoute des IDs à un champ linked... d'un nœud (sans doublons)
+ * Ajoute des IDs ÃƒÂ  un champ linked... d'un nÃ…â€œud (sans doublons)
  */
 async function addToNodeLinkedField(
   prisma: PrismaClient,
@@ -725,12 +676,12 @@ async function addToNodeLinkedField(
   });
 
   if (!node) {
-    console.warn(`⚠️ Nœud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`Ã¢Å¡Â Ã¯Â¸Â NÃ…â€œud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
 
   const current = (node[field] || []) as string[];
-  const newIds = [...new Set([...current, ...idsToAdd])]; // Dédupliquer
+  const newIds = [...new Set([...current, ...idsToAdd])]; // DÃƒÂ©dupliquer
 
   await prisma.treeBranchLeafNode.update({
     where: { id: nodeId },

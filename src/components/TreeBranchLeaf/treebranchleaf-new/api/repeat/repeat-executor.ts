@@ -36,7 +36,6 @@ export async function runRepeatExecution(
   req: MinimalReq,
   execution: RepeatExecutionResult
 ): Promise<RepeatExecutionSummary> {
-  console.log(`🚀🚀🚀 [REPEAT-EXECUTOR] *** NOUVEAU REPEAT-EXECUTOR EN MARCHE *** Début duplication`);
   const { repeaterNodeId, scopeId, plan, blueprint } = execution;
 
   const authCtx = getAuthCtx(req);
@@ -54,40 +53,33 @@ export async function runRepeatExecution(
     throw new RepeatOperationError('Access denied for this repeater tree.', 403);
   }
 
-  // 🔴 FILTRE CRITIQUE: Ne JAMAIS utiliser des IDs suffixés comme templates
-  // Les templates doivent être des UUIDs purs, sans suffixes de copie (-1, -2, etc.)
+  // Ã°Å¸â€Â´ FILTRE CRITIQUE: Ne JAMAIS utiliser des IDs suffixÃƒÂ©s comme templates
+  // Les templates doivent ÃƒÂªtre des UUIDs purs, sans suffixes de copie (-1, -2, etc.)
   // Si on utilise uuid-1 comme template et qu'on lui applique un nouveau suffixe,
-  // on crée uuid-1-1 (double suffixe) au lieu de uuid-2
+  // on crÃƒÂ©e uuid-1-1 (double suffixe) au lieu de uuid-2
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-  // ⚠️ IMPORTANT: Toujours utiliser les IDs déclarés dans le blueprint (metadata du répéteur)
-  // Le plan peut être partiel et omettre certains templates; l'utilisateur demande
-  // la duplication EXACTE des 6 IDs listés dans le metadata.repeater.templateNodeIds
+  // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Toujours utiliser les IDs dÃƒÂ©clarÃƒÂ©s dans le blueprint (metadata du rÃƒÂ©pÃƒÂ©teur)
+  // Le plan peut ÃƒÂªtre partiel et omettre certains templates; l'utilisateur demande
+  // la duplication EXACTE des 6 IDs listÃƒÂ©s dans le metadata.repeater.templateNodeIds
   const rawIds = blueprint.templateNodeIds;
   
-  // Nettoyer les IDs: retirer TOUS les suffixes et vérifier qu'on a des UUIDs purs
+  // Nettoyer les IDs: retirer TOUS les suffixes et vÃƒÂ©rifier qu'on a des UUIDs purs
   const templateNodeIds = rawIds
     .filter(id => typeof id === 'string' && !!id)
-    .map(id => id.replace(/(-\d+)+$/, '')) // Retirer suffixes: uuid-1 → uuid, uuid-1-2 → uuid
-    .filter(id => !hasCopySuffix.test(id)); // Double vérification
+    .map(id => id.replace(/(-\d+)+$/, '')) // Retirer suffixes: uuid-1 Ã¢â€ â€™ uuid, uuid-1-2 Ã¢â€ â€™ uuid
+    .filter(id => !hasCopySuffix.test(id)); // Double vÃƒÂ©rification
 
-  console.log(`🔍 [REPEAT-EXECUTOR] DEBUG templateNodeIds:`);
-  console.log(`   Source: ${plan.nodes.length ? 'PLAN' : 'BLUEPRINT'}`);
-  console.log(`   Raw IDs: ${rawIds.length}`);
-  console.log(`   Cleaned IDs: ${templateNodeIds.length}`);
   
-  // Afficher les IDs nettoyés
+  // Afficher les IDs nettoyÃƒÂ©s
   if (rawIds.length !== templateNodeIds.length) {
-    console.log(`   ⚠️  NETTOYAGE: ${rawIds.length - templateNodeIds.length} ID(s) suffixé(s) ont été retiré(s)`);
     rawIds.forEach((id, idx) => {
       const cleaned = id.replace(/(-\d+)+$/, '');
       if (id !== cleaned) {
-        console.log(`      ${idx + 1}. "${id}" → "${cleaned}"`);
       }
     });
   }
   
   templateNodeIds.forEach((id, idx) => {
-    console.log(`   ${idx + 1}. ${id} ✅`);
   });
 
   if (!templateNodeIds.length) {
@@ -102,36 +94,32 @@ export async function runRepeatExecution(
     authCtx.isSuperAdmin
   );
 
-  // ⚠️ FILTRE CRITIQUE: Les sections ne doivent PAS être dupliquées
-  // Seuls les nœuds enfants (leaf_field, etc.) doivent être copiés
+  // Ã¢Å¡Â Ã¯Â¸Â FILTRE CRITIQUE: Les sections ne doivent PAS ÃƒÂªtre dupliquÃƒÂ©es
+  // Seuls les nÃ…â€œuds enfants (leaf_field, etc.) doivent ÃƒÂªtre copiÃƒÂ©s
   const nodesToDuplicate = templateNodes.filter(node => node.type !== 'section');
   const sectionNodes = templateNodes.filter(node => node.type === 'section');
 
-  console.log(`\n📦 [REPEAT-EXECUTOR] Template analysis:`);
-  console.log(`   - Total template nodes: ${templateNodes.length}`);
-  console.log(`   - Nodes to duplicate: ${nodesToDuplicate.length} (excluding ${sectionNodes.length} sections)`);
-  sectionNodes.forEach(s => console.log(`   - ⏭️ Skipping section: "${s.label}" (${s.id})`));
+  // Sections are not duplicated (only their children are copied)
+  void sectionNodes;
 
   const templateById = new Map(nodesToDuplicate.map(node => [node.id, node] as const));
-  // 🔒 Sécurité ultime : recalculer les suffixes max juste avant de copier
-  // pour éviter de retomber à 1 si le plan a été calculé avant la création de -1.
+  // Ã°Å¸â€â€™ SÃƒÂ©curitÃƒÂ© ultime : recalculer les suffixes max juste avant de copier
+  // pour ÃƒÂ©viter de retomber ÃƒÂ  1 si le plan a ÃƒÂ©tÃƒÂ© calculÃƒÂ© avant la crÃƒÂ©ation de -1.
   const templateIdsForSuffix = Array.from(templateById.keys());
   const existingMax = await computeTemplateCopySuffixMax(
     prisma,
     repeaterNode.treeId,
     templateIdsForSuffix
   );
-  console.log('📊 [REPEAT-EXECUTOR] Recalcul suffixes juste avant copie');
   templateIdsForSuffix.forEach(id => {
-    console.log(`   - ${id}: max vu=${existingMax.get(id) ?? 0}`);
   });
   const plannedSuffixByTemplate = new Map<string, number>();
-  // Pré-remplir tous les templates avec suffix par défaut: (max vu + 1)
+  // PrÃƒÂ©-remplir tous les templates avec suffix par dÃƒÂ©faut: (max vu + 1)
   for (const templateId of templateIdsForSuffix) {
     const maxSeen = existingMax.get(templateId) ?? 0;
     plannedSuffixByTemplate.set(templateId, maxSeen + 1);
   }
-  // Si le plan propose des suffixes spécifiques pour certains templates, les appliquer
+  // Si le plan propose des suffixes spÃƒÂ©cifiques pour certains templates, les appliquer
   for (const nodePlan of plan.nodes) {
     const planned = coerceSuffix(nodePlan.plannedSuffix);
     const maxSeen = existingMax.get(nodePlan.templateNodeId) ?? 0;
@@ -143,21 +131,21 @@ export async function runRepeatExecution(
   const duplicatedNodeIds = new Set<string>();
   const originalNodeIdByCopyId = new Map<string, string>();
   
-  // 🔧 MAP: Associer les IDs supposés du plan aux vrais IDs créés
-  // Cela est nécessaire car repeat-instantiator.ts crée des targetNodeId supposés
-  // mais deepCopyNodeInternal peut créer des IDs réels différents
+  // Ã°Å¸â€Â§ MAP: Associer les IDs supposÃƒÂ©s du plan aux vrais IDs crÃƒÂ©ÃƒÂ©s
+  // Cela est nÃƒÂ©cessaire car repeat-instantiator.ts crÃƒÂ©e des targetNodeId supposÃƒÂ©s
+  // mais deepCopyNodeInternal peut crÃƒÂ©er des IDs rÃƒÂ©els diffÃƒÂ©rents
   const plannedNodeIdToRealNodeId = new Map<string, string>();
   
-  // 🔥 MAPS GLOBALES pour les capacités et les nœuds
-  // Ces maps sont partagées entre TOUTES les copies de variables pour que
-  // les capacités (formules/conditions/tables) utilisent les bons IDs de champs avec suffixes
+  // Ã°Å¸â€Â¥ MAPS GLOBALES pour les capacitÃƒÂ©s et les nÃ…â€œuds
+  // Ces maps sont partagÃƒÂ©es entre TOUTES les copies de variables pour que
+  // les capacitÃƒÂ©s (formules/conditions/tables) utilisent les bons IDs de champs avec suffixes
   const globalNodeIdMap = new Map<string, string>();
   const globalFormulaIdMap = new Map<string, string>();
   const globalConditionIdMap = new Map<string, string>();
   const globalTableIdMap = new Map<string, string>();
   const globalVariableCopyCache = new Map<string, string>();
 
-  // 🚀🚀🚀 DUPLICATION DES TEMPLATES: parcourir TOUS les templates à dupliquer (metadata)
+  // Ã°Å¸Å¡â‚¬Ã°Å¸Å¡â‚¬Ã°Å¸Å¡â‚¬ DUPLICATION DES TEMPLATES: parcourir TOUS les templates ÃƒÂ  dupliquer (metadata)
   for (const template of nodesToDuplicate) {
     try {
       if (!template) continue;
@@ -223,8 +211,6 @@ export async function runRepeatExecution(
         null;
       const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
 
-      console.log(`🔢 [REPEAT-EXECUTOR] Suffix appliqué pour template ${template.id}:`);
-      console.log(`   plannedSuffix=${plannedSuffix}, appliedSuffix=${appliedSuffix}, copySuffix(meta)=${createdMetadata.copySuffix}, idSuffix=${extractSuffixFromId(created.id)}, effective=${effectiveSuffix}`);
 
       const updatedMetadata = {
         ...createdMetadata,
@@ -251,20 +237,15 @@ export async function runRepeatExecution(
         sourceTemplateId: template.id
       });
 
-      console.log(`✅ [REPEAT-EXECUTOR] Nœud copié créé dans la base :`);
-      console.log(`   ID: ${created.id}`);
-      console.log(`   Label: ${created.label}`);
-      console.log(`   Template source: ${template.id}`);
 
       duplicatedNodeIds.add(created.id);
       originalNodeIdByCopyId.set(created.id, template.id);
       
-      // 🔧 MAPPING: Enregistrer les IDs réels créés
-      // Le plan suppose `templateId-suffix` mais deepCopyNodeInternal a créé `newRootId`
-      // Nous devons mapper `templateId-suffix` → `newRootId` pour les variables
+      // Ã°Å¸â€Â§ MAPPING: Enregistrer les IDs rÃƒÂ©els crÃƒÂ©ÃƒÂ©s
+      // Le plan suppose `templateId-suffix` mais deepCopyNodeInternal a crÃƒÂ©ÃƒÂ© `newRootId`
+      // Nous devons mapper `templateId-suffix` Ã¢â€ â€™ `newRootId` pour les variables
       const plannedRootId = `${template.id}-${effectiveSuffix}`;
       plannedNodeIdToRealNodeId.set(plannedRootId, newRootId);
-      console.log(`🔧 [REPEAT-EXECUTOR] NODE MAPPING: Planned "${plannedRootId}" → Real "${newRootId}"`);
       
       Object.entries(copyResult.idMap || {}).forEach(([oldId, newId]) => {
         if (!newId) return;
@@ -273,18 +254,18 @@ export async function runRepeatExecution(
           originalNodeIdByCopyId.set(newId, oldId);
         }
         
-        // 🔧 MAPPING: Aussi enregistrer les nœuds enfants
-        // Si le plan suppose `childTemplate-suffix`, mais deepCopyNodeInternal a créé `childNewId`,
+        // Ã°Å¸â€Â§ MAPPING: Aussi enregistrer les nÃ…â€œuds enfants
+        // Si le plan suppose `childTemplate-suffix`, mais deepCopyNodeInternal a crÃƒÂ©ÃƒÂ© `childNewId`,
         // on doit mapper aussi ces enfants
         const plannedChildId = `${oldId}-${effectiveSuffix}`;
         plannedNodeIdToRealNodeId.set(plannedChildId, newId);
         
-        // 🔥 AJOUT À LA MAP GLOBALE pour les capacités
-        // Cela permet aux formules/conditions de résoudre les IDs de champs
+        // Ã°Å¸â€Â¥ AJOUT Ãƒâ‚¬ LA MAP GLOBALE pour les capacitÃƒÂ©s
+        // Cela permet aux formules/conditions de rÃƒÂ©soudre les IDs de champs
         globalNodeIdMap.set(oldId, newId);
       });
       
-      // 🔥 ENREGISTRER aussi les maps de capacités du deepCopyNodeInternal
+      // Ã°Å¸â€Â¥ ENREGISTRER aussi les maps de capacitÃƒÂ©s du deepCopyNodeInternal
       if (copyResult.formulaIdMap) {
         Object.entries(copyResult.formulaIdMap).forEach(([oldId, newId]) => {
           if (oldId && newId) globalFormulaIdMap.set(oldId, newId);
@@ -301,11 +282,11 @@ export async function runRepeatExecution(
         });
       }
 
-      // Ajouter les nœuds d'affichage créés par copyVariableWithCapacities
+      // Ajouter les nÃ…â€œuds d'affichage crÃƒÂ©ÃƒÂ©s par copyVariableWithCapacities
       if (copyResult.displayNodeIds && copyResult.displayNodeIds.length > 0) {
         copyResult.displayNodeIds.forEach(displayNodeId => {
           duplicatedNodeIds.add(displayNodeId);
-          // Le displayNodeId est dérivé de l'ancien nodeId (ex: oldNodeId-suffix)
+          // Le displayNodeId est dÃƒÂ©rivÃƒÂ© de l'ancien nodeId (ex: oldNodeId-suffix)
           // On peut extraire l'ancien ID en retirant le suffixe
           const originalDisplayNodeId = displayNodeId.replace(/-\d+$/, '');
           originalNodeIdByCopyId.set(displayNodeId, originalDisplayNodeId);
@@ -345,61 +326,37 @@ export async function runRepeatExecution(
     }
   }
 
-  // 🚀 COPIER LES VARIABLES APRÈS LES NŒUDS
-  console.log(`\n🔥🔥🔥 [REPEAT-EXECUTOR] VARIABLES COPY BLOCK EXECUTING 🔥🔥🔥`);
-  console.log(`\n📊 [REPEAT-EXECUTOR] COPIE DES VARIABLES - Début`);
-  console.log(`   - plan.variables.length = ${plan.variables.length}`);
-  console.log(`   - plan.variables = `, JSON.stringify(plan.variables.slice(0, 3), null, 2));
-  console.log(`   - repeaterNodeId = ${repeaterNodeId}`);
-  console.log(`   - scopeId = ${scopeId}`);
-  console.log(`   - plannedNodeIdToRealNodeId.size = ${plannedNodeIdToRealNodeId.size}`);
-  console.log(`   - Mapping entries:`, Array.from(plannedNodeIdToRealNodeId.entries()).slice(0, 5));
+  // Ã°Å¸Å¡â‚¬ COPIER LES VARIABLES APRÃƒË†S LES NÃ…â€™UDS
   
-  console.log(`\n📋 [REPEAT-EXECUTOR] DÉBUT BOUCLE VARIABLES - Total: ${plan.variables.length}`);
   for (const variablePlan of plan.variables) {
-    console.log(`\n🔄 [REPEAT-EXECUTOR] ITERATION BOUCLE VARIABLE - variablePlan:`, JSON.stringify(variablePlan));
     try {
       let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
       
-      // ⚠️ BLOQUAGE: Vérifier si c'est une variable lookup (pour éviter de créer des champs inutiles)
+      // Ã¢Å¡Â Ã¯Â¸Â BLOQUAGE: VÃƒÂ©rifier si c'est une variable lookup (pour ÃƒÂ©viter de crÃƒÂ©er des champs inutiles)
       const templateVar = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { id: templateVariableId },
         select: { displayName: true }
       });
       
-      console.log(`   📝 Template var displayName: "${templateVar?.displayName}"`);
       
-      // Vérifier si c'est une variable lookup
+      // VÃƒÂ©rifier si c'est une variable lookup
       const isLookup = templateVar?.displayName?.includes('Lookup Table');
       
-      console.log(`   🔍 isLookup check: ${isLookup} (displayName.includes('Lookup Table'))`);
       
       if (isLookup) {
-        console.log(`🛑 [REPEAT-EXECUTOR] *** SKIP LOOKUP VARIABLE ***: ${templateVariableId} (displayName: "${templateVar?.displayName}")`);
         continue;
       }
       
-      console.log(`✅ [REPEAT-EXECUTOR] CONTINUE: Non-lookup variable ${templateVariableId} (displayName: "${templateVar?.displayName}"), va être copiée`);
       
-      // 🔧 CORRECTION: Utiliser le vrai ID du nœud créé si disponible
+      // Ã°Å¸â€Â§ CORRECTION: Utiliser le vrai ID du nÃ…â€œud crÃƒÂ©ÃƒÂ© si disponible
       const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
       if (realTargetNodeId) {
-        console.log(`🔧 [REPEAT-EXECUTOR] MAPPING CORRECTION: targetNodeId "${targetNodeId}" → "${realTargetNodeId}"`);
         targetNodeId = realTargetNodeId;
       } else {
-        console.warn(`⚠️  [REPEAT-EXECUTOR] Aucun mapping trouvé pour targetNodeId "${targetNodeId}", utilisation directe`);
+        console.warn(`Ã¢Å¡Â Ã¯Â¸Â  [REPEAT-EXECUTOR] Aucun mapping trouvÃƒÂ© pour targetNodeId "${targetNodeId}", utilisation directe`);
       }
       
-      console.log(`📊 [REPEAT-EXECUTOR] Copie variable ${templateVariableId} -> ${plannedVariableId} (targetNode: ${targetNodeId})`);
-      console.log(`   - suffix: ${plannedSuffix}`);
-      console.log(`   - repeaterNodeId: ${repeaterNodeId}`);
       
-      console.log(`📊 [REPEAT-EXECUTOR] APPEL copyVariableWithCapacities...`);
-      console.log(`🔥 [REPEAT-EXECUTOR] Maps globales:`);
-      console.log(`   - globalNodeIdMap.size: ${globalNodeIdMap.size}`);
-      console.log(`   - globalFormulaIdMap.size: ${globalFormulaIdMap.size}`);
-      console.log(`   - globalConditionIdMap.size: ${globalConditionIdMap.size}`);
-      console.log(`   - globalTableIdMap.size: ${globalTableIdMap.size}`);
       
       const variableResult = await copyVariableWithCapacities(
         templateVariableId,
@@ -409,7 +366,7 @@ export async function runRepeatExecution(
         {
           autoCreateDisplayNode: true,
           isFromRepeaterDuplication: true,
-          // 🔥 PASSER LES MAPS GLOBALES pour que les capacités utilisent les bons IDs
+          // Ã°Å¸â€Â¥ PASSER LES MAPS GLOBALES pour que les capacitÃƒÂ©s utilisent les bons IDs
           nodeIdMap: globalNodeIdMap,
           formulaIdMap: globalFormulaIdMap,
           conditionIdMap: globalConditionIdMap,
@@ -425,48 +382,42 @@ export async function runRepeatExecution(
         }
       );
       
-      console.log(`✅ [REPEAT-EXECUTOR] Variable copiée: ${plannedVariableId}`, variableResult);
       
-      // � AGRÉGER LES MAPS retournées par copyVariableWithCapacities dans les maps globales
+      // Ã¯Â¿Â½ AGRÃƒâ€°GER LES MAPS retournÃƒÂ©es par copyVariableWithCapacities dans les maps globales
       if (variableResult.success) {
-        // Ajouter les formules copiées
+        // Ajouter les formules copiÃƒÂ©es
         if (variableResult.formulaIdMap) {
           for (const [oldId, newId] of variableResult.formulaIdMap.entries()) {
             globalFormulaIdMap.set(oldId, newId);
-            console.log(`🔥 [REPEAT-EXECUTOR] Formule ajoutée à globalFormulaIdMap: ${oldId} → ${newId}`);
           }
         }
         
-        // Ajouter les conditions copiées
+        // Ajouter les conditions copiÃƒÂ©es
         if (variableResult.conditionIdMap) {
           for (const [oldId, newId] of variableResult.conditionIdMap.entries()) {
             globalConditionIdMap.set(oldId, newId);
-            console.log(`🔥 [REPEAT-EXECUTOR] Condition ajoutée à globalConditionIdMap: ${oldId} → ${newId}`);
           }
         }
         
-        // Ajouter les tables copiées
+        // Ajouter les tables copiÃƒÂ©es
         if (variableResult.tableIdMap) {
           for (const [oldId, newId] of variableResult.tableIdMap.entries()) {
             globalTableIdMap.set(oldId, newId);
-            console.log(`🔥 [REPEAT-EXECUTOR] Table ajoutée à globalTableIdMap: ${oldId} → ${newId}`);
           }
         }
       }
       
-      // 🟢 ENREGISTRER le displayNode créé dans la map globale
+      // Ã°Å¸Å¸Â¢ ENREGISTRER le displayNode crÃƒÂ©ÃƒÂ© dans la map globale
       if (variableResult.success && variableResult.displayNodeId) {
-        // Déterminer l'ID original du displayNode (sans suffixe)
+        // DÃƒÂ©terminer l'ID original du displayNode (sans suffixe)
         const originalDisplayNodeId = variableResult.displayNodeId.replace(/-\d+$/, '');
         globalNodeIdMap.set(originalDisplayNodeId, variableResult.displayNodeId);
-        console.log(`🔥 [REPEAT-EXECUTOR] DisplayNode ajouté à globalNodeIdMap: ${originalDisplayNodeId} → ${variableResult.displayNodeId}`);
       }
     } catch (varErr) {
       console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
       // Ne pas bloquer - continuer avec les autres variables
     }
   }
-  console.log(`\n🔥🔥🔥 [REPEAT-EXECUTOR] COPIE DES VARIABLES - FIN (sortie de boucle) 🔥🔥🔥`);
 
   try {
     await syncRepeaterTemplateIds(prisma, repeaterNodeId, templateNodeIds);
@@ -474,91 +425,64 @@ export async function runRepeatExecution(
     console.warn('[repeat-executor] Unable to sync repeater template IDs', syncErr);
   }
 
-  // 🚫 NOUVEAU: Isolation stricte des nœuds copiés et correction des capacités
+  // Ã°Å¸Å¡Â« NOUVEAU: Isolation stricte des nÃ…â€œuds copiÃƒÂ©s et correction des capacitÃƒÂ©s
   if (duplicatedNodeIds.size > 0) {
-    console.log(`🚫 [REPEAT-EXECUTOR] ISOLATION STRICTE pour ${duplicatedNodeIds.size} nœuds dupliqués`);
     try {
-      // 0. CORRECTION COMPLÈTE DE TOUTES LES DUPLICATIONS  
-      console.log(`🔧 [REPEAT-EXECUTOR] CORRECTION COMPLÈTE de toutes les duplications...`);
+      // 0. CORRECTION COMPLÃƒË†TE DE TOUTES LES DUPLICATIONS  
       const completeDuplicationReport = await fixAllCompleteDuplications(prisma, repeaterNodeId);
-      console.log(`🔧 [REPEAT-EXECUTOR] Duplications complètement corrigées:`);
-      console.log(`  - Nœuds traités: ${completeDuplicationReport.totalNodesProcessed}`);
-      console.log(`  - Nœuds corrigés: ${completeDuplicationReport.nodesFixed.length}`);
-      console.log(`  - Erreurs: ${completeDuplicationReport.errors.length}`);
       
-      // 0.1. DUPLICATION COMPLÈTE DES TABLES ET LOOKUPS
-      console.log(`🗂️ [REPEAT-EXECUTOR] *** NOUVEAU SYSTEME EN MARCHE *** DUPLICATION des tables et lookups...`);
-      console.log(`🗂️ [REPEAT-EXECUTOR] duplicatedNodeIds:`, Array.from(duplicatedNodeIds));
+      // 0.1. DUPLICATION COMPLÃƒË†TE DES TABLES ET LOOKUPS
       for (const nodeId of duplicatedNodeIds) {
         const originalNodeId = originalNodeIdByCopyId.get(nodeId);
         if (!originalNodeId) continue;
         const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
         if (!suffixToken) continue;
-        console.log(`🗂️ [REPEAT-EXECUTOR] Duplication table/lookup pour ${originalNodeId} -> ${nodeId} (suffix ${suffixToken})`);
         await tableLookupDuplicationService.duplicateTableLookupSystem(prisma, originalNodeId, {
           copiedNodeId: nodeId,
           suffixToken
         });
       }
 
-      // 🧭 NOUVEAU: réaligner les parents des copies quand la section dupliquée existe déjà
+      // Ã°Å¸Â§Â­ NOUVEAU: rÃƒÂ©aligner les parents des copies quand la section dupliquÃƒÂ©e existe dÃƒÂ©jÃƒÂ 
       await reassignCopiedNodesToDuplicatedParents(prisma, duplicatedNodeIds, originalNodeIdByCopyId);
       
-      // 1. Forcer l'isolation complète
+      // 1. Forcer l'isolation complÃƒÂ¨te
       const isolationResult = await enforceStrictIsolation(
         prisma,
         Array.from(duplicatedNodeIds)
       );
       
-      console.log(`🚫 [REPEAT-EXECUTOR] Isolation terminée:`);
-      console.log(`  - Nœuds isolés: ${isolationResult.isolatedNodes.length}`);
-      console.log(`  - Erreurs: ${isolationResult.errors.length}`);
       
-      // 2. Vérification de l'isolation
+      // 2. VÃƒÂ©rification de l'isolation
       await verifyIsolation(prisma, Array.from(duplicatedNodeIds));
       
-      // 3. Reset final des valeurs calculées
+      // 3. Reset final des valeurs calculÃƒÂ©es
       const resetCount = await resetCalculatedValuesAfterCopy(
         prisma,
         Array.from(duplicatedNodeIds)
       );
-      console.log(`✅ [REPEAT-EXECUTOR] ${resetCount} valeurs calculées finalement remises à null`);
       
-      // 4. Forçage des calculs indépendants
+      // 4. ForÃƒÂ§age des calculs indÃƒÂ©pendants
       await forceIndependentCalculation(prisma, Array.from(duplicatedNodeIds));
       
-      // 5. Création des triggers de recalcul pour le frontend
+      // 5. CrÃƒÂ©ation des triggers de recalcul pour le frontend
       await createRecalculationTriggers(prisma, Array.from(duplicatedNodeIds));
       
-      // 6. FORCER LE RECALCUL AVEC LES PROPRES DONNÉES
-      console.log(`🚀 [REPEAT-EXECUTOR] FORÇAGE RECALCUL avec données propres...`);
+      // 6. FORCER LE RECALCUL AVEC LES PROPRES DONNÃƒâ€°ES
       const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma, repeaterNodeId);
-      console.log(`🚀 [REPEAT-EXECUTOR] Recalculs forcés:`);
-      console.log(`  - Nœuds traités: ${forceRecalcReport.totalNodesProcessed}`);
-      console.log(`  - Nœuds recalculés: ${forceRecalcReport.nodesRecalculated.length}`);
-      console.log(`  - Erreurs: ${forceRecalcReport.errors.length}`);
       
-      // 7. BLOQUER DÉFINITIVEMENT LE FALLBACK
+      // 7. BLOQUER DÃƒâ€°FINITIVEMENT LE FALLBACK
       await blockFallbackToOriginalValues(prisma, Array.from(duplicatedNodeIds));
       
-      console.log(`🎉 [REPEAT-EXECUTOR] ISOLATION STRICTE TERMINÉE - Les champs copiés sont maintenant 100% indépendants`);
-      console.log(`📝 [REPEAT-EXECUTOR] Les champs de données d'affichage -1 doivent maintenant calculer avec leurs propres données`);
-      console.log(`🚫 [REPEAT-EXECUTOR] FALLBACK DÉFINITIVEMENT BLOQUÉ - Impossible de retomber sur les valeurs originales`);
       
-      // 🚀 8. RECALCULER LES VRAIES VALEURS AVEC OPERATION INTERPRETER
-      console.log(`\n🧮 [REPEAT-EXECUTOR] RECALCUL AVEC OPERATION INTERPRETER - Calcul des vraies valeurs...`);
+      // Ã°Å¸Å¡â‚¬ 8. RECALCULER LES VRAIES VALEURS AVEC OPERATION INTERPRETER
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
         prisma,
         repeaterNodeId,
         '-1'
       );
-      console.log(`🧮 [REPEAT-EXECUTOR] Recalculs Operation Interpreter:`);
-      console.log(`  - Nœuds traités: ${interpreterRecalcReport.totalNodes}`);
-      console.log(`  - Nœuds recalculés: ${interpreterRecalcReport.recalculated.filter(r => r.recalculationSuccess).length}`);
-      console.log(`  - Erreurs: ${interpreterRecalcReport.errors.length}`);
       interpreterRecalcReport.recalculated.forEach(r => {
         if (r.hasCapacity && r.newValue) {
-          console.log(`  ✅ ${r.label}: ${r.oldValue || 'null'} → ${r.newValue}`);
         }
       });
       
@@ -604,7 +528,7 @@ async function loadTemplateNodesWithFallback(
     throw new RepeatOperationError('Repeater does not declare template nodes to duplicate.', 422);
   }
 
-  // 1) Charger les templates présents dans l'arbre du répéteur
+  // 1) Charger les templates prÃƒÂ©sents dans l'arbre du rÃƒÂ©pÃƒÂ©teur
   const scoped = await prisma.treeBranchLeafNode.findMany({
     where: {
       id: { in: templateNodeIds },
@@ -612,7 +536,7 @@ async function loadTemplateNodesWithFallback(
     }
   });
 
-  // 2) Déterminer les IDs manquants et tenter un fallback dans la librairie
+  // 2) DÃƒÂ©terminer les IDs manquants et tenter un fallback dans la librairie
   const foundIds = new Set(scoped.map(n => n.id));
   const missingIds = templateNodeIds.filter(id => !foundIds.has(id));
 
@@ -626,13 +550,13 @@ async function loadTemplateNodesWithFallback(
     });
 
     if (!crossTree.length) {
-      // Aucun des IDs manquants n'a pu être chargé
+      // Aucun des IDs manquants n'a pu ÃƒÂªtre chargÃƒÂ©
       if (!scoped.length) {
         throw new RepeatOperationError('No template nodes could be loaded for this repeater.', 404);
       }
     }
 
-    // Vérifier l'accès organisationnel pour les templates hors-arbre
+    // VÃƒÂ©rifier l'accÃƒÂ¨s organisationnel pour les templates hors-arbre
     if (!isSuperAdmin && organizationId) {
       const unauthorized = crossTree.find(
         node => node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId
@@ -643,7 +567,7 @@ async function loadTemplateNodesWithFallback(
     }
   }
 
-  // 3) Fusionner les résultats (scoped + crossTree) et normaliser la forme
+  // 3) Fusionner les rÃƒÂ©sultats (scoped + crossTree) et normaliser la forme
   const merged = [
     ...scoped,
     ...crossTree.map(({ TreeBranchLeafTree, ...rest }) => rest)
@@ -798,7 +722,6 @@ async function reassignCopiedNodesToDuplicatedParents(
   }
 
   await prisma.$transaction(updates);
-  console.log(`🧭 [REPEAT-EXECUTOR] Parents réalignés pour ${updates.length} copie(s).`);
 }
 
 function getCopySuffixToken(nodeId: string, metadata: Prisma.JsonValue | null | undefined): string | null {

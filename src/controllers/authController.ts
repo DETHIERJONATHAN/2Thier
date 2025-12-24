@@ -191,7 +191,6 @@ export const getMe = async (req: Request, res: Response) => {
       originalUser: null // Pour l'usurpation d'identité, null par défaut
     };
 
-    console.log(`[AUTH] Récupération des données utilisateur pour ${user.email}`);
     res.status(200).json(response);
   } catch (error) {
     console.error('[AUTH] Erreur lors de la vérification du token:', error);

@@ -1,27 +1,27 @@
 ﻿/**
- * 🔧 Système de copie des variables avec leurs capacités
+ * ðŸ”§ SystÃ¨me de copie des variables avec leurs capacitÃ©s
  * 
- * Ce module gère la copie complète des variables (TreeBranchLeafNodeVariable)
- * et de leurs capacités associées (formules, conditions, tables).
+ * Ce module gÃ¨re la copie complÃ¨te des variables (TreeBranchLeafNodeVariable)
+ * et de leurs capacitÃ©s associÃ©es (formules, conditions, tables).
  * 
  * PRINCIPES :
  * -----------
- * 1. Une variable peut avoir une "capacité" définie par sourceType + sourceRef
+ * 1. Une variable peut avoir une "capacitÃ©" dÃ©finie par sourceType + sourceRef
  * 2. Les formats de sourceRef sont :
- *    - "node-formula:ID" → Formule
- *    - "condition:ID" ou "node-condition:ID" → Condition
- *    - "@table.ID" ou "node-table:ID" → Table
- *    - UUID simple → Champ (field)
+ *    - "node-formula:ID" â†’ Formule
+ *    - "condition:ID" ou "node-condition:ID" â†’ Condition
+ *    - "@table.ID" ou "node-table:ID" â†’ Table
+ *    - UUID simple â†’ Champ (field)
  * 3. Lors de la copie, on applique un suffixe sur TOUS les IDs
- * 4. Les références sont mises à jour pour pointer vers les capacités copiées
- * 5. Les colonnes linked... sont synchronisées dans les deux sens
+ * 4. Les rÃ©fÃ©rences sont mises Ã  jour pour pointer vers les capacitÃ©s copiÃ©es
+ * 5. Les colonnes linked... sont synchronisÃ©es dans les deux sens
  * 
- * ⚠️ PIÈGE CRITIQUE (Déjà cassé par le passé):
+ * âš ï¸ PIÃˆGE CRITIQUE (DÃ©jÃ  cassÃ© par le passÃ©):
  * ------------------------------------------------
- * La variable newSourceRef DOIT être MUTABLE (let) car elle est réassignée
+ * La variable newSourceRef DOIT Ãªtre MUTABLE (let) car elle est rÃ©assignÃ©e
  * dans plusieurs branches (condition/table/field) lors de la copie.
- * Si on la repasse en const, la création plantera au runtime (reassignation d'un const)
- * et la variable ne sera PAS créée. Ne pas modifier "let newSourceRef" en const.
+ * Si on la repasse en const, la crÃ©ation plantera au runtime (reassignation d'un const)
+ * et la variable ne sera PAS crÃ©Ã©e. Ne pas modifier "let newSourceRef" en const.
  * 
  * @author System TBL
  * @version 1.0.0
@@ -29,46 +29,46 @@
 
 import { PrismaClient } from '@prisma/client';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔗 IMPORTS DES MODULES DE COPIE DE CAPACITÉS
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ðŸ”— IMPORTS DES MODULES DE COPIE DE CAPACITÃ‰S
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import { copyFormulaCapacity } from './copy-capacity-formula.js';
 import { copyConditionCapacity } from './copy-capacity-condition.js';
 import { copyTableCapacity } from './copy-capacity-table.js';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 📋 TYPES ET INTERFACES
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ðŸ“‹ TYPES ET INTERFACES
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
- * Résultat d'un parsing de sourceRef
+ * RÃ©sultat d'un parsing de sourceRef
  */
 export interface ParsedSourceRef {
-  /** Type de référence : 'formula', 'condition', 'table', 'field' */
+  /** Type de rÃ©fÃ©rence : 'formula', 'condition', 'table', 'field' */
   type: 'formula' | 'condition' | 'table' | 'field';
-  /** ID extrait (sans préfixe) */
+  /** ID extrait (sans prÃ©fixe) */
   id: string;
-  /** Préfixe original pour reconstruction */
+  /** PrÃ©fixe original pour reconstruction */
   prefix: string;
 }
 
 /**
- * Résultat de la copie d'une variable
+ * RÃ©sultat de la copie d'une variable
  */
 export interface CopyVariableResult {
-  /** ID de la variable copiée */
+  /** ID de la variable copiÃ©e */
   variableId: string;
   /** Nouvelle exposedKey */
   exposedKey: string;
-  /** Type de capacité copiée (null si fixe) */
+  /** Type de capacitÃ© copiÃ©e (null si fixe) */
   capacityType: 'formula' | 'condition' | 'table' | 'field' | null;
   /** Nouveau sourceRef */
   sourceRef: string | null;
-  /** Succès de l'opération */
+  /** SuccÃ¨s de l'opÃ©ration */
   success: boolean;
-  /** Message d'erreur éventuel */
+  /** Message d'erreur Ã©ventuel */
   error?: string;
-  /** ID du nœud d'affichage créé (si applicable) */
+  /** ID du nÅ“ud d'affichage crÃ©Ã© (si applicable) */
   displayNodeId?: string;
 }
 
@@ -76,54 +76,54 @@ export interface CopyVariableResult {
  * Options pour la copie de variable
  */
 export interface CopyVariableOptions {
-  /** Maps des IDs de formules copiées (ancien ID → nouveau ID) */
+  /** Maps des IDs de formules copiÃ©es (ancien ID â†’ nouveau ID) */
   formulaIdMap?: Map<string, string>;
-  /** Maps des IDs de conditions copiées (ancien ID → nouveau ID) */
+  /** Maps des IDs de conditions copiÃ©es (ancien ID â†’ nouveau ID) */
   conditionIdMap?: Map<string, string>;
-  /** Maps des IDs de tables copiées (ancien ID → nouveau ID) */
+  /** Maps des IDs de tables copiÃ©es (ancien ID â†’ nouveau ID) */
   tableIdMap?: Map<string, string>;
-  /** Map globale des nœuds copiés (ancien ID → nouveau ID) */
+  /** Map globale des nÅ“uds copiÃ©s (ancien ID â†’ nouveau ID) */
   nodeIdMap?: Map<string, string>;
-  /** Cache des variables déjà copiées pour éviter doublons */
+  /** Cache des variables dÃ©jÃ  copiÃ©es pour Ã©viter doublons */
   variableCopyCache?: Map<string, string>;
-  /** Créer automatiquement un nœud d'affichage dans "Nouveau Section" */
+  /** CrÃ©er automatiquement un nÅ“ud d'affichage dans "Nouveau Section" */
   autoCreateDisplayNode?: boolean;
-  /** Libellé de la section cible pour l'affichage (par défaut: "Nouveau Section") */
+  /** LibellÃ© de la section cible pour l'affichage (par dÃ©faut: "Nouveau Section") */
   displaySectionLabel?: string;
-  /** Lier la variable copiée à la section d'affichage (sans créer de nœud/variable) */
+  /** Lier la variable copiÃ©e Ã  la section d'affichage (sans crÃ©er de nÅ“ud/variable) */
   linkToDisplaySection?: boolean;
-  /** Est-ce que le nœud d'affichage est déjà créé par deepCopyNodeInternal ? */
+  /** Est-ce que le nÅ“ud d'affichage est dÃ©jÃ  crÃ©Ã© par deepCopyNodeInternal ? */
   displayNodeAlreadyCreated?: boolean;
-  /** Parent ID du nœud d'affichage (utilisé par deep-copy-service) */
+  /** Parent ID du nÅ“ud d'affichage (utilisÃ© par deep-copy-service) */
   displayParentId?: string | null;
   /** Flag indiquant que la copie provient d'une duplication par repeater */
   isFromRepeaterDuplication?: boolean;
-  /** Contexte répéteur si applicable (pour journalisation) */
+  /** Contexte rÃ©pÃ©teur si applicable (pour journalisation) */
   repeatContext?: any;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS UTILITAIRES DE PARSING
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ðŸ”§ FONCTIONS UTILITAIRES DE PARSING
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Parse un sourceRef pour extraire le type et l'ID
  * 
- * @param sourceRef - Référence à parser
+ * @param sourceRef - RÃ©fÃ©rence Ã  parser
  * @returns Objet avec type, id et prefix
  * 
  * @example
  * parseSourceRef("node-formula:abc123") 
- * → { type: 'formula', id: 'abc123', prefix: 'node-formula:' }
+ * â†’ { type: 'formula', id: 'abc123', prefix: 'node-formula:' }
  * 
  * parseSourceRef("condition:def456")
- * → { type: 'condition', id: 'def456', prefix: 'condition:' }
+ * â†’ { type: 'condition', id: 'def456', prefix: 'condition:' }
  * 
  * parseSourceRef("@table.ghi789")
- * → { type: 'table', id: 'ghi789', prefix: '@table.' }
+ * â†’ { type: 'table', id: 'ghi789', prefix: '@table.' }
  * 
  * parseSourceRef("702d1b09-abc9-4096-9aaa-77155ac5294f")
- * → { type: 'field', id: '702d1b09...', prefix: '' }
+ * â†’ { type: 'field', id: '702d1b09...', prefix: '' }
  */
 export function parseSourceRef(sourceRef: string | null | undefined): ParsedSourceRef | null {
   if (!sourceRef || typeof sourceRef !== 'string') return null;
@@ -131,7 +131,7 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
   const cleaned = sourceRef.trim();
   if (!cleaned) return null;
 
-  // 🧮 Formule
+  // ðŸ§® Formule
   if (cleaned.startsWith('node-formula:')) {
     return {
       type: 'formula',
@@ -140,7 +140,7 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
     };
   }
 
-  // 🔀 Condition
+  // ðŸ”€ Condition
   if (cleaned.startsWith('condition:')) {
     return {
       type: 'condition',
@@ -157,7 +157,7 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
     };
   }
 
-  // 📊 Table
+  // ðŸ“Š Table
   if (cleaned.startsWith('@table.')) {
     return {
       type: 'table',
@@ -174,7 +174,7 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
     };
   }
 
-  // � Valeur calculée (calculatedValue d'un autre champ)
+  // ï¿½ Valeur calculÃ©e (calculatedValue d'un autre champ)
   if (cleaned.startsWith('@calculated.')) {
     return {
       type: 'calculated',
@@ -183,7 +183,7 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
     };
   }
 
-  // �📝 Champ (UUID ou node_xxx)
+  // ï¿½ðŸ“ Champ (UUID ou node_xxx)
   return {
     type: 'field',
     id: cleaned,
@@ -192,18 +192,18 @@ export function parseSourceRef(sourceRef: string | null | undefined): ParsedSour
 }
 
 /**
- * Applique un suffixe à un sourceRef
+ * Applique un suffixe Ã  un sourceRef
  * 
- * @param sourceRef - Référence originale
- * @param suffix - Suffixe numérique à appliquer
- * @returns sourceRef avec suffixe appliqué
+ * @param sourceRef - RÃ©fÃ©rence originale
+ * @param suffix - Suffixe numÃ©rique Ã  appliquer
+ * @returns sourceRef avec suffixe appliquÃ©
  * 
  * @example
  * applySuffixToSourceRef("node-formula:abc123", 1)
- * → "node-formula:abc123-1"
+ * â†’ "node-formula:abc123-1"
  * 
  * applySuffixToSourceRef("@table.def456", 2)
- * → "@table.def456-2"
+ * â†’ "@table.def456-2"
  */
 export function applySuffixToSourceRef(
   sourceRef: string | null | undefined,
@@ -214,16 +214,16 @@ export function applySuffixToSourceRef(
   const parsed = parseSourceRef(sourceRef);
   if (!parsed) return sourceRef;
 
-  // Appliquer le suffixe à l'ID
+  // Appliquer le suffixe Ã  l'ID
   const newId = `${parsed.id}-${suffix}`;
   return `${parsed.prefix}${newId}`;
 }
 
 /**
  * Extrait le nodeId depuis un sourceRef
- * Utile pour mettre à jour les colonnes linked... bidirectionnellement
+ * Utile pour mettre Ã  jour les colonnes linked... bidirectionnellement
  * 
- * @param sourceRef - Référence
+ * @param sourceRef - RÃ©fÃ©rence
  * @returns nodeId extrait ou null
  */
 export function extractNodeIdFromSourceRef(
@@ -233,30 +233,30 @@ export function extractNodeIdFromSourceRef(
   return parsed ? parsed.id : null;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔄 FONCTION PRINCIPALE DE COPIE
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ðŸ”„ FONCTION PRINCIPALE DE COPIE
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
- * Copie une variable avec sa capacité associée
+ * Copie une variable avec sa capacitÃ© associÃ©e
  * 
  * PROCESSUS :
  * -----------
- * 1. Récupère la variable originale
- * 2. Vérifie si déjà copiée (cache)
- * 3. Génère les nouveaux IDs avec suffixe
- * 4. Parse le sourceRef pour identifier la capacité
- * 5. Mappe vers la capacité copiée (si disponible dans les maps)
- * 6. Crée la nouvelle variable
- * 7. Met à jour linkedVariableIds du nœud propriétaire
- * 8. Met à jour linkedXxxIds de la capacité (bidirectionnel)
+ * 1. RÃ©cupÃ¨re la variable originale
+ * 2. VÃ©rifie si dÃ©jÃ  copiÃ©e (cache)
+ * 3. GÃ©nÃ¨re les nouveaux IDs avec suffixe
+ * 4. Parse le sourceRef pour identifier la capacitÃ©
+ * 5. Mappe vers la capacitÃ© copiÃ©e (si disponible dans les maps)
+ * 6. CrÃ©e la nouvelle variable
+ * 7. Met Ã  jour linkedVariableIds du nÅ“ud propriÃ©taire
+ * 8. Met Ã  jour linkedXxxIds de la capacitÃ© (bidirectionnel)
  * 
- * @param originalVarId - ID de la variable à copier
- * @param suffix - Suffixe numérique à appliquer
- * @param newNodeId - ID du nouveau nœud propriétaire
+ * @param originalVarId - ID de la variable Ã  copier
+ * @param suffix - Suffixe numÃ©rique Ã  appliquer
+ * @param newNodeId - ID du nouveau nÅ“ud propriÃ©taire
  * @param prisma - Instance Prisma Client
- * @param options - Options avec les maps de références
- * @returns Résultat de la copie
+ * @param options - Options avec les maps de rÃ©fÃ©rences
+ * @returns RÃ©sultat de la copie
  */
 export async function copyVariableWithCapacities(
   originalVarId: string,
@@ -266,20 +266,6 @@ export async function copyVariableWithCapacities(
   options: CopyVariableOptions = {}
 ): Promise<CopyVariableResult> {
   
-  console.log(`\n${'='.repeat(80)}`);
-  console.log(`[ENTRY] copyVariableWithCapacities called`);
-  console.log(`[COPY] variable: ${originalVarId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau nœud: ${newNodeId}`);
-  console.log(`   Options:`, {
-    formulaIdMapSize: options.formulaIdMap?.size,
-    conditionIdMapSize: options.conditionIdMap?.size,
-    tableIdMapSize: options.tableIdMap?.size,
-    nodeIdMapSize: options.nodeIdMap?.size,
-    variableCopyCacheSize: options.variableCopyCache?.size,
-    autoCreateDisplayNode: options.autoCreateDisplayNode
-  });
-  console.log(`${'='.repeat(80)}\n`);
 
   const {
     formulaIdMap = new Map(),
@@ -294,32 +280,30 @@ export async function copyVariableWithCapacities(
   } = options;
 
   try {
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔍 ÉTAPE 1 : Vérifier le cache
-    // ═══════════════════════════════════════════════════════════════════════
-    const cacheKey = `${originalVarId}|${newNodeId}`; // Scope le cache par nœud cible pour ne pas réutiliser une copie d'un autre nœud
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ” Ã‰TAPE 1 : VÃ©rifier le cache
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    const cacheKey = `${originalVarId}|${newNodeId}`; // Scope le cache par nÅ“ud cible pour ne pas rÃ©utiliser une copie d'un autre nÅ“ud
     
-    // Si trouvé en cache et autoCreateDisplayNode, on va réutiliser la variable du cache
+    // Si trouvÃ© en cache et autoCreateDisplayNode, on va rÃ©utiliser la variable du cache
     let cachedVariable: any = null;
     
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey)!;
-      console.log(`♻️ Variable déjà copiée (cache): ${cacheKey} → ${cachedId}`);
       
-      // Récupérer la variable en cache
+      // RÃ©cupÃ©rer la variable en cache
       const cached = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       
       if (cached) {
         const parsed = parseSourceRef(cached.sourceRef);
-        // ✅ IMPORTANT: Si autoCreateDisplayNode=true, on doit créer un display node même si la variable est en cache!
-        // Cela permet à plusieurs templates de partager la même variable mais avoir chacun leur display node
+        // âœ… IMPORTANT: Si autoCreateDisplayNode=true, on doit crÃ©er un display node mÃªme si la variable est en cache!
+        // Cela permet Ã  plusieurs templates de partager la mÃªme variable mais avoir chacun leur display node
         if (autoCreateDisplayNode) {
-          console.log(`✅ [CACHE] Variable trouvée. Création du display node même si variable en cache...`);
-          // STOCKER la variable du cache pour la réutiliser
+          // STOCKER la variable du cache pour la rÃ©utiliser
           cachedVariable = cached;
-          // Continuer le flow pour créer le display node!
+          // Continuer le flow pour crÃ©er le display node!
           // Ne pas retourner ici
         } else {
           // Pas besoin de display node, retourner les infos de la variable
@@ -334,15 +318,15 @@ export async function copyVariableWithCapacities(
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📥 ÉTAPE 2 : Récupérer la variable originale
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ“¥ Ã‰TAPE 2 : RÃ©cupÃ©rer la variable originale
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const originalVar = await prisma.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
 
     if (!originalVar) {
-      console.error(`❌ Variable introuvable: ${originalVarId}`);
+      console.error(`âŒ Variable introuvable: ${originalVarId}`);
       return {
         variableId: '',
         exposedKey: '',
@@ -353,14 +337,10 @@ export async function copyVariableWithCapacities(
       };
     }
 
-    console.log(`✅ Variable trouvée: ${originalVar.displayName}`);
-    console.log(`   sourceType: ${originalVar.sourceType}`);
-    console.log(`   sourceRef: ${originalVar.sourceRef || 'null'}`);
-    console.log(`   📍 DEBUG: newVariable.displayName sera utilisé pour le label du nœud d'affichage`);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // 🆔 ÉTAPE 3 : Préparer les IDs cibles (peuvent être adaptés plus loin si collision)
-  // ═══════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ðŸ†” Ã‰TAPE 3 : PrÃ©parer les IDs cibles (peuvent Ãªtre adaptÃ©s plus loin si collision)
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const stripTrailingNumeric = (raw: string | null | undefined): string => {
     if (!raw) return '';
     const trimmed = (raw as string).trim();
@@ -376,20 +356,16 @@ export async function copyVariableWithCapacities(
   let newVarId = appendSuffixOnce(originalVarId);
   let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
 
-  console.log(`📝 Préparation des IDs:`);
-  console.log(`   Variable (préliminaire): ${newVarId}`);
-  console.log(`   ExposedKey (préliminaire): ${newExposedKey}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔍 ÉTAPE 4 : Analyser et COPIER la capacité si nécessaire
-    // ═══════════════════════════════════════════════════════════════════════
-    // ⚠️ IMPORTANT: On NE MODIFIE PAS le sourceRef ! Il reste identique à l'original
-  // IMPORTANT: NE PAS convertir en const. Cette variable est réassignée plus bas.
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ” Ã‰TAPE 4 : Analyser et COPIER la capacitÃ© si nÃ©cessaire
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // âš ï¸ IMPORTANT: On NE MODIFIE PAS le sourceRef ! Il reste identique Ã  l'original
+  // IMPORTANT: NE PAS convertir en const. Cette variable est rÃ©assignÃ©e plus bas.
   // Laisser "let" et ignorer les suggestions automatiques de "prefer-const".
   let newSourceRef = originalVar.sourceRef;
     let capacityType: 'formula' | 'condition' | 'table' | 'field' | null = null;
 
-  console.log(`\n🔍 [COPY-VAR] Analyse sourceType="${originalVar.sourceType}" sourceRef="${originalVar.sourceRef}"`);
   // IMPORTANT: on traite TOUT sourceRef non vide (pas uniquement sourceType === 'tree').
   // Les conditions et tables peuvent avoir d'autres sourceType; on s'appuie sur parseSourceRef.
   if (originalVar.sourceRef) {
@@ -397,22 +373,17 @@ export async function copyVariableWithCapacities(
       
       if (parsed) {
         capacityType = parsed.type;
-        console.log(`🔍 [COPY-VAR] Capacité détectée: ${capacityType} (ID: ${parsed.id})`);
-        console.log(`📦 [COPY-VAR] Maps disponibles - formulas: ${formulaIdMap.size}, conditions: ${conditionIdMap.size}, tables: ${tableIdMap.size}, nodes: ${nodeIdMap.size}`);
 
-        // ═══════════════════════════════════════════════════════════════════
-        // 🧮 COPIE FORMULE
-        // ═══════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ðŸ§® COPIE FORMULE
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         if (capacityType === 'formula') {
-          console.log(`🧮 [COPY-VAR] Traitement FORMULE: ${parsed.id}`);
-          // Vérifier si la formule a déjà été copiée
+          // VÃ©rifier si la formule a dÃ©jÃ  Ã©tÃ© copiÃ©e
           if (formulaIdMap.has(parsed.id)) {
             const mappedFormulaId = formulaIdMap.get(parsed.id)!;
             newSourceRef = `${parsed.prefix}${mappedFormulaId}`;
-            console.log(`✅ [COPY-VAR] Formule déjà mappée: ${parsed.id} → ${mappedFormulaId}`);
           } else {
-            // ⭐ COPIER LA FORMULE MAINTENANT
-            console.log(`\n🧮 [COPY-VAR] Lancement copie formule ${parsed.id}...`);
+            // â­ COPIER LA FORMULE MAINTENANT
             try {
               const formulaResult = await copyFormulaCapacity(
                 parsed.id,
@@ -426,28 +397,24 @@ export async function copyVariableWithCapacities(
                 // Ajouter au map pour les prochaines copies
                 formulaIdMap.set(parsed.id, formulaResult.newFormulaId);
                 newSourceRef = `${parsed.prefix}${formulaResult.newFormulaId}`;
-                console.log(`✅ [COPY-VAR] Formule copiée et mappée: ${parsed.id} → ${formulaResult.newFormulaId}`);
               } else {
                 newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, Number(suffix));
-                console.log(`⚠️ [COPY-VAR] Échec copie formule (${formulaResult.error}), suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`❌ [COPY-VAR] Exception copie formule:`, (e as Error).message, (e as Error).stack);
+              console.error(`âŒ [COPY-VAR] Exception copie formule:`, (e as Error).message, (e as Error).stack);
               newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, Number(suffix));
             }
           }
         } 
-        // ═══════════════════════════════════════════════════════════════════
-        // 🔀 COPIE CONDITION
-        // ═══════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ðŸ”€ COPIE CONDITION
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         else if (capacityType === 'condition') {
           if (conditionIdMap.has(parsed.id)) {
             const mappedConditionId = conditionIdMap.get(parsed.id)!;
             newSourceRef = `${parsed.prefix}${mappedConditionId}`;
-            console.log(`✅ Condition déjà mappée: ${parsed.id} → ${mappedConditionId}`);
           } else {
-            // ⭐ COPIER LA CONDITION MAINTENANT
-            console.log(`\n🔀 Copie de la condition ${parsed.id}...`);
+            // â­ COPIER LA CONDITION MAINTENANT
             try {
               const conditionResult = await copyConditionCapacity(
                 parsed.id,
@@ -461,28 +428,24 @@ export async function copyVariableWithCapacities(
                 // Ajouter au map
                 conditionIdMap.set(parsed.id, conditionResult.newConditionId);
                 newSourceRef = `${parsed.prefix}${conditionResult.newConditionId}`;
-                console.log(`✅ Condition copiée et mappée: ${parsed.id} → ${conditionResult.newConditionId}`);
               } else {
                 newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
-                console.log(`⚠️ Échec copie condition, suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`❌ Exception copie condition:`, (e as Error).message);
+              console.error(`âŒ Exception copie condition:`, (e as Error).message);
               newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
             }
           }
         }
-        // ═══════════════════════════════════════════════════════════════════
-        // 📊 COPIE TABLE
-        // ═══════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ðŸ“Š COPIE TABLE
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         else if (capacityType === 'table') {
           if (tableIdMap.has(parsed.id)) {
             const mappedTableId = tableIdMap.get(parsed.id)!;
             newSourceRef = `${parsed.prefix}${mappedTableId}`;
-            console.log(`✅ Table déjà mappée: ${parsed.id} → ${mappedTableId}`);
           } else {
-            // ⭐ COPIER LA TABLE MAINTENANT
-            console.log(`\n📊 Copie de la table ${parsed.id}...`);
+            // â­ COPIER LA TABLE MAINTENANT
             try {
               const tableResult = await copyTableCapacity(
                 parsed.id,
@@ -496,51 +459,43 @@ export async function copyVariableWithCapacities(
                 // Ajouter au map
                 tableIdMap.set(parsed.id, tableResult.newTableId);
                 newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
-                console.log(`✅ Table copiée et mappée: ${parsed.id} → ${tableResult.newTableId}`);
-                console.log(`   📋 ${tableResult.columnsCount} colonnes, ${tableResult.rowsCount} lignes, ${tableResult.cellsCount} cellules`);
               } else {
                 newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
-                console.log(`⚠️ Échec copie table, suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`❌ Exception copie table:`, (e as Error).message);
+              console.error(`âŒ Exception copie table:`, (e as Error).message);
               newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
             }
           }
         }
-  // ═══════════════════════════════════════════════════════════════════
-  // 📝 CHAMP (pas de copie, juste mapping)
-  // ═══════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ðŸ“ CHAMP (pas de copie, juste mapping)
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         else if (capacityType === 'field') {
           // Mapper le nodeId du champ si disponible
           if (nodeIdMap.has(parsed.id)) {
             newSourceRef = nodeIdMap.get(parsed.id)!;
-            console.log(`✅ Champ mappé: ${parsed.id} → ${newSourceRef}`);
           } else {
             newSourceRef = `${parsed.id}-${suffix}`;
-            console.log(`⚠️ Champ non mappé, suffixe appliqué: ${newSourceRef}`);
           }
         }
       }
     }
 
-    console.log(`📍 sourceRef final: ${newSourceRef}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 💾 ÉTAPE 5 : Créer la nouvelle variable
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ’¾ Ã‰TAPE 5 : CrÃ©er la nouvelle variable
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
-    // 🔍 Déterminer le nodeId du nœud PROPRIÉTAIRE de la variable (nœud d'affichage)
-    // 1) Si l'ancien nodeId de la variable a été copié (présent dans nodeIdMap), on utilise ce nouveau nodeId
-    // 2) Sinon, si l'auto-création est activée, on crée un nœud d'affichage dédié et on l'utilise
-    // 3) Sinon, fallback sur newNodeId (peut causer des collisions si plusieurs variables par nœud)
+    // ðŸ” DÃ©terminer le nodeId du nÅ“ud PROPRIÃ‰TAIRE de la variable (nÅ“ud d'affichage)
+    // 1) Si l'ancien nodeId de la variable a Ã©tÃ© copiÃ© (prÃ©sent dans nodeIdMap), on utilise ce nouveau nodeId
+    // 2) Sinon, si l'auto-crÃ©ation est activÃ©e, on crÃ©e un nÅ“ud d'affichage dÃ©diÃ© et on l'utilise
+    // 3) Sinon, fallback sur newNodeId (peut causer des collisions si plusieurs variables par nÅ“ud)
   let finalNodeId = newNodeId;
     if (originalVar.nodeId && nodeIdMap.has(originalVar.nodeId)) {
       finalNodeId = nodeIdMap.get(originalVar.nodeId)!;
-      console.log(`📍 nodeId mappé: ${originalVar.nodeId} → ${finalNodeId}`);
     } else if (autoCreateDisplayNode) {
-      console.log(`🔷 [DISPLAY_NODE_CREATE] ENTRANT dans création display node. originalVar.nodeId="${originalVar.nodeId}", autoCreateDisplayNode=${autoCreateDisplayNode}, cachedVariable=${cachedVariable ? 'YES' : 'NO'}`);
-      // Créer un nœud d'affichage DÉDIÉ avec un ID unique dérivé de l'ancien nodeId + suffixe
+      // CrÃ©er un nÅ“ud d'affichage DÃ‰DIÃ‰ avec un ID unique dÃ©rivÃ© de l'ancien nodeId + suffixe
       try {
         const originalOwnerNode = await prisma.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId! },
@@ -554,44 +509,42 @@ export async function copyVariableWithCapacities(
             table_name: true, 
             table_activeId: true, 
             table_instances: true,
-            // 🔑 IMPORTANT: Récupérer subtab pour que la copie soit dans le bon sous-onglet
+            // ðŸ”‘ IMPORTANT: RÃ©cupÃ©rer subtab pour que la copie soit dans le bon sous-onglet
             subtab: true,
             subtabs: true,
             metadata: true,
           }
         });
         if (originalOwnerNode) {
-          // ═══════════════════════════════════════════════════════════════════════════════════════
-          // 🔑 RÈGLE: Déterminer le parent du display node
-          // ═══════════════════════════════════════════════════════════════════════════════════════
+          // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+          // ðŸ”‘ RÃˆGLE: DÃ©terminer le parent du display node
+          // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           // 
           // CONTEXTE DE REPEATER (isFromRepeaterDuplication): 
-          //   - Si c'est une variable LIÉE (originalVar.nodeId != newNodeId), le parent DOIT être newNodeId
-          //   - Cela crée le display node comme enfant du nœud instance
+          //   - Si c'est une variable LIÃ‰E (originalVar.nodeId != newNodeId), le parent DOIT Ãªtre newNodeId
+          //   - Cela crÃ©e le display node comme enfant du nÅ“ud instance
           //
           // CONTEXTE NORMAL:
-          //   - Le parent = le parent de l'original (même section)
+          //   - Le parent = le parent de l'original (mÃªme section)
           // 
-          // ═══════════════════════════════════════════════════════════════════════════════════════
+          // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           
-          // 🔍 Déterminer si c'est une variable LIÉE (dans repeatContext, la variable appartient à un autre nœud)
+          // ðŸ” DÃ©terminer si c'est une variable LIÃ‰E (dans repeatContext, la variable appartient Ã  un autre nÅ“ud)
           const isLinkedVariable = options.isFromRepeaterDuplication && 
                                    originalVar.nodeId !== newNodeId;
           
           let displayParentId: string | null;
           if (isLinkedVariable) {
-            // 🔗 Variable LIÉE: créer le display node COMME ENFANT du nœud instance (newNodeId)
+            // ðŸ”— Variable LIÃ‰E: crÃ©er le display node COMME ENFANT du nÅ“ud instance (newNodeId)
             displayParentId = newNodeId;
-            console.log(`📌 [LINKED_VAR] Display node pour variable liée sera enfant de: ${newNodeId}`);
           } else {
-            // 📍 Variable DIRECTE: créer le display node dans la même section que l'original
+            // ðŸ“ Variable DIRECTE: crÃ©er le display node dans la mÃªme section que l'original
             displayParentId = originalOwnerNode.parentId || null;
-            console.log(`📌 [DIRECT_VAR] Display node pour variable directe sera dans même parent: ${displayParentId}`);
           }
 
-          // Générer un ID unique pour le nœud d'affichage (ex: <oldVarNodeId>-<suffix>)
-          // ⚠️ Important: si le nodeId original porte déjà un suffixe numérique, on le retire d'abord
-          // afin d'éviter des IDs en double-suffixe (ex: foo-1-1 → foo-1).
+          // GÃ©nÃ©rer un ID unique pour le nÅ“ud d'affichage (ex: <oldVarNodeId>-<suffix>)
+          // âš ï¸ Important: si le nodeId original porte dÃ©jÃ  un suffixe numÃ©rique, on le retire d'abord
+          // afin d'Ã©viter des IDs en double-suffixe (ex: foo-1-1 â†’ foo-1).
           const baseDisplayNodeId = stripTrailingNumeric(originalVar.nodeId) || originalVar.nodeId;
           const displayNodeId = `${baseDisplayNodeId}-${suffix}`;
           finalNodeId = displayNodeId;
@@ -603,7 +556,7 @@ export async function copyVariableWithCapacities(
             parentId: displayParentId,
             type: 'leaf_field' as const,
             subType: null as any,
-            label: originalVar.displayName || 'Donnée',
+            label: originalVar.displayName || 'DonnÃ©e',
             description: null as string | null,
             value: null as string | null,
             order: (originalOwnerNode.order ?? 0) + 1,
@@ -620,7 +573,7 @@ export async function copyVariableWithCapacities(
             defaultValue: null as any,
             calculatedValue: null as any,
             metadata: { fromVariableId: appendSuffixOnce(originalVar.id) } as any,
-            // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+            // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
             subtab: originalOwnerNode.subtab,
             subtabs: originalOwnerNode.subtabs,
             createdAt: now,
@@ -631,8 +584,8 @@ export async function copyVariableWithCapacities(
             hasFormula: false,
             hasLink: false,
             hasMarkers: false,
-            // 📊 TABLE: Copier les colonnes table du nœud original
-            // ✅ IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiées
+            // ðŸ“Š TABLE: Copier les colonnes table du nÅ“ud original
+            // âœ… IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiÃ©es
             hasTable: originalOwnerNode.hasTable ?? false,
             table_name: originalOwnerNode.table_name,
             table_activeId: originalOwnerNode.table_activeId ? `${originalOwnerNode.table_activeId}-${suffix}` : null,
@@ -640,7 +593,7 @@ export async function copyVariableWithCapacities(
               if (!originalOwnerNode.table_instances) {
                 return originalOwnerNode.table_instances;
               }
-              // 🔑 CRITIQUE: Gérer les deux cas - objet ou STRING JSON (Prisma retourne parfois string)
+              // ðŸ”‘ CRITIQUE: GÃ©rer les deux cas - objet ou STRING JSON (Prisma retourne parfois string)
               let rawInstances: Record<string, unknown>;
               if (typeof originalOwnerNode.table_instances === 'object') {
                 rawInstances = JSON.parse(JSON.stringify(originalOwnerNode.table_instances));
@@ -649,7 +602,7 @@ export async function copyVariableWithCapacities(
                 try {
                   rawInstances = JSON.parse(originalOwnerNode.table_instances);
                 } catch {
-                  // Si parse échoue, retourner tel quel
+                  // Si parse Ã©choue, retourner tel quel
                   return originalOwnerNode.table_instances;
                 }
               } else {
@@ -658,17 +611,17 @@ export async function copyVariableWithCapacities(
               
               const updatedInstances: Record<string, unknown> = {};
               for (const [key, value] of Object.entries(rawInstances)) {
-                // ✅ FIX: Vérifier si la clé a DÉJÀ un suffixe numérique (-1, -2, etc.)
+                // âœ… FIX: VÃ©rifier si la clÃ© a DÃ‰JÃ€ un suffixe numÃ©rique (-1, -2, etc.)
                 // Ne pas utiliser includes('-') car UUIDs contiennent des tirets!
-                const hasSuffixRegex = /-\d+$/;  // Suffixe numérique à la fin
+                const hasSuffixRegex = /-\d+$/;  // Suffixe numÃ©rique Ã  la fin
                 const newKey = hasSuffixRegex.test(key) ? key : `${key}-${suffix}`;
                 
-                // AUSSI ajouter le suffixe au tableId INTÉRIEUR si présent
+                // AUSSI ajouter le suffixe au tableId INTÃ‰RIEUR si prÃ©sent
                 if (value && typeof value === 'object') {
                   const tableInstanceObj = value as Record<string, unknown>;
                   const updatedObj = { ...tableInstanceObj };
                   if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === 'string') {
-                    // ✅ FIX: Même chose pour le tableId
+                    // âœ… FIX: MÃªme chose pour le tableId
                     updatedObj.tableId = hasSuffixRegex.test(tableInstanceObj.tableId)
                       ? tableInstanceObj.tableId 
                       : `${tableInstanceObj.tableId}-${suffix}`;
@@ -681,7 +634,7 @@ export async function copyVariableWithCapacities(
               return updatedInstances;
             })() as any,
             linkedTableIds: Array.isArray(originalOwnerNode.linkedTableIds) 
-              // ✅ AJOUTER LES SUFFIXES aux IDs de table ici aussi!
+              // âœ… AJOUTER LES SUFFIXES aux IDs de table ici aussi!
               ? originalOwnerNode.linkedTableIds.map(id => `${id}-${suffix}`)
               : [] as any,
             linkedConditionIds: [] as any,
@@ -698,30 +651,26 @@ export async function copyVariableWithCapacities(
           const maybeExisting = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
           if (maybeExisting) {
             await prisma.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
-            console.log('[CREATE DISPLAY] Nœud d\'affichage existant mis à jour:', { id: displayNodeId, parentId: displayParentId, metadata: displayNodeData.metadata });
           } else {
             await prisma.treeBranchLeafNode.create({ data: displayNodeData as any });
-            console.log('[CREATE DISPLAY] Nœud d\'affichage créé:', { id: displayNodeId, parentId: displayParentId, metadata: displayNodeData.metadata });
           }
 
-          // ═══════════════════════════════════════════════════════════════════════
-          // 📊 ÉTAPE CRITIQUE: COPIER LES TABLES LIÉES AU NŒUD ORIGINAL
-          // ═══════════════════════════════════════════════════════════════════════
-          // Si le nœud original a des tables (hasTable=true et linkedTableIds non vide),
+          // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+          // ðŸ“Š Ã‰TAPE CRITIQUE: COPIER LES TABLES LIÃ‰ES AU NÅ’UD ORIGINAL
+          // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+          // Si le nÅ“ud original a des tables (hasTable=true et linkedTableIds non vide),
           // on doit copier ces tables pour que la copie fonctionne correctement
           if (originalOwnerNode.hasTable && Array.isArray(originalOwnerNode.linkedTableIds) && originalOwnerNode.linkedTableIds.length > 0) {
-            console.log(`\n📊 [COPY-TABLES] Nœud original a ${originalOwnerNode.linkedTableIds.length} tables à copier`);
             
             for (const originalTableId of originalOwnerNode.linkedTableIds) {
               const newTableId = `${originalTableId}-${suffix}`;
               
-              // Vérifier si la table existe déjà
+              // VÃ©rifier si la table existe dÃ©jÃ 
               const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({
                 where: { id: newTableId }
               });
               
               if (existingTable) {
-                console.log(`📊 [COPY-TABLES] Table ${newTableId} existe déjà, skip`);
                 tableIdMap.set(originalTableId, newTableId);
                 continue;
               }
@@ -730,7 +679,7 @@ export async function copyVariableWithCapacities(
               try {
                 const tableResult = await copyTableCapacity(
                   originalTableId,
-                  displayNodeId,  // La nouvelle table appartient au display node copié
+                  displayNodeId,  // La nouvelle table appartient au display node copiÃ©
                   Number(suffix),
                   prisma,
                   { nodeIdMap, tableCopyCache: tableIdMap, tableIdMap }
@@ -738,50 +687,45 @@ export async function copyVariableWithCapacities(
                 
                 if (tableResult.success) {
                   tableIdMap.set(originalTableId, tableResult.newTableId);
-                  console.log(`✅ [COPY-TABLES] Table copiée: ${originalTableId} → ${tableResult.newTableId} (${tableResult.columnsCount} cols, ${tableResult.rowsCount} rows)`);
                 } else {
-                  console.warn(`⚠️ [COPY-TABLES] Échec copie table ${originalTableId}: ${tableResult.error}`);
+                  console.warn(`âš ï¸ [COPY-TABLES] Ã‰chec copie table ${originalTableId}: ${tableResult.error}`);
                 }
               } catch (e) {
-                console.error(`❌ [COPY-TABLES] Exception copie table ${originalTableId}:`, (e as Error).message);
+                console.error(`âŒ [COPY-TABLES] Exception copie table ${originalTableId}:`, (e as Error).message);
               }
             }
             
-            // Mettre à jour hasTable sur le display node créé
+            // Mettre Ã  jour hasTable sur le display node crÃ©Ã©
             await prisma.treeBranchLeafNode.update({
               where: { id: displayNodeId },
               data: { hasTable: true }
             });
-            console.log(`✅ [COPY-TABLES] hasTable mis à true sur ${displayNodeId}`);
           }
         } else {
-          console.warn(`⚠️ Impossible de récupérer le nœud propriétaire original ${originalVar.nodeId}. Fallback newNodeId.`);
+          console.warn(`âš ï¸ Impossible de rÃ©cupÃ©rer le nÅ“ud propriÃ©taire original ${originalVar.nodeId}. Fallback newNodeId.`);
         }
       } catch (e) {
-        console.warn(`⚠️ Erreur lors de la création du nœud d'affichage dédié:`, (e as Error).message);
+        console.warn(`âš ï¸ Erreur lors de la crÃ©ation du nÅ“ud d'affichage dÃ©diÃ©:`, (e as Error).message);
       }
-      console.log(`📍 nodeId utilisé (display auto): ${finalNodeId}`);
     } else {
-      console.log(`📍 nodeId utilisé (fallback): ${finalNodeId}`);
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🛡️ ÉTAPE 5A : Éviter les collisions d'ID (conflits inter-templates)
-    // ═══════════════════════════════════════════════════════════════════════
-    // Cas rencontré: plusieurs templates peuvent référencer la même variable d'origine
-    // et utiliser le même suffixe numérique (ex: 1), provoquant un conflit unique
-    // sur id et/ou exposedKey. On sécurise en ajoutant un discriminant basé sur
-    // le nœud d'affichage final si collision détectée.
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ›¡ï¸ Ã‰TAPE 5A : Ã‰viter les collisions d'ID (conflits inter-templates)
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // Cas rencontrÃ©: plusieurs templates peuvent rÃ©fÃ©rencer la mÃªme variable d'origine
+    // et utiliser le mÃªme suffixe numÃ©rique (ex: 1), provoquant un conflit unique
+    // sur id et/ou exposedKey. On sÃ©curise en ajoutant un discriminant basÃ© sur
+    // le nÅ“ud d'affichage final si collision dÃ©tectÃ©e.
     try {
       const existingById = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId || newNodeId || '').slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
-        console.warn(`⚠️ Conflit sur id variable (${newVarId}), ajustement → ${adjusted}`);
-        newVarId = adjusted;
+                newVarId = adjusted;
       }
     } catch (e) {
-      console.warn(`⚠️ Vérification collision id variable échouée:`, (e as Error).message);
+      console.warn(`âš ï¸ VÃ©rification collision id variable Ã©chouÃ©e:`, (e as Error).message);
     }
 
     try {
@@ -789,29 +733,27 @@ export async function copyVariableWithCapacities(
       if (existingByKey) {
         const tail = (finalNodeId || newNodeId || '').slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
-        console.warn(`⚠️ Conflit sur exposedKey (${newExposedKey}), ajustement → ${adjustedKey}`);
-        newExposedKey = adjustedKey;
+                newExposedKey = adjustedKey;
       }
     } catch (e) {
-      console.warn(`⚠️ Vérification collision exposedKey échouée:`, (e as Error).message);
+      console.warn(`âš ï¸ VÃ©rification collision exposedKey Ã©chouÃ©e:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔁 ÉTAPE 5A-bis : Réutiliser une variable existante pour ce nœud si présente
-    // ═══════════════════════════════════════════════════════════════════════
-    // Évite la violation d'unicité sur nodeId (1 variable par nœud) quand
-    // plusieurs duplications pointent vers le même nœud d'affichage dédié.
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ” Ã‰TAPE 5A-bis : RÃ©utiliser une variable existante pour ce nÅ“ud si prÃ©sente
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // Ã‰vite la violation d'unicitÃ© sur nodeId (1 variable par nÅ“ud) quand
+    // plusieurs duplications pointent vers le mÃªme nÅ“ud d'affichage dÃ©diÃ©.
     let _reusingExistingVariable = false;
     let _existingVariableForReuse: any = null;
     
     try {
       const existingForNode = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
       if (existingForNode) {
-        console.log(`♻️ Variable déjà existante pour display node ${finalNodeId}, réutilisation: ${existingForNode.id}`);
         _reusingExistingVariable = true;
         _existingVariableForReuse = existingForNode;
         
-        // Harmoniser le nœud d'affichage avec les données de la variable existante
+        // Harmoniser le nÅ“ud d'affichage avec les donnÃ©es de la variable existante
         try {
           await prisma.treeBranchLeafNode.update({
             where: { id: finalNodeId },
@@ -829,36 +771,27 @@ export async function copyVariableWithCapacities(
           });
           await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
         } catch (e) {
-          console.warn(`⚠️ Erreur MAJ display node (réutilisation):`, (e as Error).message);
+          console.warn(`âš ï¸ Erreur MAJ display node (rÃ©utilisation):`, (e as Error).message);
         }
 
-        // Mettre en cache l'ID réutilisé pour éviter d'autres créations
+        // Mettre en cache l'ID rÃ©utilisÃ© pour Ã©viter d'autres crÃ©ations
         variableCopyCache.set(originalVarId, existingForNode.id);
         
-        // ⚠️ NE PAS RETOURNER ICI - Continuer pour copier les capacités de cette variable
-        // pour ce nouveau nœud/contexte !
+        // âš ï¸ NE PAS RETOURNER ICI - Continuer pour copier les capacitÃ©s de cette variable
+        // pour ce nouveau nÅ“ud/contexte !
       }
     } catch (e) {
-      console.warn(`⚠️ Vérification variable existante par nodeId échouée:`, (e as Error).message);
+      console.warn(`âš ï¸ VÃ©rification variable existante par nodeId Ã©chouÃ©e:`, (e as Error).message);
     }
 
-    // Utiliser la variable réutilisée, la variable en cache, ou en créer une nouvelle
+    // Utiliser la variable rÃ©utilisÃ©e, la variable en cache, ou en crÃ©er une nouvelle
     let newVariable: any;
     
     if (cachedVariable) {
-      console.log(`♻️ [COPY-VAR] Réutilisation de variable du cache: ${cachedVariable.id} pour créer display node`);
       newVariable = cachedVariable;
     } else if (_reusingExistingVariable && _existingVariableForReuse) {
-      console.log(`♻️ [COPY-VAR] Utilisation de variable existante: ${_existingVariableForReuse.id}`);
       newVariable = _existingVariableForReuse;
     } else {
-      console.log(`\n🔨 [COPY-VAR] CRÉATION DE LA VARIABLE EN BASE...`);
-      console.log(`   ID: ${newVarId}`);
-      console.log(`   nodeId: ${finalNodeId}`);
-      console.log(`   exposedKey: ${newExposedKey}`);
-      console.log(`   displayName: ${originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName}`);
-      console.log(`   sourceRef: ${newSourceRef}`);
-      console.log(`   sourceType: ${originalVar.sourceType}`);
       
       newVariable = await prisma.treeBranchLeafNodeVariable.create({
         data: {
@@ -885,25 +818,19 @@ export async function copyVariableWithCapacities(
       });
     }
 
-    console.log(`✅✅✅ VARIABLE CRÉÉE AVEC SUCCÈS EN BASE !`);
-    console.log(`   ID créé: ${newVariable.id}`);
-    console.log(`   nodeId: ${newVariable.nodeId}`);
-    console.log(`   exposedKey: ${newVariable.exposedKey}`);
-    console.log(`   📍 DEBUG displayName créé: "${newVariable.displayName}"`);
     
-    // 🔍 VÉRIFICATION: Re-chercher la variable pour confirmer qu'elle existe bien
+    // ðŸ” VÃ‰RIFICATION: Re-chercher la variable pour confirmer qu'elle existe bien
     const verification = await prisma.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (verification) {
-      console.log(`✅ VÉRIFICATION OK: Variable ${newVariable.id} existe bien en base`);
     } else {
-      console.error(`❌❌❌ PROBLÈME GRAVE: Variable ${newVariable.id} N'EXISTE PAS après création !`);
+      console.error(`âŒâŒâŒ PROBLÃˆME GRAVE: Variable ${newVariable.id} N'EXISTE PAS aprÃ¨s crÃ©ation !`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📝 ÉTAPE 5B : Mettre à jour le NŒUD D'AFFICHAGE (finalNodeId) avec les paramètres data
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ“ Ã‰TAPE 5B : Mettre Ã  jour le NÅ’UD D'AFFICHAGE (finalNodeId) avec les paramÃ¨tres data
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     try {
       await prisma.treeBranchLeafNode.update({
         where: { id: finalNodeId },
@@ -915,19 +842,18 @@ export async function copyVariableWithCapacities(
           data_precision: newVariable.precision,
           data_unit: newVariable.unit,
           data_visibleToUser: newVariable.visibleToUser,
-          // Harmoniser le label du nœud d'affichage sur le displayName de la variable
+          // Harmoniser le label du nÅ“ud d'affichage sur le displayName de la variable
           label: newVariable.displayName || undefined,
           field_label: (newVariable.displayName as any) || undefined
         }
       });
-      console.log(`✅ Paramètres capacité (data) mis à jour pour nœud d'affichage ${finalNodeId}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur lors de la mise à jour des paramètres capacité (display node):`, (e as Error).message);
+      console.warn(`âš ï¸ Erreur lors de la mise Ã  jour des paramÃ¨tres capacitÃ© (display node):`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🧩 ÉTAPE 5C : Lier à la section d'affichage (sans création) OU créer un nœud d'affichage
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ§© Ã‰TAPE 5C : Lier Ã  la section d'affichage (sans crÃ©ation) OU crÃ©er un nÅ“ud d'affichage
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (linkToDisplaySection) {
       try {
         // Trouver la section d'affichage "Nouveau Section" dans le contexte du parent d'origine
@@ -947,61 +873,54 @@ export async function copyVariableWithCapacities(
           });
           if (displaySection) {
             await addToNodeLinkedField(prisma, displaySection.id, 'linkedVariableIds', [newVariable.id]);
-            console.log(`✅ Variable liée à la section d'affichage ${displaySectionLabel}: ${displaySection.id}`);
           } else {
-            console.log(`ℹ️ Section d'affichage "${displaySectionLabel}" introuvable sous le parent.`);
           }
         }
       } catch (e) {
-        console.warn(`⚠️ Erreur lors du linkage vers la section d'affichage:`, (e as Error).message);
+        console.warn(`âš ï¸ Erreur lors du linkage vers la section d'affichage:`, (e as Error).message);
       }
     } else if (autoCreateDisplayNode) {
-      // Déjà géré ci-dessus: finalNodeId pointe vers le nœud d'affichage (copié ou créé)
-      // On s'assure simplement que le lien variable → nœud est en place
+      // DÃ©jÃ  gÃ©rÃ© ci-dessus: finalNodeId pointe vers le nÅ“ud d'affichage (copiÃ© ou crÃ©Ã©)
+      // On s'assure simplement que le lien variable â†’ nÅ“ud est en place
       try {
         await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [newVariable.id]);
       } catch (e) {
-        console.warn(`⚠️ Erreur linkage variable→display node:`, (e as Error).message);
+        console.warn(`âš ï¸ Erreur linkage variableâ†’display node:`, (e as Error).message);
       }
-      // Hydratation capacités condition/table si applicable
+      // Hydratation capacitÃ©s condition/table si applicable
       try {
         if (capacityType && newSourceRef) {
           const parsedCap = parseSourceRef(newSourceRef);
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === 'condition') {
-              const cond = await prisma.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
               await prisma.treeBranchLeafNode.update({
                 where: { id: finalNodeId },
                 data: {
                   hasCondition: true,
-                  condition_activeId: capId,
-                  condition_name: cond?.name || null,
-                  condition_description: cond?.description || null
+                  condition_activeId: capId
                 }
               });
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedConditionIds', [capId]);
             } else if (parsedCap.type === 'formula') {
-              const frm = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true, description: true } });
+              const frm = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true } });
               await prisma.treeBranchLeafNode.update({
                 where: { id: finalNodeId },
                 data: {
                   hasFormula: true,
                   formula_activeId: capId,
-                  formula_name: frm?.name || null,
-                  formula_description: frm?.description || null
+                  formula_name: frm?.name || null
                 }
               });
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedFormulaIds', [capId]);
             } else if (parsedCap.type === 'table') {
-              const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
+              const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
               await prisma.treeBranchLeafNode.update({
                 where: { id: finalNodeId },
                 data: {
                   hasTable: true,
                   table_activeId: capId,
                   table_name: tbl?.name || null,
-                  table_description: tbl?.description || null,
                   table_type: (tbl?.type as any) || null
                 }
               });
@@ -1010,23 +929,23 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        console.warn(`⚠️ Synchronisation capacités condition/table sur le nœud d'affichage:`, (e as Error).message);
+        console.warn(`âš ï¸ Synchronisation capacitÃ©s condition/table sur le nÅ“ud d'affichage:`, (e as Error).message);
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 6 : Mettre en cache
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ”— Ã‰TAPE 6 : Mettre en cache
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     variableCopyCache.set(cacheKey, newVariable.id);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔄 ÉTAPE 7 : Mise à jour bidirectionnelle des linked...
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ”„ Ã‰TAPE 7 : Mise Ã  jour bidirectionnelle des linked...
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
-    // NOTE: linkedVariableIds du nœud propriétaire est géré par le code appelant
-    // (treebranchleaf-routes.ts) qui fait un UPDATE global après toutes les copies
+    // NOTE: linkedVariableIds du nÅ“ud propriÃ©taire est gÃ©rÃ© par le code appelant
+    // (treebranchleaf-routes.ts) qui fait un UPDATE global aprÃ¨s toutes les copies
     
-    // 7B. Mise à jour inverse : ajouter dans la capacité référencée
+    // 7B. Mise Ã  jour inverse : ajouter dans la capacitÃ© rÃ©fÃ©rencÃ©e
     if (capacityType && newSourceRef) {
       const parsed = parseSourceRef(newSourceRef);
       if (parsed && parsed.id) {
@@ -1038,7 +957,6 @@ export async function copyVariableWithCapacities(
             });
             if (formula) {
               await addToNodeLinkedField(prisma, formula.nodeId, 'linkedFormulaIds', [parsed.id]);
-              console.log(`✅ linkedFormulaIds mis à jour pour formule ${parsed.id}`);
             }
           }
           else if (capacityType === 'condition') {
@@ -1048,7 +966,6 @@ export async function copyVariableWithCapacities(
             });
             if (condition) {
               await addToNodeLinkedField(prisma, condition.nodeId, 'linkedConditionIds', [parsed.id]);
-              console.log(`✅ linkedConditionIds mis à jour pour condition ${parsed.id}`);
             }
           }
           else if (capacityType === 'table') {
@@ -1058,18 +975,14 @@ export async function copyVariableWithCapacities(
             });
             if (table) {
               await addToNodeLinkedField(prisma, table.nodeId, 'linkedTableIds', [parsed.id]);
-              console.log(`✅ linkedTableIds mis à jour pour table ${parsed.id}`);
             }
           }
         } catch (e) {
-          console.warn(`⚠️ Erreur MAJ bidirectionnelle:`, (e as Error).message);
+          console.warn(`âš ï¸ Erreur MAJ bidirectionnelle:`, (e as Error).message);
         }
       }
     }
 
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`✅ COPIE VARIABLE TERMINÉE`);
-    console.log(`${'═'.repeat(80)}\n`);
 
     return {
       variableId: newVariable.id,
@@ -1077,11 +990,11 @@ export async function copyVariableWithCapacities(
       capacityType,
       sourceRef: newSourceRef,
       success: true,
-      displayNodeId: finalNodeId  // 🔑 IMPORTANT: Retourner l'ID du display node créé!
+      displayNodeId: finalNodeId  // ðŸ”‘ IMPORTANT: Retourner l'ID du display node crÃ©Ã©!
     };
 
   } catch (error) {
-    console.error(`❌ Erreur lors de la copie de la variable:`, error);
+    console.error(`âŒ Erreur lors de la copie de la variable:`, error);
     return {
       variableId: '',
       exposedKey: '',
@@ -1094,11 +1007,11 @@ export async function copyVariableWithCapacities(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🧩 CRÉER UN NŒUD D'AFFICHAGE POUR UNE VARIABLE EXISTANTE
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ðŸ§© CRÃ‰ER UN NÅ’UD D'AFFICHAGE POUR UNE VARIABLE EXISTANTE
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 /**
- * Crée (ou met à jour) un nœud d'affichage pour une variable existante.
+ * CrÃ©e (ou met Ã  jour) un nÅ“ud d'affichage pour une variable existante.
  * N'implique pas de duplication de variable.
  */
 export async function createDisplayNodeForExistingVariable(
@@ -1123,24 +1036,23 @@ export async function createDisplayNodeForExistingVariable(
       table_name: true, 
       table_activeId: true, 
       table_instances: true,
-      // 🔑 IMPORTANT: Récupérer subtab pour que la copie soit dans le bon sous-onglet
+      // ðŸ”‘ IMPORTANT: RÃ©cupÃ©rer subtab pour que la copie soit dans le bon sous-onglet
       subtab: true,
       subtabs: true,
     }
   });
-  if (!owner) throw new Error(`Nœud propriétaire introuvable: ${v.nodeId}`);
+  if (!owner) throw new Error(`NÅ“ud propriÃ©taire introuvable: ${v.nodeId}`);
 
-  // ═══════════════════════════════════════════════════════════════════════════════════════
-  // 🔑 RÈGLE FONDAMENTALE: Les copies doivent rester DANS LA MÊME SECTION que l'original
-  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ðŸ”‘ RÃˆGLE FONDAMENTALE: Les copies doivent rester DANS LA MÃŠME SECTION que l'original
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 
-  // PRINCIPE: Chaque copie doit être placée dans la même section que le champ original.
-  // PAS de création de Section-1, Section-2, etc.
+  // PRINCIPE: Chaque copie doit Ãªtre placÃ©e dans la mÃªme section que le champ original.
+  // PAS de crÃ©ation de Section-1, Section-2, etc.
   // Le parent de la copie = le parent de l'original (TOUJOURS)
   // 
-  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const displayParentId: string | null = owner.parentId;
-  console.log(`📌 [createDisplayNodeForExistingVariable] RÈGLE: Copie dans le MÊME parent que l'original: ${displayParentId}`);
 
   const now = new Date();
   const baseData = {
@@ -1149,7 +1061,7 @@ export async function createDisplayNodeForExistingVariable(
     parentId: displayParentId,
     type: 'leaf_field' as const,
     subType: null as any,
-    label: v.displayName || 'Donnée',
+    label: v.displayName || 'DonnÃ©e',
     description: null as string | null,
     value: null as string | null,
     order: (owner.order ?? 0) + 1,
@@ -1166,7 +1078,7 @@ export async function createDisplayNodeForExistingVariable(
     defaultValue: null as any,
     calculatedValue: null as any,
     metadata: { fromVariableId: variableId } as any,
-    // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+    // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
     subtab: owner.subtab,
     subtabs: owner.subtabs,
     createdAt: now,
@@ -1177,7 +1089,7 @@ export async function createDisplayNodeForExistingVariable(
     hasFormula: false,
     hasLink: false,
     hasMarkers: false,
-    // 📊 TABLE: Copier les colonnes table du nœud original
+    // ðŸ“Š TABLE: Copier les colonnes table du nÅ“ud original
     hasTable: owner.hasTable ?? false,
     table_name: owner.table_name,
     table_activeId: owner.table_activeId,
@@ -1217,17 +1129,17 @@ export async function createDisplayNodeForExistingVariable(
   return { displayNodeId, created: !existing };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS UTILITAIRES POUR LINKED FIELDS
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ðŸ”§ FONCTIONS UTILITAIRES POUR LINKED FIELDS
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
- * Ajoute des IDs à un champ linked... d'un nœud (sans doublons)
+ * Ajoute des IDs Ã  un champ linked... d'un nÅ“ud (sans doublons)
  * 
  * @param prisma - Instance Prisma
- * @param nodeId - ID du nœud
+ * @param nodeId - ID du nÅ“ud
  * @param field - Nom du champ ('linkedFormulaIds', 'linkedConditionIds', etc.)
- * @param idsToAdd - IDs à ajouter
+ * @param idsToAdd - IDs Ã  ajouter
  */
 async function addToNodeLinkedField(
   prisma: PrismaClient,
@@ -1243,12 +1155,12 @@ async function addToNodeLinkedField(
   });
 
   if (!node) {
-    console.warn(`⚠️ Nœud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`âš ï¸ NÅ“ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
 
   const current = (node[field] || []) as string[];
-  const newIds = [...new Set([...current, ...idsToAdd])]; // Dédupliquer
+  const newIds = [...new Set([...current, ...idsToAdd])]; // DÃ©dupliquer
 
   await prisma.treeBranchLeafNode.update({
     where: { id: nodeId },
@@ -1257,8 +1169,8 @@ async function addToNodeLinkedField(
 }
 
 /**
- * Version simplifiée pour compatibilité avec l'ancien code
- * qui passe parseSourceRef et addToNodeLinkedField en paramètres
+ * Version simplifiÃ©e pour compatibilitÃ© avec l'ancien code
+ * qui passe parseSourceRef et addToNodeLinkedField en paramÃ¨tres
  */
 export async function copyVariableWithCapacitiesLegacy(
   originalVarId: string,
@@ -1272,50 +1184,50 @@ export async function copyVariableWithCapacitiesLegacy(
   return copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔗 COPIE DES VARIABLES LIÉES DEPUIS linkedVariableIds
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ðŸ”— COPIE DES VARIABLES LIÃ‰ES DEPUIS linkedVariableIds
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
- * Résultat de la copie de variables liées
+ * RÃ©sultat de la copie de variables liÃ©es
  */
 export interface CopyLinkedVariablesResult {
-  /** Nombre de variables copiées */
+  /** Nombre de variables copiÃ©es */
   count: number;
   /** Map des anciennes IDs vers les nouvelles IDs */
   variableIdMap: Map<string, string>;
-  /** Résultats individuels de copie */
+  /** RÃ©sultats individuels de copie */
   results: CopyVariableResult[];
-  /** Succès global */
+  /** SuccÃ¨s global */
   success: boolean;
-  /** Message d'erreur éventuel */
+  /** Message d'erreur Ã©ventuel */
   error?: string;
 }
 
 /**
- * 🔗 COPIE MASSIVE DE VARIABLES LIÉES
+ * ðŸ”— COPIE MASSIVE DE VARIABLES LIÃ‰ES
  * 
  * Cette fonction :
- * 1. Lit l'ID du nœud source avec ses linkedVariableIds
- * 2. Pour chaque ID de variable lié, récupère la variable
+ * 1. Lit l'ID du nÅ“ud source avec ses linkedVariableIds
+ * 2. Pour chaque ID de variable liÃ©, rÃ©cupÃ¨re la variable
  * 3. Copie la variable avec son suffixe
- * 4. Copie les données associées (capacités, formules, conditions, tables)
- * 5. Met à jour les références bidirectionnelles
+ * 4. Copie les donnÃ©es associÃ©es (capacitÃ©s, formules, conditions, tables)
+ * 5. Met Ã  jour les rÃ©fÃ©rences bidirectionnelles
  * 
  * CONTEXTE D'UTILISATION :
- * Si un nœud a des linkedVariableIds = ['varA', 'varB', 'varC'],
- * cette fonction va copier ces 3 variables + toutes leurs capacités.
- * Les champs existent déjà dans le nouveau nœud avec le suffixe.
+ * Si un nÅ“ud a des linkedVariableIds = ['varA', 'varB', 'varC'],
+ * cette fonction va copier ces 3 variables + toutes leurs capacitÃ©s.
+ * Les champs existent dÃ©jÃ  dans le nouveau nÅ“ud avec le suffixe.
  * 
- * @param sourceNodeId - ID du nœud source (contient linkedVariableIds)
- * @param newNodeId - ID du nouveau nœud destination
- * @param suffix - Suffixe numérique à appliquer
+ * @param sourceNodeId - ID du nÅ“ud source (contient linkedVariableIds)
+ * @param newNodeId - ID du nouveau nÅ“ud destination
+ * @param suffix - Suffixe numÃ©rique Ã  appliquer
  * @param prisma - Instance Prisma Client
- * @param options - Options avec maps de références (formules, conditions, tables)
- * @returns Résultat de la copie massif
+ * @param options - Options avec maps de rÃ©fÃ©rences (formules, conditions, tables)
+ * @returns RÃ©sultat de la copie massif
  * 
  * @example
- * // Copier toutes les variables liées du nœud 'node-abc' vers 'node-abc-1'
+ * // Copier toutes les variables liÃ©es du nÅ“ud 'node-abc' vers 'node-abc-1'
  * const result = await copyLinkedVariablesFromNode(
  *   'node-abc',
  *   'node-abc-1',
@@ -1323,8 +1235,8 @@ export interface CopyLinkedVariablesResult {
  *   prisma,
  *   { formulaIdMap, conditionIdMap, tableIdMap }
  * );
- * console.log(`${result.count} variables copiées`);
- * // Accéder à la map : result.variableIdMap.get('oldVarId') → 'oldVarId-1'
+ * console.log(`${result.count} variables copiÃ©es`);
+ * // AccÃ©der Ã  la map : result.variableIdMap.get('oldVarId') â†’ 'oldVarId-1'
  */
 export async function copyLinkedVariablesFromNode(
   sourceNodeId: string,
@@ -1334,38 +1246,30 @@ export async function copyLinkedVariablesFromNode(
   options: CopyVariableOptions = {}
 ): Promise<CopyLinkedVariablesResult> {
 
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`🔗 COPIE VARIABLES LIÉES DU NŒUD`);
-  console.log(`   Source: ${sourceNodeId}`);
-  console.log(`   Destination: ${newNodeId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`${'═'.repeat(80)}\n`);
 
   try {
-    // ═══════════════════════════════════════════════════════════════════════
-    // 1️⃣ RÉCUPÉRER LE NŒUD SOURCE ET SES linkedVariableIds
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // 1ï¸âƒ£ RÃ‰CUPÃ‰RER LE NÅ’UD SOURCE ET SES linkedVariableIds
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const sourceNode = await prisma.treeBranchLeafNode.findUnique({
       where: { id: sourceNodeId },
       select: { linkedVariableIds: true }
     });
 
     if (!sourceNode) {
-      console.error(`❌ Nœud source introuvable: ${sourceNodeId}`);
+      console.error(`âŒ NÅ“ud source introuvable: ${sourceNodeId}`);
       return {
         count: 0,
         variableIdMap: new Map(),
         results: [],
         success: false,
-        error: `Nœud source introuvable: ${sourceNodeId}`
+        error: `NÅ“ud source introuvable: ${sourceNodeId}`
       };
     }
 
     const linkedVarIds = sourceNode.linkedVariableIds || [];
-    console.log(`📋 ${linkedVarIds.length} variables liées trouvées`);
     
     if (linkedVarIds.length === 0) {
-      console.log(`⚠️ Aucune variable liée à copier`);
       return {
         count: 0,
         variableIdMap: new Map(),
@@ -1374,20 +1278,18 @@ export async function copyLinkedVariablesFromNode(
       };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 2️⃣ COPIER CHAQUE VARIABLE LIÉE
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // 2ï¸âƒ£ COPIER CHAQUE VARIABLE LIÃ‰E
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const variableIdMap = new Map<string, string>();
     const results: CopyVariableResult[] = [];
 
-    console.log(`\n📝 Copie de ${linkedVarIds.length} variables...`);
 
     for (let i = 0; i < linkedVarIds.length; i++) {
       const varId = linkedVarIds[i];
-      console.log(`\n[${i + 1}/${linkedVarIds.length}] 🔄 Copie variable: ${varId}`);
 
       try {
-        // Copier la variable avec toutes ses capacités
+        // Copier la variable avec toutes ses capacitÃ©s
         const result = await copyVariableWithCapacities(
           varId,
           suffix,
@@ -1398,14 +1300,13 @@ export async function copyLinkedVariablesFromNode(
 
         if (result.success) {
           variableIdMap.set(varId, result.variableId);
-          console.log(`✅ Variable copiée: ${varId} → ${result.variableId}`);
         } else {
-          console.error(`❌ Échec copie: ${result.error}`);
+          console.error(`âŒ Ã‰chec copie: ${result.error}`);
         }
 
         results.push(result);
       } catch (e) {
-        console.error(`❌ Exception lors de la copie: ${(e as Error).message}`);
+        console.error(`âŒ Exception lors de la copie: ${(e as Error).message}`);
         results.push({
           variableId: '',
           exposedKey: '',
@@ -1417,30 +1318,21 @@ export async function copyLinkedVariablesFromNode(
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 3️⃣ MISE À JOUR DU NŒUD DESTINATION : linkedVariableIds
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // 3ï¸âƒ£ MISE Ã€ JOUR DU NÅ’UD DESTINATION : linkedVariableIds
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const newVarIds = Array.from(variableIdMap.values());
     
-    console.log(`\n🔗 Mise à jour linkedVariableIds du nœud destination...`);
-    console.log(`   IDs à ajouter: ${newVarIds.join(', ')}`);
 
     await addToNodeLinkedField(prisma, newNodeId, 'linkedVariableIds', newVarIds);
     
-    console.log(`✅ linkedVariableIds mis à jour pour le nœud ${newNodeId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📊 RÉSUMÉ
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ðŸ“Š RÃ‰SUMÃ‰
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.length - successCount;
 
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`📊 RÉSUMÉ COPIE VARIABLES LIÉES`);
-    console.log(`   ✅ Succès: ${successCount}/${linkedVarIds.length}`);
-    console.log(`   ❌ Échecs: ${failureCount}/${linkedVarIds.length}`);
-    console.log(`   🗺️ Map: ${variableIdMap.size} entrées`);
-    console.log(`${'═'.repeat(80)}\n`);
 
     return {
       count: successCount,
@@ -1450,7 +1342,7 @@ export async function copyLinkedVariablesFromNode(
     };
 
   } catch (error) {
-    console.error(`❌ Erreur globale lors de la copie de variables liées:`, error);
+    console.error(`âŒ Erreur globale lors de la copie de variables liÃ©es:`, error);
     return {
       count: 0,
       variableIdMap: new Map(),

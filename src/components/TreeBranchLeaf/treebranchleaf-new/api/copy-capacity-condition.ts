@@ -1,17 +1,17 @@
 /**
- * 🔀 Système de copie des CONDITIONS
+ * Ã°Å¸â€â‚¬ SystÃƒÂ¨me de copie des CONDITIONS
  * 
- * Ce module gère la copie complète d'une condition (TreeBranchLeafNodeCondition)
- * avec réécriture du conditionSet pour pointer vers les nouveaux IDs.
+ * Ce module gÃƒÂ¨re la copie complÃƒÂ¨te d'une condition (TreeBranchLeafNodeCondition)
+ * avec rÃƒÂ©ÃƒÂ©criture du conditionSet pour pointer vers les nouveaux IDs.
  * 
  * PRINCIPES :
  * -----------
  * 1. Copier la condition avec suffixe
- * 2. Réécrire le conditionSet (@value.ID → @value.ID-suffix)
- * 3. Réécrire les références de formules (node-formula:ID → node-formula:ID-suffix)
- * 4. Mettre à jour linkedConditionIds du nœud propriétaire
- * 5. 🔗 LIAISON AUTOMATIQUE OBLIGATOIRE: linkedConditionIds sur TOUS les nœuds référencés
- * 6. Synchroniser les paramètres de capacité (hasCondition, condition_activeId, etc.)
+ * 2. RÃƒÂ©ÃƒÂ©crire le conditionSet (@value.ID Ã¢â€ â€™ @value.ID-suffix)
+ * 3. RÃƒÂ©ÃƒÂ©crire les rÃƒÂ©fÃƒÂ©rences de formules (node-formula:ID Ã¢â€ â€™ node-formula:ID-suffix)
+ * 4. Mettre ÃƒÂ  jour linkedConditionIds du nÃ…â€œud propriÃƒÂ©taire
+ * 5. Ã°Å¸â€â€” LIAISON AUTOMATIQUE OBLIGATOIRE: linkedConditionIds sur TOUS les nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
+ * 6. Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ© (hasCondition, condition_activeId, etc.)
  * 
  * @author System TBL
  * @version 2.0.0 - LIAISON AUTOMATIQUE OBLIGATOIRE
@@ -20,61 +20,62 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { linkConditionToAllNodes } from './universal-linking-system';
 import { rewriteJsonReferences, forceSharedRefSuffixesInJson, type RewriteMaps } from './repeat/utils/universal-reference-rewriter.js';
+import { copyFormulaCapacity } from './copy-capacity-formula.js';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 📋 TYPES ET INTERFACES
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€œâ€¹ TYPES ET INTERFACES
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
  * Options pour la copie de condition
  */
 export interface CopyConditionOptions {
-  /** Map des nœuds copiés (ancien ID → nouveau ID) pour réécrire les @value.ID */
+  /** Map des nÃ…â€œuds copiÃƒÂ©s (ancien ID Ã¢â€ â€™ nouveau ID) pour rÃƒÂ©ÃƒÂ©crire les @value.ID */
   nodeIdMap?: Map<string, string>;
-  /** Map des formules copiées (ancien ID → nouveau ID) pour réécrire node-formula:ID */
+  /** Map des formules copiÃƒÂ©es (ancien ID Ã¢â€ â€™ nouveau ID) pour rÃƒÂ©ÃƒÂ©crire node-formula:ID */
   formulaIdMap?: Map<string, string>;
-  /** Map des tables copiées (ancien ID → nouveau ID) pour réécrire node-table:ID */
+  /** Map des tables copiÃƒÂ©es (ancien ID Ã¢â€ â€™ nouveau ID) pour rÃƒÂ©ÃƒÂ©crire node-table:ID */
   tableIdMap?: Map<string, string>;
-  /** Map des conditions déjà copiées (cache pour éviter doublons) */
+  /** Map des conditions dÃƒÂ©jÃƒÂ  copiÃƒÂ©es (cache pour ÃƒÂ©viter doublons) */
   conditionCopyCache?: Map<string, string>;
 }
 
 /**
- * Résultat de la copie d'une condition
+ * RÃƒÂ©sultat de la copie d'une condition
  */
 export interface CopyConditionResult {
-  /** ID de la condition copiée */
+  /** ID de la condition copiÃƒÂ©e */
   newConditionId: string;
-  /** ID du nœud propriétaire */
+  /** ID du nÃ…â€œud propriÃƒÂ©taire */
   nodeId: string;
-  /** conditionSet réécrit */
+  /** conditionSet rÃƒÂ©ÃƒÂ©crit */
   conditionSet: Prisma.InputJsonValue;
-  /** Succès de l'opération */
+  /** SuccÃƒÂ¨s de l'opÃƒÂ©ration */
   success: boolean;
-  /** Message d'erreur éventuel */
+  /** Message d'erreur ÃƒÂ©ventuel */
   error?: string;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔄 RÉGÉNÉRATION DES IDs INTERNES (CRITICAL !)
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€â€ž RÃƒâ€°GÃƒâ€°NÃƒâ€°RATION DES IDs INTERNES (CRITICAL !)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * 🔴 CRITIQUE : Régénère TOUS les IDs internes du conditionSet
+ * Ã°Å¸â€Â´ CRITIQUE : RÃƒÂ©gÃƒÂ©nÃƒÂ¨re TOUS les IDs internes du conditionSet
  * 
- * Les IDs internes (branches, actions, conditions binaires, fallbacks) doivent être
- * uniques et suffixés lors de la copie.
+ * Les IDs internes (branches, actions, conditions binaires, fallbacks) doivent ÃƒÂªtre
+ * uniques et suffixÃƒÂ©s lors de la copie.
  * 
  * Format des IDs internes :
- * - Branches: b_xxxxxxxx → b_xxxxxxxx-{suffix}
- * - Actions: a_xxxxxxxx → a_xxxxxxxx-{suffix}
- * - Conditions binaires: bin_xxxxxxxx → bin_xxxxxxxx-{suffix}
- * - Fallbacks: fb_xxxxxxxx → fb_xxxxxxxx-{suffix}
- * - ID principal condition: cond_xxxxxxxx → cond_xxxxxxxx-{suffix}
+ * - Branches: b_xxxxxxxx Ã¢â€ â€™ b_xxxxxxxx-{suffix}
+ * - Actions: a_xxxxxxxx Ã¢â€ â€™ a_xxxxxxxx-{suffix}
+ * - Conditions binaires: bin_xxxxxxxx Ã¢â€ â€™ bin_xxxxxxxx-{suffix}
+ * - Fallbacks: fb_xxxxxxxx Ã¢â€ â€™ fb_xxxxxxxx-{suffix}
+ * - ID principal condition: cond_xxxxxxxx Ã¢â€ â€™ cond_xxxxxxxx-{suffix}
  * 
  * @param conditionSet - Le conditionSet contenant les IDs internes
- * @param suffix - Suffixe à ajouter
- * @returns Nouveau conditionSet avec IDs internes régénérés
+ * @param suffix - Suffixe ÃƒÂ  ajouter
+ * @returns Nouveau conditionSet avec IDs internes rÃƒÂ©gÃƒÂ©nÃƒÂ©rÃƒÂ©s
  */
 function regenerateInternalIds(conditionSet: unknown, suffix: number | string): Prisma.InputJsonValue {
   if (!conditionSet || typeof conditionSet !== 'object') {
@@ -84,10 +85,10 @@ function regenerateInternalIds(conditionSet: unknown, suffix: number | string): 
   try {
     const suffixStr = String(suffix);
     
-    // Créer une copie profonde
+    // CrÃƒÂ©er une copie profonde
     let result = JSON.parse(JSON.stringify(conditionSet));
     
-    // Parcourir récursivement et renommer les IDs internes
+    // Parcourir rÃƒÂ©cursivement et renommer les IDs internes
     const processObject = (obj: any): any => {
       if (!obj || typeof obj !== 'object') return obj;
       
@@ -99,10 +100,9 @@ function regenerateInternalIds(conditionSet: unknown, suffix: number | string): 
       for (const [key, value] of Object.entries(obj)) {
         if (key === 'id' && typeof value === 'string') {
           // C'est un ID interne (b_xxx, a_xxx, bin_xxx, fb_xxx) OU l'ID principal (cond_xxx)
-          // IMPORTANT: Inclure les tirets dans la classe de caractères !
+          // IMPORTANT: Inclure les tirets dans la classe de caractÃƒÂ¨res !
           if (value.match(/^(b|a|bin|fb|cond)_[A-Za-z0-9_-]+$/)) {
             const newId = `${value}-${suffixStr}`;
-            console.log(`   🔀 Renommage ID: ${value} → ${newId}`);
             newObj[key] = newId;
           } else {
             newObj[key] = value;
@@ -120,21 +120,21 @@ function regenerateInternalIds(conditionSet: unknown, suffix: number | string): 
     return result as Prisma.InputJsonValue;
     
   } catch (error) {
-    console.error(`❌ Erreur lors de la régénération des IDs internes:`, error);
+    console.error(`Ã¢ÂÅ’ Erreur lors de la rÃƒÂ©gÃƒÂ©nÃƒÂ©ration des IDs internes:`, error);
     return conditionSet as Prisma.InputJsonValue;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS D'EXTRACTION D'IDs
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€Â§ FONCTIONS D'EXTRACTION D'IDs
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Extrait TOUS les IDs de nœuds référencés dans un conditionSet
- * (utilisé pour les mises à jour bidirectionnelles)
+ * Extrait TOUS les IDs de nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s dans un conditionSet
+ * (utilisÃƒÂ© pour les mises ÃƒÂ  jour bidirectionnelles)
  * 
- * @param conditionSet - conditionSet à analyser
- * @returns Set des IDs de nœuds trouvés
+ * @param conditionSet - conditionSet ÃƒÂ  analyser
+ * @returns Set des IDs de nÃ…â€œuds trouvÃƒÂ©s
  */
 function extractNodeIdsFromConditionSet(conditionSet: unknown): Set<string> {
   const ids = new Set<string>();
@@ -160,12 +160,12 @@ function extractNodeIdsFromConditionSet(conditionSet: unknown): Set<string> {
 }
 
 /**
- * 🔗 EXTRACTION AUTOMATIQUE : Extrait TOUTES les conditions référencées dans le conditionSet
- * Cela permet de copier AUTOMATIQUEMENT les conditions liées MÊME SI elles ne sont
+ * Ã°Å¸â€â€” EXTRACTION AUTOMATIQUE : Extrait TOUTES les conditions rÃƒÂ©fÃƒÂ©rencÃƒÂ©es dans le conditionSet
+ * Cela permet de copier AUTOMATIQUEMENT les conditions liÃƒÂ©es MÃƒÅ ME SI elles ne sont
  * pas explicitement dans linkedConditionIds
  * 
- * @param conditionSet - conditionSet à analyser
- * @returns Set des IDs de conditions trouvés (sans doublons)
+ * @param conditionSet - conditionSet ÃƒÂ  analyser
+ * @returns Set des IDs de conditions trouvÃƒÂ©s (sans doublons)
  */
 function extractLinkedConditionIdsFromConditionSet(conditionSet: unknown): Set<string> {
   const ids = new Set<string>();
@@ -173,8 +173,8 @@ function extractLinkedConditionIdsFromConditionSet(conditionSet: unknown): Set<s
   
   const str = JSON.stringify(conditionSet);
   
-  // 🔥 PATTERN AMÉLIORÉ: accepte les UUIDs avec suffixes (UUID-N)
-  // Extraire TOUTES les références de condition:XXX ou node-condition:XXX
+  // Ã°Å¸â€Â¥ PATTERN AMÃƒâ€°LIORÃƒâ€°: accepte les UUIDs avec suffixes (UUID-N)
+  // Extraire TOUTES les rÃƒÂ©fÃƒÂ©rences de condition:XXX ou node-condition:XXX
   const conditionRegex = /(?:condition|node-condition):([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?|[A-Za-z0-9_-]+(?:-\d+)?)/gi;
   let match;
   while ((match = conditionRegex.exec(str)) !== null) {
@@ -185,14 +185,14 @@ function extractLinkedConditionIdsFromConditionSet(conditionSet: unknown): Set<s
 }
 
 /**
- * Extrait TOUTES les tables référencées dans un conditionSet
- * Formats supportés:
+ * Extrait TOUTES les tables rÃƒÂ©fÃƒÂ©rencÃƒÂ©es dans un conditionSet
+ * Formats supportÃƒÂ©s:
  * - @table.ID
  * - node-table:ID
  * - @value.node-table:ID
  * 
- * @param conditionSet - conditionSet à analyser
- * @returns Set des IDs de tables trouvés (sans doublons)
+ * @param conditionSet - conditionSet ÃƒÂ  analyser
+ * @returns Set des IDs de tables trouvÃƒÂ©s (sans doublons)
  */
 function extractLinkedTableIdsFromConditionSet(conditionSet: unknown): Set<string> {
   const ids = new Set<string>();
@@ -200,7 +200,7 @@ function extractLinkedTableIdsFromConditionSet(conditionSet: unknown): Set<strin
   
   const str = JSON.stringify(conditionSet);
   
-  // 🔥 PATTERN AMÉLIORÉ: accepte les UUIDs avec suffixes (UUID-N)
+  // Ã°Å¸â€Â¥ PATTERN AMÃƒâ€°LIORÃƒâ€°: accepte les UUIDs avec suffixes (UUID-N)
   // Extraire @table:XXX
   const tableRegex1 = /@table\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?|[A-Za-z0-9_-]+(?:-\d+)?)/gi;
   let match;
@@ -220,9 +220,9 @@ function extractLinkedTableIdsFromConditionSet(conditionSet: unknown): Set<strin
 /**
  * Remplace les occurrences dans le JSON selon une Map de replacements
  * 
- * @param json - JSON à modifier
- * @param replacements - Map de "recherche" → "remplacement"
- * @returns Nouveau JSON avec remplacements appliqués
+ * @param json - JSON ÃƒÂ  modifier
+ * @param replacements - Map de "recherche" Ã¢â€ â€™ "remplacement"
+ * @returns Nouveau JSON avec remplacements appliquÃƒÂ©s
  */
 function replaceInJson(json: unknown, replacements: Map<string, string>): Prisma.InputJsonValue {
   if (!json || typeof json !== 'object') {
@@ -239,18 +239,18 @@ function replaceInJson(json: unknown, replacements: Map<string, string>): Prisma
     
     return JSON.parse(str) as Prisma.InputJsonValue;
   } catch (error) {
-    console.error(`❌ Erreur lors du remplacement dans JSON:`, error);
+    console.error(`Ã¢ÂÅ’ Erreur lors du remplacement dans JSON:`, error);
     return json as Prisma.InputJsonValue;
   }
 }
 
 /**
- * Extrait TOUTES les formules référencées dans un conditionSet
- * Formats supportés:
+ * Extrait TOUTES les formules rÃƒÂ©fÃƒÂ©rencÃƒÂ©es dans un conditionSet
+ * Formats supportÃƒÂ©s:
  * - node-formula:ID
  * 
- * @param conditionSet - conditionSet à analyser
- * @returns Set des IDs de formules trouvés (sans doublons)
+ * @param conditionSet - conditionSet ÃƒÂ  analyser
+ * @returns Set des IDs de formules trouvÃƒÂ©s (sans doublons)
  */
 function extractLinkedFormulaIdsFromConditionSet(conditionSet: unknown): Set<string> {
   const ids = new Set<string>();
@@ -258,8 +258,8 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet: unknown): Set<str
   
   const str = JSON.stringify(conditionSet);
   
-  // Extraire TOUTES les références de node-formula:XXX
-  // 🔥 PATTERN AMÉLIORÉ: accepte les UUIDs avec suffixes (UUID-N)
+  // Extraire TOUTES les rÃƒÂ©fÃƒÂ©rences de node-formula:XXX
+  // Ã°Å¸â€Â¥ PATTERN AMÃƒâ€°LIORÃƒâ€°: accepte les UUIDs avec suffixes (UUID-N)
   const formulaRegex = /node-formula:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?|[A-Za-z0-9_-]+(?:-\d+)?)/gi;
   let match;
   while ((match = formulaRegex.exec(str)) !== null) {
@@ -269,23 +269,23 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet: unknown): Set<str
   return ids;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// �🔧 FONCTIONS UTILITAIRES DE RÉÉCRITURE
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã¯Â¿Â½Ã°Å¸â€Â§ FONCTIONS UTILITAIRES DE RÃƒâ€°Ãƒâ€°CRITURE
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Réécrire le conditionSet d'une condition pour remplacer les anciens IDs par les nouveaux
+ * RÃƒÂ©ÃƒÂ©crire le conditionSet d'une condition pour remplacer les anciens IDs par les nouveaux
  * 
  * Format du conditionSet :
  * - branches[].when.left/right.ref : "@value.<nodeId>"
  * - branches[].actions[].nodeIds : ["node-xxx", "uuid-yyy"]
  * - fallback.actions[].nodeIds
- * - Références de formules : "node-formula:<formulaId>"
+ * - RÃƒÂ©fÃƒÂ©rences de formules : "node-formula:<formulaId>"
  * 
  * @param conditionSet - conditionSet original
- * @param nodeIdMap - Map ancien ID nœud → nouveau ID nœud
- * @param formulaIdMap - Map ancien ID formule → nouveau ID formule
- * @returns conditionSet réécrit
+ * @param nodeIdMap - Map ancien ID nÃ…â€œud Ã¢â€ â€™ nouveau ID nÃ…â€œud
+ * @param formulaIdMap - Map ancien ID formule Ã¢â€ â€™ nouveau ID formule
+ * @returns conditionSet rÃƒÂ©ÃƒÂ©crit
  * 
  * @example
  * rewriteConditionSet(
@@ -293,7 +293,7 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet: unknown): Set<str
  *   new Map([["abc", "abc-1"]]),
  *   new Map()
  * )
- * → { branches: [{ when: { left: { ref: "@value.abc-1" } } }] }
+ * Ã¢â€ â€™ { branches: [{ when: { left: { ref: "@value.abc-1" } } }] }
  */
 function rewriteConditionSet(
   conditionSet: unknown,
@@ -306,10 +306,10 @@ function rewriteConditionSet(
   }
 
   try {
-    // 0️⃣ Travaux de réécriture en deux passes: regex globaux puis parcours ciblé
+    // 0Ã¯Â¸ÂÃ¢Æ’Â£ Travaux de rÃƒÂ©ÃƒÂ©criture en deux passes: regex globaux puis parcours ciblÃƒÂ©
     let str = JSON.stringify(conditionSet);
 
-    // 1️⃣ Réécrire les @value.<nodeId> (avec fallback suffix si non mappé, mais jamais pour shared-ref sans mapping)
+    // 1Ã¯Â¸ÂÃ¢Æ’Â£ RÃƒÂ©ÃƒÂ©crire les @value.<nodeId> (avec fallback suffix si non mappÃƒÂ©, mais jamais pour shared-ref sans mapping)
     str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (_match, nodeId: string) => {
       const mapped = nodeIdMap.get(nodeId);
       if (mapped) return `@value.${mapped}`;
@@ -322,7 +322,7 @@ function rewriteConditionSet(
       return `@value.${nodeId}`;
     });
 
-    // 2️⃣ Réécrire les node-formula:<id> (IDs CUID/UUID supportés) avec fallback suffix
+    // 2Ã¯Â¸ÂÃ¢Æ’Â£ RÃƒÂ©ÃƒÂ©crire les node-formula:<id> (IDs CUID/UUID supportÃƒÂ©s) avec fallback suffix
     str = str.replace(/node-formula:([A-Za-z0-9_-]+)/g, (_match, formulaId: string) => {
       const mapped = formulaIdMap.get(formulaId);
       if (mapped) return `node-formula:${mapped}`;
@@ -333,7 +333,7 @@ function rewriteConditionSet(
       return `node-formula:${formulaId}`;
     });
 
-    // 3️⃣ Réécrire aussi d'éventuels node-condition:/condition: en suffix fallback (pas de map dédiée ici)
+    // 3Ã¯Â¸ÂÃ¢Æ’Â£ RÃƒÂ©ÃƒÂ©crire aussi d'ÃƒÂ©ventuels node-condition:/condition: en suffix fallback (pas de map dÃƒÂ©diÃƒÂ©e ici)
     str = str.replace(/(node-condition:|condition:)([A-Za-z0-9_-]+)/g, (_m, pref: string, condId: string) => {
       if (suffix !== undefined) {
         const suffixStr = `${suffix}`;
@@ -342,7 +342,7 @@ function rewriteConditionSet(
       return `${pref}${condId}`;
     });
 
-    // 4️⃣ Parser pour traiter précisément actions[].nodeIds (références nues)
+    // 4Ã¯Â¸ÂÃ¢Æ’Â£ Parser pour traiter prÃƒÂ©cisÃƒÂ©ment actions[].nodeIds (rÃƒÂ©fÃƒÂ©rences nues)
     const parsed = JSON.parse(str);
 
     const mapNodeIdString = (raw: string): string => {
@@ -355,7 +355,7 @@ function rewriteConditionSet(
         return raw;
       }
       
-      // Cas 1: node-formula déjà couvert mais double sécurité
+      // Cas 1: node-formula dÃƒÂ©jÃƒÂ  couvert mais double sÃƒÂ©curitÃƒÂ©
       if (raw.startsWith('node-formula:')) {
         const id = raw.replace('node-formula:', '');
         const mapped = formulaIdMap.get(id);
@@ -392,7 +392,7 @@ function rewriteConditionSet(
         if (key === 'nodeIds' && Array.isArray(val)) {
           out[key] = val.map((s: any) => (typeof s === 'string' ? mapNodeIdString(s) : s));
         } else if (key === 'when' && val && typeof val === 'object') {
-          // when.left.ref / when.right.ref déjà traités via regex, mais on parcourt par sécurité
+          // when.left.ref / when.right.ref dÃƒÂ©jÃƒÂ  traitÃƒÂ©s via regex, mais on parcourt par sÃƒÂ©curitÃƒÂ©
           out[key] = walk(val);
         } else {
           out[key] = walk(val);
@@ -448,35 +448,35 @@ function rewriteConditionSet(
 
     return suffixConditionIds(rewritten) as Prisma.InputJsonValue;
   } catch (error) {
-    console.error(`❌ Erreur lors de la réécriture du conditionSet:`, error);
+    console.error(`Ã¢ÂÅ’ Erreur lors de la rÃƒÂ©ÃƒÂ©criture du conditionSet:`, error);
     return conditionSet as Prisma.InputJsonValue;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔄 FONCTION PRINCIPALE DE COPIE
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€â€ž FONCTION PRINCIPALE DE COPIE
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Copie une condition avec réécriture du conditionSet
+ * Copie une condition avec rÃƒÂ©ÃƒÂ©criture du conditionSet
  * 
  * PROCESSUS :
  * -----------
- * 1. Vérifier le cache (éviter doublons)
- * 2. Récupérer la condition originale
- * 3. Générer le nouvel ID avec suffixe
- * 4. Réécrire le conditionSet (@value.ID + node-formula:ID)
- * 5. Créer la nouvelle condition
- * 6. Mettre à jour linkedConditionIds du nœud
- * 7. Synchroniser les paramètres de capacité
+ * 1. VÃƒÂ©rifier le cache (ÃƒÂ©viter doublons)
+ * 2. RÃƒÂ©cupÃƒÂ©rer la condition originale
+ * 3. GÃƒÂ©nÃƒÂ©rer le nouvel ID avec suffixe
+ * 4. RÃƒÂ©ÃƒÂ©crire le conditionSet (@value.ID + node-formula:ID)
+ * 5. CrÃƒÂ©er la nouvelle condition
+ * 6. Mettre ÃƒÂ  jour linkedConditionIds du nÃ…â€œud
+ * 7. Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ©
  * 8. Mettre en cache
  * 
- * @param originalConditionId - ID de la condition à copier
- * @param newNodeId - ID du nouveau nœud propriétaire
- * @param suffix - Suffixe numérique à appliquer
+ * @param originalConditionId - ID de la condition ÃƒÂ  copier
+ * @param newNodeId - ID du nouveau nÃ…â€œud propriÃƒÂ©taire
+ * @param suffix - Suffixe numÃƒÂ©rique ÃƒÂ  appliquer
  * @param prisma - Instance Prisma Client
  * @param options - Options avec nodeIdMap et formulaIdMap
- * @returns Résultat de la copie
+ * @returns RÃƒÂ©sultat de la copie
  * 
  * @example
  * const result = await copyConditionCapacity(
@@ -490,7 +490,7 @@ function rewriteConditionSet(
  *   }
  * );
  * // result.newConditionId = 'condition-abc-1'
- * // result.conditionSet = { ... avec IDs réécrits ... }
+ * // result.conditionSet = { ... avec IDs rÃƒÂ©ÃƒÂ©crits ... }
  */
 export async function copyConditionCapacity(
   originalConditionId: string,
@@ -500,11 +500,6 @@ export async function copyConditionCapacity(
   options: CopyConditionOptions = {}
 ): Promise<CopyConditionResult> {
   
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`🔀 COPIE CONDITION: ${originalConditionId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau nœud: ${newNodeId}`);
-  console.log(`${'═'.repeat(80)}\n`);
 
   const {
     nodeIdMap = new Map(),
@@ -513,12 +508,11 @@ export async function copyConditionCapacity(
   } = options;
 
   try {
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔍 ÉTAPE 1 : Vérifier le cache
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â Ãƒâ€°TAPE 1 : VÃƒÂ©rifier le cache
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     if (conditionCopyCache.has(originalConditionId)) {
       const cachedId = conditionCopyCache.get(originalConditionId)!;
-      console.log(`♻️ Condition déjà copiée (cache): ${originalConditionId} → ${cachedId}`);
       
       const cached = await prisma.treeBranchLeafNodeCondition.findUnique({
         where: { id: cachedId }
@@ -534,20 +528,19 @@ export async function copyConditionCapacity(
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📥 ÉTAPE 2 : Récupérer la condition originale PAR ID (enlever suffixe si présent)
-    // ═══════════════════════════════════════════════════════════════════════
-    // originalConditionId peut contenir un suffixe si c'est déjà une copie
-    // On enlève le suffixe pour trouver l'original
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œÂ¥ Ãƒâ€°TAPE 2 : RÃƒÂ©cupÃƒÂ©rer la condition originale PAR ID (enlever suffixe si prÃƒÂ©sent)
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // originalConditionId peut contenir un suffixe si c'est dÃƒÂ©jÃƒÂ  une copie
+    // On enlÃƒÂ¨ve le suffixe pour trouver l'original
     const cleanConditionId = originalConditionId.replace(/-\d+$/, '');
-    console.log(`🔍 Recherche condition avec id: ${cleanConditionId} (original: ${originalConditionId})`);
     
     const originalCondition = await prisma.treeBranchLeafNodeCondition.findUnique({
       where: { id: cleanConditionId }
     });
 
     if (!originalCondition) {
-      console.error(`❌ Condition introuvable avec id: ${cleanConditionId}`);
+      console.error(`Ã¢ÂÅ’ Condition introuvable avec id: ${cleanConditionId}`);
       return {
         newConditionId: '',
         nodeId: '',
@@ -557,150 +550,125 @@ export async function copyConditionCapacity(
       };
     }
 
-    console.log(`✅ Condition trouvée: ${originalCondition.name || originalCondition.id}`);
-    console.log(`   NodeId original: ${originalCondition.nodeId}`);
-    console.log(`   conditionSet original:`, originalCondition.conditionSet);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🆔 ÉTAPE 3 : Générer le nouvel ID (pour la condition elle-même)
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€ â€ Ãƒâ€°TAPE 3 : GÃƒÂ©nÃƒÂ©rer le nouvel ID (pour la condition elle-mÃƒÂªme)
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // On utilise l'id original de la condition avec suffixe
     const newConditionId = `${originalCondition.id}-${suffix}`;
-    console.log(`📝 Nouvel ID condition: ${newConditionId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔧 FIX CRITIQUE: Déterminer le VRAI propriétaire de la condition copiée
-    // ═══════════════════════════════════════════════════════════════════════
-    // Le nodeId passé en paramètre peut être un nœud qui RÉFÉRENCE la condition,
-    // pas le PROPRIÉTAIRE. Le propriétaire de la copie doit être le propriétaire
-    // ORIGINAL avec le suffixe appliqué.
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â§ FIX CRITIQUE: DÃƒÂ©terminer le VRAI propriÃƒÂ©taire de la condition copiÃƒÂ©e
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Le nodeId passÃƒÂ© en paramÃƒÂ¨tre peut ÃƒÂªtre un nÃ…â€œud qui RÃƒâ€°FÃƒâ€°RENCE la condition,
+    // pas le PROPRIÃƒâ€°TAIRE. Le propriÃƒÂ©taire de la copie doit ÃƒÂªtre le propriÃƒÂ©taire
+    // ORIGINAL avec le suffixe appliquÃƒÂ©.
     //
     // EXEMPLE:
-    // - Condition "Position" appartient à "Panneaux max" (nodeId original)
-    // - On copie via "Longueur-1" (newNodeId passé) qui RÉFÉRENCE la condition
-    // - Le VRAI propriétaire doit être "Panneaux max-1" (nodeId original + suffix)
+    // - Condition "Position" appartient ÃƒÂ  "Panneaux max" (nodeId original)
+    // - On copie via "Longueur-1" (newNodeId passÃƒÂ©) qui RÃƒâ€°FÃƒâ€°RENCE la condition
+    // - Le VRAI propriÃƒÂ©taire doit ÃƒÂªtre "Panneaux max-1" (nodeId original + suffix)
     //
     // SOLUTION: Utiliser le nodeId ORIGINAL de la condition + suffix
     const originalOwnerNodeId = originalCondition.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
     
-    // Vérifier si le nœud propriétaire copié existe
+    // VÃƒÂ©rifier si le nÃ…â€œud propriÃƒÂ©taire copiÃƒÂ© existe
     const ownerNodeExists = await prisma.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
     
-    // Si le propriétaire suffixé existe, l'utiliser. Sinon fallback sur newNodeId.
+    // Si le propriÃƒÂ©taire suffixÃƒÂ© existe, l'utiliser. Sinon fallback sur newNodeId.
     const finalOwnerNodeId = ownerNodeExists ? correctOwnerNodeId : newNodeId;
     
-    console.log(`🔧 [OWNER FIX] NodeId original propriétaire: ${originalOwnerNodeId}`);
-    console.log(`🔧 [OWNER FIX] NodeId propriétaire suffixé: ${correctOwnerNodeId}`);
-    console.log(`🔧 [OWNER FIX] Propriétaire suffixé existe: ${ownerNodeExists ? 'OUI (' + ownerNodeExists.label + ')' : 'NON'}`);
-    console.log(`🔧 [OWNER FIX] NodeId FINAL utilisé: ${finalOwnerNodeId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔄 ÉTAPE 4 : Réécrire le conditionSet
-    // ═══════════════════════════════════════════════════════════════════════
-    console.log(`\n🔄 Réécriture du conditionSet...`);
-    console.log(`   Nombre d'IDs nœuds dans la map: ${nodeIdMap.size}`);
-    console.log(`   Nombre d'IDs formules dans la map: ${formulaIdMap.size}`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€ž Ãƒâ€°TAPE 4 : RÃƒÂ©ÃƒÂ©crire le conditionSet
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 4A : EXTRACTION ET COPIE AUTOMATIQUE des FORMULES liées
-    // ═══════════════════════════════════════════════════════════════════════
-    // ⭐ CRITIQUE: Les formules DOIVENT être copiées AVANT la réécriture!
-    // Sinon formulaIdMap est vide et les tokens ne reçoivent pas les suffixes
-    console.log(`\n🔗 Extraction automatique des formules liées du conditionSet...`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 4A : EXTRACTION ET COPIE AUTOMATIQUE des FORMULES liÃƒÂ©es
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã¢Â­Â CRITIQUE: Les formules DOIVENT ÃƒÂªtre copiÃƒÂ©es AVANT la rÃƒÂ©ÃƒÂ©criture!
+    // Sinon formulaIdMap est vide et les tokens ne reÃƒÂ§oivent pas les suffixes
     const linkedFormulaIdsFromSet = extractLinkedFormulaIdsFromConditionSet(originalCondition.conditionSet);
-    console.log(`🔍 DEBUG: conditionSet original:`, JSON.stringify(originalCondition.conditionSet).substring(0, 300));
-    console.log(`🔍 DEBUG: ${linkedFormulaIdsFromSet.size} formules trouvées:`, Array.from(linkedFormulaIdsFromSet));
     
     if (linkedFormulaIdsFromSet.size > 0) {
-      console.log(`   Formules trouvées: ${Array.from(linkedFormulaIdsFromSet).join(', ')}`);
       
-      // 🔍 VÉRIFICATION: Chercher les formules dans la BD pour voir leur état réel
-      console.log(`\n🔍 VÉRIFICATION DES FORMULES DANS LA BD:`);
+      // Ã°Å¸â€Â VÃƒâ€°RIFICATION: Chercher les formules dans la BD pour voir leur ÃƒÂ©tat rÃƒÂ©el
       for (const formId of linkedFormulaIdsFromSet) {
         const existingForm = await prisma.treeBranchLeafNodeFormula.findUnique({
           where: { id: formId }
         });
         if (existingForm) {
-          console.log(`   ✅ Formule EXISTE: ${formId}`);
-          console.log(`      Tokens actuels:`, existingForm.tokens);
-          // Vérifier si les shared-refs sont suffixés
+          // Vérifier si les shared-refs sont suffixés (silencieux - debug uniquement)
           if (Array.isArray(existingForm.tokens)) {
             const unsuffixedSharedRefs = existingForm.tokens.filter((t: any) =>
               typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
             );
-            if (unsuffixedSharedRefs.length > 0) {
-              console.warn(`   ⚠️ ${unsuffixedSharedRefs.length} shared-refs NON-suffixés:`, unsuffixedSharedRefs);
-            }
+            // Debug uniquement si nécessaire
+            // if (unsuffixedSharedRefs.length > 0) {
+            //   console.warn(`   ⚠️ ${unsuffixedSharedRefs.length} shared-refs NON-suffixés:`, unsuffixedSharedRefs);
+            // }
           }
         } else {
-          console.warn(`   ❌ Formule INTROUVABLE: ${formId}`);
+          // Silencieux - formule peut être normale manquante
         }
       }
       
-      // ⭐ CRÉER UN NOUVEL nodeIdMap enrichi pour les formules de cette condition
-      // Car les shared-ref du conditionSet référencent le nœud ORIGINAL de la condition
+      // Ã¢Â­Â CRÃƒâ€°ER UN NOUVEL nodeIdMap enrichi pour les formules de cette condition
+      // Car les shared-ref du conditionSet rÃƒÂ©fÃƒÂ©rencent le nÃ…â€œud ORIGINAL de la condition
       const enrichedNodeIdMap = new Map(nodeIdMap);
       if (originalCondition.nodeId && finalOwnerNodeId) {
         enrichedNodeIdMap.set(originalCondition.nodeId, finalOwnerNodeId);
-        console.log(`   📍 NodeIdMap enrichie: ${originalCondition.nodeId} → ${finalOwnerNodeId}`);
       }
       
       for (const linkedFormId of linkedFormulaIdsFromSet) {
-        // Vérifier si cette formule est déjà mappée
+        // VÃƒÂ©rifier si cette formule est dÃƒÂ©jÃƒÂ  mappÃƒÂ©e
         if (formulaIdMap.has(linkedFormId)) {
-          console.log(`   ♻️ Formule liée déjà copiée: ${linkedFormId} → ${formulaIdMap.get(linkedFormId)}`);
         } else {
-          // 🔀 COPIER RÉCURSIVEMENT CETTE FORMULE LIÉE
+          // Ã°Å¸â€â‚¬ COPIER RÃƒâ€°CURSIVEMENT CETTE FORMULE LIÃƒâ€°E
           try {
-            console.log(`   🔀 Copie formule liée: ${linkedFormId}...`);
             const linkedFormResult = await copyFormulaCapacity(
               linkedFormId,
-              finalOwnerNodeId, // Même nœud propriétaire (corrigé)
+              finalOwnerNodeId, // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
               prisma,
               { nodeIdMap: enrichedNodeIdMap, formulaIdMap }
             );
             
             if (linkedFormResult.success) {
-              console.log(`   ✅ Formule liée copiée: ${linkedFormId} → ${linkedFormResult.newFormulaId}`);
-              // 🔍 VÉRIFICATION: Lire la formule copiée dans la BD pour vérifier les tokens
+              // Ã°Å¸â€Â VÃƒâ€°RIFICATION: Lire la formule copiÃƒÂ©e dans la BD pour vÃƒÂ©rifier les tokens
               const copiedForm = await prisma.treeBranchLeafNodeFormula.findUnique({
                 where: { id: linkedFormResult.newFormulaId }
               });
               if (copiedForm) {
-                console.log(`   🔍 Vérification formule copiée ${linkedFormResult.newFormulaId}:`);
-                console.log(`      Tokens en BD:`, copiedForm.tokens);
                 if (Array.isArray(copiedForm.tokens)) {
                   const unsuffixed = copiedForm.tokens.filter((t: any) =>
                     typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
                   );
                   if (unsuffixed.length > 0) {
-                    console.error(`   ❌ PROBLÈME: ${unsuffixed.length} shared-refs TOUJOURS non-suffixés en BD:`, unsuffixed);
+                    console.error(`   Ã¢ÂÅ’ PROBLÃƒË†ME: ${unsuffixed.length} shared-refs TOUJOURS non-suffixÃƒÂ©s en BD:`, unsuffixed);
                   } else {
-                    console.log(`   ✅ Tous les shared-refs sont suffixés en BD`);
                   }
                 }
               }
-              // Enregistrer dans la map pour la réécriture suivante
+              // Enregistrer dans la map pour la rÃƒÂ©ÃƒÂ©criture suivante
               formulaIdMap.set(linkedFormId, linkedFormResult.newFormulaId);
             } else {
-              console.warn(`   ⚠️ Échec copie formule liée: ${linkedFormId}`);
+              console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie formule liÃƒÂ©e: ${linkedFormId}`);
             }
           } catch (e) {
-            console.error(`   ❌ Exception copie formule liée:`, (e as Error).message);
+            console.error(`   Ã¢ÂÅ’ Exception copie formule liÃƒÂ©e:`, (e as Error).message);
           }
         }
       }
     } else {
-      console.log(`   (Aucune formule liée trouvée dans le conditionSet)`);
     }
     
-    // 🔥 UTILISER LE SYSTÈME UNIVERSEL pour traiter TOUS les types de références
-    // formulaIdMap est MAINTENANT remplie avec les formules copiées
+    // Ã°Å¸â€Â¥ UTILISER LE SYSTÃƒË†ME UNIVERSEL pour traiter TOUS les types de rÃƒÂ©fÃƒÂ©rences
+    // formulaIdMap est MAINTENANT remplie avec les formules copiÃƒÂ©es
     const rewriteMaps: RewriteMaps = {
       nodeIdMap: nodeIdMap,
       formulaIdMap: formulaIdMap,
@@ -708,7 +676,6 @@ export async function copyConditionCapacity(
       tableIdMap: new Map() // Pas de table dans les conditions normalement
     };
     
-    console.log(`\n🔍 DEBUG: formulaIdMap avant réécriture:`, Object.fromEntries(formulaIdMap));
     
     let rewrittenConditionSet = rewriteJsonReferences(
       originalCondition.conditionSet,
@@ -716,54 +683,46 @@ export async function copyConditionCapacity(
       suffix
     );
     
-    console.log(`\n🔍 DEBUG: conditionSet après 1ère réécriture:`, JSON.stringify(rewrittenConditionSet).substring(0, 500));
     
-    // ⭐ RÉÉCRITURE ENRICHIE : Réécrire une deuxième fois avec le nodeIdMap enrichi
-    // Car les formules du conditionSet peuvent référencer le nœud de la condition
-    // et elles auraient déjà été copiées via la variable sans le nodeIdMap enrichi
+    // Ã¢Â­Â RÃƒâ€°Ãƒâ€°CRITURE ENRICHIE : RÃƒÂ©ÃƒÂ©crire une deuxiÃƒÂ¨me fois avec le nodeIdMap enrichi
+    // Car les formules du conditionSet peuvent rÃƒÂ©fÃƒÂ©rencer le nÃ…â€œud de la condition
+    // et elles auraient dÃƒÂ©jÃƒÂ  ÃƒÂ©tÃƒÂ© copiÃƒÂ©es via la variable sans le nodeIdMap enrichi
     const enrichedRewriteMaps: RewriteMaps = {
-      nodeIdMap: new Map([...nodeIdMap, [originalCondition.nodeId, finalOwnerNodeId]]),  // Enrichi avec le bon propriétaire
+      nodeIdMap: new Map([...nodeIdMap, [originalCondition.nodeId, finalOwnerNodeId]]),  // Enrichi avec le bon propriÃƒÂ©taire
       formulaIdMap: formulaIdMap,
       conditionIdMap: conditionCopyCache || new Map(),
       tableIdMap: new Map()
     };
     rewrittenConditionSet = rewriteJsonReferences(
-      rewrittenConditionSet,  // Réécrire le résultat précédent
+      rewrittenConditionSet,  // RÃƒÂ©ÃƒÂ©crire le rÃƒÂ©sultat prÃƒÂ©cÃƒÂ©dent
       enrichedRewriteMaps,
       suffix
     );
-    console.log(`✅ conditionSet réécrit avec nodeIdMap enrichie (2ème pass):`, rewrittenConditionSet);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔥 RÉÉCRITURE FORCÉE DES SHARED-REFS DANS LE CONDITIONSET
-    // ═══════════════════════════════════════════════════════════════════════
-    // Forcer TOUS les @value.shared-ref-* même imbriqués partout dans le JSON
-    console.log(`\n🔥 RÉÉCRITURE FORCÉE des shared-refs dans conditionSet...`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€Â¥ RÃƒâ€°Ãƒâ€°CRITURE FORCÃƒâ€°E DES SHARED-REFS DANS LE CONDITIONSET
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Forcer TOUS les @value.shared-ref-* mÃƒÂªme imbriquÃƒÂ©s partout dans le JSON
     rewrittenConditionSet = forceSharedRefSuffixesInJson(rewrittenConditionSet, suffix);
     
-    // 🔴 CRITIQUE : Régénérer les IDs INTERNES du conditionSet
+    // Ã°Å¸â€Â´ CRITIQUE : RÃƒÂ©gÃƒÂ©nÃƒÂ©rer les IDs INTERNES du conditionSet
     // (branches, actions, conditions binaires, fallbacks)
-    console.log(`\n🔄 Régénération des IDs internes...`);
     rewrittenConditionSet = regenerateInternalIds(rewrittenConditionSet, suffix);
     
-    console.log(`✅ conditionSet finalisé avec IDs internes:`, rewrittenConditionSet);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 4B : EXTRACTION AUTOMATIQUE ET COPIE des conditions liées
-    // ═══════════════════════════════════════════════════════════════════════
-    // Chercher TOUTES les conditions référencées DANS le conditionSet
-    console.log(`\n🔗 Extraction automatique des conditions liées du conditionSet...`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 4B : EXTRACTION AUTOMATIQUE ET COPIE des conditions liÃƒÂ©es
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Chercher TOUTES les conditions rÃƒÂ©fÃƒÂ©rencÃƒÂ©es DANS le conditionSet
     const linkedConditionIdsFromSet = extractLinkedConditionIdsFromConditionSet(rewrittenConditionSet);
     
     if (linkedConditionIdsFromSet.size > 0) {
-      console.log(`   Conditions trouvées: ${Array.from(linkedConditionIdsFromSet).join(', ')}`);
       
       for (const linkedCondId of linkedConditionIdsFromSet) {
-        // Vérifier si cette condition est déjà mappée
+        // VÃƒÂ©rifier si cette condition est dÃƒÂ©jÃƒÂ  mappÃƒÂ©e
         if (conditionCopyCache.has(linkedCondId)) {
           const mappedId = conditionCopyCache.get(linkedCondId)!;
-          console.log(`   ♻️ Condition liée déjà copiée: ${linkedCondId} → ${mappedId}`);
-          // Remplacer DANS LE JSON les références
+          // Remplacer DANS LE JSON les rÃƒÂ©fÃƒÂ©rences
           rewrittenConditionSet = replaceInJson(
             rewrittenConditionSet,
             new Map([
@@ -772,20 +731,18 @@ export async function copyConditionCapacity(
             ])
           );
         } else {
-          // 🔀 COPIER RÉCURSIVEMENT CETTE CONDITION LIÉE
+          // Ã°Å¸â€â‚¬ COPIER RÃƒâ€°CURSIVEMENT CETTE CONDITION LIÃƒâ€°E
           try {
-            console.log(`   🔀 Copie condition liée: ${linkedCondId}...`);
             const linkedCondResult = await copyConditionCapacity(
               linkedCondId,
-              finalOwnerNodeId, // Même nœud propriétaire (corrigé)
+              finalOwnerNodeId, // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
               prisma,
               { nodeIdMap, formulaIdMap, conditionCopyCache }
             );
             
             if (linkedCondResult.success) {
-              console.log(`   ✅ Condition liée copiée: ${linkedCondId} → ${linkedCondResult.newConditionId}`);
-              // Remplacer DANS LE JSON les références
+              // Remplacer DANS LE JSON les rÃƒÂ©fÃƒÂ©rences
               rewrittenConditionSet = replaceInJson(
                 rewrittenConditionSet,
                 new Map([
@@ -794,33 +751,29 @@ export async function copyConditionCapacity(
                 ])
               );
             } else {
-              console.warn(`   ⚠️ Échec copie condition liée: ${linkedCondId}`);
+              console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie condition liÃƒÂ©e: ${linkedCondId}`);
             }
           } catch (e) {
-            console.error(`   ❌ Exception copie condition liée:`, (e as Error).message);
+            console.error(`   Ã¢ÂÅ’ Exception copie condition liÃƒÂ©e:`, (e as Error).message);
           }
         }
       }
     } else {
-      console.log(`   (Aucune condition liée trouvée dans le conditionSet)`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // � ÉTAPE 4D : EXTRACTION AUTOMATIQUE ET COPIE des tables liées
-    // ═══════════════════════════════════════════════════════════════════════
-    // Chercher TOUTES les tables référencées DANS le conditionSet
-    console.log(`\n🔗 Extraction automatique des tables liées du conditionSet...`);
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã¯Â¿Â½ Ãƒâ€°TAPE 4D : EXTRACTION AUTOMATIQUE ET COPIE des tables liÃƒÂ©es
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Chercher TOUTES les tables rÃƒÂ©fÃƒÂ©rencÃƒÂ©es DANS le conditionSet
     const linkedTableIdsFromSet = extractLinkedTableIdsFromConditionSet(rewrittenConditionSet);
     
     if (linkedTableIdsFromSet.size > 0) {
-      console.log(`   Tables trouvées: ${Array.from(linkedTableIdsFromSet).join(', ')}`);
       
       for (const linkedTableId of linkedTableIdsFromSet) {
-        // Vérifier si cette table est déjà mappée
+        // VÃƒÂ©rifier si cette table est dÃƒÂ©jÃƒÂ  mappÃƒÂ©e
         if (tableIdMap && tableIdMap.has(linkedTableId)) {
           const mappedId = tableIdMap.get(linkedTableId)!;
-          console.log(`   ♻️ Table liée déjà copiée: ${linkedTableId} → ${mappedId}`);
-          // Remplacer DANS LE JSON les références
+          // Remplacer DANS LE JSON les rÃƒÂ©fÃƒÂ©rences
           rewrittenConditionSet = replaceInJson(
             rewrittenConditionSet,
             new Map([
@@ -829,22 +782,20 @@ export async function copyConditionCapacity(
             ])
           );
         } else {
-          // 🔀 COPIER RÉCURSIVEMENT CETTE TABLE LIÉE
+          // Ã°Å¸â€â‚¬ COPIER RÃƒâ€°CURSIVEMENT CETTE TABLE LIÃƒâ€°E
           try {
-            console.log(`   🔀 Copie table liée: ${linkedTableId}...`);
             const linkedTableResult = await copyTableCapacity(
               linkedTableId,
-              finalOwnerNodeId, // Même nœud propriétaire (corrigé)
+              finalOwnerNodeId, // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
               prisma,
               { nodeIdMap, tableIdMap }
             );
             
             if (linkedTableResult.success) {
-              console.log(`   ✅ Table liée copiée: ${linkedTableId} → ${linkedTableResult.newTableId}`);
               // Enregistrer dans la map
               if (tableIdMap) tableIdMap.set(linkedTableId, linkedTableResult.newTableId);
-              // Remplacer DANS LE JSON les références
+              // Remplacer DANS LE JSON les rÃƒÂ©fÃƒÂ©rences
               rewrittenConditionSet = replaceInJson(
                 rewrittenConditionSet,
                 new Map([
@@ -853,23 +804,22 @@ export async function copyConditionCapacity(
                 ])
               );
             } else {
-              console.warn(`   ⚠️ Échec copie table liée: ${linkedTableId}`);
+              console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie table liÃƒÂ©e: ${linkedTableId}`);
             }
           } catch (e) {
-            console.error(`   ❌ Exception copie table liée:`, (e as Error).message);
+            console.error(`   Ã¢ÂÅ’ Exception copie table liÃƒÂ©e:`, (e as Error).message);
           }
         }
       }
     } else {
-      console.log(`   (Aucune table liée trouvée dans le conditionSet)`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // �💾 ÉTAPE 5 : Créer (ou mettre à jour) la nouvelle condition — idempotent
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã¯Â¿Â½Ã°Å¸â€™Â¾ Ãƒâ€°TAPE 5 : CrÃƒÂ©er (ou mettre ÃƒÂ  jour) la nouvelle condition Ã¢â‚¬â€ idempotent
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     let newCondition = await prisma.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
     if (newCondition) {
-      // Mise à jour minimale pour garder l'id stable entre ré-exécutions
+      // Mise ÃƒÂ  jour minimale pour garder l'id stable entre rÃƒÂ©-exÃƒÂ©cutions
       newCondition = await prisma.treeBranchLeafNodeCondition.update({
         where: { id: newConditionId },
         data: {
@@ -897,57 +847,47 @@ export async function copyConditionCapacity(
       });
     }
 
-    console.log(`✅ Condition créée: ${newCondition.id}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 6 : LIAISON AUTOMATIQUE OBLIGATOIRE
-    // ═══════════════════════════════════════════════════════════════════════
-    // ⚡ UTILISATION DU SYSTÈME UNIVERSEL DE LIAISON
-    // Cette fonction lie automatiquement la condition à TOUS les nœuds référencés
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 6 : LIAISON AUTOMATIQUE OBLIGATOIRE
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã¢Å¡Â¡ UTILISATION DU SYSTÃƒË†ME UNIVERSEL DE LIAISON
+    // Cette fonction lie automatiquement la condition ÃƒÂ  TOUS les nÃ…â€œuds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s
     try {
       await linkConditionToAllNodes(prisma, newConditionId, rewrittenConditionSet);
     } catch (e) {
-      console.error(`❌ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
+      console.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 6B : Mettre à jour linkedConditionIds du nœud propriétaire
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 6B : Mettre ÃƒÂ  jour linkedConditionIds du nÃ…â€œud propriÃƒÂ©taire
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     try {
       await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedConditionIds', [newConditionId]);
-      console.log(`✅ linkedConditionIds mis à jour pour nœud propriétaire ${finalOwnerNodeId}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur MAJ linkedConditionIds du propriétaire:`, (e as Error).message);
+      console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur MAJ linkedConditionIds du propriÃƒÂ©taire:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📝 ÉTAPE 7 : Synchroniser les paramètres de capacité
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€œÂ Ãƒâ€°TAPE 7 : Synchroniser les paramÃƒÂ¨tres de capacitÃƒÂ©
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     try {
       await prisma.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasCondition: true,
-          condition_activeId: newConditionId,
-          condition_name: newCondition.name,
-          condition_description: newCondition.description
+          condition_activeId: newConditionId
         }
       });
-      console.log(`✅ Paramètres capacité (condition) mis à jour pour nœud ${finalOwnerNodeId}`);
-      console.log(`   - condition_activeId: ${newConditionId}`);
-      console.log(`   - condition_name: ${newCondition.name || 'null'}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur lors de la mise à jour des paramètres capacité:`, (e as Error).message);
+      console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des paramÃƒÂ¨tres capacitÃƒÂ©:`, (e as Error).message);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔗 ÉTAPE 8 : Mettre en cache
-    // ═══════════════════════════════════════════════════════════════════════
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+    // Ã°Å¸â€â€” Ãƒâ€°TAPE 8 : Mettre en cache
+    // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     conditionCopyCache.set(originalConditionId, newConditionId);
 
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`✅ COPIE CONDITION TERMINÉE`);
-    console.log(`${'═'.repeat(80)}\n`);
 
     return {
       newConditionId,
@@ -957,7 +897,7 @@ export async function copyConditionCapacity(
     };
 
   } catch (error) {
-    console.error(`❌ Erreur lors de la copie de la condition:`, error);
+    console.error(`Ã¢ÂÅ’ Erreur lors de la copie de la condition:`, error);
     return {
       newConditionId: '',
       nodeId: '',
@@ -968,12 +908,12 @@ export async function copyConditionCapacity(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔧 FONCTIONS UTILITAIRES POUR LINKED FIELDS
-// ═══════════════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// Ã°Å¸â€Â§ FONCTIONS UTILITAIRES POUR LINKED FIELDS
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 /**
- * Ajoute des IDs à un champ linked... d'un nœud (sans doublons)
+ * Ajoute des IDs ÃƒÂ  un champ linked... d'un nÃ…â€œud (sans doublons)
  */
 async function addToNodeLinkedField(
   prisma: PrismaClient,
@@ -989,12 +929,12 @@ async function addToNodeLinkedField(
   });
 
   if (!node) {
-    console.warn(`⚠️ Nœud ${nodeId} introuvable pour MAJ ${field}`);
+    console.warn(`Ã¢Å¡Â Ã¯Â¸Â NÃ…â€œud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
 
   const current = (node[field] || []) as string[];
-  const newIds = [...new Set([...current, ...idsToAdd])]; // Dédupliquer
+  const newIds = [...new Set([...current, ...idsToAdd])]; // DÃƒÂ©dupliquer
 
   await prisma.treeBranchLeafNode.update({
     where: { id: nodeId },

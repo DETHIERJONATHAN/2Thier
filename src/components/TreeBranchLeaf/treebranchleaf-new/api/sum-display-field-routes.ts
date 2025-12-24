@@ -1,12 +1,12 @@
 /**
- * 📊 SUM DISPLAY FIELD ROUTES
+ * Ã°Å¸â€œÅ  SUM DISPLAY FIELD ROUTES
  * 
- * Routes pour gérer les champs Total (somme des copies de variables)
+ * Routes pour gÃƒÂ©rer les champs Total (somme des copies de variables)
  * 
- * Fonctionnalités:
- * - Créer un champ d'affichage qui affiche la somme de toutes les copies d'une variable
- * - Mettre à jour automatiquement quand les copies changent
- * - Supprimer le champ Total quand désactivé
+ * FonctionnalitÃƒÂ©s:
+ * - CrÃƒÂ©er un champ d'affichage qui affiche la somme de toutes les copies d'une variable
+ * - Mettre ÃƒÂ  jour automatiquement quand les copies changent
+ * - Supprimer le champ Total quand dÃƒÂ©sactivÃƒÂ©
  */
 
 import { Router, Request } from 'express';
@@ -14,7 +14,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Helper pour obtenir l'organizationId de manière robuste
+// Helper pour obtenir l'organizationId de maniÃƒÂ¨re robuste
 type MinimalReqUser = { organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };
 function getOrgId(req: Request): string | null {
   const user = (req as Request & { user?: MinimalReqUser }).user || {};
@@ -27,24 +27,23 @@ function getOrgId(req: Request): string | null {
 export function registerSumDisplayFieldRoutes(router: Router): void {
 
   // POST /api/treebranchleaf/trees/:treeId/nodes/:nodeId/sum-display-field
-  // Crée ou met à jour le champ Total qui somme toutes les copies d'une variable
+  // CrÃƒÂ©e ou met ÃƒÂ  jour le champ Total qui somme toutes les copies d'une variable
   router.post('/trees/:treeId/nodes/:nodeId/sum-display-field', async (req, res) => {
     try {
       const { treeId, nodeId } = req.params;
       const organizationId = getOrgId(req);
 
-      console.log(`📊 [SUM DISPLAY] Création champ Total pour nodeId=${nodeId}, treeId=${treeId}, orgId=${organizationId}`);
 
-      // Vérifier l'appartenance de l'arbre à l'organisation
+      // VÃƒÂ©rifier l'appartenance de l'arbre ÃƒÂ  l'organisation
       const tree = await prisma.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
 
       if (!tree) {
-        return res.status(404).json({ error: 'Arbre non trouvé' });
+        return res.status(404).json({ error: 'Arbre non trouvÃƒÂ©' });
       }
 
-      // Récupérer le nœud et sa variable
+      // RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud et sa variable
       const node = await prisma.treeBranchLeafNode.findFirst({
         where: { id: nodeId, treeId },
         select: { 
@@ -59,10 +58,10 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       });
 
       if (!node) {
-        return res.status(404).json({ error: 'Nœud non trouvé' });
+        return res.status(404).json({ error: 'NÃ…â€œud non trouvÃƒÂ©' });
       }
 
-      // Récupérer la variable principale du nœud
+      // RÃƒÂ©cupÃƒÂ©rer la variable principale du nÃ…â€œud
       const mainVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId },
         select: { 
@@ -76,11 +75,11 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       });
 
       if (!mainVariable) {
-        return res.status(404).json({ error: 'Variable non trouvée pour ce nœud' });
+        return res.status(404).json({ error: 'Variable non trouvÃƒÂ©e pour ce nÃ…â€œud' });
       }
 
-      // Trouver toutes les copies de cette variable (basé sur exposedKey avec suffixes)
-      const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, ''); // Enlever le suffixe si présent
+      // Trouver toutes les copies de cette variable (basÃƒÂ© sur exposedKey avec suffixes)
+      const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, ''); // Enlever le suffixe si prÃƒÂ©sent
       const allCopies = await prisma.treeBranchLeafNodeVariable.findMany({
         where: {
           OR: [
@@ -91,24 +90,22 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         select: { id: true, exposedKey: true, nodeId: true }
       });
 
-      console.log(`📊 [SUM DISPLAY] ${allCopies.length} copie(s) trouvée(s) pour ${baseExposedKey}`);
 
-      // 🔥 Récupérer les ordres de tous les nœuds des copies pour positionner le Total après le dernier
+      // Ã°Å¸â€Â¥ RÃƒÂ©cupÃƒÂ©rer les ordres de tous les nÃ…â€œuds des copies pour positionner le Total aprÃƒÂ¨s le dernier
       const copyNodeIds = allCopies.map(c => c.nodeId);
       const copyNodes = await prisma.treeBranchLeafNode.findMany({
         where: { id: { in: copyNodeIds } },
         select: { id: true, order: true }
       });
       const maxCopyOrder = copyNodes.reduce((max, n) => Math.max(max, n.order ?? 0), 0);
-      console.log(`📊 [SUM DISPLAY] Max order des copies: ${maxCopyOrder}, Total sera à order: ${maxCopyOrder + 1}`);
 
-      // Générer l'ID du champ Total
+      // GÃƒÂ©nÃƒÂ©rer l'ID du champ Total
       const sumFieldNodeId = `${nodeId}-sum-total`;
       const sumFieldVariableId = `${mainVariable.id}-sum-total`;
       const sumDisplayName = `${mainVariable.displayName} - Total`;
       const sumExposedKey = `${baseExposedKey}_TOTAL`;
 
-      // Vérifier si le nœud Total existe déjà
+      // VÃƒÂ©rifier si le nÃ…â€œud Total existe dÃƒÂ©jÃƒÂ 
       const existingSumNode = await prisma.treeBranchLeafNode.findUnique({
         where: { id: sumFieldNodeId },
         select: { id: true, metadata: true }
@@ -123,14 +120,14 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         sumTokens.push(`@value.${copy.nodeId}`);
       });
 
-      // Si aucune copie, mettre une valeur par défaut
+      // Si aucune copie, mettre une valeur par dÃƒÂ©faut
       if (sumTokens.length === 0) {
         sumTokens.push('0');
       }
 
       const now = new Date();
 
-      // Générer l'ID de la formule avant la création du nœud
+      // GÃƒÂ©nÃƒÂ©rer l'ID de la formule avant la crÃƒÂ©ation du nÃ…â€œud
       const sumFormulaId = `${mainVariable.id}-sum-formula`;
       
       // Construire formula_instances pour le frontend
@@ -141,19 +138,19 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
       };
 
-      // 🎯 UNIFIÉ: Structure identique à M² toiture - Total qui fonctionne
+      // Ã°Å¸Å½Â¯ UNIFIÃƒâ€°: Structure identique ÃƒÂ  MÃ‚Â² toiture - Total qui fonctionne
       // - fieldType: null (pas NUMBER)
       // - data_visibleToUser: false
       // - Pas de capabilities.datas dans metadata
       const sumNodeData = {
         label: sumDisplayName,
         field_label: sumDisplayName,
-        fieldType: null,  // 🔧 UNIFIÉ: null comme M² toiture - Total
+        fieldType: null,  // Ã°Å¸â€Â§ UNIFIÃƒâ€°: null comme MÃ‚Â² toiture - Total
         subType: null,
         fieldSubType: null,
         hasData: true,
         hasFormula: true,
-        data_visibleToUser: false,  // 🔧 UNIFIÉ: false comme M² toiture - Total
+        data_visibleToUser: false,  // Ã°Å¸â€Â§ UNIFIÃƒâ€°: false comme MÃ‚Â² toiture - Total
         formula_activeId: sumFormulaId,
         formula_instances: { [sumFormulaId]: formulaInstance },
         formula_tokens: sumTokens,
@@ -169,8 +166,8 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           sourceNodeId: nodeId,
           sumTokens,
           copiesCount: allCopies.length,
-          // 🚫 PAS de capabilities.datas ici - le frontend utilise formula_instances directement
-          // C'est le chemin qui fonctionne pour M² toiture - Total
+          // Ã°Å¸Å¡Â« PAS de capabilities.datas ici - le frontend utilise formula_instances directement
+          // C'est le chemin qui fonctionne pour MÃ‚Â² toiture - Total
           updatedAt: now.toISOString()
         },
         updatedAt: now
@@ -181,18 +178,17 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           where: { id: sumFieldNodeId },
           data: sumNodeData
         });
-        console.log(`📊 [SUM DISPLAY] Nœud Total mis à jour: ${sumFieldNodeId}`);
       } else {
         try {
           await prisma.treeBranchLeafNode.create({
             data: {
               id: sumFieldNodeId,
               treeId,
-              parentId: node.parentId, // Même section que le nœud original
+              parentId: node.parentId, // MÃƒÂªme section que le nÃ…â€œud original
               type: 'leaf_field',
               label: sumDisplayName,
               field_label: sumDisplayName,
-              order: maxCopyOrder + 1, // 🔥 APRÈS le dernier nœud copié (Mur-1, Mur-2, etc.)
+              order: maxCopyOrder + 1, // Ã°Å¸â€Â¥ APRÃƒË†S le dernier nÃ…â€œud copiÃƒÂ© (Mur-1, Mur-2, etc.)
               isVisible: true,
               isActive: true,
               subtab: node.subtab as Record<string, unknown> | null,
@@ -204,19 +200,18 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
               ...sumNodeData
             }
           });
-          console.log(`📊 [SUM DISPLAY] Nœud Total créé: ${sumFieldNodeId}`);
         } catch (err) {
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-            // Conflit d'unicité: le nœud existe déjà, on le met simplement à jour
+            // Conflit d'unicitÃƒÂ©: le nÃ…â€œud existe dÃƒÂ©jÃƒÂ , on le met simplement ÃƒÂ  jour
             await prisma.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
-            console.warn(`⚠️ [SUM DISPLAY] Nœud Total déjà existant, mise à jour forcée: ${sumFieldNodeId}`);
+            console.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] NÃ…â€œud Total dÃƒÂ©jÃƒÂ  existant, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
         }
       }
 
-      // Créer/mettre à jour la variable Total
+      // CrÃƒÂ©er/mettre ÃƒÂ  jour la variable Total
       const existingSumVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId: sumFieldNodeId }
       });
@@ -260,19 +255,19 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         } catch (err) {
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
             await prisma.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
-            console.warn(`⚠️ [SUM DISPLAY] Variable Total déjà existante, mise à jour forcée: ${sumFieldNodeId}`);
+            console.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] Variable Total dÃƒÂ©jÃƒÂ  existante, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
         }
       }
 
-      // Créer/mettre à jour la formule de somme dans la table dédiée
+      // CrÃƒÂ©er/mettre ÃƒÂ  jour la formule de somme dans la table dÃƒÂ©diÃƒÂ©e
       const existingSumFormula = await prisma.treeBranchLeafNodeFormula.findUnique({
         where: { id: sumFormulaId }
       });
 
-      // 🔥 OrganizationId pour la formule (depuis tree ou request)
+      // Ã°Å¸â€Â¥ OrganizationId pour la formule (depuis tree ou request)
       const formulaOrgId = tree.organizationId || organizationId;
 
       const sumFormulaData = {
@@ -299,14 +294,14 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         } catch (err) {
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
             await prisma.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
-            console.warn(`⚠️ [SUM DISPLAY] Formule Total déjà existante, mise à jour forcée: ${sumFormulaId}`);
+            console.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] Formule Total dÃƒÂ©jÃƒÂ  existante, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFormulaId}`);
           } else {
             throw err;
           }
         }
       }
 
-      // Sauvegarder l'option dans la metadata du nœud original
+      // Sauvegarder l'option dans la metadata du nÃ…â€œud original
       const existingMeta = (node.metadata as Record<string, unknown>) || {};
       await prisma.treeBranchLeafNode.update({
         where: { id: nodeId },
@@ -319,7 +314,6 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         }
       });
 
-      console.log(`✅ [SUM DISPLAY] Champ Total créé avec succès`);
       return res.json({ 
         success: true, 
         sumFieldNodeId,
@@ -332,9 +326,9 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const errStack = error instanceof Error ? error.stack : '';
-      console.error('❌ [SUM DISPLAY] Erreur:', errMsg);
-      console.error('❌ [SUM DISPLAY] Stack:', errStack);
-      res.status(500).json({ error: 'Erreur lors de la création du champ Total', details: errMsg });
+      console.error('Ã¢ÂÅ’ [SUM DISPLAY] Erreur:', errMsg);
+      console.error('Ã¢ÂÅ’ [SUM DISPLAY] Stack:', errStack);
+      res.status(500).json({ error: 'Erreur lors de la crÃƒÂ©ation du champ Total', details: errMsg });
     }
   });
 
@@ -345,30 +339,29 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       const { treeId, nodeId } = req.params;
       const organizationId = getOrgId(req);
 
-      console.log(`🗑️ [SUM DISPLAY] Suppression champ Total pour nodeId=${nodeId}`);
 
-      // Vérifier l'appartenance de l'arbre à l'organisation
+      // VÃƒÂ©rifier l'appartenance de l'arbre ÃƒÂ  l'organisation
       const tree = await prisma.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
 
       if (!tree) {
-        return res.status(404).json({ error: 'Arbre non trouvé' });
+        return res.status(404).json({ error: 'Arbre non trouvÃƒÂ©' });
       }
 
-      // Récupérer le nœud
+      // RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud
       const node = await prisma.treeBranchLeafNode.findFirst({
         where: { id: nodeId, treeId },
         select: { id: true, metadata: true }
       });
 
       if (!node) {
-        return res.status(404).json({ error: 'Nœud non trouvé' });
+        return res.status(404).json({ error: 'NÃ…â€œud non trouvÃƒÂ©' });
       }
 
       const sumFieldNodeId = `${nodeId}-sum-total`;
 
-      // Récupérer la variable principale pour construire les IDs
+      // RÃƒÂ©cupÃƒÂ©rer la variable principale pour construire les IDs
       const mainVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId },
         select: { id: true }
@@ -382,7 +375,6 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           await prisma.treeBranchLeafNodeFormula.delete({
             where: { id: sumFormulaId }
           });
-          console.log(`🗑️ [SUM DISPLAY] Formule supprimée: ${sumFormulaId}`);
         } catch { /* noop si n'existe pas */ }
       }
 
@@ -391,18 +383,16 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         await prisma.treeBranchLeafNodeVariable.delete({
           where: { nodeId: sumFieldNodeId }
         });
-        console.log(`🗑️ [SUM DISPLAY] Variable supprimée`);
       } catch { /* noop si n'existe pas */ }
 
-      // Supprimer le nœud Total
+      // Supprimer le nÃ…â€œud Total
       try {
         await prisma.treeBranchLeafNode.delete({
           where: { id: sumFieldNodeId }
         });
-        console.log(`🗑️ [SUM DISPLAY] Nœud supprimé: ${sumFieldNodeId}`);
       } catch { /* noop si n'existe pas */ }
 
-      // Mettre à jour la metadata du nœud original
+      // Mettre ÃƒÂ  jour la metadata du nÃ…â€œud original
       const existingMeta = (node.metadata as Record<string, unknown>) || {};
       await prisma.treeBranchLeafNode.update({
         where: { id: nodeId },
@@ -415,22 +405,21 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         }
       });
 
-      console.log(`✅ [SUM DISPLAY] Champ Total supprimé avec succès`);
       return res.json({ success: true });
 
     } catch (error) {
-      console.error('❌ [SUM DISPLAY] Erreur suppression:', error);
+      console.error('Ã¢ÂÅ’ [SUM DISPLAY] Erreur suppression:', error);
       res.status(500).json({ error: 'Erreur lors de la suppression du champ Total' });
     }
   });
 }
 
 /**
- * 📊 Met à jour le champ Total quand les copies changent
+ * Ã°Å¸â€œÅ  Met ÃƒÂ  jour le champ Total quand les copies changent
  * 
- * Appelée après chaque copie/suppression de variable pour recalculer la formule de somme
+ * AppelÃƒÂ©e aprÃƒÂ¨s chaque copie/suppression de variable pour recalculer la formule de somme
  * 
- * @param sourceNodeId - ID du nœud source de la variable
+ * @param sourceNodeId - ID du nÃ…â€œud source de la variable
  * @param prismaClient - Instance Prisma (optionnel, utilise le client global si non fourni)
  */
 export async function updateSumDisplayFieldAfterCopyChange(
@@ -440,7 +429,7 @@ export async function updateSumDisplayFieldAfterCopyChange(
   const db = prismaClient || prisma;
   
   try {
-    // Récupérer le nœud source et vérifier s'il a un champ Total activé
+    // RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud source et vÃƒÂ©rifier s'il a un champ Total activÃƒÂ©
     const sourceNode = await db.treeBranchLeafNode.findUnique({
       where: { id: sourceNodeId },
       select: { 
@@ -457,11 +446,10 @@ export async function updateSumDisplayFieldAfterCopyChange(
     const sumFieldNodeId = metadata?.sumDisplayFieldNodeId as string | undefined;
 
     if (!hasSum || !sumFieldNodeId) {
-      console.log(`📊 [SUM UPDATE] Nœud ${sourceNodeId} n'a pas de champ Total activé`);
       return;
     }
 
-    // Récupérer la variable principale
+    // RÃƒÂ©cupÃƒÂ©rer la variable principale
     const mainVariable = await db.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId: sourceNodeId },
       select: { id: true, exposedKey: true, displayName: true }
@@ -501,13 +489,32 @@ export async function updateSumDisplayFieldAfterCopyChange(
       description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
     };
 
-    // Mettre à jour la formule dans la table dédiée
-    await db.treeBranchLeafNodeFormula.update({
-      where: { id: sumFormulaId },
-      data: { tokens: sumTokens, updatedAt: now }
+    // 🔍 Vérifier que le nœud cible existe avant de créer la formule
+    const sumNodeExists = await db.treeBranchLeafNode.findUnique({
+      where: { id: sumFieldNodeId },
+      select: { id: true }
     });
 
-    // 🔥 NOUVEAU: Recalculer la valeur en récupérant les calculatedValue des nœuds sources
+    if (!sumNodeExists) {
+      // Le nœud sum-total n'existe pas encore, skip silencieusement
+      return;
+    }
+
+    // Mettre à jour ou créer la formule dans la table dédiée
+    await db.treeBranchLeafNodeFormula.upsert({
+      where: { id: sumFormulaId },
+      update: { tokens: sumTokens, updatedAt: now },
+      create: {
+        id: sumFormulaId,
+        name: `Somme ${mainVariable.displayName}`,
+        tokens: sumTokens,
+        nodeId: sumFieldNodeId,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+
+    // Ã°Å¸â€Â¥ NOUVEAU: Recalculer la valeur en rÃƒÂ©cupÃƒÂ©rant les calculatedValue des nÃ…â€œuds sources
     const copyNodeIds = allCopies.map(c => c.nodeId);
     const copyNodes = await db.treeBranchLeafNode.findMany({
       where: { id: { in: copyNodeIds } },
@@ -518,9 +525,8 @@ export async function updateSumDisplayFieldAfterCopyChange(
     for (const node of copyNodes) {
       newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
     }
-    console.log(`📊 [SUM UPDATE] Nouvelle valeur calculée: ${newCalculatedValue} (${copyNodes.length} nœuds)`);
 
-    // Mettre à jour le nœud Total avec formula_instances et formula_tokens
+    // Mettre ÃƒÂ  jour le nÃ…â€œud Total avec formula_instances et formula_tokens
     const sumNode = await db.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { metadata: true }
@@ -533,7 +539,7 @@ export async function updateSumDisplayFieldAfterCopyChange(
           updatedAt: now,
           formula_instances: { [sumFormulaId]: formulaInstance },
           formula_tokens: sumTokens,
-          calculatedValue: String(newCalculatedValue), // 🔥 NOUVEAU: Mettre à jour la valeur
+          calculatedValue: String(newCalculatedValue), // Ã°Å¸â€Â¥ NOUVEAU: Mettre ÃƒÂ  jour la valeur
           metadata: {
             ...(sumNode.metadata as Record<string, unknown> || {}),
             sumTokens,
@@ -544,9 +550,8 @@ export async function updateSumDisplayFieldAfterCopyChange(
       });
     }
 
-    console.log(`✅ [SUM UPDATE] Champ Total mis à jour: ${allCopies.length} copies, valeur: ${newCalculatedValue}, formule: ${sumTokens.join(' ')}`);
 
   } catch (error) {
-    console.error('❌ [SUM UPDATE] Erreur mise à jour champ Total:', error);
+    console.error('Ã¢ÂÅ’ [SUM UPDATE] Erreur mise ÃƒÂ  jour champ Total:', error);
   }
 }

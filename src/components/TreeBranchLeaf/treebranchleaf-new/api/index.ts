@@ -1,7 +1,7 @@
 /**
- * 🌐 TreeBranchLeaf API - Point d'entrée centralisé
+ * Ã°Å¸Å’Â TreeBranchLeaf API - Point d'entrÃƒÂ©e centralisÃƒÂ©
  * 
- * Exporte les routes API pour l'intégration dans le serveur principal
+ * Exporte les routes API pour l'intÃƒÂ©gration dans le serveur principal
  */
 
 export { default as treeBranchLeafRoutes } from './treebranchleaf-routes';

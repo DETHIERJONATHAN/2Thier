@@ -14,25 +14,16 @@ router.use(authMiddleware as unknown as (req: Request, res: Response, next: () =
 // GET - Récupérer les sections de navigation basées sur la table Category avec toutes les vérifications de sécurité
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log('🔍 [module-navigation] Route appelée - Système Category');
-    console.log('🔍 [module-navigation] User:', req.user);
-    console.log('🔍 [module-navigation] Prisma client status:', typeof prisma, !!prisma);
-    
     const organizationId = req.query.organizationId as string;
     
     if (!organizationId) {
-      console.log('❌ [module-navigation] organizationId manquant');
       res.status(400).json({ error: 'organizationId required' });
       return;
     }
 
-    console.log('[API] GET /api/module-navigation - Système Category avec sécurité multifacteur pour org:', organizationId);
-
     // Vérification utilisateur et permissions
     const user = req.user as { id?: string; email?: string; role?: string; organizationId?: string } | undefined;
     const isSuperAdmin = user?.role === 'super_admin';
-    
-    console.log(`[API] Utilisateur: ${user?.email} (${user?.role}), SuperAdmin: ${isSuperAdmin}`);
 
     // Récupérer l'organisation de l'utilisateur
     let userOrganizationId = user?.organizationId;
@@ -42,7 +33,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         where: { userId: user.id }
       });
       userOrganizationId = userOrg?.organizationId;
-      console.log(`[API] OrganizationId récupéré via UserOrganization: ${userOrganizationId}`);
     }
 
     // 🏢 RÉCUPÉRER LES CATÉGORIES ACCESSIBLES POUR CETTE ORGANISATION
@@ -94,8 +84,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       orderBy: { order: 'asc' }
     });
 
-    console.log(`[API] ${categories.length} catégories trouvées`);
-
     // 🗂️ TRANSFORMER LES CATÉGORIES EN SECTIONS POUR LE FRONTEND
     const sections = categories.map(category => ({
       id: `section-${category.id}`,
@@ -119,14 +107,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       allowedRoles: category.allowedRoles,
       requiredPermissions: category.requiredPermissions
     }));
-
-    console.log('[API] Sections créées depuis les catégories:', sections.length);
-    console.log('[API] Sections:', sections.map(s => `${s.title} (${s.modules.length} modules)`));
     
     res.json(sections);
 
   } catch (error) {
-    console.error('[API] Erreur système Category:', error);
+    console.error('[module-navigation] Erreur:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des catégories depuis la table Category' });
   }
 });

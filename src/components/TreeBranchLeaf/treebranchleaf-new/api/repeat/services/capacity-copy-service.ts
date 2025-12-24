@@ -5,13 +5,13 @@ import { deriveRepeatContextFromMetadata } from './repeat-context-utils.js';
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
 
 /**
- * Service pour corriger la copie des capacités manquantes dans les nœuds dupliqués
+ * Service pour corriger la copie des capacitÃƒÂ©s manquantes dans les nÃ…â€œuds dupliquÃƒÂ©s
  * 
  * Ce service s'assure que:
- * 1. Tous les nœuds copiés ont leurs capacités (formules, conditions, tables) correctement dupliquées
- * 2. Les capacités copiées ont des suffixes appropriés
- * 3. Les références dans les capacités pointent vers les nœuds copiés, pas les originaux
- * 4. Les flags hasFormula/hasCondition/hasTable sont cohérents avec les capacités réelles
+ * 1. Tous les nÃ…â€œuds copiÃƒÂ©s ont leurs capacitÃƒÂ©s (formules, conditions, tables) correctement dupliquÃƒÂ©es
+ * 2. Les capacitÃƒÂ©s copiÃƒÂ©es ont des suffixes appropriÃƒÂ©s
+ * 3. Les rÃƒÂ©fÃƒÂ©rences dans les capacitÃƒÂ©s pointent vers les nÃ…â€œuds copiÃƒÂ©s, pas les originaux
+ * 4. Les flags hasFormula/hasCondition/hasTable sont cohÃƒÂ©rents avec les capacitÃƒÂ©s rÃƒÂ©elles
  */
 
 export interface CapacityCopyResult {
@@ -36,7 +36,7 @@ export interface CapacityCopyReport {
 }
 
 /**
- * Copie les capacités manquantes d'un nœud original vers son nœud copié
+ * Copie les capacitÃƒÂ©s manquantes d'un nÃ…â€œud original vers son nÃ…â€œud copiÃƒÂ©
  */
 export async function copyMissingCapacities(
   prisma: PrismaClient,
@@ -46,9 +46,8 @@ export async function copyMissingCapacities(
   repeatContext?: DuplicationContext,
   nodeIdMap?: Map<string, string>
 ): Promise<CapacityCopyResult> {
-  console.log(`🔄 [CAPACITY-COPY] Copie des capacités: ${originalNodeId} → ${copiedNodeId}`);
 
-  // 1. Récupérer le nœud original avec toutes ses capacités
+  // 1. RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud original avec toutes ses capacitÃƒÂ©s
   const originalNode = await prisma.treeBranchLeafNode.findUnique({
     where: { id: originalNodeId },
     include: {
@@ -64,16 +63,16 @@ export async function copyMissingCapacities(
   });
 
   if (!originalNode) {
-    throw new Error(`Nœud original ${originalNodeId} non trouvé`);
+    throw new Error(`NÃ…â€œud original ${originalNodeId} non trouvÃƒÂ©`);
   }
 
-  // 2. Récupérer le nœud copié
+  // 2. RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud copiÃƒÂ©
   const copiedNode = await prisma.treeBranchLeafNode.findUnique({
     where: { id: copiedNodeId }
   });
 
   if (!copiedNode) {
-    throw new Error(`Nœud copié ${copiedNodeId} non trouvé`);
+    throw new Error(`NÃ…â€œud copiÃƒÂ© ${copiedNodeId} non trouvÃƒÂ©`);
   }
 
   const result: CapacityCopyResult = {
@@ -91,17 +90,17 @@ export async function copyMissingCapacities(
     }
   };
 
-  // 3. Copier les formules via copyFormulaCapacity (centralisé)
+  // 3. Copier les formules via copyFormulaCapacity (centralisÃƒÂ©)
   const formulaIdMap = new Map<string, string>();
   const suffixNum = parseInt(suffix.replace('-', '')) || 1;
   
-  // 🔧 Construire le nodeIdMap si pas fourni
-  // Cela permet de remapper les références internes dans les formules
+  // Ã°Å¸â€Â§ Construire le nodeIdMap si pas fourni
+  // Cela permet de remapper les rÃƒÂ©fÃƒÂ©rences internes dans les formules
   let workingNodeIdMap = nodeIdMap;
   if (!workingNodeIdMap) {
     workingNodeIdMap = new Map<string, string>();
     
-    // Chercher tous les nodes du même arbre ET suffixés
+    // Chercher tous les nodes du mÃƒÂªme arbre ET suffixÃƒÂ©s
     const treeId = copiedNode.treeId;
     if (treeId) {
       const allNodesInTree = await prisma.treeBranchLeafNode.findMany({
@@ -109,11 +108,11 @@ export async function copyMissingCapacities(
         select: { id: true }
       });
       
-      // Pour chaque node, vérifier si la version suffixée existe
-      const baseNodeId = originalNodeId.replace(/-\d+$/, ''); // Retirer suffixe éventuel
+      // Pour chaque node, vÃƒÂ©rifier si la version suffixÃƒÂ©e existe
+      const baseNodeId = originalNodeId.replace(/-\d+$/, ''); // Retirer suffixe ÃƒÂ©ventuel
       
       for (const node of allNodesInTree) {
-        // Si c'est un node suffixé (finit par -1, -2, etc.)
+        // Si c'est un node suffixÃƒÂ© (finit par -1, -2, etc.)
         if (node.id.match(/-\d+$/)) {
           const baseId = node.id.replace(/-\d+$/, '');
           if (!workingNodeIdMap.has(baseId)) {
@@ -126,7 +125,7 @@ export async function copyMissingCapacities(
   
   for (const formula of originalNode.TreeBranchLeafNodeFormula) {
     try {
-      // Utiliser copyFormulaCapacity pour avoir la réécriture complète avec suffixes
+      // Utiliser copyFormulaCapacity pour avoir la rÃƒÂ©ÃƒÂ©criture complÃƒÂ¨te avec suffixes
       const formulaResult = await copyFormulaCapacity(
         formula.id,
         copiedNodeId,
@@ -141,7 +140,6 @@ export async function copyMissingCapacities(
       if (formulaResult.success) {
         formulaIdMap.set(formula.id, formulaResult.newFormulaId);
         result.capacitiesFixed.formulas++;
-        console.log(`   ✅ Formule copiée (centralisée): ${formulaResult.newFormulaId}`);
 
         if (repeatContext) {
           logCapacityEvent({
@@ -152,10 +150,10 @@ export async function copyMissingCapacities(
           });
         }
       } else {
-        console.error(`   ❌ Erreur copie formule: ${formula.id}`);
+        console.error(`   Ã¢ÂÅ’ Erreur copie formule: ${formula.id}`);
       }
     } catch (error) {
-      console.error(`   ❌ Exception copie formule ${formula.id}:`, error);
+      console.error(`   Ã¢ÂÅ’ Exception copie formule ${formula.id}:`, error);
     }
   }
 
@@ -164,13 +162,13 @@ export async function copyMissingCapacities(
     const newConditionId = `${condition.id}${suffix}`;
     const conditionName = condition.name ? `${condition.name}${suffix}` : condition.name;
 
-    // Vérifier si la condition existe déjà
+    // VÃƒÂ©rifier si la condition existe dÃƒÂ©jÃƒÂ 
     const existingCondition = await prisma.treeBranchLeafNodeCondition.findUnique({
       where: { id: newConditionId }
     });
 
     if (!existingCondition) {
-      // Adapter le conditionSet pour pointer vers les nœuds copiés
+      // Adapter le conditionSet pour pointer vers les nÃ…â€œuds copiÃƒÂ©s
       const adaptedConditionSet = adaptConditionSetForCopiedNode(condition.conditionSet, suffix);
 
       await prisma.treeBranchLeafNodeCondition.create({
@@ -196,7 +194,6 @@ export async function copyMissingCapacities(
       }
 
       result.capacitiesFixed.conditions++;
-      console.log(`   ✅ Condition copiée: ${conditionName}`);
     }
   }
 
@@ -205,7 +202,7 @@ export async function copyMissingCapacities(
     const newTableId = `${table.id}${suffix}`;
     const tableName = table.name ? `${table.name}${suffix}` : table.name;
 
-    // Vérifier si la table existe déjà
+    // VÃƒÂ©rifier si la table existe dÃƒÂ©jÃƒÂ 
     const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({
       where: { id: newTableId }
     });
@@ -221,7 +218,7 @@ export async function copyMissingCapacities(
           type: table.type,
           rowCount: table.rowCount,
           columnCount: table.columnCount,
-          // 🔧 TRAITER LE meta: suffix les références aux nodes ET comparisonColumn
+          // Ã°Å¸â€Â§ TRAITER LE meta: suffix les rÃƒÂ©fÃƒÂ©rences aux nodes ET comparisonColumn
           meta: (() => {
             if (!table.meta) {
               return table.meta as Prisma.InputJsonValue;
@@ -230,7 +227,7 @@ export async function copyMissingCapacities(
               const metaObj = typeof table.meta === 'string' ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
               const suffixNum = parseInt(suffix.replace('-', '')) || 1;
               
-              // 🔢 COPIE TABLE META: suffixer comparisonColumn si c'est du texte
+              // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer comparisonColumn si c'est du texte
               if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
                 const val = metaObj.lookup.rowSourceOption.comparisonColumn;
                 if (!/^-?\d+(\.\d+)?$/.test(val.trim())) {
@@ -244,12 +241,11 @@ export async function copyMissingCapacities(
                 }
               }
               
-              // 🔥 FIX: Suffixer displayColumn (peut être string ou array)
+              // Ã°Å¸â€Â¥ FIX: Suffixer displayColumn (peut ÃƒÂªtre string ou array)
               if (metaObj?.lookup?.displayColumn) {
                 if (Array.isArray(metaObj.lookup.displayColumn)) {
                   metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col: string) => {
                     if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                      console.log(`[table.meta] displayColumn[]: ${col} → ${col}${suffix}`);
                       return `${col}${suffix}`;
                     }
                     return col;
@@ -257,18 +253,16 @@ export async function copyMissingCapacities(
                 } else if (typeof metaObj.lookup.displayColumn === 'string') {
                   const val = metaObj.lookup.displayColumn;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    console.log(`[table.meta] displayColumn: ${val} → ${val}${suffix}`);
                     metaObj.lookup.displayColumn = `${val}${suffix}`;
                   }
                 }
               }
               
-              // 🔥 FIX: Suffixer displayRow (peut être string ou array)
+              // Ã°Å¸â€Â¥ FIX: Suffixer displayRow (peut ÃƒÂªtre string ou array)
               if (metaObj?.lookup?.displayRow) {
                 if (Array.isArray(metaObj.lookup.displayRow)) {
                   metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row: string) => {
                     if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                      console.log(`[table.meta] displayRow[]: ${row} → ${row}${suffix}`);
                       return `${row}${suffix}`;
                     }
                     return row;
@@ -276,23 +270,20 @@ export async function copyMissingCapacities(
                 } else if (typeof metaObj.lookup.displayRow === 'string') {
                   const val = metaObj.lookup.displayRow;
                   if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    console.log(`[table.meta] displayRow: ${val} → ${val}${suffix}`);
                     metaObj.lookup.displayRow = `${val}${suffix}`;
                   }
                 }
               }
               
-              // Remplacer les UUIDs par leurs versions suffixés
+              // Remplacer les UUIDs par leurs versions suffixÃƒÂ©s
               let str = JSON.stringify(metaObj);
               str = str.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi, (uuid: string) => {
                 if (workingNodeIdMap && workingNodeIdMap.has(uuid)) {
                   const mapped = workingNodeIdMap.get(uuid);
-                  console.log(`[table.meta] UUID remappé: ${uuid} → ${mapped}`);
                   return mapped;
                 }
-                // Si pas dans la map et suffixe pas déjà appliqué, l'ajouter
+                // Si pas dans la map et suffixe pas dÃƒÂ©jÃƒÂ  appliquÃƒÂ©, l'ajouter
                 if (!uuid.match(/-\d+$/)) {
-                  console.log(`[table.meta] UUID suffixé: ${uuid} → ${uuid}-${suffixNum}`);
                   return `${uuid}-${suffixNum}`;
                 }
                 return uuid;
@@ -312,7 +303,7 @@ export async function copyMissingCapacities(
             create: table.tableColumns.map(col => ({
               id: `${col.id}${suffix}`,
               columnIndex: col.columnIndex,
-              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
               name: col.name 
                 ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}`)
                 : col.name,
@@ -343,11 +334,10 @@ export async function copyMissingCapacities(
       }
 
       result.capacitiesFixed.tables++;
-      console.log(`   ✅ Table copiée: ${tableName} (${table.tableColumns.length} cols, ${table.tableRows.length} rows)`);
     }
   }
 
-  // 6. Mettre à jour les flags du nœud copié
+  // 6. Mettre ÃƒÂ  jour les flags du nÃ…â€œud copiÃƒÂ©
   const newFlags = {
     hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
     hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
@@ -360,7 +350,7 @@ export async function copyMissingCapacities(
       hasFormula: newFlags.hasFormula,
       hasCondition: newFlags.hasCondition,
       hasTable: newFlags.hasTable,
-      // Réinitialiser la valeur calculée pour forcer un nouveau calcul
+      // RÃƒÂ©initialiser la valeur calculÃƒÂ©e pour forcer un nouveau calcul
       calculatedValue: null,
       calculatedAt: null,
       calculatedBy: null
@@ -369,21 +359,20 @@ export async function copyMissingCapacities(
 
   result.flagsUpdated = newFlags;
 
-  console.log(`   🎯 Flags mis à jour: hasFormula=${newFlags.hasFormula}, hasCondition=${newFlags.hasCondition}, hasTable=${newFlags.hasTable}`);
 
   return result;
 }
 
 /**
- * Adapte les tokens d'une formule pour pointer vers les nœuds copiés
+ * Adapte les tokens d'une formule pour pointer vers les nÃ…â€œuds copiÃƒÂ©s
  */
 function adaptTokensForCopiedNode(tokens: unknown, suffix: string): unknown {
   if (!tokens) return tokens;
 
   const adaptToken = (tokenStr: string): string => {
-    // Remplacer les références @value.nodeId par @value.nodeId-1
+    // Remplacer les rÃƒÂ©fÃƒÂ©rences @value.nodeId par @value.nodeId-1
     return tokenStr.replace(/@value\.([A-Za-z0-9_:-]+)/g, (match, nodeId) => {
-      // Ne pas ajouter de suffixe si c'est déjà une référence partagée avec suffixe
+      // Ne pas ajouter de suffixe si c'est dÃƒÂ©jÃƒÂ  une rÃƒÂ©fÃƒÂ©rence partagÃƒÂ©e avec suffixe
       if (nodeId.includes('shared-ref') || nodeId.endsWith(suffix.replace('-', ''))) {
         return match;
       }
@@ -412,7 +401,7 @@ function adaptTokensForCopiedNode(tokens: unknown, suffix: string): unknown {
 }
 
 /**
- * Adapte le conditionSet d'une condition pour pointer vers les nœuds copiés
+ * Adapte le conditionSet d'une condition pour pointer vers les nÃ…â€œuds copiÃƒÂ©s
  */
 function adaptConditionSetForCopiedNode(conditionSet: unknown, suffix: string): unknown {
   if (!conditionSet) return conditionSet;
@@ -420,7 +409,7 @@ function adaptConditionSetForCopiedNode(conditionSet: unknown, suffix: string): 
   try {
     let str = JSON.stringify(conditionSet);
     
-    // Remplacer les références @value.nodeId
+    // Remplacer les rÃƒÂ©fÃƒÂ©rences @value.nodeId
     str = str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (match, nodeId) => {
       if (nodeId.includes('shared-ref') || nodeId.endsWith(suffix.replace('-', ''))) {
         return match;
@@ -428,7 +417,7 @@ function adaptConditionSetForCopiedNode(conditionSet: unknown, suffix: string): 
       return `@value.${nodeId}${suffix}`;
     });
 
-    // Remplacer les références node-formula:
+    // Remplacer les rÃƒÂ©fÃƒÂ©rences node-formula:
     str = str.replace(/node-formula:([a-f0-9-]{36})/gi, (match, formulaId) => {
       return `node-formula:${formulaId}${suffix}`;
     });
@@ -485,13 +474,12 @@ function adaptConditionSetForCopiedNode(conditionSet: unknown, suffix: string): 
 }
 
 /**
- * Corrige toutes les capacités manquantes pour les nœuds copiés d'un repeater
+ * Corrige toutes les capacitÃƒÂ©s manquantes pour les nÃ…â€œuds copiÃƒÂ©s d'un repeater
  */
 export async function fixAllMissingCapacities(
   prisma: PrismaClient,
   repeaterNodeId?: string
 ): Promise<CapacityCopyReport> {
-  console.log('🔧 [CAPACITY-FIX] Correction des capacités manquantes...');
 
   const report: CapacityCopyReport = {
     totalNodesProcessed: 0,
@@ -500,7 +488,7 @@ export async function fixAllMissingCapacities(
   };
 
   try {
-    // Trouver tous les nœuds copiés avec des flags de capacité mais sans capacités réelles
+    // Trouver tous les nÃ…â€œuds copiÃƒÂ©s avec des flags de capacitÃƒÂ© mais sans capacitÃƒÂ©s rÃƒÂ©elles
     const whereClause: Prisma.TreeBranchLeafNodeWhereInput = {
       AND: [
         { label: { endsWith: '-1' } },
@@ -538,7 +526,6 @@ export async function fixAllMissingCapacities(
       }
     });
 
-    console.log(`🔍 Trouvé ${problemNodes.length} nœuds copiés à analyser`);
 
     for (const node of problemNodes) {
       report.totalNodesProcessed++;
@@ -549,13 +536,11 @@ export async function fixAllMissingCapacities(
         const tableMismatch = node.hasTable && node.TreeBranchLeafNodeTable.length === 0;
 
         if (!formulaMismatch && !conditionMismatch && !tableMismatch) {
-          console.log(`✅ ${node.label}: Aucun problème de capacités`);
           continue;
         }
 
-        console.log(`🚨 ${node.label}: Capacités manquantes détectées`);
 
-        // Trouver le nœud original
+        // Trouver le nÃ…â€œud original
         let originalNodeId: string | null = null;
         const meta = node.metadata && typeof node.metadata === 'object'
           ? (node.metadata as Record<string, unknown>)
@@ -565,7 +550,7 @@ export async function fixAllMissingCapacities(
           originalNodeId = (meta.sourceTemplateId as string) || (meta.copiedFromNodeId as string) || null;
         }
 
-        // Si pas de métadonnées, essayer de deviner l'original par le nom
+        // Si pas de mÃƒÂ©tadonnÃƒÂ©es, essayer de deviner l'original par le nom
         if (!originalNodeId && node.label) {
           const originalLabel = node.label.replace('-1', '');
           const originalNode = await prisma.treeBranchLeafNode.findFirst({
@@ -578,19 +563,18 @@ export async function fixAllMissingCapacities(
           
           if (originalNode) {
             originalNodeId = originalNode.id;
-            console.log(`💡 Nœud original deviné: ${originalLabel} (${originalNodeId})`);
           }
         }
 
         if (!originalNodeId) {
           report.errors.push({
             nodeId: node.id,
-            error: 'Impossible de trouver le nœud original'
+            error: 'Impossible de trouver le nÃ…â€œud original'
           });
           continue;
         }
 
-        // Copier les capacités manquantes
+        // Copier les capacitÃƒÂ©s manquantes
         const repeatContext = deriveRepeatContextFromMetadata(
           { id: node.id, metadata: node.metadata },
           {
@@ -612,7 +596,7 @@ export async function fixAllMissingCapacities(
     }
 
   } catch (error) {
-    console.error('❌ [CAPACITY-FIX] Erreur générale:', error);
+    console.error('Ã¢ÂÅ’ [CAPACITY-FIX] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
   }
 
   return report;

@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { tblLog, isTBLDebugEnabled } from '../utils/tblDebug';
 
 interface CalculatedValueResult {
   value: string | number | boolean | null;
@@ -90,13 +91,15 @@ export function useNodeCalculatedValue(
             extractedValue;
         }
 
-        console.log('✅ [useNodeCalculatedValue] Valeur récupérée:', {
-          nodeId,
-          treeId,
-          value: extractedValue,
-          calculatedAt: data.calculatedAt,
-          calculatedBy: data.calculatedBy
-        });
+        if (isTBLDebugEnabled()) {
+          tblLog('✅ [useNodeCalculatedValue] Valeur récupérée:', {
+            nodeId,
+            treeId,
+            value: extractedValue,
+            calculatedAt: data.calculatedAt,
+            calculatedBy: data.calculatedBy
+          });
+        }
 
         // Si on a une valeur valide, l'utiliser directement
         if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
@@ -112,7 +115,7 @@ export function useNodeCalculatedValue(
       // Chaque copie a sa propre valeur calculée stockée en base
       // Si la valeur est vide, elle le reste jusqu'à ce qu'elle soit calculée
       if ((extractedValue === null || extractedValue === undefined || extractedValue === '') && nodeId) {
-        console.log(`⚠️ [useNodeCalculatedValue] Champ copié ${nodeId} - AUCUNE valeur calculée actuellement (c'est normal)`);
+        // Log supprimé - trop fréquent
         // Ne pas chercher l'original - on l'affiche vide intentionnellement!
         setValue(null);
       }
@@ -144,12 +147,7 @@ export function useNodeCalculatedValue(
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ nodeId?: string; submissionId?: string; debugId?: string }>).detail;
       if (!detail?.nodeId || detail.nodeId === nodeId) {
-        console.log('🔄 [useNodeCalculatedValue] Refetch triggered by event:', { 
-          nodeId, 
-          eventSubmissionId: detail?.submissionId,
-          currentSubmissionId: submissionId,
-          debugId: detail?.debugId
-        });
+        // Log supprimé - appelé très fréquemment
         fetchCalculatedValue();
       }
     };

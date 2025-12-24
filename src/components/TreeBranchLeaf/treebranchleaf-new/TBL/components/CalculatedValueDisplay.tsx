@@ -9,6 +9,7 @@ import React, { useMemo } from 'react';
 import { Spin, Tooltip, Tag } from 'antd';
 import { useNodeCalculatedValue } from '../../../../../hooks/useNodeCalculatedValue';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { tblLog } from '../../../../../utils/tblDebug';
 
 interface CalculatedValueDisplayProps {
   /** ID du nœud TreeBranchLeaf */
@@ -79,14 +80,14 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
 
   // Debugging helpful log for fallback flow
   if (typeof window !== 'undefined' && localStorage.getItem('TBL_DIAG') === '1') {
-    console.log('[CalculatedValueDisplay] props', { nodeId, treeId, fallbackNodeIds });
+    tblLog('[CalculatedValueDisplay] props', { nodeId, treeId, fallbackNodeIds });
   }
 
   React.useEffect(() => {
     let cancelled = false;
     const runFallbacks = async () => {
       if (!fallbackNodeIds || fallbackNodeIds.length === 0) return;
-      console.log('[CalculatedValueDisplay] fallbackNodeIds to try:', fallbackNodeIds);
+      tblLog('[CalculatedValueDisplay] fallbackNodeIds to try:', fallbackNodeIds);
       try {
         setFallbackLoading(true);
         for (const fbId of fallbackNodeIds) {
@@ -101,12 +102,12 @@ export const CalculatedValueDisplay: React.FC<CalculatedValueDisplayProps> = ({
               if (cancelled) return;
               setFallbackValueFound(resp.value);
               if (typeof window !== 'undefined' && localStorage.getItem('TBL_DIAG') === '1') {
-                console.log('[CalculatedValueDisplay] found fallback value for', fbId, resp.value);
+                tblLog('[CalculatedValueDisplay] found fallback value for', fbId, resp.value);
               }
               setFallbackLoading(false);
               return;
             }
-          } catch (err) { console.debug('[CalculatedValueDisplay] fallback fetch error', err); }
+          } catch (err) { /* silently ignore fallback errors */ }
         }
       } finally {
         if (!cancelled) setFallbackLoading(false);

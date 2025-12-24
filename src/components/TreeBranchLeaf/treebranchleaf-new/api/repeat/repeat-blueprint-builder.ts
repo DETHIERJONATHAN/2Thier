@@ -40,7 +40,6 @@ export async function buildBlueprintForRepeater(
   prisma: PrismaClient,
   repeaterNodeId: string
 ): Promise<RepeatBlueprint | null> {
-  console.log(`[repeat-blueprint-builder] 🔍 Building blueprint for repeater: ${repeaterNodeId}`);
   
   if (!repeaterNodeId) {
     console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
@@ -49,10 +48,9 @@ export async function buildBlueprintForRepeater(
 
   const cached = captureRepeatTemplate(repeaterNodeId);
   if (cached) {
-    console.log(`[repeat-blueprint-builder] Found cached blueprint`);
     
-    // ⚠️ FIX: Ne PAS dériver les IDs depuis le cache (peut contenir des display nodes)
-    // Au lieu de ça, lire les IDs depuis metadata.repeater.templateNodeIds de la DB
+    // Ã¢Å¡Â Ã¯Â¸Â FIX: Ne PAS dÃƒÂ©river les IDs depuis le cache (peut contenir des display nodes)
+    // Au lieu de ÃƒÂ§a, lire les IDs depuis metadata.repeater.templateNodeIds de la DB
     const repeaterNodeForCache = await prisma.treeBranchLeafNode.findUnique({
       where: { id: repeaterNodeId },
       select: { metadata: true, repeater_templateNodeIds: true }
@@ -62,16 +60,13 @@ export async function buildBlueprintForRepeater(
       ? extractTemplateIds(repeaterNodeForCache)
       : [];
     
-    console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] Candidate IDs from metadata (NOT cache derivation): ${JSON.stringify(candidateTemplateIds)}`);
     const { validIds: cachedTemplateIds } = await filterExistingTemplateNodeIds(
       prisma,
       repeaterNodeId,
       candidateTemplateIds
     );
-    console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] Valid IDs after filter: ${JSON.stringify(cachedTemplateIds)}`);
 
     if (cachedTemplateIds.length) {
-      console.log(`[repeat-blueprint-builder] ✅ Using cached blueprint with ${cachedTemplateIds.length} templates`);
       const validTemplateSet = new Set(cachedTemplateIds);
       return {
         ...cached,
@@ -89,7 +84,6 @@ export async function buildBlueprintForRepeater(
     });
   }
 
-  console.log(`[repeat-blueprint-builder] Querying Prisma for repeater node...`);
   const repeaterNode = await prisma.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: {
@@ -101,39 +95,27 @@ export async function buildBlueprintForRepeater(
   });
   
   if (!repeaterNode) {
-    console.warn(`[repeat-blueprint-builder] ❌ Repeater node not found: ${repeaterNodeId}`);
+    console.warn(`[repeat-blueprint-builder] Ã¢ÂÅ’ Repeater node not found: ${repeaterNodeId}`);
     return null;
   }
   
-  console.log(`[repeat-blueprint-builder] ✅ Repeater node found:`, {
-    id: repeaterNode.id,
-    repeater_templateNodeIds: repeaterNode.repeater_templateNodeIds,
-    treeId: repeaterNode.treeId,
-    hasMetadata: !!repeaterNode.metadata
-  });
-  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] repeater_templateNodeIds RAW: ${JSON.stringify(repeaterNode.repeater_templateNodeIds)}`);
   
   const extractedIds = extractTemplateIds(repeaterNode);
-  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] extractTemplateIds result: ${JSON.stringify(extractedIds)}`);
   
-  // ⚠️ FIX CRITIQUE: Ne PAS enrichir avec les copies existantes!
-  // enrichTemplateIdsWithExistingCopies ajoutait des display nodes auto-générés
+  // Ã¢Å¡Â Ã¯Â¸Â FIX CRITIQUE: Ne PAS enrichir avec les copies existantes!
+  // enrichTemplateIdsWithExistingCopies ajoutait des display nodes auto-gÃƒÂ©nÃƒÂ©rÃƒÂ©s
   // dans la liste des templates, ce qui causait des duplications partielles.
-  // Les templates doivent TOUJOURS être exactement ceux déclarés dans metadata.
+  // Les templates doivent TOUJOURS ÃƒÂªtre exactement ceux dÃƒÂ©clarÃƒÂ©s dans metadata.
   const candidateTemplateNodeIds = extractedIds;
-  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] Candidate IDs (SANS enrichissement): ${JSON.stringify(candidateTemplateNodeIds)}`);
-  console.log(`[repeat-blueprint-builder] Candidate templates: ${candidateTemplateNodeIds.length}`);
   
   const { validIds: templateNodeIds } = await filterExistingTemplateNodeIds(
     prisma,
     repeaterNodeId,
     candidateTemplateNodeIds
   );
-  console.log(`🚨🚨🚨 [BLUEPRINT-DEBUG] After filterExistingTemplateNodeIds: ${JSON.stringify(templateNodeIds)}`);
-  console.log(`[repeat-blueprint-builder] Valid templates after filtering: ${templateNodeIds.length}`);
 
   if (!templateNodeIds.length) {
-    console.warn(`[repeat-blueprint-builder] ⚠️ No valid templates found!`);
+    console.warn(`[repeat-blueprint-builder] Ã¢Å¡Â Ã¯Â¸Â No valid templates found!`);
     return {
       repeaterNodeId,
       templateNodeIds: [],
@@ -144,7 +126,7 @@ export async function buildBlueprintForRepeater(
     };
   }
 
-  // 1️⃣ Get variables directly owned by template nodes
+  // 1Ã¯Â¸ÂÃ¢Æ’Â£ Get variables directly owned by template nodes
   const directVariables = await prisma.treeBranchLeafNodeVariable.findMany({
     where: { nodeId: { in: templateNodeIds } },
     select: {
@@ -155,7 +137,7 @@ export async function buildBlueprintForRepeater(
     }
   });
 
-  // 2️⃣ Get variables that are LINKED by template nodes (e.g., Orientation-Inclinaison variable linked to Orientation and Inclinaison nodes)
+  // 2Ã¯Â¸ÂÃ¢Æ’Â£ Get variables that are LINKED by template nodes (e.g., Orientation-Inclinaison variable linked to Orientation and Inclinaison nodes)
   // First, build a map of which template node links to which variable
   const linkedVarsByNode = new Map<string, Set<string>>();
   const templateNodesWithLinks = await prisma.treeBranchLeafNode.findMany({
@@ -193,7 +175,7 @@ export async function buildBlueprintForRepeater(
       })
     : [];
 
-  // 🔧 CRITICAL FIX: For linked variables, we need to generate a variable entry for EACH template node that references it
+  // Ã°Å¸â€Â§ CRITICAL FIX: For linked variables, we need to generate a variable entry for EACH template node that references it
   // Example: Orientation-Inclinaison variable is linked to both Orientation and Inclinaison nodes
   // We need TWO variable entries in the plan (one per template node)
   // Each entry specifies primaryTargetNodeId = the template node that should receive the copied variable
@@ -207,7 +189,7 @@ export async function buildBlueprintForRepeater(
     });
   }
   for (const linkedVar of linkedVariables) {
-    // ⚠️ IMPORTANT: Create ONE entry per template node that links this variable
+    // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: Create ONE entry per template node that links this variable
     // This ensures the variable is copied for EACH template that needs it
     const referencingNodeIds = Array.from(linkedVarsByNode.get(linkedVar.id) || []);
     for (const nodeId of referencingNodeIds) {
@@ -215,7 +197,7 @@ export async function buildBlueprintForRepeater(
         ...linkedVar,
         variableId: linkedVar.id,
         linkedToNodeIds: [nodeId], // This variable is linked to this template node
-        primaryTargetNodeId: nodeId // ← The node that should receive the copied variable's display node
+        primaryTargetNodeId: nodeId // Ã¢â€ Â The node that should receive the copied variable's display node
       });
     }
   }
@@ -249,7 +231,7 @@ export async function buildBlueprintForRepeater(
       sourceType: v.sourceType,
       displayNodeId: null,
       metadata: undefined,
-      // 🔧 PRESERVE: primaryTargetNodeId for linked variables
+      // Ã°Å¸â€Â§ PRESERVE: primaryTargetNodeId for linked variables
       primaryTargetNodeId: (v as any).primaryTargetNodeId || undefined
     })),
     capacities: [
@@ -276,7 +258,7 @@ export async function buildBlueprintForRepeater(
 }
 
 function extractTemplateIds(node: { repeater_templateNodeIds: Nullable<string>; metadata: Nullable<Record<string, unknown>> }): string[] {
-  // 🎯 PRIORITÉ 1: Lire depuis metadata.repeater.templateNodeIds (SOURCE DE VÉRITÉ)
+  // Ã°Å¸Å½Â¯ PRIORITÃƒâ€° 1: Lire depuis metadata.repeater.templateNodeIds (SOURCE DE VÃƒâ€°RITÃƒâ€°)
   const metaRepeater = typeof node.metadata === 'object' && node.metadata !== null
     ? (node.metadata as Record<string, unknown>).repeater
     : undefined;
@@ -284,19 +266,17 @@ function extractTemplateIds(node: { repeater_templateNodeIds: Nullable<string>; 
     const fromMetadata = (metaRepeater as Record<string, unknown>).templateNodeIds;
     if (Array.isArray(fromMetadata) && fromMetadata.length > 0) {
       const filtered = fromMetadata.filter((id): id is string => typeof id === 'string');
-      console.log(`✅ [extractTemplateIds] Lecture depuis metadata: ${filtered.length} IDs`);
       return filtered;
     }
   }
 
-  // 🔄 FALLBACK: Si metadata est vide, lire depuis repeater_templateNodeIds
+  // Ã°Å¸â€â€ž FALLBACK: Si metadata est vide, lire depuis repeater_templateNodeIds
   const fromColumn = parseJsonArray<string>(node.repeater_templateNodeIds);
   if (fromColumn.length) {
-    console.log(`⚠️ [extractTemplateIds] Fallback vers colonne: ${fromColumn.length} IDs`);
     return fromColumn;
   }
 
-  console.warn(`❌ [extractTemplateIds] Aucun template trouvé !`);
+  console.warn(`Ã¢ÂÅ’ [extractTemplateIds] Aucun template trouvÃƒÂ© !`);
   return [];
 }
 
@@ -329,17 +309,16 @@ async function enrichTemplateIdsWithExistingCopies(
   repeaterNodeId: string,
   initialIds: string[]
 ): Promise<string[]> {
-  // 🔴 CRITIQUE: Filtrer TOUS les IDs avec suffixe dès le début
-  // Si repeater_templateNodeIds contient "uuid-1", on doit le rejeter immédiatement
-  // Utilise une regex précise pour détecter UNIQUEMENT les suffixes de copie (après un UUID complet)
+  // Ã°Å¸â€Â´ CRITIQUE: Filtrer TOUS les IDs avec suffixe dÃƒÂ¨s le dÃƒÂ©but
+  // Si repeater_templateNodeIds contient "uuid-1", on doit le rejeter immÃƒÂ©diatement
+  // Utilise une regex prÃƒÂ©cise pour dÃƒÂ©tecter UNIQUEMENT les suffixes de copie (aprÃƒÂ¨s un UUID complet)
   // Pattern: UUID complet (8-4-4-4-12) + un ou plusieurs suffixes -N
   const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
   const normalized = initialIds
     .filter((id): id is string => typeof id === 'string' && !!id)
-    .filter(id => !hasCopySuffix.test(id)); // ❌ Rejeter les IDs avec suffixes de copie
+    .filter(id => !hasCopySuffix.test(id)); // Ã¢ÂÅ’ Rejeter les IDs avec suffixes de copie
   
   const templateSet = new Set(normalized);
-  console.log(`[enrichTemplateIdsWithExistingCopies] 🔍 Initial IDs filtered: ${initialIds.length} → ${normalized.length} (removed suffixed IDs)`);
   
   if (!repeaterNodeId) {
     return Array.from(templateSet);
@@ -361,8 +340,8 @@ async function enrichTemplateIdsWithExistingCopies(
       const sourceTemplateId = typeof metadata.sourceTemplateId === 'string' ? metadata.sourceTemplateId : null;
       const copiedFromNodeId = typeof metadata.copiedFromNodeId === 'string' ? metadata.copiedFromNodeId : null;
       
-      // 🔴 FIX: N'ajouter que les IDs ORIGINAUX (sans suffixe -1, -2, etc.)
-      // Ne PAS ajouter les copies elles-mêmes comme templates!
+      // Ã°Å¸â€Â´ FIX: N'ajouter que les IDs ORIGINAUX (sans suffixe -1, -2, etc.)
+      // Ne PAS ajouter les copies elles-mÃƒÂªmes comme templates!
       if (sourceTemplateId && !sourceTemplateId.match(/-\d+$/)) {
         templateSet.add(sourceTemplateId);
       }
@@ -374,7 +353,6 @@ async function enrichTemplateIdsWithExistingCopies(
     console.warn('[repeat-blueprint-builder] Unable to derive template IDs from existing copies:', error);
   }
 
-  console.log(`[repeat-blueprint-builder] 🔍 Enriched templates (ORIGINAUX SEULEMENT): ${Array.from(templateSet).length}`);
   return Array.from(templateSet);
 }
 

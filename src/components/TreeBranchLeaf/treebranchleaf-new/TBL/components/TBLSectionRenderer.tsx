@@ -10,6 +10,7 @@
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { dlog as globalDlog } from '../../../../../utils/debug';
+import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 // ✅ NOUVEAU SYSTÈME : CalculatedValueDisplay affiche les valeurs STOCKÉES dans Prisma
 import { CalculatedValueDisplay } from './CalculatedValueDisplay';
 import { useBatchEvaluation } from '../hooks/useBatchEvaluation';
@@ -965,7 +966,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   useEffect(() => {
     const handleForceRetransform = (event: Event) => {
       const customEvent = event as CustomEvent<{ nodeId: string; fieldName: string }>;
-      console.log('🔄 [TBLSectionRenderer] Received tbl-force-retransform for:', customEvent.detail?.nodeId, 'field:', customEvent.detail?.fieldName);
+      if (isTBLDebugEnabled()) tblLog('🔄 [TBLSectionRenderer] Received tbl-force-retransform for:', customEvent.detail?.nodeId, 'field:', customEvent.detail?.fieldName);
       
       // Force re-render by updating a dummy state
       forceUpdate({});
@@ -990,7 +991,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     });
     
     if (copiesInSection.length > 0) {
-      console.log(`🚨 [SECTION-COPIES] Section "${section.title}" a reçu ${copiesInSection.length} copies:`, 
+      if (isTBLDebugEnabled()) tblLog(`🚨 [SECTION-COPIES] Section "${section.title}" a reçu ${copiesInSection.length} copies:`, 
         copiesInSection.map(f => `${f.label} (source: ${(f.metadata as any)?.sourceTemplateId})`));
     }
   }, [section.fields, section.title]);
@@ -1004,12 +1005,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       window.TBL_FORM_DATA = formData;
       window.TBL_ALL_NODES = allNodes;
       window.debugSharedRefs = () => {
-        console.log('🔍 [DEBUG SUMMARY]');
-        console.log('TBL_CASCADER_NODE_IDS:', window.TBL_CASCADER_NODE_IDS);
-        console.log('TBL_FORM_DATA pour Versant:', Object.entries(formData).filter(([k]) => k.includes('versant') || k.includes('Versant') || k.includes('e207d8bf')));
-        console.log('TBL_ALL_NODES count:', allNodes.length);
-        console.log('Nœuds de type leaf_option:', allNodes.filter(n => n.type === 'leaf_option').length);
-        console.log('Nœuds avec sharedReferenceIds:', allNodes.filter(n => n.sharedReferenceIds && n.sharedReferenceIds.length > 0).length);
+        if (isTBLDebugEnabled()) tblLog('🔍 [DEBUG SUMMARY]');
+        if (isTBLDebugEnabled()) tblLog('TBL_CASCADER_NODE_IDS:', window.TBL_CASCADER_NODE_IDS);
+        if (isTBLDebugEnabled()) tblLog('TBL_FORM_DATA pour Versant:', Object.entries(formData).filter(([k]) => k.includes('versant') || k.includes('Versant') || k.includes('e207d8bf')));
+        if (isTBLDebugEnabled()) tblLog('TBL_ALL_NODES count:', allNodes.length);
+        if (isTBLDebugEnabled()) tblLog('Nœuds de type leaf_option:', allNodes.filter(n => n.type === 'leaf_option').length);
+        if (isTBLDebugEnabled()) tblLog('Nœuds avec sharedReferenceIds:', allNodes.filter(n => n.sharedReferenceIds && n.sharedReferenceIds.length > 0).length);
       };
     }
   }, [formData, allNodes]);
@@ -1496,7 +1497,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           const response = await api.delete(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}`, { suppressErrorLogForStatuses: [404] });
           // ✨ Le serveur retourne les IDs supprimés (CASCADE + display nodes)
           const serverDeletedIds: string[] = response?.deletedIds || response?.data?.deletedIds || [node.id];
-          console.log('✅ [DELETE OK]', { nodeId: node.id, serverDeleted: serverDeletedIds.length });
+          if (isTBLDebugEnabled()) tblLog('✅ [DELETE OK]', { nodeId: node.id, serverDeleted: serverDeletedIds.length });
           // Marquer ces IDs comme supprimés pour éviter de les re-supprimer
           serverDeletedIds.forEach(id => alreadyDeletedOnServer.add(id));
           return { status: 'success', id: node.id, serverDeletedIds };
@@ -1560,7 +1561,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           } 
         }));
         
-        console.log('✨ [DELETE COPY GROUP] Mise à jour locale sans rechargement:', globalSuccessIds.length, 'éléments');
+        if (isTBLDebugEnabled()) tblLog('✨ [DELETE COPY GROUP] Mise à jour locale sans rechargement:', globalSuccessIds.length, 'éléments');
         
         // Déclencher une mise à jour du formData pour les composants dépendants
         window.dispatchEvent(new CustomEvent('TBL_FORM_DATA_CHANGED', { 
@@ -1787,7 +1788,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     let nextOrder = 0;
     
     // 🎯 Les champs sont maintenant triés par order TBL
-    console.log('🔍 [ALL FIELDS DEBUG] Fields récupérés de la base (TRIÉS PAR ORDER TBL):', {
+    if (isTBLDebugEnabled()) tblLog('🔍 [ALL FIELDS DEBUG] Fields récupérés de la base (TRIÉS PAR ORDER TBL):', {
       totalFields: fields.length,
       fieldIds: fields.map(f => f.id),
       versantFields: fields.filter(f => f.id?.includes('3f0f') || f.id?.includes('e207d8bf') || f.label?.includes('Versant')),
@@ -1819,7 +1820,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         // Log the special case for debugging: copy in section but the parent repeater is NOT in this section
         try {
           if (process.env.NODE_ENV === 'development') {
-            console.log('🔁 [COPY LOCATION] Copy appears in section (rendering):', { fieldId: field.id, label: field.label, parentRepeaterId: (field as any).parentRepeaterId, sectionId: section.id });
+            if (isTBLDebugEnabled()) tblLog('🔁 [COPY LOCATION] Copy appears in section (rendering):', { fieldId: field.id, label: field.label, parentRepeaterId: (field as any).parentRepeaterId, sectionId: section.id });
           } else {
             dlog('🔁 [COPY LOCATION] Copy appears in section (rendering):', { fieldId: field.id, label: field.label, parentRepeaterId: (field as any).parentRepeaterId, sectionId: section.id });
           }
@@ -1839,7 +1840,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       
       // 🚨 CRITIQUE: Détecter les repeaters copiés qui ont changé de type
       if (field.id === 'e207d8bf-6a6f-414c-94ed-ffde47096915' || field.id === '10724c29-a717-4650-adf3-0ea6633f64f1') {
-        console.log('🚨🚨🚨 [REPEATER TYPE CHECK] Analyse du repeater:', {
+        if (isTBLDebugEnabled()) tblLog('🚨🚨🚨 [REPEATER TYPE CHECK] Analyse du repeater:', {
           fieldId: field.id,
           fieldLabel: field.label,
           fieldType: field.type,
@@ -1856,7 +1857,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       if (isRepeater) {
         // 🔥 DEBUG CRITIQUE: Analyser ce repeater spécifiquement
         if (field.id === '10724c29-a717-4650-adf3-0ea6633f64f1') {
-          console.log('🔥🔥🔥 [REPEATER CONTAINER DEBUG] Repeater container analysé:', {
+          if (isTBLDebugEnabled()) tblLog('🔥🔥🔥 [REPEATER CONTAINER DEBUG] Repeater container analysé:', {
             fieldId: field.id,
             fieldLabel: field.label,
             fieldType: field.type,
@@ -1961,7 +1962,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const templateNodeIds = getTemplateNodeIdsInTreeOrder(expandTemplateNodeIds(templateNodeIdsRaw));
         
         // 🔍 DIAGNOSTIC: Logger les templateNodeIds pour analyser la configuration
-        console.log('🔍 [REPEATER CONFIG]', {
+        if (isTBLDebugEnabled()) tblLog('🔍 [REPEATER CONFIG]', {
           repeaterId: field.id,
           repeaterLabel: field.label,
           templateNodeIdsRaw: JSON.stringify(templateNodeIdsRaw),
@@ -1974,7 +1975,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           const node = allNodes?.find(n => n.id === tid);
           return node ? `${node.label} (${tid})` : `[NOT FOUND] ${tid}`;
         });
-        console.log('🔍 [REPEATER TEMPLATES]', templateFields);
+        if (isTBLDebugEnabled()) tblLog('🔍 [REPEATER TEMPLATES]', templateFields);
         
         // 🎯 CORRECTION : Utiliser le label du champ (ex: "Versant", "Toiture") pour le bouton
         const repeaterLabel = field.label || field.name || 'Entrée';
@@ -2061,7 +2062,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               }) : undefined) as (typeof f.options extends undefined ? never : NonNullable<typeof f.options>[number]) | undefined;
 
               // 🔍 DEBUG COPY: log key info so we can trace why conditionalFields are not injected
-              console.log('🔧 [REPEATER COPY INJECTION START]', { fieldId: f.id, fieldLabel: f.label, selectedValue, selectedOption, optionsCount: f.options?.length || 0 });
+              if (isTBLDebugEnabled()) tblLog('🔧 [REPEATER COPY INJECTION START]', { fieldId: f.id, fieldLabel: f.label, selectedValue, selectedOption, optionsCount: f.options?.length || 0 });
 
               // Si pas de conditionalFields préconstruits, reconstruire depuis allNodes via nodeId persistant
               let conditionalFieldsToRender: TBLField[] = [];
@@ -2086,7 +2087,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                         const n2 = originalId ? maybeNodeIdMap[originalId] : undefined;
                         if (typeof n1 === 'string' && n1.length > 0) cascaderNodeId = n1;
                         if (!cascaderNodeId && typeof n2 === 'string' && n2.length > 0) cascaderNodeId = n2;
-                        if (cascaderNodeId) console.log('🔁 [REPEATER COPY INJECTION] fallback cascaderNodeId via TBL_CASCADER_NODE_IDS', { fId: f.id, cascaderNodeId });
+                        if (cascaderNodeId) if (isTBLDebugEnabled()) tblLog('🔁 [REPEATER COPY INJECTION] fallback cascaderNodeId via TBL_CASCADER_NODE_IDS', { fId: f.id, cascaderNodeId });
                       }
                     } catch { /* noop */ }
                     if (!cascaderNodeId) {
@@ -2096,7 +2097,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                         const maybe2 = (window as any).TBL_FORM_DATA[templateKey];
                         if (typeof maybe2 === 'string' && maybe2.length > 0) {
                           cascaderNodeId = maybe2;
-                          console.log('🔁 [REPEATER COPY INJECTION] fallback cascaderNodeId via template key found:', { fieldId: f.id, templateKey, cascaderNodeId });
+                          if (isTBLDebugEnabled()) tblLog('🔁 [REPEATER COPY INJECTION] fallback cascaderNodeId via template key found:', { fieldId: f.id, templateKey, cascaderNodeId });
                         }
                       }
                     }
@@ -2136,7 +2137,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 }
                 // Debug: if we could not reconstruct conditionalFields for a copy
                 if ((!selectedOption || (selectedOption && (!Array.isArray(selectedOption.conditionalFields) || selectedOption.conditionalFields.length === 0))) && conditionalFieldsToRender.length === 0 && (selectedValue || cascaderNodeId)) {
-                  console.log('�🔎 [REPEATER COPY INJECTION] No conditional fields reconstructed for copy:', {
+                  if (isTBLDebugEnabled()) tblLog('�🔎 [REPEATER COPY INJECTION] No conditional fields reconstructed for copy:', {
                     fieldId: f.id,
                     fieldLabel: f.label,
                     selectedValue,
@@ -2322,7 +2323,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           const isVersantField = field.label?.includes('Versant') || field.id?.includes('versant') || field.label?.toLowerCase().includes('versant');
           
           // 🚨 DEBUG CRITIQUE: Analyser le formData pour ce champ
-          console.log('🔍 [FORM DATA DEBUG] Recherche de valeur pour field:', {
+          if (isTBLDebugEnabled()) tblLog('🔍 [FORM DATA DEBUG] Recherche de valeur pour field:', {
             fieldId: field.id,
             fieldLabel: field.label,
             rawSelectedValue,
@@ -2342,7 +2343,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           });
 
           if (isVersantField) {
-            console.log('🎯🎯🎯 [VERSANT DEBUG] Champ Versant détecté:', {
+            if (isTBLDebugEnabled()) tblLog('🎯🎯🎯 [VERSANT DEBUG] Champ Versant détecté:', {
               fieldId: field.id,
               fieldLabel: field.label,
               fieldType: field.type,
@@ -2371,8 +2372,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           // Il gère automatiquement l'affichage des champs basé sur les sélections utilisateur
 
           // Chercher l'option sélectionnée qui a des champs conditionnels
-          console.log('\n��� [ULTRA DEBUG] ========== DÉBUT INJECTION CONDITIONNELS ==========');
-          console.log('��� [ULTRA DEBUG] Champ détecté pour injection:', {
+          if (isTBLDebugEnabled()) tblLog('\n��� [ULTRA DEBUG] ========== DÉBUT INJECTION CONDITIONNELS ==========');
+          if (isTBLDebugEnabled()) tblLog('��� [ULTRA DEBUG] Champ détecté pour injection:', {
             fieldId: field.id,
             fieldLabel: field.label,
             fieldType: field.type,
@@ -2398,7 +2399,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 const cascNode = allNodes.find(n => n.id === cascNodeId);
                 if (cascNode) {
                   selectedValue = cascNode.label || (cascNode as any).value || selectedValue;
-                  console.log('🩹 [CASCADER PATCH] selectedValue reconstruit via cascaderNodeId:', { fieldId: field.id, cascNodeId, selectedValue });
+                  if (isTBLDebugEnabled()) tblLog('🩹 [CASCADER PATCH] selectedValue reconstruit via cascaderNodeId:', { fieldId: field.id, cascNodeId, selectedValue });
                 }
               }
               // 2) Fallback: si une clé miroir simple a été stockée avec le label (cas où handleFieldChange a déjà écrit la valeur)
@@ -2406,7 +2407,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 const direct = globalFormData[field.id];
                 if (typeof direct === 'string' && direct.length > 0) {
                   selectedValue = direct as unknown;
-                  console.log('🩹 [CASCADER PATCH] selectedValue reconstruit via TBL_FORM_DATA direct:', { fieldId: field.id, selectedValue });
+                  if (isTBLDebugEnabled()) tblLog('🩹 [CASCADER PATCH] selectedValue reconstruit via TBL_FORM_DATA direct:', { fieldId: field.id, selectedValue });
                 }
               }
               // 3) Dernier recours: tester les options en comparant label vs rawSelectedValue stringifié
@@ -2414,7 +2415,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 const matchByLabel = field.options.find(o => o.label === rawSelectedValue);
                 if (matchByLabel) {
                   selectedValue = matchByLabel.value ?? matchByLabel.label;
-                  console.log('🩹 [CASCADER PATCH] selectedValue reconstruit via option.label match rawSelectedValue:', { fieldId: field.id, selectedValue });
+                  if (isTBLDebugEnabled()) tblLog('🩹 [CASCADER PATCH] selectedValue reconstruit via option.label match rawSelectedValue:', { fieldId: field.id, selectedValue });
                 }
               }
             } catch (e) {
@@ -2424,7 +2425,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
           // 🔥 DEBUG spécifique pour la copie du champ Versant
           if (field.id === 'e207d8bf-6a6f-414c-94ed-ffde47096915') {
-            console.log('🔥🔥🔥 [COPIE VERSANT DEBUG] Champ copié spécifique détecté:', {
+            if (isTBLDebugEnabled()) tblLog('🔥🔥🔥 [COPIE VERSANT DEBUG] Champ copié spécifique détecté:', {
               fieldId: field.id,
               fieldLabel: field.label,
               fieldType: field.type,
@@ -2440,7 +2441,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
           // 🔥 DEBUG spécifique pour les instances copiées du repeater (format namespacé)
           if (field.id && field.id.includes('10724c29-a717-4650-adf3-0ea6633f64f1_')) {
-            console.log('🔥🔥🔥 [REPEATER INSTANCE DEBUG] Instance copiée détectée:', {
+            if (isTBLDebugEnabled()) tblLog('🔥🔥🔥 [REPEATER INSTANCE DEBUG] Instance copiée détectée:', {
               fieldId: field.id,
               fieldLabel: field.label,
               fieldType: field.type,
@@ -2457,7 +2458,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
           // 🎯 LOG SPÉCIAL VERSANT
           if (isVersantField) {
-            console.log('🎯🎯🎯 [VERSANT INJECTION] Analyse injection pour champ Versant:', {
+            if (isTBLDebugEnabled()) tblLog('🎯🎯🎯 [VERSANT INJECTION] Analyse injection pour champ Versant:', {
               fieldId: field.id,
               fieldLabel: field.label,
               selectedValue,
@@ -2481,7 +2482,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           const selectedNorm = norm(selectedValue);
           
           // 🔥 LOG CRITIQUE: Vérifier l'état de field.options AVANT recherche
-          console.log('��� [ULTRA DEBUG] État field.options au moment de la sélection:', {
+          if (isTBLDebugEnabled()) tblLog('��� [ULTRA DEBUG] État field.options au moment de la sélection:', {
             fieldId: field.id,
             fieldLabel: field.label,
             selectedValue,
@@ -2537,7 +2538,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           
           // 🔍🔍🔍 DEBUG: Vérifier si l'option sélectionnée a des conditionalFields
           if (selectedOption && field.type === 'cascade') {
-            console.log(`🎯🎯🎯 [SELECTED OPTION CHECK] field="${field.label}", selectedValue="${selectedValue}"`, {
+            if (isTBLDebugEnabled()) tblLog(`🎯🎯🎯 [SELECTED OPTION CHECK] field="${field.label}", selectedValue="${selectedValue}"`, {
               selectedOptionLabel: selectedOption.label,
               selectedOptionHasConditionalFields: !!selectedOption.conditionalFields,
               selectedOptionConditionalFieldsCount: Array.isArray(selectedOption.conditionalFields) ? selectedOption.conditionalFields.length : 0,
@@ -2576,7 +2577,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     const val = TBL_FORM_DATA[key];
                     if (typeof val === 'string' && val.length > 0) {
                       maybeId = val as string;
-                      console.log('🔁 [CASCADER FALLBACK COPY] Utilisation sélection de la copie:', {
+                      if (isTBLDebugEnabled()) tblLog('🔁 [CASCADER FALLBACK COPY] Utilisation sélection de la copie:', {
                         templateId: field.id,
                         copyId: copy.id,
                         nodeId: maybeId
@@ -2599,14 +2600,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               matchingNode = resolveMatchingNodeFromSelectedValue((selectedOption as any).id, cascaderNodeId);
             }
             if (matchingNode) {
-              console.log('🔍🔍🔍 [SECTION RENDERER] Recherche prioritaire via nodeId/selectedValue', {
+              if (isTBLDebugEnabled()) tblLog('🔍🔍🔍 [SECTION RENDERER] Recherche prioritaire via nodeId/selectedValue', {
                 fieldLabel: field.label,
                 found: !!matchingNode,
                 matchingNodeId: matchingNode.id
               });
             }
             if (!matchingNode) {
-              console.log('🔍🔍🔍 [SECTION RENDERER] Option non trouvée niveau 1, recherche dans allNodes...', {
+              if (isTBLDebugEnabled()) tblLog('🔍🔍🔍 [SECTION RENDERER] Option non trouvée niveau 1, recherche dans allNodes...', {
                 fieldLabel: field.label,
                 selectedValue,
                 allNodesCount: allNodes.length,
@@ -2641,7 +2642,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 );
               }
               
-              console.log('🔍🔍🔍 [SECTION RENDERER] Résultat recherche matchingNode:', {
+              if (isTBLDebugEnabled()) tblLog('🔍🔍🔍 [SECTION RENDERER] Résultat recherche matchingNode:', {
                 found: !!matchingNode,
                 matchingNode: matchingNode ? { id: matchingNode.id, label: matchingNode.label, type: matchingNode.type } : null
               });
@@ -2654,7 +2655,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             );
             
             if (preBuiltOption && preBuiltOption.conditionalFields && preBuiltOption.conditionalFields.length > 0) {
-              console.log('✅ [SECTION RENDERER] Option pré-clonée trouvée dans field.options avec conditionalFields:',  {
+              if (isTBLDebugEnabled()) tblLog('✅ [SECTION RENDERER] Option pré-clonée trouvée dans field.options avec conditionalFields:',  {
                 label: preBuiltOption.label,
                 conditionalFieldsCount: preBuiltOption.conditionalFields.length,
                 conditionalFieldsDetails: preBuiltOption.conditionalFields.map(cf => ({ id: cf.id, label: cf.label })),
@@ -2664,11 +2665,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               // 🧩 Fallback: si la valeur sélectionnée est undefined, utiliser la valeur de l'option retenue
               if (selectedValue === undefined || selectedValue === null) {
                 selectedValue = preBuiltOption.value as unknown;
-                console.log('🧩 [FALLBACK SELECTED VALUE] selectedValue défini via preBuiltOption.value =', selectedValue);
+                if (isTBLDebugEnabled()) tblLog('🧩 [FALLBACK SELECTED VALUE] selectedValue défini via preBuiltOption.value =', selectedValue);
               }
             } else if (matchingNode) {
-              console.log('✅✅✅ [SECTION RENDERER] Option trouvée dans allNodes:', matchingNode);
-              console.log('🔍 [MATCHING NODE DEBUG] Détails complets du nœud:', {
+              if (isTBLDebugEnabled()) tblLog('✅✅✅ [SECTION RENDERER] Option trouvée dans allNodes:', matchingNode);
+              if (isTBLDebugEnabled()) tblLog('🔍 [MATCHING NODE DEBUG] Détails complets du nœud:', {
                 id: matchingNode.id,
                 label: matchingNode.label,
                 type: matchingNode.type,
@@ -2703,14 +2704,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 childNode.type === 'leaf_option_field'
               );
 
-              console.log('🔍🔍🔍 [SECTION RENDERER] Recherche childFields:', {
+              if (isTBLDebugEnabled()) tblLog('🔍🔍🔍 [SECTION RENDERER] Recherche childFields:', {
                 matchingNodeId: matchingNode.id,
                 childFieldsCount: childFields.length,
                 childFields: childFields.map(c => ({ id: c.id, label: c.label, type: c.type, fieldType: c.fieldType, sharedReferenceName: c.sharedReferenceName }))
               });
 
               if (childFields.length > 0) {
-                console.log(`🎯🎯🎯 [SECTION RENDERER] Trouvé ${childFields.length} champs enfants (références partagées)`);
+                if (isTBLDebugEnabled()) tblLog(`🎯🎯🎯 [SECTION RENDERER] Trouvé ${childFields.length} champs enfants (références partagées)`);
                 childFields.forEach(childNode => {
                   // 🎨 HÉRITAGE APPARENCE + SUBTAB: Passer l'apparence et le subtab du parent
                   const fieldFromChild = buildConditionalFieldFromNode(childNode, parentFieldAppearanceForChildren, parentSubTabsForChildren);
@@ -2719,7 +2720,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 });
               }
 
-              console.log('🔍🔍🔍 [SECTION RENDERER] Reconstruction option depuis allNodes:', {
+              if (isTBLDebugEnabled()) tblLog('🔍🔍🔍 [SECTION RENDERER] Reconstruction option depuis allNodes:', {
                 matchingNodeId: matchingNode.id,
                 matchingNodeLabel: matchingNode.label,
                 fieldId: field.id,
@@ -2734,7 +2735,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               // Les sharedReferenceIds peuvent être dans le nœud directement OU dans ses enfants
               const sharedReferenceIds = findAllSharedReferencesRecursive(matchingNode.id, allNodes);
               
-              console.log('🔗🔗🔗 [SECTION RENDERER] Recherche RÉCURSIVE des références partagées:', {
+              if (isTBLDebugEnabled()) tblLog('🔗🔗🔗 [SECTION RENDERER] Recherche RÉCURSIVE des références partagées:', {
                 matchingNodeId: matchingNode.id,
                 matchingNodeLabel: matchingNode.label,
                 sharedReferenceIdsRecursive: sharedReferenceIds,
@@ -2752,7 +2753,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               });
 
               if (sharedReferenceIds.length > 0) {
-                console.log('🔗🔗🔗 [SECTION RENDERER] Références partagées détectées via recherche récursive:', {
+                if (isTBLDebugEnabled()) tblLog('🔗🔗🔗 [SECTION RENDERER] Références partagées détectées via recherche récursive:', {
                   matchingNodeId: matchingNode.id,
                   sharedReferenceIds,
                   fieldId: field.id,
@@ -2764,15 +2765,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 sharedReferenceIds.forEach(refId => {
                   const refNode = allNodes.find(node => node.id === refId);
                   if (!refNode) {
-                    console.log('⚠️ [SECTION RENDERER] Référence partagée introuvable:', { refId, matchingNodeId: matchingNode.id });
+                    if (isTBLDebugEnabled()) tblLog('⚠️ [SECTION RENDERER] Référence partagée introuvable:', { refId, matchingNodeId: matchingNode.id });
                     return;
                   }
                   if (existingIds.has(refNode.id)) {
-                    console.log('⚠️ [SECTION RENDERER] Référence déjà ajoutée:', { refId: refNode.id, matchingNodeId: matchingNode.id });
+                    if (isTBLDebugEnabled()) tblLog('⚠️ [SECTION RENDERER] Référence déjà ajoutée:', { refId: refNode.id, matchingNodeId: matchingNode.id });
                     return;
                   }
                   
-                  console.log('✅ [SECTION RENDERER] Ajout référence partagée:', {
+                  if (isTBLDebugEnabled()) tblLog('✅ [SECTION RENDERER] Ajout référence partagée:', {
                     refId: refNode.id,
                     refLabel: refNode.label,
                     refFieldType: refNode.fieldType,
@@ -2786,7 +2787,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   conditionalFields.push(refField);
                   existingIds.add(refField.id);
                   
-                  console.log('✅ [SECTION RENDERER] Champ conditionnel ajouté:', {
+                  if (isTBLDebugEnabled()) tblLog('✅ [SECTION RENDERER] Champ conditionnel ajouté:', {
                     refFieldId: refField.id,
                     refFieldLabel: refField.label,
                     refFieldType: refField.type,
@@ -2794,7 +2795,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   });
                 });
               } else {
-                console.log('⚠️ [SECTION RENDERER] Aucune référence partagée trouvée via recherche récursive:', {
+                if (isTBLDebugEnabled()) tblLog('⚠️ [SECTION RENDERER] Aucune référence partagée trouvée via recherche récursive:', {
                   matchingNodeId: matchingNode.id,
                   matchingNodeLabel: matchingNode.label,
                   fieldId: field.id,
@@ -2810,7 +2811,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               // 🧩 Fallback: si selectedValue est undefined, utiliser le label de l'option reconstruite
               if (selectedValue === undefined || selectedValue === null) {
                 selectedValue = reconstructedOption.value as unknown;
-                console.log('🧩 [FALLBACK SELECTED VALUE] selectedValue défini via reconstructedOption.value =', selectedValue);
+                if (isTBLDebugEnabled()) tblLog('🧩 [FALLBACK SELECTED VALUE] selectedValue défini via reconstructedOption.value =', selectedValue);
               }
             } else {
               dlog('🔴 [SECTION RENDERER] Aucune option match dans field.options ni allNodes. selectedValue=', selectedValue, 'selectedNorm=', selectedNorm);
@@ -2875,7 +2876,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
                 if (rebuiltConditional.length > 0) {
                   (selectedOption as any).conditionalFields = rebuiltConditional;
-                  console.log('✅ [SECTION RENDERER] conditionalFields reconstruits dynamiquement pour option sélectionnée:', {
+                  if (isTBLDebugEnabled()) tblLog('✅ [SECTION RENDERER] conditionalFields reconstruits dynamiquement pour option sélectionnée:', {
                     fieldId: field.id,
                     fieldLabel: field.label,
                     optionLabel: selectedOption.label,
@@ -2895,24 +2896,24 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
           // �🚨🚨 [DIAGNOSTIC VERSANT-MESURE SIMPLE] - Log TOUTES les sélections cascade
           if (field.type === 'cascade' && selectedValue) {
-            console.log(`\n${'🔥'.repeat(50)}`);
-            console.log(`🚨🚨🚨 [CASCADE SELECTED] field="${field.label}" (id=${field.id})`);
-            console.log(`🚨 selectedValue="${selectedValue}"`);
-            console.log(`🚨 selectedOption exists? ${!!selectedOption}`);
-            console.log(`🚨 field.isRepeaterInstance? ${!!(field as any).isRepeaterInstance}`);
-            console.log(`🚨 field.repeaterNamespace?`, (field as any).repeaterNamespace);
+            if (isTBLDebugEnabled()) tblLog(`\n${'🔥'.repeat(50)}`);
+            if (isTBLDebugEnabled()) tblLog(`🚨🚨🚨 [CASCADE SELECTED] field="${field.label}" (id=${field.id})`);
+            if (isTBLDebugEnabled()) tblLog(`🚨 selectedValue="${selectedValue}"`);
+            if (isTBLDebugEnabled()) tblLog(`🚨 selectedOption exists? ${!!selectedOption}`);
+            if (isTBLDebugEnabled()) tblLog(`🚨 field.isRepeaterInstance? ${!!(field as any).isRepeaterInstance}`);
+            if (isTBLDebugEnabled()) tblLog(`🚨 field.repeaterNamespace?`, (field as any).repeaterNamespace);
             
             if (selectedOption) {
-              console.log(`🚨 selectedOption.label: "${selectedOption.label}"`);
-              console.log(`🚨 selectedOption.value: "${selectedOption.value}"`);
-              console.log(`🚨 selectedOption.conditionalFields exists? ${!!selectedOption.conditionalFields}`);
-              console.log(`🚨 selectedOption.conditionalFields.length: ${selectedOption.conditionalFields?.length || 0}`);
+              if (isTBLDebugEnabled()) tblLog(`🚨 selectedOption.label: "${selectedOption.label}"`);
+              if (isTBLDebugEnabled()) tblLog(`🚨 selectedOption.value: "${selectedOption.value}"`);
+              if (isTBLDebugEnabled()) tblLog(`🚨 selectedOption.conditionalFields exists? ${!!selectedOption.conditionalFields}`);
+              if (isTBLDebugEnabled()) tblLog(`🚨 selectedOption.conditionalFields.length: ${selectedOption.conditionalFields?.length || 0}`);
               
               // 🔥🔥🔥 DETECTION SPECIFIQUE MESURE SIMPLE 🔥🔥🔥
               if (selectedOption.label === 'Mesure simple') {
-                console.log(`\n${'🎯'.repeat(30)}`);
-                console.log('🎯🎯🎯 [MESURE SIMPLE DETECTED] DÉTECTION MESURE SIMPLE !');
-                console.log('🎯 Contexte complet:', {
+                if (isTBLDebugEnabled()) tblLog(`\n${'🎯'.repeat(30)}`);
+                if (isTBLDebugEnabled()) tblLog('🎯🎯🎯 [MESURE SIMPLE DETECTED] DÉTECTION MESURE SIMPLE !');
+                if (isTBLDebugEnabled()) tblLog('🎯 Contexte complet:', {
                   fieldId: field.id,
                   fieldLabel: field.label,
                   isRepeaterInstance: !!(field as any).isRepeaterInstance,
@@ -2926,9 +2927,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 });
                 
                 if (selectedOption.conditionalFields?.length > 0) {
-                  console.log('🎯 [MESURE SIMPLE] Champs conditionnels trouvés:');
+                  if (isTBLDebugEnabled()) tblLog('🎯 [MESURE SIMPLE] Champs conditionnels trouvés:');
                   selectedOption.conditionalFields.forEach((cf, idx) => {
-                    console.log(`🎯   ${idx + 1}. ${cf.label} (id: ${cf.id}, sharedRef: ${(cf as any).sharedReferenceName})`);
+                    if (isTBLDebugEnabled()) tblLog(`🎯   ${idx + 1}. ${cf.label} (id: ${cf.id}, sharedRef: ${(cf as any).sharedReferenceName})`);
                   });
                   
                   // Vérifier spécifiquement les champs recherchés
@@ -2939,7 +2940,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     cf.label?.toLowerCase().includes('rampant')
                   );
                   
-                  console.log('🎯 [MESURE SIMPLE] Champs cibles recherchés:', {
+                  if (isTBLDebugEnabled()) tblLog('🎯 [MESURE SIMPLE] Champs cibles recherchés:', {
                     longueurFacadeTrouve: !!longueurFacade,
                     longueurFacadeDetails: longueurFacade ? {
                       id: longueurFacade.id,
@@ -2954,27 +2955,27 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     } : null
                   });
                 } else {
-                  console.log('🎯 [MESURE SIMPLE] ❌ PROBLÈME: Aucun champ conditionnel trouvé !');
+                  if (isTBLDebugEnabled()) tblLog('🎯 [MESURE SIMPLE] ❌ PROBLÈME: Aucun champ conditionnel trouvé !');
                 }
-                console.log(`${'🎯'.repeat(30)}\n`);
+                if (isTBLDebugEnabled()) tblLog(`${'🎯'.repeat(30)}\n`);
               }
               
               if (selectedOption.conditionalFields && selectedOption.conditionalFields.length > 0) {
-                console.log(`🚨 RÉFÉRENCES PARTAGÉES TROUVÉES:`, selectedOption.conditionalFields.map(f => ({
+                if (isTBLDebugEnabled()) tblLog(`🚨 RÉFÉRENCES PARTAGÉES TROUVÉES:`, selectedOption.conditionalFields.map(f => ({
                   id: f.id,
                   label: f.label,
                   type: f.type,
                   sharedReferenceName: (f as any).sharedReferenceName
                 })));
               } else {
-                console.log(`🚨 ❌ AUCUNE RÉFÉRENCE PARTAGÉE dans selectedOption.conditionalFields`);
+                if (isTBLDebugEnabled()) tblLog(`🚨 ❌ AUCUNE RÉFÉRENCE PARTAGÉE dans selectedOption.conditionalFields`);
               }
             } else {
-              console.log(`🚨 ❌ selectedOption is NULL or UNDEFINED`);
+              if (isTBLDebugEnabled()) tblLog(`🚨 ❌ selectedOption is NULL or UNDEFINED`);
             }
             
-            console.log(`🚨 rawConditionalFields.length: ${rawConditionalFields.length}`);
-            console.log(`${'🔥'.repeat(50)}\n`);
+            if (isTBLDebugEnabled()) tblLog(`🚨 rawConditionalFields.length: ${rawConditionalFields.length}`);
+            if (isTBLDebugEnabled()) tblLog(`${'🔥'.repeat(50)}\n`);
           }
 
           // 🔥 FIX: Toujours traiter les conditionalFields (repeater ET copies normales)
@@ -2982,9 +2983,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           if (rawConditionalFields.length > 0) {
             // 🎯 LOG SPÉCIFIQUE MESURE SIMPLE DANS REPEATER
             if (selectedOption?.label === 'Mesure simple' && (field as any).isRepeaterInstance) {
-              console.log(`\n${'🎯'.repeat(50)}`);
-              console.log('🎯🎯🎯 [MESURE SIMPLE REPEATER] DÉTECTION DANS REPEATER !');
-              console.log('🎯 Context:', {
+              if (isTBLDebugEnabled()) tblLog(`\n${'🎯'.repeat(50)}`);
+              if (isTBLDebugEnabled()) tblLog('🎯🎯🎯 [MESURE SIMPLE REPEATER] DÉTECTION DANS REPEATER !');
+              if (isTBLDebugEnabled()) tblLog('🎯 Context:', {
                 fieldLabel: field.label,
                 repeaterNamespace: (field as any).repeaterNamespace,
                 conditionalFieldsCount: rawConditionalFields.length,
@@ -3001,7 +3002,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             if (namespaceMeta && (field as any).isRepeaterInstance) {
               // 🔄 Cas repeater: appliquer namespaceRepeaterField SAUF pour les références partagées
               if (selectedOption?.label === 'Mesure simple') {
-                console.log('💥💥💥 [MESURE SIMPLE REPEATER] CHECKING SHARED REFERENCES');
+                if (isTBLDebugEnabled()) tblLog('💥💥💥 [MESURE SIMPLE REPEATER] CHECKING SHARED REFERENCES');
               }
               conditionalFieldsToRender = rawConditionalFields.map((conditionalField, index) => {
                 if ((conditionalField as any).isRepeaterInstance) {
@@ -3028,7 +3029,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 if (hasSharedReferences || isBackendNode) {
                   if (selectedOption?.label === 'Mesure simple') {
                     if (hasSharedReferences) {
-                      console.log(`🔥 [${index + 1}] BYPASS NAMESPACE (shared ref):`, {
+                      if (isTBLDebugEnabled()) tblLog(`🔥 [${index + 1}] BYPASS NAMESPACE (shared ref):`, {
                         id: conditionalField.id,
                         label: conditionalField.label,
                         sharedReferenceId: conditionalField.sharedReferenceId,
@@ -3037,7 +3038,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       });
                     }
                     if (isBackendNode) {
-                      console.log(`🔥 [${index + 1}] BYPASS NAMESPACE (backend node):`, {
+                      if (isTBLDebugEnabled()) tblLog(`🔥 [${index + 1}] BYPASS NAMESPACE (backend node):`, {
                         id: conditionalField.id,
                         label: conditionalField.label,
                         nodeId: (conditionalField as any).nodeId || (conditionalField as any).metadata?.nodeId || (conditionalField as any).config?.nodeId,
@@ -3066,7 +3067,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 );
                 
                 if (selectedOption?.label === 'Mesure simple') {
-                  console.log(`💥 [${index + 1}] NAMESPACÉ (pas de shared ref):`, {
+                  if (isTBLDebugEnabled()) tblLog(`💥 [${index + 1}] NAMESPACÉ (pas de shared ref):`, {
                     avant: conditionalField.label,
                     après: namespacedField.label,
                     id: namespacedField.id
@@ -3082,7 +3083,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           if (conditionalFieldsToRender.length > 0) {
             // Si la sélection a été reconstruite à partir d'une COPIE, on laisse l'injection se faire au niveau de la copie
             if (fallbackSelectedCopyId && fallbackSelectedCopyId !== field.id) {
-              console.log('↪️ [INJECTION SKIP] Sélection reconstruite depuis une copie, injection déléguée à la copie.', {
+              if (isTBLDebugEnabled()) tblLog('↪️ [INJECTION SKIP] Sélection reconstruite depuis une copie, injection déléguée à la copie.', {
                 templateId: field.id,
                 fallbackSelectedCopyId
               });
@@ -3092,7 +3093,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             // Si nous avons reconstruit la sélection via une COPIE, attacher aux champs de la copie.
             const parentIdForInjection = field.id;
             if (selectedOption?.label === 'Mesure simple') {
-              console.log('🧭 [INJECTION PARENT] Détermination du parentFieldId pour injection:', {
+              if (isTBLDebugEnabled()) tblLog('🧭 [INJECTION PARENT] Détermination du parentFieldId pour injection:', {
                 fieldId: field.id,
                 fallbackSelectedCopyId,
                 parentIdForInjection
@@ -3100,9 +3101,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             }
             // 🎉 LOG FINAL POUR MESURE SIMPLE
             if (selectedOption?.label === 'Mesure simple') {
-              console.log(`\n${'🎉'.repeat(50)}`);
-              console.log('🎉🎉🎉 [MESURE SIMPLE INJECTION] INJECTION FINALE RÉUSSIE !');
-              console.log('🎉 Champs injectés:', conditionalFieldsToRender.map(cf => ({
+              if (isTBLDebugEnabled()) tblLog(`\n${'🎉'.repeat(50)}`);
+              if (isTBLDebugEnabled()) tblLog('🎉🎉🎉 [MESURE SIMPLE INJECTION] INJECTION FINALE RÉUSSIE !');
+              if (isTBLDebugEnabled()) tblLog('🎉 Champs injectés:', conditionalFieldsToRender.map(cf => ({
                 id: cf.id,
                 label: cf.label,
                 type: cf.type,
@@ -3110,9 +3111,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 sharedReferenceId: cf.sharedReferenceId,
                 sharedReferenceIds: cf.sharedReferenceIds
               })));
-              console.log(`${'🎉'.repeat(50)}\n`);
+              if (isTBLDebugEnabled()) tblLog(`${'🎉'.repeat(50)}\n`);
             } else {
-              console.log('🔍 [CONDITIONAL FIELDS] Injection de champs conditionnels:', {
+              if (isTBLDebugEnabled()) tblLog('🔍 [CONDITIONAL FIELDS] Injection de champs conditionnels:', {
                 fieldId: field.id,
                 fieldLabel: field.label,
                 selectedOptionLabel: selectedOption?.label,
@@ -3176,7 +3177,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               );
               
               if (isAlreadyInFinalFields || isDuplicateBasedOnParent || existsInSectionFieldsDirectly) {
-                console.log('🚫 [CONDITIONAL FIELD] Éviter doublon - champ déjà présent:', {
+                if (isTBLDebugEnabled()) tblLog('🚫 [CONDITIONAL FIELD] Éviter doublon - champ déjà présent:', {
                   id: conditionalField.id,
                   label: conditionalField.label,
                   parentField: parentIdForInjection,
@@ -3304,7 +3305,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         if (field.order < existingField.order) {
           acc[existingFieldIndex] = field;
         }
-        console.log('🔧 [DEDUPLICATION] Doublon détecté et résolu:', {
+        if (isTBLDebugEnabled()) tblLog('🔧 [DEDUPLICATION] Doublon détecté et résolu:', {
           id: field.id,
           label: field.label,
           parentFieldId: (field as any).parentFieldId,
@@ -3338,12 +3339,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       sourceTemplateId: (f as any).sourceTemplateId || (f.metadata as any)?.sourceTemplateId,
       isDeletableCopy: !!(f as any).isDeletableCopy
     }));
-    console.log(`�🚨🚨 [ULTRA DEBUG] ORDEREDFIELDS Section "${section.title}" (${section.sectionName}): ${orderedFields.length} champs`, fieldDetails);
+    if (isTBLDebugEnabled()) tblLog(`�🚨🚨 [ULTRA DEBUG] ORDEREDFIELDS Section "${section.title}" (${section.sectionName}): ${orderedFields.length} champs`, fieldDetails);
     
     // Log spécifique pour les champs conditionnels
     const conditionalFields = orderedFields.filter(f => (f as any).isConditional);
     if (conditionalFields.length > 0) {
-      console.log(`🚨🚨🚨 [ULTRA DEBUG] CHAMPS CONDITIONNELS trouvés dans orderedFields:`, {
+      if (isTBLDebugEnabled()) tblLog(`🚨🚨🚨 [ULTRA DEBUG] CHAMPS CONDITIONNELS trouvés dans orderedFields:`, {
         nbChamps: conditionalFields.length,
         details: conditionalFields.map(cf => ({
           id: cf.id,
@@ -3361,7 +3362,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   // conditionalFields dans finalFields quand une option est sélectionnée.
   // On ne doit pas les filtrer à nouveau ici.
   const visibilityFilteredFields = useMemo(() => {
-    console.log('🚨🚨🚨 [ULTRA DEBUG] VISIBILITYFILTERED - Entrée:', {
+    if (isTBLDebugEnabled()) tblLog('🚨🚨🚨 [ULTRA DEBUG] VISIBILITYFILTERED - Entrée:', {
       section: section.title,
       nbOrderedFields: orderedFields.length,
       orderedFieldsConditionnels: orderedFields.filter(f => (f as any).isConditional).length,
@@ -3383,7 +3384,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         
         // Log pour debug
         if ((field as any).isConditional || (field as any).parentRepeaterId || (field as any).isDeletableCopy) {
-          console.log('🔧 [SUBTAB FILTER] Champ dynamique:', {
+          if (isTBLDebugEnabled()) tblLog('🔧 [SUBTAB FILTER] Champ dynamique:', {
             id: field.id,
             label: field.label,
             fieldSubTabs,
@@ -3410,7 +3411,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // LOG DÉTAILLÉ pour champs conditionnels injectés
     orderedFields.forEach(field => {
       if ((field as any).isConditional) {
-        console.log(`🔍🔍🔍 [CONDITIONAL FIELD DEBUG]`, {
+        if (isTBLDebugEnabled()) tblLog(`🔍🔍🔍 [CONDITIONAL FIELD DEBUG]`, {
           fieldId: field.id,
           fieldLabel: field.label,
           isConditional: (field as any).isConditional,
@@ -3423,7 +3424,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       }
     });
     
-    console.log('🚨🚨🚨 [ULTRA DEBUG] VISIBILITYFILTERED - Sortie:', {
+    if (isTBLDebugEnabled()) tblLog('🚨🚨🚨 [ULTRA DEBUG] VISIBILITYFILTERED - Sortie:', {
       section: section.title,
       nbResultFields: result.length,
       nbExcludedCopies: orderedFields.length - result.length,
@@ -3549,7 +3550,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     }
     
     // ⚠️ DEBUG DÉSACTIVÉ pour performance - réactiver si besoin
-    // console.log(`🎯 [RENDER DATA FIELD] Début renderDataSectionField pour: "${field.label}" (id: ${field.id})`);
+    // if (isTBLDebugEnabled()) tblLog(`🎯 [RENDER DATA FIELD] Début renderDataSectionField pour: "${field.label}" (id: ${field.id})`);
     
     // 🔥 CORRECTION: Les champs avec data.instances vides seront gérés par PRIORITÉ 0 dans getDisplayValue()
     
@@ -3731,7 +3732,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // 🎯 PRIORITÉ 0 ABSOLUE: Champs Total (-sum-total) - AVANT TOUT
       // Ces champs ont leur propre valeur calculée stockée en base, pas besoin de capacités complexes
       if (treeId && isSumTotalField) {
-        console.log(`🎯 [SUM-TOTAL] Affichage direct pour champ Total: ${field.id} (${field.label})`);
+        if (isTBLDebugEnabled()) tblLog(`🎯 [SUM-TOTAL] Affichage direct pour champ Total: ${field.id} (${field.label})`);
         return renderStoredCalculatedValue(field.id, {
           fallbackValue: rawValue
         });
@@ -3739,7 +3740,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // 🔥 FIX PRIORITAIRE: Forcer l'affichage via CalculatedValueDisplay pour TOUTES les copies
       if (treeId && isCopyWithSuffix) {
-        console.log(`🚀 [COPY FIX CHAMPS DONNÉES] Forçage CalculatedValueDisplay pour copie de données: ${field.id} (${field.label})`);
+        if (isTBLDebugEnabled()) tblLog(`🚀 [COPY FIX CHAMPS DONNÉES] Forçage CalculatedValueDisplay pour copie de données: ${field.id} (${field.label})`);
         // Les configs d'apparence sont maintenant automatiquement extraites par renderStoredCalculatedValue
         return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
           fallbackValue: rawValue
@@ -3747,7 +3748,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       }
       
   dlog(`🔬 [TEST CAPABILITIES] Champ "${field.label}" - Capabilities présentes:`, !!capabilities);
-  console.log(`🔥 [DEBUG CAPABILITIES] "${field.label}":`, {
+  if (isTBLDebugEnabled()) tblLog(`🔥 [DEBUG CAPABILITIES] "${field.label}":`, {
     hasData: !!capabilities?.data,
     dataActiveId: capabilities?.data?.activeId,
     dataInstancesCount: Object.keys(capabilities?.data?.instances || {}).length,
@@ -3826,7 +3827,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const hasDataCapability = capabilities?.data?.enabled || (capabilities?.data?.instances !== undefined);
       
       if (hasEmptyInstances && hasDataCapability && treeId && field.id) {
-        console.log(`🚀🚀🚀 [MEGA FIX BACKEND] Champ "${field.label}" (${field.id}) - Affichage valeur stockée`);
+        if (isTBLDebugEnabled()) tblLog(`🚀🚀🚀 [MEGA FIX BACKEND] Champ "${field.label}" (${field.id}) - Affichage valeur stockée`);
         return renderStoredCalculatedValue(resolveBackendNodeId(field) || field.id, {
           fallbackValue: effectiveMirrorValue
         });
@@ -3852,7 +3853,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           if (fallbackSourceRef && typeof fallbackSourceRef === 'string') {
             dataSourceRef = fallbackSourceRef;
             dataSourceType = 'tree';
-            console.log(`🔧 [FALLBACK SOURCEREF] Utilisation sourceRef du champ pour "${field.label}": ${dataSourceRef}`);
+            if (isTBLDebugEnabled()) tblLog(`🔧 [FALLBACK SOURCEREF] Utilisation sourceRef du champ pour "${field.label}": ${dataSourceRef}`);
           }
         }
         
@@ -3876,7 +3877,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             // Car le backend retourne les résultats indexés par field.id, pas par l'ID de la condition/formule
             if (r.startsWith('condition:') || r.startsWith('formula:') || r.startsWith('node-formula:')) {
               nodeIdToUse = field.id; // Utiliser l'ID du champ, pas celui de la condition/formule
-              console.log(`✅ [FIX FORMULA/CONDITION] Utilisation field.id pour la recherche backend: ${nodeIdToUse} (sourceRef était: ${r})`);
+              if (isTBLDebugEnabled()) tblLog(`✅ [FIX FORMULA/CONDITION] Utilisation field.id pour la recherche backend: ${nodeIdToUse} (sourceRef était: ${r})`);
             } else if (r.startsWith('@value.')) {
               nodeIdToUse = r.split('@value.')[1]; // "@value.xyz" -> "xyz"
               dlog(`✅ [FIX @VALUE] Extraction nodeId direct de sourceRef: ${nodeIdToUse}`);
@@ -3961,7 +3962,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               // On doit donc TOUJOURS utiliser field.id pour les formules/conditions.
               if (isCondition || isFormula) {
                 variableNodeId = field.id;
-                console.log(`🔥🔥🔥 [FIX ${isFormula ? 'FORMULA' : 'CONDITION'}] Utilisation de field.id: ${variableNodeId} pour "${field.label}"`);
+                if (isTBLDebugEnabled()) tblLog(`🔥🔥🔥 [FIX ${isFormula ? 'FORMULA' : 'CONDITION'}] Utilisation de field.id: ${variableNodeId} pour "${field.label}"`);
               }
               
               if (!variableNodeId || !treeId) {
@@ -3988,7 +3989,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               }
               
               if (localStorage.getItem('TBL_DIAG') === '1') {
-                console.log('🔍 [TBL_DIAG] renderStoredCalculatedValue DATA-VARIABLE', {
+                if (isTBLDebugEnabled()) tblLog('🔍 [TBL_DIAG] renderStoredCalculatedValue DATA-VARIABLE', {
                   fieldId: field.id,
                   label: field.label,
                   resolved: resolveBackendNodeId(field),
@@ -4053,7 +4054,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       // mais restent marquées comme display nodes -> forcer l'appel CalculatedValueDisplay
       if (treeId && looksLikeDisplayNode && !hasDynamicCapabilities) {
         if (localStorage.getItem('TBL_DIAG') === '1') {
-          console.log('🔍 [TBL_DIAG] Fallback display node (no dynamic capabilities):', {
+          if (isTBLDebugEnabled()) tblLog('🔍 [TBL_DIAG] Fallback display node (no dynamic capabilities):', {
             fieldId: field.id,
             label: field.label,
             resolvedBackendId: resolveBackendNodeId(field),
@@ -4090,7 +4091,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       
       // 🐛 DEBUG SPÉCIFIQUE pour M² de la toiture
       if (field.id === 'bda4aa6c-033e-46f8-ad39-5ea4e2a1cb77') {
-        console.log('🐛 [DEBUG M² toiture] Configuration complète du champ:', {
+        if (isTBLDebugEnabled()) tblLog('🐛 [DEBUG M² toiture] Configuration complète du champ:', {
           id: field.id,
           label: field.label,
           type: field.type,
@@ -4492,7 +4493,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                         // 🎯 DEBUG SPÉCIAL PANNEAU
                         const isPanneauField = field.label?.includes('Panneau') || field.label?.includes('panneau');
                         if (isPanneauField) {
-                          console.log(`🎯🎯🎯 [PANNEAU FILTER DEBUG] Champ Panneau dans filtrage DATA SECTION:`, {
+                          if (isTBLDebugEnabled()) tblLog(`🎯🎯🎯 [PANNEAU FILTER DEBUG] Champ Panneau dans filtrage DATA SECTION:`, {
                             label: field.label,
                             id: field.id,
                             sourceTemplateId,
@@ -4505,25 +4506,25 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       }
                       
                       if (sourceTemplateId && !isPhysicalRepeaterCopy && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId)) {
-                        console.log(`🚫 [COPY-FILTER] Exclusion de template DATA SECTION: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
+                        if (isTBLDebugEnabled()) tblLog(`🚫 [COPY-FILTER] Exclusion de template DATA SECTION: "${field.label}" (sourceTemplateId: ${meta.sourceTemplateId})`);
                         return false;
                       }
                       if (isRepeaterVariant && !isPhysicalRepeaterCopy) {
-                        console.log(`🚫 [REPEATER-FILTER] Exclusion de variante repeater DATA SECTION: "${field.label}" (id: ${field.id})`);
+                        if (isTBLDebugEnabled()) tblLog(`🚫 [REPEATER-FILTER] Exclusion de variante repeater DATA SECTION: "${field.label}" (id: ${field.id})`);
                       }
                       return !isRepeaterVariant || isPhysicalRepeaterCopy;
                     });
                     
-                    console.log(`🎯🎯🎯 [DATA SECTION ROW] Rendering ${filteredFields.length} filtered fields in Row:`, filteredFields.map(f => ({ id: f.id, label: f.label })));
+                    if (isTBLDebugEnabled()) tblLog(`🎯🎯🎯 [DATA SECTION ROW] Rendering ${filteredFields.length} filtered fields in Row:`, filteredFields.map(f => ({ id: f.id, label: f.label })));
                     
                     const groupedBySuffix = groupDisplayFieldsBySuffix(filteredFields);
                     return groupedBySuffix.reduce<React.ReactElement[]>((elements, { suffix, fields: groupedFields }) => {
                       if (groupedFields.length > 0) {
-                        console.log(`🎯 [DATA SECTION GROUP] Suffix "${suffix}" -> ${groupedFields.length} champs`);
+                        if (isTBLDebugEnabled()) tblLog(`🎯 [DATA SECTION GROUP] Suffix "${suffix}" -> ${groupedFields.length} champs`);
                       }
                       const groupElements = groupedFields.map((field) => {
                         const rendered = renderDataSectionField(field);
-                        console.log(`✅✅✅ [DATA SECTION FIELD RENDERED] (suffix: ${suffix}) "${field.label}" -> JSX element:`, rendered);
+                        if (isTBLDebugEnabled()) tblLog(`✅✅✅ [DATA SECTION FIELD RENDERED] (suffix: ${suffix}) "${field.label}" -> JSX element:`, rendered);
                         return rendered;
                       });
                       return elements.concat(groupElements);
@@ -4539,7 +4540,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   return groupedBySuffix.flatMap(({ suffix, fields: groupedFields }) =>
                     groupedFields.map((field) => {
                   // 🚨🚨🚨 DEBUG: Log pour chaque champ rendu avec détails complets
-                  console.log('��� [ULTRA DEBUG] RENDU CHAMP:', {
+                  if (isTBLDebugEnabled()) tblLog('��� [ULTRA DEBUG] RENDU CHAMP:', {
                     id: field.id,
                     label: field.label,
                     type: field.type,
@@ -4552,7 +4553,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
                   // Debug spécifique pour les champs conditionnels
                   if ((field as any).isConditional) {
-                    console.log('��� [CONDITIONAL FIELD RENDER] Rendu champ conditionnel:', {
+                    if (isTBLDebugEnabled()) tblLog('��� [CONDITIONAL FIELD RENDER] Rendu champ conditionnel:', {
                       id: field.id,
                       label: field.label,
                       type: field.type,
@@ -4581,7 +4582,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     
                     // 🔍 DEBUG CRITIQUE : Afficher TOUTES les propriétés du field
                     if (isAddButton) {
-                      console.log('🎯🎯🎯 [REPEATER RENDER] Rendu du bouton ADD:', {
+                      if (isTBLDebugEnabled()) tblLog('🎯🎯🎯 [REPEATER RENDER] Rendu du bouton ADD:', {
                         fieldId: field.id,
                         fieldLabel: field.label,
                         'field.repeaterButtonSize': (field as any).repeaterButtonSize,
@@ -4642,29 +4643,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             }}
                             onClick={async () => {
                             if (isAddButton) {
-                              // � PREUVE: Écrire dans fichier log frontend
-                              try {
-                                const timestamp = new Date().toISOString();
-                                await fetch('/api/debug/log-click', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ 
-                                    timestamp, 
-                                    repeaterParentId,
-                                    message: '🚨 BOUTON AJOUTER CLIQUÉ DANS FRONTEND'
-                                  })
-                                }).catch(() => {
-                                  // Fallback: utiliser console storage
-                                  if (typeof localStorage !== 'undefined') {
-                                    const logs = JSON.parse(localStorage.getItem('frontend-clicks') || '[]');
-                                    logs.push({ timestamp, repeaterParentId });
-                                    localStorage.setItem('frontend-clicks', JSON.stringify(logs.slice(-20)));
-                                  }
-                                });
-                              } catch (e) {
-                                console.error('Failed to log click', e);
-                              }
-                              
                               // 🎯 SCROLL LOCK: Sauvegarder la position du scroll pour la restaurer après
                               const scrollContainer = document.querySelector('.ant-layout-content') || document.documentElement;
                               const savedScrollTop = scrollContainer.scrollTop;
@@ -4694,11 +4672,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               
                               try {
                                 // 🎯 NOUVELLE LOGIQUE: Utiliser l'API de copie réelle
-                                console.log(`\n${'🚀'.repeat(30)}`);
-                                console.log(`🚀🚀🚀 [CRÉATION VERSANT] Bouton "Ajouter Versant" cliqué !`);
-                                console.log(`🚀 repeaterParentId: ${repeaterParentId}`);
-                                console.log(`🚀 Utilisation de l'API de copie au lieu du namespace`);
-                                console.log(`${'🚀'.repeat(30)}\n`);
+                                if (isTBLDebugEnabled()) tblLog(`\n${'🚀'.repeat(30)}`);
+                                if (isTBLDebugEnabled()) tblLog(`🚀🚀🚀 [CRÉATION VERSANT] Bouton "Ajouter Versant" cliqué !`);
+                                if (isTBLDebugEnabled()) tblLog(`🚀 repeaterParentId: ${repeaterParentId}`);
+                                if (isTBLDebugEnabled()) tblLog(`🚀 Utilisation de l'API de copie au lieu du namespace`);
+                                if (isTBLDebugEnabled()) tblLog(`${'🚀'.repeat(30)}\n`);
                                 // Récupérer les templates depuis les métadonnées du repeater
                                 const parentField = section.fields.find(f => f.id === repeaterParentId);
                                 
@@ -4724,11 +4702,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 
                                 if (templateNodeIds.length === 0) {
                                   console.error('❌ [COPY-API] Aucun template trouvé dans le repeater');
-                                  console.log('🔍 [COPY-API] parentField:', parentField);
+                                  if (isTBLDebugEnabled()) tblLog('🔍 [COPY-API] parentField:', parentField);
                                   return;
                                 }
                                 
-                                console.log(`🔁 [COPY-API] Préparation duplication via repeat endpoint:`, {
+                                if (isTBLDebugEnabled()) tblLog(`🔁 [COPY-API] Préparation duplication via repeat endpoint:`, {
                                   repeaterParentId,
                                   templateNodeIds,
                                   includeTotals: true
@@ -4752,79 +4730,29 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   repeatRequestBody
                                 );
                                 
-                                console.log(`✅ [COPY-API] Repeat execute terminé:`, response);
-                                
-                                // 🚨 DIAGNOSTIC: Afficher les infos debug du backend
-                                if (response?.debug) {
-                                  console.error(`\n${'🚨'.repeat(40)}`);
-                                  console.error(`🚨🚨🚨 [DIAGNOSTIC BACKEND] REPEAT EXECUTION DEBUG 🚨🚨🚨`);
-                                  console.error(`🔍 Templates déclarés (metadata): ${response.debug.templateCount} IDs`);
-                                  console.error(`   → ${JSON.stringify(response.debug.templateNodeIds)}`);
-                                  console.error(`\n🔧 Templates à dupliquer (après filtre sections): ${response.debug.nodesToDuplicateCount} IDs`);
-                                  console.error(`   → ${JSON.stringify(response.debug.nodesToDuplicateIds)}`);
-                                  console.error(`\n⏭️  Sections ignorées: ${response.debug.sectionCount} IDs`);
-                                  console.error(`   → ${JSON.stringify(response.debug.sectionIds)}`);
-                                  console.error(`\n✅ Champs RÉELLEMENT copiés: ${response.count} nœuds`);
-                                  console.error(`   → ${JSON.stringify(response.duplicated?.map((d: any) => ({ id: d.id, label: d.label, sourceTemplateId: d.sourceTemplateId })))}`);
-                                  console.error(`\n❌ MANQUANTS: ${response.debug.templateCount - response.count} templates non copiés`);
-                                  if (response.debug.templateCount !== response.count) {
-                                    const copiedSourceIds = new Set(response.duplicated?.map((d: any) => d.sourceTemplateId));
-                                    const missing = response.debug.templateNodeIds.filter((id: string) => !copiedSourceIds.has(id));
-                                    console.error(`   Templates manquants: ${JSON.stringify(missing)}`);
-                                  }
-                                  console.error(`${'🚨'.repeat(40)}\n`);
-                                }
+                                if (isTBLDebugEnabled()) tblLog(`✅ [COPY-API] Repeat execute terminé:`, response);
                                 
                                 // ✅ Réponse reçue. On n'appelle PAS TBL_FORCE_REFRESH pour éviter le rechargement
                                 // du formulaire complet et l'affichage d'un loader. On émet un événement local
                                 // pour indiquer qu'une duplication a été effectuée, mais en demandant aux
                                 // listeners de ne pas forcer un rechargement (suppressReload).
                                 try {
-                                  console.log('[COPY-API] Processing response for event dispatch...', { hasResponse: !!response });
+                                  if (isTBLDebugEnabled()) tblLog('[COPY-API] Processing response for event dispatch...', { hasResponse: !!response });
                                   const duplicatedArray = (response && (response.duplicated || (response as any).data?.duplicated)) || [];
-                                  console.log('[COPY-API] duplicatedArray extracted:', { count: duplicatedArray.length, items: duplicatedArray });
+                                  if (isTBLDebugEnabled()) tblLog('[COPY-API] duplicatedArray extracted:', { count: duplicatedArray.length, items: duplicatedArray });
                                   const normalizedDuplicated = duplicatedArray.map((d: any) => ({ id: d?.id || d, parentId: d?.parentId || (d?.node || {})?.parentId || undefined, sourceTemplateId: d?.sourceTemplateId || (d?.metadata || {})?.sourceTemplateId || undefined }));
                                   const newNodesPayload = (response && (response.nodes || (response as any).data?.nodes)) || [];
                                   const eventDebugId = Math.random().toString(36).slice(2,9);
-                                  // Ensure we have detailed nodes for each duplicated item before dispatching.
-                                  let finalNodesPayload: any[] = Array.isArray(newNodesPayload) ? [...newNodesPayload] : [];
+                                  // 🚀 OPTIMISATION: Utiliser directement les nœuds de la réponse sans fetches supplémentaires
+                                  // Le backend devrait retourner les nœuds complets dans response.nodes
+                                  const finalNodesPayload: any[] = Array.isArray(newNodesPayload) ? [...newNodesPayload] : [];
                                   const duplicatedIds = normalizedDuplicated.map((d:any)=>d.id).filter(Boolean);
-                                  if (duplicatedIds.length && finalNodesPayload.length === 0) {
-                                    // If response doesn't include the full nodes, attempt per-id fetch with retries
-                                    const MAX_ATTEMPTS = 5;
-                                    const RETRY_DELAY_MS = 120;
-                                    const fetchedNodes: any[] = [];
-                                    await Promise.all(duplicatedIds.map(async (id) => {
-                                      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-                                        try {
-                                          const res = await api.get(`/api/treebranchleaf/nodes/${id}/full`);
-                                          if (res) {
-                                            // Normalize response to nodes array
-                                            const arr = Array.isArray(res) ? res : (res.data || res.nodes || (res.node ? [res.node] : []));
-                                            if (Array.isArray(arr) && arr.length > 0) {
-                                              fetchedNodes.push(...arr);
-                                              break;
-                                            }
-                                          }
-                                        } catch {
-                                          // ignore and retry
-                                        }
-                                        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-                                      }
-                                    }));
-                                    if (fetchedNodes.length > 0) {
-                                      // Deduplicate by id
-                                      const existing = new Set(finalNodesPayload.map((n:any)=>n.id));
-                                      const unique = fetchedNodes.filter((n:any)=>n && n.id && !existing.has(n.id));
-                                      finalNodesPayload.push(...unique);
-                                    }
-                                    // If still empty, we'll still dispatch but the hierarchical hook will try reconcile
-                                    if (finalNodesPayload.length === 0) {
-                                      console.warn('[COPY-API] No full nodes found from response or fetch attempts for duplicated ids; dispatching with empty newNodes (hook will reconcile).', { eventDebugId, duplicatedIds });
-                                    }
-                                  }
+                                  
+                                  // 🚀 SUPPRESSION DES FETCHES BLOQUANTS
+                                  // Les fetches individuels avec retries (5 tentatives × N nœuds) bloquaient l'UI
+                                  // Le hook useTBLData-hierarchical-fixed fera un fetch silencieux si nécessaire
                                   const eventTreeId = resolveEventTreeId();
-                                  console.log('[COPY-API] 📡 About to dispatch tbl-repeater-updated', { eventDebugId, duplicatedCount: normalizedDuplicated.length, duplicatedIds: normalizedDuplicated.map(d => d.id), treeId: eventTreeId, nodeId: repeaterParentId });
+                                  if (isTBLDebugEnabled()) tblLog('[COPY-API] 📡 About to dispatch tbl-repeater-updated', { eventDebugId, duplicatedCount: normalizedDuplicated.length, duplicatedIds: normalizedDuplicated.map(d => d.id), treeId: eventTreeId, nodeId: repeaterParentId });
                                   window.dispatchEvent(new CustomEvent('tbl-repeater-updated', {
                                     detail: {
                                       treeId: eventTreeId,
@@ -4839,18 +4767,18 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   }));
                                   if (process.env.NODE_ENV === 'development') {
                                     try {
-                                      console.log('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId, duplicated: JSON.stringify(normalizedDuplicated, null, 2), newNodesCount: (finalNodesPayload || []).length });
-                                      console.log('[COPY-API] 📡 newNodes preview:', JSON.stringify((finalNodesPayload || []).slice(0, 6), null, 2));
-                                    } catch (err) { console.log('[COPY-API] dispatched (debug log failure)', err); }
+                                      if (isTBLDebugEnabled()) tblLog('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId, duplicated: JSON.stringify(normalizedDuplicated, null, 2), newNodesCount: (finalNodesPayload || []).length });
+                                      if (isTBLDebugEnabled()) tblLog('[COPY-API] 📡 newNodes preview:', JSON.stringify((finalNodesPayload || []).slice(0, 6), null, 2));
+                                    } catch (err) { if (isTBLDebugEnabled()) tblLog('[COPY-API] dispatched (debug log failure)', err); }
                                   } else {
-                                    console.log('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId });
+                                    if (isTBLDebugEnabled()) tblLog('✅✅✅ [COPY-API] 📡 Event dispatched successfully!', { eventDebugId });
                                   }
                                   // 🎯 OPTIMISTIC UI: On ne force plus le rechargement complet !
                                   // L'événement tbl-repeater-updated avec suppressReload=true et newNodes suffit
                                   // pour une mise à jour instantanée sans freeze.
                                   // Un sync silencieux en arrière-plan garantit la cohérence pour les clics suivants.
                                   try {
-                                    console.log('✅ [COPY-API] Mise à jour optimiste appliquée (pas de forceRemote)');
+                                    if (isTBLDebugEnabled()) tblLog('✅ [COPY-API] Mise à jour optimiste appliquée (pas de forceRemote)');
                                     // Dispatch un retransform LOCAL UNIQUEMENT (pas de refetch serveur)
                                     window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
                                       detail: {
@@ -4861,13 +4789,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                         eventDebugId,
                                       }
                                     }));
-                                    console.log('✅ [COPY-API] Local retransform dispatched (no server refetch)');
+                                    if (isTBLDebugEnabled()) tblLog('✅ [COPY-API] Local retransform dispatched (no server refetch)');
                                     
                                     // 🔄 BACKGROUND SYNC: Synchronisation silencieuse pour les clics suivants
                                     // Cela garantit que les suffixes -2, -3, etc. seront corrects
                                     window.setTimeout(() => {
                                       try {
-                                        console.log('🔄 [COPY-API] Background silent sync starting...');
+                                        if (isTBLDebugEnabled()) tblLog('🔄 [COPY-API] Background silent sync starting...');
                                         window.dispatchEvent(new CustomEvent('tbl-repeater-updated', {
                                           detail: {
                                             treeId: eventTreeId,
@@ -4966,7 +4894,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   
                   if (isInjectedConditionalField) {
                     // Rendre directement le champ conditionnel injecté
-                    console.log('🚨🚨🚨 [CONDITIONAL FIELD DIRECT RENDER] Rendu champ conditionnel injecté:', {
+                    if (isTBLDebugEnabled()) tblLog('🚨🚨🚨 [CONDITIONAL FIELD DIRECT RENDER] Rendu champ conditionnel injecté:', {
                       id: field.id,
                       label: field.label,
                       type: field.type,
@@ -5028,7 +4956,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       const selectedOption = field.options.find((opt: any) => opt.value === selectedValue);
                       
                       if (selectedOption && selectedOption.conditionalFields && selectedOption.conditionalFields.length > 0) {
-                        console.log('🚨🚨🚨 [CONDITIONAL FIELD DIRECT RENDER] Rendu champ conditionnel injecté:', {
+                        if (isTBLDebugEnabled()) tblLog('🚨🚨🚨 [CONDITIONAL FIELD DIRECT RENDER] Rendu champ conditionnel injecté:', {
                           id: condField.id,
                           label: condField.label,
                           type: condField.type,
@@ -5131,7 +5059,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               
                               // Debug pour comprendre pourquoi le bouton n'apparaît pas
                               if (field.label?.includes('Inclinaison') || field.label?.includes('Orientation')) {
-                                console.log('🗑️ [DELETE BUTTON DEBUG]', {
+                                if (isTBLDebugEnabled()) tblLog('🗑️ [DELETE BUTTON DEBUG]', {
                                   label: field.label,
                                   id: field.id,
                                   isLastInGroup,
@@ -5312,3 +5240,4 @@ const MemoizedTBLSectionRenderer = React.memo(TBLSectionRenderer, (prevProps, ne
 MemoizedTBLSectionRenderer.displayName = 'TBLSectionRenderer';
 
 export default MemoizedTBLSectionRenderer;
+

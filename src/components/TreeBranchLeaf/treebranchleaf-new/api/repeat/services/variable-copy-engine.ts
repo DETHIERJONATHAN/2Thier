@@ -143,20 +143,7 @@ export async function copyVariableWithCapacities(
   options: CopyVariableOptions = {}
 ): Promise<CopyVariableResult> {
   
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`�🚀🚀 [ENTRY] copyVariableWithCapacities APPELÉE !`);
-  console.log(`�🔗 COPIE VARIABLE: ${originalVarId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`   Nouveau nœud: ${newNodeId}`);
-  console.log(`   Options:`, {
-    formulaIdMapSize: options.formulaIdMap?.size,
-    conditionIdMapSize: options.conditionIdMap?.size,
-    tableIdMapSize: options.tableIdMap?.size,
-    nodeIdMapSize: options.nodeIdMap?.size,
-    variableCopyCacheSize: options.variableCopyCache?.size,
-    autoCreateDisplayNode: options.autoCreateDisplayNode
-  });
-  console.log(`${'═'.repeat(80)}\n`);
+  // 🔇 Logs d'entrée supprimés pour lisibilité
 
   const {
     formulaIdMap = new Map(),
@@ -182,7 +169,7 @@ export async function copyVariableWithCapacities(
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey)!;
-      console.log(`♻️ Variable déjà copiée pour ce nœud (cache): ${originalVarId} → ${cachedId}`);
+      // Variable en cache, réutilisation silencieuse
       
       // Récupérer les infos depuis la base pour retourner un résultat complet
       const cached = await prisma.treeBranchLeafNodeVariable.findUnique({
@@ -210,9 +197,6 @@ export async function copyVariableWithCapacities(
     });
 
     if (!originalVar) {
-      console.error(`❌ Variable introuvable: ${originalVarId}`);
-      console.warn(`⚠️ Cette variable est ORPHELINE - elle ne peut pas être copiée`);
-      
       // 🔧 FIX: Nettoyer les linkedVariableIds orphelins du nœud parent
       // pour que la prochaine création fonctionne sans référence invalide
       if (newNodeId) {
@@ -233,7 +217,7 @@ export async function copyVariableWithCapacities(
                 where: { id: node.id },
                 data: { linkedVariableIds: cleaned }
               });
-              console.log(`🧹 Nettoyé linkedVariableIds orphelin de ${node.id}`);
+              // Nettoyage silencieux linkedVariableIds
             }
           }
         } catch (cleanErr) {
@@ -252,10 +236,7 @@ export async function copyVariableWithCapacities(
       };
     }
 
-    console.log(`✅ Variable trouvée: ${originalVar.displayName}`);
-    console.log(`   sourceType: ${originalVar.sourceType}`);
-    console.log(`   sourceRef: ${originalVar.sourceRef || 'null'}`);
-    console.log(`   📍 DEBUG: newVariable.displayName sera utilisé pour le label du nœud d'affichage`);
+    // Variable trouvée, traitement en cours...
 
     const normalizedRepeatContext = repeatContext
       ? {
@@ -291,9 +272,7 @@ export async function copyVariableWithCapacities(
   let newVarId = appendSuffixOnce(originalVarId);
   let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
 
-  console.log(`📝 Préparation des IDs:`);
-  console.log(`   Variable (préliminaire): ${newVarId}`);
-  console.log(`   ExposedKey (préliminaire): ${newExposedKey}`);
+  // Préparation des IDs...
 
     // ═══════════════════════════════════════════════════════════════════════
     // 🔍 ÉTAPE 4 : Analyser et COPIER la capacité si nécessaire
@@ -318,16 +297,12 @@ export async function copyVariableWithCapacities(
       });
     };
 
-  console.log(`\n🔍 [COPY-VAR] Analyse sourceType="${originalVar.sourceType}" sourceRef="${originalVar.sourceRef}"`);
-  // IMPORTANT: on traite TOUT sourceRef non vide (pas uniquement sourceType === 'tree').
-  // Les conditions et tables peuvent avoir d'autres sourceType; on s'appuie sur parseSourceRef.
+  // Analyse du sourceRef...
   if (originalVar.sourceRef) {
       const parsed = parseSourceRef(originalVar.sourceRef);
       
       if (parsed) {
         capacityType = parsed.type;
-        console.log(`🔍 [COPY-VAR] Capacité détectée: ${capacityType} (ID: ${parsed.id})`);
-        console.log(`📦 [COPY-VAR] Maps disponibles - formulas: ${formulaIdMap.size}, conditions: ${conditionIdMap.size}, tables: ${tableIdMap.size}, nodes: ${nodeIdMap.size}`);
 
         // ═══════════════════════════════════════════════════════════════════
         // 🧮 COPIE FORMULE
@@ -341,16 +316,13 @@ export async function copyVariableWithCapacities(
         };
 
         if (capacityType === 'formula') {
-          console.log(`🧮 [COPY-VAR] Traitement FORMULE: ${parsed.id}`);
-          // Vérifier si la formule a déjà été copiée
+          // Traitement FORMULE
           if (formulaIdMap.has(parsed.id)) {
             const mappedFormulaId = formulaIdMap.get(parsed.id)!;
             newSourceRef = `${parsed.prefix}${mappedFormulaId}`;
-            console.log(`✅ [COPY-VAR] Formule déjà mappée: ${parsed.id} → ${mappedFormulaId}`);
             emitCapacityEvent(mappedFormulaId, 'formula');
           } else {
-            // ⭐ COPIER LA FORMULE MAINTENANT
-            console.log(`\n🧮 [COPY-VAR] Lancement copie formule ${parsed.id}...`);
+            // Copier la formule
             try {
               const formulaResult = await copyFormulaCapacity(
                 parsed.id,
@@ -361,17 +333,13 @@ export async function copyVariableWithCapacities(
               );
 
               if (formulaResult.success) {
-                // Ajouter au map pour les prochaines copies
                 formulaIdMap.set(parsed.id, formulaResult.newFormulaId);
                 newSourceRef = `${parsed.prefix}${formulaResult.newFormulaId}`;
-                console.log(`✅ [COPY-VAR] Formule copiée et mappée: ${parsed.id} → ${formulaResult.newFormulaId}`);
                 emitCapacityEvent(formulaResult.newFormulaId, 'formula');
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
-                console.log(`⚠️ [COPY-VAR] Échec copie formule (${formulaResult.error}), suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`❌ [COPY-VAR] Exception copie formule:`, (e as Error).message, (e as Error).stack);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -383,11 +351,9 @@ export async function copyVariableWithCapacities(
           if (conditionIdMap.has(parsed.id)) {
             const mappedConditionId = conditionIdMap.get(parsed.id)!;
             newSourceRef = `${parsed.prefix}${mappedConditionId}`;
-            console.log(`✅ Condition déjà mappée: ${parsed.id} → ${mappedConditionId}`);
             emitCapacityEvent(mappedConditionId, 'condition');
           } else {
-            // ⭐ COPIER LA CONDITION MAINTENANT
-            console.log(`\n🔀 Copie de la condition ${parsed.id}...`);
+            // Copier la condition
             try {
               const conditionResult = await copyConditionCapacity(
                 parsed.id,
@@ -398,17 +364,13 @@ export async function copyVariableWithCapacities(
               );
 
               if (conditionResult.success) {
-                // Ajouter au map
                 conditionIdMap.set(parsed.id, conditionResult.newConditionId);
                 newSourceRef = `${parsed.prefix}${conditionResult.newConditionId}`;
-                console.log(`✅ Condition copiée et mappée: ${parsed.id} → ${conditionResult.newConditionId}`);
                 emitCapacityEvent(conditionResult.newConditionId, 'condition');
               } else {
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
-                console.log(`⚠️ Échec copie condition, suffixe appliqué: ${newSourceRef}`);
               }
             } catch (e) {
-              console.error(`❌ Exception copie condition:`, (e as Error).message);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -420,11 +382,9 @@ export async function copyVariableWithCapacities(
           if (tableIdMap.has(parsed.id)) {
             const mappedTableId = tableIdMap.get(parsed.id)!;
             newSourceRef = `${parsed.prefix}${mappedTableId}`;
-            console.log(`✅ Table déjà mappée: ${parsed.id} → ${mappedTableId}`);
             emitCapacityEvent(mappedTableId, 'table');
           } else {
-            // ⭐ COPIER LA TABLE MAINTENANT
-            console.log(`\n📊 Copie de la table ${parsed.id}...`);
+            // Copier la table
             try {
               const tableResult = await copyTableCapacity(
                 parsed.id,
@@ -456,23 +416,16 @@ export async function copyVariableWithCapacities(
   // ═══════════════════════════════════════════════════════════════════
         else if (capacityType === 'field') {
           const isSharedRefField = parsed.id.startsWith('shared-ref-');
-          // Mapper le nodeId du champ si disponible
           if (nodeIdMap.has(parsed.id)) {
             newSourceRef = nodeIdMap.get(parsed.id)!;
-            console.log(`✅ Champ mappé: ${parsed.id} → ${newSourceRef}`);
           } else if (isSharedRefField) {
-            // Ne pas suffixer une shared-ref si on n'a pas de mapping (elle reste partagée)
             newSourceRef = parsed.id;
-            console.log(`⚪ Champ shared-ref conservé sans suffixe: ${newSourceRef}`);
           } else {
             newSourceRef = appendSuffixOnce(parsed.id);
-            console.log(`⚠️ Champ non mappé, suffixe appliqué: ${newSourceRef}`);
           }
         }
       }
     }
-
-    console.log(`📍 sourceRef final: ${newSourceRef}`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // 💾 ÉTAPE 5 : Créer la nouvelle variable
@@ -483,20 +436,13 @@ export async function copyVariableWithCapacities(
     // 2) Sinon, si l'auto-création est activée, on crée un nœud d'affichage dédié et on l'utilise
     // 3) Sinon, fallback sur newNodeId (peut causer des collisions si plusieurs variables par nœud)
   let finalNodeId = newNodeId;
-    // 🔍 DEBUG: Vérifier l'état de nodeIdMap
-    console.log(`🔍 [DEBUG-DISPLAY] originalVar.nodeId: ${originalVar.nodeId}`);
-    console.log(`🔍 [DEBUG-DISPLAY] nodeIdMap exists: ${!!nodeIdMap}`);
-    console.log(`🔍 [DEBUG-DISPLAY] nodeIdMap.size: ${nodeIdMap?.size || 0}`);
-    console.log(`🔍 [DEBUG-DISPLAY] nodeIdMap.has(originalVar.nodeId): ${originalVar.nodeId ? nodeIdMap?.has(originalVar.nodeId) : 'N/A (no nodeId)'}`);
-    if (nodeIdMap && nodeIdMap.size > 0) {
-      console.log(`🔍 [DEBUG-DISPLAY] nodeIdMap keys (first 5):`, Array.from(nodeIdMap.keys()).slice(0, 5));
-    }
+    // Détermination du nodeId du nœud d'affichage
     // ⚠️ TOUJOURS créer un display node dédié quand autoCreateDisplayNode=true
     // Même si la variable a un nodeId et même s'il est dans nodeIdMap,
     // on crée un nœud d'affichage séparé pour éviter les collisions et garantir
     // une structure de données cohérente lors de la copie
     if (autoCreateDisplayNode) {
-      console.log(`🚀🚀🚀 [AUTO-CREATE-DISPLAY] DÉBUT - Variable: ${originalVar.id} (${originalVar.displayName}), nodeId: ${originalVar.nodeId}`);
+      // Création du nœud d'affichage...
       
       // ⚠️ VÉRIFICATION: La variable DOIT avoir un nodeId pour créer un display node
       if (!originalVar.nodeId) {
@@ -669,7 +615,6 @@ export async function copyVariableWithCapacities(
           });
           
           const templateIds = new Set(templateNodeIds.map(t => t.id));
-          console.log(`🔍 [DISPLAY_SEARCH] Template nodes to EXCLUDE: ${templateIds.size}`);
           
           const candidates = await prisma.treeBranchLeafNode.findMany({
             where: {
@@ -695,32 +640,10 @@ export async function copyVariableWithCapacities(
             }
           });
 
-          if (candidates.length === 0) {
-            console.log(`⚠️ [DISPLAY_SEARCH] No display node found after excluding templates`);
-          } else {
-            console.log(`✅ [DISPLAY_SEARCH] Found ${candidates.length} candidates after excluding templates`);
-          }
-
           originalDisplayNode = pickDisplayCandidate(candidates);
         }
 
-        if (originalDisplayNode) {
-          console.log(
-            `✅ [AUTO-CREATE-DISPLAY] Original display trouvé: ${originalDisplayNode.id} (parent=${originalDisplayNode.parentId})`
-          );
-        } else {
-          console.log(
-            `⚠️  [AUTO-CREATE-DISPLAY] Aucun display original trouvé pour ${originalVar.id}`
-          );
-          
-          // 🔧 FALLBACK: Si pas de display node trouvé, utiliser le parent du nœud PROPRIÉTAIRE
-          // (qui est le nœud auquel la variable appartient)
-          if (originalVar.nodeId && originalOwnerNode) {
-            console.log(
-              `📌 [AUTO-CREATE-DISPLAY] Fallback: utilisant parent du nœud propriétaire: ${originalOwnerNode.parentId}`
-            );
-          }
-        }
+        // Display node trouvé ou fallback vers parent du propriétaire
 
         // 🔑 CRITIQUE: Charger le nœud DUPLIQUÉ pour obtenir son parentId
         // Le nœud dupliqué peut avoir un parentId différent du nœud original
@@ -775,17 +698,12 @@ export async function copyVariableWithCapacities(
           const inheritedDisplayParentId = originalDisplayNode?.parentId ?? null;
           
           let resolvedParentId = inheritedDisplayParentId
-            ?? originalOwnerNode.parentId  // ⭐ PRIORITÉ 2: Parent du propriétaire original
+            ?? originalOwnerNode.parentId
             ?? displayParentId
             ?? duplicatedOwnerNode.parentId
             ?? null;
           
-          console.log(`📌 [DISPLAY_NODE_PARENT] Résolution du parentId:`);
-          console.log(`   - inheritedDisplayParentId: ${inheritedDisplayParentId}`);
-          console.log(`   - originalOwnerNode.parentId: ${originalOwnerNode.parentId}`);
-          console.log(`   - resolvedParentId final: ${resolvedParentId}`);
-          
-          // Vérifier que le parent existe si fourni, sinon fallback au parent du nœud dupliqué
+          // Vérifier que le parent existe
           if (resolvedParentId && prisma) {
             try {
               const parentExists = await prisma.treeBranchLeafNode.findUnique({
@@ -793,19 +711,13 @@ export async function copyVariableWithCapacities(
                 select: { id: true }
               });
               if (!parentExists) {
-                console.log(`⚠️  [DISPLAY_NODE_PARENT] Parent ${resolvedParentId} n'existe pas, fallback au parent du nœud dupliqué`);
                 resolvedParentId = duplicatedOwnerNode.parentId ?? null;
-              } else {
-                console.log(`✅ [DISPLAY_NODE_PARENT] Parent ${resolvedParentId} existe, utilisation confirmée`);
               }
             } catch (parentCheckErr) {
-              console.warn(`⚠️  [DISPLAY_NODE_PARENT] Erreur lors de la vérification du parent, fallback:`, (parentCheckErr as Error).message);
               resolvedParentId = duplicatedOwnerNode.parentId ?? null;
             }
           } else if (!resolvedParentId) {
-            // Fallback: utiliser le parent du nœud dupliqué
             resolvedParentId = duplicatedOwnerNode.parentId ?? null;
-            console.log(`📌 [DISPLAY_NODE_PARENT] Utilisation du parent du nœud dupliqué: ${resolvedParentId}`);
           }
 
           // Générer un ID unique pour le nœud d'affichage (ex: <oldVarNodeId>-<suffix>)
@@ -947,30 +859,38 @@ export async function copyVariableWithCapacities(
             createdAt: now,
             updatedAt: now,
             hasAPI: tableSourceNode.hasAPI ?? false,
-            hasCondition: tableSourceNode.hasCondition ?? false,
+            // 🔧 FIX: Ne pas hériter des flags hasFormula/hasCondition/hasTable du nœud source
+            // si la variable actuelle n'a PAS de capacité de ce type.
+            // Sinon un simple champ de saisie (variable simple) se transforme en cellule de calcul !
+            hasCondition: capacityType === 'condition' ? (tableSourceNode.hasCondition ?? true) : false,
             hasData: tableSourceNode.hasData ?? false,
-            hasFormula: tableSourceNode.hasFormula ?? false,
+            hasFormula: capacityType === 'formula' ? (tableSourceNode.hasFormula ?? true) : false,
             hasLink: tableSourceNode.hasLink ?? false,
             hasMarkers: tableSourceNode.hasMarkers ?? false,
-            hasTable: tableSourceNode.hasTable ?? false,
-            table_name: tableSourceNode.table_name,
-            table_activeId: tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
-            table_instances: cloneAndSuffixInstances(tableSourceNode.table_instances) as any,
-            table_columns: tableSourceNode.table_columns as any,
-            table_data: tableSourceNode.table_data as any,
-            table_importSource: tableSourceNode.table_importSource as any,
-            table_isImported: tableSourceNode.table_isImported ?? false,
-            table_meta: tableSourceNode.table_meta as any,
-            table_rows: tableSourceNode.table_rows as any,
-            table_type: tableSourceNode.table_type as any,
-            linkedTableIds: Array.isArray(tableSourceNode.linkedTableIds)
+            hasTable: capacityType === 'table' ? (tableSourceNode.hasTable ?? true) : false,
+            table_name: capacityType === 'table' ? tableSourceNode.table_name : null,
+            table_activeId: capacityType === 'table' && tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
+            table_instances: capacityType === 'table' ? cloneAndSuffixInstances(tableSourceNode.table_instances) as any : null,
+            table_columns: capacityType === 'table' ? tableSourceNode.table_columns as any : null,
+            table_data: capacityType === 'table' ? tableSourceNode.table_data as any : null,
+            table_importSource: capacityType === 'table' ? tableSourceNode.table_importSource as any : null,
+            table_isImported: capacityType === 'table' ? (tableSourceNode.table_isImported ?? false) : false,
+            table_meta: capacityType === 'table' ? tableSourceNode.table_meta as any : null,
+            table_rows: capacityType === 'table' ? tableSourceNode.table_rows as any : null,
+            table_type: capacityType === 'table' ? tableSourceNode.table_type as any : null,
+            linkedTableIds: capacityType === 'table' && Array.isArray(tableSourceNode.linkedTableIds)
               ? tableSourceNode.linkedTableIds.map(id => appendSuffix(String(id)))
               : [] as any,
-            // 🔧 FIX 16/12/2025: NE PAS inclure linkedConditionIds et linkedFormulaIds ici
-            // car ils seront mis à jour APRÈS la copie des conditions/formules.
-            // Si on les inclut avec [], ils écraseraient les valeurs ajoutées par copyFormulaCapacity!
-            // linkedConditionIds: [] as any,  // SUPPRIMÉ
-            // linkedFormulaIds: [] as any,    // SUPPRIMÉ
+            // 🔧 FIX 24/12/2025: Explicitement mettre à null/[] les IDs de capacités non pertinentes
+            // pour éviter qu'un champ simple hérite des formules/conditions du nœud source
+            formula_activeId: capacityType === 'formula' && tableSourceNode.formula_activeId 
+              ? appendSuffix(String(tableSourceNode.formula_activeId)) 
+              : null,
+            condition_activeId: capacityType === 'condition' && tableSourceNode.condition_activeId 
+              ? appendSuffix(String(tableSourceNode.condition_activeId)) 
+              : null,
+            linkedFormulaIds: [] as any,  // Sera rempli après si capacityType === 'formula'
+            linkedConditionIds: [] as any,  // Sera rempli après si capacityType === 'condition'
             linkedVariableIds: [newVarId],
             data_activeId: tableSourceNode.data_activeId ? appendSuffix(String(tableSourceNode.data_activeId)) : null,
             data_displayFormat: tableSourceNode.data_displayFormat,
@@ -990,10 +910,8 @@ export async function copyVariableWithCapacities(
           const maybeExisting = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
           if (maybeExisting) {
             await prisma.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
-            console.log(`✅✅✅ [AUTO-CREATE-DISPLAY] Nœud d'affichage existant mis à jour: ${displayNodeId} (label: ${originalVar.displayName}-${suffix})`);
           } else {
             await prisma.treeBranchLeafNode.create({ data: displayNodeData as any });
-            console.log(`✅✅✅ [AUTO-CREATE-DISPLAY] Nœud d'affichage CRÉÉ AVEC SUCCÈS: ${displayNodeId} (label: ${originalVar.displayName}-${suffix})`);
           }
 
           // ═══════════════════════════════════════════════════════════════════════
@@ -1002,153 +920,110 @@ export async function copyVariableWithCapacities(
           // 🔧 FIX 16/12/2025: Utiliser tableSourceNode au lieu de originalOwnerNode
           // pour copier les formules/conditions depuis le bon nœud source
           // (peut être le display node original ou le nœud propriétaire)
+          // 🔧 FIX 24/12/2025: Ne copier les formules/conditions QUE si la variable
+          // a un capacityType correspondant. Sinon un champ simple se transforme en cellule de calcul !
           const copiedFormulaIds: string[] = [];
           const copiedConditionIds: string[] = [];
 
           try {
-            // 🔢 COPIER LES FORMULES depuis tableSourceNode (pas originalOwnerNode)
-            const originalFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
-              where: { nodeId: tableSourceNode.id }
-            });
-            console.log(`📋 Formules à copier depuis ${tableSourceNode.id}: ${originalFormulas.length}`);
-            
-            for (const f of originalFormulas) {
-              // 🔧 FIX 16/12/2025: Utiliser l'ID original SANS manipulation
-              // appendSuffixOnce ajoute le suffixe (ex: -1) à l'ID de base
-              const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
+            // Copier les formules depuis tableSourceNode UNIQUEMENT si la variable a une capacité formule
+            if (capacityType === 'formula') {
+              const originalFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
+                where: { nodeId: tableSourceNode.id }
+              });
               
-              // Vérifier si la formule existe déjà
-              const existingFormula = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
-              
-              if (existingFormula) {
-                // Si la formule existe et pointe vers CE nœud, on la réutilise
-                if (existingFormula.nodeId === displayNodeId) {
-                  console.log(`   ♻️ Formule ${newFormulaId} existe déjà pour CE nœud, skip`);
-                  copiedFormulaIds.push(newFormulaId);
+              for (const f of originalFormulas) {
+                const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
+                const existingFormula = await prisma.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
+                
+                if (existingFormula) {
+                  if (existingFormula.nodeId === displayNodeId) {
+                    copiedFormulaIds.push(newFormulaId);
+                    continue;
+                  }
                   continue;
                 }
-                // Si elle existe pour un AUTRE nœud, c'est un conflit - on skip
-                // (chaque nœud avec le même suffixe devrait avoir les mêmes formules)
-                console.log(`   ⚠️ Formule ${newFormulaId} existe pour autre nœud (${existingFormula.nodeId}), skip`);
-                continue;
-              }
-              
-              // Utiliser copyFormulaCapacity pour avoir la réécriture centralisée avec suffixes
-              try {
-                const formulaResult = await copyFormulaCapacity(
-                  f.id,
-                  displayNodeId,
-                  suffix,
-                  prisma,
-                  { formulaIdMap, nodeIdMap }
-                );
+                
+                // Utiliser copyFormulaCapacity pour avoir la réécriture centralisée avec suffixes
+                try {
+                  const formulaResult = await copyFormulaCapacity(
+                    f.id,
+                    displayNodeId,
+                    suffix,
+                    prisma,
+                    { formulaIdMap, nodeIdMap }
+                  );
 
-                if (formulaResult.success) {
-                  formulaIdMap.set(f.id, formulaResult.newFormulaId);
-                  copiedFormulaIds.push(formulaResult.newFormulaId);
-                  console.log(`   ✅ Formule copiée (centralisée): ${f.id} → ${formulaResult.newFormulaId}`);
-                } else {
-                  console.error(`   ❌ Erreur copie formule: ${f.id}`);
+                  if (formulaResult.success) {
+                    formulaIdMap.set(f.id, formulaResult.newFormulaId);
+                    copiedFormulaIds.push(formulaResult.newFormulaId);
+                  }
+                } catch (error) {
+                  // Erreur copie formule silencieuse
                 }
-              } catch (error) {
-                console.error(`   ❌ Exception copie formule ${f.id}:`, error);
               }
             }
 
-            // 🔀 COPIER LES CONDITIONS depuis tableSourceNode (pas originalOwnerNode)
-            // 🔧 FIX 16/12/2025: Utiliser copyConditionCapacity pour une copie centralisée
-            // avec le bon propriétaire (suffixé)
-            const originalConditions = await prisma.treeBranchLeafNodeCondition.findMany({
-              where: { nodeId: tableSourceNode.id }
-            });
-            console.log(`📋 Conditions à copier depuis ${tableSourceNode.id}: ${originalConditions.length}`);
-            
-            for (const c of originalConditions) {
-              // 🔧 FIX 16/12/2025: Utiliser l'ID original SANS manipulation complexe
-              const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
+            // Copier les conditions depuis tableSourceNode UNIQUEMENT si la variable a une capacité condition
+            if (capacityType === 'condition') {
+              const originalConditions = await prisma.treeBranchLeafNodeCondition.findMany({
+                where: { nodeId: tableSourceNode.id }
+              });
               
-              // Vérifier si la condition existe déjà
-              const existingCondition = await prisma.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
-              
-              if (existingCondition) {
-                // Si la condition existe et pointe vers CE nœud, on la réutilise
-                if (existingCondition.nodeId === displayNodeId) {
-                  console.log(`   ♻️ Condition ${newConditionId} existe déjà pour CE nœud, skip`);
-                  copiedConditionIds.push(newConditionId);
+              for (const c of originalConditions) {
+                const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
+                const existingCondition = await prisma.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+                
+                if (existingCondition) {
+                  if (existingCondition.nodeId === displayNodeId) {
+                    copiedConditionIds.push(newConditionId);
+                    continue;
+                  }
                   continue;
                 }
-                // Si elle existe pour un AUTRE nœud, c'est un conflit - on skip
-                console.log(`   ⚠️ Condition ${newConditionId} existe pour autre nœud (${existingCondition.nodeId}), skip`);
-                continue;
-              }
-              
-              // 🔧 FIX 16/12/2025: Utiliser copyConditionCapacity au lieu de créer manuellement
-              // Cela garantit que le nodeId sera le bon propriétaire (suffixé)
-              try {
-                const conditionResult = await copyConditionCapacity(
-                  c.id,
-                  displayNodeId,
-                  suffix,
-                  prisma,
-                  { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
-                );
+                
+                // 🔧 FIX 16/12/2025: Utiliser copyConditionCapacity au lieu de créer manuellement
+                // Cela garantit que le nodeId sera le bon propriétaire (suffixé)
+                try {
+                  const conditionResult = await copyConditionCapacity(
+                    c.id,
+                    displayNodeId,
+                    suffix,
+                    prisma,
+                    { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
+                  );
 
-                if (conditionResult.success) {
-                  conditionIdMap.set(c.id, conditionResult.newConditionId);
-                  copiedConditionIds.push(conditionResult.newConditionId);
-                  console.log(`   ✅ Condition copiée (centralisée): ${c.id} → ${conditionResult.newConditionId}`);
-                } else {
-                  console.error(`   ❌ Erreur copie condition: ${c.id}`);
+                  if (conditionResult.success) {
+                    conditionIdMap.set(c.id, conditionResult.newConditionId);
+                    copiedConditionIds.push(conditionResult.newConditionId);
+                  }
+                } catch (error) {
+                  // Erreur copie condition silencieuse
                 }
-              } catch (error) {
-                console.error(`   ❌ Exception copie condition ${c.id}:`, error);
               }
             }
 
-            // 📊 METTRE À JOUR LE NŒUD avec hasFormula/hasCondition et linkedIds
-            // 🔧 FIX 16/12/2025: Aussi mettre à jour condition_activeId et formula_activeId
+            // Mettre à jour le nœud avec hasFormula/hasCondition et linkedIds
             const updateData: Record<string, any> = {};
             if (copiedFormulaIds.length > 0) {
               updateData.hasFormula = true;
               updateData.linkedFormulaIds = copiedFormulaIds;
-              // Mettre à jour formula_activeId - chercher l'ID correspondant ou utiliser le premier
               if (tableSourceNode.formula_activeId) {
                 const newFormulaActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.formula_activeId)));
-                if (copiedFormulaIds.includes(newFormulaActiveId)) {
-                  updateData.formula_activeId = newFormulaActiveId;
-                  console.log(`   📊 formula_activeId=${newFormulaActiveId}`);
-                } else {
-                  // L'ID exact n'est pas trouvé (peut-être ID dédié), utiliser le premier
-                  updateData.formula_activeId = copiedFormulaIds[0];
-                  console.log(`   📊 formula_activeId=${copiedFormulaIds[0]} (premier disponible)`);
-                }
+                updateData.formula_activeId = copiedFormulaIds.includes(newFormulaActiveId) ? newFormulaActiveId : copiedFormulaIds[0];
               } else if (copiedFormulaIds.length > 0) {
-                // Pas d'activeId sur l'original, utiliser le premier
                 updateData.formula_activeId = copiedFormulaIds[0];
-                console.log(`   📊 formula_activeId=${copiedFormulaIds[0]} (premier par défaut)`);
               }
-              console.log(`   📊 hasFormula=true, linkedFormulaIds=${copiedFormulaIds.join(', ')}`);
             }
             if (copiedConditionIds.length > 0) {
               updateData.hasCondition = true;
               updateData.linkedConditionIds = copiedConditionIds;
-              // Mettre à jour condition_activeId - chercher l'ID correspondant ou utiliser le premier
               if (tableSourceNode.condition_activeId) {
                 const newConditionActiveId = appendSuffixOnce(stripTrailingNumeric(String(tableSourceNode.condition_activeId)));
-                if (copiedConditionIds.includes(newConditionActiveId)) {
-                  updateData.condition_activeId = newConditionActiveId;
-                  console.log(`   📊 condition_activeId=${newConditionActiveId}`);
-                } else {
-                  // L'ID exact n'est pas trouvé (peut-être ID dédié), utiliser le premier
-                  updateData.condition_activeId = copiedConditionIds[0];
-                  console.log(`   📊 condition_activeId=${copiedConditionIds[0]} (premier disponible)`);
-                }
+                updateData.condition_activeId = copiedConditionIds.includes(newConditionActiveId) ? newConditionActiveId : copiedConditionIds[0];
               } else if (copiedConditionIds.length > 0) {
-                // Pas d'activeId sur l'original, utiliser le premier
                 updateData.condition_activeId = copiedConditionIds[0];
-                console.log(`   📊 condition_activeId=${copiedConditionIds[0]} (premier par défaut)`);
               }
-              console.log(`   📊 hasCondition=true, linkedConditionIds=${copiedConditionIds.join(', ')}`);
             }
             
             if (Object.keys(updateData).length > 0) {
@@ -1156,39 +1031,26 @@ export async function copyVariableWithCapacities(
                 where: { id: displayNodeId },
                 data: updateData
               });
-              console.log(`✅ Nœud d'affichage ${displayNodeId} mis à jour avec formules/conditions`);
             }
 
-            // ═══════════════════════════════════════════════════════════════════════
-            // 📊 COPIER LES TABLES du nœud propriétaire original
-            // ═══════════════════════════════════════════════════════════════════════
-            // CRITIQUE: Si le nœud original a des tables (hasTable=true et linkedTableIds),
-            // on doit les copier pour que la copie fonctionne correctement
+            // Copier les tables du nœud propriétaire original
             const copiedTableIds: string[] = [];
             
             if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
-              console.log(`\n📊 [COPY-TABLES] Nœud original a ${tableSourceNode.linkedTableIds.length} tables à copier`);
-              
               for (const originalTableId of tableSourceNode.linkedTableIds) {
                 const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
-                
-                // Vérifier si la table existe déjà
-                const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({
-                  where: { id: newTableId }
-                });
+                const existingTable = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
                 
                 if (existingTable) {
-                  console.log(`   ♻️ Table ${newTableId} existe déjà, skip`);
                   copiedTableIds.push(newTableId);
                   tableIdMap.set(String(originalTableId), newTableId);
                   continue;
                 }
                 
-                // Copier la table via copyTableCapacity
                 try {
                   const tableResult = await copyTableCapacity(
                     String(originalTableId),
-                    displayNodeId,  // La nouvelle table appartient au display node copié
+                    displayNodeId,
                     suffix,
                     prisma,
                     { nodeIdMap, tableCopyCache: tableIdMap, tableIdMap }
@@ -1197,72 +1059,51 @@ export async function copyVariableWithCapacities(
                   if (tableResult.success) {
                     tableIdMap.set(String(originalTableId), tableResult.newTableId);
                     copiedTableIds.push(tableResult.newTableId);
-                    console.log(`   ✅ Table copiée: ${originalTableId} → ${tableResult.newTableId} (${tableResult.columnsCount} cols, ${tableResult.rowsCount} rows)`);
-                  } else {
-                    console.warn(`   ⚠️ Échec copie table ${originalTableId}: ${tableResult.error}`);
                   }
                 } catch (tableErr) {
-                  console.error(`   ❌ Exception copie table ${originalTableId}:`, (tableErr as Error).message);
+                  // Erreur copie table silencieuse
                 }
               }
               
-              // Mettre à jour hasTable et linkedTableIds sur le display node
               if (copiedTableIds.length > 0) {
                 await prisma.treeBranchLeafNode.update({
                   where: { id: displayNodeId },
-                  data: { 
-                    hasTable: true,
-                    linkedTableIds: copiedTableIds
-                  }
+                  data: { hasTable: true, linkedTableIds: copiedTableIds }
                 });
-                console.log(`   ✅ hasTable=true, linkedTableIds mis à jour sur ${displayNodeId}`);
               }
             }
 
           } catch (copyCapErr) {
-            console.warn(`⚠️ Erreur lors de la copie des formules/conditions pour display node:`, (copyCapErr as Error).message);
+            // Erreur silencieuse copie formules/conditions
           }
         } else {
-          console.warn(`⚠️ Impossible de récupérer le nœud propriétaire original ${originalVar.nodeId}. Fallback newNodeId.`);
+          // Fallback si nœud propriétaire introuvable
         }
         } catch (e) {
-          console.warn(`⚠️ Erreur lors de la création du nœud d'affichage dédié:`, (e as Error).message);
+          // Erreur silencieuse création display node
         }
       }
-      console.log(`🎉🎉🎉 [AUTO-CREATE-DISPLAY] TERMINÉ - Variable: ${originalVar.id} (${originalVar.displayName}), displayNodeId: ${finalNodeId}`);
-    } else {
-      console.log(`📍 nodeId utilisé (fallback): ${finalNodeId}`);
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🛡️ ÉTAPE 5A : Éviter les collisions d'ID (conflits inter-templates)
-    // ═══════════════════════════════════════════════════════════════════════
-    // Cas rencontré: plusieurs templates peuvent référencer la même variable d'origine
-    // et utiliser le même suffixe numérique (ex: 1), provoquant un conflit unique
-    // sur id et/ou exposedKey. On sécurise en ajoutant un discriminant basé sur
-    // le nœud d'affichage final si collision détectée.
+    // Éviter les collisions d'ID
     try {
       const existingById = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId || newNodeId || '').slice(-6) || `${Date.now()}`;
-        const adjusted = `${originalVarId}-${suffix}-${tail}`;
-        console.warn(`⚠️ Conflit sur id variable (${newVarId}), ajustement → ${adjusted}`);
-        newVarId = adjusted;
+        newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`⚠️ Vérification collision id variable échouée:`, (e as Error).message);
+      // Vérification collision silencieuse
     }
 
     try {
       const existingByKey = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId || newNodeId || '').slice(-6) || `${Date.now()}`;
-        const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
-        console.warn(`⚠️ Conflit sur exposedKey (${newExposedKey}), ajustement → ${adjustedKey}`);
-        newExposedKey = adjustedKey;
+        newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`⚠️ Vérification collision exposedKey échouée:`, (e as Error).message);
+      // Vérification collision silencieuse
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1276,16 +1117,13 @@ export async function copyVariableWithCapacities(
     try {
       const existingForNode = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
       if (existingForNode) {
-        // 🔍 Vérifier que la variable existante a le BON suffixe
         const expectedVarId = `${originalVarId}-${suffix}`;
         const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
         
         if (hasSuffixMatch) {
-          console.log(`♻️ Variable existante AVEC BON SUFFIXE pour ${finalNodeId}, réutilisation: ${existingForNode.id}`);
           _reusingExistingVariable = true;
           _existingVariableForReuse = existingForNode;
           
-          // Harmoniser le nœud d'affichage avec les données de la variable existante
           try {
             const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
             await prisma.treeBranchLeafNode.update({
@@ -1302,78 +1140,46 @@ export async function copyVariableWithCapacities(
                 field_label: (normalizedExistingName as any) || undefined
               }
             });
-            // 🔴 CRITIQUE: NE PAS ajouter la variable existante aux linkedVariableIds des nœuds ORIGINAUX (templates)
             const isCopiedNode = finalNodeId.includes('-') && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId);
-            if (!isCopiedNode) {
-              console.warn(`⚠️ SKIP addToNodeLinkedField (réutilisation): ${finalNodeId} est un nœud ORIGINAL, pas une copie`);
-            } else {
+            if (isCopiedNode) {
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
             }
           } catch (e) {
-            console.warn(`⚠️ Erreur MAJ display node (réutilisation):`, (e as Error).message);
+            // Erreur MAJ display node silencieuse
           }
 
-          // Mettre en cache l'ID réutilisé pour éviter d'autres créations
           const cacheKey = `${originalVarId}|${finalNodeId}`;
           variableCopyCache.set(cacheKey, existingForNode.id);
-          
-          // ⚠️ NE PAS RETOURNER ICI - Continuer pour copier les capacités de cette variable
-          // pour ce nouveau nœud/contexte !
         } else {
-          console.warn(`⚠️ Variable existante MAIS MAUVAIS SUFFIXE: ${existingForNode.id}, attendu: ${expectedVarId}`);
-          console.warn(`   → Suppression de l'ancienne ET création nouvelle variable obligatoire`);
-          
-          // 🔧 CRITIQUE: Supprimer l'ancienne variable car contrainte UNIQUE sur nodeId
-          // On NE PEUT PAS avoir 2 variables pour le même nodeId
           try {
             await prisma.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
-            console.log(`🗑️ Ancienne variable supprimée: ${existingForNode.id}`);
           } catch (delError) {
-            console.warn(`⚠️ Erreur suppression ancienne variable:`, (delError as Error).message);
+            // Erreur suppression silencieuse
           }
-          
-          // 🎯 FORCER la création d'une nouvelle variable
           _reusingExistingVariable = false;
           _existingVariableForReuse = null;
         }
       }
     } catch (e) {
-      console.warn(`⚠️ Vérification variable existante par nodeId échouée:`, (e as Error).message);
+      // Vérification silencieuse
     }
 
     // Utiliser la variable réutilisée ou en créer une nouvelle
     let newVariable: any;
     
     if (_reusingExistingVariable && _existingVariableForReuse) {
-      console.log(`♻️ [COPY-VAR] Utilisation de variable existante: ${_existingVariableForReuse.id}`);
       newVariable = _existingVariableForReuse;
     } else {
-      console.log(`\n🔨 [COPY-VAR] CRÉATION DE LA VARIABLE EN BASE...`);
-      console.log(`   ID: ${newVarId}`);
-      console.log(`   nodeId: ${finalNodeId}`);
-      console.log(`   exposedKey: ${newExposedKey}`);
       const normalizedDisplayName = forceSingleSuffix(originalVar.displayName);
-      console.log(`   displayName: ${normalizedDisplayName}`);
-      console.log(`   sourceRef: ${newSourceRef}`);
-      console.log(`   sourceType: ${originalVar.sourceType}`);
       
-      // 🔍 Vérification CRITIQUE du finalNodeId
       if (!finalNodeId) {
-        console.error(`❌ ERREUR CRITIQUE: finalNodeId est NULL/undefined!`);
-        console.error(`   autoCreateDisplayNode: ${autoCreateDisplayNode}`);
-        console.error(`   originalVar.nodeId: ${originalVar.nodeId}`);
-        console.error(`   newNodeId: ${newNodeId}`);
         throw new Error(`Cannot create variable: finalNodeId is ${finalNodeId}. This indicates the display node was not created properly.`);
       }
 
       try {
-        // 🔧 COPIER ET SUFFIXER les capacités liées
-        
-        // ⭐ CRITIQUE : Ajouter le mapping du nœud ORIGINAL au nœud NOUVEAU
-        // Cela permet aux formules de réécrire correctement les @value.shared-ref-xxx
+        // Ajouter le mapping du nœud si nécessaire
         if (originalVar.nodeId && finalNodeId && !nodeIdMap.has(originalVar.nodeId)) {
           nodeIdMap.set(originalVar.nodeId, finalNodeId);
-          console.log(`📍 Mapping nœud ajouté: ${originalVar.nodeId} → ${finalNodeId}`);
         }
         
         // ⭐ FORMULES LIÉES : Copier récursivement
@@ -1395,12 +1201,10 @@ export async function copyVariableWithCapacities(
               if (formulaResult.success) {
                 formulaIdMap.set(formulaId, formulaResult.newFormulaId);
                 newLinkedFormulaIds.push(formulaResult.newFormulaId);
-                console.log(`✅ Formule copiée (récursive): ${formulaId} → ${formulaResult.newFormulaId}`);
               } else {
                 newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`❌ Erreur copie formule récursive:`, (e as Error).message);
               newLinkedFormulaIds.push(`${formulaId}-${suffix}`);
             }
           }
@@ -1425,12 +1229,10 @@ export async function copyVariableWithCapacities(
               if (conditionResult.success) {
                 conditionIdMap.set(conditionId, conditionResult.newConditionId);
                 newLinkedConditionIds.push(conditionResult.newConditionId);
-                console.log(`✅ Condition copiée (récursive): ${conditionId} → ${conditionResult.newConditionId}`);
               } else {
                 newLinkedConditionIds.push(`${conditionId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`❌ Erreur copie condition récursive:`, (e as Error).message);
               newLinkedConditionIds.push(`${conditionId}-${suffix}`);
             }
           }
@@ -1455,12 +1257,10 @@ export async function copyVariableWithCapacities(
               if (tableResult.success) {
                 tableIdMap.set(tableId, tableResult.newTableId);
                 newLinkedTableIds.push(tableResult.newTableId);
-                console.log(`✅ Table copiée (récursive): ${tableId} → ${tableResult.newTableId}`);
               } else {
                 newLinkedTableIds.push(`${tableId}-${suffix}`);
               }
             } catch (e) {
-              console.error(`❌ Erreur copie table récursive:`, (e as Error).message);
               newLinkedTableIds.push(`${tableId}-${suffix}`);
             }
           }
@@ -1490,12 +1290,6 @@ export async function copyVariableWithCapacities(
           }
         });
       } catch (createError) {
-        console.error(`❌❌❌ ERREUR LORS DE LA CRÉATION DE LA VARIABLE!`);
-        console.error(`   Erreur Prisma: ${(createError as Error).message}`);
-        console.error(`   Node ID tenté: ${finalNodeId}`);
-        console.error(`   Variable ID: ${newVarId}`);
-        console.error(`   ExposedKey: ${newExposedKey}`);
-        console.error(`   Détails complets:`, createError);
         throw createError;
       }
     }
@@ -1517,44 +1311,24 @@ export async function copyVariableWithCapacities(
       });
     }
 
-    console.log(`✅✅✅ VARIABLE CRÉÉE AVEC SUCCÈS EN BASE !`);
-    console.log(`   ID créé: ${newVariable.id}`);
-    console.log(`   nodeId: ${newVariable.nodeId}`);
-    console.log(`   exposedKey: ${newVariable.exposedKey}`);
-    console.log(`   📍 DEBUG displayName créé: "${newVariable.displayName}"`);
-    
-    // 🔗 ÉTAPE CRITIQUE : LIAISON AUTOMATIQUE OBLIGATOIRE
-    // 🔴 DÉSACTIVÉ lors de duplication de répéteur car:
-    // - Les linkedVariableIds sont déjà copiés depuis les templates (ligne 598 deep-copy-service.ts)
-    // - Appeler cette fonction ajouterait les variables COPIÉES aux linkedVariableIds des nœuds ORIGINAUX
-    // - Cela pollue les templates originaux avec des IDs de copies (-1, -2, etc.)
-    // 
-    // Cette fonction ne doit être appelée QUE lors de création manuelle de variables,
-    // PAS lors de duplication de répéteur.
+    // Liaison automatique si pas duplication répéteur
     if (!isFromRepeaterDuplication) {
       try {
         await linkVariableToAllCapacityNodes(prisma, newVariable.id, newVariable.sourceRef);
       } catch (e) {
-        console.error(`❌ Erreur LIAISON AUTOMATIQUE VARIABLE:`, (e as Error).message);
+        // Erreur liaison silencieuse
       }
-    } else {
-      console.log(`⏭️ SKIP linkVariableToAllCapacityNodes (duplication répéteur - linkedVariableIds déjà copiés)`);
     }
     
-    // 🔍 VÉRIFICATION: Re-chercher la variable pour confirmer qu'elle existe bien
+    // Vérification existence
     const verification = await prisma.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
-    if (verification) {
-      console.log(`✅ VÉRIFICATION OK: Variable ${newVariable.id} existe bien en base`);
-    } else {
-      console.error(`❌❌❌ PROBLÈME GRAVE: Variable ${newVariable.id} N'EXISTE PAS après création !`);
-      console.error(`❌❌❌ PROBLÈME GRAVE: Variable ${newVariable.id} N'EXISTE PAS après création !`);
+    if (!verification) {
+      console.error(`❌ Variable ${newVariable.id} N'EXISTE PAS après création !`);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📝 ÉTAPE 5B : Mettre à jour le NŒUD D'AFFICHAGE (finalNodeId) avec les paramètres data
-    // ═══════════════════════════════════════════════════════════════════════
+    // Mettre à jour le nœud d'affichage
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
       await prisma.treeBranchLeafNode.update({
@@ -1567,14 +1341,12 @@ export async function copyVariableWithCapacities(
           data_precision: newVariable.precision,
           data_unit: newVariable.unit,
           data_visibleToUser: newVariable.visibleToUser,
-          // Harmoniser le label du nœud d'affichage sur le displayName de la variable
           label: normalizedNodeLabel || undefined,
           field_label: (normalizedNodeLabel as any) || undefined
         }
       });
-      console.log(`✅ Paramètres capacité (data) mis à jour pour nœud d'affichage ${finalNodeId}`);
     } catch (e) {
-      console.warn(`⚠️ Erreur lors de la mise à jour des paramètres capacité (display node):`, (e as Error).message);
+      // Erreur MAJ display node silencieuse
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1599,13 +1371,10 @@ export async function copyVariableWithCapacities(
           });
           if (displaySection) {
             await addToNodeLinkedField(prisma, displaySection.id, 'linkedVariableIds', [newVariable.id]);
-            console.log(`✅ Variable liée à la section d'affichage ${displaySectionLabel}: ${displaySection.id}`);
-          } else {
-            console.log(`ℹ️ Section d'affichage "${displaySectionLabel}" introuvable sous le parent.`);
           }
         }
       } catch (e) {
-        console.warn(`⚠️ Erreur lors du linkage vers la section d'affichage:`, (e as Error).message);
+        // Erreur linkage section silencieuse
       }
     } else if (autoCreateDisplayNode) {
       // Déjà géré ci-dessus: finalNodeId pointe vers le nœud d'affichage (copié ou créé)
@@ -1615,14 +1384,11 @@ export async function copyVariableWithCapacities(
         // Seulement ajouter aux nœuds COPIÉS (qui ont un suffixe)
         // Vérifier que finalNodeId est bien un nœud copié (avec suffixe) et NON un template original
         const isCopiedNode = finalNodeId.includes('-') && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId);
-        if (!isCopiedNode) {
-          console.warn(`⚠️ SKIP addToNodeLinkedField: ${finalNodeId} est un nœud ORIGINAL (template), pas une copie. On ne doit PAS ajouter ${newVariable.id} à ses linkedVariableIds.`);
-        } else {
+        if (isCopiedNode) {
           await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [newVariable.id]);
-          console.log(`✅ Variable ${newVariable.id} ajoutée au linkedVariableIds du nœud copié ${finalNodeId}`);
         }
       } catch (e) {
-        console.warn(`⚠️ Erreur linkage variable→display node:`, (e as Error).message);
+        // Erreur linkage silencieuse
       }
       // Hydratation capacités condition/table si applicable
       try {
@@ -1631,14 +1397,11 @@ export async function copyVariableWithCapacities(
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === 'condition') {
-              const cond = await prisma.treeBranchLeafNodeCondition.findUnique({ where: { id: capId }, select: { name: true, description: true } });
               await prisma.treeBranchLeafNode.update({
                 where: { id: finalNodeId },
                 data: {
                   hasCondition: true,
-                  condition_activeId: capId,
-                  condition_name: cond?.name || null,
-                  condition_description: cond?.description || null
+                  condition_activeId: capId
                 }
               });
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedConditionIds', [capId]);
@@ -1672,23 +1435,21 @@ export async function copyVariableWithCapacities(
                         linkedVariableIds: { set: next }
                       }
                     });
-                    console.log(`✅ linkedVariableIds updated on target node ${newNodeId}:`, next);
                   }
                 }
               }
             } catch (e) {
-              console.warn(`⚠️ Failed to sync linkedVariableIds on target node ${newNodeId}:`, (e as Error).message);
+              // Erreur sync linkedVariableIds silencieuse
             }
             } else if (parsedCap.type === 'table') {
-              const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, description: true, type: true } });
+              const tbl = await prisma.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
               await prisma.treeBranchLeafNode.update({
                 where: { id: finalNodeId },
                 data: {
                   hasTable: true,
                   table_activeId: capId,
                   table_name: tbl?.name || null,
-                  table_description: tbl?.description || null,
-                  table_type: (tbl?.type as any) || null
+                  table_type: tbl?.type || null
                 }
               });
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedTableIds', [capId]);
@@ -1696,7 +1457,7 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        console.warn(`⚠️ Synchronisation capacités condition/table sur le nœud d'affichage:`, (e as Error).message);
+        // Erreur sync capacités silencieuse
       }
     }
 
@@ -1709,7 +1470,7 @@ export async function copyVariableWithCapacities(
         await replaceLinkedVariableId(prisma, finalNodeId, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
-      console.warn(`⚠️ Failed to replace linkedVariableIds on nodes ${newNodeId} / ${finalNodeId}:`, (e as Error).message);
+      // Erreur replace linkedVariableIds silencieuse
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1741,7 +1502,6 @@ export async function copyVariableWithCapacities(
             });
             if (formula) {
               await addToNodeLinkedField(prisma, formula.nodeId, 'linkedFormulaIds', [parsed.id]);
-              console.log(`✅ linkedFormulaIds mis à jour pour formule ${parsed.id}`);
             }
           }
           else if (capacityType === 'condition') {
@@ -1751,7 +1511,6 @@ export async function copyVariableWithCapacities(
             });
             if (condition) {
               await addToNodeLinkedField(prisma, condition.nodeId, 'linkedConditionIds', [parsed.id]);
-              console.log(`✅ linkedConditionIds mis à jour pour condition ${parsed.id}`);
             }
           }
           else if (capacityType === 'table') {
@@ -1761,34 +1520,25 @@ export async function copyVariableWithCapacities(
             });
             if (table) {
               await addToNodeLinkedField(prisma, table.nodeId, 'linkedTableIds', [parsed.id]);
-              console.log(`✅ linkedTableIds mis à jour pour table ${parsed.id}`);
             }
           }
         } catch (e) {
-          console.warn(`⚠️ Erreur MAJ bidirectionnelle:`, (e as Error).message);
+          // Erreur MAJ bidirectionnelle silencieuse
         }
       }
     }
 
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`✅ COPIE VARIABLE TERMINÉE`);
-    console.log(`${'═'.repeat(80)}\n`);
-
     // 📊 Mettre à jour le champ Total si activé sur le nœud source
     try {
-      // Récupérer le nodeId de la variable originale pour trouver le nœud source
       const originalVariable = await prisma.treeBranchLeafNodeVariable.findUnique({
         where: { id: originalVarId },
         select: { nodeId: true }
       });
       if (originalVariable?.nodeId) {
-        // Appel asynchrone non-bloquant pour mettre à jour le Total
-        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma).catch(err => {
-          console.warn(`⚠️ Erreur mise à jour champ Total:`, err);
-        });
+        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma).catch(() => {});
       }
     } catch (sumErr) {
-      console.warn(`⚠️ Erreur récupération variable originale pour Total:`, sumErr);
+      // Erreur mise à jour Total silencieuse
     }
 
     return {
@@ -2081,25 +1831,14 @@ export async function copyLinkedVariablesFromNode(
   prisma: PrismaClient,
   options: CopyVariableOptions = {}
 ): Promise<CopyLinkedVariablesResult> {
-
-  console.log(`\n${'═'.repeat(80)}`);
-  console.log(`🔗 COPIE VARIABLES LIÉES DU NŒUD`);
-  console.log(`   Source: ${sourceNodeId}`);
-  console.log(`   Destination: ${newNodeId}`);
-  console.log(`   Suffixe: ${suffix}`);
-  console.log(`${'═'.repeat(80)}\n`);
-
   try {
-    // ═══════════════════════════════════════════════════════════════════════
-    // 1️⃣ RÉCUPÉRER LE NŒUD SOURCE ET SES linkedVariableIds
-    // ═══════════════════════════════════════════════════════════════════════
+    // Récupérer le nœud source et ses linkedVariableIds
     const sourceNode = await prisma.treeBranchLeafNode.findUnique({
       where: { id: sourceNodeId },
       select: { linkedVariableIds: true }
     });
 
     if (!sourceNode) {
-      console.error(`❌ Nœud source introuvable: ${sourceNodeId}`);
       return {
         count: 0,
         variableIdMap: new Map(),
@@ -2110,10 +1849,8 @@ export async function copyLinkedVariablesFromNode(
     }
 
     const linkedVarIds = sourceNode.linkedVariableIds || [];
-    console.log(`📋 ${linkedVarIds.length} variables liées trouvées`);
     
     if (linkedVarIds.length === 0) {
-      console.log(`⚠️ Aucune variable liée à copier`);
       return {
         count: 0,
         variableIdMap: new Map(),
@@ -2122,20 +1859,14 @@ export async function copyLinkedVariablesFromNode(
       };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 2️⃣ COPIER CHAQUE VARIABLE LIÉE
-    // ═══════════════════════════════════════════════════════════════════════
+    // Copier chaque variable liée
     const variableIdMap = new Map<string, string>();
     const results: CopyVariableResult[] = [];
 
-    console.log(`\n📝 Copie de ${linkedVarIds.length} variables...`);
-
     for (let i = 0; i < linkedVarIds.length; i++) {
       const varId = linkedVarIds[i];
-      console.log(`\n[${i + 1}/${linkedVarIds.length}] 🔄 Copie variable: ${varId}`);
 
       try {
-        // Copier la variable avec toutes ses capacités
         const result = await copyVariableWithCapacities(
           varId,
           suffix,
@@ -2146,14 +1877,10 @@ export async function copyLinkedVariablesFromNode(
 
         if (result.success) {
           variableIdMap.set(varId, result.variableId);
-          console.log(`✅ Variable copiée: ${varId} → ${result.variableId}`);
-        } else {
-          console.error(`❌ Échec copie: ${result.error}`);
         }
 
         results.push(result);
       } catch (e) {
-        console.error(`❌ Exception lors de la copie: ${(e as Error).message}`);
         results.push({
           variableId: '',
           exposedKey: '',
@@ -2165,30 +1892,12 @@ export async function copyLinkedVariablesFromNode(
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 3️⃣ MISE À JOUR DU NŒUD DESTINATION : linkedVariableIds
-    // ═══════════════════════════════════════════════════════════════════════
+    // Mise à jour du nœud destination : linkedVariableIds
     const newVarIds = Array.from(variableIdMap.values());
-    
-    console.log(`\n🔗 Mise à jour linkedVariableIds du nœud destination...`);
-    console.log(`   IDs à ajouter: ${newVarIds.join(', ')}`);
-
     await addToNodeLinkedField(prisma, newNodeId, 'linkedVariableIds', newVarIds);
-    
-    console.log(`✅ linkedVariableIds mis à jour pour le nœud ${newNodeId}`);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // 📊 RÉSUMÉ
-    // ═══════════════════════════════════════════════════════════════════════
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.length - successCount;
-
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`📊 RÉSUMÉ COPIE VARIABLES LIÉES`);
-    console.log(`   ✅ Succès: ${successCount}/${linkedVarIds.length}`);
-    console.log(`   ❌ Échecs: ${failureCount}/${linkedVarIds.length}`);
-    console.log(`   🗺️ Map: ${variableIdMap.size} entrées`);
-    console.log(`${'═'.repeat(80)}\n`);
 
     return {
       count: successCount,
@@ -2198,7 +1907,7 @@ export async function copyLinkedVariablesFromNode(
     };
 
   } catch (error) {
-    console.error(`❌ Erreur globale lors de la copie de variables liées:`, error);
+    console.error(`❌ Erreur globale copyLinkedVariablesFromNode:`, error);
     return {
       count: 0,
       variableIdMap: new Map(),

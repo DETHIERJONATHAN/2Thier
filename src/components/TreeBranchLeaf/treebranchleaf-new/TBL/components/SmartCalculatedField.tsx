@@ -10,6 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { tblLog } from '../../../../../utils/tblDebug';
 // Debug flag opt-in: localStorage.TBL_SMART_DEBUG='1'
 const isSmartDebug = () => {
   try { return typeof localStorage !== 'undefined' && localStorage.getItem('TBL_SMART_DEBUG') === '1'; } catch { return false; }
@@ -250,12 +251,12 @@ function useUniversalTranslator() {
     const cached = calculationCache.get(cacheKey);
     
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-  if (isSmartDebug()) console.log(`🔄 [TRADUCTEUR] Cache HIT pour ${sourceRef}`);
+  if (isSmartDebug()) if (isSmartDebug()) tblLog(`🔄 [TRADUCTEUR] Cache HIT pour ${sourceRef}`);
       return { result: cached.result, cached: true };
     }
 
     const attemptEval = async (): Promise<unknown> => {
-  if (isSmartDebug()) console.log(`🧠 [TRADUCTEUR] Traduction/Evaluation unifiée de ${sourceRef}...`);
+  if (isSmartDebug()) if (isSmartDebug()) tblLog(`🧠 [TRADUCTEUR] Traduction/Evaluation unifiée de ${sourceRef}...`);
 
       // 2. Gestion référence locale directe (@value.<key>) – retour immédiat
       if (sourceRef.startsWith('@value.')) {
@@ -269,11 +270,11 @@ function useUniversalTranslator() {
       // Inspiré d'operation-interpreter.ts qui gère les 3 modes de lookup
       if (sourceRef.startsWith('@table.')) {
         try {
-          console.log(`📊 [TABLE] Détection référence table: ${sourceRef}`);
+          if (isSmartDebug()) tblLog(`📊 [TABLE] Détection référence table: ${sourceRef}`);
           
           // Extraire l'ID de la table
           const tableId = sourceRef.replace('@table.', '');
-          console.log(`📊 [TABLE] TableId extrait: ${tableId}`);
+          if (isSmartDebug()) tblLog(`📊 [TABLE] TableId extrait: ${tableId}`);
           
           // Récupérer les informations de la table depuis l'API
           const tableResponse = await fetch(`/api/tbl/tables/${tableId}`, {
@@ -297,7 +298,7 @@ function useUniversalTranslator() {
             return null;
           }
           
-          console.log(`✅ [TABLE] Table trouvée: ${table.name} (type: ${table.type})`);
+          if (isSmartDebug()) tblLog(`✅ [TABLE] Table trouvée: ${table.name} (type: ${table.type})`);
           
           // Extraire la configuration de lookup
           const meta = table.meta || {};
@@ -313,7 +314,7 @@ function useUniversalTranslator() {
           const rowEnabled = lookup.rowLookupEnabled === true;
           const colEnabled = lookup.columnLookupEnabled === true;
           
-          console.log(`📋 [TABLE] Config lookup:`, {
+          if (isSmartDebug()) tblLog(`📋 [TABLE] Config lookup:`, {
             rowEnabled,
             colEnabled,
             rowFieldId,
@@ -328,19 +329,21 @@ function useUniversalTranslator() {
           
           // 🔍 DEBUG: Vérification des conditions MODE 1
           const allConditionsMet = colEnabled && !rowEnabled && colFieldId && lookup.displayColumn;
-          console.log(`🧪 [TABLE] Conditions MODE 1:`, {
-            colEnabled,
-            rowEnabled,
-            colFieldId,
-            hasDisplayColumn: !!lookup.displayColumn,
-            displayColumnValue: lookup.displayColumn,
-            displayColumnType: typeof lookup.displayColumn,
-            displayColumnIsArray: Array.isArray(lookup.displayColumn),
-            allConditionsMet
-          });
+          if (isSmartDebug()) {
+            tblLog(`🧪 [TABLE] Conditions MODE 1:`, {
+              colEnabled,
+              rowEnabled,
+              colFieldId,
+              hasDisplayColumn: !!lookup.displayColumn,
+              displayColumnValue: lookup.displayColumn,
+              displayColumnType: typeof lookup.displayColumn,
+              displayColumnIsArray: Array.isArray(lookup.displayColumn),
+              allConditionsMet
+            });
+          }
           
           if (!allConditionsMet) {
-            console.error(`❌ [TABLE] MODE 1 conditions NOT MET - Arrêt !`, {
+            if (isSmartDebug()) tblLog(`❌ [TABLE] MODE 1 conditions NOT MET - Arrêt !`, {
               'colEnabled && !rowEnabled': colEnabled && !rowEnabled,
               'colFieldId exists': !!colFieldId,
               'lookup.displayColumn exists': !!lookup.displayColumn
@@ -350,7 +353,7 @@ function useUniversalTranslator() {
           // 🎯 MODE 1: Seulement COLONNE activée (colonne dynamique × displayColumn fixe)
           // On CROISE: colonne sélectionnée × chaque displayColumn (lignes fixes)
           if (colEnabled && !rowEnabled && colFieldId && lookup.displayColumn) {
-            if (isSmartDebug()) console.log(`🎯 [TABLE] MODE 1: Colonne dynamique × displayColumn fixe (CROISEMENT)`);
+            if (isSmartDebug()) if (isSmartDebug()) tblLog(`🎯 [TABLE] MODE 1: Colonne dynamique × displayColumn fixe (CROISEMENT)`);
             
             // Récupérer la valeur de colonne sélectionnée (depuis formData ou mirrors)
             const colValue = formData[colFieldId] || formData[`__mirror_data_${colFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${colFieldId}`]);
@@ -364,7 +367,7 @@ function useUniversalTranslator() {
             const results = [];
             
             if (isSmartDebug()) {
-              console.log(`📊 [TABLE] MODE 1 - Croisement:`, {
+              if (isSmartDebug()) tblLog(`📊 [TABLE] MODE 1 - Croisement:`, {
                 colonneSélectionnée: colValue,
                 lignesFixesÀCroiser: displayColumns,
                 colonnesTableau: columns.slice(0, 5),
@@ -376,7 +379,7 @@ function useUniversalTranslator() {
               const normalizedCol = String(colValue).trim().toLowerCase();
               const normalizedRow = String(fixedRowValue).trim().toLowerCase();
               
-              console.log(`🔍 [TABLE] MODE 1 - Recherche pour fixedRowValue:`, {
+              if (isSmartDebug()) tblLog(`🔍 [TABLE] MODE 1 - Recherche pour fixedRowValue:`, {
                 fixedRowValue,
                 fixedRowValueType: typeof fixedRowValue,
                 normalizedRow,
@@ -393,7 +396,7 @@ function useUniversalTranslator() {
               const colSelectorInRows = rows.findIndex(r => {
                 const normalized = String(r).trim().toLowerCase();
                 const match = normalized === normalizedCol || r === colValue || String(r) === String(colValue);
-                console.log(`  🔎 [ORIENTATION_IN_ROWS] Test ligne "${r}" (normalized="${normalized}") vs "${colValue}" (normalized="${normalizedCol}"): ${match}`);
+                if (isSmartDebug()) tblLog(`  🔎 [ORIENTATION_IN_ROWS] Test ligne "${r}" (normalized="${normalized}") vs "${colValue}" (normalized="${normalizedCol}"): ${match}`);
                 return match;
               });
               
@@ -403,7 +406,7 @@ function useUniversalTranslator() {
                 const numericMatch = Number(c) === Number(fixedRowValue);
                 const stringMatch = normalized === normalizedRow || String(c) === String(fixedRowValue);
                 const match = numericMatch || stringMatch;
-                console.log(`  🔎 [INCLINAISON_IN_COLS] Test colonne "${c}" (type=${typeof c}, normalized="${normalized}") vs "${fixedRowValue}" (type=${typeof fixedRowValue}, normalized="${normalizedRow}"): numericMatch=${numericMatch}, stringMatch=${stringMatch}, FINAL=${match}`);
+                if (isSmartDebug()) tblLog(`  🔎 [INCLINAISON_IN_COLS] Test colonne "${c}" (type=${typeof c}, normalized="${normalized}") vs "${fixedRowValue}" (type=${typeof fixedRowValue}, normalized="${normalizedRow}"): numericMatch=${numericMatch}, stringMatch=${stringMatch}, FINAL=${match}`);
                 return match;
               });
               
@@ -411,7 +414,7 @@ function useUniversalTranslator() {
               const colSelectorInCols = -1; // Non utilisé dans ce cas
               const fixedRowInRows = -1;    // Non utilisé dans ce cas
               
-              console.log(`📊 [TABLE] MODE 1 - Résultats findIndex (INVERSÉS):`, {
+              if (isSmartDebug()) tblLog(`📊 [TABLE] MODE 1 - Résultats findIndex (INVERSÉS):`, {
                 orientationDansRows: colSelectorInRows,    // Est Nord-Est cherché dans rows[]
                 inclinaisonDansCols: fixedRowInCols,      // 25/45 cherché dans columns[]
                 colSelectorInCols,    // -1 (non utilisé car inversé)
@@ -424,7 +427,7 @@ function useUniversalTranslator() {
                 // rowIndex = colSelectorInRows (index de "Est Nord-Est" dans rows[])
                 // colIndex = fixedRowInCols (index de "25" ou "45" dans columns[])
                 const value = data[colSelectorInRows]?.[fixedRowInCols];
-                console.log(`✅ [TABLE] MODE 1 INVERSÉ - Valeur trouvée: data[${colSelectorInRows}][${fixedRowInCols}] = ${value} (Orientation="${colValue}" × Inclinaison="${fixedRowValue}")`);
+                if (isSmartDebug()) tblLog(`✅ [TABLE] MODE 1 INVERSÉ - Valeur trouvée: data[${colSelectorInRows}][${fixedRowInCols}] = ${value} (Orientation="${colValue}" × Inclinaison="${fixedRowValue}")`);
                 if (value !== undefined && value !== null) {
                   results.push(value);
                 }
@@ -448,7 +451,7 @@ function useUniversalTranslator() {
           // 🎯 MODE 2: Seulement LIGNE activée (displayRow fixe × ligne dynamique)
           // On CROISE: chaque displayRow (colonnes fixes) × ligne sélectionnée
           if (rowEnabled && !colEnabled && rowFieldId && lookup.displayRow) {
-            if (isSmartDebug()) console.log(`🎯 [TABLE] MODE 2: displayRow fixe × ligne dynamique (CROISEMENT)`);
+            if (isSmartDebug()) if (isSmartDebug()) tblLog(`🎯 [TABLE] MODE 2: displayRow fixe × ligne dynamique (CROISEMENT)`);
             
             // Récupérer la valeur de ligne sélectionnée (depuis formData ou mirrors)
             const rowValue = formData[rowFieldId] || formData[`__mirror_data_${rowFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${rowFieldId}`]);
@@ -462,7 +465,7 @@ function useUniversalTranslator() {
             const results = [];
             
             if (isSmartDebug()) {
-              console.log(`📊 [TABLE] MODE 2 - Croisement:`, {
+              if (isSmartDebug()) tblLog(`📊 [TABLE] MODE 2 - Croisement:`, {
                 ligneSélectionnée: rowValue,
                 colonnesFixesÀCroiser: displayRows,
                 colonnesTableau: columns.slice(0, 5),
@@ -475,7 +478,7 @@ function useUniversalTranslator() {
               const normalizedCol = String(fixedColValue).trim().toLowerCase();
               
               if (isSmartDebug()) {
-                console.log(`🔍 [TABLE] MODE 2 - Recherche pour fixedColValue:`, {
+                if (isSmartDebug()) tblLog(`🔍 [TABLE] MODE 2 - Recherche pour fixedColValue:`, {
                   fixedColValue,
                   fixedColValueType: typeof fixedColValue,
                   normalizedCol,
@@ -510,13 +513,13 @@ function useUniversalTranslator() {
               if (rowSelectorInRows !== -1 && fixedColInCols !== -1) {
                 finalRowIdx = rowSelectorInRows;
                 finalColIdx = fixedColInCols;
-                if (isSmartDebug()) console.log(`✅ [TABLE] MODE 2 - Config normale: row="${rowValue}" (idx=${finalRowIdx}), col="${fixedColValue}" (idx=${finalColIdx})`);
+                if (isSmartDebug()) if (isSmartDebug()) tblLog(`✅ [TABLE] MODE 2 - Config normale: row="${rowValue}" (idx=${finalRowIdx}), col="${fixedColValue}" (idx=${finalColIdx})`);
               }
               // Configuration inversée : ligne dans columns[], colonne fixe dans rows[]
               else if (rowSelectorInCols !== -1 && fixedColInRows !== -1) {
                 finalRowIdx = fixedColInRows;
                 finalColIdx = rowSelectorInCols;
-                if (isSmartDebug()) console.log(`🔄 [TABLE] MODE 2 - Inversion détectée: row="${rowValue}" (idx=${finalRowIdx}), col="${fixedColValue}" (idx=${finalColIdx})`);
+                if (isSmartDebug()) if (isSmartDebug()) tblLog(`🔄 [TABLE] MODE 2 - Inversion détectée: row="${rowValue}" (idx=${finalRowIdx}), col="${fixedColValue}" (idx=${finalColIdx})`);
               }
               
               if (finalRowIdx !== -1 && finalColIdx !== -1) {
@@ -524,7 +527,7 @@ function useUniversalTranslator() {
                 const dataColIdx = finalColIdx - 1;
                 const result = data[dataRowIdx]?.[dataColIdx];
                 results.push(result);
-                if (isSmartDebug()) console.log(`✅ [TABLE] MODE 2: "${fixedColValue}" × "${rowValue}" = ${result} (data[${dataRowIdx}][${dataColIdx}])`);
+                if (isSmartDebug()) if (isSmartDebug()) tblLog(`✅ [TABLE] MODE 2: "${fixedColValue}" × "${rowValue}" = ${result} (data[${dataRowIdx}][${dataColIdx}])`);
               } else {
                 if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 2: Impossible de croiser "${fixedColValue}" × "${rowValue}"`);
               }
@@ -537,14 +540,14 @@ function useUniversalTranslator() {
           
           // 🎯 MODE 3: Les DEUX activés (croisement dynamique colonne × ligne)
           if (rowEnabled && colEnabled && rowFieldId && colFieldId) {
-            if (isSmartDebug()) console.log(`🎯 [TABLE] MODE 3: Croisement dynamique colonne × ligne`);
+            if (isSmartDebug()) if (isSmartDebug()) tblLog(`🎯 [TABLE] MODE 3: Croisement dynamique colonne × ligne`);
             
             // Récupérer les deux valeurs sélectionnées (depuis formData ou mirrors)
             const rowValue = formData[rowFieldId] || formData[`__mirror_data_${rowFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${rowFieldId}`]);
             const colValue = formData[colFieldId] || formData[`__mirror_data_${colFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${colFieldId}`]);
             
             if (isSmartDebug()) {
-              console.log(`📊 [TABLE] MODE 3 - Valeurs:`, {
+              if (isSmartDebug()) tblLog(`📊 [TABLE] MODE 3 - Valeurs:`, {
                 rowFieldId,
                 rowValue,
                 colFieldId,
@@ -562,7 +565,7 @@ function useUniversalTranslator() {
             const normalizedCol = String(colValue).trim().toLowerCase();
             
             if (isSmartDebug()) {
-              console.log(`🔍 [TABLE] MODE 3 - Recherche:`, {
+              if (isSmartDebug()) tblLog(`🔍 [TABLE] MODE 3 - Recherche:`, {
                 rowValue,
                 rowValueType: typeof rowValue,
                 normalizedRow,
@@ -600,11 +603,11 @@ function useUniversalTranslator() {
             if (rowInRows !== -1 && colInCols !== -1) {
               finalRowIdx = rowInRows;
               finalColIdx = colInCols;
-              if (isSmartDebug()) console.log(`✅ [TABLE] MODE 3: Configuration normale`);
+              if (isSmartDebug()) if (isSmartDebug()) tblLog(`✅ [TABLE] MODE 3: Configuration normale`);
             } else if (rowInCols !== -1 && colInRows !== -1) {
               finalRowIdx = colInRows;
               finalColIdx = rowInCols;
-              if (isSmartDebug()) console.log(`🔄 [TABLE] MODE 3: Inversion détectée et corrigée`);
+              if (isSmartDebug()) if (isSmartDebug()) tblLog(`🔄 [TABLE] MODE 3: Inversion détectée et corrigée`);
             } else {
               finalRowIdx = rowInRows !== -1 ? rowInRows : colInRows;
               finalColIdx = colInCols !== -1 ? colInCols : rowInCols;
@@ -616,7 +619,7 @@ function useUniversalTranslator() {
               const result = data[dataRowIdx]?.[dataColIdx];
               
               if (isSmartDebug()) {
-                console.log(`✅ [TABLE] MODE 3: Résultat[${dataRowIdx}][${dataColIdx}] = ${result}`);
+                if (isSmartDebug()) tblLog(`✅ [TABLE] MODE 3: Résultat[${dataRowIdx}][${dataColIdx}] = ${result}`);
               }
               
               calculationCache.set(cacheKey, { result, timestamp: Date.now(), dependencies: [rowFieldId, colFieldId] });
@@ -641,14 +644,16 @@ function useUniversalTranslator() {
       // qui utilise des noms de champs (ex: "Hauteur façade avant") et les traduire vers leurs mirrors
       let interceptedByMirror = false;
       
-      console.log(`🧠 [TRADUCTEUR][STEP_1] Début traduction pour sourceRef: "${sourceRef}"`);
-      console.log(`🧠 [TRADUCTEUR][STEP_2] elementId extrait: "${elementId}"`);
-      console.log(`🧠 [TRADUCTEUR][STEP_3] FormData reçu:`, Object.keys(formData).length, 'clés');
+      if (isSmartDebug()) {
+        tblLog(`🧠 [TRADUCTEUR][STEP_1] Début traduction pour sourceRef: "${sourceRef}"`);
+        tblLog(`🧠 [TRADUCTEUR][STEP_2] elementId extrait: "${elementId}"`);
+        tblLog(`🧠 [TRADUCTEUR][STEP_3] FormData reçu:`, Object.keys(formData).length, 'clés');
+      }
       
       // 🎯 LOG SPÉCIAL POUR LE CHAMP QUI FONCTIONNE
-      if (elementId === '10bfb6d2-67ae-49a8-8d49-fc6dafa3f74e') {
-        console.log(`⭐ [TRADUCTEUR][WORKING_FIELD] Traduction du champ qui fonctionne !`);
-        console.log(`⭐ [TRADUCTEUR][WORKING_FIELD][FORMDATA]`, Object.keys(formData).filter(k => k.includes('10bfb6d2') || k.includes('Prix')));
+      if (isSmartDebug() && elementId === '10bfb6d2-67ae-49a8-8d49-fc6dafa3f74e') {
+        tblLog(`⭐ [TRADUCTEUR][WORKING_FIELD] Traduction du champ qui fonctionne !`);
+        tblLog(`⭐ [TRADUCTEUR][WORKING_FIELD][FORMDATA]`, Object.keys(formData).filter(k => k.includes('10bfb6d2') || k.includes('Prix')));
       }
       
       try {
@@ -665,7 +670,7 @@ function useUniversalTranslator() {
                 // Créer une correspondance avec l'elementId recherché
                 if (elementId.includes(fieldLabel.replace(/\s/g, '').toLowerCase()) || 
                     fieldLabel.replace(/\s/g, '').toLowerCase().includes(elementId.toLowerCase())) {
-                  console.log(`🎯 [TRADUCTEUR][MIRROR_INTERCEPT] ${elementId} → utilise mirror ${mirrorKey} = ${window.TBL_FORM_DATA[mirrorKey]}`);
+                  if (isSmartDebug()) tblLog(`🎯 [TRADUCTEUR][MIRROR_INTERCEPT] ${elementId} → utilise mirror ${mirrorKey} = ${window.TBL_FORM_DATA[mirrorKey]}`);
                   const mirrorValue = window.TBL_FORM_DATA[mirrorKey];
                   calculationCache.set(cacheKey, { result: mirrorValue, timestamp: Date.now(), dependencies: [mirrorKey] });
                   interceptedByMirror = true;
@@ -683,7 +688,7 @@ function useUniversalTranslator() {
               if (mirrorKey.startsWith('__mirror_data_')) {
                 const fieldLabel = mirrorKey.replace('__mirror_data_', '');
                 if (window.TBL_FORM_DATA[mirrorKey] != null && window.TBL_FORM_DATA[mirrorKey] !== '' && window.TBL_FORM_DATA[mirrorKey] !== 0) {
-                  console.log(`🔍 [TRADUCTEUR][AVAILABLE_MIRROR] ${fieldLabel} = ${window.TBL_FORM_DATA[mirrorKey]} (via ${mirrorKey})`);
+                  if (isSmartDebug()) tblLog(`🔍 [TRADUCTEUR][AVAILABLE_MIRROR] ${fieldLabel} = ${window.TBL_FORM_DATA[mirrorKey]} (via ${mirrorKey})`);
                 }
               }
             }
@@ -705,9 +710,9 @@ function useUniversalTranslator() {
       }
       if (isSmartDebug()) {
         if (elementId !== originalSourceRef) {
-          console.log(`🔧 [TRADUCTEUR] Stripping préfixe: '${originalSourceRef}' -> elementId='${elementId}'`);
+          if (isSmartDebug()) tblLog(`🔧 [TRADUCTEUR] Stripping préfixe: '${originalSourceRef}' -> elementId='${elementId}'`);
         } else {
-          console.log(`🔧 [TRADUCTEUR] Pas de préfixe à retirer pour '${sourceRef}' (elementId='${elementId}')`);
+          if (isSmartDebug()) tblLog(`🔧 [TRADUCTEUR] Pas de préfixe à retirer pour '${sourceRef}' (elementId='${elementId}')`);
         }
       }
 
@@ -724,35 +729,37 @@ function useUniversalTranslator() {
             // Ajouter le champ par son nom naturel dans formData pour que les formules le trouvent
             enhancedFormData[fieldLabel] = mirrorValue;
             if (isSmartDebug()) {
-              console.log(`🎯 [TRADUCTEUR][FORMDATA_ENRICHMENT] "${fieldLabel}" = ${mirrorValue} (depuis ${mirrorKey})`);
+              if (isSmartDebug()) tblLog(`🎯 [TRADUCTEUR][FORMDATA_ENRICHMENT] "${fieldLabel}" = ${mirrorValue} (depuis ${mirrorKey})`);
             }
           }
         }
         
         if (isSmartDebug()) {
           const enrichedCount = Object.keys(enhancedFormData).length - Object.keys(formData).length;
-          console.log(`✨ [TRADUCTEUR][FORMDATA_ENRICHMENT] ${enrichedCount} champs TreeBranchLeaf ajoutés au formData pour l'évaluation`);
+          if (isSmartDebug()) tblLog(`✨ [TRADUCTEUR][FORMDATA_ENRICHMENT] ${enrichedCount} champs TreeBranchLeaf ajoutés au formData pour l'évaluation`);
         }
       }
 
       // 4. Appel via bridge unifié (dédup + batch) avec les données enrichies
-      console.log(`🧠 [TRADUCTEUR][STEP_4] Appel bridge unifié pour elementId: "${elementId}"`);
-      console.log(`🧠 [TRADUCTEUR][STEP_4][ENHANCED_DATA]`, Object.keys(enhancedFormData).length, 'clés enrichies');
+      if (isSmartDebug()) {
+        tblLog(`🧠 [TRADUCTEUR][STEP_4] Appel bridge unifié pour elementId: "${elementId}"`);
+        tblLog(`🧠 [TRADUCTEUR][STEP_4][ENHANCED_DATA]`, Object.keys(enhancedFormData).length, 'clés enrichies');
+      }
       
       let flightPromise = inFlightRequests.get(elementId);
       if (!flightPromise) {
-        console.log(`🧠 [TRADUCTEUR][STEP_4][NEW_REQUEST] Nouvelle requête pour "${elementId}"`);
+        if (isSmartDebug()) tblLog(`🧠 [TRADUCTEUR][STEP_4][NEW_REQUEST] Nouvelle requête pour "${elementId}"`);
         flightPromise = enqueue(elementId, enhancedFormData) as Promise<unknown>;
         inFlightRequests.set(elementId, flightPromise);
       } else if (isSmartDebug()) {
-        console.log(`🪄 [TRADUCTEUR] Rejoint requête batch en vol pour ${sourceRef}`);
+        tblLog(`🪄 [TRADUCTEUR] Rejoint requête batch en vol pour ${sourceRef}`);
       }
       
-      console.log(`🧠 [TRADUCTEUR][STEP_5] Attente de la réponse...`);
+      if (isSmartDebug()) tblLog(`🧠 [TRADUCTEUR][STEP_5] Attente de la réponse...`);
       const response = await flightPromise as { success?: boolean; code?: string; value?: unknown; result?: unknown; calculatedValue?: unknown; error?: string } | null;
       if (inFlightRequests.get(elementId) === flightPromise) inFlightRequests.delete(elementId);
       
-      console.log(`🧠 [TRADUCTEUR][STEP_6] Réponse reçue:`, response ? Object.keys(response) : 'null');
+      if (isSmartDebug()) tblLog(`🧠 [TRADUCTEUR][STEP_6] Réponse reçue:`, response ? Object.keys(response) : 'null');
       
       // 🔍 Debug pour diagnostic uniquement en cas d'erreur
       if (!response) { 
@@ -771,9 +778,9 @@ function useUniversalTranslator() {
       const respTyped: { calculatedValue?: unknown; value?: unknown; result?: unknown } = response as { calculatedValue?: unknown; value?: unknown; result?: unknown };
       const extracted = (respTyped.calculatedValue !== undefined ? respTyped.calculatedValue : (respTyped.value !== undefined ? respTyped.value : respTyped.result)) ?? null;
       
-      console.log(`🧠 [TRADUCTEUR][STEP_7] Valeur extraite:`, extracted);
+      if (isSmartDebug()) tblLog(`🧠 [TRADUCTEUR][STEP_7] Valeur extraite:`, extracted);
       
-      if ((diagMode() || isSmartDebug()) && extracted === null) console.log('[SMART][RESPONSE][NO-VALUE]', { sourceRef, responseKeys: Object.keys(response || {}) });
+      if ((diagMode() || isSmartDebug()) && extracted === null) tblLog('[SMART][RESPONSE][NO-VALUE]', { sourceRef, responseKeys: Object.keys(response || {}) });
       // Capturer dependencies si fournies (supports divers champs)
       const depsCandidate = (response as Record<string, unknown>)?.['dependencies'] || (response as Record<string, unknown>)?.['dependencies_used'];
       if (!frozenDependencies.has(elementId) && Array.isArray(depsCandidate) && depsCandidate.length > 0) {
@@ -788,7 +795,7 @@ function useUniversalTranslator() {
       }
       
       if (isSmartDebug()) {
-        console.log(`🎯 [TRADUCTEUR][FINAL_RESULT] ${sourceRef} → ${extracted} (via enhancedFormData avec ${Object.keys(enhancedFormData).filter(k => k.startsWith('__mirror_') || !k.startsWith('__')).length} champs enrichis)`);
+        tblLog(`🎯 [TRADUCTEUR][FINAL_RESULT] ${sourceRef} → ${extracted} (via enhancedFormData avec ${Object.keys(enhancedFormData).filter(k => k.startsWith('__mirror_') || !k.startsWith('__')).length} champs enrichis)`);
       }
       return extracted;
     };
@@ -882,31 +889,31 @@ export function SmartCalculatedField({
   const getMirrorFallback = useCallback(async (sourceRef: string): Promise<unknown | null> => {
     const fieldId = sourceRef.replace(/^(formula:|condition:|table:|variable:)/, '');
     
-    console.log(`🚀 [DYNAMIC] Évaluation complètement dynamique de ${sourceRef}`);
-    console.log(`🔍 [DYNAMIC][STEP_1] fieldId extrait: "${fieldId}"`);
-    console.log(`🔍 [DYNAMIC][STEP_2] FormData disponible:`, Object.keys(formData).slice(0, 10), '...');
-    console.log(`🔍 [DYNAMIC][STEP_3] Mirrors disponibles:`, typeof window !== 'undefined' && window.TBL_FORM_DATA ? Object.keys(window.TBL_FORM_DATA).filter(k => k.startsWith('__mirror_')).slice(0, 5) : 'Aucun');
+    if (isSmartDebug()) tblLog(`🚀 [DYNAMIC] Évaluation complètement dynamique de ${sourceRef}`);
+    if (isSmartDebug()) tblLog(`🔍 [DYNAMIC][STEP_1] fieldId extrait: "${fieldId}"`);
+    if (isSmartDebug()) tblLog(`🔍 [DYNAMIC][STEP_2] FormData disponible:`, Object.keys(formData).slice(0, 10), '...');
+    if (isSmartDebug()) tblLog(`🔍 [DYNAMIC][STEP_3] Mirrors disponibles:`, typeof window !== 'undefined' && window.TBL_FORM_DATA ? Object.keys(window.TBL_FORM_DATA).filter(k => k.startsWith('__mirror_')).slice(0, 5) : 'Aucun');
     
     // 🎯 ANALYSE SPÉCIALE POUR LE CHAMP QUI FONCTIONNE: 10bfb6d2-67ae-49a8-8d49-fc6dafa3f74e
     if (fieldId === '10bfb6d2-67ae-49a8-8d49-fc6dafa3f74e') {
-      console.log(`⭐ [WORKING_FIELD] Analyse du champ qui fonctionne: ${fieldId}`);
-      console.log(`⭐ [WORKING_FIELD][MIRRORS] Recherche de mirrors pour ce champ...`);
+      if (isSmartDebug()) tblLog(`⭐ [WORKING_FIELD] Analyse du champ qui fonctionne: ${fieldId}`);
+      if (isSmartDebug()) tblLog(`⭐ [WORKING_FIELD][MIRRORS] Recherche de mirrors pour ce champ...`);
       
       if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
         const relatedMirrors = Object.keys(window.TBL_FORM_DATA).filter(k => 
           k.includes(fieldId) || k.includes('Prix Kw/h test')
         );
-        console.log(`⭐ [WORKING_FIELD][MIRRORS_FOUND]`, relatedMirrors);
+        if (isSmartDebug()) tblLog(`⭐ [WORKING_FIELD][MIRRORS_FOUND]`, relatedMirrors);
         
         for (const mirrorKey of relatedMirrors) {
           const value = window.TBL_FORM_DATA[mirrorKey];
-          console.log(`⭐ [WORKING_FIELD][MIRROR_VALUE] ${mirrorKey} = ${value}`);
+          if (isSmartDebug()) tblLog(`⭐ [WORKING_FIELD][MIRROR_VALUE] ${mirrorKey} = ${value}`);
         }
       }
       
-      console.log(`⭐ [WORKING_FIELD][FORMDATA] Recherche dans formData...`);
+      if (isSmartDebug()) tblLog(`⭐ [WORKING_FIELD][FORMDATA] Recherche dans formData...`);
       const directValue = formData[fieldId];
-      console.log(`⭐ [WORKING_FIELD][DIRECT] formData["${fieldId}"] = ${directValue}`);
+      if (isSmartDebug()) tblLog(`⭐ [WORKING_FIELD][DIRECT] formData["${fieldId}"] = ${directValue}`);
       
       // Recherche étendue
       const possibleKeys = [
@@ -919,7 +926,7 @@ export function SmartCalculatedField({
       
       for (const key of possibleKeys) {
         if (formData[key] !== undefined) {
-          console.log(`⭐ [WORKING_FIELD][FOUND] formData["${key}"] = ${formData[key]}`);
+          if (isSmartDebug()) tblLog(`⭐ [WORKING_FIELD][FOUND] formData["${key}"] = ${formData[key]}`);
         }
       }
       
@@ -978,27 +985,27 @@ export function SmartCalculatedField({
     }
     
     // POUR TOUS LES AUTRES : Évaluation dynamique générique
-    console.log(`🔍 [GENERIC] Évaluation générique pour fieldId: "${fieldId}"`);
-    console.log(`🔍 [GENERIC][SOURCE_REF] sourceRef original: "${sourceRef}"`);
+    if (isSmartDebug()) tblLog(`🔍 [GENERIC] Évaluation générique pour fieldId: "${fieldId}"`);
+    if (isSmartDebug()) tblLog(`🔍 [GENERIC][SOURCE_REF] sourceRef original: "${sourceRef}"`);
     
     // 🎯 LOGS POUR IDENTIFIER POURQUOI D'AUTRES CHAMPS NE FONCTIONNENT PAS
     if (fieldId.includes('702d1b09-abc9-4096-9aaa-77155ac5294f')) {
-      console.log(`🔎 [FORMULA_FIELD] Analyse du champ formule: ${fieldId}`);
-      console.log(`🔎 [FORMULA_FIELD][TYPE] Probablement une formule TreeBranchLeaf`);
+      if (isSmartDebug()) tblLog(`🔎 [FORMULA_FIELD] Analyse du champ formule: ${fieldId}`);
+      if (isSmartDebug()) tblLog(`🔎 [FORMULA_FIELD][TYPE] Probablement une formule TreeBranchLeaf`);
     }
     
     if (fieldId.includes('cc8bf34e-3461-426e-a16d-2c1db4ff8a76')) {
-      console.log(`🔎 [CHAMP_C] Analyse du champ C: ${fieldId}`);
-      console.log(`🔎 [CHAMP_C][TYPE] Probablement un champ de données`);
+      if (isSmartDebug()) tblLog(`🔎 [CHAMP_C] Analyse du champ C: ${fieldId}`);
+      if (isSmartDebug()) tblLog(`🔎 [CHAMP_C][TYPE] Probablement un champ de données`);
     }
     
     if (fieldId.includes('688046c2-c2ee-4617-b4d3-c66eca40fa9d')) {
-      console.log(`🔎 [CHAMP_C_DATA] Analyse du champ C data: ${fieldId}`);
-      console.log(`🔎 [CHAMP_C_DATA][TYPE] Probablement un champ de données aussi`);
+      if (isSmartDebug()) tblLog(`🔎 [CHAMP_C_DATA] Analyse du champ C data: ${fieldId}`);
+      if (isSmartDebug()) tblLog(`🔎 [CHAMP_C_DATA][TYPE] Probablement un champ de données aussi`);
     }
     
     // Recherche intelligente dans formData
-    console.log(`🔍 [SEARCH] Recherche intelligente pour fieldId: "${fieldId}"`);
+    if (isSmartDebug()) tblLog(`🔍 [SEARCH] Recherche intelligente pour fieldId: "${fieldId}"`);
     const possibleKeys = [
       fieldId,
       `${fieldId}_field`,
@@ -1008,22 +1015,22 @@ export function SmartCalculatedField({
       `formula_${fieldId}`
     ];
     
-    console.log(`🔍 [SEARCH][KEYS] Clés à tester:`, possibleKeys);
+    if (isSmartDebug()) tblLog(`🔍 [SEARCH][KEYS] Clés à tester:`, possibleKeys);
     
     for (const key of possibleKeys) {
       const value = formData[key];
-      console.log(`🔍 [SEARCH][TEST] formData["${key}"] = ${value} (${typeof value})`);
+      if (isSmartDebug()) tblLog(`🔍 [SEARCH][TEST] formData["${key}"] = ${value} (${typeof value})`);
       if (value !== undefined && value !== null && value !== '') {
-        console.log(`✅ [SEARCH][FOUND] Trouvé valeur pour "${key}": ${value}`);
+        if (isSmartDebug()) tblLog(`✅ [SEARCH][FOUND] Trouvé valeur pour "${key}": ${value}`);
         return value;
       }
     }
     
     // 🪞 RECHERCHE DANS LES MIRRORS
-    console.log(`🪞 [MIRROR_SEARCH] Recherche dans les mirrors pour fieldId: "${fieldId}"`);
+    if (isSmartDebug()) tblLog(`🪞 [MIRROR_SEARCH] Recherche dans les mirrors pour fieldId: "${fieldId}"`);
     if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
       const allMirrorKeys = Object.keys(window.TBL_FORM_DATA).filter(k => k.startsWith('__mirror_'));
-      console.log(`🪞 [MIRROR_SEARCH][AVAILABLE]`, allMirrorKeys.slice(0, 10), '...');
+      if (isSmartDebug()) tblLog(`🪞 [MIRROR_SEARCH][AVAILABLE]`, allMirrorKeys.slice(0, 10), '...');
       
       // Recherche mirrors liés à ce fieldId
       const relatedMirrors = allMirrorKeys.filter(k => 
@@ -1032,34 +1039,34 @@ export function SmartCalculatedField({
         (fieldId.length > 10 && k.includes(fieldId.substring(0, 10)))
       );
       
-      console.log(`🪞 [MIRROR_SEARCH][RELATED]`, relatedMirrors);
+      if (isSmartDebug()) tblLog(`🪞 [MIRROR_SEARCH][RELATED]`, relatedMirrors);
       
       for (const mirrorKey of relatedMirrors) {
         const mirrorValue = window.TBL_FORM_DATA[mirrorKey];
-        console.log(`🪞 [MIRROR_SEARCH][VALUE] ${mirrorKey} = ${mirrorValue}`);
+        if (isSmartDebug()) tblLog(`🪞 [MIRROR_SEARCH][VALUE] ${mirrorKey} = ${mirrorValue}`);
         if (mirrorValue !== null && mirrorValue !== undefined && mirrorValue !== '' && mirrorValue !== 0) {
-          console.log(`✅ [MIRROR_SEARCH][FOUND] Utilisation mirror "${mirrorKey}": ${mirrorValue}`);
+          if (isSmartDebug()) tblLog(`✅ [MIRROR_SEARCH][FOUND] Utilisation mirror "${mirrorKey}": ${mirrorValue}`);
           return mirrorValue;
         }
       }
     }
     
     // Dernière chance: chercher par pattern
-    console.log(`🔍 [PATTERN_SEARCH] Recherche par pattern pour fieldId: "${fieldId}"`);
+    if (isSmartDebug()) tblLog(`🔍 [PATTERN_SEARCH] Recherche par pattern pour fieldId: "${fieldId}"`);
     const matchingKeys = Object.keys(formData).filter(key => 
       key.includes(fieldId) || formData[key]?.toString().includes(fieldId)
     );
     
-    console.log(`🔍 [PATTERN_SEARCH][MATCHING]`, matchingKeys);
+    if (isSmartDebug()) tblLog(`🔍 [PATTERN_SEARCH][MATCHING]`, matchingKeys);
     
     if (matchingKeys.length > 0) {
       const result = formData[matchingKeys[0]];
-      console.log(`🔍 [PATTERN] ${matchingKeys[0]} = ${result}`);
+      if (isSmartDebug()) tblLog(`🔍 [PATTERN] ${matchingKeys[0]} = ${result}`);
       return result;
     }
     
-    console.log(`❌ [NOT_FOUND] Aucune valeur trouvée pour ${fieldId}`);
-    console.log(`❌ [NOT_FOUND][FORMDATA_KEYS]`, Object.keys(formData).slice(0, 20), '...');
+    if (isSmartDebug()) tblLog(`❌ [NOT_FOUND] Aucune valeur trouvée pour ${fieldId}`);
+    if (isSmartDebug()) tblLog(`❌ [NOT_FOUND][FORMDATA_KEYS]`, Object.keys(formData).slice(0, 20), '...');
     return null;
   }, [formData, api]);
   
@@ -1135,7 +1142,7 @@ export function SmartCalculatedField({
     if (cachedSig && cachedSig.expiresAt > Date.now()) {
       if (isSmartDebug()) console.log('[SMART][FAST-PATH] signature cache hit', { sourceRef, signature });
       if (latestResultRef.current !== cachedSig.value) {
-        console.log(`🏃 [RESULT DEBUG] Cache hit pour ${sourceRef}, setResult:`, cachedSig.value);
+        if (isSmartDebug()) tblLog(`🏃 [RESULT DEBUG] Cache hit pour ${sourceRef}, setResult:`, cachedSig.value);
         setResult(cachedSig.value);
       }
       return; // éviter appel réseau
@@ -1163,7 +1170,7 @@ export function SmartCalculatedField({
         if (diagMode()) console.log('[TBL_DIAG][calc-result]', { sourceRef, signature, value: calculatedResult });
         setResult(prev => {
           // 🔍 LOG FORCÉ pour diagnostic
-          console.log(`🔍 [RESULT DEBUG] setResult pour ${sourceRef}:`, { prev, calculatedResult, willChange: prev !== calculatedResult });
+          if (isSmartDebug()) tblLog(`🔍 [RESULT DEBUG] setResult pour ${sourceRef}:`, { prev, calculatedResult, willChange: prev !== calculatedResult });
           
           if (prev === calculatedResult) {
             if (isSmartDebug()) console.log('[SMART][RESULT][UNCHANGED]', sourceRef);
@@ -1172,7 +1179,7 @@ export function SmartCalculatedField({
           signatureResultCache.set(sigKey, { value: calculatedResult, expiresAt: Date.now() + CACHE_TTL });
           if (isSmartDebug()) console.log('[SMART][RESULT][SET]', { sourceRef, signature, value: calculatedResult });
           
-          console.log(`✅ [RESULT DEBUG] Nouveau result pour ${sourceRef}:`, calculatedResult);
+          if (isSmartDebug()) tblLog(`✅ [RESULT DEBUG] Nouveau result pour ${sourceRef}:`, calculatedResult);
           
           return calculatedResult;
         });
@@ -1187,7 +1194,7 @@ export function SmartCalculatedField({
         } else {
           if (isSmartDebug()) console.error('❌ Erreur calcul:', error);
         }
-        console.log(`❌ [RESULT DEBUG] setResult(null) à cause d'erreur pour ${sourceRef}:`, error);
+        if (isSmartDebug()) tblLog(`❌ [RESULT DEBUG] setResult(null) à cause d'erreur pour ${sourceRef}:`, error);
         setResult(null);
       } finally {
         inflightRef.current = false;
@@ -1199,7 +1206,7 @@ export function SmartCalculatedField({
     const timeoutId = setTimeout(() => {
       if (latestIsLoadingRef.current) {
         if ((diagMode() || isSmartDebug())) console.warn('[SMART][TIMEOUT]', sourceRef);
-        console.log(`⏰ [RESULT DEBUG] Timeout pour ${sourceRef}, setResult(prev ?? null)`);
+        if (isSmartDebug()) tblLog(`⏰ [RESULT DEBUG] Timeout pour ${sourceRef}, setResult(prev ?? null)`);
         setIsLoading(false);
         setResult(prev => prev ?? null);
       }
@@ -1278,3 +1285,4 @@ export function SmartCalculatedField({
     </span>
   );
 }
+

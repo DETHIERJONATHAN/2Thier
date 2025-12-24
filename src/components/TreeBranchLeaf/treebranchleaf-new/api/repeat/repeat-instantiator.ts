@@ -63,7 +63,7 @@ export function createInstantiationPlan(
   });
 
   const variables: VariableCopyPlan[] = blueprint.variables.map(variable => {
-    // 🔧 CRITICAL FIX: Check if this is a linked variable that should target a specific template node
+    // Ã°Å¸â€Â§ CRITICAL FIX: Check if this is a linked variable that should target a specific template node
     // For linked variables, primaryTargetNodeId specifies which template node should receive the copy
     // For direct variables, primaryTargetNodeId is undefined, so we fallback to variable.nodeId
     // 
@@ -82,7 +82,7 @@ export function createInstantiationPlan(
     return {
       templateVariableId: variable.variableId,
       plannedSuffix: variableSuffix,
-      targetNodeId: plannedTargetNodeId,  // ← NOW uses the template node that REFERENCES the variable
+      targetNodeId: plannedTargetNodeId,  // Ã¢â€ Â NOW uses the template node that REFERENCES the variable
       plannedVariableId
     };
   });

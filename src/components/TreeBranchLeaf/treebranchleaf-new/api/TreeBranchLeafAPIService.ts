@@ -1,7 +1,7 @@
 /**
- * 🌲 TreeBranchLeaf - Service Client API
+ * Ã°Å¸Å’Â² TreeBranchLeaf - Service Client API
  * 
- * Service qui utilise notre API centralisée avec l'authentification CRM
+ * Service qui utilise notre API centralisÃƒÂ©e avec l'authentification CRM
  */
 
 import type { TreeBranchLeafTree, TreeBranchLeafNode } from '../types';
@@ -9,7 +9,7 @@ import { TreeBranchLeafAPI } from './TreeBranchLeafAPI';
 
 /**
  * Service client pour TreeBranchLeaf
- * Utilise directement notre API centralisée
+ * Utilise directement notre API centralisÃƒÂ©e
  */
 export class TreeBranchLeafAPIService {
   private organizationId: string;

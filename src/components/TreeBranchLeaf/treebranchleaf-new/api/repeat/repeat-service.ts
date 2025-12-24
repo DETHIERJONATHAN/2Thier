@@ -79,30 +79,26 @@ export async function planRepeatDuplication(
     throw new RepeatOperationError(`Repeater ${repeaterNodeId} was not found.`, 404);
   }
 
-  // 🔴 FILTRE CRITIQUE: Nettoyer les IDs suffixés avant de calculer les suffixes
+  // Ã°Å¸â€Â´ FILTRE CRITIQUE: Nettoyer les IDs suffixÃƒÂ©s avant de calculer les suffixes
   // Les templateNodeIds ne doivent contenir que des UUIDs purs
   const cleanedTemplateIds = blueprint.templateNodeIds
     .filter(id => typeof id === 'string' && !!id)
     .map(id => id.replace(/(-\d+)+$/, '')) // Retirer les suffixes
-    .filter((id, idx, arr) => arr.indexOf(id) === idx); // Dédupliquer
+    .filter((id, idx, arr) => arr.indexOf(id) === idx); // DÃƒÂ©dupliquer
   
   const needsCleaning = blueprint.templateNodeIds.length !== cleanedTemplateIds.length;
   
   if (needsCleaning) {
-    console.log(`🧹 [repeat-service] NETTOYAGE DES IDs DÉTECTÉ:`);
-    console.log(`   Avant: ${blueprint.templateNodeIds.length} IDs`);
-    console.log(`   Après: ${cleanedTemplateIds.length} IDs`);
     blueprint.templateNodeIds.forEach((id, idx) => {
       const cleaned = id.replace(/(-\d+)+$/, '');
       if (id !== cleaned) {
-        console.log(`      "${id}" → "${cleaned}"`);
       }
     });
   }
 
-  // ⚠️ IMPORTANT : NE JAMAIS modifier metadata.repeater.templateNodeIds dans la base !
+  // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT : NE JAMAIS modifier metadata.repeater.templateNodeIds dans la base !
   // Les IDs dans metadata doivent TOUJOURS rester les IDs originaux (sans suffixes)
-  // On utilise seulement cleanedTemplateIds en mémoire pour calculer les suffixes
+  // On utilise seulement cleanedTemplateIds en mÃƒÂ©moire pour calculer les suffixes
 
   let actualSuffix: number;
   let perTemplateSuffixes: Record<string, number>;
@@ -117,7 +113,7 @@ export async function planRepeatDuplication(
       cleanedTemplateIds.map(id => [id, actualSuffix])
     );
   } else {
-    // Calculer automatiquement le prochain suffix séquentiel
+    // Calculer automatiquement le prochain suffix sÃƒÂ©quentiel
     const existingMax = await computeTemplateCopySuffixMax(
       prisma,
       repeaterNode.treeId,
@@ -127,14 +123,9 @@ export async function planRepeatDuplication(
     const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
     actualSuffix = globalMax + 1;
     
-    console.log(`📊 [repeat-service] Calcul du suffixe (execute)`);
-    console.log(`   Templates évalués: ${cleanedTemplateIds.length}`);
     cleanedTemplateIds.forEach(id => {
       const mx = existingMax.get(id) ?? 0;
-      console.log(`   - ${id} => max ${mx}`);
     });
-    console.log(`   Max global: ${globalMax}`);
-    console.log(`   ➡️  Prochain suffixe appliqué à tous: ${actualSuffix}`);
     
     perTemplateSuffixes = {};
     for (const templateId of cleanedTemplateIds) {
@@ -144,8 +135,8 @@ export async function planRepeatDuplication(
 
   const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, actualSuffix);
 
-  // 🔧 FIX CRITIQUE: Mettre à jour blueprint.templateNodeIds avec les IDs nettoyés
-  // avant de créer le plan, sinon le plan recevra des IDs vides/pollués
+  // Ã°Å¸â€Â§ FIX CRITIQUE: Mettre ÃƒÂ  jour blueprint.templateNodeIds avec les IDs nettoyÃƒÂ©s
+  // avant de crÃƒÂ©er le plan, sinon le plan recevra des IDs vides/polluÃƒÂ©s
   blueprint.templateNodeIds = cleanedTemplateIds;
 
   const plan = createInstantiationPlan(blueprint, {
@@ -175,12 +166,9 @@ export async function executeRepeatDuplication(
   repeaterNodeId: string,
   options: RepeatDuplicationOptions = {}
 ): Promise<RepeatExecutionResult> {
-  console.log(`[repeat-service] 🔄 executeRepeatDuplication called for ${repeaterNodeId}`, { options });
   try {
     const planned = await planRepeatDuplication(prisma, repeaterNodeId, options);
-    console.log(`[repeat-service] ✅ Plan created successfully`);
 
-    console.log(`\n🔥 [repeat-service] PLANNED VARIABLES:`, JSON.stringify(planned.plan.variables.slice(0, 2), null, 2));
     const operations: RepeatExecutionOperation[] = [
       ...planned.plan.nodes.map(nodePlan => ({
         type: 'node-copy' as const,
@@ -194,14 +182,13 @@ export async function executeRepeatDuplication(
       }))
     ];
 
-    console.log(`[repeat-service] Operations count: ${operations.length} (nodes: ${planned.plan.nodes.length}, variables: ${planned.plan.variables.length})`);
     return {
       ...planned,
       status: 'pending-execution',
       operations
     };
   } catch (error) {
-    console.error(`[repeat-service] ❌ ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
+    console.error(`[repeat-service] Ã¢ÂÅ’ ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
     throw error;
   }
 }

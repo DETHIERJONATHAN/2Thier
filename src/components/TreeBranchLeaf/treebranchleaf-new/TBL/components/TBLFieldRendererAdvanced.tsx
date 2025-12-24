@@ -45,6 +45,7 @@ import { type DynamicConstraints } from '../hooks/useDynamicConstraints';
 import { useNodeFormulas, getConstraintFormulas, extractSourceNodeIdFromTokens } from '../hooks/useNodeFormulas';
 import { useNodeCalculatedValue } from '../../../../../hooks/useNodeCalculatedValue';
 import { generateMirrorVariants } from '../utils/mirrorNormalization';
+import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 
 import type { RawTreeNode } from '../types';
 
@@ -78,7 +79,7 @@ const evaluateFilterConditions = (
   if (!conditions || conditions.length === 0) return true;
   if (!tableData || !config) return true;
   
-  console.log(`[evaluateFilterConditions] Évaluation pour option:`, option, `avec ${conditions.length} condition(s)`);
+  // Log supprimé - trop verbeux
 
   const results = conditions.map(condition => {
     // 1. Extraire la valeur de référence depuis formData
@@ -136,7 +137,7 @@ const evaluateFilterConditions = (
 
     // 3. Comparer referenceValue avec chaque tableValue selon l'opérateur
     // Si plusieurs valeurs (colonne ET ligne), toutes doivent passer la condition
-    console.log(`[evaluateFilterConditions] Comparaison: referenceValue=${referenceValue}, tableValues:`, tableValues, `opérateur=${condition.operator}`);
+    // Log supprimé - trop verbeux
     
     const conditionResults = tableValues.map(tableValue => {
       let result = false;
@@ -169,14 +170,14 @@ const evaluateFilterConditions = (
           result = false;
       }
       
-      console.log(`[evaluateFilterConditions] ${String(referenceValue)} ${condition.operator} ${String(tableValue)} = ${result}`);
+      // Log supprimé - trop verbeux
       return result;
     });
     
     // Si colonne ET ligne: toutes les conditions doivent passer (AND)
     // Si seulement colonne OU ligne: au moins une doit passer
     const conditionPassed = conditionResults.every(result => result);
-    console.log(`[evaluateFilterConditions] Condition ${condition.id} résultat: ${conditionPassed}`);
+    // Log supprimé - trop verbeux
     return conditionPassed;
   });
 
@@ -185,7 +186,7 @@ const evaluateFilterConditions = (
     ? results.every(result => result) 
     : results.some(result => result);
     
-  console.log(`[evaluateFilterConditions] Résultat final pour option "${option.value}": ${finalResult} (logique: ${filterLogic})`);
+  // Log supprimé - trop verbeux
   return finalResult;
 };
 
@@ -1419,35 +1420,25 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   const fieldTypeLower = (field.type || '').toLowerCase();
   const shouldLoadFormulas = ['number', 'text', 'select', 'checkbox', 'date'].includes(fieldTypeLower);
   
-  // 🔍 DEBUG: Voir pourquoi le champ pourrait ne pas charger ses formules
-  useEffect(() => {
-    if (field.id === '63358d05-4ae7-4a88-8ee5-29e280424919') {
-      console.log(`🔍 [DEBUG] Champ "N° de panneau" - type="${field.type}", fieldTypeLower="${fieldTypeLower}", shouldLoadFormulas=${shouldLoadFormulas}`);
-    }
-  }, [field.type, field.id, fieldTypeLower, shouldLoadFormulas]);
+  // Débug supprimé - trop verbeux
   
   const { formulas: nodeFormulas, loading: formulasLoading } = useNodeFormulas({
     nodeId: field.id,
     enabled: shouldLoadFormulas
   });
   
-  // Debug: afficher quand les formules sont chargées pour les champs NUMBER
+  // Debug: log uniquement si debug activé ET si formules trouvées
   useEffect(() => {
-    if (shouldLoadFormulas) {
-      console.log(`🔢 [NUMBER FIELD] "${field.label}" (${field.id}) - Chargement formules: ${formulasLoading ? 'en cours...' : `${nodeFormulas.length} trouvée(s)`}`);
+    if (nodeFormulas.length > 0 && isTBLDebugEnabled()) {
+      tblLog(`📋 [NodeFormulas] "${field.label}" (${field.id}) - ${nodeFormulas.length} formule(s) chargée(s)`);
     }
-    if (nodeFormulas.length > 0) {
-      console.log(`📋 [NodeFormulas] "${field.label}" (${field.id}) - ${nodeFormulas.length} formule(s) chargée(s):`, 
-        nodeFormulas.map(f => ({ id: f.id, targetProperty: f.targetProperty, tokens: f.tokens }))
-      );
-    }
-  }, [nodeFormulas, field.label, field.id, formulasLoading, shouldLoadFormulas]);
+  }, [nodeFormulas, field.label, field.id]);
 
   // 🎯 NOUVEAU: Extraction des formules de contrainte (number_max, number_min, etc.)
   const constraintFormulas = useMemo(() => {
     const formulas = getConstraintFormulas(nodeFormulas);
-    if (formulas.length > 0) {
-      console.log(`🎯 [ConstraintFormulas] "${field.label}" a ${formulas.length} formule(s) de contrainte:`, formulas);
+    if (formulas.length > 0 && isTBLDebugEnabled()) {
+      tblLog(`🎯 [ConstraintFormulas] "${field.label}" a ${formulas.length} formule(s) de contrainte`);
     }
     return formulas;
   }, [nodeFormulas, field.label]);
@@ -1459,11 +1450,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     for (const formula of constraintFormulas) {
       const sourceId = extractSourceNodeIdFromTokens(formula.tokens);
       if (sourceId) {
-        console.log(`🎯 [ConstraintSource] "${field.label}" - Source nodeId extrait: ${sourceId} depuis tokens:`, formula.tokens);
         return sourceId;
       }
     }
-    console.log(`⚠️ [ConstraintSource] "${field.label}" - Aucun sourceId trouvé dans les tokens`);
     return null;
   }, [constraintFormulas, field.label]);
 
@@ -1524,7 +1513,6 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       if (value !== undefined && value !== null && value !== '') {
         foundValue = value;
         foundKey = key;
-        console.log(`✅ [ConstraintValue] "${field.label}" - Valeur trouvée dans formData[${key}]: ${value}`);
         break;
       }
     }
@@ -1533,19 +1521,15 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     if (foundKey) {
       if (hasBackendValue && typeof foundValue === 'number' && foundValue === 0 && constraintBackendValue !== foundValue) {
-        console.log(`♻️ [ConstraintValue] "${field.label}" - Remplacement valeur miroir 0 par backend: ${constraintBackendValue}`);
         return constraintBackendValue;
       }
       return foundValue;
     }
 
     if (hasBackendValue) {
-      console.log(`✅ [ConstraintValue] "${field.label}" - Valeur trouvée via backend:`, constraintBackendValue);
       return constraintBackendValue;
     }
     
-    console.log(`⚠️ [ConstraintValue] "${field.label}" - Aucune valeur dans formData pour nodeId: ${constraintSourceNodeId}`);
-    console.log(`📋 [ConstraintValue] formData keys:`, Object.keys(formData).filter(k => k.includes(constraintSourceNodeId.slice(0, 8))));
     return undefined;
   }, [constraintSourceNodeId, formData, field.label, constraintMirrorVariants, constraintBackendValue]);
 
@@ -1557,11 +1541,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       return constraints;
     }
 
-    console.log(`🎯 [DynamicConstraints] Pour "${field.label}":`, {
-      constraintFormulas,
-      constraintSourceNodeId,
-      constraintSourceValue
-    });
+    // Log supprimé - trop verbeux
 
     for (const formula of constraintFormulas) {
       const targetProp = formula.targetProperty;
@@ -1575,7 +1555,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         const numValue = typeof value === 'number' ? value : parseFloat(String(value));
         if (!isNaN(numValue)) {
           (constraints as Record<string, number>)[targetProp] = numValue;
-          console.log(`✅ [DynamicConstraints] ${targetProp} = ${numValue} pour "${field.label}"`);
+          // Log supprimé - trop verbeux
         }
         // 🆕 Récupérer le message de contrainte depuis la formule
         if (formula.constraintMessage) {

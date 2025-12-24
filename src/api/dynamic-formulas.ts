@@ -1,8 +1,8 @@
 /**
- * 🌟 API POUR SYSTÈME DYNAMIQUE DE FORMULES
+ * Ã°Å¸Å’Å¸ API POUR SYSTÃƒË†ME DYNAMIQUE DE FORMULES
  * 
  * Cette API s'adapte automatiquement aux configurations des formulaires
- * et permet de gérer TOUS les devis et formules de manière dynamique.
+ * et permet de gÃƒÂ©rer TOUS les devis et formules de maniÃƒÂ¨re dynamique.
  */
 
 import { getFieldMapping } from '../config/fieldMapping';
@@ -13,8 +13,8 @@ import DynamicFormulaEngine from '../services/DynamicFormulaEngine';
 const router = express.Router();
 
 /**
- * 🔍 GET /api/dynamic-formulas/configurations
- * Récupère toutes les configurations de champs pour une organisation
+ * Ã°Å¸â€Â GET /api/dynamic-formulas/configurations
+ * RÃƒÂ©cupÃƒÂ¨re toutes les configurations de champs pour une organisation
  */
 router.get('/configurations', async (req, res) => {
   try {
@@ -31,7 +31,6 @@ router.get('/configurations', async (req, res) => {
     const configurations = await engine.loadFieldConfigurations(organizationId);
     await engine.cleanup();
 
-    console.log('✅ [DynamicFormulaAPI] Configurations récupérées:', Object.keys(configurations).length);
 
     res.json({
       success: true,
@@ -47,18 +46,18 @@ router.get('/configurations', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [DynamicFormulaAPI] Erreur récupération configurations:', error);
+    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur rÃƒÂ©cupÃƒÂ©ration configurations:', error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la récupération des configurations',
+      error: 'Erreur lors de la rÃƒÂ©cupÃƒÂ©ration des configurations',
       details: error.message
     });
   }
 });
 
 /**
- * 🧮 POST /api/dynamic-formulas/calculate
- * Exécute les calculs dynamiques selon les valeurs fournies
+ * Ã°Å¸Â§Â® POST /api/dynamic-formulas/calculate
+ * ExÃƒÂ©cute les calculs dynamiques selon les valeurs fournies
  */
 router.post('/calculate', async (req, res) => {
   try {
@@ -75,12 +74,10 @@ router.post('/calculate', async (req, res) => {
     if (!fieldValues || typeof fieldValues !== 'object') {
       return res.status(400).json({
         success: false,
-        error: 'fieldValues requis dans le body de la requête'
+        error: 'fieldValues requis dans le body de la requÃƒÂªte'
       });
     }
 
-    console.log('🧮 [DynamicFormulaAPI] Début calculs pour org:', organizationId);
-    console.log('📝 Valeurs reçues:', Object.keys(fieldValues).length);
 
     const engine = new DynamicFormulaEngine();
     
@@ -94,12 +91,11 @@ router.post('/calculate', async (req, res) => {
       organizationId
     };
 
-    // Exécuter les calculs
+    // ExÃƒÂ©cuter les calculs
     const results = await engine.executeCalculations(context);
     
     await engine.cleanup();
 
-    console.log('✅ [DynamicFormulaAPI] Calculs terminés:', Object.keys(results).length);
 
     res.json({
       success: true,
@@ -114,7 +110,7 @@ router.post('/calculate', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [DynamicFormulaAPI] Erreur calculs:', error);
+    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur calculs:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors des calculs dynamiques',
@@ -124,35 +120,32 @@ router.post('/calculate', async (req, res) => {
 });
 
 /**
- * ⚡ POST /api/dynamic-formulas/calculate-prix-kwh
- * Calcul spécifique pour Prix Kw/h selon votre logique
+ * Ã¢Å¡Â¡ POST /api/dynamic-formulas/calculate-prix-kwh
+ * Calcul spÃƒÂ©cifique pour Prix Kw/h selon votre logique
  */
 router.post('/calculate-prix-kwh', async (req, res) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
     const { 
       selectedOption, // 'prix-kwh' ou 'calcul-du-prix-kwh'
-      prixDefini,     // Valeur actuelle Prix Kw/h - Défini
+      prixDefini,     // Valeur actuelle Prix Kw/h - DÃƒÂ©fini
       consommation,   // Consommation annuelle Kw/h
-      calculBase,     // Base de calcul si nécessaire
+      calculBase,     // Base de calcul si nÃƒÂ©cessaire
       directValue     // Valeur directe si saisie
     } = req.body;
 
-    console.log('⚡ [Prix Kw/h API] Calcul spécifique - Option:', selectedOption);
-    console.log('⚡ [Prix Kw/h API] Prix défini:', prixDefini);
-    console.log('⚡ [Prix Kw/h API] Consommation:', consommation);
 
     const engine = new DynamicFormulaEngine();
     const fieldConfigs = await engine.loadFieldConfigurations(organizationId);
     
-    // Récupérer le mapping des champs dynamique
+    // RÃƒÂ©cupÃƒÂ©rer le mapping des champs dynamique
     const fieldMapping = getFieldMapping();
     
-    // Construire le contexte avec les valeurs spécifiques
+    // Construire le contexte avec les valeurs spÃƒÂ©cifiques
     const context = {
       fieldValues: {
         [fieldMapping.prix_kwh]: selectedOption, // Prix Kw/h (advanced_select)
-        [fieldMapping.prix_mois]: prixDefini,     // Prix Kw/h - Défini
+        [fieldMapping.prix_mois]: prixDefini,     // Prix Kw/h - DÃƒÂ©fini
         [fieldMapping.consommation_kwh]: consommation,  // Consommation annuelle
         'direct_prix_kwh_input': directValue,
         'calcul_du_prix_base': calculBase || prixDefini
@@ -161,15 +154,14 @@ router.post('/calculate-prix-kwh', async (req, res) => {
       organizationId
     };
 
-    // Calcul spécifique
+    // Calcul spÃƒÂ©cifique
     const results = await engine.executeCalculations(context);
     
     await engine.cleanup();
 
-    // Résultat spécifique pour Prix Kw/h - Défini
+    // RÃƒÂ©sultat spÃƒÂ©cifique pour Prix Kw/h - DÃƒÂ©fini
     const finalPrixKwh = results['52c7f63b-7e57-4ba8-86da-19a176f09220'];
 
-    console.log('✅ [Prix Kw/h API] Résultat final:', finalPrixKwh);
 
     res.json({
       success: true,
@@ -188,7 +180,7 @@ router.post('/calculate-prix-kwh', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [Prix Kw/h API] Erreur:', error);
+    console.error('Ã¢ÂÅ’ [Prix Kw/h API] Erreur:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors du calcul Prix Kw/h',
@@ -198,15 +190,14 @@ router.post('/calculate-prix-kwh', async (req, res) => {
 });
 
 /**
- * 🔄 PUT /api/dynamic-formulas/configurations/:fieldId
- * Met à jour la configuration d'un champ (système adaptatif)
+ * Ã°Å¸â€â€ž PUT /api/dynamic-formulas/configurations/:fieldId
+ * Met ÃƒÂ  jour la configuration d'un champ (systÃƒÂ¨me adaptatif)
  */
 router.put('/configurations/:fieldId', async (req, res) => {
   try {
     const { fieldId } = req.params;
     const { advancedConfig, formulas, dependencies } = req.body;
 
-    console.log('🔄 [DynamicFormulaAPI] Mise à jour configuration:', fieldId);
 
     const engine = new DynamicFormulaEngine();
     
@@ -218,7 +209,6 @@ router.put('/configurations/:fieldId', async (req, res) => {
 
     await engine.cleanup();
 
-    console.log('✅ [DynamicFormulaAPI] Configuration mise à jour');
 
     res.json({
       success: true,
@@ -230,25 +220,24 @@ router.put('/configurations/:fieldId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [DynamicFormulaAPI] Erreur mise à jour:', error);
+    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur mise ÃƒÂ  jour:', error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la mise à jour de la configuration',
+      error: 'Erreur lors de la mise ÃƒÂ  jour de la configuration',
       details: error.message
     });
   }
 });
 
 /**
- * 🎯 GET /api/dynamic-formulas/field/:fieldId/logic
- * Analyse les logiques conditionnelles d'un champ spécifique
+ * Ã°Å¸Å½Â¯ GET /api/dynamic-formulas/field/:fieldId/logic
+ * Analyse les logiques conditionnelles d'un champ spÃƒÂ©cifique
  */
 router.get('/field/:fieldId/logic', async (req, res) => {
   try {
     const { fieldId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
 
-    console.log('🎯 [DynamicFormulaAPI] Analyse logique pour champ:', fieldId);
 
     const engine = new DynamicFormulaEngine();
     const configurations = await engine.loadFieldConfigurations(organizationId);
@@ -257,7 +246,7 @@ router.get('/field/:fieldId/logic', async (req, res) => {
     if (!fieldConfig) {
       return res.status(404).json({
         success: false,
-        error: 'Champ non trouvé'
+        error: 'Champ non trouvÃƒÂ©'
       });
     }
 
@@ -279,7 +268,7 @@ router.get('/field/:fieldId/logic', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [DynamicFormulaAPI] Erreur analyse logique:', error);
+    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur analyse logique:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de l\'analyse de la logique',
@@ -289,8 +278,8 @@ router.get('/field/:fieldId/logic', async (req, res) => {
 });
 
 /**
- * 📊 GET /api/dynamic-formulas/analytics
- * Statistiques du système dynamique
+ * Ã°Å¸â€œÅ  GET /api/dynamic-formulas/analytics
+ * Statistiques du systÃƒÂ¨me dynamique
  */
 router.get('/analytics', async (req, res) => {
   try {
@@ -315,7 +304,6 @@ router.get('/analytics', async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
-    console.log('📊 [DynamicFormulaAPI] Statistiques:', analytics);
 
     res.json({
       success: true,
@@ -323,10 +311,10 @@ router.get('/analytics', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [DynamicFormulaAPI] Erreur analytics:', error);
+    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur analytics:', error);
     res.status(500).json({
       success: false,
-      error: 'Erreur lors de la récupération des statistiques',
+      error: 'Erreur lors de la rÃƒÂ©cupÃƒÂ©ration des statistiques',
       details: error.message
     });
   }

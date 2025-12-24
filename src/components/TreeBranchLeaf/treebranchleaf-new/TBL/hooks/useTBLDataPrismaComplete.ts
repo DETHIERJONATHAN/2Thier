@@ -9,14 +9,14 @@ const verbose = () => (typeof window !== 'undefined' && window.__TBL_VERBOSE__ =
 const diagEnabled = () => {
   try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; }
 };
-const ddiag = (...args: unknown[]) => { if (diagEnabled()) console.log('[TBL_DIAG]', ...args as any); };
+const ddiag = (...args: unknown[]) => { if (diagEnabled()) if (verbose()) console.log('[TBL_DIAG]', ...args as any); };
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 
 // 🎯 FONCTION: Création automatique des mirrors pour tous les champs TreeBranchLeaf
 export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode[]): void => {
   try {
     if (typeof window === 'undefined' || !window.TBL_FORM_DATA) {
-      console.log('🎯 [MIRROR] Initialisation TBL_FORM_DATA...');
+      if (verbose()) console.log('🎯 [MIRROR] Initialisation TBL_FORM_DATA...');
       if (typeof window !== 'undefined') {
         window.TBL_FORM_DATA = {};
       }
@@ -42,7 +42,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
               window.TBL_FORM_DATA[mirrorKey] = defaultValue;
               mirrorsCreated++;
               
-              console.log('🎯 [MIRROR][AUTO_CREATE]', { 
+              if (verbose()) console.log('🎯 [MIRROR][AUTO_CREATE]', { 
                 mirrorKey, 
                 fieldId: field.id, 
                 fieldLabel: field.label, 
@@ -57,7 +57,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                   const variantKey = `__mirror_data_${v}`;
                   if (!(variantKey in window.TBL_FORM_DATA)) {
                     window.TBL_FORM_DATA[variantKey] = defaultValue;
-                    console.log('🎯 [MIRROR][AUTO_CREATE_VARIANT]', { 
+                    if (verbose()) console.log('🎯 [MIRROR][AUTO_CREATE_VARIANT]', { 
                       variantKey, 
                       from: mirrorKey, 
                       defaultValue 
@@ -84,7 +84,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(formulaMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = 0; // Les formules retournent généralement des nombres
             window.TBL_FORM_DATA[formulaMirrorKey] = defaultValue;
-            console.log('🧮 [MIRROR][FORMULA_CREATE]', {
+            if (verbose()) console.log('🧮 [MIRROR][FORMULA_CREATE]', {
               mirrorKey: formulaMirrorKey,
               formulaId: node.id,
               formulaLabel: node.label,
@@ -97,7 +97,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(formulaLabelMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = 0;
             window.TBL_FORM_DATA[formulaLabelMirrorKey] = defaultValue;
-            console.log('🧮 [MIRROR][FORMULA_LABEL_CREATE]', {
+            if (verbose()) console.log('🧮 [MIRROR][FORMULA_LABEL_CREATE]', {
               mirrorKey: formulaLabelMirrorKey,
               formulaLabel: node.label,
               defaultValue
@@ -112,7 +112,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                   const formulaVariantKey = variantKey.replace('__mirror_data_', '__mirror_formula_');
                   if (!(formulaVariantKey in window.TBL_FORM_DATA)) {
                     window.TBL_FORM_DATA[formulaVariantKey] = defaultValue;
-                    console.log('🧮 [MIRROR][FORMULA_VARIANT]', {
+                    if (verbose()) console.log('🧮 [MIRROR][FORMULA_VARIANT]', {
                       variantKey: formulaVariantKey,
                       from: formulaLabelMirrorKey,
                       defaultValue
@@ -140,7 +140,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(conditionMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = false; // Les conditions retournent généralement des booléens
             window.TBL_FORM_DATA[conditionMirrorKey] = defaultValue;
-            console.log('🔀 [MIRROR][CONDITION_CREATE]', {
+            if (verbose()) console.log('🔀 [MIRROR][CONDITION_CREATE]', {
               mirrorKey: conditionMirrorKey,
               conditionId: node.id,
               conditionLabel: node.label,
@@ -153,7 +153,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(conditionLabelMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = false;
             window.TBL_FORM_DATA[conditionLabelMirrorKey] = defaultValue;
-            console.log('🔀 [MIRROR][CONDITION_LABEL_CREATE]', {
+            if (verbose()) console.log('🔀 [MIRROR][CONDITION_LABEL_CREATE]', {
               mirrorKey: conditionLabelMirrorKey,
               conditionLabel: node.label,
               defaultValue
@@ -168,7 +168,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                   const conditionVariantKey = variantKey.replace('__mirror_data_', '__mirror_condition_');
                   if (!(conditionVariantKey in window.TBL_FORM_DATA)) {
                     window.TBL_FORM_DATA[conditionVariantKey] = defaultValue;
-                    console.log('🔀 [MIRROR][CONDITION_VARIANT]', {
+                    if (verbose()) console.log('🔀 [MIRROR][CONDITION_VARIANT]', {
                       variantKey: conditionVariantKey,
                       from: conditionLabelMirrorKey,
                       defaultValue
@@ -1953,7 +1953,7 @@ export const transformNodesToTBLComplete = (
     });
   });
   
-  if (verbose()) console.log('🗺️ [TAB MAPPING EARLY] Template → Tab mapping créée:', templateToTabMap.size, 'templates');
+  if (verbose()) if (verbose()) console.log('🗺️ [TAB MAPPING EARLY] Template → Tab mapping créée:', templateToTabMap.size, 'templates');
   
   const processNodeRecursively = (nodeId: string, currentLevel: number = 2): TBLField[] => {
     const children = childrenMap.get(nodeId) || [];
@@ -2309,7 +2309,7 @@ export const transformNodesToTBLComplete = (
   });
   
   // 🔍🔍🔍 DIAGNOSTIC GLOBAL - Tous les champs "Panneau"
-  // console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Recherche champs Panneau dans fieldsByTab');
+  // if (verbose()) console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Recherche champs Panneau dans fieldsByTab');
   // const allFieldsGlobal = Object.values(fieldsByTab).flat();
   // const panneauFieldsGlobal = allFieldsGlobal.filter(f => 
   //   f.label?.includes('Panneau') || f.label?.includes('panneau') ||
@@ -2318,7 +2318,7 @@ export const transformNodesToTBLComplete = (
   //   f.id.startsWith('f117b34a-') || 
   //   f.id.startsWith('fb35d781-')
   // );
-  // console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Panneau fields trouvés:', panneauFieldsGlobal.length, panneauFieldsGlobal.map(f => ({
+  // if (verbose()) console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Panneau fields trouvés:', panneauFieldsGlobal.length, panneauFieldsGlobal.map(f => ({
   //   id: f.id,
   //   label: f.label,
   //   tabId: Object.entries(fieldsByTab).find(([_, fields]) => fields.includes(f))?.[0],
@@ -2330,7 +2330,7 @@ export const transformNodesToTBLComplete = (
 
 // 🎯 HOOK PRINCIPAL
 export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRetransform }: { tree_id: string; disabled?: boolean; triggerRetransform?: number }) => {
-  console.log('🎯 [TBL DEBUG] useTBLDataPrismaComplete appelé avec tree_id:', tree_id, 'disabled:', disabled, 'triggerRetransform:', triggerRetransform);
+  if (verbose()) console.log('🎯 [TBL DEBUG] useTBLDataPrismaComplete appelé avec tree_id:', tree_id, 'disabled:', disabled, 'triggerRetransform:', triggerRetransform);
   
   // ✅ STABILISATION ULTRA CRITIQUE: Utiliser un REF pour que l'API ne change JAMAIS
   const apiHook = useAuthenticatedApi();
@@ -2352,7 +2352,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         window.__tblEventLog = window.__tblEventLog || [];
         window.__tblEventLog.push({ event: event.type, time: new Date().toISOString(), detail: event.detail });
         if (event.type === 'tbl-node-updated') {
-          console.log('🌐 [GLOBAL] tbl-node-updated event detected!', event.detail);
+          if (verbose()) console.log('🌐 [GLOBAL] tbl-node-updated event detected!', event.detail);
         }
       } catch {
         // noop
@@ -2411,9 +2411,9 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       const sections = Object.values(sectionsByTab || {}).flat();
       const sectionsWithDisplayAlways = sections.filter(s => !!(s as any).metadata?.displayAlways);
       if (sectionsWithDisplayAlways.length) {
-        console.log('[TBL Hook - Prisma] Sections with displayAlways found after transform:', sectionsWithDisplayAlways.map(s => ({ id: s.id, title: s.title })));
+        if (verbose()) console.log('[TBL Hook - Prisma] Sections with displayAlways found after transform:', sectionsWithDisplayAlways.map(s => ({ id: s.id, title: s.title })));
       } else {
-        console.log('[TBL Hook - Prisma] No sections with displayAlways after transform');
+        if (verbose()) console.log('[TBL Hook - Prisma] No sections with displayAlways after transform');
       }
     } catch (e) { console.error('[TBL Hook - Prisma] logging transform error', e); }
   }, [sectionsByTab]);
@@ -2433,7 +2433,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         updateRawRef.current(response);
         if (process.env.NODE_ENV === 'development') {
           const withDisplayAlways = response.filter(r => r.metadata && typeof r.metadata === 'object' && (r.metadata as any).displayAlways === true);
-          console.log('🔎 [TBL Hook - Prisma] fetch nodes with displayAlways', withDisplayAlways.map(n => ({ id: n.id, label: n.label }))); 
+          if (verbose()) console.log('🔎 [TBL Hook - Prisma] fetch nodes with displayAlways', withDisplayAlways.map(n => ({ id: n.id, label: n.label }))); 
         }
         const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
         const transformedData = transformNodesToTBLComplete(response, formData);
@@ -2492,7 +2492,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
             f.id.startsWith('f117b34a-') || f.id.startsWith('fb35d781-')
           );
-          console.log('🔍🔍🔍 [DIAGNOSTIC PANNEAU] Tous les champs "Panneau" trouvés:', panneauFields.map(f => ({
+          if (verbose()) console.log('🔍🔍🔍 [DIAGNOSTIC PANNEAU] Tous les champs "Panneau" trouvés:', panneauFields.map(f => ({
             id: f.id,
             label: f.label,
             parentId: (f as any).parentId,
@@ -2595,7 +2595,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               f.id.startsWith('fb35d781-')
             );
           if (found.length > 0) {
-            console.log('🔎 [DIAGNOSTIC SECTION] Panneau fields in section:', { tabId, sectionId: sec.id, sectionName: sec.name, fields: found.map(f => ({ id: f.id, label: f.label, parentRepeaterId: (f as any).parentRepeaterId, sourceTemplateId: (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId, subTabKey: (f as any).subTabKey, subTabKeys: (f as any).subTabKeys, visible: f.visible })) });
+            if (verbose()) console.log('🔎 [DIAGNOSTIC SECTION] Panneau fields in section:', { tabId, sectionId: sec.id, sectionName: sec.name, fields: found.map(f => ({ id: f.id, label: f.label, parentRepeaterId: (f as any).parentRepeaterId, sourceTemplateId: (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId, subTabKey: (f as any).subTabKey, subTabKeys: (f as any).subTabKeys, visible: f.visible })) });
             }
           });
         });
@@ -2689,7 +2689,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               if (newOnes.length === 0) return prev;
               return [...prev, ...newOnes];
             });
-            console.log('[TBL Hook] merged nodes from full tree query:', candidates.length);
+            if (verbose()) console.log('[TBL Hook] merged nodes from full tree query:', candidates.length);
             // trigger retransform and re-evaluate missing
             setFormDataVersion(v => v + 1);
             await new Promise(r => setTimeout(r, 120));
@@ -2728,14 +2728,14 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     }
 
     try {
-      console.log('🔄 [TBL Hook] Retransformation avec formData actuel...', 'rawNodes:', currentRawNodes.length);
-      console.log('🔍 [TBL Hook] RawNodes IDs:', currentRawNodes.map(n => `${n.id}(${n.label})`).slice(0, 10));
+      if (verbose()) console.log('🔄 [TBL Hook] Retransformation avec formData actuel...', 'rawNodes:', currentRawNodes.length);
+      if (verbose()) console.log('🔍 [TBL Hook] RawNodes IDs:', currentRawNodes.map(n => `${n.id}(${n.label})`).slice(0, 10));
       
       // ✅ Récupérer formData depuis le global store TBL
       const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
       const transformedData = transformNodesToTBLComplete(currentRawNodes, formData);
       
-      console.log('🎯 [TBL Hook] Retransformation: transformedData.tabs.length=', transformedData.tabs.length, 'fieldsByTab keys=', Object.keys(transformedData.fieldsByTab).length);
+      if (verbose()) console.log('🎯 [TBL Hook] Retransformation: transformedData.tabs.length=', transformedData.tabs.length, 'fieldsByTab keys=', Object.keys(transformedData.fieldsByTab).length);
       
       // 🎯 PHASE 2: Résolution asynchrone des valeurs pour les champs qui en ont besoin
       const resolvedFieldsByTab: Record<string, TBLField[]> = {};
@@ -2811,14 +2811,14 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         console.error('⚠️ [TBL Hook] Impossible de créer les mirrors après retransformation:', mirrorError);
       }
       
-      console.log('✅ [TBL Hook] Retransformation terminée, mise à jour du state...');
-      console.log('📊 [TBL Hook] État mis à jour: tabs=', resolvedTabs.length, 'fieldsByTab=', Object.keys(resolvedFieldsByTab).length);
+      if (verbose()) console.log('✅ [TBL Hook] Retransformation terminée, mise à jour du state...');
+      if (verbose()) console.log('📊 [TBL Hook] État mis à jour: tabs=', resolvedTabs.length, 'fieldsByTab=', Object.keys(resolvedFieldsByTab).length);
       
       setTree({ ...transformedData.tree, tabs: resolvedTabs });
       setTabs(resolvedTabs);
       setFieldsByTab(resolvedFieldsByTab);
       setSectionsByTab(resolvedSectionsByTab);
-      console.log('✅ [TBL Hook] Retransformation terminée');
+      if (verbose()) console.log('✅ [TBL Hook] Retransformation terminée');
     } catch (err) {
       console.error('❌ [TBL Hook] Erreur lors de la retransformation:', err);
     }
@@ -2845,23 +2845,23 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
   const isRetransformingRef = useRef(false);
 
   useEffect(() => {
-    console.log('🎯 [TBL Hook] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
+    if (verbose()) console.log('🎯 [TBL Hook] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
     
   const handleFormDataChange = () => {
-      console.log('🔔 [TBL Hook] Event TBL_FORM_DATA_CHANGED reçu !');
+      if (verbose()) console.log('🔔 [TBL Hook] Event TBL_FORM_DATA_CHANGED reçu !');
       
       if (disabled) {
-        console.log('⚠️ [TBL Hook] Hook désactivé, ignoré');
+        if (verbose()) console.log('⚠️ [TBL Hook] Hook désactivé, ignoré');
         return;
       }
       
       if (!tree_id) {
-        console.log('⚠️ [TBL Hook] Pas de tree_id, ignoré');
+        if (verbose()) console.log('⚠️ [TBL Hook] Pas de tree_id, ignoré');
         return;
       }
       
       if (rawNodesRef.current.length === 0) {
-        console.log('⚠️ [TBL Hook] rawNodes vide, ignoré');
+        if (verbose()) console.log('⚠️ [TBL Hook] rawNodes vide, ignoré');
         return;
       }
       
@@ -2880,11 +2880,11 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       }, 250);
     };
 
-    console.log('✅ [TBL Hook] Event listener TBL_FORM_DATA_CHANGED attaché');
+    if (verbose()) console.log('✅ [TBL Hook] Event listener TBL_FORM_DATA_CHANGED attaché');
     window.addEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
     
     return () => {
-      console.log('🧹 [TBL Hook] Event listener TBL_FORM_DATA_CHANGED détaché');
+      if (verbose()) console.log('🧹 [TBL Hook] Event listener TBL_FORM_DATA_CHANGED détaché');
       window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
       if (retransformDebounceRef.current) {
         window.clearTimeout(retransformDebounceRef.current);
@@ -2901,7 +2901,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       
       // Recharger uniquement si c'est notre arbre
   if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
-        console.log('🔄 [TBL Hook OLD] Capacité mise à jour détectée, rechargement des données... (debounced)', customEvent.detail);
+        if (verbose()) console.log('🔄 [TBL Hook OLD] Capacité mise à jour détectée, rechargement des données... (debounced)', customEvent.detail);
         if (capabilityDebounceRef.current) window.clearTimeout(capabilityDebounceRef.current);
         capabilityDebounceRef.current = window.setTimeout(() => {
           fetchDataRef.current();
@@ -2962,7 +2962,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
   // 🔄 Écouter les changements de paramètres repeater pour recharger les données
   useEffect(() => {
-    console.log('🎧🎧🎧 [TBL Hook] Listener tbl-repeater-updated INSTALLÉ', { tree_id, disabled });
+    if (verbose()) console.log('🎧🎧🎧 [TBL Hook] Listener tbl-repeater-updated INSTALLÉ', { tree_id, disabled });
 
     const handleRepeaterUpdate = async (event: Event) => {
       const customEvent = event as CustomEvent<{
@@ -2980,7 +2980,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       const { treeId: eventTreeId, suppressReload } = detail;
 
       if (disabled || !eventTreeId || String(eventTreeId) !== String(tree_id)) {
-        console.log('🔇 [TBL Hook] Repeater update ignoré (autre arbre ou hook désactivé)', { eventTreeId, tree_id, disabled });
+        if (verbose()) console.log('🔇 [TBL Hook] Repeater update ignoré (autre arbre ou hook désactivé)', { eventTreeId, tree_id, disabled });
         return;
       }
 
@@ -3361,7 +3361,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
     window.addEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     return () => {
-      console.log('🧹 [TBL Hook] Event listener tbl-repeater-updated détaché');
+      if (verbose()) console.log('🧹 [TBL Hook] Event listener tbl-repeater-updated détaché');
       window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     };
   }, [tree_id, disabled]);
@@ -3400,4 +3400,5 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
   };
 };
     
+
 

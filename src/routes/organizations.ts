@@ -83,8 +83,6 @@ const getActiveGoogleModules = (moduleStatuses: ModuleStatus[] = []): ModuleStat
 
 // ✅ FONCTION UTILITAIRE : Compter les modules réellement actifs pour une organisation
 async function countRealActiveModules(organizationId: string): Promise<number> {
-  console.log(`[countRealActiveModules] 🔍 Début count pour organisation: ${organizationId}`);
-  
   // Vérifier si c'est Google Workspace en regardant GoogleWorkspaceConfig
   const organization = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -95,7 +93,6 @@ async function countRealActiveModules(organizationId: string): Promise<number> {
   });
   
   const hasGoogleWorkspace = !!organization?.GoogleWorkspaceConfig;
-  console.log(`[countRealActiveModules] 🌐 Organisation ${organization?.name} - Google Workspace: ${hasGoogleWorkspace}`);
   
   // Récupérer TOUS les modules actifs de la base
   const allActiveModules = await prisma.module.findMany({
@@ -111,34 +108,23 @@ async function countRealActiveModules(organizationId: string): Promise<number> {
     }
   });
   
-  console.log(`[countRealActiveModules] 📊 Total modules actifs dans Module: ${allActiveModules.length}`);
-  
   // Filtrer les modules réellement actifs pour cette organisation
   const activeModulesForOrg = allActiveModules.filter(module => {
-    // Si le module a un statut spécifique pour cette organisation
     const moduleStatus = module.OrganizationModuleStatus[0];
     
     // Si c'est un module Google et que Google Workspace n'est pas activé
     if (module.key && module.key.toLowerCase().startsWith('google_') && !hasGoogleWorkspace) {
-      console.log(`[countRealActiveModules] 🚫 Module Google ${module.key}: Google Workspace désactivé -> EXCLU`);
       return false;
     }
     
     if (moduleStatus) {
-      // Utiliser le statut spécifique (peut être actif ou inactif)
-      console.log(`[countRealActiveModules] ${moduleStatus.active ? '✅' : '❌'} Module ${module.key || 'Sans clé'} (${module.label || 'Sans nom'}): statut spécifique -> ${moduleStatus.active ? 'ACTIF' : 'INACTIF'}`);
       return moduleStatus.active;
     } else {
-      // Pas de statut spécifique = actif par défaut
-      console.log(`[countRealActiveModules] ✅ Module ${module.key || 'Sans clé'} (${module.label || 'Sans nom'}): pas de statut spécifique -> ACTIF par défaut`);
-      return true;
+      return true; // Pas de statut spécifique = actif par défaut
     }
   });
   
-  const finalCount = activeModulesForOrg.length;
-  console.log(`[countRealActiveModules] 🎯 Count final pour ${organization?.name}: ${finalCount}`);
-  
-  return finalCount;
+  return activeModulesForOrg.length;
 }
 
 // 🔧 FONCTION HELPER : Vérifier si Google Workspace est activé
@@ -176,7 +162,7 @@ const extractGoogleWorkspaceDomain = (organization: OrganizationWithFeatures): s
 const cleanupOrganizationData = async (tx: Prisma.TransactionClient, organizationId: string): Promise<void> => {
   const runDelete = async (label: string, action: () => Promise<unknown>) => {
     try {
-      console.log(`[ORGANIZATIONS] 🗑️ Suppression ${label} pour ${organizationId}`);
+      
       await action();
     } catch (error) {
       console.error(`[ORGANIZATIONS] ❌ Échec suppression ${label} pour ${organizationId}`, error);
@@ -386,14 +372,11 @@ router.use(organizationsRateLimit);
 
 // 🟢 GET /api/organizations/active - SEULEMENT LES ORGANISATIONS ACTIVES
 router.get('/active', async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] GET /organizations/active - Récupération organisations ACTIVES uniquement');
+  
   
   try {
     const requestingUser = req.user;
     const { search, userId } = req.query;
-    
-    console.log(`[ORGANIZATIONS] User role: ${requestingUser?.role}`);
-    console.log(`[ORGANIZATIONS] Query params:`, { search, userId });
     
     // 🔍 VALIDATION QUERY PARAMS avec FILTRE ACTIF OBLIGATOIRE
     const where: Record<string, unknown> = {
@@ -425,15 +408,15 @@ router.get('/active', async (req: AuthenticatedRequest, res) => {
     // ✅ PERMISSIONS : Tous les utilisateurs authentifiés peuvent voir les orgs actives
     if (isSuperAdmin(requestingUser)) {
       // Super admin voit toutes les organisations actives
-      console.log('[ORGANIZATIONS] Super admin - accès aux organisations actives');
+      
     } else if (requestingUser?.role === 'admin' && requestingUser.organizationId) {
       // Admin voit seulement son organisation SI elle est active
       where.id = requestingUser.organizationId;
-      console.log('[ORGANIZATIONS] Admin - accès à son organisation uniquement si active');
+      
     } else if (requestingUser?.organizationId) {
       // Utilisateur normal voit seulement son organisation SI elle est active
       where.id = requestingUser.organizationId;
-      console.log('[ORGANIZATIONS] Utilisateur - accès à son organisation uniquement si active');
+      
     } else {
       console.log('[ORGANIZATIONS] Accès refusé - pas d\'organisation assignée');
       return res.status(403).json({
@@ -494,7 +477,7 @@ router.get('/active', async (req: AuthenticatedRequest, res) => {
       };
     }));
     
-    console.log(`[ORGANIZATIONS] ${enrichedOrganizations.length} organisations ACTIVES trouvées`);
+    
     
     res.json({
       success: true,
@@ -512,14 +495,11 @@ router.get('/active', async (req: AuthenticatedRequest, res) => {
 
 // �🏷️ GET /api/organizations - SÉCURISÉ AVEC ZOD + SANITISATION (TOUTES LES ORGS POUR ADMIN)
 router.get('/', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] GET /organizations - Récupération organisations SÉCURISÉE');
+  
   
   try {
     const requestingUser = req.user;
     const { search, userId } = req.query;
-    
-    console.log(`[ORGANIZATIONS] User role: ${requestingUser?.role}`);
-    console.log(`[ORGANIZATIONS] Query params:`, { search, userId });
     
     // 🔍 VALIDATION QUERY PARAMS (optionnelle mais recommandée)  
     const where: Record<string, unknown> = {};
@@ -549,13 +529,13 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
     // ✅ LOGIQUE PERMISSIONS STRICTE
     if (isSuperAdmin(requestingUser)) {
       // Super admin voit tout
-      console.log('[ORGANIZATIONS] Super admin - accès complet');
+      
     } else if (requestingUser?.role === 'admin' && requestingUser.organizationId) {
       // Admin voit seulement son organisation
       where.id = requestingUser.organizationId;
-      console.log('[ORGANIZATIONS] Admin - accès à son organisation uniquement');
+      
     } else {
-      console.log('[ORGANIZATIONS] Accès refusé - rôle insuffisant');
+      
       return res.status(403).json({
         success: false,
         message: 'Accès refusé'
@@ -603,8 +583,6 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
       // 🚀 COMPTAGE DYNAMIQUE RÉEL avec fonction utilitaire
       const realActiveModulesCount = await countRealActiveModules(org.id);
       
-      console.log(`[DEBUG] Organisation ${org.name}: ${realActiveModulesCount} modules réellement actifs`);
-      
       return {
         ...org,
         stats: {
@@ -617,8 +595,6 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
         googleWorkspaceModules: activeGoogleModules.map(oms => oms.Module).filter(Boolean)
       };
     }));
-    
-    console.log(`[ORGANIZATIONS] ${enrichedOrganizations.length} organisations trouvées`);
     
     res.json({
       success: true,
@@ -636,7 +612,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
 
 // 🏷️ POST /api/organizations - SÉCURISÉ AVEC ZOD + SANITISATION + RATE LIMITING
 router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] POST /organizations - Création organisation SÉCURISÉE');
+  
   
   try {
     // 🔍 VALIDATION ZOD ULTRA-STRICTE
@@ -699,7 +675,7 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
       
       // 🌟 CONFIGURATION GOOGLE WORKSPACE SI ACTIVÉE
       if (data.googleWorkspace?.enabled) {
-        console.log('[ORGANIZATIONS] Configuration Google Workspace activée');
+        
         // Ici on pourrait ajouter la logique pour créer la configuration Google Workspace
         // pour l'instant on log juste
       }
@@ -731,7 +707,7 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
 
 // 🏷️ GET /api/organizations/:id - SÉCURISÉ AVEC ZOD + SANITISATION
 router.get('/:id', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] GET /organizations/:id - Récupération organisation SÉCURISÉE');
+  
   
   try {
     const { id } = req.params;
@@ -740,7 +716,7 @@ router.get('/:id', requireRole(['admin', 'super_admin']), async (req: Authentica
     // 🧹 VALIDATION + SANITISATION ID (Factorisé)
     const sanitizedId = validateAndSanitizeId(id, 'ID organisation');
     
-    console.log(`[ORGANIZATIONS] Récupération organisation ${sanitizedId}`);
+    
     
     // ✅ VÉRIFICATION PERMISSIONS
     if (!canAccessOrganization(requestingUser, sanitizedId)) {
@@ -826,7 +802,7 @@ router.get('/:id', requireRole(['admin', 'super_admin']), async (req: Authentica
       googleWorkspaceModules: activeGoogleModules.map(oms => oms.Module).filter(Boolean)
     };
     
-    console.log('[ORGANIZATIONS] Organisation récupérée avec succès');
+    
     
     res.json({
       success: true,
@@ -844,7 +820,7 @@ router.get('/:id', requireRole(['admin', 'super_admin']), async (req: Authentica
 
 // 🏷️ PUT /api/organizations/:id - SÉCURISÉ AVEC ZOD + SANITISATION + RATE LIMITING
 router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] PUT /organizations/:id - Mise à jour organisation SÉCURISÉE');
+  
   
   try {
     const { id } = req.params;
@@ -997,7 +973,7 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
       return updated;
     });
     
-    console.log('[ORGANIZATIONS] Organisation mise à jour avec succès');
+    
     
     res.json({
       success: true,
@@ -1021,13 +997,13 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
 
 // 🏷️ DELETE /api/organizations/:id - SÉCURISÉ + RATE LIMITING
 router.delete('/:id', organizationsDeleteRateLimit, requireRole(['super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] DELETE /organizations/:id - Suppression organisation SÉCURISÉE');
+  
   
   try {
     const { id } = req.params;
     const sanitizedId = validateAndSanitizeId(id, 'ID organisation');
     
-    console.log(`[ORGANIZATIONS] Tentative suppression organisation ${sanitizedId}`);
+    
     
     // ✅ VÉRIFICATION EXISTENCE
     const existingOrg = await prisma.organization.findUnique({
@@ -1064,7 +1040,7 @@ router.delete('/:id', organizationsDeleteRateLimit, requireRole(['super_admin'])
       });
     });
     
-    console.log('[ORGANIZATIONS] Organisation supprimée avec succès');
+    
     
     res.json({
       success: true,
@@ -1094,7 +1070,7 @@ router.delete('/:id', organizationsDeleteRateLimit, requireRole(['super_admin'])
 
 // GET /api/organizations/:id/google-modules - Récupérer statut modules Google Workspace
 router.get('/:id/google-modules', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] GET /organizations/:id/google-modules - Récupération modules Google');
+  
   
   try {
     const { id } = req.params;
@@ -1161,7 +1137,7 @@ router.get('/:id/google-modules', requireRole(['admin', 'super_admin']), async (
 
 // POST /api/organizations/:id/google-modules/:module/toggle - Toggle module Google Workspace
 router.post('/:id/google-modules/:module/toggle', requireRole(['super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] POST /organizations/:id/google-modules/:module/toggle - Toggle module Google');
+  
   
   try {
     const { id, module } = req.params;
@@ -1185,7 +1161,7 @@ router.post('/:id/google-modules/:module/toggle', requireRole(['super_admin']), 
       });
     }
     
-    console.log(`[ORGANIZATIONS] Toggle module ${sanitizedModule} à ${enabled} pour organisation ${sanitizedId}`);
+    
     
     // 🔄 TRANSACTION SÉCURISÉE
     await prisma.$transaction(async (tx) => {
@@ -1226,7 +1202,7 @@ router.post('/:id/google-modules/:module/toggle', requireRole(['super_admin']), 
       });
     });
     
-    console.log('[ORGANIZATIONS] Module Google mis à jour avec succès');
+    
     
     res.json({
       success: true,
@@ -1244,7 +1220,7 @@ router.post('/:id/google-modules/:module/toggle', requireRole(['super_admin']), 
 
 // GET /api/organizations/:id/google-workspace/domain-status - Vérifier le statut du domaine pour Google Workspace
 router.get('/:id/google-workspace/domain-status', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ORGANIZATIONS] GET /organizations/:id/google-workspace/domain-status - Vérification statut domaine');
+  
   
   try {
     const { id } = req.params;
@@ -1303,7 +1279,7 @@ router.get('/:id/google-workspace/domain-status', requireRole(['admin', 'super_a
     // Dans une vraie implémentation, on ferait des requêtes DNS réelles
     const isConfigured = false;
     
-    console.log('[ORGANIZATIONS] Statut domaine calculé:', { domain, isConfigured });
+    
     
     res.json({
       success: true,

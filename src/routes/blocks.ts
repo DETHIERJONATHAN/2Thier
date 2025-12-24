@@ -43,39 +43,28 @@ router.get('/',
   },
   requireRole(['admin', 'super_admin']), 
   async (req: Request, res: Response): Promise<void> => {
-  const user = (req as Request & { user?: { id?: string; organizationId?: string; role?: string; isSuperAdmin?: boolean } }).user; // Récupérer l'utilisateur depuis le middleware
-  
-  console.log('[DEBUG] User role:', user?.role);
-  console.log('[DEBUG] User:', JSON.stringify(user, null, 2));
+  const user = (req as Request & { user?: { id?: string; organizationId?: string; role?: string; isSuperAdmin?: boolean } }).user;
   
   // Récupérer l'organizationId depuis différentes sources possibles
   const organizationId = req.query.organizationId as string || 
                         req.headers['x-organization-id'] as string ||
                         user?.organizationId;
 
-  console.log(`[API] GET /api/blocks pour org: ${organizationId} par user: ${user?.id || 'undefined'}`);
-  console.log(`[API] Sources org ID - query: ${req.query.organizationId}, header: ${req.headers['x-organization-id']}, user: ${user?.organizationId}`);
-
   const whereClause: Record<string, unknown> = {};
 
   // Si un organizationId est fourni, on l'utilise.
   if (organizationId) {
     whereClause.organizationId = organizationId;
-    console.log(`[API] Recherche de blocs pour l'organisation: ${organizationId}`);
   } else if (user?.isSuperAdmin || user?.role === 'super_admin') {
     // Si l'utilisateur est super_admin et qu'aucun ID d'orga n'est fourni,
     // on ne met pas de filtre, ce qui retournera TOUS les blocs.
-    console.log('[API] SuperAdmin a demandé tous les blocs.');
   } else {
     // Si ce n'est pas un super_admin et qu'il n'y a pas d'ID d'orga, on retourne un tableau vide.
-    console.log('[API] Utilisateur non-SuperAdmin sans ID d\'orga. Retour d\'un tableau vide.');
     res.json({ success: true, data: [] });
     return;
   }
 
   try {
-    console.log(`[API] Clause WHERE pour Prisma:`, JSON.stringify(whereClause, null, 2));
-    
     const blocks = await prisma.block.findMany({
       where: whereClause,
       include: {
@@ -95,41 +84,11 @@ router.get('/',
       },
     });
 
-    console.log(`[API] Prisma a trouvé ${blocks.length} blocks bruts`);
-    
-    // Debug détaillé du premier bloc
-    if (blocks.length > 0) {
-      const firstBlock = blocks[0];
-      console.log(`[API] Premier bloc - ID: ${firstBlock.id}, Name: ${firstBlock.name}`);
-      console.log(`[API] Premier bloc - Section prop exists: ${'Section' in firstBlock}`);
-      console.log(`[API] Premier bloc - Section value: ${Array.isArray(firstBlock.Section) ? firstBlock.Section.length + ' sections' : typeof firstBlock.Section}`);
-      
-      if (firstBlock.Section && Array.isArray(firstBlock.Section)) {
-        console.log(`[API] Section details: ${firstBlock.Section.map(s => `${s.name}(${s.Field?.length || 0} fields)`).join(', ')}`);
-      }
-    }
-    
-    console.log(`[API] Blocks trouvés:`, blocks.map(b => ({ id: b.id, name: b.name, organizationId: b.organizationId, sectionsCount: b.Section?.length || 0 })));
-    
-    console.log(`[API] Premier bloc avant adaptation:`, JSON.stringify(blocks[0], null, 2));
-
     // Adapter la structure pour correspondre à ce que le frontend attend
     type SectionWithFields = Section & { Field: (Field & { FieldOption: FieldOption[] })[] };
     type BlockWithSections = Block & { Section: SectionWithFields[] };
 
-    console.log(`[API] === DÉBUT ADAPTATION ===`);
     const blocksWithAdaptedStructure = (blocks as BlockWithSections[]).map(adaptBlockStructure);
-
-    console.log(`[API] Blocks après adaptation: ${blocksWithAdaptedStructure.length}`);
-    if (blocksWithAdaptedStructure.length > 0) {
-      console.log(`[API] Premier bloc après adaptation - ID: ${blocksWithAdaptedStructure[0].id}`);
-      console.log(`[API] Premier bloc après adaptation - sections?: ${blocksWithAdaptedStructure[0].sections ? blocksWithAdaptedStructure[0].sections.length : 'undefined'}`);
-      if (blocksWithAdaptedStructure[0].sections && blocksWithAdaptedStructure[0].sections.length > 0) {
-        console.log(`[API] Première section: ${blocksWithAdaptedStructure[0].sections[0].name} avec ${blocksWithAdaptedStructure[0].sections[0].fields?.length || 0} champs`);
-      }
-    }
-    console.log(`[API] === FIN ADAPTATION ===`);
-    console.log(`[API] Retour final:`, blocksWithAdaptedStructure.map(b => ({ id: b.id, name: b.name, sectionsCount: b.sections?.length || 0 })));
 
     // Désactiver le cache pour s'assurer que les données fraîches sont retournées
     res.set({

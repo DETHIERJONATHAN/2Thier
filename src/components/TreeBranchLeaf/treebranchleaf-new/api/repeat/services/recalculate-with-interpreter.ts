@@ -2,10 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import { interpretReference, identifyReferenceType } from '../../operation-interpreter';
 
 /**
- * 🚀 SERVICE: RECALCULATION DES CHAMPS APRÈS DUPLICATION
+ * Ã°Å¸Å¡â‚¬ SERVICE: RECALCULATION DES CHAMPS APRÃƒË†S DUPLICATION
  * 
  * Ce service appelle l'OPERATION INTERPRETER pour recalculer
- * les vraies valeurs des champs copiés avec leurs capacités
+ * les vraies valeurs des champs copiÃƒÂ©s avec leurs capacitÃƒÂ©s
  * (formules, conditions, tables)
  */
 
@@ -27,14 +27,13 @@ export interface RecalculationReport {
 }
 
 /**
- * 🧮 RECALCULER UN SEUL NŒUD avec l'Operation Interpreter
+ * Ã°Å¸Â§Â® RECALCULER UN SEUL NÃ…â€™UD avec l'Operation Interpreter
  */
 export async function recalculateNodeWithOperationInterpreter(
   prisma: PrismaClient,
   nodeId: string,
   submissionId?: string
 ): Promise<RecalculationResult> {
-  console.log(`🧮 [RECALC] Recalculation du nœud: ${nodeId}`);
 
   const result: RecalculationResult = {
     nodeId,
@@ -47,7 +46,7 @@ export async function recalculateNodeWithOperationInterpreter(
   };
 
   try {
-    // 1. Chercher le nœud
+    // 1. Chercher le nÃ…â€œud
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
@@ -67,14 +66,14 @@ export async function recalculateNodeWithOperationInterpreter(
     });
 
     if (!node) {
-      result.error = `Nœud non trouvé`;
+      result.error = `NÃ…â€œud non trouvÃƒÂ©`;
       return result;
     }
 
     result.label = node.field_label;
     result.oldValue = node.calculatedValue;
 
-    // 2. Déterminer le type de capacité
+    // 2. DÃƒÂ©terminer le type de capacitÃƒÂ©
     if (node.TreeBranchLeafNodeFormula?.length > 0) {
       result.capacityType = 'formula';
       result.hasCapacity = true;
@@ -86,9 +85,8 @@ export async function recalculateNodeWithOperationInterpreter(
       result.hasCapacity = true;
     }
 
-    // Si pas de capacité, pas besoin de recalculer
+    // Si pas de capacitÃƒÂ©, pas besoin de recalculer
     if (!result.hasCapacity) {
-      console.log(`   ℹ️  Pas de capacité (formule/condition/table)`);
       return result;
     }
 
@@ -108,8 +106,6 @@ export async function recalculateNodeWithOperationInterpreter(
       return result;
     }
 
-    console.log(`   📍 sourceRef: ${sourceRef}`);
-    console.log(`   🔄 Appel à interpretReference...`);
 
     // 4. APPELER OPERATION INTERPRETER POUR RECALCULER
     try {
@@ -127,10 +123,9 @@ export async function recalculateNodeWithOperationInterpreter(
       result.newValue = interpretResult.result;
       result.recalculationSuccess = true;
 
-      console.log(`   ✅ Nouvelle valeur calculée: ${result.newValue}`);
 
-      // 5. METTRE À JOUR LA BD avec la nouvelle calculatedValue
-      if (result.newValue && result.newValue !== 'null' && result.newValue !== '∅') {
+      // 5. METTRE Ãƒâ‚¬ JOUR LA BD avec la nouvelle calculatedValue
+      if (result.newValue && result.newValue !== 'null' && result.newValue !== 'Ã¢Ë†â€¦') {
         await prisma.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
@@ -139,32 +134,29 @@ export async function recalculateNodeWithOperationInterpreter(
             calculatedBy: `interpreter-${result.capacityType}`
           }
         });
-        console.log(`   💾 Valeur sauvegardée en BD`);
       }
 
     } catch (interpretError) {
       result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-      console.warn(`   ⚠️  ${result.error}`);
+      console.warn(`   Ã¢Å¡Â Ã¯Â¸Â  ${result.error}`);
     }
 
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
-    console.error(`   ❌ Erreur: ${result.error}`);
+    console.error(`   Ã¢ÂÅ’ Erreur: ${result.error}`);
   }
 
   return result;
 }
 
 /**
- * 🚀 RECALCULER TOUS LES NŒUDS COPIÉS DU REPEATER
+ * Ã°Å¸Å¡â‚¬ RECALCULER TOUS LES NÃ…â€™UDS COPIÃƒâ€°S DU REPEATER
  */
 export async function recalculateAllCopiedNodesWithOperationInterpreter(
   prisma: PrismaClient,
   repeaterNodeId: string,
   suffixMarker: string = '-1'
 ): Promise<RecalculationReport> {
-  console.log(`\n🚀 [RECALC-REPORT] Recalculation de TOUS les nœuds copiés du repeater ${repeaterNodeId}`);
-  console.log(`   Cherchant nœuds avec suffixe: ${suffixMarker}`);
 
   const report: RecalculationReport = {
     totalNodes: 0,
@@ -174,7 +166,6 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
 
   try {
     // 1. D'abord, trouver tous les enfants du repeater node
-    console.log(`   📍 Recherche des enfants du repeater: ${repeaterNodeId}`);
     const repeaterChildren = await prisma.treeBranchLeafNode.findMany({
       where: {
         parentId: repeaterNodeId
@@ -185,9 +176,8 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
       }
     });
 
-    console.log(`   📋 Trouvé ${repeaterChildren.length} enfants directs du repeater`);
 
-    // 2. Chercher récursivement tous les descendants (enfants + petits-enfants + etc.)
+    // 2. Chercher rÃƒÂ©cursivement tous les descendants (enfants + petits-enfants + etc.)
     const allDescendants: Array<{ id: string; field_label: string | null }> = [];
     const queue = [...repeaterChildren];
     
@@ -197,7 +187,7 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
       
       allDescendants.push(current);
       
-      // Chercher les enfants de ce nœud
+      // Chercher les enfants de ce nÃ…â€œud
       const children = await prisma.treeBranchLeafNode.findMany({
         where: {
           parentId: current.id
@@ -211,18 +201,15 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
       queue.push(...children);
     }
 
-    console.log(`   📋 Trouvé ${allDescendants.length} descendants totaux`);
 
     // 3. Filtrer pour ne garder que ceux avec le suffixe
     const copiedNodes = allDescendants.filter(node => node.id.includes(suffixMarker));
-    console.log(`   📋 Après filtrage par suffixe "${suffixMarker}": ${copiedNodes.length} nœuds copiés`);
 
     report.totalNodes = copiedNodes.length;
 
     // 4. Recalculer chacun
     for (const node of copiedNodes) {
       try {
-        console.log(`   ⏳ Recalculation de: ${node.id} (${node.field_label})`);
         const recalcResult = await recalculateNodeWithOperationInterpreter(
           prisma,
           node.id
@@ -230,29 +217,23 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
         report.recalculated.push(recalcResult);
 
         if (recalcResult.recalculationSuccess && recalcResult.newValue) {
-          console.log(`   ✅ ${node.field_label}: ${recalcResult.oldValue || 'null'} → ${recalcResult.newValue}`);
         } else if (!recalcResult.recalculationSuccess) {
-          console.log(`   ⚠️  ${node.field_label}: Pas de capacité ou erreur`);
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         report.errors.push({ nodeId: node.id, error: errorMsg });
-        console.error(`   ❌ ${node.field_label}: ${errorMsg}`);
+        console.error(`   Ã¢ÂÅ’ ${node.field_label}: ${errorMsg}`);
       }
     }
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
-    console.error(`❌ Erreur globale: ${errorMsg}`);
+    console.error(`Ã¢ÂÅ’ Erreur globale: ${errorMsg}`);
   }
 
-  // Résumé
+  // RÃƒÂ©sumÃƒÂ©
   const successCount = report.recalculated.filter(r => r.recalculationSuccess).length;
-  console.log(`\n📊 RÉSUMÉ RECALCULATION:`);
-  console.log(`   • Total nœuds descendants: ${report.totalNodes}`);
-  console.log(`   • Recalculés avec succès: ${successCount}`);
-  console.log(`   • Erreurs: ${report.errors.length}`);
 
   return report;
 }

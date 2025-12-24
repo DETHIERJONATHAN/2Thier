@@ -1,10 +1,10 @@
 /**
- * 🔄 HOOK DE SYNCHRONISATION AUTOMATIQUE
+ * Ã°Å¸â€â€ž HOOK DE SYNCHRONISATION AUTOMATIQUE
  * 
  * Synchronise TreeBranchLeafNodeVariable.sourceRef avec data_instances.metadata.sourceRef
  * 
- * Se lance automatiquement au démarrage du serveur
- * Corrige les désynchronisations sans casser ce qui fonctionne déjà
+ * Se lance automatiquement au dÃƒÂ©marrage du serveur
+ * Corrige les dÃƒÂ©synchronisations sans casser ce qui fonctionne dÃƒÂ©jÃƒÂ 
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -25,9 +25,8 @@ interface DataInstance {
 
 export async function syncVariableSourceRefs() {
   try {
-    console.log('\n🔄 [SYNC HOOK] Synchronisation des sourceRef...');
 
-    // Récupérer tous les nodes avec data_instances
+    // RÃƒÂ©cupÃƒÂ©rer tous les nodes avec data_instances
     const nodes = await prisma.treeBranchLeafNode.findMany({
       where: {
         data_instances: { not: null }
@@ -52,31 +51,31 @@ export async function syncVariableSourceRefs() {
 
       const jsonSourceRef = firstInstance.metadata.sourceRef;
 
-      // Si pas de variable en DB, skip (sera créée plus tard)
+      // Si pas de variable en DB, skip (sera crÃƒÂ©ÃƒÂ©e plus tard)
       if (!node.TreeBranchLeafNodeVariable) {
         continue;
       }
 
       const dbSourceRef = node.TreeBranchLeafNodeVariable.sourceRef;
 
-      // ⚠️ PROTECTION: Ne pas écraser les références @table. et @value.
+      // Ã¢Å¡Â Ã¯Â¸Â PROTECTION: Ne pas ÃƒÂ©craser les rÃƒÂ©fÃƒÂ©rences @table. et @value.
       if (dbSourceRef && (dbSourceRef.startsWith('@table.') || dbSourceRef.startsWith('@value.'))) {
-        // Vérifier que le JSON ne dit pas autre chose
+        // VÃƒÂ©rifier que le JSON ne dit pas autre chose
         if (jsonSourceRef.startsWith('node-formula:')) {
           // Le JSON dit formula mais la DB dit table/value
-          // C'est probablement une erreur de sync précédente
+          // C'est probablement une erreur de sync prÃƒÂ©cÃƒÂ©dente
           // On GARDE la DB (table/value) car c'est ce qui fonctionne
           skipCount++;
           continue;
         }
       }
 
-      // Si déjà synchronisé, skip
+      // Si dÃƒÂ©jÃƒÂ  synchronisÃƒÂ©, skip
       if (jsonSourceRef === dbSourceRef) {
         continue;
       }
 
-      // ✅ SYNCHRONISER
+      // Ã¢Å“â€¦ SYNCHRONISER
       await prisma.treeBranchLeafNodeVariable.update({
         where: { id: node.TreeBranchLeafNodeVariable.id },
         data: { sourceRef: jsonSourceRef }
@@ -86,29 +85,26 @@ export async function syncVariableSourceRefs() {
     }
 
     if (syncCount > 0) {
-      console.log(`✅ [SYNC HOOK] ${syncCount} sourceRef synchronisé(s)`);
     }
     if (skipCount > 0) {
-      console.log(`⚠️  [SYNC HOOK] ${skipCount} table/value protégé(s)`);
     }
     if (syncCount === 0 && skipCount === 0) {
-      console.log(`✅ [SYNC HOOK] Tout est déjà synchronisé`);
     }
 
   } catch (error) {
-    console.error('❌ [SYNC HOOK] Erreur:', error);
-    // Ne pas crasher le serveur si le hook échoue
+    console.error('Ã¢ÂÅ’ [SYNC HOOK] Erreur:', error);
+    // Ne pas crasher le serveur si le hook ÃƒÂ©choue
   }
 }
 
 /**
- * 🎯 Hook à appeler au démarrage du serveur
+ * Ã°Å¸Å½Â¯ Hook ÃƒÂ  appeler au dÃƒÂ©marrage du serveur
  */
 export async function initializeTreeBranchLeafSync() {
   try {
     await syncVariableSourceRefs();
   } catch (error) {
-    console.error('❌ [INIT SYNC] Erreur:', error);
+    console.error('Ã¢ÂÅ’ [INIT SYNC] Erreur:', error);
   } finally {
     await prisma.$disconnect();
   }

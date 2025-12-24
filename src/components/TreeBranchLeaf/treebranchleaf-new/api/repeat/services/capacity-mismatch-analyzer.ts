@@ -1,8 +1,8 @@
 /**
- * 🧪 Service de test spécifique pour les problèmes de capacités manquantes
+ * Ã°Å¸Â§Âª Service de test spÃƒÂ©cifique pour les problÃƒÂ¨mes de capacitÃƒÂ©s manquantes
  * 
- * Ce service se concentre sur le cas précis où un nœud copié a le flag
- * hasTable=true mais aucune table associée (Tables: 0)
+ * Ce service se concentre sur le cas prÃƒÂ©cis oÃƒÂ¹ un nÃ…â€œud copiÃƒÂ© a le flag
+ * hasTable=true mais aucune table associÃƒÂ©e (Tables: 0)
  */
 
 import { type PrismaClient } from '@prisma/client';
@@ -19,17 +19,16 @@ export interface CapacityMismatchAnalysis {
 }
 
 /**
- * 🔍 Analyser les décalages entre flags de capacité et capacités réelles
+ * Ã°Å¸â€Â Analyser les dÃƒÂ©calages entre flags de capacitÃƒÂ© et capacitÃƒÂ©s rÃƒÂ©elles
  */
 export async function analyzeCapacityMismatches(
   prisma: PrismaClient,
   nodeId: string
 ): Promise<CapacityMismatchAnalysis[]> {
-  console.log(`🔍 [CAPACITY-ANALYSIS] Analyse des décalages pour ${nodeId}`);
   
   const results: CapacityMismatchAnalysis[] = [];
   
-  // Récupérer le nœud avec toutes ses capacités
+  // RÃƒÂ©cupÃƒÂ©rer le nÃ…â€œud avec toutes ses capacitÃƒÂ©s
   const node = await prisma.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     include: {
@@ -41,11 +40,10 @@ export async function analyzeCapacityMismatches(
   });
 
   if (!node) {
-    console.log(`❌ [CAPACITY-ANALYSIS] Nœud ${nodeId} introuvable`);
     return results;
   }
 
-  // Trouver le nœud original si c'est une copie
+  // Trouver le nÃ…â€œud original si c'est une copie
   const originalId = nodeId.replace(/-\d+$/, '');
   let originalNode = null;
   
@@ -61,19 +59,11 @@ export async function analyzeCapacityMismatches(
     });
   }
 
-  console.log(`📊 [CAPACITY-ANALYSIS] Node: ${node.label} (${node.id})`);
-  console.log(`  hasFormula: ${node.hasFormula}, formulas: ${node.TreeBranchLeafNodeFormula.length}`);
-  console.log(`  hasCondition: ${node.hasCondition}, conditions: ${node.TreeBranchLeafNodeCondition.length}`);
-  console.log(`  hasTable: ${node.hasTable}, tables: ${node.TreeBranchLeafNodeTable.length}`);
   
   if (originalNode) {
-    console.log(`📊 [CAPACITY-ANALYSIS] Original: ${originalNode.label} (${originalNode.id})`);
-    console.log(`  hasFormula: ${originalNode.hasFormula}, formulas: ${originalNode.TreeBranchLeafNodeFormula.length}`);
-    console.log(`  hasCondition: ${originalNode.hasCondition}, conditions: ${originalNode.TreeBranchLeafNodeCondition.length}`);
-    console.log(`  hasTable: ${originalNode.hasTable}, tables: ${originalNode.TreeBranchLeafNodeTable.length}`);
   }
 
-  // Analyser les décalages
+  // Analyser les dÃƒÂ©calages
   const capacityChecks = [
     {
       type: 'formula' as const,
@@ -102,11 +92,11 @@ export async function analyzeCapacityMismatches(
 
       if (check.originalCount > 0) {
         causes.push(`L'original avait ${check.originalCount} ${check.type}(s) mais la copie en a 0`);
-        causes.push(`Problème dans le processus de copie des ${check.type}s`);
-        suggestedFix = `Vérifier pourquoi copy${check.type.charAt(0).toUpperCase() + check.type.slice(1)}Capacity a échoué`;
+        causes.push(`ProblÃƒÂ¨me dans le processus de copie des ${check.type}s`);
+        suggestedFix = `VÃƒÂ©rifier pourquoi copy${check.type.charAt(0).toUpperCase() + check.type.slice(1)}Capacity a ÃƒÂ©chouÃƒÂ©`;
       } else {
         causes.push(`Le flag has${check.type.charAt(0).toUpperCase() + check.type.slice(1)} est incorrect`);
-        suggestedFix = `Corriger le flag has${check.type.charAt(0).toUpperCase() + check.type.slice(1)} à false`;
+        suggestedFix = `Corriger le flag has${check.type.charAt(0).toUpperCase() + check.type.slice(1)} ÃƒÂ  false`;
       }
 
       results.push({
@@ -120,9 +110,6 @@ export async function analyzeCapacityMismatches(
         suggestedFix
       });
 
-      console.log(`⚠️ [CAPACITY-ANALYSIS] DÉCALAGE DÉTECTÉ: ${check.type}`);
-      console.log(`   Flag: ${check.hasFlag}, Réel: ${check.actualCount}, Original: ${check.originalCount}`);
-      console.log(`   Causes possibles: ${causes.join(', ')}`);
     }
   }
 
@@ -130,7 +117,7 @@ export async function analyzeCapacityMismatches(
 }
 
 /**
- * 🛠️ Corriger automatiquement les flags de capacité incorrects
+ * Ã°Å¸â€ºÂ Ã¯Â¸Â Corriger automatiquement les flags de capacitÃƒÂ© incorrects
  */
 export async function fixCapacityFlags(
   prisma: PrismaClient,
@@ -138,20 +125,17 @@ export async function fixCapacityFlags(
   analysis: CapacityMismatchAnalysis[]
 ): Promise<void> {
   if (analysis.length === 0) {
-    console.log(`✅ [CAPACITY-FIX] Aucune correction nécessaire pour ${nodeId}`);
     return;
   }
 
-  console.log(`🛠️ [CAPACITY-FIX] Correction des flags pour ${nodeId}`);
   
   const updateData: Record<string, boolean> = {};
   
   for (const mismatch of analysis) {
     if (mismatch.actualCapacityCount === 0 && mismatch.hasCapacityFlag) {
-      // Si pas de capacité mais flag à true, mettre le flag à false
+      // Si pas de capacitÃƒÂ© mais flag ÃƒÂ  true, mettre le flag ÃƒÂ  false
       const flagName = `has${mismatch.capacityType.charAt(0).toUpperCase() + mismatch.capacityType.slice(1)}`;
       updateData[flagName] = false;
-      console.log(`🛠️ [CAPACITY-FIX] Correction ${flagName}: true → false`);
     }
   }
   
@@ -160,6 +144,5 @@ export async function fixCapacityFlags(
       where: { id: nodeId },
       data: updateData
     });
-    console.log(`✅ [CAPACITY-FIX] Flags corrigés pour ${nodeId}`);
   }
 }

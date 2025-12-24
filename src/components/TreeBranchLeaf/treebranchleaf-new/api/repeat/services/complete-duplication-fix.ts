@@ -2,13 +2,13 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
 
 /**
- * Service pour corriger COMPLÈTEMENT la duplication des nœuds avec lookups
+ * Service pour corriger COMPLÃƒË†TEMENT la duplication des nÃ…â€œuds avec lookups
  * 
  * Ce service s'assure que:
- * 1. Toutes les capacités (formules, conditions, tables) sont copiées avec suffixes
- * 2. Les tables de lookup sont correctement liées et alimentées
- * 3. Les fieldConfig pointent vers les bonnes ressources copiées  
- * 4. Aucun fallback vers les données originales n'est possible
+ * 1. Toutes les capacitÃƒÂ©s (formules, conditions, tables) sont copiÃƒÂ©es avec suffixes
+ * 2. Les tables de lookup sont correctement liÃƒÂ©es et alimentÃƒÂ©es
+ * 3. Les fieldConfig pointent vers les bonnes ressources copiÃƒÂ©es  
+ * 4. Aucun fallback vers les donnÃƒÂ©es originales n'est possible
  */
 
 export interface CompleteDuplicationResult {
@@ -31,7 +31,7 @@ export interface CompleteDuplicationReport {
 }
 
 /**
- * Corrige complètement un nœud dupliqué en copiant toutes ses capacités et lookups
+ * Corrige complÃƒÂ¨tement un nÃ…â€œud dupliquÃƒÂ© en copiant toutes ses capacitÃƒÂ©s et lookups
  */
 export async function fixCompleteDuplication(
   prisma: PrismaClient,
@@ -39,7 +39,6 @@ export async function fixCompleteDuplication(
   copiedNodeId: string,
   suffix: string = '-1'
 ): Promise<CompleteDuplicationResult> {
-  console.log(`🔄 [COMPLETE-FIX] Correction complète: ${originalNodeId} → ${copiedNodeId}`);
 
   const result: CompleteDuplicationResult = {
     nodeId: copiedNodeId,
@@ -54,7 +53,7 @@ export async function fixCompleteDuplication(
     calculatedValueReset: false
   };
 
-  // 1. Récupérer les nœuds
+  // 1. RÃƒÂ©cupÃƒÂ©rer les nÃ…â€œuds
   const [originalNode, copiedNode] = await Promise.all([
     prisma.treeBranchLeafNode.findUnique({
       where: { id: originalNodeId },
@@ -75,19 +74,19 @@ export async function fixCompleteDuplication(
   ]);
 
   if (!originalNode) {
-    throw new Error(`Nœud original ${originalNodeId} non trouvé`);
+    throw new Error(`NÃ…â€œud original ${originalNodeId} non trouvÃƒÂ©`);
   }
   if (!copiedNode) {
-    throw new Error(`Nœud copié ${copiedNodeId} non trouvé`);
+    throw new Error(`NÃ…â€œud copiÃƒÂ© ${copiedNodeId} non trouvÃƒÂ©`);
   }
 
   result.nodeLabel = copiedNode.label;
 
-  // 2. Copier les formules manquantes via copyFormulaCapacity (centralisé)
+  // 2. Copier les formules manquantes via copyFormulaCapacity (centralisÃƒÂ©)
   const formulaIdMap = new Map<string, string>();
   const suffixNum = parseInt(suffix.replace('-', '')) || 1;
   
-  // 🔧 Construire le nodeIdMap pour les remappages internes
+  // Ã°Å¸â€Â§ Construire le nodeIdMap pour les remappages internes
   const nodeIdMap = new Map<string, string>();
   const treeId = copiedNode.treeId;
   if (treeId) {
@@ -96,7 +95,7 @@ export async function fixCompleteDuplication(
       select: { id: true }
     });
     
-    // Pour chaque node suffixé, mapper son base vers la version suffixée
+    // Pour chaque node suffixÃƒÂ©, mapper son base vers la version suffixÃƒÂ©e
     for (const node of allNodesInTree) {
       if (node.id.match(/-\d+$/)) {
         const baseId = node.id.replace(/-\d+$/, '');
@@ -121,10 +120,10 @@ export async function fixCompleteDuplication(
         formulaIdMap.set(formula.id, formulaResult.newFormulaId);
         result.capacitiesFixed.formulas++;
       } else {
-        console.error(`❌ Erreur copie formule: ${formula.id}`);
+        console.error(`Ã¢ÂÅ’ Erreur copie formule: ${formula.id}`);
       }
     } catch (error) {
-      console.error(`❌ Exception copie formule ${formula.id}:`, error);
+      console.error(`Ã¢ÂÅ’ Exception copie formule ${formula.id}:`, error);
     }
   }
 
@@ -175,7 +174,7 @@ export async function fixCompleteDuplication(
           type: table.type,
           rowCount: table.rowCount,
           columnCount: table.columnCount,
-          // 🔢 COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
+          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
           meta: (() => {
             if (!table.meta) return table.meta as Prisma.InputJsonValue;
             try {
@@ -230,7 +229,7 @@ export async function fixCompleteDuplication(
               id: `${col.id}${suffix}`,
               tableId: newTableId,
               columnIndex: col.columnIndex,
-              // 🔢 COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
               name: col.name 
                 ? (/^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}`)
                 : col.name,
@@ -257,11 +256,11 @@ export async function fixCompleteDuplication(
     }
   }
 
-  // 5. Corriger les lookups associés
+  // 5. Corriger les lookups associÃƒÂ©s
   await fixAssociatedLookups(prisma, originalNode, copiedNode, suffix);
-  result.capacitiesFixed.lookups = 1; // Simplifié pour le rapport
+  result.capacitiesFixed.lookups = 1; // SimplifiÃƒÂ© pour le rapport
 
-  // 6. Mettre à jour fieldConfig pour pointer vers les nouvelles ressources
+  // 6. Mettre ÃƒÂ  jour fieldConfig pour pointer vers les nouvelles ressources
   if (copiedNode.fieldConfig) {
     const newFieldConfig = updateFieldConfigReferences(copiedNode.fieldConfig, suffix);
     
@@ -274,7 +273,7 @@ export async function fixCompleteDuplication(
     }
   }
 
-  // 7. Mettre à jour les flags et réinitialiser la valeur calculée
+  // 7. Mettre ÃƒÂ  jour les flags et rÃƒÂ©initialiser la valeur calculÃƒÂ©e
   await prisma.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
@@ -293,7 +292,7 @@ export async function fixCompleteDuplication(
 }
 
 /**
- * Corrige les lookups associés (ex: table Mesure-1 pour Orientation-Inclinaison-1)
+ * Corrige les lookups associÃƒÂ©s (ex: table Mesure-1 pour Orientation-Inclinaison-1)
  */
 async function fixAssociatedLookups(
   prisma: PrismaClient,
@@ -301,7 +300,7 @@ async function fixAssociatedLookups(
   copiedNode: any,
   suffix: string
 ): Promise<void> {
-  // Chercher les nœuds de type "Mesure" qui pourraient contenir des lookups
+  // Chercher les nÃ…â€œuds de type "Mesure" qui pourraient contenir des lookups
   const measureNodes = await prisma.treeBranchLeafNode.findMany({
     where: {
       AND: [
@@ -320,7 +319,7 @@ async function fixAssociatedLookups(
     }
   });
 
-  // Pour chaque table du nœud original, chercher un lookup correspondant
+  // Pour chaque table du nÃ…â€œud original, chercher un lookup correspondant
   for (const originalTable of originalNode.TreeBranchLeafNodeTable) {
     const lookupName = `Lookup ${originalNode.label}${suffix}`;
     
@@ -331,9 +330,8 @@ async function fixAssociatedLookups(
       );
 
       if (lookupTable && lookupTable.tableRows.length === 0) {
-        console.log(`   🔗 Correction lookup: ${lookupTable.name}`);
         
-        // Supprimer les anciennes données vides
+        // Supprimer les anciennes donnÃƒÂ©es vides
         await Promise.all([
           prisma.treeBranchLeafNodeTableColumn.deleteMany({
             where: { tableId: lookupTable.id }
@@ -343,7 +341,7 @@ async function fixAssociatedLookups(
           })
         ]);
 
-        // Copier les données de la table principale
+        // Copier les donnÃƒÂ©es de la table principale
         await Promise.all([
           ...originalTable.tableColumns.map(col =>
             prisma.treeBranchLeafNodeTableColumn.create({
@@ -371,7 +369,7 @@ async function fixAssociatedLookups(
           )
         ]);
 
-        // Mettre à jour la configuration
+        // Mettre ÃƒÂ  jour la configuration
         await prisma.treeBranchLeafNodeTable.update({
           where: { id: lookupTable.id },
           data: {
@@ -389,7 +387,7 @@ async function fixAssociatedLookups(
 }
 
 /**
- * Adapte les références dans les tokens/conditions pour pointer vers les nœuds copiés
+ * Adapte les rÃƒÂ©fÃƒÂ©rences dans les tokens/conditions pour pointer vers les nÃ…â€œuds copiÃƒÂ©s
  */
 function adaptReferencesForCopiedNode(data: unknown, suffix: string): unknown {
   if (!data) return data;
@@ -427,14 +425,14 @@ function adaptReferencesForCopiedNode(data: unknown, suffix: string): unknown {
 }
 
 /**
- * Met à jour les références dans fieldConfig
+ * Met ÃƒÂ  jour les rÃƒÂ©fÃƒÂ©rences dans fieldConfig
  */
 function updateFieldConfigReferences(fieldConfig: unknown, suffix: string): unknown {
   if (!fieldConfig || typeof fieldConfig !== 'object') return fieldConfig;
 
   const config = { ...fieldConfig as Record<string, any> };
 
-  // Mettre à jour les références vers les tables/lookups
+  // Mettre ÃƒÂ  jour les rÃƒÂ©fÃƒÂ©rences vers les tables/lookups
   if (config.lookupTableId) {
     config.lookupTableId = `${config.lookupTableId}${suffix}`;
   }
@@ -446,13 +444,12 @@ function updateFieldConfigReferences(fieldConfig: unknown, suffix: string): unkn
 }
 
 /**
- * Corrige tous les nœuds dupliqués d'un repeater
+ * Corrige tous les nÃ…â€œuds dupliquÃƒÂ©s d'un repeater
  */
 export async function fixAllCompleteDuplications(
   prisma: PrismaClient,
   repeaterNodeId?: string
 ): Promise<CompleteDuplicationReport> {
-  console.log('🔧 [COMPLETE-DUPLICATION-FIX] Correction complète de tous les nœuds...');
 
   const report: CompleteDuplicationReport = {
     totalNodesProcessed: 0,
@@ -516,7 +513,7 @@ export async function fixAllCompleteDuplications(
         if (!originalNodeId) {
           report.errors.push({
             nodeId: node.id,
-            error: 'Impossible de trouver le nœud original'
+            error: 'Impossible de trouver le nÃ…â€œud original'
           });
           continue;
         }
@@ -533,7 +530,7 @@ export async function fixAllCompleteDuplications(
     }
 
   } catch (error) {
-    console.error('❌ [COMPLETE-DUPLICATION-FIX] Erreur générale:', error);
+    console.error('Ã¢ÂÅ’ [COMPLETE-DUPLICATION-FIX] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
   }
 
   return report;
