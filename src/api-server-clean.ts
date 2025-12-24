@@ -451,10 +451,16 @@ app.listen(port, () => {
   console.log(`🛡️ [ENTERPRISE-SECURITY] Sécurité niveau 100% activée`);
   
   // 🔄 Synchronisation automatique des sourceRef TreeBranchLeaf
-  console.log('🔄 [TREEBRANCHLEAF] Synchronisation des sourceRef...');
-  initializeTreeBranchLeafSync().catch(err => {
-    console.error('⚠️  [TREEBRANCHLEAF] Erreur lors de la synchronisation:', err);
-  });
+  // ⚠️ DÉSACTIVÉ EN PRODUCTION pour éviter les crashes mémoire
+  // Cette synchronisation charge tous les nodes en mémoire
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('🔄 [TREEBRANCHLEAF] Synchronisation des sourceRef...');
+    initializeTreeBranchLeafSync().catch(err => {
+      console.error('⚠️  [TREEBRANCHLEAF] Erreur lors de la synchronisation:', err);
+    });
+  } else {
+    console.log('⏭️ [TREEBRANCHLEAF] Synchronisation désactivée en production (optimisation mémoire)');
+  }
   console.log(`📋 [API-SERVER-CLEAN] Endpoints disponibles:`);
   console.log(`   - Health: http://localhost:${port}/api/health`);
   console.log(`   - Auth Me: http://localhost:${port}/api/auth/me`);

@@ -1,5 +1,5 @@
 /**
- * 🌐 MIDDLEWARE DE DÉTECTION AUTOMATIQUE DES SITES VITRINES v2.0
+ * 🌐 MIDDLEWARE DE DÉTECTION AUTOMATIQUE DES SITES VITRINES v2.1
  * 
  * Détecte le domaine appelé et charge automatiquement le site correspondant
  * depuis la base de données. Fonctionne pour TOUS les sites créés dans le CRM.
@@ -9,7 +9,7 @@
  * - devis1min.be → Charge le site avec domain="devis1min.be"
  * - monsite.com → Charge le site avec domain="monsite.com"
  * 
- * Updated: 14/10/2025 - Fix siteName loading
+ * Updated: 24/12/2025 - Ajout cache mémoire + réduction logs production
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -18,12 +18,19 @@ import { renderWebsite } from './websiteRenderer';
 
 const prisma = new PrismaClient();
 
+// 🚀 CACHE MÉMOIRE pour éviter les requêtes Prisma répétées
+const websiteCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 60_000; // 60 secondes
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Domaines réservés pour le CRM (ne sont PAS des sites vitrines)
 const CRM_DOMAINS = [
   'app.2thier.be',
   'api.2thier.be',
   'crm.2thier.be',
-  'localhost'
+  'localhost',
+  'railway.app',     // Railway deployments
+  'up.railway.app'   // Railway preview URLs
 ];
 
 export interface WebsiteRequest extends Request {
@@ -59,12 +66,17 @@ export async function detectWebsite(
     // Enlever le port si présent (ex: localhost:5173)
     hostname = hostname.split(':')[0];
     
-    console.log(`🔍 [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req.hostname}`);
-    console.log(`🔍 [WEBSITE-DETECTION] Domaine détecté: ${hostname}`);
+    // 🔇 Réduire les logs en production
+    if (!isProduction) {
+      console.log(`🔍 [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req.hostname}`);
+      console.log(`🔍 [WEBSITE-DETECTION] Domaine détecté: ${hostname}`);
+    }
     
     // Si c'est un domaine CRM, passer au suivant
     if (CRM_DOMAINS.some(crm => hostname.includes(crm))) {
-      console.log(`📱 [WEBSITE-DETECTION] Domaine CRM détecté: ${hostname}`);
+      if (!isProduction) {
+        console.log(`📱 [WEBSITE-DETECTION] Domaine CRM détecté: ${hostname}`);
+      }
       req.isWebsiteRoute = false;
       return next();
     }
@@ -72,7 +84,22 @@ export async function detectWebsite(
     // Nettoyer le hostname (enlever www. si présent)
     const cleanDomain = hostname.replace(/^www\./, '');
 
-    console.log(`🌐 [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
+    // 🚀 VÉRIFIER LE CACHE D'ABORD
+    const cacheKey = cleanDomain;
+    const cached = websiteCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      if (cached.data) {
+        req.websiteData = cached.data;
+        req.isWebsiteRoute = true;
+      } else {
+        req.isWebsiteRoute = false;
+      }
+      return next();
+    }
+
+    if (!isProduction) {
+      console.log(`🌐 [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
+    }
 
     // Chercher le site dans la base de données
     const website = await prisma.webSite.findFirst({
@@ -94,9 +121,11 @@ export async function detectWebsite(
     });
 
     if (website) {
-      console.log(`✅ [WEBSITE-DETECTION] Site trouvé: ${website.siteName} (${website.slug})`);
+      if (!isProduction) {
+        console.log(`✅ [WEBSITE-DETECTION] Site trouvé: ${website.siteName} (${website.slug})`);
+      }
       
-      req.websiteData = {
+      const websiteData = {
         id: website.id,
         slug: website.slug,
         domain: website.domain || cleanDomain,
@@ -104,12 +133,21 @@ export async function detectWebsite(
         config: website.config,
         sections: website.sections
       };
+      
+      // 🚀 METTRE EN CACHE
+      websiteCache.set(cacheKey, { data: websiteData, timestamp: Date.now() });
+      
+      req.websiteData = websiteData;
       req.isWebsiteRoute = true;
       
       // 🌐 SI C'EST UN SITE VITRINE, NE PAS ROUTER, IGNORER COMPLÈTEMENT LA REQUÊTE
       // ET LA LAISSER PASSER AU RENDERER
     } else {
-      console.log(`⚠️ [WEBSITE-DETECTION] Aucun site trouvé pour: ${cleanDomain}`);
+      if (!isProduction) {
+        console.log(`⚠️ [WEBSITE-DETECTION] Aucun site trouvé pour: ${cleanDomain}`);
+      }
+      // 🚀 METTRE EN CACHE (résultat null)
+      websiteCache.set(cacheKey, { data: null, timestamp: Date.now() });
       req.isWebsiteRoute = false;
     }
 
