@@ -72,6 +72,7 @@ import integrationsRoutes from './integrations'; // 🔌 Intégrations (advertis
 // 🌐 ROUTES PUBLIQUES (sans authentification)
 import publicLeadsRoutes from './publicLeads'; // 🌍 API publique leads
 import documentsRoutes from './documents'; // 📄 Routes documents (templates, génération PDF)
+import syncTempRoutes from './sync-temp'; // 🔄 TEMPORAIRE: Sync documents
 
 const apiRouter = Router();
 
@@ -352,6 +353,9 @@ apiRouter.use('/public', publicLeadsRoutes);
 
 // 📄 Routes Documents (templates, génération PDF)
 apiRouter.use('/documents', documentsRoutes);
+
+// 🔄 TEMPORAIRE: Sync documents vers Cloud SQL
+apiRouter.use('/sync', syncTempRoutes);
 
 
 // apiRouter.use('/auth/google', googleAuthRouter); // NOUVEAU: Authentification Google OAuth - Commenté car non défini

@@ -2321,9 +2321,9 @@ function identifyReferenceType(ref) {
   }
   return "field";
 }
-async function identifyReferenceTypeFromDB(id, prisma70) {
+async function identifyReferenceTypeFromDB(id, prisma71) {
   try {
-    const conditionNode = await prisma70.treeBranchLeafNode.findUnique({
+    const conditionNode = await prisma71.treeBranchLeafNode.findUnique({
       where: { id },
       select: { type: true }
     });
@@ -2348,9 +2348,9 @@ async function identifyReferenceTypeFromDB(id, prisma70) {
 function normalizeRef(ref) {
   return ref.replace("@value.", "").replace("@table.", "").replace("node-formula:", "").replace("node-table:", "").replace("node-condition:", "").replace("condition:", "").trim();
 }
-async function enrichDataFromSubmission(submissionId, prisma70, valueMap, labelMap, treeId) {
+async function enrichDataFromSubmission(submissionId, prisma71, valueMap, labelMap, treeId) {
   try {
-    const submissionData = await prisma70.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma71.treeBranchLeafSubmissionData.findMany({
       where: { submissionId },
       select: {
         nodeId: true,
@@ -2358,14 +2358,14 @@ async function enrichDataFromSubmission(submissionId, prisma70, valueMap, labelM
       }
     });
     if (!treeId) {
-      const firstSubmissionNode = await prisma70.treeBranchLeafSubmissionData.findFirst({
+      const firstSubmissionNode = await prisma71.treeBranchLeafSubmissionData.findFirst({
         where: { submissionId },
         include: { TreeBranchLeafNode: { select: { treeId: true } } }
       });
       treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
     }
     if (treeId) {
-      const allNodes = await prisma70.treeBranchLeafNode.findMany({
+      const allNodes = await prisma71.treeBranchLeafNode.findMany({
         where: { treeId },
         select: {
           id: true,
@@ -2402,7 +2402,7 @@ async function enrichDataFromSubmission(submissionId, prisma70, valueMap, labelM
     console.error(`[ENRICHMENT] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur enrichissement:`, error);
   }
 }
-async function getNodeValue(nodeId, submissionId, prisma70, valueMap, options) {
+async function getNodeValue(nodeId, submissionId, prisma71, valueMap, options) {
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     if (val === null || val === void 0) {
@@ -2410,7 +2410,7 @@ async function getNodeValue(nodeId, submissionId, prisma70, valueMap, options) {
     }
     return String(val);
   }
-  const data = await prisma70.treeBranchLeafSubmissionData.findFirst({
+  const data = await prisma71.treeBranchLeafSubmissionData.findFirst({
     where: {
       nodeId,
       submissionId
@@ -2422,7 +2422,7 @@ async function getNodeValue(nodeId, submissionId, prisma70, valueMap, options) {
   if (data?.value !== null && data?.value !== void 0) {
     return String(data.value);
   }
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { calculatedValue: true, label: true }
   });
@@ -2431,12 +2431,12 @@ async function getNodeValue(nodeId, submissionId, prisma70, valueMap, options) {
   }
   return options?.preserveEmpty ? null : "0";
 }
-async function getNodeLabel(nodeId, prisma70, labelMap) {
+async function getNodeLabel(nodeId, prisma71, labelMap) {
   if (labelMap && labelMap.has(nodeId)) {
     const label = labelMap.get(nodeId);
     return label || "Inconnu";
   }
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: {
       label: true,
@@ -2446,7 +2446,7 @@ async function getNodeLabel(nodeId, prisma70, labelMap) {
   });
   return node?.sharedReferenceName || node?.field_label || node?.label || "Inconnu";
 }
-async function interpretReference(ref, submissionId, prisma70, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
+async function interpretReference(ref, submissionId, prisma71, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
   if (depth > 10) {
     console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 R\xC3\u0192\xC2\xA9cursion trop profonde (depth=${depth}) pour ref:`, ref);
     return {
@@ -2466,23 +2466,23 @@ async function interpretReference(ref, submissionId, prisma70, valuesCache = /* 
   let type = knownType || identifyReferenceType(ref);
   const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   if (type === "field" && uuidRegex.test(cleanRef)) {
-    type = await identifyReferenceTypeFromDB(cleanRef, prisma70);
+    type = await identifyReferenceTypeFromDB(cleanRef, prisma71);
   }
   let result;
   try {
     switch (type) {
       case "condition":
-        result = await interpretCondition(cleanRef, submissionId, prisma70, valuesCache, depth, valueMap, labelMap);
+        result = await interpretCondition(cleanRef, submissionId, prisma71, valuesCache, depth, valueMap, labelMap);
         break;
       case "formula":
-        result = await interpretFormula(cleanRef, submissionId, prisma70, valuesCache, depth, valueMap, labelMap);
+        result = await interpretFormula(cleanRef, submissionId, prisma71, valuesCache, depth, valueMap, labelMap);
         break;
       case "table":
-        result = await interpretTable(cleanRef, submissionId, prisma70, valuesCache, depth, valueMap, labelMap);
+        result = await interpretTable(cleanRef, submissionId, prisma71, valuesCache, depth, valueMap, labelMap);
         break;
       case "value":
       case "field":
-        result = await interpretField(cleanRef, submissionId, prisma70, valueMap, labelMap);
+        result = await interpretField(cleanRef, submissionId, prisma71, valueMap, labelMap);
         break;
       default:
         console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Type inconnu: ${type}`);
@@ -2506,9 +2506,9 @@ async function interpretReference(ref, submissionId, prisma70, valuesCache = /* 
   valuesCache.set(cleanRef, result);
   return result;
 }
-async function interpretCondition(conditionId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
+async function interpretCondition(conditionId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
   const cleanId = conditionId.replace("condition:", "");
-  const condition = await prisma70.treeBranchLeafNodeCondition.findUnique({
+  const condition = await prisma71.treeBranchLeafNodeCondition.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2540,7 +2540,7 @@ async function interpretCondition(conditionId, submissionId, prisma70, valuesCac
     }
     if (ref.startsWith("@select.")) {
       const optionNodeId = ref.slice("@select.".length).split(".")[0];
-      const optionNode = await prisma70.treeBranchLeafNode.findUnique({
+      const optionNode = await prisma71.treeBranchLeafNode.findUnique({
         where: { id: optionNodeId },
         select: { id: true, label: true, parentId: true }
       });
@@ -2552,14 +2552,14 @@ async function interpretCondition(conditionId, submissionId, prisma70, valuesCac
     const operandType = identifyReferenceType(ref);
     if (operandType === "field" || operandType === "value") {
       const operandId = normalizeRef(ref);
-      const value = await getNodeValue(operandId, submissionId, prisma70, valueMap, { preserveEmpty: true });
-      const label = await getNodeLabel(operandId, prisma70, labelMap);
+      const value = await getNodeValue(operandId, submissionId, prisma71, valueMap, { preserveEmpty: true });
+      const label = await getNodeLabel(operandId, prisma71, labelMap);
       return { value, label };
     }
     const interpreted = await interpretReference(
       ref,
       submissionId,
-      prisma70,
+      prisma71,
       valuesCache,
       depth + 1,
       valueMap,
@@ -2603,7 +2603,7 @@ async function interpretCondition(conditionId, submissionId, prisma70, valuesCac
       alorsResult = await interpretReference(
         alorsNodeId,
         submissionId,
-        prisma70,
+        prisma71,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2619,7 +2619,7 @@ async function interpretCondition(conditionId, submissionId, prisma70, valuesCac
       sinonResult = await interpretReference(
         sinonNodeId,
         submissionId,
-        prisma70,
+        prisma71,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2886,9 +2886,9 @@ function buildFormulaExpression(tokens2) {
   const expression = exprSegments.join(" ");
   return { expression, parts, roleToEncoded, encodedMeta };
 }
-async function interpretFormula(formulaId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
+async function interpretFormula(formulaId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
   const cleanId = formulaId.replace("node-formula:", "");
-  let formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
+  let formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2899,7 +2899,7 @@ async function interpretFormula(formulaId, submissionId, prisma70, valuesCache, 
   });
   if (!formula) {
     try {
-      const byNode = await prisma70.treeBranchLeafNodeFormula.findFirst({
+      const byNode = await prisma71.treeBranchLeafNodeFormula.findFirst({
         where: { nodeId: cleanId },
         select: { id: true, name: true, tokens: true, nodeId: true },
         orderBy: { isDefault: "desc" }
@@ -2953,7 +2953,7 @@ async function interpretFormula(formulaId, submissionId, prisma70, valuesCache, 
       const refResult = await interpretReference(
         meta.refId,
         submissionId,
-        prisma70,
+        prisma71,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2968,7 +2968,7 @@ async function interpretFormula(formulaId, submissionId, prisma70, valuesCache, 
         const label = refResult.details?.formulaName || refResult.details?.label || `Formule ${meta.refId}`;
         labelCacheByEncoded.set(encoded, label);
       } else {
-        const label = await getNodeLabel(meta.refId, prisma70, labelMap).catch(() => meta.refId);
+        const label = await getNodeLabel(meta.refId, prisma71, labelMap).catch(() => meta.refId);
         labelCacheByEncoded.set(encoded, label || meta.refId);
       }
       return safeValue;
@@ -3040,12 +3040,12 @@ async function interpretFormula(formulaId, submissionId, prisma70, valuesCache, 
     }
   };
 }
-async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
+async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeValue(fieldId, submissionId, prisma70, valueMap) : null;
+    return fieldId ? await getNodeValue(fieldId, submissionId, prisma71, valueMap) : null;
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
-    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma70, valueMap);
+    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma71, valueMap);
     return result;
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
@@ -3053,7 +3053,7 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
       const capacityResult = await interpretReference(
         sourceOption.capacityRef,
         submissionId,
-        prisma70,
+        prisma71,
         valuesCache,
         depth + 1,
         valueMap,
@@ -3067,12 +3067,12 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
   }
   return null;
 }
-async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma70, labelMap) {
+async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma71, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeLabel(fieldId, prisma70, labelMap) : "Source";
+    return fieldId ? await getNodeLabel(fieldId, prisma71, labelMap) : "Source";
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
-    return await getNodeLabel(sourceOption.sourceField, prisma70, labelMap);
+    return await getNodeLabel(sourceOption.sourceField, prisma71, labelMap);
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
     const capacityId = sourceOption.capacityRef.replace("@value.", "").replace("formula:", "").replace("condition:", "").replace("table:", "");
@@ -3083,9 +3083,9 @@ async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma70, lab
   }
   return "Source";
 }
-async function interpretTable(tableId, submissionId, prisma70, valuesCache, depth, valueMap, labelMap) {
+async function interpretTable(tableId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
   const cleanId = tableId.replace("@table.", "").replace("node-table:", "");
-  let table = await prisma70.treeBranchLeafNodeTable.findUnique({
+  let table = await prisma71.treeBranchLeafNodeTable.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -3119,7 +3119,7 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
   });
   if (!table) {
     try {
-      const byNode = await prisma70.treeBranchLeafNodeTable.findFirst({
+      const byNode = await prisma71.treeBranchLeafNodeTable.findFirst({
         where: { nodeId: cleanId },
         select: {
           id: true,
@@ -3214,13 +3214,13 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
       lookup,
       colFieldId,
       submissionId,
-      prisma70,
+      prisma71,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma70, labelMap);
+    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma71, labelMap);
     const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
     if (!colSelectorValue2) {
       return {
@@ -3234,7 +3234,7 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
       const filterRefResult = await interpretReference(
         colSourceOption.filterValueRef,
         submissionId,
-        prisma70,
+        prisma71,
         valuesCache,
         depth + 1,
         valueMap,
@@ -3263,7 +3263,7 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
     }
     const results = [];
     if (lookup.extractValueRef) {
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma70, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma71, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedColSelector2 = String(colSelectorValue2 || "").trim().toLowerCase();
       const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedColSelector2);
@@ -3439,13 +3439,13 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
       lookup,
       rowFieldId,
       submissionId,
-      prisma70,
+      prisma71,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma70, labelMap);
+    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma71, labelMap);
     const displayRows = Array.isArray(lookup.displayRow) ? lookup.displayRow : [lookup.displayRow];
     if (!rowSelectorValue2) {
       return {
@@ -3456,7 +3456,7 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
     }
     const results = [];
     if (lookup.extractValueRef) {
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma70, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma71, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedRowSelector2 = String(rowSelectorValue2 || "").trim().toLowerCase();
       const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedRowSelector2);
@@ -3651,7 +3651,7 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
     lookup,
     rowFieldId,
     submissionId,
-    prisma70,
+    prisma71,
     valuesCache,
     depth,
     valueMap,
@@ -3662,14 +3662,14 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
     lookup,
     colFieldId,
     submissionId,
-    prisma70,
+    prisma71,
     valuesCache,
     depth,
     valueMap,
     labelMap
   );
-  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma70, labelMap);
-  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma70, labelMap);
+  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma71, labelMap);
+  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma71, labelMap);
   const rowSourceType = rowSourceOption?.type || (rowFieldId ? "select" : void 0);
   const colSourceType = colSourceOption?.type || (colFieldId ? "select" : void 0);
   if (!rowSelectorValue || !colSelectorValue) {
@@ -3777,21 +3777,21 @@ async function interpretTable(tableId, submissionId, prisma70, valuesCache, dept
     }
   };
 }
-async function interpretField(fieldId, submissionId, prisma70, valueMap, labelMap) {
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+async function interpretField(fieldId, submissionId, prisma71, valueMap, labelMap) {
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: fieldId },
     select: { type: true, label: true }
   });
   if (node && node.type) {
     if (node.type.startsWith("leaf_table_")) {
-      return await interpretTable(fieldId, submissionId, prisma70, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma71, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
     if (node.type.includes("table")) {
-      return await interpretTable(fieldId, submissionId, prisma70, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma71, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
   }
-  const value = await getNodeValue(fieldId, submissionId, prisma70, valueMap);
-  const label = await getNodeLabel(fieldId, prisma70, labelMap);
+  const value = await getNodeValue(fieldId, submissionId, prisma71, valueMap);
+  const label = await getNodeLabel(fieldId, prisma71, labelMap);
   const humanText = `${label}(${value})`;
   return {
     result: value || "0",
@@ -3804,16 +3804,16 @@ async function interpretField(fieldId, submissionId, prisma70, valueMap, labelMa
     }
   };
 }
-async function evaluateVariableOperation(variableNodeId, submissionId, prisma70, valueMap) {
-  const variableNode = await prisma70.treeBranchLeafNode.findUnique({
+async function evaluateVariableOperation(variableNodeId, submissionId, prisma71, valueMap) {
+  const variableNode = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: variableNodeId },
     select: { treeId: true }
   });
   const treeId = variableNode?.treeId;
   const localValueMap = valueMap || /* @__PURE__ */ new Map();
   const labelMap = /* @__PURE__ */ new Map();
-  await enrichDataFromSubmission(submissionId, prisma70, localValueMap, labelMap, treeId);
-  const variable = await prisma70.treeBranchLeafNodeVariable.findUnique({
+  await enrichDataFromSubmission(submissionId, prisma71, localValueMap, labelMap, treeId);
+  const variable = await prisma71.treeBranchLeafNodeVariable.findUnique({
     where: { nodeId: variableNodeId },
     select: {
       id: true,
@@ -3843,7 +3843,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma70,
     const result = await interpretReference(
       variable.sourceRef,
       submissionId,
-      prisma70,
+      prisma71,
       valuesCache,
       0,
       // Profondeur initiale = 0
@@ -3867,7 +3867,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma70,
     const result = await interpretReference(
       variable.sourceRef,
       submissionId,
-      prisma70,
+      prisma71,
       valuesCache,
       0,
       // Profondeur initiale = 0
@@ -3916,7 +3916,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express87 = __toESM(require("express"), 1);
+var import_express88 = __toESM(require("express"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
@@ -3928,7 +3928,7 @@ var import_compression = __toESM(require("compression"), 1);
 var import_express_winston = __toESM(require("express-winston"), 1);
 
 // src/routes/index.ts
-var import_express71 = require("express");
+var import_express73 = require("express");
 
 // src/routes/authRoutes.ts
 var import_express = require("express");
@@ -4937,9 +4937,9 @@ var GoogleGmailService = class _GoogleGmailService {
    */
   async loadOrganizationInfo() {
     try {
-      const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-      const prisma70 = new PrismaClient72();
-      const organization = await prisma70.organization.findUnique({
+      const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+      const prisma71 = new PrismaClient73();
+      const organization = await prisma71.organization.findUnique({
         where: { id: this.organizationId },
         include: {
           GoogleWorkspaceConfig: true
@@ -4951,7 +4951,7 @@ var GoogleGmailService = class _GoogleGmailService {
       } else {
         console.warn(`[GoogleGmailService] \u26A0\uFE0F Email admin non trouv\xE9 pour l'organisation ${this.organizationId}`);
       }
-      await prisma70.$disconnect();
+      await prisma71.$disconnect();
     } catch (error) {
       console.error("[GoogleGmailService] Erreur lors du chargement des infos organisation:", error);
     }
@@ -27968,8 +27968,8 @@ function getOrgId(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router84) {
-  router84.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router85) {
+  router85.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -28226,7 +28226,7 @@ function registerSumDisplayFieldRoutes(router84) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router84.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router85.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
@@ -28620,7 +28620,7 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
-async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma70, options = {}) {
+async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma71, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaCopyCache = /* @__PURE__ */ new Map()
@@ -28628,7 +28628,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
   try {
     if (formulaCopyCache.has(originalFormulaId)) {
       const cachedId = formulaCopyCache.get(originalFormulaId);
-      const cached = await prisma70.treeBranchLeafNodeFormula.findUnique({
+      const cached = await prisma71.treeBranchLeafNodeFormula.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -28641,7 +28641,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
       }
     }
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, "");
-    const originalFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({
+    const originalFormula = await prisma71.treeBranchLeafNodeFormula.findUnique({
       where: { id: cleanFormulaId }
     });
     if (!originalFormula) {
@@ -28657,7 +28657,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
     const newFormulaId = `${originalFormula.id}-${suffix}`;
     const originalOwnerNodeId = originalFormula.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma70.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma71.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
@@ -28686,7 +28686,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
       } else {
       }
     }
-    const newFormula = await prisma70.treeBranchLeafNodeFormula.upsert({
+    const newFormula = await prisma71.treeBranchLeafNodeFormula.upsert({
       where: { id: newFormulaId },
       update: {
         nodeId: finalOwnerNodeId,
@@ -28719,7 +28719,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    const savedFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({
+    const savedFormula = await prisma71.treeBranchLeafNodeFormula.findUnique({
       where: { id: newFormula.id }
     });
     if (savedFormula && Array.isArray(savedFormula.tokens)) {
@@ -28734,20 +28734,20 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
       }
     }
     try {
-      await linkFormulaToAllNodes(prisma70, newFormulaId, rewrittenTokens);
+      await linkFormulaToAllNodes(prisma71, newFormulaId, rewrittenTokens);
     } catch (e) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     if (ownerNodeExistsForUpdate) {
       try {
-        await addToNodeLinkedField2(prisma70, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
+        await addToNodeLinkedField2(prisma71, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
       } catch (e) {
         console.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, e.message);
       }
     }
     if (ownerNodeExistsForUpdate) {
       try {
-        await prisma70.treeBranchLeafNode.update({
+        await prisma71.treeBranchLeafNode.update({
           where: { id: finalOwnerNodeId },
           data: {
             hasFormula: true,
@@ -28777,9 +28777,9 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
     };
   }
 }
-async function addToNodeLinkedField2(prisma70, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField2(prisma71, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -28789,7 +28789,7 @@ async function addToNodeLinkedField2(prisma70, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma70.treeBranchLeafNode.update({
+  await prisma71.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -28884,7 +28884,7 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet) {
   }
   return ids;
 }
-async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma70, options = {}) {
+async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma71, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaIdMap = /* @__PURE__ */ new Map(),
@@ -28893,7 +28893,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
   try {
     if (conditionCopyCache.has(originalConditionId)) {
       const cachedId = conditionCopyCache.get(originalConditionId);
-      const cached = await prisma70.treeBranchLeafNodeCondition.findUnique({
+      const cached = await prisma71.treeBranchLeafNodeCondition.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -28906,7 +28906,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       }
     }
     const cleanConditionId = originalConditionId.replace(/-\d+$/, "");
-    const originalCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({
+    const originalCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({
       where: { id: cleanConditionId }
     });
     if (!originalCondition) {
@@ -28922,7 +28922,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
     const newConditionId = `${originalCondition.id}-${suffix}`;
     const originalOwnerNodeId = originalCondition.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma70.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma71.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
@@ -28930,7 +28930,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
     const linkedFormulaIdsFromSet = extractLinkedFormulaIdsFromConditionSet(originalCondition.conditionSet);
     if (linkedFormulaIdsFromSet.size > 0) {
       for (const formId of linkedFormulaIdsFromSet) {
-        const existingForm = await prisma70.treeBranchLeafNodeFormula.findUnique({
+        const existingForm = await prisma71.treeBranchLeafNodeFormula.findUnique({
           where: { id: formId }
         });
         if (existingForm) {
@@ -28955,11 +28955,11 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
               finalOwnerNodeId,
               // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma70,
+              prisma71,
               { nodeIdMap: enrichedNodeIdMap, formulaIdMap }
             );
             if (linkedFormResult.success) {
-              const copiedForm = await prisma70.treeBranchLeafNodeFormula.findUnique({
+              const copiedForm = await prisma71.treeBranchLeafNodeFormula.findUnique({
                 where: { id: linkedFormResult.newFormulaId }
               });
               if (copiedForm) {
@@ -29030,7 +29030,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
               finalOwnerNodeId,
               // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma70,
+              prisma71,
               { nodeIdMap, formulaIdMap, conditionCopyCache }
             );
             if (linkedCondResult.success) {
@@ -29070,7 +29070,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
               finalOwnerNodeId,
               // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma70,
+              prisma71,
               { nodeIdMap, tableIdMap }
             );
             if (linkedTableResult.success) {
@@ -29092,9 +29092,9 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       }
     } else {
     }
-    let newCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+    let newCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
     if (newCondition) {
-      newCondition = await prisma70.treeBranchLeafNodeCondition.update({
+      newCondition = await prisma71.treeBranchLeafNodeCondition.update({
         where: { id: newConditionId },
         data: {
           nodeId: finalOwnerNodeId,
@@ -29106,7 +29106,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
         }
       });
     } else {
-      newCondition = await prisma70.treeBranchLeafNodeCondition.create({
+      newCondition = await prisma71.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: finalOwnerNodeId,
@@ -29121,17 +29121,17 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       });
     }
     try {
-      await linkConditionToAllNodes(prisma70, newConditionId, rewrittenConditionSet);
+      await linkConditionToAllNodes(prisma71, newConditionId, rewrittenConditionSet);
     } catch (e) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField3(prisma70, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
+      await addToNodeLinkedField3(prisma71, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
     } catch (e) {
       console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedConditionIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
-      await prisma70.treeBranchLeafNode.update({
+      await prisma71.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasCondition: true,
@@ -29159,9 +29159,9 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
     };
   }
 }
-async function addToNodeLinkedField3(prisma70, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField3(prisma71, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -29171,7 +29171,7 @@ async function addToNodeLinkedField3(prisma70, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma70.treeBranchLeafNode.update({
+  await prisma71.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -29186,7 +29186,7 @@ function stripNumericSuffix(value) {
   if (numericOnly.test(value)) return value;
   return value;
 }
-async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, options = {}) {
+async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     tableCopyCache = /* @__PURE__ */ new Map(),
@@ -29195,7 +29195,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
   try {
     if (tableCopyCache.has(originalTableId)) {
       const cachedId = tableCopyCache.get(originalTableId);
-      const cached = await prisma70.treeBranchLeafNodeTable.findUnique({
+      const cached = await prisma71.treeBranchLeafNodeTable.findUnique({
         where: { id: cachedId },
         include: {
           tableColumns: true,
@@ -29219,7 +29219,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
       }
     }
     const cleanTableId = originalTableId.replace(/-\d+$/, "");
-    const originalTable = await prisma70.treeBranchLeafNodeTable.findUnique({
+    const originalTable = await prisma71.treeBranchLeafNodeTable.findUnique({
       where: { id: cleanTableId },
       include: {
         tableColumns: { orderBy: { columnIndex: "asc" } },
@@ -29246,7 +29246,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     const newTableId = `${originalTable.id}-${suffix}`;
     const originalOwnerNodeId = originalTable.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma70.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma71.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
@@ -29254,10 +29254,10 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     const columnIdMap = /* @__PURE__ */ new Map();
     const rowIdMap = /* @__PURE__ */ new Map();
     let tableAlreadyExisted = false;
-    let newTable = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+    let newTable = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
     if (newTable) {
       tableAlreadyExisted = true;
-      newTable = await prisma70.treeBranchLeafNodeTable.update({
+      newTable = await prisma71.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
           nodeId: finalOwnerNodeId,
@@ -29329,7 +29329,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
         }
       });
     } else {
-      newTable = await prisma70.treeBranchLeafNodeTable.create({
+      newTable = await prisma71.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: finalOwnerNodeId,
@@ -29406,12 +29406,12 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     let columnsCount = 0;
     let rowsCount = 0;
     if (tableAlreadyExisted) {
-      const existingCols = await prisma70.treeBranchLeafNodeTableColumn.count({ where: { tableId: newTableId } });
-      const existingRows = await prisma70.treeBranchLeafNodeTableRow.count({ where: { tableId: newTableId } });
+      const existingCols = await prisma71.treeBranchLeafNodeTableColumn.count({ where: { tableId: newTableId } });
+      const existingRows = await prisma71.treeBranchLeafNodeTableRow.count({ where: { tableId: newTableId } });
       columnsCount = existingCols;
       rowsCount = existingRows;
     } else {
-      const originalColumnsRaw = await prisma70.$queryRaw`
+      const originalColumnsRaw = await prisma71.$queryRaw`
       SELECT "id", "tableId", "columnIndex", "name", "type", "width", "format", "metadata"
       FROM "TreeBranchLeafNodeTableColumn"
       WHERE "tableId" = ${originalTable.id}
@@ -29427,7 +29427,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
             if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
             return `${raw}-${suffix}`;
           })();
-          await prisma70.treeBranchLeafNodeTableColumn.create({
+          await prisma71.treeBranchLeafNodeTableColumn.create({
             data: {
               id: newColumnId,
               tableId: newTableId,
@@ -29445,7 +29445,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
           console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
         }
       }
-      const originalRowsRaw = await prisma70.$queryRaw`
+      const originalRowsRaw = await prisma71.$queryRaw`
       SELECT "id", "tableId", "rowIndex", "cells"
       FROM "TreeBranchLeafNodeTableRow"
       WHERE "tableId" = ${originalTable.id}
@@ -29455,7 +29455,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
         try {
           const newRowId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
           rowIdMap.set(row.id, newRowId);
-          await prisma70.treeBranchLeafNodeTableRow.create({
+          await prisma71.treeBranchLeafNodeTableRow.create({
             data: {
               id: newRowId,
               tableId: newTableId,
@@ -29473,14 +29473,14 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
       }
     }
     try {
-      const cols = await prisma70.treeBranchLeafNodeTableColumn.findMany({
+      const cols = await prisma71.treeBranchLeafNodeTableColumn.findMany({
         where: { tableId: newTableId },
         select: { id: true, name: true }
       });
       for (const c of cols) {
         const cleaned = stripNumericSuffix(c.name);
         if (cleaned !== c.name) {
-          await prisma70.treeBranchLeafNodeTableColumn.update({
+          await prisma71.treeBranchLeafNodeTableColumn.update({
             where: { id: c.id },
             data: { name: cleaned }
           });
@@ -29489,7 +29489,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     } catch (e) {
       console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Normalisation des noms de colonnes \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:`, e.message);
     }
-    await prisma70.treeBranchLeafNodeTable.update({
+    await prisma71.treeBranchLeafNodeTable.update({
       where: { id: newTableId },
       data: {
         rowCount: rowsCount,
@@ -29501,17 +29501,17 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     let rewrittenTableData = rewriteJsonReferences(originalTable.tableData, rewriteMaps, suffix);
     rewrittenTableData = forceSharedRefSuffixesInJson(rewrittenTableData, suffix);
     try {
-      await linkTableToAllNodes(prisma70, newTableId, rewrittenTableData);
+      await linkTableToAllNodes(prisma71, newTableId, rewrittenTableData);
     } catch (e) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField4(prisma70, finalOwnerNodeId, "linkedTableIds", [newTableId]);
+      await addToNodeLinkedField4(prisma71, finalOwnerNodeId, "linkedTableIds", [newTableId]);
     } catch (e) {
       console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedTableIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
-      const originalNode = await prisma70.treeBranchLeafNode.findUnique({
+      const originalNode = await prisma71.treeBranchLeafNode.findUnique({
         where: { id: originalTable.nodeId },
         select: {
           table_activeId: true,
@@ -29537,7 +29537,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
       if (!newTableInstances[newTableId]) {
         newTableInstances[newTableId] = {};
       }
-      await prisma70.treeBranchLeafNode.update({
+      await prisma71.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasTable: true,
@@ -29573,9 +29573,9 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma70, 
     };
   }
 }
-async function addToNodeLinkedField4(prisma70, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField4(prisma71, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -29585,14 +29585,14 @@ async function addToNodeLinkedField4(prisma70, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma70.treeBranchLeafNode.update({
+  await prisma71.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/variable-copy-engine.ts
-async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma70, options = {}) {
+async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma71, options = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionIdMap = /* @__PURE__ */ new Map(),
@@ -29611,7 +29611,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
-      const cached = await prisma70.treeBranchLeafNodeVariable.findUnique({
+      const cached = await prisma71.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -29626,13 +29626,13 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         };
       }
     }
-    const originalVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
       if (newNodeId) {
         try {
-          const orphanLinkedVarIds = await prisma70.treeBranchLeafNode.findMany({
+          const orphanLinkedVarIds = await prisma71.treeBranchLeafNode.findMany({
             where: {
               linkedVariableIds: {
                 hasSome: [originalVarId]
@@ -29643,7 +29643,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           for (const node of orphanLinkedVarIds) {
             const cleaned = (node.linkedVariableIds || []).filter((id) => id !== originalVarId);
             if (cleaned.length !== node.linkedVariableIds?.length) {
-              await prisma70.treeBranchLeafNode.update({
+              await prisma71.treeBranchLeafNode.update({
                 where: { id: node.id },
                 data: { linkedVariableIds: cleaned }
               });
@@ -29721,7 +29721,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma70,
+                prisma71,
                 { nodeIdMap, formulaCopyCache: formulaIdMap }
               );
               if (formulaResult.success) {
@@ -29746,7 +29746,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma70,
+                prisma71,
                 { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
               );
               if (conditionResult.success) {
@@ -29771,7 +29771,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma70,
+                prisma71,
                 { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -29822,7 +29822,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               return value;
             }
           };
-          const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
+          const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
             where: { id: originalVar.nodeId },
             select: {
               id: true,
@@ -29928,7 +29928,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             const withoutRepeater = nodes.find((node) => !hasRepeaterMetadata(node.metadata));
             return withoutRepeater ?? nodes[0];
           };
-          let originalDisplayNode = await prisma70.treeBranchLeafNode.findFirst({
+          let originalDisplayNode = await prisma71.treeBranchLeafNode.findFirst({
             where: {
               metadata: {
                 path: ["fromVariableId"],
@@ -29938,7 +29938,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             select: displayNodeSelect
           });
           if (!originalDisplayNode) {
-            const templateNodeIds = await prisma70.treeBranchLeafNode.findMany({
+            const templateNodeIds = await prisma71.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
@@ -29947,7 +29947,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               select: { id: true }
             });
             const templateIds = new Set(templateNodeIds.map((t) => t.id));
-            const candidates = await prisma70.treeBranchLeafNode.findMany({
+            const candidates = await prisma71.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
@@ -29970,7 +29970,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             });
             originalDisplayNode = pickDisplayCandidate(candidates);
           }
-          const duplicatedOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
+          const duplicatedOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
             where: { id: newNodeId },
             select: {
               id: true,
@@ -29980,9 +29980,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           if (originalOwnerNode && duplicatedOwnerNode) {
             const inheritedDisplayParentId = originalDisplayNode?.parentId ?? null;
             let resolvedParentId = inheritedDisplayParentId ?? originalOwnerNode.parentId ?? displayParentId ?? duplicatedOwnerNode.parentId ?? null;
-            if (resolvedParentId && prisma70) {
+            if (resolvedParentId && prisma71) {
               try {
-                const parentExists = await prisma70.treeBranchLeafNode.findUnique({
+                const parentExists = await prisma71.treeBranchLeafNode.findUnique({
                   where: { id: resolvedParentId },
                   select: { id: true }
                 });
@@ -30148,22 +30148,22 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               fieldSubType: tableSourceNode.fieldSubType,
               field_label: displayLabel
             };
-            const maybeExisting = await prisma70.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+            const maybeExisting = await prisma71.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
             if (maybeExisting) {
-              await prisma70.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
+              await prisma71.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
             } else {
-              await prisma70.treeBranchLeafNode.create({ data: displayNodeData });
+              await prisma71.treeBranchLeafNode.create({ data: displayNodeData });
             }
             const copiedFormulaIds = [];
             const copiedConditionIds = [];
             try {
               if (capacityType === "formula") {
-                const originalFormulas = await prisma70.treeBranchLeafNodeFormula.findMany({
+                const originalFormulas = await prisma71.treeBranchLeafNodeFormula.findMany({
                   where: { nodeId: tableSourceNode.id }
                 });
                 for (const f of originalFormulas) {
                   const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
-                  const existingFormula = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
+                  const existingFormula = await prisma71.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
                   if (existingFormula) {
                     if (existingFormula.nodeId === displayNodeId2) {
                       copiedFormulaIds.push(newFormulaId);
@@ -30176,7 +30176,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       f.id,
                       displayNodeId2,
                       suffix,
-                      prisma70,
+                      prisma71,
                       { formulaIdMap, nodeIdMap }
                     );
                     if (formulaResult.success) {
@@ -30188,12 +30188,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 }
               }
               if (capacityType === "condition") {
-                const originalConditions = await prisma70.treeBranchLeafNodeCondition.findMany({
+                const originalConditions = await prisma71.treeBranchLeafNodeCondition.findMany({
                   where: { nodeId: tableSourceNode.id }
                 });
                 for (const c of originalConditions) {
                   const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
-                  const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+                  const existingCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
                   if (existingCondition) {
                     if (existingCondition.nodeId === displayNodeId2) {
                       copiedConditionIds.push(newConditionId);
@@ -30206,7 +30206,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       c.id,
                       displayNodeId2,
                       suffix,
-                      prisma70,
+                      prisma71,
                       { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
                     );
                     if (conditionResult.success) {
@@ -30239,7 +30239,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 }
               }
               if (Object.keys(updateData).length > 0) {
-                await prisma70.treeBranchLeafNode.update({
+                await prisma71.treeBranchLeafNode.update({
                   where: { id: displayNodeId2 },
                   data: updateData
                 });
@@ -30248,7 +30248,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
                 for (const originalTableId of tableSourceNode.linkedTableIds) {
                   const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
-                  const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+                  const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
                   if (existingTable) {
                     copiedTableIds.push(newTableId);
                     tableIdMap2.set(String(originalTableId), newTableId);
@@ -30259,7 +30259,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       String(originalTableId),
                       displayNodeId2,
                       suffix,
-                      prisma70,
+                      prisma71,
                       { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
                     );
                     if (tableResult.success) {
@@ -30270,7 +30270,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   }
                 }
                 if (copiedTableIds.length > 0) {
-                  await prisma70.treeBranchLeafNode.update({
+                  await prisma71.treeBranchLeafNode.update({
                     where: { id: displayNodeId2 },
                     data: { hasTable: true, linkedTableIds: copiedTableIds }
                   });
@@ -30285,7 +30285,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     }
     try {
-      const existingById = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      const existingById = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         newVarId = `${originalVarId}-${suffix}-${tail}`;
@@ -30293,7 +30293,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     } catch (e) {
     }
     try {
-      const existingByKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      const existingByKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
@@ -30303,7 +30303,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
       if (existingForNode) {
         const expectedVarId = `${originalVarId}-${suffix}`;
         const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
@@ -30312,7 +30312,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           _existingVariableForReuse = existingForNode;
           try {
             const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
-            await prisma70.treeBranchLeafNode.update({
+            await prisma71.treeBranchLeafNode.update({
               where: { id: finalNodeId2 },
               data: {
                 hasData: true,
@@ -30328,7 +30328,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             });
             const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
             if (isCopiedNode) {
-              await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+              await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
             }
           } catch (e) {
           }
@@ -30336,7 +30336,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           variableCopyCache.set(cacheKey2, existingForNode.id);
         } else {
           try {
-            await prisma70.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
+            await prisma71.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
           }
           _reusingExistingVariable = false;
@@ -30368,7 +30368,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 formulaId,
                 finalNodeId2,
                 suffix,
-                prisma70,
+                prisma71,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (formulaResult.success) {
@@ -30393,7 +30393,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 conditionId,
                 finalNodeId2,
                 suffix,
-                prisma70,
+                prisma71,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (conditionResult.success) {
@@ -30418,7 +30418,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 tableId,
                 finalNodeId2,
                 suffix,
-                prisma70,
+                prisma71,
                 { nodeIdMap, formulaIdMap, conditionIdMap, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -30432,7 +30432,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         }
-        newVariable = await prisma70.treeBranchLeafNodeVariable.create({
+        newVariable = await prisma71.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: finalNodeId2,
@@ -30471,11 +30471,11 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     if (!isFromRepeaterDuplication) {
       try {
-        await linkVariableToAllCapacityNodes(prisma70, newVariable.id, newVariable.sourceRef);
+        await linkVariableToAllCapacityNodes(prisma71, newVariable.id, newVariable.sourceRef);
       } catch (e) {
       }
     }
-    const verification = await prisma70.treeBranchLeafNodeVariable.findUnique({
+    const verification = await prisma71.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (!verification) {
@@ -30483,7 +30483,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
-      await prisma70.treeBranchLeafNode.update({
+      await prisma71.treeBranchLeafNode.update({
         where: { id: finalNodeId2 },
         data: {
           hasData: true,
@@ -30501,12 +30501,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     if (linkToDisplaySection) {
       try {
-        const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: { parentId: true, treeId: true }
         });
         if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma70.treeBranchLeafNode.findFirst({
+          const displaySection = await prisma71.treeBranchLeafNode.findFirst({
             where: {
               treeId: originalOwnerNode.treeId,
               parentId: originalOwnerNode.parentId,
@@ -30516,7 +30516,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             select: { id: true }
           });
           if (displaySection) {
-            await addToNodeLinkedField5(prisma70, displaySection.id, "linkedVariableIds", [newVariable.id]);
+            await addToNodeLinkedField5(prisma71, displaySection.id, "linkedVariableIds", [newVariable.id]);
           }
         }
       } catch (e) {
@@ -30525,7 +30525,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       try {
         const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
         if (isCopiedNode) {
-          await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+          await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedVariableIds", [newVariable.id]);
         }
       } catch (e) {
       }
@@ -30535,18 +30535,18 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              await prisma70.treeBranchLeafNode.update({
+              await prisma71.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
                   condition_activeId: capId
                 }
               });
-              await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedConditionIds", [capId]);
               try {
                 if (newNodeId) {
                   const suffixedVarId = `${originalVarId}-${suffix}`;
-                  const targetNode = await prisma70.treeBranchLeafNode.findUnique({
+                  const targetNode = await prisma71.treeBranchLeafNode.findUnique({
                     where: { id: newNodeId },
                     select: { linkedVariableIds: true }
                   });
@@ -30557,7 +30557,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                     const next = Array.from(/* @__PURE__ */ new Set([...withoutOriginal, ...candidates]));
                     const changed = current.length !== next.length || current.some((id) => !next.includes(id));
                     if (changed) {
-                      await prisma70.treeBranchLeafNode.update({
+                      await prisma71.treeBranchLeafNode.update({
                         where: { id: newNodeId },
                         data: {
                           linkedVariableIds: { set: next }
@@ -30569,8 +30569,8 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               } catch (e) {
               }
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
-              await prisma70.treeBranchLeafNode.update({
+              const tbl = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
+              await prisma71.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
@@ -30579,7 +30579,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField5(prisma70, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedTableIds", [capId]);
             }
           }
         }
@@ -30588,10 +30588,10 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     try {
       if (newNodeId) {
-        await replaceLinkedVariableId(prisma70, newNodeId, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma71, newNodeId, originalVarId, newVariable.id, suffix);
       }
       if (finalNodeId2 && finalNodeId2 !== newNodeId) {
-        await replaceLinkedVariableId(prisma70, finalNodeId2, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma71, finalNodeId2, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
     }
@@ -30602,28 +30602,28 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       if (parsed && parsed.id) {
         try {
           if (capacityType === "formula") {
-            const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
+            const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (formula) {
-              await addToNodeLinkedField5(prisma70, formula.nodeId, "linkedFormulaIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma71, formula.nodeId, "linkedFormulaIds", [parsed.id]);
             }
           } else if (capacityType === "condition") {
-            const condition = await prisma70.treeBranchLeafNodeCondition.findUnique({
+            const condition = await prisma71.treeBranchLeafNodeCondition.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (condition) {
-              await addToNodeLinkedField5(prisma70, condition.nodeId, "linkedConditionIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma71, condition.nodeId, "linkedConditionIds", [parsed.id]);
             }
           } else if (capacityType === "table") {
-            const table = await prisma70.treeBranchLeafNodeTable.findUnique({
+            const table = await prisma71.treeBranchLeafNodeTable.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (table) {
-              await addToNodeLinkedField5(prisma70, table.nodeId, "linkedTableIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma71, table.nodeId, "linkedTableIds", [parsed.id]);
             }
           }
         } catch (e) {
@@ -30631,12 +30631,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     }
     try {
-      const originalVariable = await prisma70.treeBranchLeafNodeVariable.findUnique({
+      const originalVariable = await prisma71.treeBranchLeafNodeVariable.findUnique({
         where: { id: originalVarId },
         select: { nodeId: true }
       });
       if (originalVariable?.nodeId) {
-        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma70).catch(() => {
+        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma71).catch(() => {
         });
       }
     } catch (sumErr) {
@@ -30667,10 +30667,10 @@ ${"\u2550".repeat(80)}`);
     throw error;
   }
 }
-async function createDisplayNodeForExistingVariable(variableId, prisma70, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
-  const v = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+async function createDisplayNodeForExistingVariable(variableId, prisma71, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
+  const v = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
   if (!v) throw new Error(`Variable introuvable: ${variableId}`);
-  const owner = await prisma70.treeBranchLeafNode.findUnique({
+  const owner = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: v.nodeId },
     select: {
       id: true,
@@ -30741,13 +30741,13 @@ async function createDisplayNodeForExistingVariable(variableId, prisma70, displa
     fieldSubType: null,
     field_label: v.displayName
   };
-  const existing = await prisma70.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
+  const existing = await prisma71.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
   if (existing) {
-    await prisma70.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
+    await prisma71.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
   } else {
-    await prisma70.treeBranchLeafNode.create({ data: baseData });
+    await prisma71.treeBranchLeafNode.create({ data: baseData });
   }
-  await prisma70.treeBranchLeafNode.update({
+  await prisma71.treeBranchLeafNode.update({
     where: { id: displayNodeId },
     data: {
       hasData: true,
@@ -30761,9 +30761,9 @@ async function createDisplayNodeForExistingVariable(variableId, prisma70, displa
   });
   return { displayNodeId, created: !existing };
 }
-async function addToNodeLinkedField5(prisma70, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField5(prisma71, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -30773,14 +30773,14 @@ async function addToNodeLinkedField5(prisma70, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma70.treeBranchLeafNode.update({
+  await prisma71.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
-async function replaceLinkedVariableId(prisma70, nodeId, originalVarId, newVarId, suffix) {
+async function replaceLinkedVariableId(prisma71, nodeId, originalVarId, newVarId, suffix) {
   const stripNumericSuffix2 = (raw) => raw.replace(/-\d+(?:-\d+)*$/, "");
-  const node = await prisma70.treeBranchLeafNode.findUnique({
+  const node = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { linkedVariableIds: true }
   });
@@ -30792,14 +30792,14 @@ async function replaceLinkedVariableId(prisma70, nodeId, originalVarId, newVarId
   const next = Array.from(/* @__PURE__ */ new Set([...filtered, newVarId, suffixedId]));
   const changed = current.length !== next.length || current.some((id) => !next.includes(id));
   if (!changed) return;
-  await prisma70.treeBranchLeafNode.update({
+  await prisma71.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { linkedVariableIds: { set: next } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-selector-tables.ts
-async function copySelectorTablesAfterNodeCopy(prisma70, copiedRootNodeId, originalRootNodeId, options, suffix) {
+async function copySelectorTablesAfterNodeCopy(prisma71, copiedRootNodeId, originalRootNodeId, options, suffix) {
   try {
     const getAllDescendants = async (nodeId) => {
       const results = [];
@@ -30807,7 +30807,7 @@ async function copySelectorTablesAfterNodeCopy(prisma70, copiedRootNodeId, origi
       while (queue.length > 0) {
         const currentId = queue.shift();
         results.push(currentId);
-        const children = await prisma70.treeBranchLeafNode.findMany({
+        const children = await prisma71.treeBranchLeafNode.findMany({
           where: { parentId: currentId },
           select: { id: true }
         });
@@ -30817,7 +30817,7 @@ async function copySelectorTablesAfterNodeCopy(prisma70, copiedRootNodeId, origi
     };
     const originalNodeIds = await getAllDescendants(originalRootNodeId);
     const copiedNodeIds = await getAllDescendants(copiedRootNodeId);
-    const selectorsInOriginal = await prisma70.treeBranchLeafNode.findMany({
+    const selectorsInOriginal = await prisma71.treeBranchLeafNode.findMany({
       where: {
         id: { in: originalNodeIds },
         table_activeId: { not: null }
@@ -30837,13 +30837,13 @@ async function copySelectorTablesAfterNodeCopy(prisma70, copiedRootNodeId, origi
       if (!copiedSelectorId) {
         continue;
       }
-      const hasSelectConfig = await prisma70.treeBranchLeafSelectConfig.findUnique({
+      const hasSelectConfig = await prisma71.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: originalSelector.id }
       });
       if (hasSelectConfig) {
         continue;
       }
-      const originalTable = await prisma70.treeBranchLeafNodeTable.findUnique({
+      const originalTable = await prisma71.treeBranchLeafNodeTable.findUnique({
         where: { id: originalTableId },
         select: {
           id: true,
@@ -30867,7 +30867,7 @@ async function copySelectorTablesAfterNodeCopy(prisma70, copiedRootNodeId, origi
           copiedSelectorId,
           // Ã°Å¸â€˜Ë† Le nÃ…â€œud selector copiÃƒÂ© sera propriÃƒÂ©taire de la table copiÃƒÂ©e
           suffix,
-          prisma70,
+          prisma71,
           {
             nodeIdMap: options.nodeIdMap,
             tableCopyCache: options.tableCopyCache,
@@ -31349,7 +31349,7 @@ function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
-async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
+async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
   const {
     targetParentId,
     suffixNum,
@@ -31414,7 +31414,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
       return conditionSet;
     }
   };
-  const source = await prisma70.treeBranchLeafNode.findUnique({
+  const source = await prisma71.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { organizationId: true } } }
   });
@@ -31437,7 +31437,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     } else if (copySuffixNum != null && Number.isFinite(copySuffixNum)) {
     } else {
       const baseSourceId = source.id.replace(/-\d+(?:-\d+)*$/, "");
-      const existingIdsWithSuffix = await prisma70.treeBranchLeafNode.findMany({
+      const existingIdsWithSuffix = await prisma71.treeBranchLeafNode.findMany({
         where: {
           treeId: source.treeId,
           id: {
@@ -31489,7 +31489,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     ...derivedRepeatContext,
     suffix: derivedRepeatContext.suffix ?? suffixToken
   } : void 0;
-  const allNodes = await prisma70.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
+  const allNodes = await prisma71.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
   const byId = new Map(allNodes.map((n) => [n.id, n]));
   const existingNodeIds = new Set(byId.keys());
   const childrenByParent = /* @__PURE__ */ new Map();
@@ -31519,7 +31519,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
   const displayNodeIds = [];
   const directVariableIdByNodeId = /* @__PURE__ */ new Map();
   if (toCopy.size > 0) {
-    const nodeVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
+    const nodeVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: Array.from(toCopy) } },
       select: { nodeId: true, id: true }
     });
@@ -31826,7 +31826,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
       }
       const parentOfParentId = await ensureExternalParentChain(parentNode.parentId ?? null);
       const parentCloneData = buildCloneData(parentNode, clonedParentId, parentOfParentId);
-      await prisma70.treeBranchLeafNode.create({ data: parentCloneData });
+      await prisma71.treeBranchLeafNode.create({ data: parentCloneData });
       createdNodes.push({ oldId: originalParentId, newId: clonedParentId });
       existingNodeIds.add(clonedParentId);
       resolvedExternalParents.set(originalParentId, clonedParentId);
@@ -31884,7 +31884,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     const isRoot = oldId === source.id;
     const newParentId = await resolveParentId(oldNode, isRoot);
     const cloneData = buildCloneData(oldNode, newId, newParentId);
-    await prisma70.treeBranchLeafNode.create({ data: cloneData });
+    await prisma71.treeBranchLeafNode.create({ data: cloneData });
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
     if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
@@ -31894,7 +31894,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
-    const formulas = await prisma70.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
+    const formulas = await prisma71.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
     const formulaMap = new Map(formulas.map((f) => [f.id, f]));
     const sortedFormulas = [];
     const validLinkedIds = [];
@@ -31916,7 +31916,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
           f.id,
           newId,
           suffixNum,
-          prisma70,
+          prisma71,
           {
             formulaIdMap,
             nodeIdMap: idMap
@@ -31947,12 +31947,12 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     }
     if (newLinkedFormulaIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma70, newId, "linkedFormulaIds", newLinkedFormulaIds);
+        await addToNodeLinkedField6(prisma71, newId, "linkedFormulaIds", newLinkedFormulaIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:", e.message);
       }
     }
-    const conditions = await prisma70.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
+    const conditions = await prisma71.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
     const copiedNodeIds = new Set(idMap.values());
     const conditionMap = new Map(conditions.map((c) => [c.id, c]));
@@ -31974,7 +31974,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
       const newConditionId = appendSuffix(c.id);
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap);
-      const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({
+      const existingCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({
         where: { id: newConditionId }
       });
       if (existingCondition) {
@@ -31983,7 +31983,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
         }
         continue;
       }
-      await prisma70.treeBranchLeafNodeCondition.create({
+      await prisma71.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: newId,
@@ -32017,7 +32017,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
           if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) {
             continue;
           }
-          await addToNodeLinkedField6(prisma70, normalizedRefId, "linkedConditionIds", [newConditionId]);
+          await addToNodeLinkedField6(prisma71, normalizedRefId, "linkedConditionIds", [newConditionId]);
         }
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
@@ -32025,7 +32025,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     }
     if (newLinkedConditionIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma70, newId, "linkedConditionIds", newLinkedConditionIds);
+        await addToNodeLinkedField6(prisma71, newId, "linkedConditionIds", newLinkedConditionIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds for node:", e.message);
       }
@@ -32049,7 +32049,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     }
     if (Object.keys(updateActiveIds).length > 0) {
       try {
-        await prisma70.treeBranchLeafNode.update({
+        await prisma71.treeBranchLeafNode.update({
           where: { id: newId },
           data: updateActiveIds
         });
@@ -32057,7 +32057,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
         console.warn("[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur mise \xC3\u0192\xC2\xA0 jour activeIds:", e.message);
       }
     }
-    const tables = await prisma70.treeBranchLeafNodeTable.findMany({
+    const tables = await prisma71.treeBranchLeafNodeTable.findMany({
       where: { nodeId: oldId },
       include: { tableColumns: true, tableRows: true }
     });
@@ -32075,7 +32075,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
       additionalTableIds.push(source.table_activeId);
     }
-    const additionalTables = additionalTableIds.length > 0 ? await prisma70.treeBranchLeafNodeTable.findMany({
+    const additionalTables = additionalTableIds.length > 0 ? await prisma71.treeBranchLeafNodeTable.findMany({
       where: { id: { in: additionalTableIds } },
       include: { tableColumns: true, tableRows: true }
     }) : [];
@@ -32089,7 +32089,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     for (const t of allTablesToCopy) {
       const newTableId = appendSuffix(t.id);
       tableIdMap2.set(t.id, newTableId);
-      const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
+      const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({
         where: { id: newTableId }
       });
       if (existingTable) {
@@ -32098,7 +32098,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
       if (linkedTableIdOrder.includes(t.id)) {
         newLinkedTableIds.push(newTableId);
       }
-      await prisma70.treeBranchLeafNodeTable.create({
+      await prisma71.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: newId,
@@ -32214,22 +32214,22 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     }
     if (newLinkedTableIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma70, newId, "linkedTableIds", newLinkedTableIds);
+        await addToNodeLinkedField6(prisma71, newId, "linkedTableIds", newLinkedTableIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedTableIds for node:", e.message);
       }
     }
-    const originalSelectConfig = await prisma70.treeBranchLeafSelectConfig.findUnique({
+    const originalSelectConfig = await prisma71.treeBranchLeafSelectConfig.findUnique({
       where: { nodeId: oldId }
     });
     if (originalSelectConfig) {
-      const existingCopyConfig = await prisma70.treeBranchLeafSelectConfig.findUnique({
+      const existingCopyConfig = await prisma71.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: newId }
       });
       if (!existingCopyConfig) {
         const newTableReference = originalSelectConfig.tableReference ? appendSuffix(originalSelectConfig.tableReference) : null;
         try {
-          await prisma70.treeBranchLeafSelectConfig.create({
+          await prisma71.treeBranchLeafSelectConfig.create({
             data: {
               id: appendSuffix(originalSelectConfig.id),
               nodeId: newId,
@@ -32257,16 +32257,16 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
       } else {
       }
     }
-    const originalNumberConfig = await prisma70.treeBranchLeafNumberConfig.findUnique({
+    const originalNumberConfig = await prisma71.treeBranchLeafNumberConfig.findUnique({
       where: { nodeId: oldId }
     });
     if (originalNumberConfig) {
-      const existingCopyNumberConfig = await prisma70.treeBranchLeafNumberConfig.findUnique({
+      const existingCopyNumberConfig = await prisma71.treeBranchLeafNumberConfig.findUnique({
         where: { nodeId: newId }
       });
       if (!existingCopyNumberConfig) {
         try {
-          await prisma70.treeBranchLeafNumberConfig.create({
+          await prisma71.treeBranchLeafNumberConfig.create({
             data: {
               id: appendSuffix(originalNumberConfig.id),
               nodeId: newId,
@@ -32333,7 +32333,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
               linkedVarId,
               suffixToken,
               newNodeId,
-              prisma70,
+              prisma71,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -32360,7 +32360,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
     }
     if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0) {
       try {
-        await prisma70.treeBranchLeafNode.update({
+        await prisma71.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
@@ -32378,7 +32378,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
   if (displayNodeIds.length > 0) {
     for (const nodeId2 of displayNodeIds) {
       try {
-        const copiedNode = await prisma70.treeBranchLeafNode.findUnique({
+        const copiedNode = await prisma71.treeBranchLeafNode.findUnique({
           where: { id: nodeId2 },
           select: { id: true, label: true, field_label: true, linkedTableIds: true }
         });
@@ -32386,7 +32386,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
           continue;
         }
         const originalNodeId = nodeId2.replace(/-\d+$/, "");
-        const originalVar = await prisma70.treeBranchLeafNodeVariable.findFirst({
+        const originalVar = await prisma71.treeBranchLeafNodeVariable.findFirst({
           where: { nodeId: originalNodeId }
         });
         if (!originalVar) {
@@ -32394,13 +32394,13 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
         }
         const newVarId = appendSuffix(originalVar.id);
         const newExposedKey = appendSuffix(originalVar.exposedKey);
-        const existingVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
+        const existingVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
           where: { id: newVarId }
         });
         if (existingVar) {
           continue;
         }
-        await prisma70.treeBranchLeafNodeVariable.create({
+        await prisma71.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: nodeId2,
@@ -32420,7 +32420,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        await prisma70.treeBranchLeafNode.update({
+        await prisma71.treeBranchLeafNode.update({
           where: { id: nodeId2 },
           data: {
             hasData: true,
@@ -32442,7 +32442,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
   try {
     const newNodeIds = Array.from(idMap.values());
     if (newNodeIds.length > 0) {
-      const copiedVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
+      const copiedVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
         where: { nodeId: { in: newNodeIds } },
         select: {
           nodeId: true,
@@ -32457,7 +32457,7 @@ async function deepCopyNodeInternal(prisma70, req2, nodeId, opts) {
       });
       for (const variable of copiedVariables) {
         try {
-          await prisma70.treeBranchLeafNode.updateMany({
+          await prisma71.treeBranchLeafNode.updateMany({
             where: {
               id: variable.nodeId,
               OR: [{ data_activeId: null }, { hasData: false }]
@@ -33465,7 +33465,7 @@ function buildResultText(prefixExpr, resultValue, unit) {
   if (prefixExpr) return prefixExpr;
   return right ? `${right}${u}` : "";
 }
-async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma70, submissionId, organizationId, userId) {
+async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma71, submissionId, organizationId, userId) {
   return {
     detail: {
       type: "legacy-disabled",
@@ -38068,9 +38068,9 @@ router56.post("/evaluate/batch", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation batch" });
   }
 });
-async function ensureNodeOrgAccess(prisma70, nodeId, auth) {
+async function ensureNodeOrgAccess(prisma71, nodeId, auth) {
   try {
-    const node = await prisma70.treeBranchLeafNode.findFirst({
+    const node = await prisma71.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { treeId: true }
     });
@@ -38080,7 +38080,7 @@ async function ensureNodeOrgAccess(prisma70, nodeId, auth) {
     if (auth.isSuperAdmin) {
       return { ok: true };
     }
-    const tree = await prisma70.treeBranchLeafTree.findFirst({
+    const tree = await prisma71.treeBranchLeafTree.findFirst({
       where: { id: node.treeId },
       select: { organizationId: true }
     });
@@ -43204,8 +43204,8 @@ function logRouteHit(route) {
 }
 router58.post("/evaluate", async (req2, res) => {
   logRouteHit("POST /api/tbl/evaluate");
-  const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-  const prisma70 = new PrismaClient72();
+  const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+  const prisma71 = new PrismaClient73();
   try {
     const { elementId, elementIds, contextData = {}, evalType } = req2.body || {};
     if (Array.isArray(elementIds) && elementIds.length > 0) {
@@ -43218,7 +43218,7 @@ router58.post("/evaluate", async (req2, res) => {
           continue;
         }
         try {
-          const single = await resolveSingleEvaluation(prisma70, id, contextData);
+          const single = await resolveSingleEvaluation(prisma71, id, contextData);
           results[id] = single.payload;
           traces[id] = single.trace;
         } catch (e) {
@@ -43241,7 +43241,7 @@ router58.post("/evaluate", async (req2, res) => {
     const trace = [];
     let resolvedNodeId = null;
     let variable = null;
-    const byKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const byKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (byKey) {
       resolvedNodeId = byKey.nodeId;
       variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -43250,7 +43250,7 @@ router58.post("/evaluate", async (req2, res) => {
       trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
     }
     if (!resolvedNodeId) {
-      const node = await prisma70.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+      const node = await prisma71.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
       if (node) {
         resolvedNodeId = node.id;
         trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -43259,7 +43259,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
+      const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
         where: { id: elementId },
         select: { id: true, nodeId: true, name: true, tokens: true }
       });
@@ -43267,8 +43267,8 @@ router58.post("/evaluate", async (req2, res) => {
         resolvedNodeId = formula.nodeId;
         trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
         try {
-          const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-          const prismaInstance = new PrismaClient73();
+          const { PrismaClient: PrismaClient74 } = await import("@prisma/client");
+          const prismaInstance = new PrismaClient74();
           const submissionId = contextData.submissionId || "temp-evaluation";
           const valueMap = /* @__PURE__ */ new Map();
           for (const [key2, value] of Object.entries(contextData)) {
@@ -43309,7 +43309,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceFormula = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceFormula = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceFormula) {
         resolvedNodeId = viaSourceFormula.nodeId;
         variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -43319,7 +43319,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceRaw = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceRaw = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceRaw) {
         resolvedNodeId = viaSourceRaw.nodeId;
         variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -43338,7 +43338,7 @@ router58.post("/evaluate", async (req2, res) => {
       });
     }
     if (!variable) {
-      const v = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+      const v = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
       if (v) {
         variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
         trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -43376,15 +43376,15 @@ router58.post("/evaluate", async (req2, res) => {
     console.error("\u{1F4A5} [TBL INTELLIGENCE] Erreur /evaluate:", e);
     return res.status(500).json({ success: false, error: "Erreur interne /evaluate", details: e instanceof Error ? e.message : "unknown" });
   } finally {
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
   }
 });
-async function resolveSingleEvaluation(prisma70, elementId, contextData) {
+async function resolveSingleEvaluation(prisma71, elementId, contextData) {
   const evaluationEngine2 = new TBLEvaluationEngine_default();
   const trace = [];
   let resolvedNodeId = null;
   let variable = null;
-  const byKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+  const byKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
   if (byKey) {
     resolvedNodeId = byKey.nodeId;
     variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -43393,7 +43393,7 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
     trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
   }
   if (!resolvedNodeId) {
-    const node = await prisma70.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+    const node = await prisma71.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
     if (node) {
       resolvedNodeId = node.id;
       trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -43402,7 +43402,7 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
       where: { id: elementId },
       select: { id: true, nodeId: true, name: true, tokens: true }
     });
@@ -43410,8 +43410,8 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
       resolvedNodeId = formula.nodeId;
       trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
       try {
-        const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-        const prismaInstance = new PrismaClient72();
+        const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+        const prismaInstance = new PrismaClient73();
         const submissionId = contextData.submissionId || "temp-evaluation";
         const valueMap = /* @__PURE__ */ new Map();
         for (const [key2, value] of Object.entries(contextData)) {
@@ -43454,7 +43454,7 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceFormula = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceFormula = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceFormula) {
       resolvedNodeId = viaSourceFormula.nodeId;
       variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -43464,7 +43464,7 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceRaw = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceRaw = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceRaw) {
       resolvedNodeId = viaSourceRaw.nodeId;
       variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -43477,7 +43477,7 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
     return { payload: { success: false, error: "Impossible de r\xE9soudre elementId", trace }, trace };
   }
   if (!variable) {
-    const v = await prisma70.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+    const v = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
     if (v) {
       variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
       trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -43494,8 +43494,8 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
   trace.push({ step: "capacity_detect", info: `Capacit\xE9 d\xE9tect\xE9e=${capacity}`, success: true });
   if (capacity === "2") {
     try {
-      const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-      const prismaInstance = new PrismaClient72();
+      const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+      const prismaInstance = new PrismaClient73();
       const formulaId = sr.replace(/^(formula:|node-formula:)/, "");
       const submissionId = contextData.submissionId || "temp-evaluation";
       const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
@@ -43561,8 +43561,8 @@ async function resolveSingleEvaluation(prisma70, elementId, contextData) {
   }
   if (capacity === "3") {
     try {
-      const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-      const prismaInstance = new PrismaClient72();
+      const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+      const prismaInstance = new PrismaClient73();
       const conditionId = sr.replace(/^condition:/, "");
       const submissionId = contextData.submissionId || "temp-evaluation";
       const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
@@ -43688,10 +43688,10 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     });
   }
   console.log("\u{1F527} [TBL EVALUATE CONDITION] \xC9valuation avec operation-interpreter:", tblCode);
-  const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-  const prisma70 = new PrismaClient72();
+  const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+  const prisma71 = new PrismaClient73();
   try {
-    const conditionRecord = await prisma70.treeBranchLeafNodeCondition.findUnique({
+    const conditionRecord = await prisma71.treeBranchLeafNodeCondition.findUnique({
       where: { id: tblCode },
       select: { nodeId: true }
     });
@@ -43704,7 +43704,7 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     const result = await evaluateVariableOperation(
       conditionRecord.nodeId,
       submissionId || tblCode,
-      prisma70
+      prisma71
     );
     console.log("\u2705 [TBL EVALUATE CONDITION] R\xE9sultat operation-interpreter:", result);
     return res.json({
@@ -43724,7 +43724,7 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
       details: error instanceof Error ? error.message : "unknown"
     });
   } finally {
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
   }
 });
 router58.post("/evaluate/table/:tblCode", async (req2, res) => {
@@ -43741,9 +43741,9 @@ router58.post("/update-database-results", async (req2, res) => {
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F504} [TBL UPDATE] D\xE9but mise \xE0 jour base de donn\xE9es avec CapacityCalculator");
-    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-    const prisma70 = new PrismaClient72();
-    const submissionData = await prisma70.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+    const prisma71 = new PrismaClient73();
+    const submissionData = await prisma71.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: "condition"
@@ -43781,7 +43781,7 @@ router58.post("/update-database-results", async (req2, res) => {
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           method: "CapacityCalculator"
         };
-        await prisma70.treeBranchLeafSubmissionData.update({
+        await prisma71.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: newOperationResult
@@ -43798,7 +43798,7 @@ router58.post("/update-database-results", async (req2, res) => {
         console.error(`\u274C [TBL UPDATE] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
     return res.json({
       success: true,
       updated,
@@ -43819,9 +43819,9 @@ router58.post("/check-submission-data", async (req2, res) => {
   logRouteHit("POST /api/tbl/check-submission-data");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
-    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-    const prisma70 = new PrismaClient72();
-    const allData = await prisma70.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+    const prisma71 = new PrismaClient73();
+    const allData = await prisma71.treeBranchLeafSubmissionData.findMany({
       where: { submissionId }
     });
     const grouped = allData.reduce((acc, item) => {
@@ -43834,7 +43834,7 @@ router58.post("/check-submission-data", async (req2, res) => {
       });
       return acc;
     }, {});
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
     return res.json({
       success: true,
       submissionId,
@@ -43856,8 +43856,8 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F9E0} [TBL INTELLIGENT UPDATE] D\xE9but mise \xE0 jour avec traductions intelligentes");
-    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-    const prisma70 = new PrismaClient72();
+    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+    const prisma71 = new PrismaClient73();
     let TBLIntelligentTranslator;
     try {
       const translatorModule = await import("../../../../../../tbl-intelligent-translator.cjs");
@@ -43869,8 +43869,8 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         error: "TBLIntelligentTranslator non disponible"
       });
     }
-    const translator = new TBLIntelligentTranslator(prisma70);
-    const submissionData = await prisma70.treeBranchLeafSubmissionData.findMany({
+    const translator = new TBLIntelligentTranslator(prisma71);
+    const submissionData = await prisma71.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -43897,7 +43897,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
           data.submissionId
         );
         console.log(`\u2705 [TBL INTELLIGENT] Traduction g\xE9n\xE9r\xE9e: ${intelligentResult.substring(0, 100)}...`);
-        await prisma70.treeBranchLeafSubmissionData.update({
+        await prisma71.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: intelligentResult,
@@ -43915,7 +43915,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         console.error(`\u274C [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
     return res.json({
       success: true,
       message: "Traductions intelligentes appliqu\xE9es",
@@ -43937,9 +43937,9 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
   logRouteHit("GET /api/tbl/check-intelligent-translations");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.query;
-    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-    const prisma70 = new PrismaClient72();
-    const recentData = await prisma70.treeBranchLeafSubmissionData.findMany({
+    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+    const prisma71 = new PrismaClient73();
+    const recentData = await prisma71.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -43957,7 +43957,7 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
       },
       take: 10
     });
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
     const translations = recentData.map((data) => ({
       id: data.id,
       nodeLabel: data.TreeBranchLeafNode?.label,
@@ -43991,12 +43991,12 @@ router58.get("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log("\u{1F504} [TBL NODES] R\xE9cup\xE9ration node via TBL:", nodeId);
-    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-    const prisma70 = new PrismaClient72();
-    const node = await prisma70.treeBranchLeafNode.findUnique({
+    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+    const prisma71 = new PrismaClient73();
+    const node = await prisma71.treeBranchLeafNode.findUnique({
       where: { id: nodeId }
     });
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
     if (!node) {
       return res.status(404).json({ success: false, error: "Node non trouv\xE9" });
     }
@@ -44014,14 +44014,14 @@ router58.get("/reusables/conditions", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/conditions");
   try {
     console.log("\u{1F504} [TBL CONDITIONS] R\xE9cup\xE9ration conditions via TBL");
-    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-    const prisma70 = new PrismaClient72();
-    const conditions = await prisma70.treeBranchLeafNodeCondition.findMany({
+    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+    const prisma71 = new PrismaClient73();
+    const conditions = await prisma71.treeBranchLeafNodeCondition.findMany({
       include: {
         node: true
       }
     });
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
     return res.json({
       success: true,
       conditions,
@@ -44040,14 +44040,14 @@ router58.get("/reusables/formulas", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/formulas");
   try {
     console.log("\u{1F504} [TBL FORMULAS] R\xE9cup\xE9ration formules via TBL");
-    const { PrismaClient: PrismaClient72 } = await import("@prisma/client");
-    const prisma70 = new PrismaClient72();
-    const formulas = await prisma70.treeBranchLeafNodeFormula.findMany({
+    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
+    const prisma71 = new PrismaClient73();
+    const formulas = await prisma71.treeBranchLeafNodeFormula.findMany({
       include: {
         node: true
       }
     });
-    await prisma70.$disconnect();
+    await prisma71.$disconnect();
     return res.json({
       success: true,
       formulas,
@@ -49581,7704 +49581,16 @@ router69.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
 });
 var publicLeads_default = router69;
 
-// src/routes/index.ts
-var apiRouter = (0, import_express71.Router)();
-apiRouter.use("/auth", authRoutes_default);
-console.log("[ROUTER] Routes d'authentification mont\xE9es sur /auth");
-apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
-apiRouter.use("/", misc_default);
-apiRouter.use("/profile", profile_default);
-apiRouter.post("/logout", logout);
-apiRouter.use("/organizations", organizations_default);
-apiRouter.use("/organizations", googleWorkspace_default);
-apiRouter.use("/google-workspace", googleWorkspace_default);
-apiRouter.use("/modules", modules_default);
-apiRouter.use("/admin-modules", admin_modules_default);
-apiRouter.use("/icons", icons_default);
-apiRouter.use("/blocks", blocks_default);
-apiRouter.use("/fields", fields_default);
-apiRouter.use("/sections", sections_default);
-apiRouter.use("/module-navigation", module_navigation_default);
-apiRouter.use("/form-sections", form_sections_default);
-apiRouter.use("/field-types", fieldTypes_default);
-apiRouter.use("/option-nodes", optionNodes_default);
-apiRouter.use("/notifications", notifications_default);
-apiRouter.use("/notifications-system", notificationSystemRoutes_default);
-apiRouter.use("/settings", settingsRoutes_default);
-apiRouter.use("/leads", leadsRoutes_default);
-apiRouter.use("/dashboard", dashboard_default);
-apiRouter.use("/clients", clients_default);
-apiRouter.use("/company", company_default);
-apiRouter.use("/projects", projects_default);
-apiRouter.use("/emails", emails_default);
-apiRouter.use("/gemini", gemini_default);
-apiRouter.use("/roles", rolesRoutes_default);
-apiRouter.use("/permissions", permissions_default);
-apiRouter.use("/users", usersRoutes_default);
-apiRouter.use("/admin", admin_default);
-apiRouter.use("/impersonate", impersonate_default);
-apiRouter.use("/admin-password", adminPasswordRoutes_default);
-apiRouter.use("/gmail", gmailRoutes_default);
-apiRouter.use("/calendar", calendar_default);
-apiRouter.use("/google-auth", google_auth_default);
-apiRouter.use("/google/scheduler", google_scheduler_default);
-apiRouter.use("/google-tokens", google_tokens_default);
-apiRouter.use("/auth/google", google_auth_default);
-apiRouter.use("/services", services_default);
-apiRouter.use("/telnyx", telnyx_default2);
-apiRouter.use("/quotes", quotes_default);
-apiRouter.use("/google-drive", google_drive_default);
-apiRouter.use("/google-meet", google_meet_default);
-apiRouter.use("/analytics", analytics_default);
-apiRouter.use("/ai", ai_default);
-apiRouter.use("/ai", ai_code_default);
-apiRouter.use("/advanced-select", advanced_select_default);
-apiRouter.use("/dynamic-formulas", dynamic_formulas_default);
-apiRouter.use("/treebranchleaf", treebranchleaf_routes_default);
-apiRouter.use("/tbl", tbl_intelligence_routes_default);
-apiRouter.use("/tbl", tbl_routes_default);
-apiRouter.use("/tbl", tbl_capabilities_default);
-apiRouter.use("/validations", validations_default);
-apiRouter.use("/formulas", formulas_default2);
-apiRouter.use("/dependencies", dependencies_default2);
-apiRouter.use("/invitations", invitations_default);
-apiRouter.use("/lead-generation", leadGeneration_default);
-apiRouter.use("/marketplace", marketplace_fixed_default);
-apiRouter.use("/partner", partner_default);
-apiRouter.use("/forms", publicForms_default);
-apiRouter.use("/public-forms", publicForms_default);
-apiRouter.use("/landing-pages", landingPages_default);
-apiRouter.use("/campaign-analytics", campaignAnalytics_default);
-apiRouter.use("/dispatch", dispatch_default);
-apiRouter.use("/integrations", integrations_default);
-apiRouter.use("/integrations", integrationsStatus_default);
-apiRouter.use("/public", publicLeads_default);
-apiRouter.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
-});
-var routes_default = apiRouter;
-
-// src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
-var import_express72 = require("express");
-var import_client61 = require("@prisma/client");
-init_operation_interpreter();
-
-// src/services/calculatedValuesService.ts
-async function storeCalculatedValues(values, submissionId) {
-  const result = {
-    success: true,
-    stored: 0,
-    failed: 0,
-    errors: []
-  };
-  for (const value of values) {
-    try {
-      const { nodeId, calculatedValue, calculatedBy = "unknown" } = value;
-      if (!nodeId) {
-        result.errors.push({ nodeId: "unknown", error: "nodeId manquant" });
-        result.failed++;
-        continue;
-      }
-      const node = await prisma.treeBranchLeafNode.findUnique({
-        where: { id: nodeId },
-        select: { id: true, label: true }
-      });
-      if (!node) {
-        result.errors.push({
-          nodeId,
-          error: "N\u0153ud non trouv\xE9"
-        });
-        result.failed++;
-        continue;
-      }
-      await prisma.treeBranchLeafNode.update({
-        where: { id: nodeId },
-        data: {
-          calculatedValue: String(calculatedValue),
-          calculatedAt: /* @__PURE__ */ new Date(),
-          calculatedBy
-        }
-      });
-      result.stored++;
-    } catch (error) {
-      result.failed++;
-      result.errors.push({
-        nodeId: value.nodeId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      console.error(`\u274C [StoreCalculatedValues] Erreur stockage:`, {
-        nodeId: value.nodeId,
-        error,
-        submissionId
-      });
-    }
-  }
-  result.success = result.failed === 0;
-  return result;
-}
-
-// src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
-var router70 = (0, import_express72.Router)();
-var prisma59 = new import_client61.PrismaClient();
-var stagingStore = /* @__PURE__ */ new Map();
-var STAGE_TTL_MS = 1e3 * 60 * 60;
-function pruneStages() {
-  const now = Date.now();
-  for (const [k, v] of stagingStore) {
-    if (now - v.updatedAt > STAGE_TTL_MS) stagingStore.delete(k);
-  }
-}
-function newStageId() {
-  return `stage-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-function sanitizeFormData(input) {
-  if (Array.isArray(input)) {
-    return input.map(sanitizeFormData);
-  }
-  if (input && typeof input === "object") {
-    const result = {};
-    for (const [k, v] of Object.entries(input)) {
-      if (k.startsWith("__") || k.startsWith("__mirror_") || k.startsWith("__formula_") || k.startsWith("__condition_")) {
-        continue;
-      }
-      if (v === null || v === void 0 || v === "") continue;
-      result[k] = sanitizeFormData(v);
-    }
-    return result;
-  }
-  return input;
-}
-var UUID_NODE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var GENERATED_NODE_REGEX = /^node_[0-9]+_[a-z0-9]+$/i;
-var SHARED_REFERENCE_REGEX = /^shared-ref-[a-z0-9-]+$/i;
-function isSharedReferenceId(nodeId) {
-  return SHARED_REFERENCE_REGEX.test(nodeId);
-}
-function isAcceptedNodeId(nodeId) {
-  return UUID_NODE_REGEX.test(nodeId) || GENERATED_NODE_REGEX.test(nodeId) || isSharedReferenceId(nodeId);
-}
-async function resolveSharedReferenceAliases(sharedRefs, treeId) {
-  if (!sharedRefs.length) {
-    return /* @__PURE__ */ new Map();
-  }
-  const where = {
-    sharedReferenceId: { in: sharedRefs }
-  };
-  if (treeId) {
-    where.treeId = treeId;
-  }
-  const aliases = await prisma59.treeBranchLeafNode.findMany({
-    where,
-    select: { id: true, sharedReferenceId: true }
-  });
-  const map = /* @__PURE__ */ new Map();
-  for (const alias of aliases) {
-    if (!alias.sharedReferenceId) continue;
-    if (!map.has(alias.sharedReferenceId)) {
-      map.set(alias.sharedReferenceId, []);
-    }
-    map.get(alias.sharedReferenceId).push(alias.id);
-  }
-  return map;
-}
-async function applySharedReferenceValues(target, entries, treeId) {
-  if (!entries.length) return;
-  const sharedRefKeys = entries.map(([key2]) => key2).filter(isSharedReferenceId);
-  const aliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
-  for (const [key2, value] of entries) {
-    target.set(key2, value);
-    if (!isSharedReferenceId(key2)) continue;
-    const aliases = aliasMap.get(key2) || [];
-    for (const alias of aliases) {
-      target.set(alias, value);
-    }
-  }
-}
-async function saveUserEntriesNeutral(submissionId, formData, treeId) {
-  if (!formData || typeof formData !== "object") return 0;
-  let saved = 0;
-  const entries = /* @__PURE__ */ new Map();
-  const displayNodes = treeId ? await prisma59.treeBranchLeafNode.findMany({
-    where: {
-      treeId,
-      calculatedBy: { contains: "preview-unknown-user" }
-      // ✅ Seulement les displays avec preview-unknown-user
-    },
-    select: { id: true, calculatedBy: true, label: true }
-  }) : [];
-  const displayNodeIds = new Set(displayNodes.map((n) => n.id));
-  if (displayNodeIds.size > 0) {
-    console.log(`\u{1F6AB} [SAVE] ${displayNodeIds.size} DISPLAY fields (preview-unknown-user) identifi\xE9s - ne seront PAS sauvegard\xE9s`);
-  }
-  const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
-  const sharedRefAliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
-  for (const [key2, value] of Object.entries(formData)) {
-    if (key2.startsWith("__mirror_") || key2.startsWith("__formula_") || key2.startsWith("__condition_")) {
-      continue;
-    }
-    if (!isAcceptedNodeId(key2)) continue;
-    if (displayNodeIds.has(key2)) {
-      console.log(`\u{1F6AB} [SAVE] Display field ignor\xE9: ${key2} (preview-unknown-user dans calculatedBy)`);
-      continue;
-    }
-    if (value === null || value === void 0 || value === "") {
-      continue;
-    }
-    const storageIds = isSharedReferenceId(key2) ? [key2, ...sharedRefAliasMap.get(key2) || []] : [key2];
-    for (const nodeId of storageIds) {
-      if (!isAcceptedNodeId(nodeId)) continue;
-      const serializedValue = value === null || value === void 0 ? null : typeof value === "string" ? value : JSON.stringify(value);
-      const entry = {
-        id: `${submissionId}-${nodeId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        submissionId,
-        nodeId,
-        value: serializedValue,
-        operationSource: "neutral",
-        operationDetail: {
-          inputValue: value,
-          nodeId,
-          action: "user_input",
-          sourceNodeId: key2,
-          aliasResolved: nodeId !== key2
-        }
-      };
-      entries.set(nodeId, entry);
-    }
-  }
-  for (const entry of entries.values()) {
-    const key2 = { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } };
-    const existing = await prisma59.treeBranchLeafSubmissionData.findUnique({ where: key2 });
-    const normalize2 = (v) => {
-      if (v === null || v === void 0) return null;
-      if (typeof v === "string") return v;
-      try {
-        return JSON.stringify(v);
-      } catch {
-        return String(v);
-      }
-    };
-    if (existing) {
-      const changed = normalize2(existing.value) !== normalize2(entry.value) || (existing.operationSource || null) !== (entry.operationSource || null);
-      if (changed) {
-        await prisma59.treeBranchLeafSubmissionData.update({
-          where: key2,
-          data: {
-            value: entry.value,
-            operationSource: "neutral",
-            operationDetail: entry.operationDetail
-          }
-        });
-        saved++;
-      }
-    } else {
-      await prisma59.treeBranchLeafSubmissionData.create({ data: entry });
-      saved++;
-    }
-  }
-  return saved;
-}
-async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId) {
-  const capacities = await prisma59.treeBranchLeafNodeVariable.findMany({
-    where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
-    include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
-  });
-  const _tblContext = {
-    submissionId,
-    labelMap: /* @__PURE__ */ new Map(),
-    valueMap: /* @__PURE__ */ new Map(),
-    organizationId,
-    userId: userId || "unknown-user",
-    treeId
-  };
-  const results = { updated: 0, created: 0, stored: 0 };
-  const calculatedValuesToStore = [];
-  for (const capacity of capacities) {
-    const sourceRef = capacity.sourceRef;
-    const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "DISPLAY";
-    if (isDisplayField) {
-      console.log(`\u{1F6AB} [TBL CAPACITY] Display field ignor\xE9: ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label})`);
-      continue;
-    }
-    try {
-      const capacityResult = await evaluateVariableOperation(
-        capacity.nodeId,
-        submissionId,
-        prisma59
-      );
-      const normalizedOperationSource = typeof capacityResult.operationSource === "string" ? capacityResult.operationSource.toLowerCase() : "neutral";
-      let parsedDetail = null;
-      try {
-        parsedDetail = typeof capacityResult.operationDetail === "string" ? JSON.parse(capacityResult.operationDetail) : capacityResult.operationDetail;
-      } catch {
-        parsedDetail = capacityResult.operationDetail;
-      }
-      const key2 = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } };
-      const existing = await prisma59.treeBranchLeafSubmissionData.findUnique({ where: key2 });
-      const normalize2 = (v) => {
-        if (v === null || v === void 0) return null;
-        if (typeof v === "string") return v;
-        try {
-          return JSON.stringify(v);
-        } catch {
-          return String(v);
-        }
-      };
-      if (existing) {
-        const changed = (existing.sourceRef || null) !== (sourceRef || null) || (existing.operationSource || null) !== (normalizedOperationSource || null) || (existing.fieldLabel || null) !== (capacity.TreeBranchLeafNode?.label || null) || normalize2(existing.operationDetail) !== normalize2(parsedDetail);
-        if (changed) {
-          await prisma59.treeBranchLeafSubmissionData.update({
-            where: key2,
-            data: {
-              value: null,
-              sourceRef,
-              operationSource: normalizedOperationSource,
-              fieldLabel: capacity.TreeBranchLeafNode?.label || null,
-              operationDetail: parsedDetail,
-              lastResolved: /* @__PURE__ */ new Date()
-            }
-          });
-          results.updated++;
-        }
-      } else {
-        await prisma59.treeBranchLeafSubmissionData.create({
-          data: {
-            id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            submissionId,
-            nodeId: capacity.nodeId,
-            value: null,
-            sourceRef,
-            operationSource: normalizedOperationSource,
-            fieldLabel: capacity.TreeBranchLeafNode?.label || null,
-            operationDetail: parsedDetail,
-            lastResolved: /* @__PURE__ */ new Date()
-          }
-        });
-        results.created++;
-      }
-      const rawValue = capacityResult.value ?? capacityResult.calculatedValue ?? capacityResult.result;
-      const stringified = rawValue === null || rawValue === void 0 ? null : String(rawValue).trim();
-      if (rawValue !== null && rawValue !== void 0 && stringified !== "" && stringified !== "\u2205") {
-        let normalizedValue;
-        if (typeof rawValue === "number" || typeof rawValue === "boolean") {
-          normalizedValue = rawValue;
-        } else {
-          normalizedValue = String(rawValue);
-        }
-        calculatedValuesToStore.push({
-          nodeId: capacity.nodeId,
-          calculatedValue: normalizedValue,
-          calculatedBy: `submission-${submissionId}`
-        });
-      }
-    } catch (error) {
-      console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
-    }
-  }
-  if (calculatedValuesToStore.length > 0) {
-    try {
-      const nodeIds = calculatedValuesToStore.map((v) => v.nodeId);
-      const nodesInfo = await prisma59.treeBranchLeafNode.findMany({
-        where: { id: { in: nodeIds } },
-        select: { id: true, fieldType: true, type: true }
-      });
-      const displayFieldIds = new Set(
-        nodesInfo.filter((n) => n.fieldType === "DISPLAY" || n.type === "DISPLAY").map((n) => n.id)
-      );
-      const valuesToStoreFiltered = calculatedValuesToStore.filter((v) => {
-        if (displayFieldIds.has(v.nodeId)) {
-          console.log(`\u{1F6AB} [TBL CAPACITY STORE] Display field exclu de la persistence: ${v.nodeId}`);
-          return false;
-        }
-        return true;
-      });
-      if (valuesToStoreFiltered.length > 0) {
-        const storeResult = await storeCalculatedValues(valuesToStoreFiltered, submissionId);
-        results.stored = storeResult.stored;
-        console.log(`[TBL CAPACITY STORE] \u2705 ${results.stored} valeurs stock\xE9es (${displayFieldIds.size} display fields exclus)`);
-        if (!storeResult.success && storeResult.errors.length > 0) {
-          console.warn("[TBL CAPACITY STORE] Certaines valeurs n'ont pas pu \xEAtre enregistr\xE9es:", storeResult.errors);
-        }
-      }
-    } catch (storeError) {
-      console.error("[TBL CAPACITY STORE] Erreur lors du stockage des valeurs calcul\xE9es:", storeError);
-    }
-  }
-  return results;
-}
-router70.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
-  try {
-    const { submissionId } = req2.params;
-    const { forceUpdate = false } = req2.body || {};
-    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        error: "Organisation ID manquant - authentification requise"
-      });
-    }
-    console.log("\u{1F525} [TBL EVALUATE ALL] D\xE9but \xE9valuation compl\xE8te:", submissionId);
-    console.log(`\u{1F3E2} [TBL EVALUATE ALL] Organisation: ${organizationId}, Utilisateur: ${userId}`);
-    const submissionData = await prisma59.treeBranchLeafSubmissionData.findMany({
-      where: {
-        submissionId,
-        sourceRef: { not: null }
-      },
-      include: {
-        TreeBranchLeafNode: {
-          select: { label: true, type: true }
-        }
-      }
-    });
-    console.log(`\u{1F4CA} [TBL EVALUATE ALL] ${submissionData.length} \xE9l\xE9ments avec capacit\xE9s trouv\xE9s`);
-    if (submissionData.length === 0) {
-      return res.json({
-        success: true,
-        message: "Aucune capacit\xE9 \xE0 \xE9valuer",
-        evaluated: 0
-      });
-    }
-    const _context = {
-      submissionId,
-      organizationId,
-      // ✅ VRAIE ORGANISATION!
-      userId,
-      // ✅ VRAI UTILISATEUR!
-      labelMap: /* @__PURE__ */ new Map(),
-      // 🔥 MAPS INITIALISÉES
-      valueMap: /* @__PURE__ */ new Map()
-    };
-    let evaluatedCount = 0;
-    let errorCount = 0;
-    const results = [];
-    for (const data of submissionData) {
-      try {
-        if (!forceUpdate && data.operationResult && data.lastResolved) {
-          console.log(`\u23ED\uFE0F [TBL EVALUATE ALL] Skip ${data.sourceRef} (d\xE9j\xE0 \xE9valu\xE9)`);
-          continue;
-        }
-        console.log(`\u{1F504} [TBL EVALUATE ALL] \xC9valuation ${data.sourceRef}...`);
-        const calculationResult = await evaluateVariableOperation(
-          data.nodeId,
-          submissionId,
-          prisma59
-        );
-        console.log(`\u2705 [TBL EVALUATE ALL] R\xE9sultat pour ${data.sourceRef}:`, calculationResult.operationResult);
-        const normalize2 = (v) => {
-          if (v === null || v === void 0) return null;
-          if (typeof v === "string") return v;
-          try {
-            return JSON.stringify(v);
-          } catch {
-            return String(v);
-          }
-        };
-        const normalizedSource = typeof calculationResult.operationSource === "string" ? calculationResult.operationSource.toLowerCase() : "neutral";
-        const nextDetail = (() => {
-          try {
-            return typeof calculationResult.operationDetail === "string" ? JSON.parse(calculationResult.operationDetail) : calculationResult.operationDetail;
-          } catch {
-            return calculationResult.operationDetail;
-          }
-        })();
-        const changed = (data.operationSource || null) !== (normalizedSource || null) || normalize2(data.operationDetail) !== normalize2(nextDetail);
-        if (changed) {
-          await prisma59.treeBranchLeafSubmissionData.update({
-            where: { id: data.id },
-            data: {
-              operationDetail: nextDetail,
-              operationSource: normalizedSource,
-              lastResolved: /* @__PURE__ */ new Date()
-            }
-          });
-        } else {
-          console.log(`\u23ED\uFE0F [TBL EVALUATE ALL] NO-OP ${data.sourceRef} (inchang\xE9)`);
-        }
-        results.push({
-          id: data.id,
-          sourceRef: data.sourceRef,
-          nodeLabel: data.TreeBranchLeafNode?.label,
-          operationResult: calculationResult.operationResult,
-          success: true
-        });
-        evaluatedCount++;
-      } catch (error) {
-        console.error(`\u274C [TBL EVALUATE ALL] Erreur pour ${data.sourceRef}:`, error);
-        results.push({
-          id: data.id,
-          sourceRef: data.sourceRef,
-          nodeLabel: data.TreeBranchLeafNode?.label,
-          error: error instanceof Error ? error.message : "Erreur inconnue",
-          success: false
-        });
-        errorCount++;
-      }
-    }
-    console.log(`\u{1F389} [TBL EVALUATE ALL] Termin\xE9: ${evaluatedCount} \xE9valu\xE9s, ${errorCount} erreurs`);
-    return res.json({
-      success: true,
-      submissionId,
-      evaluated: evaluatedCount,
-      errors: errorCount,
-      total: submissionData.length,
-      results,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  } catch (error) {
-    console.error("\u274C [TBL EVALUATE ALL] Erreur globale:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Erreur lors de l'\xE9valuation compl\xE8te",
-      details: error instanceof Error ? error.message : "Erreur inconnue"
-    });
-  }
-});
-router70.get("/submissions/:submissionId/verification", async (req2, res) => {
-  try {
-    const { submissionId } = req2.params;
-    console.log("\u{1F50D} [TBL VERIFICATION] V\xE9rification soumission:", submissionId);
-    const rows = await prisma59.treeBranchLeafSubmissionData.findMany({
-      where: { submissionId, sourceRef: { not: null } },
-      select: { operationResult: true }
-    });
-    const total = rows.length;
-    const toStringSafely = (val) => {
-      if (val === null || val === void 0) return "";
-      if (typeof val === "string") return val;
-      try {
-        return JSON.stringify(val);
-      } catch {
-        return String(val);
-      }
-    };
-    let withIntelligentTranslations = 0;
-    let withOldMessages = 0;
-    let withErrors = 0;
-    for (const r of rows) {
-      const s = toStringSafely(r.operationResult).trim();
-      if (!s) {
-        withErrors++;
-        continue;
-      }
-      if (s.includes("\xC9valu\xE9 dynamiquement par TBL Prisma")) {
-        withOldMessages++;
-      }
-      if (s.includes("Si ") || /(=) Result \(/.test(s) || s.includes("(/)")) {
-        withIntelligentTranslations++;
-      }
-    }
-    const successRate = total > 0 ? Math.round((total - withOldMessages - withErrors) / total * 100) : 100;
-    return res.json({
-      success: true,
-      submissionId,
-      verification: {
-        total,
-        withIntelligentTranslations,
-        withOldMessages,
-        withErrors,
-        successRate: `${successRate}%`
-      },
-      status: withOldMessages === 0 && withErrors === 0 ? "perfect" : "needs_improvement",
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  } catch (error) {
-    console.error("\u274C [TBL VERIFICATION] Erreur:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Erreur lors de la v\xE9rification"
-    });
-  }
-});
-router70.post("/submissions/create-and-evaluate", async (req2, res) => {
-  try {
-    const { treeId, clientId, formData, status = "draft", providedName, reuseSubmissionId } = req2.body;
-    const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
-    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        error: "Organisation ID manquant - authentification requise"
-      });
-    }
-    console.log("\u{1F525} [TBL CREATE-AND-EVALUATE] D\xE9but cr\xE9ation compl\xE8te TBL Prisma");
-    console.log(`\u{1F3E2} [TBL CREATE-AND-EVALUATE] Organisation: ${organizationId}, Utilisateur: ${userId}`);
-    console.log(`\u{1F4CB} [TBL CREATE-AND-EVALUATE] TreeId re\xE7u: ${treeId}, ClientId: ${clientId}`);
-    let effectiveTreeId = treeId;
-    if (!effectiveTreeId) {
-      console.log("\u26A0\uFE0F [TBL CREATE-AND-EVALUATE] Aucun treeId fourni, recherche du premier arbre disponible...");
-      const firstTree = await prisma59.treeBranchLeafTree.findFirst({
-        select: { id: true, name: true }
-      });
-      if (!firstTree) {
-        throw new Error("Aucun arbre TreeBranchLeaf trouv\xE9 dans la base de donn\xE9es");
-      }
-      effectiveTreeId = firstTree.id;
-      console.log(`\u{1F333} [TBL CREATE-AND-EVALUATE] Arbre par d\xE9faut s\xE9lectionn\xE9: ${effectiveTreeId} (${firstTree.name})`);
-    } else {
-      const treeExists = await prisma59.treeBranchLeafTree.findUnique({
-        where: { id: effectiveTreeId },
-        select: { id: true, name: true }
-      });
-      if (!treeExists) {
-        console.log(`\u274C [TBL CREATE-AND-EVALUATE] Arbre ${effectiveTreeId} introuvable, recherche d'un arbre alternatif...`);
-        const firstTree = await prisma59.treeBranchLeafTree.findFirst({
-          select: { id: true, name: true }
-        });
-        if (!firstTree) {
-          throw new Error("Aucun arbre TreeBranchLeaf trouv\xE9 dans la base de donn\xE9es");
-        }
-        effectiveTreeId = firstTree.id;
-        console.log(`\u{1F333} [TBL CREATE-AND-EVALUATE] Arbre alternatif s\xE9lectionn\xE9: ${effectiveTreeId} (${firstTree.name})`);
-      } else {
-        console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Arbre valid\xE9: ${effectiveTreeId} (${treeExists.name})`);
-      }
-    }
-    if (!clientId) {
-      console.log("\u274C [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS");
-      return res.status(400).json({
-        success: false,
-        error: "Lead obligatoire",
-        message: "Un lead doit \xEAtre s\xE9lectionn\xE9 pour cr\xE9er un devis. Veuillez s\xE9lectionner ou cr\xE9er un lead."
-      });
-    }
-    let effectiveLeadId = clientId;
-    const leadExists = await prisma59.lead.findUnique({
-      where: { id: effectiveLeadId },
-      select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
-    });
-    if (!leadExists) {
-      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable`);
-      return res.status(404).json({
-        success: false,
-        error: "Lead introuvable",
-        message: `Le lead ${effectiveLeadId} n'existe pas. Veuillez s\xE9lectionner un lead valide.`
-      });
-    }
-    if (leadExists.organizationId !== organizationId) {
-      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Le lead ${effectiveLeadId} n'appartient pas \xE0 l'organisation ${organizationId}`);
-      return res.status(403).json({
-        success: false,
-        error: "Lead non autoris\xE9",
-        message: "Le lead s\xE9lectionn\xE9 n'appartient pas \xE0 votre organisation."
-      });
-    }
-    console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Lead valid\xE9: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
-    effectiveLeadId = leadExists.id;
-    let effectiveUserId = userId;
-    if (effectiveUserId) {
-      const userExists = await prisma59.user.findUnique({
-        where: { id: effectiveUserId },
-        select: { id: true, firstName: true, lastName: true }
-      });
-      if (!userExists) {
-        console.log(`\u274C [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
-        effectiveUserId = null;
-      } else {
-        console.log(`\u2705 [TBL CREATE-AND-EVALUATE] User valid\xE9: ${effectiveUserId} (${userExists.firstName} ${userExists.lastName})`);
-      }
-    }
-    let submissionId = reuseSubmissionId;
-    if (submissionId) {
-      const existing = await prisma59.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
-      if (!existing) submissionId = void 0;
-    }
-    if (!submissionId) {
-      const existingDraft = await prisma59.treeBranchLeafSubmission.findFirst({
-        where: {
-          treeId: effectiveTreeId,
-          leadId: effectiveLeadId,
-          organizationId,
-          status: "draft"
-        },
-        orderBy: { updatedAt: "desc" },
-        select: { id: true }
-      });
-      if (existingDraft) {
-        submissionId = existingDraft.id;
-        console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] R\xE9utilisation du draft existant: ${submissionId} (leadId: ${effectiveLeadId})`);
-      }
-    }
-    if (!submissionId) {
-      submissionId = `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      await prisma59.treeBranchLeafSubmission.create({
-        data: {
-          id: submissionId,
-          treeId: effectiveTreeId,
-          userId: effectiveUserId,
-          leadId: effectiveLeadId,
-          organizationId,
-          // 🔥 IMPORTANT pour retrouver les drafts
-          status: status || "draft",
-          summary: { name: providedName || `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` },
-          exportData: cleanFormData || {},
-          completedAt: status === "completed" ? /* @__PURE__ */ new Date() : null,
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Soumission cr\xE9\xE9e: ${submissionId} pour organization ${organizationId}`);
-    } else {
-      await prisma59.treeBranchLeafSubmission.update({
-        where: { id: submissionId },
-        data: {
-          status: status || "draft",
-          summary: { name: providedName || `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` },
-          exportData: cleanFormData || {},
-          completedAt: status === "completed" ? /* @__PURE__ */ new Date() : null,
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-      console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] Soumission mise \xE0 jour: ${submissionId}`);
-    }
-    if (cleanFormData && typeof cleanFormData === "object") {
-      const savedCount = await saveUserEntriesNeutral(submissionId, cleanFormData, effectiveTreeId);
-      if (savedCount > 0) console.log(`\u2705 [TBL CREATE-AND-EVALUATE] ${savedCount} entr\xE9es utilisateur enregistr\xE9es`);
-      const capacities = await prisma59.treeBranchLeafNodeVariable.findMany({
-        where: {
-          TreeBranchLeafNode: {
-            treeId: effectiveTreeId
-          },
-          sourceRef: { not: null }
-        },
-        include: {
-          TreeBranchLeafNode: {
-            select: { id: true, label: true }
-          }
-        }
-      });
-      console.log(`\u{1F3AF} [TBL CREATE-AND-EVALUATE] ${capacities.length} capacit\xE9s trouv\xE9es`);
-      const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId);
-      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.stored} valeurs stock\xE9es`);
-    }
-    const finalSubmission = await prisma59.treeBranchLeafSubmission.findUnique({
-      where: { id: submissionId },
-      include: {
-        TreeBranchLeafSubmissionData: true
-      }
-    });
-    return res.status(201).json({
-      success: true,
-      message: "Soumission cr\xE9\xE9e et \xE9valu\xE9e avec TBL Prisma",
-      submission: finalSubmission
-    });
-  } catch (error) {
-    console.error("\u274C [TBL CREATE-AND-EVALUATE] Erreur:", error);
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : "Erreur interne"
-    });
-  }
-});
-router70.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
-  try {
-    const { submissionId } = req2.params;
-    const { formData, status } = req2.body || {};
-    const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
-    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || null;
-    if (!organizationId) {
-      return res.status(400).json({ success: false, error: "Organisation ID manquant - authentification requise" });
-    }
-    const submission = await prisma59.treeBranchLeafSubmission.findUnique({
-      where: { id: submissionId },
-      select: { id: true, treeId: true, status: true, exportData: true }
-    });
-    if (!submission) {
-      return res.status(404).json({ success: false, error: "Soumission introuvable" });
-    }
-    const saved = await saveUserEntriesNeutral(submissionId, cleanFormData, submission.treeId);
-    const updateData = {};
-    if (status && status !== submission.status) {
-      updateData.status = status;
-    }
-    if (cleanFormData) {
-      const normalize2 = (v) => {
-        if (v === null || v === void 0) return null;
-        if (typeof v === "string") return v;
-        try {
-          return JSON.stringify(v);
-        } catch {
-          return String(v);
-        }
-      };
-      if (normalize2(submission.exportData) !== normalize2(cleanFormData)) {
-        updateData.exportData = cleanFormData;
-      }
-    }
-    if (Object.keys(updateData).length > 0) {
-      await prisma59.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
-    }
-    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId);
-    const finalSubmission = await prisma59.treeBranchLeafSubmission.findUnique({
-      where: { id: submissionId },
-      include: { TreeBranchLeafSubmissionData: true }
-    });
-    return res.json({
-      success: true,
-      message: `Soumission mise \xE0 jour (${saved} entr\xE9es) et \xE9valu\xE9e (${stats.updated} mises \xE0 jour, ${stats.created} cr\xE9\xE9es, ${stats.stored} valeurs stock\xE9es)`,
-      submission: finalSubmission
-    });
-  } catch (error) {
-    console.error("\u274C [TBL UPDATE-AND-EVALUATE] Erreur:", error);
-    return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
-  }
-});
-router70.post("/submissions/preview-evaluate", async (req2, res) => {
-  try {
-    const { treeId, formData, baseSubmissionId, leadId } = req2.body || {};
-    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
-    if (!organizationId) {
-      return res.status(400).json({ success: false, error: "Organisation ID manquant - authentification requise" });
-    }
-    let effectiveTreeId = treeId;
-    if (!effectiveTreeId) {
-      const firstTree = await prisma59.treeBranchLeafTree.findFirst({ select: { id: true } });
-      if (!firstTree) {
-        return res.status(404).json({ success: false, error: "Aucun arbre TreeBranchLeaf trouv\xE9" });
-      }
-      effectiveTreeId = firstTree.id;
-    } else {
-      const exists = await prisma59.treeBranchLeafTree.findUnique({ where: { id: effectiveTreeId }, select: { id: true } });
-      if (!exists) {
-        return res.status(404).json({ success: false, error: `Arbre introuvable: ${effectiveTreeId}` });
-      }
-    }
-    const nodes = await prisma59.treeBranchLeafNode.findMany({ where: { treeId: effectiveTreeId }, select: { id: true, label: true } });
-    const labelMap = /* @__PURE__ */ new Map();
-    for (const n of nodes) labelMap.set(n.id, n.label);
-    const valueMap = /* @__PURE__ */ new Map();
-    if (leadId) {
-      const lead = await prisma59.lead.findUnique({
-        where: { id: leadId },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          company: true,
-          leadNumber: true,
-          linkedin: true,
-          website: true,
-          status: true,
-          notes: true,
-          data: true
-        }
-      });
-      if (lead) {
-        valueMap.set("lead.id", lead.id);
-        valueMap.set("lead.firstName", lead.firstName);
-        valueMap.set("lead.lastName", lead.lastName);
-        valueMap.set("lead.email", lead.email);
-        valueMap.set("lead.phone", lead.phone);
-        valueMap.set("lead.company", lead.company);
-        valueMap.set("lead.leadNumber", lead.leadNumber);
-        valueMap.set("lead.linkedin", lead.linkedin);
-        valueMap.set("lead.website", lead.website);
-        valueMap.set("lead.status", lead.status);
-        valueMap.set("lead.notes", lead.notes);
-        if (lead.data && typeof lead.data === "object") {
-          const leadData = lead.data;
-          if (leadData.postalCode) {
-            valueMap.set("lead.postalCode", leadData.postalCode);
-          } else if (leadData.address && typeof leadData.address === "string") {
-            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
-            if (postalCodeMatch) {
-              const extractedPostalCode = postalCodeMatch[1];
-              valueMap.set("lead.postalCode", extractedPostalCode);
-            }
-          }
-          if (leadData.address) {
-            valueMap.set("lead.address", leadData.address);
-          }
-          if (leadData.city) {
-            valueMap.set("lead.city", leadData.city);
-          }
-          if (leadData.country) {
-            valueMap.set("lead.country", leadData.country);
-          }
-        }
-      }
-    }
-    if (baseSubmissionId) {
-      const existingData = await prisma59.treeBranchLeafSubmissionData.findMany({
-        where: { submissionId: baseSubmissionId },
-        select: { nodeId: true, value: true }
-      });
-      const existingEntries = existingData.map((row) => [row.nodeId, row.value]);
-      await applySharedReferenceValues(valueMap, existingEntries, effectiveTreeId);
-    }
-    if (formData && typeof formData === "object") {
-      const overrides = Object.entries(formData).filter(([k]) => !k.startsWith("__"));
-      await applySharedReferenceValues(valueMap, overrides, effectiveTreeId);
-    }
-    if (formData && typeof formData === "object") {
-      const formEntries = Object.entries(formData);
-      const sharedReferenceMapping = {
-        "plan": ["shared-ref-1764095668124-l53956", "shared-ref-1764095679973-fad7d7", "shared-ref-1764093957109-52vog", "shared-ref-1764093355187-f83m8h"],
-        "inclinaison": ["shared-ref-1764093957109-52vog", "shared-ref-1764093355187-f83m8h"]
-      };
-      for (const [nodeId, value] of formEntries) {
-        if (!nodeId.startsWith("__") && value !== null && value !== void 0 && value !== "") {
-          const nodeInfo = await prisma59.treeBranchLeafNode.findUnique({
-            where: { id: nodeId },
-            select: {
-              id: true,
-              label: true,
-              sharedReferenceIds: true,
-              TreeBranchLeafSelectConfig: {
-                select: {
-                  id: true,
-                  options: true
-                }
-              }
-            }
-          });
-          if (nodeInfo?.TreeBranchLeafSelectConfig?.options) {
-            const options = Array.isArray(nodeInfo.TreeBranchLeafSelectConfig.options) ? nodeInfo.TreeBranchLeafSelectConfig.options : [];
-            const selectedOption = options.find((opt) => opt.value === value);
-            if (selectedOption?.sharedReferenceIds?.length) {
-              let optionType = null;
-              if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.plan)) {
-                optionType = "plan";
-              } else if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.inclinaison)) {
-                optionType = "inclinaison";
-              }
-              if (optionType) {
-                const referencesToClean = optionType === "plan" ? sharedReferenceMapping.inclinaison : sharedReferenceMapping.plan;
-                const nodesToClean = await prisma59.treeBranchLeafNode.findMany({
-                  where: {
-                    treeId: effectiveTreeId,
-                    sharedReferenceIds: { hasSome: referencesToClean }
-                  },
-                  select: { id: true, label: true, sharedReferenceIds: true }
-                });
-                for (const nodeToClean of nodesToClean) {
-                  if (valueMap.has(nodeToClean.id)) {
-                    valueMap.delete(nodeToClean.id);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    const capacitiesRaw = await prisma59.treeBranchLeafNodeVariable.findMany({
-      where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
-      include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
-    });
-    const capacities = capacitiesRaw.sort((a, b) => {
-      const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
-      const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
-      return aIsSumFormula - bIsSumFormula;
-    });
-    const submissionId = baseSubmissionId || `preview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const context = {
-      submissionId,
-      organizationId,
-      userId,
-      treeId: effectiveTreeId,
-      labelMap,
-      valueMap
-    };
-    const results = [];
-    let evaluated = 0;
-    for (const cap of capacities) {
-      try {
-        const evaluation = await evaluateVariableOperation(
-          cap.nodeId,
-          // variableNodeId
-          context.submissionId,
-          // submissionId
-          prisma59,
-          // prismaClient
-          context.valueMap
-          // valueMap (données temporaires du formulaire)
-        );
-        if (evaluation.value !== null && evaluation.value !== void 0 && evaluation.value !== "\u2205") {
-          context.valueMap.set(cap.nodeId, evaluation.value);
-        }
-        results.push({
-          nodeId: cap.nodeId,
-          nodeLabel: cap.TreeBranchLeafNode?.label || null,
-          sourceRef: cap.sourceRef,
-          operationSource: evaluation.operationSource,
-          // 🔥 STRUCTURE CORRECTE: value directement au niveau racine pour SmartCalculatedField
-          value: evaluation.value,
-          // ✅ VALEUR CALCULÉE (utilisée par SmartCalculatedField)
-          calculatedValue: evaluation.value,
-          // ✅ ALIAS pour compatibilité
-          operationResult: {
-            value: evaluation.value,
-            // ✅ Aussi dans operationResult pour traçabilité
-            humanText: evaluation.operationResult,
-            // ✅ Le texte explicatif
-            detail: evaluation.operationDetail
-          },
-          operationDetail: evaluation.operationDetail,
-          // 🎨 NOUVEAU: Configuration d'affichage depuis TreeBranchLeafNodeVariable
-          displayConfig: {
-            displayFormat: cap.displayFormat || "number",
-            unit: cap.unit || null,
-            precision: cap.precision ?? 2,
-            visibleToUser: cap.visibleToUser ?? true
-          }
-        });
-        evaluated++;
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : "Erreur inconnue";
-        results.push({
-          nodeId: cap.nodeId,
-          nodeLabel: cap.TreeBranchLeafNode?.label || null,
-          sourceRef: cap.sourceRef,
-          operationSource: "error",
-          value: null,
-          // ✅ Valeur nulle pour les erreurs
-          calculatedValue: null,
-          // ✅ ALIAS
-          operationResult: {
-            value: null,
-            // ✅ Valeur nulle
-            humanText: errorMessage,
-            // ✅ Message d'erreur
-            error: errorMessage
-          },
-          operationDetail: null,
-          // 🎨 Configuration d'affichage même en cas d'erreur
-          displayConfig: {
-            displayFormat: cap.displayFormat || "number",
-            unit: cap.unit || null,
-            precision: cap.precision ?? 2,
-            visibleToUser: cap.visibleToUser ?? true
-          }
-        });
-      }
-    }
-    try {
-      const nodeIds = results.map((r) => r.nodeId);
-      const nodesInfo = await prisma59.treeBranchLeafNode.findMany({
-        where: { id: { in: nodeIds } },
-        select: { id: true, fieldType: true, type: true }
-      });
-      const displayFieldIds = new Set(
-        nodesInfo.filter((n) => n.fieldType === "DISPLAY" || n.type === "DISPLAY").map((n) => n.id)
-      );
-      const calculatedValues = results.map((r) => {
-        const candidate = r.value ?? r.calculatedValue;
-        return { ...r, candidate };
-      }).filter((r) => {
-        if (displayFieldIds.has(r.nodeId)) {
-          return false;
-        }
-        if (r.candidate === null || r.candidate === void 0) return false;
-        const strValue = String(r.candidate).trim();
-        if (strValue === "" || strValue === "\u2205") return false;
-        return true;
-      }).map((r) => ({
-        nodeId: r.nodeId,
-        calculatedValue: String(r.candidate),
-        calculatedBy: `preview-${userId}`
-      }));
-      if (calculatedValues.length > 0) {
-        await storeCalculatedValues(calculatedValues, submissionId);
-      }
-    } catch (storeError) {
-    }
-    return res.json({
-      success: true,
-      mode: "preview",
-      submissionId,
-      treeId: effectiveTreeId,
-      evaluated,
-      results
-    });
-  } catch (error) {
-    console.error("\u274C [TBL PREVIEW-EVALUATE] Erreur:", error);
-    return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
-  }
-});
-router70.post("/submissions/stage", async (req2, res) => {
-  try {
-    pruneStages();
-    const { stageId, treeId, submissionId, formData } = req2.body || {};
-    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
-    const userId = req2.user?.userId || "unknown-user";
-    if (!organizationId) return res.status(400).json({ success: false, error: "Organisation ID manquant" });
-    let effectiveTreeId = treeId;
-    if (!effectiveTreeId) {
-      const firstTree = await prisma59.treeBranchLeafTree.findFirst({ select: { id: true } });
-      if (!firstTree) return res.status(404).json({ success: false, error: "Aucun arbre trouv\xE9" });
-      effectiveTreeId = firstTree.id;
-    }
-    const id = stageId || newStageId();
-    const clean = formData && typeof formData === "object" ? sanitizeFormData(formData) : {};
-    const existing = stagingStore.get(id);
-    const merged = {
-      id,
-      organizationId,
-      userId,
-      treeId: effectiveTreeId,
-      submissionId: submissionId || existing?.submissionId,
-      formData: { ...existing?.formData || {}, ...clean },
-      updatedAt: Date.now()
-    };
-    stagingStore.set(id, merged);
-    return res.json({ success: true, stage: merged });
-  } catch (e) {
-    return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
-  }
-});
-router70.post("/submissions/stage/preview", async (req2, res) => {
-  try {
-    pruneStages();
-    const { stageId } = req2.body || {};
-    const stage = stageId ? stagingStore.get(stageId) : void 0;
-    if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
-    const nodes = await prisma59.treeBranchLeafNode.findMany({ where: { treeId: stage.treeId }, select: { id: true, label: true } });
-    const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
-    const valueMap = /* @__PURE__ */ new Map();
-    if (stage.submissionId) {
-      const existingData = await prisma59.treeBranchLeafSubmissionData.findMany({
-        where: { submissionId: stage.submissionId },
-        select: { nodeId: true, value: true }
-      });
-      const existingEntries = existingData.map((r) => [r.nodeId, r.value]);
-      await applySharedReferenceValues(valueMap, existingEntries, stage.treeId);
-    }
-    const stageEntries = Object.entries(stage.formData);
-    await applySharedReferenceValues(valueMap, stageEntries, stage.treeId);
-    const capacitiesRaw = await prisma59.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
-    const capacities = capacitiesRaw.sort((a, b) => {
-      const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
-      const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
-      return aIsSumFormula - bIsSumFormula;
-    });
-    const context = { submissionId: stage.submissionId || `preview-${Date.now()}`, organizationId: stage.organizationId, userId: stage.userId, treeId: stage.treeId, labelMap, valueMap };
-    const results = [];
-    for (const c of capacities) {
-      try {
-        const r = await evaluateVariableOperation(
-          c.nodeId,
-          context.submissionId,
-          prisma59,
-          context.valueMap
-        );
-        if (r.value !== null && r.value !== void 0 && r.value !== "\u2205") {
-          context.valueMap.set(c.nodeId, r.value);
-        }
-        results.push({
-          nodeId: c.nodeId,
-          nodeLabel: c.TreeBranchLeafNode?.label || null,
-          sourceRef: c.sourceRef,
-          operationSource: r.operationSource || "neutral",
-          value: r.value,
-          // ✅ VALEUR CALCULÉE
-          calculatedValue: r.value,
-          // ✅ ALIAS
-          operationResult: {
-            value: r.value,
-            humanText: r.operationResult,
-            detail: r.operationDetail
-          },
-          operationDetail: r.operationDetail
-        });
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : "Erreur";
-        results.push({
-          nodeId: c.nodeId,
-          nodeLabel: c.TreeBranchLeafNode?.label || null,
-          sourceRef: c.sourceRef,
-          operationSource: "error",
-          value: null,
-          // ✅ Valeur nulle
-          calculatedValue: null,
-          // ✅ ALIAS
-          operationResult: {
-            value: null,
-            humanText: errorMessage,
-            error: errorMessage
-          },
-          operationDetail: null
-        });
-      }
-    }
-    return res.json({ success: true, stageId: stage.id, results });
-  } catch (e) {
-    return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
-  }
-});
-router70.post("/submissions/stage/commit", async (req2, res) => {
-  try {
-    pruneStages();
-    const { stageId, asNew } = req2.body || {};
-    const stage = stageId ? stagingStore.get(stageId) : void 0;
-    if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
-    if (!asNew && stage.submissionId) {
-      const submission = await prisma59.treeBranchLeafSubmission.findUnique({ where: { id: stage.submissionId } });
-      if (!submission) return res.status(404).json({ success: false, error: "Soumission introuvable" });
-      await prisma59.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData } });
-      const saved2 = await saveUserEntriesNeutral(stage.submissionId, stage.formData, stage.treeId);
-      const stats2 = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId);
-      return res.json({ success: true, submissionId: stage.submissionId, saved: saved2, stats: stats2 });
-    }
-    const submissionId = `tbl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    await prisma59.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: "draft", summary: { name: `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` }, exportData: stage.formData, updatedAt: /* @__PURE__ */ new Date() } });
-    const saved = await saveUserEntriesNeutral(submissionId, stage.formData, stage.treeId);
-    const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId);
-    stage.submissionId = submissionId;
-    stage.updatedAt = Date.now();
-    stagingStore.set(stage.id, stage);
-    return res.status(201).json({ success: true, submissionId, saved, stats });
-  } catch (e) {
-    return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
-  }
-});
-router70.post("/submissions/stage/discard", (req2, res) => {
-  pruneStages();
-  const { stageId } = req2.body || {};
-  if (!stageId || !stagingStore.has(stageId)) return res.json({ success: true, discarded: false });
-  stagingStore.delete(stageId);
-  return res.json({ success: true, discarded: true });
-});
-router70.get("/tables/:tableId", async (req2, res) => {
-  try {
-    const { tableId } = req2.params;
-    console.log(`\u{1F4CA} [GET TABLE] R\xE9cup\xE9ration table: ${tableId}`);
-    const table = await prisma59.treeBranchLeafNodeTable.findUnique({
-      where: { id: tableId },
-      select: {
-        id: true,
-        name: true,
-        nodeId: true,
-        meta: true
-      }
-    });
-    if (!table) {
-      console.log(`\u274C [GET TABLE] Table introuvable: ${tableId}`);
-      return res.status(404).json({
-        success: false,
-        error: "Table introuvable"
-      });
-    }
-    console.log(`\u2705 [GET TABLE] Table trouv\xE9e: ${table.name || tableId}`);
-    const meta = table.meta;
-    const lookupConfig = meta?.lookup || {};
-    const tableData = meta?.data || {};
-    const columns = tableData.columns || [];
-    const rows = tableData.rows || [];
-    const data = tableData.matrix || [];
-    console.log(`\u{1F4CA} [GET TABLE] Donn\xE9es extraites:`, {
-      columnsCount: columns.length,
-      rowsCount: rows.length,
-      dataRowsCount: data.length,
-      lookupEnabled: lookupConfig.rowLookupEnabled || lookupConfig.columnLookupEnabled
-    });
-    return res.json({
-      success: true,
-      table: {
-        id: table.id,
-        nodeId: table.nodeId,
-        name: table.name || null,
-        type: "matrix",
-        // Type de table
-        sourceRef: `@table.${table.id}`,
-        // 🔥 DONNÉES DE LA TABLE (colonnes, lignes, data)
-        columns,
-        rows,
-        data,
-        // 🔥 CONFIGURATION DE LOOKUP
-        meta: {
-          lookup: {
-            enabled: lookupConfig.rowLookupEnabled || lookupConfig.columnLookupEnabled || false,
-            mode: lookupConfig.mode || "columns",
-            rowLookupEnabled: lookupConfig.rowLookupEnabled || false,
-            columnLookupEnabled: lookupConfig.columnLookupEnabled || false,
-            selectors: {
-              rowFieldId: lookupConfig.selectors?.rowFieldId || null,
-              columnFieldId: lookupConfig.selectors?.columnFieldId || null
-            },
-            displayRow: lookupConfig.displayRow || null,
-            displayColumn: lookupConfig.displayColumn || null
-          }
-        }
-      }
-    });
-  } catch (error) {
-    console.error("\u274C [GET TABLE] Erreur:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Erreur lors de la r\xE9cup\xE9ration de la table",
-      details: error instanceof Error ? error.message : "Erreur inconnue"
-    });
-  }
-});
-var tbl_submission_evaluator_default = router70;
-
-// src/controllers/calculatedValueController.ts
-var import_express73 = require("express");
-var import_crypto13 = require("crypto");
-var router71 = (0, import_express73.Router)();
-var parseStoredStringValue = (raw) => {
-  if (raw === null || raw === void 0) {
-    return null;
-  }
-  const trimmed = String(raw).trim();
-  if (!trimmed || trimmed === "\u2205") {
-    return null;
-  }
-  const looksJson = trimmed.startsWith("{") && trimmed.endsWith("}") || trimmed.startsWith("[") && trimmed.endsWith("]");
-  if (looksJson) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (typeof parsed === "object" && parsed !== null) {
-        const candidate = parsed;
-        if (candidate.value !== void 0) return candidate.value;
-        if (candidate.result !== void 0) return candidate.result;
-      }
-      if (typeof parsed === "string" || typeof parsed === "number" || typeof parsed === "boolean") {
-        return parsed;
-      }
-    } catch {
-    }
-  }
-  if (trimmed === "true") return true;
-  if (trimmed === "false") return false;
-  const numeric = Number(trimmed);
-  if (!Number.isNaN(numeric) && trimmed === numeric.toString()) {
-    return numeric;
-  }
-  return trimmed;
-};
-var extractValueFromOperationResult = (raw) => {
-  if (raw === null || raw === void 0) {
-    return null;
-  }
-  if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
-    return raw;
-  }
-  if (typeof raw === "object") {
-    const record = raw;
-    const candidate = record.value ?? record.result ?? record.humanText ?? record.text;
-    if (candidate === void 0 || candidate === null) {
-      return null;
-    }
-    if (typeof candidate === "string" || typeof candidate === "number" || typeof candidate === "boolean") {
-      return candidate;
-    }
-  }
-  return null;
-};
-var hasMeaningfulValue = (val) => {
-  if (val === null || val === void 0) return false;
-  if (typeof val === "string") {
-    return val.trim() !== "" && val.trim() !== "\u2205";
-  }
-  return true;
-};
-var toIsoString = (date) => {
-  if (!date) {
-    return void 0;
-  }
-  try {
-    return date instanceof Date ? date.toISOString() : new Date(date).toISOString();
-  } catch {
-    return void 0;
-  }
-};
-router71.get("/:nodeId/calculated-value", async (req2, res) => {
-  try {
-    const { nodeId } = req2.params;
-    const pickQueryString = (key2) => {
-      const rawValue = req2.query[key2];
-      if (typeof rawValue === "string") return rawValue;
-      if (Array.isArray(rawValue) && rawValue.length > 0 && typeof rawValue[0] === "string") {
-        return rawValue[0];
-      }
-      return void 0;
-    };
-    const submissionId = pickQueryString("submissionId") || pickQueryString("_submissionId") || pickQueryString("subId") || pickQueryString("tblSubmissionId");
-    if (!nodeId) {
-      return res.status(400).json({ error: "nodeId requis" });
-    }
-    const node = await prisma.treeBranchLeafNode.findUnique({
-      where: {
-        id: nodeId
-      },
-      select: {
-        id: true,
-        label: true,
-        calculatedValue: true,
-        metadata: true,
-        calculatedAt: true,
-        calculatedBy: true,
-        type: true,
-        fieldType: true,
-        treeId: true
-        // ✨ Ajouté pour operation-interpreter
-      }
-    });
-    if (!node) {
-      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
-    }
-    const preferSubmissionData = Boolean(submissionId);
-    const forceFlag = pickQueryString("force") || pickQueryString("forceRefresh") || pickQueryString("refresh") || pickQueryString("forceRecompute");
-    const forceRecompute = Boolean(
-      forceFlag && ["1", "true", "yes", "force"].includes(forceFlag.toLowerCase())
-    );
-    let submissionDataEntry = null;
-    let submissionResolvedValue = null;
-    if (preferSubmissionData && submissionId) {
-      submissionDataEntry = await prisma.treeBranchLeafSubmissionData.findUnique({
-        where: { submissionId_nodeId: { submissionId, nodeId } },
-        select: {
-          value: true,
-          lastResolved: true,
-          operationResult: true,
-          operationDetail: true,
-          operationSource: true,
-          sourceRef: true,
-          fieldLabel: true
-        }
-      });
-      if (submissionDataEntry) {
-        submissionResolvedValue = parseStoredStringValue(submissionDataEntry.value);
-        if (!hasMeaningfulValue(submissionResolvedValue)) {
-          submissionResolvedValue = extractValueFromOperationResult(submissionDataEntry.operationResult);
-        }
-      }
-      const needsSubmissionRecompute = forceRecompute || !submissionDataEntry || !hasMeaningfulValue(submissionResolvedValue);
-      if (needsSubmissionRecompute) {
-        const variableMeta = await prisma.treeBranchLeafNodeVariable.findUnique({
-          where: { nodeId },
-          select: { nodeId: true, displayName: true, exposedKey: true, unit: true }
-        });
-        if (variableMeta) {
-          try {
-            const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-            const evaluation = await evaluateVariableOperation2(nodeId, submissionId, prisma);
-            const recomputedValue = evaluation.value ?? evaluation.operationResult ?? null;
-            const persistedValue = recomputedValue === null || recomputedValue === void 0 ? null : String(recomputedValue);
-            const resolvedAt = /* @__PURE__ */ new Date();
-            const isDisplayField = node.fieldType === "DISPLAY" || node.type === "DISPLAY";
-            if (!isDisplayField) {
-              await prisma.treeBranchLeafSubmissionData.upsert({
-                where: { submissionId_nodeId: { submissionId, nodeId } },
-                update: {
-                  value: persistedValue,
-                  operationDetail: evaluation.operationDetail,
-                  operationSource: evaluation.operationSource,
-                  sourceRef: evaluation.sourceRef,
-                  fieldLabel: node.label,
-                  isVariable: true,
-                  variableDisplayName: variableMeta.displayName,
-                  variableKey: variableMeta.exposedKey,
-                  variableUnit: variableMeta.unit,
-                  lastResolved: resolvedAt
-                },
-                create: {
-                  id: (0, import_crypto13.randomUUID)(),
-                  submissionId,
-                  nodeId,
-                  value: persistedValue,
-                  operationDetail: evaluation.operationDetail,
-                  operationSource: evaluation.operationSource,
-                  sourceRef: evaluation.sourceRef,
-                  fieldLabel: node.label,
-                  isVariable: true,
-                  variableDisplayName: variableMeta.displayName,
-                  variableKey: variableMeta.exposedKey,
-                  variableUnit: variableMeta.unit,
-                  lastResolved: resolvedAt
-                }
-              });
-            }
-            return res.json({
-              success: true,
-              nodeId: node.id,
-              label: node.label,
-              value: recomputedValue,
-              calculatedAt: resolvedAt.toISOString(),
-              calculatedBy: evaluation.operationSource || "operation-interpreter-auto",
-              type: node.type,
-              fieldType: node.fieldType,
-              submissionId,
-              sourceRef: evaluation.sourceRef,
-              operationDetail: evaluation.operationDetail,
-              freshCalculation: true
-            });
-          } catch (recomputeErr) {
-            console.error("\u274C [CalculatedValueController] Recompute error:", recomputeErr);
-          }
-        }
-      }
-      if (submissionDataEntry && hasMeaningfulValue(submissionResolvedValue)) {
-        return res.json({
-          success: true,
-          nodeId: node.id,
-          label: node.label || submissionDataEntry.fieldLabel,
-          value: submissionResolvedValue,
-          calculatedAt: toIsoString(submissionDataEntry.lastResolved) || toIsoString(node.calculatedAt),
-          calculatedBy: submissionDataEntry.operationSource || node.calculatedBy,
-          type: node.type,
-          fieldType: node.fieldType,
-          submissionId,
-          sourceRef: submissionDataEntry.sourceRef,
-          operationDetail: submissionDataEntry.operationDetail,
-          fromSubmission: true
-        });
-      }
-    }
-    const isTBLField = node.type === "field" && node.metadata && typeof node.metadata === "object";
-    const hasTableLookup = isTBLField && node.metadata?.lookup?.enabled === true && node.metadata?.lookup?.tableReference;
-    const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
-      where: { nodeId },
-      select: { sourceType: true, sourceRef: true }
-    });
-    const hasFormulaVariable = variableMeta2?.sourceRef?.startsWith("node-formula:");
-    const hasConditionVariable = variableMeta2?.sourceRef?.startsWith("condition:");
-    const hasTreeSourceVariable = variableMeta2?.sourceType === "tree" && (hasFormulaVariable || hasConditionVariable);
-    const existingValue = node.calculatedValue;
-    const hasValidExistingValue = existingValue && existingValue !== "" && existingValue !== "0" && existingValue !== "[]" && existingValue !== "null" && existingValue !== "undefined";
-    if (hasValidExistingValue) {
-      return res.json({
-        success: true,
-        nodeId: node.id,
-        label: node.label,
-        value: parseStoredStringValue(existingValue),
-        calculatedAt: toIsoString(node.calculatedAt),
-        calculatedBy: node.calculatedBy,
-        type: node.type,
-        fieldType: node.fieldType,
-        fromStoredValue: true
-      });
-    }
-    const isRealSubmission = submissionId && !submissionId.startsWith("preview-");
-    const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
-    if (canRecalculateHere && node.treeId && isRealSubmission) {
-      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" - recalcul table lookup:`, {
-        nodeId,
-        hasTableLookup,
-        submissionId
-      });
-      try {
-        const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-        const result = await evaluateVariableOperation2(
-          nodeId,
-          submissionId,
-          prisma
-        );
-        console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
-        if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
-          const stringValue = String(result.value ?? result.operationResult);
-          if (stringValue && stringValue !== "0" && stringValue !== "") {
-            await prisma.treeBranchLeafNode.update({
-              where: { id: nodeId },
-              data: {
-                calculatedValue: stringValue,
-                calculatedAt: /* @__PURE__ */ new Date(),
-                calculatedBy: "operation-interpreter-auto"
-              }
-            });
-          }
-          return res.json({
-            success: true,
-            nodeId: node.id,
-            label: node.label,
-            value: stringValue,
-            calculatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-            calculatedBy: "operation-interpreter-auto",
-            type: node.type,
-            fieldType: node.fieldType,
-            freshCalculation: true
-          });
-        }
-      } catch (operationErr) {
-        console.error("\u274C [CalculatedValueController] Erreur operation-interpreter:", operationErr);
-      }
-    }
-    return res.json({
-      success: true,
-      nodeId: node.id,
-      label: node.label,
-      value: node.calculatedValue,
-      calculatedAt: node.calculatedAt,
-      calculatedBy: node.calculatedBy,
-      type: node.type,
-      fieldType: node.fieldType
-    });
-  } catch (error) {
-    console.error("[CalculatedValueController] GET erreur:", error);
-    return res.status(500).json({ error: String(error) });
-  }
-});
-router71.post("/:nodeId/store-calculated-value", async (req2, res) => {
-  try {
-    const { nodeId } = req2.params;
-    const { calculatedValue, calculatedBy, submissionId } = req2.body;
-    if (!nodeId) {
-      return res.status(400).json({ error: "nodeId requis" });
-    }
-    if (calculatedValue === void 0) {
-      return res.status(400).json({ error: "calculatedValue requis" });
-    }
-    console.log("[CalculatedValueController] POST store-calculated-value", {
-      nodeId,
-      calculatedValue,
-      calculatedBy,
-      submissionId,
-      headers: {
-        organization: req2.headers["x-organization-id"],
-        referer: req2.headers["referer"]
-      }
-    });
-    const updated = await prisma.treeBranchLeafNode.update({
-      where: { id: nodeId },
-      data: {
-        calculatedValue: String(calculatedValue),
-        calculatedAt: /* @__PURE__ */ new Date(),
-        calculatedBy: calculatedBy || "unknown"
-      },
-      select: {
-        id: true,
-        label: true,
-        calculatedValue: true,
-        calculatedAt: true,
-        calculatedBy: true
-      }
-    });
-    console.log("\u2705 [CalculatedValueController] Valeur stock\xE9e:", {
-      nodeId,
-      calculatedValue,
-      calculatedBy,
-      submissionId
-    });
-    return res.json({
-      success: true,
-      nodeId: updated.id,
-      calculatedValue: updated.calculatedValue,
-      calculatedAt: updated.calculatedAt,
-      calculatedBy: updated.calculatedBy
-    });
-  } catch (error) {
-    console.error("[CalculatedValueController] POST erreur:", error);
-    return res.status(500).json({ error: String(error) });
-  }
-});
-router71.post("/store-batch-calculated-values", async (req2, res) => {
-  try {
-    const { values, submissionId } = req2.body;
-    if (!Array.isArray(values) || values.length === 0) {
-      return res.status(400).json({ error: "values doit \xEAtre un tableau non-vide" });
-    }
-    const results = [];
-    for (const { nodeId, calculatedValue, calculatedBy } of values) {
-      if (!nodeId) continue;
-      try {
-        const updated = await prisma.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: {
-            calculatedValue: String(calculatedValue),
-            calculatedAt: /* @__PURE__ */ new Date(),
-            calculatedBy: calculatedBy || "unknown"
-          }
-        });
-        results.push({
-          nodeId,
-          success: true,
-          calculatedValue: updated.calculatedValue
-        });
-      } catch (err) {
-        results.push({
-          nodeId,
-          success: false,
-          error: String(err)
-        });
-      }
-    }
-    console.log("\u2705 [CalculatedValueController] BATCH stockage:", {
-      submissionId,
-      total: values.length,
-      success: results.filter((r) => r.success).length,
-      failed: results.filter((r) => !r.success).length
-    });
-    return res.json({
-      success: true,
-      results,
-      submissionId
-    });
-  } catch (error) {
-    console.error("[CalculatedValueController] BATCH POST erreur:", error);
-    return res.status(500).json({ error: String(error) });
-  }
-});
-var calculatedValueController_default = router71;
-
-// src/api/websites.ts
-var import_express74 = require("express");
-var import_client62 = require("@prisma/client");
-var router72 = (0, import_express74.Router)();
-var prisma60 = new import_client62.PrismaClient();
-router72.get("/websites", authenticateToken, async (req2, res) => {
-  try {
-    const organizationId = req2.headers["x-organization-id"];
-    const showAll = req2.query.all === "true";
-    if (!organizationId && !showAll) {
-      return res.status(400).json({ error: "Organization ID is required" });
-    }
-    const whereClause = {
-      isActive: true
-    };
-    if (!showAll && organizationId) {
-      whereClause.organizationId = organizationId;
-    }
-    const websites = await prisma60.webSite.findMany({
-      where: whereClause,
-      include: {
-        config: true
-      },
-      orderBy: {
-        createdAt: "desc"
-      }
-    });
-    res.json(websites);
-  } catch (error) {
-    console.error("Error fetching websites:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.get("/websites/:slug", async (req2, res) => {
-  try {
-    const { slug } = req2.params;
-    const organizationId = req2.headers["x-organization-id"];
-    const whereClause = { slug, isActive: true };
-    if (organizationId) {
-      whereClause.organizationId = organizationId;
-    }
-    const website = await prisma60.webSite.findFirst({
-      where: whereClause,
-      include: {
-        config: {
-          include: {
-            logoFile: true,
-            faviconFile: true,
-            heroBackgroundFile: true,
-            ogImageFile: true
-          }
-        },
-        sections: {
-          where: { isActive: true },
-          orderBy: { displayOrder: "asc" }
-        },
-        services: {
-          where: { isActive: true },
-          orderBy: { displayOrder: "asc" }
-        },
-        projects: {
-          where: { isActive: true },
-          orderBy: { displayOrder: "asc" }
-        },
-        testimonials: {
-          where: { isActive: true },
-          orderBy: { displayOrder: "asc" }
-        },
-        blogPosts: {
-          where: { isPublished: true },
-          orderBy: { publishedAt: "desc" },
-          take: 10,
-          include: {
-            author: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true
-              }
-            }
-          }
-        },
-        mediaFiles: {
-          where: { isPublic: true },
-          orderBy: { createdAt: "desc" }
-        }
-      }
-    });
-    if (!website) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    if (website.maintenanceMode && !organizationId) {
-      return res.status(503).json({
-        error: "Site en maintenance",
-        message: website.maintenanceMessage || "Le site est temporairement indisponible."
-      });
-    }
-    res.json(website);
-  } catch (error) {
-    console.error("Error fetching website:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.get("/websites/:slug/services", async (req2, res) => {
-  try {
-    const { slug } = req2.params;
-    const website = await prisma60.webSite.findFirst({
-      where: { slug, isActive: true },
-      select: { id: true }
-    });
-    if (!website) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    const services = await prisma60.webSiteService.findMany({
-      where: {
-        websiteId: website.id,
-        isActive: true
-      },
-      orderBy: { displayOrder: "asc" }
-    });
-    res.json(services);
-  } catch (error) {
-    console.error("Error fetching services:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.get("/websites/:slug/projects", async (req2, res) => {
-  try {
-    const { slug } = req2.params;
-    const { featured } = req2.query;
-    const website = await prisma60.webSite.findFirst({
-      where: { slug, isActive: true },
-      select: { id: true }
-    });
-    if (!website) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    const whereClause = {
-      websiteId: website.id,
-      isActive: true
-    };
-    if (featured === "true") {
-      whereClause.isFeatured = true;
-    }
-    const projects = await prisma60.webSiteProject.findMany({
-      where: whereClause,
-      orderBy: { displayOrder: "asc" }
-    });
-    res.json(projects);
-  } catch (error) {
-    console.error("Error fetching projects:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.get("/websites/:slug/testimonials", async (req2, res) => {
-  try {
-    const { slug } = req2.params;
-    const { featured } = req2.query;
-    const website = await prisma60.webSite.findFirst({
-      where: { slug, isActive: true },
-      select: { id: true }
-    });
-    if (!website) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    const whereClause = {
-      websiteId: website.id,
-      isActive: true
-    };
-    if (featured === "true") {
-      whereClause.isFeatured = true;
-    }
-    const testimonials = await prisma60.webSiteTestimonial.findMany({
-      where: whereClause,
-      orderBy: { displayOrder: "asc" }
-    });
-    res.json(testimonials);
-  } catch (error) {
-    console.error("Error fetching testimonials:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.get("/websites/:slug/blog", async (req2, res) => {
-  try {
-    const { slug } = req2.params;
-    const { limit = "10", featured } = req2.query;
-    const website = await prisma60.webSite.findFirst({
-      where: { slug, isActive: true },
-      select: { id: true }
-    });
-    if (!website) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    const whereClause = {
-      websiteId: website.id,
-      isPublished: true
-    };
-    if (featured === "true") {
-      whereClause.isFeatured = true;
-    }
-    const blogPosts = await prisma60.webSiteBlogPost.findMany({
-      where: whereClause,
-      orderBy: { publishedAt: "desc" },
-      take: parseInt(limit),
-      include: {
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatarUrl: true
-          }
-        }
-      }
-    });
-    res.json(blogPosts);
-  } catch (error) {
-    console.error("Error fetching blog posts:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
-  try {
-    const { slug, postSlug } = req2.params;
-    const website = await prisma60.webSite.findFirst({
-      where: { slug, isActive: true },
-      select: { id: true }
-    });
-    if (!website) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    const blogPost = await prisma60.webSiteBlogPost.findFirst({
-      where: {
-        websiteId: website.id,
-        slug: postSlug,
-        isPublished: true
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatarUrl: true,
-            email: true
-          }
-        }
-      }
-    });
-    if (!blogPost) {
-      return res.status(404).json({ error: "Blog post not found" });
-    }
-    res.json(blogPost);
-  } catch (error) {
-    console.error("Error fetching blog post:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.put("/websites/:id", authenticateToken, async (req2, res) => {
-  try {
-    const websiteId = parseInt(req2.params.id);
-    const organizationId = req2.headers["x-organization-id"];
-    const data = req2.body;
-    if (!organizationId) {
-      return res.status(400).json({ error: "Organization ID is required" });
-    }
-    const existingWebsite = await prisma60.webSite.findFirst({
-      where: {
-        id: websiteId,
-        organizationId
-      }
-    });
-    if (!existingWebsite) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    const updatedWebsite = await prisma60.webSite.update({
-      where: { id: websiteId },
-      data: {
-        name: data.name,
-        slug: data.slug,
-        domain: data.domain,
-        description: data.description,
-        language: data.language,
-        timezone: data.timezone,
-        isActive: data.isActive,
-        maintenanceMode: data.maintenanceMode,
-        maintenanceMessage: data.maintenanceMessage,
-        analyticsCode: data.analyticsCode,
-        customCss: data.customCss,
-        customJs: data.customJs,
-        seoMetadata: data.seoMetadata
-      },
-      include: {
-        config: true
-      }
-    });
-    res.json(updatedWebsite);
-  } catch (error) {
-    console.error("Error updating website:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.post("/websites", authenticateToken, async (req2, res) => {
-  try {
-    const organizationId = req2.headers["x-organization-id"];
-    const data = req2.body;
-    if (!organizationId) {
-      return res.status(400).json({ error: "Organization ID is required" });
-    }
-    const newWebsite = await prisma60.webSite.create({
-      data: {
-        name: data.name,
-        slug: data.slug,
-        domain: data.domain,
-        description: data.description,
-        language: data.language || "fr",
-        timezone: data.timezone || "Europe/Brussels",
-        organizationId,
-        isActive: true,
-        maintenanceMode: false
-      },
-      include: {
-        config: true
-      }
-    });
-    res.status(201).json(newWebsite);
-  } catch (error) {
-    console.error("Error creating website:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router72.delete("/websites/:id", authenticateToken, async (req2, res) => {
-  console.log("\u{1F5D1}\uFE0F [WEBSITES] DELETE /websites/:id atteint!");
-  console.log("\u{1F5D1}\uFE0F [WEBSITES] ID du site:", req2.params.id);
-  try {
-    const websiteId = parseInt(req2.params.id);
-    const organizationId = req2.headers["x-organization-id"];
-    const user = req2.user;
-    console.log("\u{1F5D1}\uFE0F [WEBSITES] User:", user?.email, "isSuperAdmin:", user?.isSuperAdmin);
-    console.log("\u{1F5D1}\uFE0F [WEBSITES] OrganizationId:", organizationId);
-    if (!organizationId && !user?.isSuperAdmin) {
-      console.log("\u274C [WEBSITES] Organization ID requis et user n'est pas Super Admin");
-      return res.status(400).json({ error: "Organization ID is required" });
-    }
-    const whereClause = { id: websiteId };
-    if (!user?.isSuperAdmin && organizationId) {
-      whereClause.organizationId = organizationId;
-    }
-    const existingWebsite = await prisma60.webSite.findFirst({
-      where: whereClause
-    });
-    if (!existingWebsite) {
-      return res.status(404).json({ error: "Website not found" });
-    }
-    await prisma60.webSite.delete({
-      where: { id: websiteId }
-    });
-    console.log(`\u2705 Site web ${websiteId} (${existingWebsite.name}) supprim\xE9 par ${user?.email || "unknown"}`);
-    res.json({
-      success: true,
-      message: `Site "${existingWebsite.name}" supprim\xE9 avec succ\xE8s`
-    });
-  } catch (error) {
-    console.error("Error deleting website:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-var websites_default = router72;
-
-// src/api/website-services.ts
-var import_express75 = require("express");
-var import_client63 = require("@prisma/client");
-var router73 = (0, import_express75.Router)();
-var prisma61 = new import_client63.PrismaClient();
-router73.get("/website-services/:websiteId", async (req2, res) => {
-  try {
-    const { websiteId } = req2.params;
-    const services = await prisma61.webSiteService.findMany({
-      where: {
-        websiteId: parseInt(websiteId)
-      },
-      orderBy: {
-        displayOrder: "asc"
-      }
-    });
-    res.json(services);
-  } catch (error) {
-    console.error("Error fetching services:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router73.post("/website-services", async (req2, res) => {
-  try {
-    const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
-    if (!websiteId || !key2 || !title) {
-      return res.status(400).json({ error: "websiteId, key, and title are required" });
-    }
-    const maxOrder = await prisma61.webSiteService.aggregate({
-      where: { websiteId: parseInt(websiteId) },
-      _max: { displayOrder: true }
-    });
-    const service = await prisma61.webSiteService.create({
-      data: {
-        websiteId: parseInt(websiteId),
-        key: key2,
-        icon: icon || "CheckCircleOutlined",
-        title,
-        description: description || "",
-        features: features || [],
-        ctaText: ctaText || "En savoir plus",
-        ctaUrl: ctaUrl || "",
-        isActive: isActive !== void 0 ? isActive : true,
-        displayOrder: (maxOrder._max.displayOrder || 0) + 1
-      }
-    });
-    res.json(service);
-  } catch (error) {
-    console.error("Error creating service:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router73.put("/website-services/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
-    const service = await prisma61.webSiteService.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...key2 && { key: key2 },
-        ...icon && { icon },
-        ...title && { title },
-        ...description !== void 0 && { description },
-        ...features && { features },
-        ...ctaText !== void 0 && { ctaText },
-        ...ctaUrl !== void 0 && { ctaUrl },
-        ...isActive !== void 0 && { isActive }
-      }
-    });
-    res.json(service);
-  } catch (error) {
-    console.error("Error updating service:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router73.delete("/website-services/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    await prisma61.webSiteService.delete({
-      where: { id: parseInt(id) }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting service:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router73.post("/website-services/reorder", async (req2, res) => {
-  try {
-    const { services } = req2.body;
-    if (!Array.isArray(services)) {
-      return res.status(400).json({ error: "services array is required" });
-    }
-    await Promise.all(
-      services.map(
-        (service) => prisma61.webSiteService.update({
-          where: { id: service.id },
-          data: { displayOrder: service.displayOrder }
-        })
-      )
-    );
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error reordering services:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-var website_services_default = router73;
-
-// src/api/website-projects.ts
-var import_express76 = require("express");
-var import_client64 = require("@prisma/client");
-var router74 = (0, import_express76.Router)();
-var prisma62 = new import_client64.PrismaClient();
-router74.get("/website-projects/:websiteId", async (req2, res) => {
-  try {
-    const { websiteId } = req2.params;
-    const projects = await prisma62.webSiteProject.findMany({
-      where: {
-        websiteId: parseInt(websiteId)
-      },
-      orderBy: {
-        displayOrder: "asc"
-      }
-    });
-    res.json(projects);
-  } catch (error) {
-    console.error("Error fetching projects:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router74.post("/website-projects", async (req2, res) => {
-  try {
-    const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
-    if (!websiteId || !title) {
-      return res.status(400).json({ error: "websiteId and title are required" });
-    }
-    const maxOrder = await prisma62.webSiteProject.aggregate({
-      where: { websiteId: parseInt(websiteId) },
-      _max: { displayOrder: true }
-    });
-    const project = await prisma62.webSiteProject.create({
-      data: {
-        websiteId: parseInt(websiteId),
-        title,
-        location: location || "",
-        details: details || "",
-        tags: tags || [],
-        isActive: isActive !== void 0 ? isActive : true,
-        isFeatured: isFeatured || false,
-        displayOrder: (maxOrder._max.displayOrder || 0) + 1,
-        completedAt: completedAt ? new Date(completedAt) : /* @__PURE__ */ new Date()
-      }
-    });
-    res.json(project);
-  } catch (error) {
-    console.error("Error creating project:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router74.put("/website-projects/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
-    const project = await prisma62.webSiteProject.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...title && { title },
-        ...location !== void 0 && { location },
-        ...details !== void 0 && { details },
-        ...tags && { tags },
-        ...isActive !== void 0 && { isActive },
-        ...isFeatured !== void 0 && { isFeatured },
-        ...completedAt && { completedAt: new Date(completedAt) }
-      }
-    });
-    res.json(project);
-  } catch (error) {
-    console.error("Error updating project:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router74.delete("/website-projects/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    await prisma62.webSiteProject.delete({
-      where: { id: parseInt(id) }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting project:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router74.post("/website-projects/reorder", async (req2, res) => {
-  try {
-    const { projects } = req2.body;
-    if (!Array.isArray(projects)) {
-      return res.status(400).json({ error: "projects array is required" });
-    }
-    await Promise.all(
-      projects.map(
-        (project) => prisma62.webSiteProject.update({
-          where: { id: project.id },
-          data: { displayOrder: project.displayOrder }
-        })
-      )
-    );
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error reordering projects:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-var website_projects_default = router74;
-
-// src/api/website-testimonials.ts
-var import_express77 = require("express");
-var import_client65 = require("@prisma/client");
-var router75 = (0, import_express77.Router)();
-var prisma63 = new import_client65.PrismaClient();
-router75.get("/website-testimonials/:websiteId", async (req2, res) => {
-  try {
-    const { websiteId } = req2.params;
-    const testimonials = await prisma63.webSiteTestimonial.findMany({
-      where: {
-        websiteId: parseInt(websiteId)
-      },
-      orderBy: {
-        displayOrder: "asc"
-      }
-    });
-    res.json(testimonials);
-  } catch (error) {
-    console.error("Error fetching testimonials:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router75.post("/website-testimonials", async (req2, res) => {
-  try {
-    const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
-    if (!websiteId || !customerName || !text) {
-      return res.status(400).json({ error: "websiteId, customerName, and text are required" });
-    }
-    const maxOrder = await prisma63.webSiteTestimonial.aggregate({
-      where: { websiteId: parseInt(websiteId) },
-      _max: { displayOrder: true }
-    });
-    const testimonial = await prisma63.webSiteTestimonial.create({
-      data: {
-        websiteId: parseInt(websiteId),
-        customerName,
-        location: location || "",
-        service: service || "",
-        rating: rating || 5,
-        text,
-        isActive: isActive !== void 0 ? isActive : true,
-        isFeatured: isFeatured || false,
-        displayOrder: (maxOrder._max.displayOrder || 0) + 1,
-        publishedAt: publishedAt ? new Date(publishedAt) : /* @__PURE__ */ new Date()
-      }
-    });
-    res.json(testimonial);
-  } catch (error) {
-    console.error("Error creating testimonial:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router75.put("/website-testimonials/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
-    const testimonial = await prisma63.webSiteTestimonial.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...customerName && { customerName },
-        ...location !== void 0 && { location },
-        ...service !== void 0 && { service },
-        ...rating !== void 0 && { rating },
-        ...text !== void 0 && { text },
-        ...isActive !== void 0 && { isActive },
-        ...isFeatured !== void 0 && { isFeatured },
-        ...publishedAt && { publishedAt: new Date(publishedAt) }
-      }
-    });
-    res.json(testimonial);
-  } catch (error) {
-    console.error("Error updating testimonial:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router75.delete("/website-testimonials/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    await prisma63.webSiteTestimonial.delete({
-      where: { id: parseInt(id) }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting testimonial:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-router75.post("/website-testimonials/reorder", async (req2, res) => {
-  try {
-    const { testimonials } = req2.body;
-    if (!Array.isArray(testimonials)) {
-      return res.status(400).json({ error: "testimonials array is required" });
-    }
-    await Promise.all(
-      testimonials.map(
-        (testimonial) => prisma63.webSiteTestimonial.update({
-          where: { id: testimonial.id },
-          data: { displayOrder: testimonial.displayOrder }
-        })
-      )
-    );
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error reordering testimonials:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-var website_testimonials_default = router75;
-
-// src/api/website-sections.ts
-var import_express78 = __toESM(require("express"), 1);
-var import_client66 = require("@prisma/client");
-var router76 = import_express78.default.Router();
-var prisma64 = new import_client66.PrismaClient();
-router76.get("/website-sections/:websiteId", async (req2, res) => {
-  try {
-    const { websiteId } = req2.params;
-    const sections = await prisma64.webSiteSection.findMany({
-      where: {
-        websiteId: parseInt(websiteId)
-      },
-      orderBy: {
-        displayOrder: "asc"
-      }
-    });
-    res.json(sections);
-  } catch (error) {
-    console.error("\u274C Erreur r\xE9cup\xE9ration sections:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router76.post("/website-sections", async (req2, res) => {
-  try {
-    const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
-    const maxOrder = await prisma64.webSiteSection.aggregate({
-      where: { websiteId: parseInt(websiteId) },
-      _max: { displayOrder: true }
-    });
-    const section = await prisma64.webSiteSection.create({
-      data: {
-        websiteId: parseInt(websiteId),
-        key: key2,
-        type,
-        name,
-        content: content || {},
-        backgroundColor,
-        textColor,
-        customCss,
-        displayOrder: (maxOrder._max.displayOrder || 0) + 1,
-        isActive: true,
-        isLocked: false
-      }
-    });
-    res.json(section);
-  } catch (error) {
-    console.error("\u274C Erreur cr\xE9ation section:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router76.put("/website-sections/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
-    console.log("\u{1F527} PUT /api/website-sections/:id");
-    console.log("  ID:", id);
-    console.log("  Body keys:", Object.keys(req2.body));
-    console.log("  Content keys:", content ? Object.keys(content) : "undefined");
-    const existing = await prisma64.webSiteSection.findUnique({
-      where: { id: parseInt(id) }
-    });
-    if (!existing) {
-      return res.status(404).json({ error: "Section introuvable" });
-    }
-    const deepMerge = (target, source) => {
-      if (!source || typeof source !== "object" || Array.isArray(source)) {
-        return source;
-      }
-      const result = { ...target || {} };
-      for (const key2 in source) {
-        if (source[key2] !== void 0) {
-          if (result[key2] && typeof result[key2] === "object" && !Array.isArray(result[key2]) && typeof source[key2] === "object" && !Array.isArray(source[key2])) {
-            result[key2] = deepMerge(result[key2], source[key2]);
-          } else {
-            result[key2] = source[key2];
-          }
-        }
-      }
-      return result;
-    };
-    const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
-    console.log("  \u{1F50D} Existing content keys:", existing.content ? Object.keys(existing.content) : "none");
-    console.log("  \u{1F50D} Merged content keys:", mergedContent ? Object.keys(mergedContent) : "none");
-    const section = await prisma64.webSiteSection.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...name !== void 0 && { name },
-        ...content !== void 0 && { content: mergedContent },
-        ...backgroundColor !== void 0 && { backgroundColor },
-        ...textColor !== void 0 && { textColor },
-        ...customCss !== void 0 && { customCss },
-        ...isActive !== void 0 && { isActive }
-      }
-    });
-    console.log("\u2705 Section mise \xE0 jour ID:", section.id);
-    res.json(section);
-  } catch (error) {
-    console.error("\u274C Erreur modification section:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router76.patch("/website-sections/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
-    console.log("\u{1F527} PATCH /api/website-sections/:id");
-    console.log("  ID:", id);
-    console.log("  Body keys:", Object.keys(req2.body));
-    const existing = await prisma64.webSiteSection.findUnique({
-      where: { id: parseInt(id) }
-    });
-    if (!existing) {
-      return res.status(404).json({ error: "Section introuvable" });
-    }
-    const deepMerge = (target, source) => {
-      if (!source || typeof source !== "object" || Array.isArray(source)) {
-        return source;
-      }
-      const result = { ...target || {} };
-      for (const key2 in source) {
-        if (source[key2] !== void 0) {
-          if (result[key2] && typeof result[key2] === "object" && !Array.isArray(result[key2]) && typeof source[key2] === "object" && !Array.isArray(source[key2])) {
-            result[key2] = deepMerge(result[key2], source[key2]);
-          } else {
-            result[key2] = source[key2];
-          }
-        }
-      }
-      return result;
-    };
-    const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
-    const section = await prisma64.webSiteSection.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...name !== void 0 && { name },
-        ...content !== void 0 && { content: mergedContent },
-        ...backgroundColor !== void 0 && { backgroundColor },
-        ...textColor !== void 0 && { textColor },
-        ...customCss !== void 0 && { customCss },
-        ...isActive !== void 0 && { isActive }
-      }
-    });
-    console.log("\u2705 Section mise \xE0 jour:", section);
-    res.json(section);
-  } catch (error) {
-    console.error("\u274C Erreur modification section:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router76.delete("/website-sections/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const section = await prisma64.webSiteSection.findUnique({
-      where: { id: parseInt(id) }
-    });
-    if (section?.isLocked) {
-      return res.status(403).json({ error: "Cette section est verrouill\xE9e et ne peut pas \xEAtre supprim\xE9e" });
-    }
-    await prisma64.webSiteSection.delete({
-      where: { id: parseInt(id) }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error("\u274C Erreur suppression section:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router76.post("/website-sections/reorder", async (req2, res) => {
-  try {
-    const { sections } = req2.body;
-    await prisma64.$transaction(
-      sections.map(
-        (section) => prisma64.webSiteSection.update({
-          where: { id: section.id },
-          data: { displayOrder: section.displayOrder }
-        })
-      )
-    );
-    res.json({ success: true });
-  } catch (error) {
-    console.error("\u274C Erreur r\xE9organisation sections:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router76.post("/website-sections/duplicate/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const original = await prisma64.webSiteSection.findUnique({
-      where: { id: parseInt(id) }
-    });
-    if (!original) {
-      return res.status(404).json({ error: "Section introuvable" });
-    }
-    const newKey = `${original.key}-copy-${Date.now()}`;
-    const duplicate = await prisma64.webSiteSection.create({
-      data: {
-        websiteId: original.websiteId,
-        key: newKey,
-        type: original.type,
-        name: `${original.name} (Copie)`,
-        content: original.content,
-        backgroundColor: original.backgroundColor,
-        textColor: original.textColor,
-        customCss: original.customCss,
-        displayOrder: original.displayOrder + 1,
-        isActive: original.isActive,
-        isLocked: false
-      }
-    });
-    res.json(duplicate);
-  } catch (error) {
-    console.error("\u274C Erreur duplication section:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-var website_sections_default = router76;
-
-// src/api/website-themes.ts
-var import_express79 = require("express");
-var router77 = (0, import_express79.Router)();
-router77.get("/:websiteId", async (req2, res) => {
-  try {
-    const { websiteId } = req2.params;
-    console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
-    const theme = await prisma.webSiteTheme.findUnique({
-      where: { websiteId: parseInt(websiteId) }
-    });
-    if (!theme) {
-      return res.status(404).json({ message: "Th\xE8me non trouv\xE9" });
-    }
-    res.json(theme);
-  } catch (error) {
-    console.error("\u274C [API] Erreur GET theme:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router77.post("/", async (req2, res) => {
-  try {
-    const themeData = req2.body;
-    console.log("\u{1F4E1} [API] POST theme:", themeData);
-    const theme = await prisma.webSiteTheme.create({
-      data: themeData
-    });
-    res.status(201).json(theme);
-  } catch (error) {
-    console.error("\u274C [API] Erreur POST theme:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router77.put("/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    const themeData = req2.body;
-    console.log("\u{1F4E1} [API] PUT theme:", id, themeData);
-    const theme = await prisma.webSiteTheme.update({
-      where: { id: parseInt(id) },
-      data: themeData
-    });
-    res.json(theme);
-  } catch (error) {
-    console.error("\u274C [API] Erreur PUT theme:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router77.delete("/:id", async (req2, res) => {
-  try {
-    const { id } = req2.params;
-    console.log("\u{1F4E1} [API] DELETE theme:", id);
-    await prisma.webSiteTheme.delete({
-      where: { id: parseInt(id) }
-    });
-    res.json({ message: "Th\xE8me supprim\xE9 avec succ\xE8s" });
-  } catch (error) {
-    console.error("\u274C [API] Erreur DELETE theme:", error);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-var website_themes_default = router77;
-
-// src/api/contact-form.ts
-var import_express80 = require("express");
-var import_client67 = require("@prisma/client");
-var router78 = (0, import_express80.Router)();
-var prisma65 = new import_client67.PrismaClient();
-var isValidEmail = (email) => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-};
-var isSpam = (data) => {
-  if (data.message) {
-    const urlCount = (data.message.match(/https?:\/\//g) || []).length;
-    if (urlCount > 3) return true;
-  }
-  const spamKeywords = ["viagra", "casino", "bitcoin", "forex", "seo service", "make money"];
-  const text = `${data.name} ${data.message || ""}`.toLowerCase();
-  if (spamKeywords.some((keyword) => text.includes(keyword))) {
-    return true;
-  }
-  return false;
-};
-router78.post("/contact-form", async (req2, res) => {
-  try {
-    const data = req2.body;
-    if (!data.name || data.name.trim().length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: "Le nom doit contenir au moins 2 caract\xE8res"
-      });
-    }
-    if (!data.email || !isValidEmail(data.email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Email invalide"
-      });
-    }
-    if (!data.websiteId) {
-      return res.status(400).json({
-        success: false,
-        message: "Website ID manquant"
-      });
-    }
-    const website = await prisma65.webSite.findUnique({
-      where: { id: data.websiteId },
-      select: { id: true, organizationId: true }
-    });
-    if (!website) {
-      return res.status(404).json({
-        success: false,
-        message: "Site web introuvable"
-      });
-    }
-    const spam = isSpam(data);
-    const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || "unknown";
-    const userAgent = req2.headers["user-agent"] || "unknown";
-    const submission = await prisma65.contactSubmission.create({
-      data: {
-        websiteId: data.websiteId,
-        organizationId: website.organizationId,
-        name: data.name.trim(),
-        email: data.email.toLowerCase().trim(),
-        phone: data.phone?.trim() || null,
-        service: data.service?.trim() || null,
-        message: data.message?.trim() || null,
-        source: "website",
-        ipAddress,
-        userAgent,
-        status: spam ? "spam" : "new",
-        isRead: false
-      }
-    });
-    console.log("\u{1F4E7} \u2705 Nouveau formulaire de contact re\xE7u:", {
-      id: submission.id,
-      name: data.name,
-      email: data.email,
-      service: data.service,
-      websiteId: data.websiteId,
-      organizationId: website.organizationId,
-      spam,
-      date: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    if (spam) {
-      console.log("\u26A0\uFE0F SPAM D\xC9TECT\xC9 - Marqu\xE9 comme spam dans la BDD");
-    }
-    res.json({
-      success: true,
-      message: "Merci ! Nous avons bien re\xE7u votre demande. Nous vous r\xE9pondrons sous 24h.",
-      submissionId: submission.id
-    });
-  } catch (error) {
-    console.error("\u274C Erreur lors de la soumission du formulaire:", error);
-    res.status(500).json({
-      success: false,
-      message: "Une erreur est survenue. Veuillez r\xE9essayer ou nous contacter directement par t\xE9l\xE9phone."
-    });
-  }
-});
-router78.get("/contact-submissions/:websiteId", async (req2, res) => {
-  try {
-    const websiteId = parseInt(req2.params.websiteId);
-    const submissions = await prisma65.contactSubmission.findMany({
-      where: { websiteId },
-      orderBy: { submittedAt: "desc" },
-      take: 100
-      // Limiter à 100 dernières soumissions
-    });
-    res.json(submissions);
-  } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration soumissions:", error);
-    res.status(500).json({ success: false, message: "Erreur serveur" });
-  }
-});
-router78.patch("/contact-submission/:id/read", async (req2, res) => {
-  try {
-    const id = parseInt(req2.params.id);
-    const submission = await prisma65.contactSubmission.update({
-      where: { id },
-      data: { isRead: true }
-    });
-    res.json({ success: true, submission });
-  } catch (error) {
-    console.error("Erreur marquage lu:", error);
-    res.status(500).json({ success: false, message: "Erreur serveur" });
-  }
-});
-router78.patch("/contact-submission/:id/status", async (req2, res) => {
-  try {
-    const id = parseInt(req2.params.id);
-    const { status, notes } = req2.body;
-    const validStatuses = ["new", "contacted", "converted", "spam"];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ success: false, message: "Statut invalide" });
-    }
-    const submission = await prisma65.contactSubmission.update({
-      where: { id },
-      data: {
-        status,
-        notes: notes || void 0,
-        respondedAt: status === "contacted" ? /* @__PURE__ */ new Date() : void 0
-      }
-    });
-    res.json({ success: true, submission });
-  } catch (error) {
-    console.error("Erreur changement statut:", error);
-    res.status(500).json({ success: false, message: "Erreur serveur" });
-  }
-});
-router78.delete("/contact-submission/:id", async (req2, res) => {
-  try {
-    const id = parseInt(req2.params.id);
-    await prisma65.contactSubmission.delete({
-      where: { id }
-    });
-    res.json({ success: true, message: "Soumission supprim\xE9e" });
-  } catch (error) {
-    console.error("Erreur suppression:", error);
-    res.status(500).json({ success: false, message: "Erreur serveur" });
-  }
-});
-var contact_form_default = router78;
-
-// src/api/image-upload.ts
-var import_express81 = require("express");
-var import_multer2 = __toESM(require("multer"), 1);
-var import_path6 = __toESM(require("path"), 1);
-var import_promises = __toESM(require("fs/promises"), 1);
-var import_client68 = require("@prisma/client");
-var router79 = (0, import_express81.Router)();
-var prisma66 = new import_client68.PrismaClient();
-var storage2 = import_multer2.default.diskStorage({
-  destination: async (req2, file, cb) => {
-    const uploadDir = import_path6.default.join(process.cwd(), "public", "uploads", "websites");
-    await import_promises.default.mkdir(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req2, file, cb) => {
-    const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
-    cb(null, uniqueName);
-  }
-});
-var fileFilter = (req2, file, cb) => {
-  const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Type de fichier non autoris\xE9. Utilisez JPG, PNG, GIF, WEBP ou SVG."));
-  }
-};
-var upload2 = (0, import_multer2.default)({
-  storage: storage2,
-  fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024
-    // 5MB max
-  }
-});
-router79.post("/upload", upload2.single("file"), async (req2, res) => {
-  try {
-    if (!req2.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Aucun fichier fourni"
-      });
-    }
-    console.log("\u{1F4F8} [IMAGE-UPLOAD] Fichier re\xE7u:", {
-      originalName: req2.file.originalname,
-      size: req2.file.size,
-      mimetype: req2.file.mimetype,
-      filename: req2.file.filename
-    });
-    const fileUrl = `/uploads/websites/${req2.file.filename}`;
-    const fullUrl = `http://localhost:4000${fileUrl}`;
-    console.log("\u{1F4F8} \u2705 Upload r\xE9ussi:", {
-      fileName: req2.file.originalname,
-      url: fullUrl,
-      size: `${(req2.file.size / 1024).toFixed(2)} KB`
-    });
-    res.json({
-      success: true,
-      message: "Image upload\xE9e avec succ\xE8s",
-      url: fullUrl,
-      // URL complète utilisable dans le frontend
-      fileUrl,
-      // Chemin relatif
-      file: {
-        fileName: req2.file.originalname,
-        size: req2.file.size,
-        mimetype: req2.file.mimetype
-      }
-    });
-  } catch (error) {
-    console.error("\u274C [IMAGE-UPLOAD] Erreur:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de l'upload",
-      error: error instanceof Error ? error.message : "Erreur inconnue"
-    });
-  }
-});
-router79.post("/upload-image", upload2.single("image"), async (req2, res) => {
-  try {
-    if (!req2.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Aucune image fournie"
-      });
-    }
-    const { websiteId, category = "general" } = req2.body;
-    if (!websiteId) {
-      return res.status(400).json({
-        success: false,
-        message: "Website ID manquant"
-      });
-    }
-    const fileUrl = `/uploads/websites/${req2.file.filename}`;
-    const mediaFile = await prisma66.webSiteMediaFile.create({
-      data: {
-        websiteId: parseInt(websiteId),
-        fileName: req2.file.originalname,
-        fileType: req2.file.mimetype,
-        // ✅ CORRECTION: fileType au lieu de mimeType
-        fileUrl,
-        filePath: req2.file.path,
-        fileSize: req2.file.size,
-        category,
-        // 'logo', 'project', 'service', 'general'
-        uploadedById: req2.user?.id || null
-      }
-    });
-    console.log("\u{1F4F8} \u2705 Image upload\xE9e:", {
-      id: mediaFile.id,
-      fileName: mediaFile.fileName,
-      url: fileUrl,
-      size: `${(req2.file.size / 1024).toFixed(2)} KB`,
-      category
-    });
-    res.json({
-      success: true,
-      message: "Image upload\xE9e avec succ\xE8s",
-      file: {
-        id: mediaFile.id,
-        fileName: mediaFile.fileName,
-        url: fileUrl,
-        size: mediaFile.fileSize,
-        mimeType: mediaFile.fileType
-        // ✅ CORRECTION: retourne fileType
-      }
-    });
-  } catch (error) {
-    console.error("\u274C Erreur upload image:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de l'upload"
-    });
-  }
-});
-router79.get("/images/:websiteId", async (req2, res) => {
-  try {
-    const websiteId = parseInt(req2.params.websiteId);
-    const { category } = req2.query;
-    const where = { websiteId };
-    if (category) {
-      where.category = category;
-    }
-    const images = await prisma66.webSiteMediaFile.findMany({
-      where,
-      orderBy: { uploadedAt: "desc" }
-    });
-    res.json({
-      success: true,
-      images
-    });
-  } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration images:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur serveur"
-    });
-  }
-});
-router79.delete("/image/:id", async (req2, res) => {
-  try {
-    const id = parseInt(req2.params.id);
-    const mediaFile = await prisma66.webSiteMediaFile.findUnique({
-      where: { id }
-    });
-    if (!mediaFile) {
-      return res.status(404).json({
-        success: false,
-        message: "Image introuvable"
-      });
-    }
-    try {
-      await import_promises.default.unlink(mediaFile.filePath);
-    } catch (err) {
-      console.warn("Fichier d\xE9j\xE0 supprim\xE9 ou inexistant");
-    }
-    await prisma66.webSiteMediaFile.delete({
-      where: { id }
-    });
-    res.json({
-      success: true,
-      message: "Image supprim\xE9e"
-    });
-  } catch (error) {
-    console.error("Erreur suppression image:", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur serveur"
-    });
-  }
-});
-var image_upload_default = router79;
-
-// src/api/ai-content.ts
-var import_express82 = require("express");
-
-// src/services/aiContentService.ts
-var AIContentService = class {
-  geminiService;
-  constructor() {
-    this.geminiService = new GoogleGeminiService();
-  }
-  /**
-   * Option A : Génère le contenu d'un service
-   */
-  async generateService(context) {
-    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
-
-G\xE9n\xE8re le contenu complet d'un service pour le site "${context.siteName}".
-
-Type de service : ${context.serviceType}
-${context.keywords ? `Mots-cl\xE9s sugg\xE9r\xE9s : ${context.keywords.join(", ")}` : ""}
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
-{
-  "key": "identifiant-technique-du-service (slug, kebab-case)",
-  "icon": "Nom d'une ic\xF4ne Ant Design pertinente (ex: ThunderboltOutlined, FireOutlined, etc.)",
-  "title": "Titre accrocheur du service (3-6 mots)",
-  "description": "Description persuasive en 1-2 phrases (max 150 caract\xE8res)",
-  "features": ["Caract\xE9ristique 1 (5-8 mots)", "Caract\xE9ristique 2", "Caract\xE9ristique 3", "Caract\xE9ristique 4"],
-  "ctaText": "Texte du call-to-action (3-5 mots)",
-  "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3", "mot-cl\xE9 4", "mot-cl\xE9 5", "mot-cl\xE9 6", "mot-cl\xE9 7", "mot-cl\xE9 8"]
-}
-
-\u26A0\uFE0F IMPORTANT pour les keywords :
-- G\xE9n\xE8re AU MINIMUM 8 mots-cl\xE9s SEO pertinents et vari\xE9s
-- Inclus des synonymes, termes techniques, b\xE9n\xE9fices clients
-- Pense r\xE9f\xE9rencement naturel (longue tra\xEEne + termes courts)
-- Exemples : "panneaux solaires", "installation photovolta\xEFque", "\xE9nergie renouvelable", "\xE9conomies \xE9lectricit\xE9", "autoconsommation", "primes photovolta\xEFques", "panneaux haute performance", "autonomie \xE9nerg\xE9tique"
-
-R\xE8gles :
-- Ton professionnel et convaincant
-- Orient\xE9 b\xE9n\xE9fices client
-- Optimis\xE9 SEO naturellement
-- Pas de texte superflu, UNIQUEMENT le JSON`;
-    const response = await this.geminiService.generateContentStream(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Format de r\xE9ponse invalide de l'IA");
-    }
-    return JSON.parse(jsonMatch[0]);
-  }
-  /**
-   * Option A : Génère le contenu d'un projet
-   */
-  async generateProject(context) {
-    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
-
-G\xE9n\xE8re le contenu complet d'un projet r\xE9alis\xE9 pour le site "${context.siteName}".
-
-Type de projet : ${context.projectType}
-${context.location ? `Localisation : ${context.location}` : ""}
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
-{
-  "title": "Titre technique du projet (ex: 12.5 kWp + Batterie 15 kWh)",
-  "location": "Ville ou r\xE9gion",
-  "details": "Description d\xE9taill\xE9e du projet en 2-3 phrases (max 200 caract\xE8res)",
-  "tags": ["Tag1", "Tag2", "Tag3"]
-}
-
-R\xE8gles :
-- Titre technique et pr\xE9cis
-- D\xE9tails concrets et mesurables
-- Tags pertinents (2-4 tags)
-- Pas de texte superflu, UNIQUEMENT le JSON`;
-    const response = await this.geminiService.generateContentStream(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Format de r\xE9ponse invalide de l'IA");
-    }
-    return JSON.parse(jsonMatch[0]);
-  }
-  /**
-   * Option A : Génère le contenu d'un témoignage
-   */
-  async generateTestimonial(context) {
-    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
-
-G\xE9n\xE8re un t\xE9moignage client r\xE9aliste et convaincant pour le site "${context.siteName}".
-
-Service concern\xE9 : ${context.serviceType}
-Type de client : ${context.customerType || "particulier"}
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
-{
-  "customerName": "Pr\xE9nom Nom (belge francophone)",
-  "location": "Ville belge",
-  "service": "Nom du service utilis\xE9",
-  "rating": 5,
-  "text": "T\xE9moignage authentique et d\xE9taill\xE9 (3-4 phrases, max 300 caract\xE8res). Doit mentionner des d\xE9tails concrets, l'exp\xE9rience v\xE9cue, et les r\xE9sultats obtenus."
-}
-
-R\xE8gles :
-- T\xE9moignage cr\xE9dible et authentique
-- D\xE9tails concrets et sp\xE9cifiques
-- Ton positif mais naturel
-- Pas de superlatifs exag\xE9r\xE9s
-- Pas de texte superflu, UNIQUEMENT le JSON`;
-    const response = await this.geminiService.generateContentStream(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Format de r\xE9ponse invalide de l'IA");
-    }
-    return JSON.parse(jsonMatch[0]);
-  }
-  /**
-   * Option B : Génère le contenu complet d'une page
-   */
-  async generatePageContent(context) {
-    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
-
-G\xE9n\xE8re le contenu complet de la page d'accueil pour "${context.siteName}".
-
-Type de site : ${context.siteType}
-Services principaux : ${context.mainServices.join(", ")}
-${context.targetAudience ? `Audience cible : ${context.targetAudience}` : ""}
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
-{
-  "heroTitle": "Titre principal accrocheur (max 60 caract\xE8res)",
-  "heroSubtitle": "Sous-titre avec liste des services s\xE9par\xE9s par \u2022",
-  "heroCtaPrimary": "Texte bouton principal (3-5 mots)",
-  "heroCtaSecondary": "Texte bouton secondaire (2-4 mots)",
-  "metaTitle": "Titre SEO optimis\xE9 (50-60 caract\xE8res)",
-  "metaDescription": "Description SEO persuasive (140-160 caract\xE8res)",
-  "metaKeywords": "Liste de mots-cl\xE9s SEO s\xE9par\xE9s par des virgules",
-  "aboutText": "Texte de pr\xE9sentation de l'entreprise (3-4 phrases, max 400 caract\xE8res)"
-}
-
-R\xE8gles :
-- Titres percutants et orient\xE9s b\xE9n\xE9fices
-- SEO naturel et optimis\xE9
-- Ton professionnel et convaincant
-- Int\xE9grer les mots-cl\xE9s de mani\xE8re naturelle
-- Pas de texte superflu, UNIQUEMENT le JSON`;
-    const response = await this.geminiService.generateContentStream(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Format de r\xE9ponse invalide de l'IA");
-    }
-    return JSON.parse(jsonMatch[0]);
-  }
-  /**
-   * Option C : Optimisation SEO d'un contenu existant
-   */
-  async optimizeSEO(content) {
-    const prompt = `Tu es un expert SEO sp\xE9cialis\xE9 dans le secteur ${content.industry}.
-
-Analyse et optimise le contenu SEO pour "${content.siteName}".
-
-Titre actuel : ${content.currentTitle || "Non d\xE9fini"}
-Description actuelle : ${content.currentDescription || "Non d\xE9finie"}
-${content.targetKeywords ? `Mots-cl\xE9s cibles : ${content.targetKeywords.join(", ")}` : ""}
-
-Contenu de la page :
-${content.pageContent.substring(0, 1e3)}
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
-{
-  "metaTitle": "Titre SEO optimis\xE9 (50-60 caract\xE8res)",
-  "metaDescription": "Description SEO optimis\xE9e (140-160 caract\xE8res)",
-  "metaKeywords": "Liste de mots-cl\xE9s SEO pertinents s\xE9par\xE9s par des virgules",
-  "improvements": [
-    "Am\xE9lioration 1 sugg\xE9r\xE9e",
-    "Am\xE9lioration 2 sugg\xE9r\xE9e",
-    "Am\xE9lioration 3 sugg\xE9r\xE9e",
-    "Am\xE9lioration 4 sugg\xE9r\xE9e"
-  ]
-}
-
-R\xE8gles :
-- Optimisation SEO technique
-- Mots-cl\xE9s int\xE9gr\xE9s naturellement
-- Appel \xE0 l'action dans la description
-- Suggestions concr\xE8tes et actionnables
-- Pas de texte superflu, UNIQUEMENT le JSON`;
-    const response = await this.geminiService.generateContentStream(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Format de r\xE9ponse invalide de l'IA");
-    }
-    return JSON.parse(jsonMatch[0]);
-  }
-  /**
-   * Génère plusieurs services d'un coup pour un site complet
-   */
-  async generateMultipleServices(context) {
-    const services = [];
-    for (const serviceType of context.serviceTypes) {
-      try {
-        const service = await this.generateService({
-          siteName: context.siteName,
-          industry: context.industry,
-          serviceType
-        });
-        services.push(service);
-      } catch (error) {
-        console.error(`Erreur g\xE9n\xE9ration service ${serviceType}:`, error);
-      }
-    }
-    return services;
-  }
-};
-var aiContentService = new AIContentService();
-
-// src/api/ai-content.ts
-var router80 = (0, import_express82.Router)();
-router80.post("/generate-service", async (req2, res) => {
-  try {
-    const { siteName, industry, serviceType, keywords } = req2.body;
-    if (!siteName || !industry || !serviceType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants : siteName, industry, serviceType requis"
-      });
-    }
-    const content = await aiContentService.generateService({
-      siteName,
-      industry,
-      serviceType,
-      keywords
-    });
-    res.json({
-      success: true,
-      content
-    });
-  } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration service:", error);
-    res.status(500).json({
-      error: "Erreur lors de la g\xE9n\xE9ration du service",
-      details: error.message
-    });
-  }
-});
-router80.post("/generate-project", async (req2, res) => {
-  try {
-    const { siteName, industry, projectType, location } = req2.body;
-    if (!siteName || !industry || !projectType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants : siteName, industry, projectType requis"
-      });
-    }
-    const content = await aiContentService.generateProject({
-      siteName,
-      industry,
-      projectType,
-      location
-    });
-    res.json({
-      success: true,
-      content
-    });
-  } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration projet:", error);
-    res.status(500).json({
-      error: "Erreur lors de la g\xE9n\xE9ration du projet",
-      details: error.message
-    });
-  }
-});
-router80.post("/generate-testimonial", async (req2, res) => {
-  try {
-    const { siteName, industry, serviceType, customerType } = req2.body;
-    if (!siteName || !industry || !serviceType) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants : siteName, industry, serviceType requis"
-      });
-    }
-    const content = await aiContentService.generateTestimonial({
-      siteName,
-      industry,
-      serviceType,
-      customerType
-    });
-    res.json({
-      success: true,
-      content
-    });
-  } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration t\xE9moignage:", error);
-    res.status(500).json({
-      error: "Erreur lors de la g\xE9n\xE9ration du t\xE9moignage",
-      details: error.message
-    });
-  }
-});
-router80.post("/generate-page", async (req2, res) => {
-  try {
-    const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
-    if (!siteName || !siteType || !industry || !mainServices) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants : siteName, siteType, industry, mainServices requis"
-      });
-    }
-    const content = await aiContentService.generatePageContent({
-      siteName,
-      siteType,
-      industry,
-      mainServices,
-      targetAudience
-    });
-    res.json({
-      success: true,
-      content
-    });
-  } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration page:", error);
-    res.status(500).json({
-      error: "Erreur lors de la g\xE9n\xE9ration de la page",
-      details: error.message
-    });
-  }
-});
-router80.post("/optimize-seo", async (req2, res) => {
-  try {
-    const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
-    if (!pageContent || !siteName || !industry) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants : pageContent, siteName, industry requis"
-      });
-    }
-    const suggestions = await aiContentService.optimizeSEO({
-      currentTitle,
-      currentDescription,
-      pageContent,
-      targetKeywords,
-      siteName,
-      industry
-    });
-    res.json({
-      success: true,
-      suggestions
-    });
-  } catch (error) {
-    console.error("Erreur optimisation SEO:", error);
-    res.status(500).json({
-      error: "Erreur lors de l'optimisation SEO",
-      details: error.message
-    });
-  }
-});
-router80.post("/generate-multiple-services", async (req2, res) => {
-  try {
-    const { siteName, industry, serviceTypes } = req2.body;
-    if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
-      return res.status(400).json({
-        error: "Param\xE8tres manquants : siteName, industry, serviceTypes (array) requis"
-      });
-    }
-    const services = await aiContentService.generateMultipleServices({
-      siteName,
-      industry,
-      serviceTypes
-    });
-    res.json({
-      success: true,
-      services,
-      count: services.length
-    });
-  } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration multiple services:", error);
-    res.status(500).json({
-      error: "Erreur lors de la g\xE9n\xE9ration des services",
-      details: error.message
-    });
-  }
-});
-var ai_content_default = router80;
-
-// src/api/ai.ts
-var import_express83 = __toESM(require("express"), 1);
-var import_generative_ai2 = require("@google/generative-ai");
-var router81 = import_express83.default.Router();
-var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-var MODEL_NAME = "gemini-pro";
-router81.post("/generate", async (req2, res) => {
-  try {
-    const { prompt, context, sectionType, currentValue } = req2.body;
-    if (!prompt) {
-      return res.status(400).json({
-        success: false,
-        error: "Le prompt est requis"
-      });
-    }
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: "GEMINI_API_KEY non configur\xE9e"
-      });
-    }
-    console.log(`[AI] G\xE9n\xE9ration pour context="${context}", section="${sectionType}"`);
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const generationConfig = {
-      temperature: 0.8,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 2048
-    };
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig
-    });
-    const response = await result.response;
-    const text = response.text();
-    console.log(`[AI] R\xE9ponse re\xE7ue (${text.length} caract\xE8res)`);
-    let suggestions;
-    try {
-      const jsonMatch = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
-      if (jsonMatch) {
-        suggestions = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("Pas de JSON trouv\xE9");
-      }
-    } catch (parseError) {
-      console.warn("[AI] R\xE9ponse non-JSON, conversion en array");
-      suggestions = parseNonJSONResponse(text, context);
-    }
-    const formattedSuggestions = formatSuggestions(suggestions, context);
-    res.json({
-      success: true,
-      suggestions: formattedSuggestions,
-      raw: text
-      // Pour debug
-    });
-  } catch (error) {
-    console.error("[AI] Erreur:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Erreur lors de la g\xE9n\xE9ration IA",
-      details: error.toString()
-    });
-  }
-});
-function parseNonJSONResponse(text, context) {
-  const lines = text.split(/\n\n+|\n\d+\.\s+/).filter((l) => l.trim());
-  switch (context) {
-    case "title":
-    case "subtitle":
-    case "description":
-      return lines.slice(0, 5).map((line) => line.trim());
-    case "fullSection":
-      return {
-        title: lines[0] || "Titre g\xE9n\xE9r\xE9",
-        subtitle: lines[1] || "Sous-titre g\xE9n\xE9r\xE9",
-        description: lines[2] || "Description g\xE9n\xE9r\xE9e",
-        items: lines.slice(3, 9).map((line, idx) => ({
-          title: `\xC9l\xE9ment ${idx + 1}`,
-          description: line
-        }))
-      };
-    default:
-      return lines;
-  }
-}
-function formatSuggestions(data, context) {
-  switch (context) {
-    case "title":
-    case "subtitle":
-    case "description":
-      if (Array.isArray(data)) {
-        return data.map((item) => ({
-          value: typeof item === "string" ? item : item.value || item.text || String(item),
-          reason: typeof item === "object" ? item.reason : void 0
-        }));
-      }
-      return [{ value: String(data) }];
-    case "fullSection":
-      if (Array.isArray(data)) {
-        return data.map((item) => ({
-          value: {
-            title: item.title || "Titre",
-            subtitle: item.subtitle || "Sous-titre",
-            description: item.description || "Description",
-            items: item.items || []
-          },
-          reason: item.reason
-        }));
-      }
-      return [{
-        value: {
-          title: data.title || "Titre",
-          subtitle: data.subtitle || "Sous-titre",
-          description: data.description || "Description",
-          items: data.items || []
-        }
-      }];
-    case "layout":
-      if (Array.isArray(data)) {
-        return data.map((item) => ({
-          value: {
-            columns: item.columns || 3,
-            rows: item.rows,
-            gap: item.gap || 24,
-            responsive: item.responsive || { mobile: 1, tablet: 2, desktop: 3 }
-          },
-          reason: item.reason
-        }));
-      }
-      return [{
-        value: {
-          columns: data.columns || 3,
-          rows: data.rows,
-          gap: data.gap || 24,
-          responsive: data.responsive || { mobile: 1, tablet: 2, desktop: 3 }
-        }
-      }];
-    case "colors":
-      if (Array.isArray(data)) {
-        return data.map((item) => ({
-          value: {
-            primary: item.primary || "#1890ff",
-            secondary: item.secondary || "#52c41a",
-            accent: item.accent || "#faad14",
-            background: item.background || "#ffffff",
-            text: item.text || "#000000"
-          },
-          reason: item.reason
-        }));
-      }
-      return [{
-        value: {
-          primary: data.primary || "#1890ff",
-          secondary: data.secondary || "#52c41a",
-          accent: data.accent || "#faad14",
-          background: data.background || "#ffffff",
-          text: data.text || "#000000"
-        }
-      }];
-    default:
-      if (Array.isArray(data)) {
-        return data.map((item) => ({
-          value: item,
-          reason: typeof item === "object" ? item.reason : void 0
-        }));
-      }
-      return [{ value: data }];
-  }
-}
-router81.post("/analyze-section", async (req2, res) => {
-  try {
-    const { sectionType, content, prompt } = req2.body;
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: "GEMINI_API_KEY non configur\xE9e"
-      });
-    }
-    console.log(`[AI Analyze] Section="${sectionType}"`);
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const generationConfig = {
-      temperature: 0.7,
-      // Moins créatif, plus factuel
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 4096
-      // Plus long pour analyse détaillée
-    };
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig
-    });
-    const response = await result.response;
-    const text = response.text();
-    console.log(`[AI Analyze] R\xE9ponse re\xE7ue (${text.length} caract\xE8res)`);
-    let analysis;
-    try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        analysis = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("Pas de JSON trouv\xE9");
-      }
-    } catch (parseError) {
-      console.warn("[AI Analyze] Parsing \xE9chou\xE9, g\xE9n\xE9ration d'analyse par d\xE9faut");
-      analysis = generateFallbackAnalysis(sectionType, content);
-    }
-    const validatedAnalysis = validateAnalysis(analysis);
-    res.json(validatedAnalysis);
-  } catch (error) {
-    console.error("[AI Analyze] Erreur:", error);
-    res.json(generateFallbackAnalysis(req2.body.sectionType, req2.body.content));
-  }
-});
-function validateAnalysis(analysis) {
-  return {
-    score: analysis.score || 70,
-    suggestions: Array.isArray(analysis.suggestions) ? analysis.suggestions.map((s) => ({
-      id: s.id || `suggestion-${Date.now()}-${Math.random()}`,
-      category: s.category || "design",
-      type: s.type || "improvement",
-      title: s.title || "Am\xE9lioration sugg\xE9r\xE9e",
-      description: s.description || "D\xE9tails non disponibles",
-      impact: s.impact || "medium",
-      changes: s.changes || {},
-      preview: s.preview
-    })) : [],
-    summary: {
-      strengths: Array.isArray(analysis.summary?.strengths) ? analysis.summary.strengths : ["Contenu pr\xE9sent"],
-      weaknesses: Array.isArray(analysis.summary?.weaknesses) ? analysis.summary.weaknesses : ["Optimisation possible"],
-      opportunities: Array.isArray(analysis.summary?.opportunities) ? analysis.summary.opportunities : ["Am\xE9lioration continue"]
-    }
-  };
-}
-function generateFallbackAnalysis(sectionType, content) {
-  const itemCount = content?.values?.length || content?.stats?.length || content?.items?.length || 6;
-  return {
-    score: 65,
-    suggestions: [
-      {
-        id: "layout-optimize",
-        category: "layout",
-        type: "improvement",
-        title: "Optimiser le layout de la grille",
-        description: `Avec ${itemCount} \xE9l\xE9ments, une disposition diff\xE9rente pourrait am\xE9liorer l'\xE9quilibre visuel.`,
-        impact: "medium",
-        changes: {
-          "gridLayout": {
-            columns: itemCount <= 4 ? itemCount : 3,
-            gap: 32,
-            responsive: { mobile: 1, tablet: 2, desktop: itemCount <= 4 ? itemCount : 3 }
-          }
-        },
-        preview: {
-          before: `Layout actuel`,
-          after: `Layout optimis\xE9 pour ${itemCount} \xE9l\xE9ments`
-        }
-      },
-      {
-        id: "spacing-increase",
-        category: "design",
-        type: "improvement",
-        title: "Augmenter l'espacement",
-        description: "Un espacement de 32px am\xE9liorerait la respiration visuelle.",
-        impact: "low",
-        changes: {
-          "gridLayout.gap": 32
-        },
-        preview: {
-          before: "Espacement standard",
-          after: "Espacement am\xE9lior\xE9 (32px)"
-        }
-      },
-      {
-        id: "header-improve",
-        category: "content",
-        type: "improvement",
-        title: "Renforcer l'en-t\xEAte",
-        description: "Ajouter un sous-titre explicatif renforcerait le message.",
-        impact: "medium",
-        changes: {
-          "sectionHeader.subtitle": `D\xE9couvrez nos ${sectionType} adapt\xE9s \xE0 vos besoins`
-        }
-      }
-    ],
-    summary: {
-      strengths: [
-        "Structure claire",
-        "Contenu pr\xE9sent",
-        "Design coh\xE9rent"
-      ],
-      weaknesses: [
-        "Layout pourrait \xEAtre optimis\xE9",
-        "Espacement \xE0 am\xE9liorer",
-        "En-t\xEAte \xE0 renforcer"
-      ],
-      opportunities: [
-        "Meilleure utilisation de l'espace",
-        "Plus d'impact visuel",
-        "Message plus clair"
-      ]
-    }
-  };
-}
-router81.post("/optimize-seo", async (req2, res) => {
-  try {
-    const { content, sectionType } = req2.body;
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: "GEMINI_API_KEY non configur\xE9e"
-      });
-    }
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const prompt = `Tu es un expert SEO. Optimise ce contenu pour le r\xE9f\xE9rencement :
-
-Section : ${sectionType}
-Contenu actuel : ${JSON.stringify(content)}
-
-G\xE9n\xE8re :
-1. Meta title (max 60 caract\xE8res, optimis\xE9 SEO)
-2. Meta description (max 160 caract\xE8res, incite au clic)
-3. 5 mots-cl\xE9s pertinents
-4. Slug URL optimis\xE9
-5. Balises alt pour images (3 suggestions)
-
-Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slug, altTexts: [] }`;
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const seoData = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    res.json({
-      success: true,
-      seo: seoData
-    });
-  } catch (error) {
-    console.error("[AI SEO] Erreur:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Erreur lors de l'optimisation SEO"
-    });
-  }
-});
-router81.post("/improve-content", async (req2, res) => {
-  try {
-    const { content, instructions } = req2.body;
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: "GEMINI_API_KEY non configur\xE9e"
-      });
-    }
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const prompt = `Am\xE9liore ce contenu selon les instructions suivantes :
-
-Contenu actuel :
-${JSON.stringify(content, null, 2)}
-
-Instructions :
-${instructions || "Rendre plus engageant, professionnel et optimis\xE9 pour la conversion"}
-
-Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const improvedContent = jsonMatch ? JSON.parse(jsonMatch[0]) : content;
-    res.json({
-      success: true,
-      improved: improvedContent,
-      original: content
-    });
-  } catch (error) {
-    console.error("[AI Improve] Erreur:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Erreur lors de l'am\xE9lioration du contenu"
-    });
-  }
-});
-router81.post("/optimize-layout", async (req2, res) => {
-  try {
-    const { itemCount, sectionType, currentLayout } = req2.body;
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: "GEMINI_API_KEY non configur\xE9e"
-      });
-    }
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const prompt = `Tu es un expert en UI/UX et design responsive.
-
-Type de section : ${sectionType}
-Nombre d'\xE9l\xE9ments : ${itemCount}
-Layout actuel : ${JSON.stringify(currentLayout || {})}
-
-Sugg\xE8re 3 configurations de grille CSS optimales pour cette section.
-Pour chaque configuration, explique pourquoi elle est adapt\xE9e.
-
-Format de r\xE9ponse : JSON array avec :
-[
-  {
-    "preset": "3x2" (ou "custom"),
-    "columns": 3,
-    "rows": 2,
-    "gap": 24,
-    "responsive": {
-      "mobile": 1,
-      "tablet": 2,
-      "desktop": 3
-    },
-    "reason": "Explication de pourquoi ce layout est optimal"
-  }
-]`;
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    let layouts = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-    if (!Array.isArray(layouts) || layouts.length === 0) {
-      layouts = generateFallbackLayouts(itemCount);
-    }
-    res.json({
-      success: true,
-      layouts: layouts.slice(0, 3)
-      // Max 3 suggestions
-    });
-  } catch (error) {
-    console.error("[AI Layout] Erreur:", error);
-    res.json({
-      success: true,
-      layouts: generateFallbackLayouts(req2.body.itemCount || 6)
-    });
-  }
-});
-router81.post("/generate-palette", async (req2, res) => {
-  try {
-    const { baseColor, mood, industry } = req2.body;
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: "GEMINI_API_KEY non configur\xE9e"
-      });
-    }
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-    const prompt = `Tu es un expert en th\xE9orie des couleurs et design.
-
-Couleur de base : ${baseColor || "#1890ff"}
-Ambiance souhait\xE9e : ${mood || "professionnelle, moderne"}
-Secteur d'activit\xE9 : ${industry || "technologie"}
-
-G\xE9n\xE8re 3 palettes de couleurs harmonieuses avec :
-- primary : couleur principale
-- secondary : couleur secondaire
-- accent : couleur d'accentuation
-- background : couleur de fond
-- text : couleur de texte
-- success, warning, error : couleurs de statut
-
-Format : JSON array avec :
-[
-  {
-    "name": "Nom de la palette",
-    "primary": "#RRGGBB",
-    "secondary": "#RRGGBB",
-    "accent": "#RRGGBB",
-    "background": "#RRGGBB",
-    "text": "#RRGGBB",
-    "success": "#RRGGBB",
-    "warning": "#RRGGBB",
-    "error": "#RRGGBB",
-    "reason": "Pourquoi cette palette est adapt\xE9e"
-  }
-]`;
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    let palettes = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-    if (!Array.isArray(palettes) || palettes.length === 0) {
-      palettes = generateFallbackPalettes(baseColor);
-    }
-    res.json({
-      success: true,
-      palettes: palettes.slice(0, 3)
-    });
-  } catch (error) {
-    console.error("[AI Palette] Erreur:", error);
-    res.json({
-      success: true,
-      palettes: generateFallbackPalettes(req2.body.baseColor || "#1890ff")
-    });
-  }
-});
-function generateFallbackLayouts(itemCount) {
-  const layouts = [];
-  if (itemCount <= 3) {
-    layouts.push({
-      preset: "1x1",
-      columns: itemCount,
-      gap: 24,
-      responsive: { mobile: 1, tablet: 2, desktop: itemCount },
-      reason: "Layout horizontal adapt\xE9 pour peu d'\xE9l\xE9ments"
-    });
-  } else if (itemCount <= 6) {
-    layouts.push({
-      preset: "3x2",
-      columns: 3,
-      rows: 2,
-      gap: 24,
-      responsive: { mobile: 1, tablet: 2, desktop: 3 },
-      reason: "Grille 3 colonnes \xE9quilibr\xE9e"
-    });
-  } else if (itemCount <= 9) {
-    layouts.push({
-      preset: "3x3",
-      columns: 3,
-      rows: 3,
-      gap: 20,
-      responsive: { mobile: 1, tablet: 2, desktop: 3 },
-      reason: "Grille 3x3 pour 7-9 \xE9l\xE9ments"
-    });
-  } else {
-    layouts.push({
-      preset: "4x3",
-      columns: 4,
-      rows: Math.ceil(itemCount / 4),
-      gap: 16,
-      responsive: { mobile: 1, tablet: 2, desktop: 4 },
-      reason: "Grille dense pour nombreux \xE9l\xE9ments"
-    });
-  }
-  return layouts;
-}
-function generateFallbackPalettes(baseColor) {
-  return [
-    {
-      name: "Palette Professionnelle",
-      primary: baseColor || "#1890ff",
-      secondary: "#52c41a",
-      accent: "#faad14",
-      background: "#ffffff",
-      text: "#000000",
-      success: "#52c41a",
-      warning: "#faad14",
-      error: "#ff4d4f",
-      reason: "Couleurs \xE9quilibr\xE9es et professionnelles"
-    },
-    {
-      name: "Palette Moderne",
-      primary: "#722ed1",
-      secondary: "#13c2c2",
-      accent: "#fadb14",
-      background: "#f0f2f5",
-      text: "#262626",
-      success: "#52c41a",
-      warning: "#fa8c16",
-      error: "#f5222d",
-      reason: "Design moderne avec contraste \xE9lev\xE9"
-    },
-    {
-      name: "Palette \xC9l\xE9gante",
-      primary: "#2f54eb",
-      secondary: "#eb2f96",
-      accent: "#faad14",
-      background: "#fafafa",
-      text: "#141414",
-      success: "#73d13d",
-      warning: "#ffc53d",
-      error: "#ff7875",
-      reason: "\xC9l\xE9gance et sophistication"
-    }
-  ];
-}
-var ai_default2 = router81;
-
-// src/routes/ai-field-generator.ts
-var import_express84 = __toESM(require("express"), 1);
-var router82 = import_express84.default.Router();
-var geminiService3 = new GoogleGeminiService();
-router82.use(authMiddleware);
-var SmartPromptBuilder = class {
-  /**
-   * Construit un prompt optimisé selon le type de champ
-   */
-  static buildPrompt(params) {
-    const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = params;
-    const language = aiContext.language || "fran\xE7ais";
-    const tone = aiContext.tone || "professionnel et convaincant";
-    const audience = aiContext.targetAudience || "clients potentiels";
-    const business = aiContext.businessType || "services \xE9nerg\xE9tiques";
-    const keywords = aiContext.keywords?.join(", ") || "";
-    const baseContext = `
-Tu es un expert en r\xE9daction web, marketing digital et SEO pour le secteur ${business}.
-
-CONTEXTE:
-- Type de section: ${aiContext.sectionType}
-- Champ \xE0 g\xE9n\xE9rer: ${fieldLabel} (${fieldId})
-- Public cible: ${audience}
-- Ton: ${tone}
-- Langue: ${language}
-${keywords ? `- Mots-cl\xE9s sugg\xE9r\xE9s: ${keywords}` : ""}
-${currentValue ? `- Valeur actuelle: "${currentValue}"` : ""}
-`;
-    switch (fieldType) {
-      case "text":
-        return this.buildTextPrompt(baseContext, fieldId, fieldLabel, currentValue);
-      case "textarea":
-        return this.buildTextareaPrompt(baseContext, fieldId, fieldLabel, currentValue);
-      case "select":
-      case "multiselect":
-        return this.buildSelectPrompt(baseContext, fieldId, fieldLabel, currentValue);
-      case "richtext":
-        return this.buildRichtextPrompt(baseContext, fieldId, fieldLabel, currentValue);
-      default:
-        return this.buildGenericPrompt(baseContext, fieldLabel, currentValue);
-    }
-  }
-  /**
-   * Prompt pour champs texte courts (titres, labels, CTA)
-   */
-  static buildTextPrompt(context, fieldId, label, current) {
-    const isTitle = fieldId.toLowerCase().includes("title") || label.toLowerCase().includes("titre");
-    const isCTA = fieldId.toLowerCase().includes("cta") || label.toLowerCase().includes("bouton");
-    const isLabel = fieldId.toLowerCase().includes("label");
-    let specificGuidelines = "";
-    let maxLength = 60;
-    if (isTitle) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES TITRE:
-- Accrocheur et m\xE9morable
-- Orient\xE9 b\xE9n\xE9fice client
-- Inclure un chiffre ou statistique si pertinent
-- \xC9voquer la transformation ou le r\xE9sultat
-- Cr\xE9er de la curiosit\xE9 ou urgence
-`;
-      maxLength = 60;
-    } else if (isCTA) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES CTA:
-- Verbe d'action \xE0 l'imp\xE9ratif
-- Court et percutant (3-5 mots maximum)
-- Cr\xE9er l'urgence ou la valeur
-- Exemples: "Demander un devis gratuit", "D\xE9couvrir nos solutions", "Calculer mes \xE9conomies"
-`;
-      maxLength = 40;
-    } else if (isLabel) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES LABEL:
-- Clair et descriptif
-- Terme professionnel mais accessible
-- Coh\xE9rent avec le secteur
-`;
-      maxLength = 40;
-    }
-    return `${context}
-
-${specificGuidelines}
-
-T\xC2CHE: G\xE9n\xE8re 3 PROPOSITIONS VARI\xC9ES pour ce champ texte court.
-
-CONTRAINTES:
-- Maximum ${maxLength} caract\xE8res par proposition
-- Ton professionnel et convaincant
-- Optimis\xE9 SEO naturellement
-- \xC9viter les clich\xE9s et phrases creuses
-- Vari\xE9t\xE9 dans les approches (angle diff\xE9rent pour chaque proposition)
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure:
-{
-  "suggestions": [
-    {
-      "content": "Proposition 1",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 85
-    },
-    {
-      "content": "Proposition 2", 
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 90
-    },
-    {
-      "content": "Proposition 3",
-      "reasoning": "Pourquoi cette proposition (1 phrase)", 
-      "score": 80
-    }
-  ],
-  "analysis": {
-    "fieldType": "${fieldId}",
-    "bestApproach": "Approche recommand\xE9e (1 phrase)",
-    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3"],
-    "avgScore": 85
-  }
-}
-
-\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
-  }
-  /**
-   * Prompt pour champs textarea (descriptions, paragraphes)
-   */
-  static buildTextareaPrompt(context, fieldId, label, current) {
-    const isDescription = fieldId.toLowerCase().includes("description") || label.toLowerCase().includes("description");
-    const isAbout = fieldId.toLowerCase().includes("about") || label.toLowerCase().includes("pr\xE9sentation");
-    let specificGuidelines = "";
-    let maxLength = 200;
-    if (isDescription) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES DESCRIPTION:
-- 2-3 phrases persuasives
-- Structure: Probl\xE8me \u2192 Solution \u2192 B\xE9n\xE9fice
-- Inclure des chiffres/donn\xE9es si pertinent
-- Call-to-action implicite
-- Optimis\xE9 pour la conversion
-`;
-      maxLength = 200;
-    } else if (isAbout) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES \xC0 PROPOS:
-- 3-4 phrases engageantes
-- Histoire/mission de l'entreprise
-- Valeurs et diff\xE9renciateurs
-- Preuve sociale ou chiffres cl\xE9s
-- Cr\xE9er la confiance
-`;
-      maxLength = 300;
-    }
-    return `${context}
-
-${specificGuidelines}
-
-T\xC2CHE: G\xE9n\xE8re 3 PROPOSITIONS VARI\xC9ES pour ce champ texte long.
-
-CONTRAINTES:
-- Maximum ${maxLength} caract\xE8res par proposition
-- Style fluide et naturel
-- Ponctuation et structure professionnelle
-- Int\xE9gration naturelle des mots-cl\xE9s
-- \xC9viter le jargon excessif
-- Vari\xE9t\xE9 dans les angles (rationnel, \xE9motionnel, social proof)
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure:
-{
-  "suggestions": [
-    {
-      "content": "Proposition 1 (2-3 phrases)",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 88,
-      "angle": "angle rationnel / \xE9motionnel / social proof"
-    },
-    {
-      "content": "Proposition 2 (2-3 phrases)",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 92,
-      "angle": "angle rationnel / \xE9motionnel / social proof"
-    },
-    {
-      "content": "Proposition 3 (2-3 phrases)",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 85,
-      "angle": "angle rationnel / \xE9motionnel / social proof"
-    }
-  ],
-  "analysis": {
-    "fieldType": "${fieldId}",
-    "bestApproach": "Approche recommand\xE9e (1 phrase)",
-    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3", "mot-cl\xE9 4"],
-    "avgScore": 88,
-    "readabilityTips": ["Conseil 1", "Conseil 2"]
-  }
-}
-
-\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
-  }
-  /**
-   * Prompt pour champs select/multiselect (features, tags, options)
-   */
-  static buildSelectPrompt(context, fieldId, label, current) {
-    const isFeatures = fieldId.toLowerCase().includes("feature") || label.toLowerCase().includes("caract\xE9ristique");
-    const isTags = fieldId.toLowerCase().includes("tag") || label.toLowerCase().includes("\xE9tiquette");
-    const isBenefits = fieldId.toLowerCase().includes("benefit") || label.toLowerCase().includes("avantage");
-    let specificGuidelines = "";
-    let itemCount = 4;
-    if (isFeatures) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES FEATURES:
-- Caract\xE9ristiques techniques ET b\xE9n\xE9fices
-- Format: "B\xE9n\xE9fice concret + d\xE9tail technique"
-- Exemples: "Garantie 25 ans sur les panneaux", "Installation en 2 jours chrono"
-- M\xE9langer aspects techniques, pratiques, et commerciaux
-`;
-      itemCount = 4;
-    } else if (isTags) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES TAGS:
-- Mots-cl\xE9s courts (1-3 mots)
-- Descriptifs et recherchables
-- Mix: technique + cat\xE9gorie + b\xE9n\xE9fice
-- Exemples: "\xC9nergie verte", "R\xE9sidentiel", "Haute performance"
-`;
-      itemCount = 5;
-    } else if (isBenefits) {
-      specificGuidelines = `
-GUIDELINES SP\xC9CIFIQUES AVANTAGES:
-- Orient\xE9 r\xE9sultat client
-- Quantifiable si possible
-- \xC9motionnel + rationnel
-- Exemples: "R\xE9duisez vos factures de 60%", "Installation garantie d\xE9cennale"
-`;
-      itemCount = 4;
-    }
-    return `${context}
-
-${specificGuidelines}
-
-T\xC2CHE: G\xE9n\xE8re ${itemCount} ITEMS PERTINENTS ET VARI\xC9S pour ce champ liste.
-
-CONTRAINTES:
-- ${itemCount} items par proposition
-- Chaque item: 5-12 mots maximum
-- Coh\xE9rence et compl\xE9mentarit\xE9 entre les items
-- \xC9viter les r\xE9p\xE9titions
-- Mix de types: technique, pratique, \xE9motionnel, chiffr\xE9
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure:
-{
-  "suggestions": [
-    {
-      "content": ["Item 1", "Item 2", "Item 3", "Item 4"],
-      "reasoning": "Logique de s\xE9lection (1 phrase)",
-      "score": 87
-    },
-    {
-      "content": ["Item 1", "Item 2", "Item 3", "Item 4"],
-      "reasoning": "Logique de s\xE9lection (1 phrase)",
-      "score": 91
-    },
-    {
-      "content": ["Item 1", "Item 2", "Item 3", "Item 4"],
-      "reasoning": "Logique de s\xE9lection (1 phrase)",
-      "score": 84
-    }
-  ],
-  "analysis": {
-    "fieldType": "${fieldId}",
-    "bestApproach": "Approche recommand\xE9e (1 phrase)",
-    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3"],
-    "avgScore": 87
-  }
-}
-
-\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
-  }
-  /**
-   * Prompt pour richtext (contenu HTML/Markdown enrichi)
-   */
-  static buildRichtextPrompt(context, fieldId, label, current) {
-    return `${context}
-
-T\xC2CHE: G\xE9n\xE8re 2 PROPOSITIONS VARI\xC9ES de contenu enrichi (paragraphes structur\xE9s).
-
-CONTRAINTES:
-- 2-4 paragraphes par proposition
-- Structure: Intro \u2192 D\xE9veloppement \u2192 Conclusion/CTA
-- Ton professionnel et engageant
-- Int\xE9gration naturelle des mots-cl\xE9s
-- Lisibilit\xE9 optimale (phrases courtes, transitions)
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure:
-{
-  "suggestions": [
-    {
-      "content": "Paragraphe 1
-
-Paragraphe 2
-
-Paragraphe 3",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 89,
-      "structure": "intro + b\xE9n\xE9fices + preuve sociale"
-    },
-    {
-      "content": "Paragraphe 1
-
-Paragraphe 2
-
-Paragraphe 3",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 92,
-      "structure": "probl\xE8me + solution + r\xE9sultats"
-    }
-  ],
-  "analysis": {
-    "fieldType": "${fieldId}",
-    "bestApproach": "Approche recommand\xE9e (1 phrase)",
-    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3", "mot-cl\xE9 4"],
-    "avgScore": 90,
-    "readabilityScore": 85
-  }
-}
-
-\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
-  }
-  /**
-   * Prompt générique pour types inconnus
-   */
-  static buildGenericPrompt(context, label, current) {
-    return `${context}
-
-T\xC2CHE: G\xE9n\xE8re 3 PROPOSITIONS PERTINENTES pour le champ "${label}".
-
-Retourne UNIQUEMENT un objet JSON valide avec cette structure:
-{
-  "suggestions": [
-    {
-      "content": "Proposition 1",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 85
-    },
-    {
-      "content": "Proposition 2",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 88
-    },
-    {
-      "content": "Proposition 3",
-      "reasoning": "Pourquoi cette proposition (1 phrase)",
-      "score": 82
-    }
-  ],
-  "analysis": {
-    "fieldType": "${label}",
-    "bestApproach": "Approche recommand\xE9e (1 phrase)",
-    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3"],
-    "avgScore": 85
-  }
-}
-
-\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
-  }
-};
-var QualityAnalyzer = class {
-  /**
-   * Analyse et enrichit les suggestions avec des métriques
-   */
-  static analyzeSuggestions(response, fieldType) {
-    try {
-      const scores = response.suggestions.map((s) => s.score || 0);
-      const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-      response.suggestions.sort((a, b) => (b.score || 0) - (a.score || 0));
-      response.analysis = {
-        ...response.analysis,
-        avgScore,
-        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        fieldType,
-        qualityLevel: avgScore >= 90 ? "excellent" : avgScore >= 80 ? "good" : avgScore >= 70 ? "acceptable" : "needs-improvement"
-      };
-      return response;
-    } catch (error) {
-      console.error("\u274C [QualityAnalyzer] Erreur analyse:", error);
-      return response;
-    }
-  }
-};
-router82.post("/generate-field", async (req2, res) => {
-  const startTime = Date.now();
-  try {
-    const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
-    if (!fieldId || !fieldType || !fieldLabel) {
-      return res.status(400).json({
-        success: false,
-        error: "Param\xE8tres manquants",
-        details: "fieldId, fieldType et fieldLabel sont requis"
-      });
-    }
-    if (!aiContext || !aiContext.sectionType) {
-      return res.status(400).json({
-        success: false,
-        error: "Contexte IA manquant",
-        details: "aiContext.sectionType est requis"
-      });
-    }
-    console.log("\u{1F916} [AI] G\xE9n\xE9ration pour:", {
-      fieldId,
-      fieldType,
-      fieldLabel,
-      sectionType: aiContext.sectionType
-    });
-    const prompt = SmartPromptBuilder.buildPrompt({
-      fieldId,
-      fieldType,
-      fieldLabel,
-      currentValue,
-      aiContext
-    });
-    console.log("\u{1F4DD} [AI] Prompt construit, appel \xE0 Gemini...");
-    const geminiResult = await geminiService3.chat({ prompt, raw: true });
-    if (!geminiResult.success || !geminiResult.content) {
-      throw new Error(geminiResult.error || "Erreur lors de l'appel \xE0 Gemini");
-    }
-    console.log("\u2705 [AI] R\xE9ponse brute re\xE7ue:", geminiResult.content.substring(0, 200));
-    const jsonMatch = geminiResult.content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Format de r\xE9ponse invalide: JSON non trouv\xE9 dans la r\xE9ponse IA");
-    }
-    let parsedResponse = JSON.parse(jsonMatch[0]);
-    parsedResponse = QualityAnalyzer.analyzeSuggestions(parsedResponse, fieldType);
-    const duration = Date.now() - startTime;
-    const modelUsed = geminiResult.model || geminiService3.getStatus().model;
-    console.log(`\u2705 [AI] G\xE9n\xE9ration r\xE9ussie en ${duration}ms, score moyen: ${parsedResponse.analysis.avgScore}/100`);
-    return res.json({
-      success: true,
-      content: parsedResponse.suggestions[0]?.content,
-      // Meilleure suggestion par défaut
-      suggestions: parsedResponse.suggestions,
-      analysis: parsedResponse.analysis,
-      metadata: {
-        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        duration,
-        model: modelUsed,
-        fieldType,
-        fieldId
-      }
-    });
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error("\u274C [AI] Erreur g\xE9n\xE9ration:", error);
-    if (error.message?.includes("API key")) {
-      return res.status(500).json({
-        success: false,
-        error: "Configuration IA manquante",
-        details: "La cl\xE9 API Google Gemini n'est pas configur\xE9e",
-        duration
-      });
-    }
-    if (error.message?.includes("quota") || error.message?.includes("rate limit")) {
-      return res.status(429).json({
-        success: false,
-        error: "Limite de quota atteinte",
-        details: "Trop de requ\xEAtes IA. Attendez quelques instants.",
-        duration
-      });
-    }
-    return res.status(500).json({
-      success: false,
-      error: "Erreur lors de la g\xE9n\xE9ration",
-      details: error.message || "Erreur inconnue",
-      duration
-    });
-  }
-});
-router82.get("/status", async (_req, res) => {
-  try {
-    const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
-    res.json({
-      success: true,
-      available: isAvailable,
-      service: "Google Gemini",
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      available: false,
-      error: error.message
-    });
-  }
-});
-var ai_field_generator_default = router82;
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express85 = require("express");
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
-var parseJsonArray = (value) => {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-async function buildBlueprintForRepeater(prisma70, repeaterNodeId) {
-  if (!repeaterNodeId) {
-    console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
-    return null;
-  }
-  const cached = captureRepeatTemplate(repeaterNodeId);
-  if (cached) {
-    const repeaterNodeForCache = await prisma70.treeBranchLeafNode.findUnique({
-      where: { id: repeaterNodeId },
-      select: { metadata: true, repeater_templateNodeIds: true }
-    });
-    const candidateTemplateIds = repeaterNodeForCache ? extractTemplateIds(repeaterNodeForCache) : [];
-    const { validIds: cachedTemplateIds } = await filterExistingTemplateNodeIds(
-      prisma70,
-      repeaterNodeId,
-      candidateTemplateIds
-    );
-    if (cachedTemplateIds.length) {
-      const validTemplateSet = new Set(cachedTemplateIds);
-      return {
-        ...cached,
-        repeaterNodeId,
-        templateNodeIds: cachedTemplateIds,
-        variables: cached.variables?.filter((v) => !v.nodeId || validTemplateSet.has(v.nodeId)) ?? [],
-        capacities: cached.capacities?.filter((c) => !c.ownerNodeId || validTemplateSet.has(c.ownerNodeId)) ?? [],
-        totalField: cached.totalField
-      };
-    }
-    console.warn("[repeat-blueprint-builder] Cached blueprint invalid, falling back to Prisma lookup", {
-      repeaterNodeId,
-      candidateTemplateIds
-    });
-  }
-  const repeaterNode = await prisma70.treeBranchLeafNode.findUnique({
-    where: { id: repeaterNodeId },
-    select: {
-      id: true,
-      repeater_templateNodeIds: true,
-      metadata: true,
-      treeId: true
-    }
-  });
-  if (!repeaterNode) {
-    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC2\x9D\xC5\u2019 Repeater node not found: ${repeaterNodeId}`);
-    return null;
-  }
-  const extractedIds = extractTemplateIds(repeaterNode);
-  const candidateTemplateNodeIds = extractedIds;
-  const { validIds: templateNodeIds } = await filterExistingTemplateNodeIds(
-    prisma70,
-    repeaterNodeId,
-    candidateTemplateNodeIds
-  );
-  if (!templateNodeIds.length) {
-    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F No valid templates found!`);
-    return {
-      repeaterNodeId,
-      templateNodeIds: [],
-      variables: [],
-      capacities: [],
-      capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      lastUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
-  const directVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
-    where: { nodeId: { in: templateNodeIds } },
-    select: {
-      id: true,
-      nodeId: true,
-      sourceRef: true,
-      sourceType: true
-    }
-  });
-  const linkedVarsByNode = /* @__PURE__ */ new Map();
-  const templateNodesWithLinks = await prisma70.treeBranchLeafNode.findMany({
-    where: { id: { in: templateNodeIds } },
-    select: {
-      id: true,
-      linkedVariableIds: true
-    }
-  });
-  for (const node of templateNodesWithLinks) {
-    if (node.linkedVariableIds && node.linkedVariableIds.length > 0) {
-      for (const varId of node.linkedVariableIds) {
-        if (!linkedVarsByNode.has(varId)) {
-          linkedVarsByNode.set(varId, /* @__PURE__ */ new Set());
-        }
-        linkedVarsByNode.get(varId).add(node.id);
-      }
-    }
-  }
-  const linkedVariableIds = Array.from(linkedVarsByNode.keys()).filter(
-    (id) => !directVariables.some((v) => v.id === id)
-    // Avoid duplicates
-  );
-  const linkedVariables = linkedVariableIds.length > 0 ? await prisma70.treeBranchLeafNodeVariable.findMany({
-    where: { id: { in: linkedVariableIds } },
-    select: {
-      id: true,
-      nodeId: true,
-      sourceRef: true,
-      sourceType: true
-    }
-  }) : [];
-  const expandedVariables = [];
-  for (const directVar of directVariables) {
-    expandedVariables.push({
-      ...directVar,
-      variableId: directVar.id,
-      linkedToNodeIds: []
-      // Direct variables don't have this
-    });
-  }
-  for (const linkedVar of linkedVariables) {
-    const referencingNodeIds = Array.from(linkedVarsByNode.get(linkedVar.id) || []);
-    for (const nodeId of referencingNodeIds) {
-      expandedVariables.push({
-        ...linkedVar,
-        variableId: linkedVar.id,
-        linkedToNodeIds: [nodeId],
-        // This variable is linked to this template node
-        primaryTargetNodeId: nodeId
-        // Ã¢â€ Â The node that should receive the copied variable's display node
-      });
-    }
-  }
-  const variables = expandedVariables;
-  const [formulas, conditions, tables] = await Promise.all([
-    prisma70.treeBranchLeafNodeFormula.findMany({
-      where: { nodeId: { in: templateNodeIds } },
-      select: { id: true, nodeId: true }
-    }),
-    prisma70.treeBranchLeafNodeCondition.findMany({
-      where: { nodeId: { in: templateNodeIds } },
-      select: { id: true, nodeId: true }
-    }),
-    prisma70.treeBranchLeafNodeTable.findMany({
-      where: { nodeId: { in: templateNodeIds } },
-      select: { id: true, nodeId: true }
-    })
-  ]);
-  const totalField = extractTotalFieldConfig(repeaterNode.metadata);
-  return {
-    repeaterNodeId,
-    templateNodeIds,
-    variables: variables.map((v) => ({
-      nodeId: v.nodeId,
-      variableId: v.id,
-      sourceRef: v.sourceRef,
-      sourceType: v.sourceType,
-      displayNodeId: null,
-      metadata: void 0,
-      // Ã°Å¸â€Â§ PRESERVE: primaryTargetNodeId for linked variables
-      primaryTargetNodeId: v.primaryTargetNodeId || void 0
-    })),
-    capacities: [
-      ...formulas.map((f) => ({
-        ownerNodeId: f.nodeId,
-        capacityId: f.id,
-        capacityType: "formula"
-      })),
-      ...conditions.map((c) => ({
-        ownerNodeId: c.nodeId,
-        capacityId: c.id,
-        capacityType: "condition"
-      })),
-      ...tables.map((t) => ({
-        ownerNodeId: t.nodeId,
-        capacityId: t.id,
-        capacityType: "table"
-      }))
-    ],
-    totalField: totalField || void 0,
-    capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    lastUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-}
-function extractTemplateIds(node) {
-  const metaRepeater = typeof node.metadata === "object" && node.metadata !== null ? node.metadata.repeater : void 0;
-  if (metaRepeater && typeof metaRepeater === "object") {
-    const fromMetadata = metaRepeater.templateNodeIds;
-    if (Array.isArray(fromMetadata) && fromMetadata.length > 0) {
-      const filtered = fromMetadata.filter((id) => typeof id === "string");
-      return filtered;
-    }
-  }
-  const fromColumn = parseJsonArray(node.repeater_templateNodeIds);
-  if (fromColumn.length) {
-    return fromColumn;
-  }
-  console.warn(`\xC3\xA2\xC2\x9D\xC5\u2019 [extractTemplateIds] Aucun template trouv\xC3\u0192\xC2\xA9 !`);
-  return [];
-}
-function extractTotalFieldConfig(metadata) {
-  if (!metadata || typeof metadata !== "object") return null;
-  const repeaterMeta = metadata.repeater;
-  if (!repeaterMeta || typeof repeaterMeta !== "object") return null;
-  const total = repeaterMeta.totalField;
-  if (!total || typeof total !== "object") return null;
-  const typed = total;
-  if (!typed.aggregationType || !typed.repeaterNodeId) return null;
-  return {
-    repeaterNodeId: typed.repeaterNodeId,
-    aggregationType: typed.aggregationType,
-    targetDisplayNodeId: typed.targetDisplayNodeId ?? null,
-    targetVariableId: typed.targetVariableId ?? null,
-    metadata: typed.metadata ?? null
-  };
-}
-async function filterExistingTemplateNodeIds(prisma70, repeaterNodeId, candidateIds) {
-  const normalized = Array.from(new Set(candidateIds.filter((id) => typeof id === "string" && !!id)));
-  if (!normalized.length) {
-    return { validIds: [], missingIds: [] };
-  }
-  const existing = await prisma70.treeBranchLeafNode.findMany({
-    where: { id: { in: normalized } },
-    select: { id: true }
-  });
-  const existingSet = new Set(existing.map((node) => node.id));
-  const validIds = normalized.filter((id) => existingSet.has(id));
-  const missingIds = normalized.filter((id) => !existingSet.has(id));
-  if (missingIds.length) {
-    console.warn("[repeat-blueprint-builder] Missing template nodes detected", {
-      repeaterNodeId,
-      missingCount: missingIds.length,
-      missingIds
-    });
-  }
-  return { validIds, missingIds };
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-instantiator.ts
-function createInstantiationPlan(blueprint, options) {
-  const { suffix, perTemplateSuffixes } = options;
-  const resolveSuffix = (templateNodeId) => {
-    if (perTemplateSuffixes && perTemplateSuffixes[templateNodeId] !== void 0) {
-      return perTemplateSuffixes[templateNodeId];
-    }
-    return suffix;
-  };
-  const nodes = blueprint.templateNodeIds.map((templateNodeId) => {
-    const nodeSuffix = resolveSuffix(templateNodeId);
-    return {
-      templateNodeId,
-      plannedSuffix: nodeSuffix,
-      newNodeId: `${templateNodeId}-${nodeSuffix}`
-    };
-  });
-  const variables = blueprint.variables.map((variable) => {
-    const targetTemplateNodeId = variable.primaryTargetNodeId || variable.nodeId;
-    const variableSuffix = resolveSuffix(targetTemplateNodeId);
-    const plannedVariableId = `${variable.variableId}-${targetTemplateNodeId}-${variableSuffix}`;
-    const plannedTargetNodeId = `${targetTemplateNodeId}-${variableSuffix}`;
-    return {
-      templateVariableId: variable.variableId,
-      plannedSuffix: variableSuffix,
-      targetNodeId: plannedTargetNodeId,
-      // Ã¢â€ Â NOW uses the template node that REFERENCES the variable
-      plannedVariableId
-    };
-  });
-  let totalFieldPlan;
-  if (options.includeTotals && blueprint.totalField) {
-    totalFieldPlan = {
-      plannedSuffix: suffix,
-      plannedVariableId: `${blueprint.totalField.targetVariableId ?? "total"}-${suffix}`,
-      plannedDisplayNodeId: `${blueprint.totalField.targetDisplayNodeId ?? "display-total"}-${suffix}`
-    };
-  }
-  return {
-    nodes,
-    variables,
-    totalField: totalFieldPlan
-  };
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/suffix-utils.ts
-function extractNumericSuffix(candidate) {
-  if (typeof candidate === "number" && Number.isFinite(candidate)) {
-    return candidate;
-  }
-  if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
-    return Number(candidate);
-  }
-  return null;
-}
-function extractSuffixFromId(id) {
-  if (!id) return null;
-  const match = /-(\d+)$/.exec(id);
-  if (!match) return null;
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-async function computeTemplateCopySuffixMax(prisma70, treeId, templateNodeIds) {
-  if (!treeId || !templateNodeIds.length) {
-    return /* @__PURE__ */ new Map();
-  }
-  const templateSet = new Set(templateNodeIds);
-  const templateIds = Array.from(templateSet);
-  const orStartsWith = templateIds.map((templateId) => ({ id: { startsWith: `${templateId}-` } }));
-  const copies = await prisma70.treeBranchLeafNode.findMany({
-    where: {
-      treeId,
-      OR: orStartsWith
-    },
-    select: { id: true, metadata: true }
-  });
-  const metaCopies = await prisma70.treeBranchLeafNode.findMany({
-    where: {
-      treeId,
-      OR: templateIds.map((templateId) => ({
-        OR: [
-          { metadata: { path: ["copiedFromNodeId"], equals: templateId } },
-          { metadata: { path: ["sourceTemplateId"], equals: templateId } }
-        ]
-      }))
-    },
-    select: { id: true, metadata: true }
-  });
-  const maxMap = /* @__PURE__ */ new Map();
-  for (const copy of copies) {
-    let templateId = null;
-    for (const candidate of templateIds) {
-      if (copy.id.startsWith(`${candidate}-`)) {
-        templateId = candidate;
-        break;
-      }
-    }
-    if (!templateId || !templateSet.has(templateId)) continue;
-    const rest = copy.id.slice(templateId.length + 1);
-    const idSuffix = /^\d+$/.test(rest) ? Number(rest) : null;
-    const metadata = copy.metadata ?? {};
-    const metaSuffix = extractNumericSuffix(metadata.copySuffix);
-    const resolved = idSuffix ?? metaSuffix ?? 0;
-    const prev = maxMap.get(templateId) ?? 0;
-    if (resolved > prev) maxMap.set(templateId, resolved);
-  }
-  for (const copy of metaCopies) {
-    const meta = copy.metadata ?? {};
-    const metaTemplateId = meta.copiedFromNodeId || meta.sourceTemplateId || null;
-    if (!metaTemplateId || !templateSet.has(metaTemplateId)) continue;
-    const metaSuffix = extractNumericSuffix(meta.copySuffix) ?? extractSuffixFromId(copy.id) ?? 0;
-    const prev = maxMap.get(metaTemplateId) ?? 0;
-    if (metaSuffix > prev) {
-      maxMap.set(metaTemplateId, metaSuffix);
-    }
-  }
-  return maxMap;
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-service.ts
-var RepeatOperationError = class extends Error {
-  status;
-  details;
-  constructor(message, status = 400, details) {
-    super(message);
-    this.name = "RepeatOperationError";
-    this.status = status;
-    this.details = details;
-  }
-};
-var makeScopeId = (repeaterNodeId, suffix) => {
-  const trimmedSuffix = typeof suffix === "string" ? suffix.trim() : String(suffix);
-  return `${repeaterNodeId}:${trimmedSuffix}`;
-};
-async function planRepeatDuplication(prisma70, repeaterNodeId, options = {}) {
-  if (!repeaterNodeId) {
-    throw new RepeatOperationError("Missing repeaterNodeId in request path.", 400);
-  }
-  const blueprint = await buildBlueprintForRepeater(prisma70, repeaterNodeId);
-  if (!blueprint) {
-    throw new RepeatOperationError(`No blueprint available for repeater ${repeaterNodeId}.`, 404);
-  }
-  if (!blueprint.templateNodeIds?.length) {
-    throw new RepeatOperationError(
-      `Repeater ${repeaterNodeId} does not reference any template nodes.`,
-      422
-    );
-  }
-  const repeaterNode = await prisma70.treeBranchLeafNode.findUnique({
-    where: { id: repeaterNodeId },
-    select: { treeId: true }
-  });
-  if (!repeaterNode) {
-    throw new RepeatOperationError(`Repeater ${repeaterNodeId} was not found.`, 404);
-  }
-  const cleanedTemplateIds = blueprint.templateNodeIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id, idx, arr) => arr.indexOf(id) === idx);
-  const needsCleaning = blueprint.templateNodeIds.length !== cleanedTemplateIds.length;
-  if (needsCleaning) {
-    blueprint.templateNodeIds.forEach((id, idx) => {
-      const cleaned = id.replace(/(-\d+)+$/, "");
-      if (id !== cleaned) {
-      }
-    });
-  }
-  let actualSuffix;
-  let perTemplateSuffixes;
-  if (options.suffix) {
-    const parsed = parseInt(String(options.suffix), 10);
-    if (Number.isNaN(parsed)) {
-      throw new RepeatOperationError("Repeat suffix must be numeric when provided.", 422);
-    }
-    actualSuffix = parsed;
-    perTemplateSuffixes = Object.fromEntries(
-      cleanedTemplateIds.map((id) => [id, actualSuffix])
-    );
-  } else {
-    const existingMax = await computeTemplateCopySuffixMax(
-      prisma70,
-      repeaterNode.treeId,
-      cleanedTemplateIds
-    );
-    const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
-    actualSuffix = globalMax + 1;
-    cleanedTemplateIds.forEach((id) => {
-      const mx = existingMax.get(id) ?? 0;
-    });
-    perTemplateSuffixes = {};
-    for (const templateId of cleanedTemplateIds) {
-      perTemplateSuffixes[templateId] = actualSuffix;
-    }
-  }
-  const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, actualSuffix);
-  blueprint.templateNodeIds = cleanedTemplateIds;
-  const plan = createInstantiationPlan(blueprint, {
-    suffix: actualSuffix,
-    includeTotals: options.includeTotals ?? true,
-    targetParentId: options.targetParentId ?? null,
-    perTemplateSuffixes
-  });
-  return {
-    repeaterNodeId,
-    suffix: actualSuffix,
-    scopeId,
-    blueprint,
-    plan
-  };
-}
-async function executeRepeatDuplication(prisma70, repeaterNodeId, options = {}) {
-  try {
-    const planned = await planRepeatDuplication(prisma70, repeaterNodeId, options);
-    const operations = [
-      ...planned.plan.nodes.map((nodePlan) => ({
-        type: "node-copy",
-        templateId: nodePlan.templateNodeId,
-        targetId: nodePlan.newNodeId
-      })),
-      ...planned.plan.variables.map((variablePlan) => ({
-        type: "variable-copy",
-        templateId: variablePlan.templateVariableId,
-        targetId: variablePlan.plannedVariableId
-      }))
-    ];
-    return {
-      ...planned,
-      status: "pending-execution",
-      operations
-    };
-  } catch (error) {
-    console.error(`[repeat-service] \xC3\xA2\xC2\x9D\xC5\u2019 ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
-    throw error;
-  }
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-var import_client69 = require("@prisma/client");
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
-function parseSourceRef3(sourceRef) {
-  if (!sourceRef || typeof sourceRef !== "string") return null;
-  const cleaned = sourceRef.trim();
-  if (!cleaned) return null;
-  if (cleaned.startsWith("node-formula:")) {
-    return {
-      type: "formula",
-      id: cleaned.replace("node-formula:", ""),
-      prefix: "node-formula:"
-    };
-  }
-  if (cleaned.startsWith("condition:")) {
-    return {
-      type: "condition",
-      id: cleaned.replace("condition:", ""),
-      prefix: "condition:"
-    };
-  }
-  if (cleaned.startsWith("node-condition:")) {
-    return {
-      type: "condition",
-      id: cleaned.replace("node-condition:", ""),
-      prefix: "node-condition:"
-    };
-  }
-  if (cleaned.startsWith("@table.")) {
-    return {
-      type: "table",
-      id: cleaned.replace("@table.", ""),
-      prefix: "@table."
-    };
-  }
-  if (cleaned.startsWith("node-table:")) {
-    return {
-      type: "table",
-      id: cleaned.replace("node-table:", ""),
-      prefix: "node-table:"
-    };
-  }
-  if (cleaned.startsWith("@calculated.")) {
-    return {
-      type: "calculated",
-      id: cleaned.replace("@calculated.", ""),
-      prefix: "@calculated."
-    };
-  }
-  return {
-    type: "field",
-    id: cleaned,
-    prefix: ""
-  };
-}
-function applySuffixToSourceRef2(sourceRef, suffix) {
-  if (!sourceRef) return null;
-  const parsed = parseSourceRef3(sourceRef);
-  if (!parsed) return sourceRef;
-  const newId = `${parsed.id}-${suffix}`;
-  return `${parsed.prefix}${newId}`;
-}
-async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma70, options = {}) {
-  const {
-    formulaIdMap = /* @__PURE__ */ new Map(),
-    conditionIdMap = /* @__PURE__ */ new Map(),
-    tableIdMap: tableIdMap2 = /* @__PURE__ */ new Map(),
-    nodeIdMap = /* @__PURE__ */ new Map(),
-    variableCopyCache = /* @__PURE__ */ new Map(),
-    autoCreateDisplayNode = false,
-    displaySectionLabel = "Nouveau Section",
-    linkToDisplaySection = false
-    // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
-  } = options;
-  try {
-    const cacheKey = `${originalVarId}|${newNodeId}`;
-    let cachedVariable = null;
-    if (variableCopyCache.has(cacheKey)) {
-      const cachedId = variableCopyCache.get(cacheKey);
-      const cached = await prisma70.treeBranchLeafNodeVariable.findUnique({
-        where: { id: cachedId }
-      });
-      if (cached) {
-        const parsed = parseSourceRef3(cached.sourceRef);
-        if (autoCreateDisplayNode) {
-          cachedVariable = cached;
-        } else {
-          return {
-            variableId: cached.id,
-            exposedKey: cached.exposedKey,
-            capacityType: parsed?.type || null,
-            sourceRef: cached.sourceRef,
-            success: true
-          };
-        }
-      }
-    }
-    const originalVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
-      where: { id: originalVarId }
-    });
-    if (!originalVar) {
-      console.error(`\xE2\x9D\u0152 Variable introuvable: ${originalVarId}`);
-      return {
-        variableId: "",
-        exposedKey: "",
-        capacityType: null,
-        sourceRef: null,
-        success: false,
-        error: `Variable introuvable: ${originalVarId}`
-      };
-    }
-    const stripTrailingNumeric = (raw) => {
-      if (!raw) return "";
-      const trimmed = raw.trim();
-      return trimmed.replace(/(?:-\d+)+\s*$/, "");
-    };
-    const appendSuffixOnce = (value) => {
-      if (!value) return value ?? "";
-      const base = stripTrailingNumeric(value);
-      return `${base}-${suffix}`;
-    };
-    let newVarId = appendSuffixOnce(originalVarId);
-    let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
-    let newSourceRef = originalVar.sourceRef;
-    let capacityType = null;
-    if (originalVar.sourceRef) {
-      const parsed = parseSourceRef3(originalVar.sourceRef);
-      if (parsed) {
-        capacityType = parsed.type;
-        if (capacityType === "formula") {
-          if (formulaIdMap.has(parsed.id)) {
-            const mappedFormulaId = formulaIdMap.get(parsed.id);
-            newSourceRef = `${parsed.prefix}${mappedFormulaId}`;
-          } else {
-            try {
-              const formulaResult = await copyFormulaCapacity(
-                parsed.id,
-                newNodeId,
-                suffix,
-                prisma70,
-                { nodeIdMap, formulaCopyCache: formulaIdMap }
-              );
-              if (formulaResult.success) {
-                formulaIdMap.set(parsed.id, formulaResult.newFormulaId);
-                newSourceRef = `${parsed.prefix}${formulaResult.newFormulaId}`;
-              } else {
-                newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
-              }
-            } catch (e) {
-              console.error(`\xE2\x9D\u0152 [COPY-VAR] Exception copie formule:`, e.message, e.stack);
-              newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
-            }
-          }
-        } else if (capacityType === "condition") {
-          if (conditionIdMap.has(parsed.id)) {
-            const mappedConditionId = conditionIdMap.get(parsed.id);
-            newSourceRef = `${parsed.prefix}${mappedConditionId}`;
-          } else {
-            try {
-              const conditionResult = await copyConditionCapacity(
-                parsed.id,
-                newNodeId,
-                suffix,
-                prisma70,
-                { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
-              );
-              if (conditionResult.success) {
-                conditionIdMap.set(parsed.id, conditionResult.newConditionId);
-                newSourceRef = `${parsed.prefix}${conditionResult.newConditionId}`;
-              } else {
-                newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
-              }
-            } catch (e) {
-              console.error(`\xE2\x9D\u0152 Exception copie condition:`, e.message);
-              newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
-            }
-          }
-        } else if (capacityType === "table") {
-          if (tableIdMap2.has(parsed.id)) {
-            const mappedTableId = tableIdMap2.get(parsed.id);
-            newSourceRef = `${parsed.prefix}${mappedTableId}`;
-          } else {
-            try {
-              const tableResult = await copyTableCapacity2(
-                parsed.id,
-                newNodeId,
-                suffix,
-                prisma70,
-                { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
-              );
-              if (tableResult.success) {
-                tableIdMap2.set(parsed.id, tableResult.newTableId);
-                newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
-              } else {
-                newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
-              }
-            } catch (e) {
-              console.error(`\xE2\x9D\u0152 Exception copie table:`, e.message);
-              newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
-            }
-          }
-        } else if (capacityType === "field") {
-          if (nodeIdMap.has(parsed.id)) {
-            newSourceRef = nodeIdMap.get(parsed.id);
-          } else {
-            newSourceRef = `${parsed.id}-${suffix}`;
-          }
-        }
-      }
-    }
-    let finalNodeId2 = newNodeId;
-    if (originalVar.nodeId && nodeIdMap.has(originalVar.nodeId)) {
-      finalNodeId2 = nodeIdMap.get(originalVar.nodeId);
-    } else if (autoCreateDisplayNode) {
-      try {
-        const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
-          where: { id: originalVar.nodeId },
-          select: {
-            id: true,
-            parentId: true,
-            treeId: true,
-            order: true,
-            linkedTableIds: true,
-            hasTable: true,
-            table_name: true,
-            table_activeId: true,
-            table_instances: true,
-            // ðŸ”‘ IMPORTANT: RÃ©cupÃ©rer subtab pour que la copie soit dans le bon sous-onglet
-            subtab: true,
-            subtabs: true,
-            metadata: true
-          }
-        });
-        if (originalOwnerNode) {
-          const isLinkedVariable = options.isFromRepeaterDuplication && originalVar.nodeId !== newNodeId;
-          let displayParentId;
-          if (isLinkedVariable) {
-            displayParentId = newNodeId;
-          } else {
-            displayParentId = originalOwnerNode.parentId || null;
-          }
-          const baseDisplayNodeId = stripTrailingNumeric(originalVar.nodeId) || originalVar.nodeId;
-          const displayNodeId2 = `${baseDisplayNodeId}-${suffix}`;
-          finalNodeId2 = displayNodeId2;
-          const now = /* @__PURE__ */ new Date();
-          const displayNodeData = {
-            id: displayNodeId2,
-            treeId: originalOwnerNode.treeId,
-            parentId: displayParentId,
-            type: "leaf_field",
-            subType: null,
-            label: originalVar.displayName || "Donn\xC3\xA9e",
-            description: null,
-            value: null,
-            order: (originalOwnerNode.order ?? 0) + 1,
-            isRequired: false,
-            isVisible: true,
-            isActive: true,
-            isMultiple: false,
-            fieldConfig: null,
-            conditionConfig: null,
-            formulaConfig: null,
-            tableConfig: null,
-            apiConfig: null,
-            linkConfig: null,
-            defaultValue: null,
-            calculatedValue: null,
-            metadata: { fromVariableId: appendSuffixOnce(originalVar.id) },
-            // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
-            subtab: originalOwnerNode.subtab,
-            subtabs: originalOwnerNode.subtabs,
-            createdAt: now,
-            updatedAt: now,
-            hasAPI: false,
-            hasCondition: false,
-            hasData: false,
-            hasFormula: false,
-            hasLink: false,
-            hasMarkers: false,
-            // ðŸ“Š TABLE: Copier les colonnes table du nÅ“ud original
-            // âœ… IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiÃ©es
-            hasTable: originalOwnerNode.hasTable ?? false,
-            table_name: originalOwnerNode.table_name,
-            table_activeId: originalOwnerNode.table_activeId ? `${originalOwnerNode.table_activeId}-${suffix}` : null,
-            table_instances: (() => {
-              if (!originalOwnerNode.table_instances) {
-                return originalOwnerNode.table_instances;
-              }
-              let rawInstances;
-              if (typeof originalOwnerNode.table_instances === "object") {
-                rawInstances = JSON.parse(JSON.stringify(originalOwnerNode.table_instances));
-              } else if (typeof originalOwnerNode.table_instances === "string") {
-                try {
-                  rawInstances = JSON.parse(originalOwnerNode.table_instances);
-                } catch {
-                  return originalOwnerNode.table_instances;
-                }
-              } else {
-                return originalOwnerNode.table_instances;
-              }
-              const updatedInstances = {};
-              for (const [key2, value] of Object.entries(rawInstances)) {
-                const hasSuffixRegex = /-\d+$/;
-                const newKey = hasSuffixRegex.test(key2) ? key2 : `${key2}-${suffix}`;
-                if (value && typeof value === "object") {
-                  const tableInstanceObj = value;
-                  const updatedObj = { ...tableInstanceObj };
-                  if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === "string") {
-                    updatedObj.tableId = hasSuffixRegex.test(tableInstanceObj.tableId) ? tableInstanceObj.tableId : `${tableInstanceObj.tableId}-${suffix}`;
-                  }
-                  updatedInstances[newKey] = updatedObj;
-                } else {
-                  updatedInstances[newKey] = value;
-                }
-              }
-              return updatedInstances;
-            })(),
-            linkedTableIds: Array.isArray(originalOwnerNode.linkedTableIds) ? originalOwnerNode.linkedTableIds.map((id) => `${id}-${suffix}`) : [],
-            linkedConditionIds: [],
-            linkedFormulaIds: [],
-            linkedVariableIds: [],
-            appearance_size: "md",
-            appearance_variant: null,
-            appearance_width: "100%",
-            fieldType: "TEXT",
-            fieldSubType: null,
-            field_label: originalVar.displayName
-          };
-          const maybeExisting = await prisma70.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
-          if (maybeExisting) {
-            await prisma70.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
-          } else {
-            await prisma70.treeBranchLeafNode.create({ data: displayNodeData });
-          }
-          if (originalOwnerNode.hasTable && Array.isArray(originalOwnerNode.linkedTableIds) && originalOwnerNode.linkedTableIds.length > 0) {
-            for (const originalTableId of originalOwnerNode.linkedTableIds) {
-              const newTableId = `${originalTableId}-${suffix}`;
-              const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
-                where: { id: newTableId }
-              });
-              if (existingTable) {
-                tableIdMap2.set(originalTableId, newTableId);
-                continue;
-              }
-              try {
-                const tableResult = await copyTableCapacity2(
-                  originalTableId,
-                  displayNodeId2,
-                  // La nouvelle table appartient au display node copiÃ©
-                  Number(suffix),
-                  prisma70,
-                  { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
-                );
-                if (tableResult.success) {
-                  tableIdMap2.set(originalTableId, tableResult.newTableId);
-                } else {
-                  console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [COPY-TABLES] \xC3\u2030chec copie table ${originalTableId}: ${tableResult.error}`);
-                }
-              } catch (e) {
-                console.error(`\xE2\x9D\u0152 [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
-              }
-            }
-            await prisma70.treeBranchLeafNode.update({
-              where: { id: displayNodeId2 },
-              data: { hasTable: true }
-            });
-          }
-        } else {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de r\xC3\xA9cup\xC3\xA9rer le n\xC5\u201Cud propri\xC3\xA9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
-        }
-      } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la cr\xC3\xA9ation du n\xC5\u201Cud d'affichage d\xC3\xA9di\xC3\xA9:`, e.message);
-      }
-    } else {
-    }
-    try {
-      const existingById = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
-      if (existingById) {
-        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
-        const adjusted = `${originalVarId}-${suffix}-${tail}`;
-        newVarId = adjusted;
-      }
-    } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
-    }
-    try {
-      const existingByKey = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
-      if (existingByKey) {
-        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
-        const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
-        newExposedKey = adjustedKey;
-      }
-    } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision exposedKey \xC3\xA9chou\xC3\xA9e:`, e.message);
-    }
-    let _reusingExistingVariable = false;
-    let _existingVariableForReuse = null;
-    try {
-      const existingForNode = await prisma70.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
-      if (existingForNode) {
-        _reusingExistingVariable = true;
-        _existingVariableForReuse = existingForNode;
-        try {
-          await prisma70.treeBranchLeafNode.update({
-            where: { id: finalNodeId2 },
-            data: {
-              hasData: true,
-              data_activeId: existingForNode.id,
-              data_exposedKey: existingForNode.exposedKey,
-              data_displayFormat: existingForNode.displayFormat,
-              data_precision: existingForNode.precision,
-              data_unit: existingForNode.unit,
-              data_visibleToUser: existingForNode.visibleToUser,
-              label: existingForNode.displayName || void 0,
-              field_label: existingForNode.displayName || void 0
-            }
-          });
-          await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
-        } catch (e) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
-        }
-        variableCopyCache.set(originalVarId, existingForNode.id);
-      }
-    } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification variable existante par nodeId \xC3\xA9chou\xC3\xA9e:`, e.message);
-    }
-    let newVariable;
-    if (cachedVariable) {
-      newVariable = cachedVariable;
-    } else if (_reusingExistingVariable && _existingVariableForReuse) {
-      newVariable = _existingVariableForReuse;
-    } else {
-      newVariable = await prisma70.treeBranchLeafNodeVariable.create({
-        data: {
-          id: newVarId,
-          nodeId: finalNodeId2,
-          exposedKey: newExposedKey,
-          displayName: originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName,
-          displayFormat: originalVar.displayFormat,
-          unit: originalVar.unit,
-          precision: originalVar.precision,
-          visibleToUser: originalVar.visibleToUser,
-          isReadonly: originalVar.isReadonly,
-          defaultValue: originalVar.defaultValue,
-          fixedValue: originalVar.fixedValue,
-          selectedNodeId: originalVar.selectedNodeId ? nodeIdMap.get(originalVar.selectedNodeId) || appendSuffixOnce(originalVar.selectedNodeId) : null,
-          sourceRef: newSourceRef,
-          sourceType: originalVar.sourceType,
-          metadata: originalVar.metadata,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-    }
-    const verification = await prisma70.treeBranchLeafNodeVariable.findUnique({
-      where: { id: newVariable.id }
-    });
-    if (verification) {
-    } else {
-      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
-    }
-    try {
-      await prisma70.treeBranchLeafNode.update({
-        where: { id: finalNodeId2 },
-        data: {
-          hasData: true,
-          data_activeId: newVariable.id,
-          data_exposedKey: newVariable.exposedKey,
-          data_displayFormat: newVariable.displayFormat,
-          data_precision: newVariable.precision,
-          data_unit: newVariable.unit,
-          data_visibleToUser: newVariable.visibleToUser,
-          // Harmoniser le label du nÅ“ud d'affichage sur le displayName de la variable
-          label: newVariable.displayName || void 0,
-          field_label: newVariable.displayName || void 0
-        }
-      });
-    } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la mise \xC3\xA0 jour des param\xC3\xA8tres capacit\xC3\xA9 (display node):`, e.message);
-    }
-    if (linkToDisplaySection) {
-      try {
-        const originalOwnerNode = await prisma70.treeBranchLeafNode.findUnique({
-          where: { id: originalVar.nodeId },
-          select: { parentId: true, treeId: true }
-        });
-        if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma70.treeBranchLeafNode.findFirst({
-            where: {
-              treeId: originalOwnerNode.treeId,
-              parentId: originalOwnerNode.parentId,
-              type: "section",
-              label: { equals: displaySectionLabel }
-            },
-            select: { id: true }
-          });
-          if (displaySection) {
-            await addToNodeLinkedField8(prisma70, displaySection.id, "linkedVariableIds", [newVariable.id]);
-          } else {
-          }
-        }
-      } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors du linkage vers la section d'affichage:`, e.message);
-      }
-    } else if (autoCreateDisplayNode) {
-      try {
-        await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedVariableIds", [newVariable.id]);
-      } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
-      }
-      try {
-        if (capacityType && newSourceRef) {
-          const parsedCap = parseSourceRef3(newSourceRef);
-          const capId = parsedCap?.id;
-          if (parsedCap && capId) {
-            if (parsedCap.type === "condition") {
-              await prisma70.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
-                data: {
-                  hasCondition: true,
-                  condition_activeId: capId
-                }
-              });
-              await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedConditionIds", [capId]);
-            } else if (parsedCap.type === "formula") {
-              const frm = await prisma70.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true } });
-              await prisma70.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
-                data: {
-                  hasFormula: true,
-                  formula_activeId: capId,
-                  formula_name: frm?.name || null
-                }
-              });
-              await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedFormulaIds", [capId]);
-            } else if (parsedCap.type === "table") {
-              const tbl = await prisma70.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
-              await prisma70.treeBranchLeafNode.update({
-                where: { id: finalNodeId2 },
-                data: {
-                  hasTable: true,
-                  table_activeId: capId,
-                  table_name: tbl?.name || null,
-                  table_type: tbl?.type || null
-                }
-              });
-              await addToNodeLinkedField8(prisma70, finalNodeId2, "linkedTableIds", [capId]);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Synchronisation capacit\xC3\xA9s condition/table sur le n\xC5\u201Cud d'affichage:`, e.message);
-      }
-    }
-    variableCopyCache.set(cacheKey, newVariable.id);
-    if (capacityType && newSourceRef) {
-      const parsed = parseSourceRef3(newSourceRef);
-      if (parsed && parsed.id) {
-        try {
-          if (capacityType === "formula") {
-            const formula = await prisma70.treeBranchLeafNodeFormula.findUnique({
-              where: { id: parsed.id },
-              select: { nodeId: true }
-            });
-            if (formula) {
-              await addToNodeLinkedField8(prisma70, formula.nodeId, "linkedFormulaIds", [parsed.id]);
-            }
-          } else if (capacityType === "condition") {
-            const condition = await prisma70.treeBranchLeafNodeCondition.findUnique({
-              where: { id: parsed.id },
-              select: { nodeId: true }
-            });
-            if (condition) {
-              await addToNodeLinkedField8(prisma70, condition.nodeId, "linkedConditionIds", [parsed.id]);
-            }
-          } else if (capacityType === "table") {
-            const table = await prisma70.treeBranchLeafNodeTable.findUnique({
-              where: { id: parsed.id },
-              select: { nodeId: true }
-            });
-            if (table) {
-              await addToNodeLinkedField8(prisma70, table.nodeId, "linkedTableIds", [parsed.id]);
-            }
-          }
-        } catch (e) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ bidirectionnelle:`, e.message);
-        }
-      }
-    }
-    return {
-      variableId: newVariable.id,
-      exposedKey: newExposedKey,
-      capacityType,
-      sourceRef: newSourceRef,
-      success: true,
-      displayNodeId: finalNodeId2
-      // ðŸ”‘ IMPORTANT: Retourner l'ID du display node crÃ©Ã©!
-    };
-  } catch (error) {
-    console.error(`\xE2\x9D\u0152 Erreur lors de la copie de la variable:`, error);
-    return {
-      variableId: "",
-      exposedKey: "",
-      capacityType: null,
-      sourceRef: null,
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      displayNodeId: void 0
-      // Pas de display node en cas d'erreur
-    };
-  }
-}
-async function addToNodeLinkedField8(prisma70, nodeId, field, idsToAdd) {
-  if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma70.treeBranchLeafNode.findUnique({
-    where: { id: nodeId },
-    select: { [field]: true }
-  });
-  if (!node) {
-    console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F N\xC5\u201Cud ${nodeId} introuvable pour MAJ ${field}`);
-    return;
-  }
-  const current = node[field] || [];
-  const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma70.treeBranchLeafNode.update({
-    where: { id: nodeId },
-    data: { [field]: { set: newIds } }
-  });
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/shared/shared-reference-helpers.ts
-async function applySharedReferencesFromOriginalInternal2(params) {
-  const { prisma: prisma70, nodeId, authCtx } = params;
-  const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
-  const copyRoot = await prisma70.treeBranchLeafNode.findFirst({
-    where: { id: nodeId },
-    include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
-  });
-  if (!copyRoot) throw new Error("N\u0153ud introuvable");
-  if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
-    throw new Error("Acc\xE8s non autoris\xE9");
-  }
-  const all = await prisma70.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
-  const nodeVariableIdByNodeId = /* @__PURE__ */ new Map();
-  if (all.length > 0) {
-    const nodeVariables = await prisma70.treeBranchLeafNodeVariable.findMany({
-      where: { nodeId: { in: all.map((n) => n.id) } },
-      select: { nodeId: true, id: true }
-    });
-    for (const variable of nodeVariables) {
-      if (variable.nodeId && variable.id) {
-        nodeVariableIdByNodeId.set(variable.nodeId, variable.id);
-      }
-    }
-  }
-  const byId = new Map(all.map((n) => [n.id, n]));
-  const childrenByParent = /* @__PURE__ */ new Map();
-  for (const n of all) {
-    if (!n.parentId) continue;
-    const arr = childrenByParent.get(n.parentId) || [];
-    arr.push(n.id);
-    childrenByParent.set(n.parentId, arr);
-  }
-  const collectedCopyIds = /* @__PURE__ */ new Set();
-  const queue = [copyRoot.id];
-  while (queue.length) {
-    const cur = queue.shift();
-    if (collectedCopyIds.has(cur)) continue;
-    collectedCopyIds.add(cur);
-    for (const c of childrenByParent.get(cur) || []) queue.push(c);
-  }
-  const originalToCopy = /* @__PURE__ */ new Map();
-  for (const id of collectedCopyIds) {
-    const n = byId.get(id);
-    if (!n) continue;
-    const meta = n.metadata || {};
-    const origId = String(meta.copiedFromNodeId || "");
-    if (origId) originalToCopy.set(origId, n.id);
-  }
-  if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
-  const originalIds = Array.from(originalToCopy.keys());
-  const originals = await prisma70.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
-  const allRefIds = /* @__PURE__ */ new Set();
-  for (const orig of originals) {
-    if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
-    if (Array.isArray(orig.sharedReferenceIds)) orig.sharedReferenceIds.forEach((id) => id && allRefIds.add(id));
-  }
-  const metaRoot = copyRoot.metadata || {};
-  let chosenSuffix = typeof metaRoot.copySuffix === "number" ? metaRoot.copySuffix : null;
-  if (!chosenSuffix) {
-    let maxSuffix = 0;
-    const SUFFIX_RE = /^(shared-ref-[A-Za-z0-9_\-]+)-(\d+)$/;
-    for (const n of all) {
-      const m = typeof n.id === "string" ? n.id.match(SUFFIX_RE) : null;
-      if (m) {
-        const num = Number(m[2]);
-        if (!Number.isNaN(num)) maxSuffix = Math.max(maxSuffix, num);
-      }
-    }
-    chosenSuffix = maxSuffix + 1 || 1;
-    await prisma70.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
-  }
-  const refCopyIdByOriginal = /* @__PURE__ */ new Map();
-  const desiredIds = Array.from(allRefIds).map((id) => `${id}-${chosenSuffix}`);
-  const existingRefCopies = desiredIds.length > 0 ? await prisma70.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
-  const existingSet = new Set(existingRefCopies.map((n) => n.id));
-  const ensureRefCopy = async (origRefId) => {
-    const desiredRootId = `${origRefId}-${chosenSuffix}`;
-    if (existingSet.has(desiredRootId)) {
-      refCopyIdByOriginal.set(origRefId, desiredRootId);
-      return desiredRootId;
-    }
-    const subtreeIds = [];
-    const q = [origRefId];
-    const seen = /* @__PURE__ */ new Set();
-    while (q.length) {
-      const cur = q.shift();
-      if (seen.has(cur)) continue;
-      seen.add(cur);
-      subtreeIds.push(cur);
-      const kids = childrenByParent.get(cur) || [];
-      for (const cid of kids) q.push(cid);
-    }
-    const origSubtree = subtreeIds.map((id) => byId.get(id)).filter(Boolean);
-    const desired = new Set(subtreeIds.map((id) => `${id}-${chosenSuffix}`));
-    if (desired.size > 0) {
-      const already = await prisma70.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
-      for (const n of already) desired.delete(n.id);
-    }
-    const idMap = /* @__PURE__ */ new Map();
-    for (const id of subtreeIds) idMap.set(id, `${id}-${chosenSuffix}`);
-    for (const orig of origSubtree) {
-      const newId = idMap.get(orig.id);
-      if (!desired.has(newId)) continue;
-      const newParentId = orig.parentId ? idMap.get(orig.parentId) ?? null : null;
-      const toCreate = {
-        id: newId,
-        treeId: copyRoot.treeId,
-        type: orig.type,
-        subType: orig.subType,
-        fieldType: orig.fieldType ?? "TEXT",
-        label: orig.label,
-        description: orig.description,
-        parentId: newParentId,
-        order: orig.order ?? 9999,
-        isVisible: orig.isVisible ?? true,
-        isActive: orig.isActive ?? true,
-        isRequired: orig.isRequired ?? false,
-        isMultiple: orig.isMultiple ?? false,
-        hasData: false,
-        hasFormula: false,
-        hasCondition: false,
-        hasTable: false,
-        hasAPI: false,
-        hasLink: false,
-        hasMarkers: false,
-        isSharedReference: orig.id === origRefId ? true : orig.isSharedReference ?? false,
-        sharedReferenceId: null,
-        sharedReferenceIds: [],
-        sharedReferenceName: orig.sharedReferenceName ?? orig.label ?? null,
-        sharedReferenceDescription: orig.sharedReferenceDescription ?? orig.description ?? null,
-        linkedFormulaIds: Array.isArray(orig.linkedFormulaIds) ? orig.linkedFormulaIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
-        linkedConditionIds: Array.isArray(orig.linkedConditionIds) ? orig.linkedConditionIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
-        linkedTableIds: Array.isArray(orig.linkedTableIds) ? orig.linkedTableIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
-        linkedVariableIds: Array.isArray(orig.linkedVariableIds) ? orig.linkedVariableIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
-        metadata: { ...orig.metadata || {}, copiedFromNodeId: orig.id },
-        updatedAt: /* @__PURE__ */ new Date()
-      };
-      await prisma70.treeBranchLeafNode.create({ data: toCreate });
-      const sourceVariableIds = /* @__PURE__ */ new Set();
-      if (Array.isArray(orig.linkedVariableIds)) {
-        for (const rawId of orig.linkedVariableIds) {
-          if (typeof rawId === "string") {
-            const normalized = rawId.trim();
-            if (normalized) {
-              sourceVariableIds.add(normalized);
-            }
-          }
-        }
-      }
-      const directVarId = nodeVariableIdByNodeId.get(orig.id);
-      if (directVarId) {
-        sourceVariableIds.add(directVarId);
-      }
-      if (sourceVariableIds.size > 0) {
-        const variableCopyCache = /* @__PURE__ */ new Map();
-        const formulaIdMap = /* @__PURE__ */ new Map();
-        const conditionIdMap = /* @__PURE__ */ new Map();
-        const tableIdMap2 = /* @__PURE__ */ new Map();
-        const globalNodeIdMap = new Map([...originalToCopy, ...idMap]);
-        for (const originalVarId of sourceVariableIds) {
-          try {
-            const copyResult = await copyVariableWithCapacities2(
-              originalVarId,
-              chosenSuffix,
-              newId,
-              prisma70,
-              {
-                formulaIdMap,
-                conditionIdMap,
-                tableIdMap: tableIdMap2,
-                nodeIdMap: globalNodeIdMap,
-                variableCopyCache,
-                autoCreateDisplayNode: true
-              }
-            );
-            if (!copyResult.success) {
-              console.warn(`\u26A0\uFE0F [SHARED-REF] \xC9chec copie variable ${originalVarId}: ${copyResult.error}`);
-            }
-          } catch (e) {
-            console.warn(`\u26A0\uFE0F [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
-          }
-        }
-      }
-    }
-    refCopyIdByOriginal.set(origRefId, desiredRootId);
-    return desiredRootId;
-  };
-  for (const rid of allRefIds) await ensureRefCopy(rid);
-  const updates = [];
-  let applied = 0;
-  for (const orig of originals) {
-    const copyId = originalToCopy.get(orig.id);
-    const origMultiple = Array.isArray(orig.sharedReferenceIds) ? orig.sharedReferenceIds.filter(Boolean) : [];
-    const origSingle = orig.sharedReferenceId ?? null;
-    const mappedMultiple = origMultiple.map((id) => refCopyIdByOriginal.get(id) || `${id}-${chosenSuffix}`);
-    const mappedSingle = origSingle ? refCopyIdByOriginal.get(origSingle) || `${origSingle}-${chosenSuffix}` : null;
-    const finalArray = mappedMultiple.length > 0 ? mappedMultiple : mappedSingle ? [mappedSingle] : [];
-    const finalSingle = finalArray.length > 0 ? finalArray[0] : null;
-    updates.push(prisma70.treeBranchLeafNode.update({
-      where: { id: copyId },
-      data: {
-        sharedReferenceId: finalSingle,
-        sharedReferenceIds: finalArray,
-        sharedReferenceName: orig.sharedReferenceName ?? null,
-        sharedReferenceDescription: orig.sharedReferenceDescription ?? null,
-        isSharedReference: false,
-        hasData: orig.hasData,
-        updatedAt: /* @__PURE__ */ new Date()
-      }
-    }));
-    applied++;
-  }
-  await prisma70.$transaction(updates);
-  return { success: true, applied, suffix: chosenSuffix };
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-values-service.ts
-async function resetCalculatedValuesAfterCopy(prisma70, copiedNodeIds) {
-  const nodesWithCapacities = await prisma70.treeBranchLeafNode.findMany({
-    where: {
-      id: { in: copiedNodeIds },
-      OR: [
-        { hasFormula: true },
-        { hasCondition: true },
-        { hasTable: true }
-      ]
-    },
-    select: {
-      id: true,
-      label: true,
-      calculatedValue: true,
-      hasFormula: true,
-      hasCondition: true,
-      hasTable: true
-    }
-  });
-  for (const node of nodesWithCapacities) {
-  }
-  const result = await prisma70.treeBranchLeafNode.updateMany({
-    where: {
-      id: { in: copiedNodeIds },
-      OR: [
-        { hasFormula: true },
-        { hasCondition: true },
-        { hasTable: true }
-      ]
-    },
-    data: {
-      calculatedValue: null
-    }
-  });
-  return result.count;
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/strict-isolation-service.ts
-async function enforceStrictIsolation(prisma70, copiedNodeIds) {
-  const result = {
-    isolatedNodes: [],
-    errors: []
-  };
-  for (const nodeId of copiedNodeIds) {
-    try {
-      const changes = [];
-      const node = await prisma70.treeBranchLeafNode.findUnique({
-        where: { id: nodeId },
-        include: {
-          TreeBranchLeafNodeFormula: true,
-          TreeBranchLeafNodeCondition: true,
-          TreeBranchLeafNodeTable: true,
-          TreeBranchLeafNodeVariable: true
-        }
-      });
-      if (!node) {
-        result.errors.push({ nodeId, error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
-        continue;
-      }
-      if (node.hasFormula || node.hasCondition || node.hasTable) {
-        if (node.calculatedValue !== null) {
-          await prisma70.treeBranchLeafNode.update({
-            where: { id: nodeId },
-            data: { calculatedValue: null }
-          });
-          changes.push(`calculatedValue: ${node.calculatedValue} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 null`);
-        }
-      }
-      if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
-        await prisma70.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: { hasFormula: false }
-        });
-        changes.push("hasFormula: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune formule trouv\xC3\u0192\xC2\xA9e)");
-      }
-      if (node.hasCondition && node.TreeBranchLeafNodeCondition.length === 0) {
-        await prisma70.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: { hasCondition: false }
-        });
-        changes.push("hasCondition: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune condition trouv\xC3\u0192\xC2\xA9e)");
-      }
-      if (node.hasTable && node.TreeBranchLeafNodeTable.length === 0) {
-        await prisma70.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: { hasTable: false }
-        });
-        changes.push("hasTable: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune table trouv\xC3\u0192\xC2\xA9e)");
-      }
-      const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
-      const updatedMetadata = {
-        ...currentMetadata,
-        strictlyIsolated: true,
-        isolatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        calculatedValueReset: true,
-        independentCalculation: true
-      };
-      await prisma70.treeBranchLeafNode.update({
-        where: { id: nodeId },
-        data: { metadata: updatedMetadata }
-      });
-      changes.push("metadata: marqu\xC3\u0192\xC2\xA9 comme strictement isol\xC3\u0192\xC2\xA9");
-      result.isolatedNodes.push({
-        nodeId: node.id,
-        label: node.label,
-        changes
-      });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      result.errors.push({ nodeId, error: errorMsg });
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
-    }
-  }
-  return result;
-}
-async function verifyIsolation(prisma70, copiedNodeIds) {
-  for (const nodeId of copiedNodeIds) {
-    const node = await prisma70.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: {
-        id: true,
-        label: true,
-        calculatedValue: true,
-        hasFormula: true,
-        hasCondition: true,
-        hasTable: true,
-        metadata: true
-      }
-    });
-    if (!node) continue;
-    const metadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
-    const isIsolated = metadata.strictlyIsolated === true;
-    const hasCapacity = node.hasFormula || node.hasCondition || node.hasTable;
-    if (hasCapacity && node.calculatedValue !== null) {
-    }
-    if (!isIsolated) {
-    }
-  }
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-independent-calculation.ts
-async function forceIndependentCalculation(prisma70, copiedNodeIds) {
-  for (const nodeId of copiedNodeIds) {
-    try {
-      const node = await prisma70.treeBranchLeafNode.findUnique({
-        where: { id: nodeId },
-        include: {
-          TreeBranchLeafNodeFormula: true,
-          TreeBranchLeafNodeCondition: true,
-          TreeBranchLeafNodeTable: true,
-          TreeBranchLeafNodeVariable: true
-        }
-      });
-      if (!node) continue;
-      if (node.hasFormula || node.hasCondition || node.hasTable) {
-        const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
-        const updatedMetadata = {
-          ...currentMetadata,
-          lastForceRecalc: (/* @__PURE__ */ new Date()).toISOString(),
-          forceIndependentCalc: true,
-          // Marquer comme devant ÃƒÂªtre recalculÃƒÂ© cÃƒÂ´tÃƒÂ© frontend
-          requiresFreshCalculation: true,
-          calculationInvalidated: Date.now()
-        };
-        await prisma70.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: {
-            calculatedValue: null,
-            metadata: updatedMetadata
-          }
-        });
-      } else if (!node.hasFormula && !node.hasCondition && !node.hasTable) {
-        if (node.calculatedValue !== null) {
-          await prisma70.treeBranchLeafNode.update({
-            where: { id: nodeId },
-            data: { calculatedValue: null }
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [FORCE-CALC] Erreur pour ${nodeId}:`, error);
-    }
-  }
-}
-async function createRecalculationTriggers(prisma70, copiedNodeIds) {
-  const triggerTimestamp = Date.now();
-  for (const nodeId of copiedNodeIds) {
-    try {
-      const currentMetadata = await prisma70.treeBranchLeafNode.findUnique({
-        where: { id: nodeId },
-        select: { metadata: true, label: true }
-      });
-      if (!currentMetadata) continue;
-      const metadata = currentMetadata.metadata && typeof currentMetadata.metadata === "object" ? currentMetadata.metadata : {};
-      const updatedMetadata = {
-        ...metadata,
-        // Marqueurs pour forcer le recalcul cÃƒÂ´tÃƒÂ© frontend
-        recalcTrigger: triggerTimestamp,
-        mustRecalculate: true,
-        independentNode: true,
-        noFallbackToOriginal: true
-      };
-      await prisma70.treeBranchLeafNode.update({
-        where: { id: nodeId },
-        data: { metadata: updatedMetadata }
-      });
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TRIGGERS] Erreur pour ${nodeId}:`, error);
-    }
-  }
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/complete-duplication-fix.ts
-async function fixCompleteDuplication(prisma70, originalNodeId, copiedNodeId, suffix = "-1") {
-  const result = {
-    nodeId: copiedNodeId,
-    nodeLabel: null,
-    capacitiesFixed: {
-      formulas: 0,
-      conditions: 0,
-      tables: 0,
-      lookups: 0
-    },
-    fieldConfigUpdated: false,
-    calculatedValueReset: false
-  };
-  const [originalNode, copiedNode] = await Promise.all([
-    prisma70.treeBranchLeafNode.findUnique({
-      where: { id: originalNodeId },
-      include: {
-        TreeBranchLeafNodeFormula: true,
-        TreeBranchLeafNodeCondition: true,
-        TreeBranchLeafNodeTable: {
-          include: {
-            tableColumns: true,
-            tableRows: true
-          }
-        }
-      }
-    }),
-    prisma70.treeBranchLeafNode.findUnique({
-      where: { id: copiedNodeId }
-    })
-  ]);
-  if (!originalNode) {
-    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud original ${originalNodeId} non trouv\xC3\u0192\xC2\xA9`);
-  }
-  if (!copiedNode) {
-    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
-  }
-  result.nodeLabel = copiedNode.label;
-  const formulaIdMap = /* @__PURE__ */ new Map();
-  const suffixNum = parseInt(suffix.replace("-", "")) || 1;
-  const nodeIdMap = /* @__PURE__ */ new Map();
-  const treeId = copiedNode.treeId;
-  if (treeId) {
-    const allNodesInTree = await prisma70.treeBranchLeafNode.findMany({
-      where: { treeId },
-      select: { id: true }
-    });
-    for (const node of allNodesInTree) {
-      if (node.id.match(/-\d+$/)) {
-        const baseId = node.id.replace(/-\d+$/, "");
-        if (!nodeIdMap.has(baseId)) {
-          nodeIdMap.set(baseId, node.id);
-        }
-      }
-    }
-  }
-  for (const formula of originalNode.TreeBranchLeafNodeFormula) {
-    try {
-      const formulaResult = await copyFormulaCapacity(
-        formula.id,
-        copiedNodeId,
-        suffixNum,
-        prisma70,
-        { formulaIdMap, nodeIdMap }
-      );
-      if (formulaResult.success) {
-        formulaIdMap.set(formula.id, formulaResult.newFormulaId);
-        result.capacitiesFixed.formulas++;
-      } else {
-        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule: ${formula.id}`);
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${formula.id}:`, error);
-    }
-  }
-  for (const condition of originalNode.TreeBranchLeafNodeCondition) {
-    const newConditionId = `${condition.id}${suffix}`;
-    const existingCondition = await prisma70.treeBranchLeafNodeCondition.findUnique({
-      where: { id: newConditionId }
-    });
-    if (!existingCondition) {
-      const adaptedConditionSet = adaptReferencesForCopiedNode(condition.conditionSet, suffix);
-      await prisma70.treeBranchLeafNodeCondition.create({
-        data: {
-          id: newConditionId,
-          nodeId: copiedNodeId,
-          organizationId: condition.organizationId,
-          name: condition.name ? `${condition.name}${suffix}` : condition.name,
-          conditionSet: adaptedConditionSet,
-          description: condition.description,
-          isDefault: condition.isDefault,
-          order: condition.order
-        }
-      });
-      result.capacitiesFixed.conditions++;
-    }
-  }
-  for (const table of originalNode.TreeBranchLeafNodeTable) {
-    const newTableId = `${table.id}${suffix}`;
-    const existingTable = await prisma70.treeBranchLeafNodeTable.findUnique({
-      where: { id: newTableId }
-    });
-    if (!existingTable) {
-      await prisma70.treeBranchLeafNodeTable.create({
-        data: {
-          id: newTableId,
-          nodeId: copiedNodeId,
-          organizationId: table.organizationId,
-          name: table.name ? `${table.name}${suffix}` : table.name,
-          description: table.description,
-          type: table.type,
-          rowCount: table.rowCount,
-          columnCount: table.columnCount,
-          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
-          meta: (() => {
-            if (!table.meta) return table.meta;
-            try {
-              const metaObj = typeof table.meta === "string" ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
-              const suffixNum2 = parseInt(suffix.replace("-", "")) || 1;
-              if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
-                metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum2}`;
-              }
-              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-                }
-              }
-              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-                }
-              }
-              return metaObj;
-            } catch {
-              return table.meta;
-            }
-          })(),
-          isDefault: table.isDefault,
-          order: table.order,
-          lookupDisplayColumns: table.lookupDisplayColumns,
-          lookupSelectColumn: table.lookupSelectColumn
-        }
-      });
-      await Promise.all([
-        ...table.tableColumns.map(
-          (col) => prisma70.treeBranchLeafNodeTableColumn.create({
-            data: {
-              id: `${col.id}${suffix}`,
-              tableId: newTableId,
-              columnIndex: col.columnIndex,
-              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-              name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
-              type: col.type,
-              width: col.width,
-              format: col.format,
-              metadata: col.metadata
-            }
-          })
-        ),
-        ...table.tableRows.map(
-          (row) => prisma70.treeBranchLeafNodeTableRow.create({
-            data: {
-              id: `${row.id}${suffix}`,
-              tableId: newTableId,
-              rowIndex: row.rowIndex,
-              cells: row.cells
-            }
-          })
-        )
-      ]);
-      result.capacitiesFixed.tables++;
-    }
-  }
-  await fixAssociatedLookups(prisma70, originalNode, copiedNode, suffix);
-  result.capacitiesFixed.lookups = 1;
-  if (copiedNode.fieldConfig) {
-    const newFieldConfig = updateFieldConfigReferences(copiedNode.fieldConfig, suffix);
-    if (newFieldConfig !== copiedNode.fieldConfig) {
-      await prisma70.treeBranchLeafNode.update({
-        where: { id: copiedNodeId },
-        data: { fieldConfig: newFieldConfig }
-      });
-      result.fieldConfigUpdated = true;
-    }
-  }
-  await prisma70.treeBranchLeafNode.update({
-    where: { id: copiedNodeId },
-    data: {
-      hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
-      hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
-      hasTable: originalNode.TreeBranchLeafNodeTable.length > 0,
-      calculatedValue: null,
-      calculatedAt: null,
-      calculatedBy: null
-    }
-  });
-  result.calculatedValueReset = true;
-  return result;
-}
-async function fixAssociatedLookups(prisma70, originalNode, copiedNode, suffix) {
-  const measureNodes = await prisma70.treeBranchLeafNode.findMany({
-    where: {
-      AND: [
-        { label: { contains: "Mesure" } },
-        { label: { endsWith: suffix } },
-        { treeId: copiedNode.treeId }
-      ]
-    },
-    include: {
-      TreeBranchLeafNodeTable: {
-        include: {
-          tableColumns: true,
-          tableRows: true
-        }
-      }
-    }
-  });
-  for (const originalTable of originalNode.TreeBranchLeafNodeTable) {
-    const lookupName = `Lookup ${originalNode.label}${suffix}`;
-    for (const measureNode of measureNodes) {
-      const lookupTable = measureNode.TreeBranchLeafNodeTable.find(
-        (t) => t.name.includes("Lookup") && (t.name.includes(originalNode.label) || t.name === lookupName)
-      );
-      if (lookupTable && lookupTable.tableRows.length === 0) {
-        await Promise.all([
-          prisma70.treeBranchLeafNodeTableColumn.deleteMany({
-            where: { tableId: lookupTable.id }
-          }),
-          prisma70.treeBranchLeafNodeTableRow.deleteMany({
-            where: { tableId: lookupTable.id }
-          })
-        ]);
-        await Promise.all([
-          ...originalTable.tableColumns.map(
-            (col) => prisma70.treeBranchLeafNodeTableColumn.create({
-              data: {
-                id: `${col.id}-lookup${suffix}`,
-                tableId: lookupTable.id,
-                columnIndex: col.columnIndex,
-                name: col.name,
-                type: col.type,
-                width: col.width,
-                format: col.format,
-                metadata: col.metadata
-              }
-            })
-          ),
-          ...originalTable.tableRows.map(
-            (row) => prisma70.treeBranchLeafNodeTableRow.create({
-              data: {
-                id: `${row.id}-lookup${suffix}`,
-                tableId: lookupTable.id,
-                rowIndex: row.rowIndex,
-                cells: row.cells
-              }
-            })
-          )
-        ]);
-        await prisma70.treeBranchLeafNodeTable.update({
-          where: { id: lookupTable.id },
-          data: {
-            rowCount: originalTable.rowCount,
-            columnCount: originalTable.columnCount,
-            lookupSelectColumn: originalTable.lookupSelectColumn || "Orientation",
-            lookupDisplayColumns: originalTable.lookupDisplayColumns.length > 0 ? originalTable.lookupDisplayColumns : ["Orientation"]
-          }
-        });
-      }
-    }
-  }
-}
-function adaptReferencesForCopiedNode(data, suffix) {
-  if (!data) return data;
-  const adaptString = (str) => {
-    return str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (match, nodeId) => {
-      if (nodeId.includes("shared-ref") || nodeId.endsWith(suffix.replace("-", ""))) {
-        return match;
-      }
-      return `@value.${nodeId}${suffix}`;
-    }).replace(/node-formula:([a-f0-9-]{36})/gi, (match, formulaId) => {
-      return `node-formula:${formulaId}${suffix}`;
-    });
-  };
-  if (Array.isArray(data)) {
-    return data.map(
-      (item) => typeof item === "string" ? adaptString(item) : item
-    );
-  }
-  if (typeof data === "string") {
-    return adaptString(data);
-  }
-  try {
-    const str = JSON.stringify(data);
-    const adapted = adaptString(str);
-    return JSON.parse(adapted);
-  } catch {
-    return data;
-  }
-}
-function updateFieldConfigReferences(fieldConfig, suffix) {
-  if (!fieldConfig || typeof fieldConfig !== "object") return fieldConfig;
-  const config = { ...fieldConfig };
-  if (config.lookupTableId) {
-    config.lookupTableId = `${config.lookupTableId}${suffix}`;
-  }
-  if (config.lookupNodeId) {
-    config.lookupNodeId = `${config.lookupNodeId}${suffix}`;
-  }
-  return config;
-}
-async function fixAllCompleteDuplications(prisma70, repeaterNodeId) {
-  const report = {
-    totalNodesProcessed: 0,
-    nodesFixed: [],
-    errors: []
-  };
-  try {
-    const whereClause = {
-      AND: [
-        { label: { endsWith: "-1" } }
-      ]
-    };
-    if (repeaterNodeId) {
-      whereClause.AND.push({
-        metadata: {
-          path: ["duplicatedFromRepeater"],
-          equals: repeaterNodeId
-        }
-      });
-    }
-    const copiedNodes = await prisma70.treeBranchLeafNode.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        label: true,
-        metadata: true
-      }
-    });
-    for (const node of copiedNodes) {
-      report.totalNodesProcessed++;
-      try {
-        let originalNodeId = null;
-        if (node.metadata && typeof node.metadata === "object") {
-          const meta = node.metadata;
-          originalNodeId = meta.sourceTemplateId || meta.copiedFromNodeId || null;
-        }
-        if (!originalNodeId && node.label) {
-          const originalLabel = node.label.replace("-1", "");
-          const originalNode = await prisma70.treeBranchLeafNode.findFirst({
-            where: {
-              label: originalLabel,
-              id: { not: node.id }
-            },
-            select: { id: true }
-          });
-          if (originalNode) {
-            originalNodeId = originalNode.id;
-          }
-        }
-        if (!originalNodeId) {
-          report.errors.push({
-            nodeId: node.id,
-            error: "Impossible de trouver le n\xC3\u2026\xE2\u20AC\u0153ud original"
-          });
-          continue;
-        }
-        const result = await fixCompleteDuplication(prisma70, originalNodeId, node.id, "-1");
-        report.nodesFixed.push(result);
-      } catch (error) {
-        report.errors.push({
-          nodeId: node.id,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
-  } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [COMPLETE-DUPLICATION-FIX] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
-  }
-  return report;
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-recalculation-service.ts
-async function forceNodeRecalculationWithOwnData(prisma70, copiedNodeId) {
-  const result = {
-    nodeId: copiedNodeId,
-    nodeLabel: null,
-    oldCalculatedValue: null,
-    newCalculatedValue: null,
-    recalculationForced: false,
-    referencesUpdated: []
-  };
-  const copiedNode = await prisma70.treeBranchLeafNode.findUnique({
-    where: { id: copiedNodeId },
-    include: {
-      TreeBranchLeafNodeFormula: true,
-      TreeBranchLeafNodeCondition: true,
-      TreeBranchLeafNodeTable: {
-        include: {
-          tableColumns: true,
-          tableRows: true
-        }
-      }
-    }
-  });
-  if (!copiedNode) {
-    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
-  }
-  result.nodeLabel = copiedNode.label;
-  result.oldCalculatedValue = copiedNode.calculatedValue;
-  for (const formula of copiedNode.TreeBranchLeafNodeFormula) {
-    if (formula.tokens) {
-      let tokensStr = JSON.stringify(formula.tokens);
-      let updated = false;
-      const updatedTokensStr = tokensStr.replace(
-        /@value\.([A-Za-z0-9_:-]+)(?!-1)/g,
-        (match, nodeId) => {
-          if (nodeId.includes("shared-ref") || nodeId.endsWith("1")) {
-            return match;
-          }
-          updated = true;
-          result.referencesUpdated.push(`Formula ${formula.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
-          return `@value.${nodeId}-1`;
-        }
-      );
-      if (updated) {
-        const newTokens = JSON.parse(updatedTokensStr);
-        await prisma70.treeBranchLeafNodeFormula.update({
-          where: { id: formula.id },
-          data: { tokens: newTokens }
-        });
-      }
-    }
-  }
-  for (const condition of copiedNode.TreeBranchLeafNodeCondition) {
-    if (condition.conditionSet) {
-      let conditionStr = JSON.stringify(condition.conditionSet);
-      let updated = false;
-      const updatedConditionStr = conditionStr.replace(
-        /@value\.([A-Za-z0-9_:-]+)(?!-1)/g,
-        (match, nodeId) => {
-          if (nodeId.includes("shared-ref") || nodeId.endsWith("1")) {
-            return match;
-          }
-          updated = true;
-          result.referencesUpdated.push(`Condition ${condition.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
-          return `@value.${nodeId}-1`;
-        }
-      );
-      if (updated) {
-        const newConditionSet = JSON.parse(updatedConditionStr);
-        await prisma70.treeBranchLeafNodeCondition.update({
-          where: { id: condition.id },
-          data: { conditionSet: newConditionSet }
-        });
-      }
-    }
-  }
-  const forceRecalcMetadata = {
-    ...copiedNode.metadata && typeof copiedNode.metadata === "object" ? copiedNode.metadata : {},
-    forceRecalculation: true,
-    lastForceRecalc: (/* @__PURE__ */ new Date()).toISOString(),
-    independentCalculation: true,
-    noFallbackToOriginal: true,
-    recalculationReason: "Duplication independence enforcement"
-  };
-  await prisma70.treeBranchLeafNode.update({
-    where: { id: copiedNodeId },
-    data: {
-      calculatedValue: null,
-      calculatedAt: null,
-      calculatedBy: null,
-      metadata: forceRecalcMetadata
-    }
-  });
-  result.recalculationForced = true;
-  result.newCalculatedValue = null;
-  return result;
-}
-async function forceAllNodesRecalculationWithOwnData(prisma70, repeaterNodeId) {
-  const report = {
-    totalNodesProcessed: 0,
-    nodesRecalculated: [],
-    errors: []
-  };
-  try {
-    const whereClause = {
-      AND: [
-        { label: { endsWith: "-1" } }
-      ]
-    };
-    if (repeaterNodeId) {
-      whereClause.AND.push({
-        metadata: {
-          path: ["duplicatedFromRepeater"],
-          equals: repeaterNodeId
-        }
-      });
-    }
-    const copiedNodes = await prisma70.treeBranchLeafNode.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        label: true,
-        calculatedValue: true
-      }
-    });
-    for (const node of copiedNodes) {
-      report.totalNodesProcessed++;
-      try {
-        if (node.calculatedValue !== null) {
-          const result = await forceNodeRecalculationWithOwnData(prisma70, node.id);
-          report.nodesRecalculated.push(result);
-        } else {
-        }
-      } catch (error) {
-        report.errors.push({
-          nodeId: node.id,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
-  } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [FORCE-RECALC-ALL] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
-  }
-  return report;
-}
-async function blockFallbackToOriginalValues(prisma70, copiedNodeIds) {
-  for (const nodeId of copiedNodeIds) {
-    const node = await prisma70.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: { metadata: true }
-    });
-    if (node) {
-      const antiFactbackMetadata = {
-        ...node.metadata && typeof node.metadata === "object" ? node.metadata : {},
-        blockFallbackToOriginal: true,
-        enforceIndependentCalculation: true,
-        lastAntiFactbackUpdate: (/* @__PURE__ */ new Date()).toISOString(),
-        calculationIsolationLevel: "STRICT"
-      };
-      await prisma70.treeBranchLeafNode.update({
-        where: { id: nodeId },
-        data: {
-          metadata: antiFactbackMetadata,
-          // S'assurer que la valeur est null pour forcer un nouveau calcul
-          calculatedValue: null,
-          calculatedAt: null
-        }
-      });
-    }
-  }
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
-var TableLookupDuplicationService = class {
-  /**
-   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
-   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
-   */
-  async duplicateTableLookupSystem(prisma70, originalNodeId, arg) {
-    let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
-    if (!suffixToken) suffixToken = "-1";
-    if (!suffixToken.startsWith("-")) {
-      suffixToken = `-${suffixToken}`;
-    }
-    const normalizedOriginalId = normalizeNodeBase(originalNodeId);
-    const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
-    try {
-      const originalSelectConfigs = await prisma70.treeBranchLeafSelectConfig.findMany({
-        where: { nodeId: originalNodeId }
-      });
-      if (originalSelectConfigs.length === 0) {
-        return;
-      }
-      for (const selectConfig of originalSelectConfigs) {
-        await this.duplicateTableAndSelectConfig(prisma70, selectConfig, copiedNodeId, suffixToken);
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
-      throw error;
-    }
-  }
-  /**
-   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
-   */
-  async duplicateTableAndSelectConfig(prisma70, originalSelectConfig, copiedNodeId, suffix) {
-    const originalTableId = originalSelectConfig.tableReference;
-    const copiedTableId = `${originalTableId}${suffix}`;
-    try {
-      const originalTable = await prisma70.treeBranchLeafNodeTable.findUnique({
-        where: { id: originalTableId },
-        include: {
-          tableColumns: true,
-          tableRows: true
-        }
-      });
-      if (!originalTable) {
-        return;
-      }
-      const existingCopiedTable = await prisma70.treeBranchLeafNodeTable.findUnique({
-        where: { id: copiedTableId }
-      });
-      if (!existingCopiedTable) {
-        await prisma70.treeBranchLeafNodeTable.create({
-          data: {
-            id: copiedTableId,
-            nodeId: copiedNodeId,
-            name: originalTable.name + suffix,
-            type: originalTable.type,
-            description: originalTable.description,
-            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
-            meta: (() => {
-              if (!originalTable.meta) return originalTable.meta;
-              try {
-                const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
-                const suffixNum = parseInt(suffix.replace("-", "")) || 1;
-                if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
-                  metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
-                }
-                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
-                  }
-                }
-                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
-                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
-                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
-                  }
-                }
-                if (metaObj?.lookup?.displayColumn) {
-                  if (Array.isArray(metaObj.lookup.displayColumn)) {
-                    metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
-                      if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
-                        return `${col}${suffix}`;
-                      }
-                      return col;
-                    });
-                  } else if (typeof metaObj.lookup.displayColumn === "string") {
-                    const val = metaObj.lookup.displayColumn;
-                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      metaObj.lookup.displayColumn = `${val}${suffix}`;
-                    }
-                  }
-                }
-                if (metaObj?.lookup?.displayRow) {
-                  if (Array.isArray(metaObj.lookup.displayRow)) {
-                    metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
-                      if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
-                        return `${row}${suffix}`;
-                      }
-                      return row;
-                    });
-                  } else if (typeof metaObj.lookup.displayRow === "string") {
-                    const val = metaObj.lookup.displayRow;
-                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
-                      metaObj.lookup.displayRow = `${val}${suffix}`;
-                    }
-                  }
-                }
-                return metaObj;
-              } catch {
-                return originalTable.meta;
-              }
-            })(),
-            organizationId: originalTable.organizationId,
-            rowCount: originalTable.rowCount,
-            columnCount: originalTable.columnCount,
-            lookupDisplayColumns: originalTable.lookupDisplayColumns,
-            lookupSelectColumn: originalTable.lookupSelectColumn,
-            // Duplication des colonnes
-            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
-            tableColumns: {
-              create: originalTable.tableColumns.map((col) => ({
-                columnIndex: col.columnIndex,
-                name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
-                type: col.type,
-                width: col.width,
-                format: col.format,
-                metadata: col.metadata
-              }))
-            },
-            // Duplication des lignes
-            tableRows: {
-              create: originalTable.tableRows.map((row) => ({
-                rowIndex: row.rowIndex,
-                cells: row.cells
-              }))
-            }
-          }
-        });
-      } else {
-      }
-      const existingSelectConfig = await prisma70.treeBranchLeafSelectConfig.findFirst({
-        where: {
-          nodeId: copiedNodeId,
-          tableReference: copiedTableId
-        }
-      });
-      if (!existingSelectConfig) {
-        await prisma70.treeBranchLeafSelectConfig.create({
-          data: {
-            nodeId: copiedNodeId,
-            tableReference: copiedTableId,
-            keyColumn: originalSelectConfig.keyColumn,
-            keyRow: originalSelectConfig.keyRow,
-            valueColumn: originalSelectConfig.valueColumn,
-            valueRow: originalSelectConfig.valueRow,
-            displayColumn: originalSelectConfig.displayColumn,
-            displayRow: originalSelectConfig.displayRow,
-            createdAt: /* @__PURE__ */ new Date(),
-            updatedAt: /* @__PURE__ */ new Date()
-          }
-        });
-        try {
-          const node = await prisma70.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
-          const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
-          currentCapabilities.table = currentCapabilities.table || {};
-          currentCapabilities.table.enabled = true;
-          currentCapabilities.table.activeId = copiedTableId;
-          currentCapabilities.table.instances = currentCapabilities.table.instances || {};
-          currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
-          const currentLinked = node?.linkedTableIds || [];
-          const newLinked = Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
-          await prisma70.treeBranchLeafNode.update({
-            where: { id: copiedNodeId },
-            data: {
-              hasTable: true,
-              table_activeId: copiedTableId,
-              table_instances: { set: currentCapabilities.table.instances },
-              table_name: originalTable.name + suffix,
-              table_type: originalTable.type,
-              capabilities: currentCapabilities,
-              linkedTableIds: { set: newLinked }
-            }
-          });
-        } catch (nodeUpdateErr) {
-          console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
-        }
-      } else {
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur duplication table/config ${originalTableId}:`, error);
-      throw error;
-    }
-  }
-  /**
-   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
-   */
-  async repairMissingSelectConfigs(prisma70) {
-    try {
-      const copiedNodes = await prisma70.treeBranchLeafNode.findMany({
-        where: {
-          id: {
-            endsWith: "-1"
-          }
-        }
-      });
-      for (const copiedNode of copiedNodes) {
-        const originalNodeId = copiedNode.id.replace("-1", "");
-        const copiedSelectConfigs = await prisma70.treeBranchLeafSelectConfig.findMany({
-          where: { nodeId: copiedNode.id }
-        });
-        if (copiedSelectConfigs.length === 0) {
-          await this.duplicateTableLookupSystem(prisma70, originalNodeId, {
-            copiedNodeId: copiedNode.id,
-            suffixToken: "-1"
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
-      throw error;
-    }
-  }
-};
-var tableLookupDuplicationService = new TableLookupDuplicationService();
-function normalizeNodeBase(value) {
-  return value.replace(/-\d+(?:-\d+)*$/, "");
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
-init_operation_interpreter();
-async function recalculateNodeWithOperationInterpreter(prisma70, nodeId, submissionId) {
-  const result = {
-    nodeId,
-    label: null,
-    hasCapacity: false,
-    capacityType: "none",
-    oldValue: null,
-    newValue: null,
-    recalculationSuccess: false
-  };
-  try {
-    const node = await prisma70.treeBranchLeafNode.findUnique({
-      where: { id: nodeId },
-      select: {
-        id: true,
-        field_label: true,
-        calculatedValue: true,
-        hasFormula: true,
-        hasCondition: true,
-        hasTable: true,
-        linkedFormulaIds: true,
-        linkedConditionIds: true,
-        linkedTableIds: true,
-        TreeBranchLeafNodeFormula: { select: { id: true } },
-        TreeBranchLeafNodeCondition: { select: { id: true } },
-        TreeBranchLeafNodeTable: { select: { id: true } }
-      }
-    });
-    if (!node) {
-      result.error = `N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9`;
-      return result;
-    }
-    result.label = node.field_label;
-    result.oldValue = node.calculatedValue;
-    if (node.TreeBranchLeafNodeFormula?.length > 0) {
-      result.capacityType = "formula";
-      result.hasCapacity = true;
-    } else if (node.TreeBranchLeafNodeCondition?.length > 0) {
-      result.capacityType = "condition";
-      result.hasCapacity = true;
-    } else if (node.TreeBranchLeafNodeTable?.length > 0) {
-      result.capacityType = "table";
-      result.hasCapacity = true;
-    }
-    if (!result.hasCapacity) {
-      return result;
-    }
-    let sourceRef = "";
-    if (result.capacityType === "formula" && node.linkedFormulaIds?.length > 0) {
-      sourceRef = `node-formula:${node.linkedFormulaIds[0]}`;
-    } else if (result.capacityType === "condition" && node.linkedConditionIds?.length > 0) {
-      sourceRef = `condition:${node.linkedConditionIds[0]}`;
-    } else if (result.capacityType === "table" && node.linkedTableIds?.length > 0) {
-      sourceRef = `node-table:${node.linkedTableIds[0]}`;
-    }
-    if (!sourceRef) {
-      result.error = `Impossible de construire sourceRef`;
-      return result;
-    }
-    try {
-      const valuesCache = /* @__PURE__ */ new Map();
-      const interpretResult = await interpretReference(
-        sourceRef,
-        submissionId || "",
-        prisma70,
-        valuesCache,
-        0,
-        /* @__PURE__ */ new Map(),
-        /* @__PURE__ */ new Map()
-      );
-      result.newValue = interpretResult.result;
-      result.recalculationSuccess = true;
-      if (result.newValue && result.newValue !== "null" && result.newValue !== "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6") {
-        await prisma70.treeBranchLeafNode.update({
-          where: { id: nodeId },
-          data: {
-            calculatedValue: result.newValue,
-            calculatedAt: /* @__PURE__ */ new Date(),
-            calculatedBy: `interpreter-${result.capacityType}`
-          }
-        });
-      }
-    } catch (interpretError) {
-      result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-      console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  ${result.error}`);
-    }
-  } catch (error) {
-    result.error = error instanceof Error ? error.message : String(error);
-    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Erreur: ${result.error}`);
-  }
-  return result;
-}
-async function recalculateAllCopiedNodesWithOperationInterpreter(prisma70, repeaterNodeId, suffixMarker = "-1") {
-  const report = {
-    totalNodes: 0,
-    recalculated: [],
-    errors: []
-  };
-  try {
-    const repeaterChildren = await prisma70.treeBranchLeafNode.findMany({
-      where: {
-        parentId: repeaterNodeId
-      },
-      select: {
-        id: true,
-        field_label: true
-      }
-    });
-    const allDescendants = [];
-    const queue = [...repeaterChildren];
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) continue;
-      allDescendants.push(current);
-      const children = await prisma70.treeBranchLeafNode.findMany({
-        where: {
-          parentId: current.id
-        },
-        select: {
-          id: true,
-          field_label: true
-        }
-      });
-      queue.push(...children);
-    }
-    const copiedNodes = allDescendants.filter((node) => node.id.includes(suffixMarker));
-    report.totalNodes = copiedNodes.length;
-    for (const node of copiedNodes) {
-      try {
-        const recalcResult = await recalculateNodeWithOperationInterpreter(
-          prisma70,
-          node.id
-        );
-        report.recalculated.push(recalcResult);
-        if (recalcResult.recalculationSuccess && recalcResult.newValue) {
-        } else if (!recalcResult.recalculationSuccess) {
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        report.errors.push({ nodeId: node.id, error: errorMsg });
-        console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${node.field_label}: ${errorMsg}`);
-      }
-    }
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur globale: ${errorMsg}`);
-  }
-  const successCount = report.recalculated.filter((r) => r.recalculationSuccess).length;
-  return report;
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/repeater-template-sync.ts
-var parseJsonArray2 = (value) => {
-  if (!value) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-var extractMetaTemplateIds = (metadata) => {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return [];
-  }
-  const meta = metadata;
-  const repeaterMeta = meta.repeater && typeof meta.repeater === "object" ? meta.repeater : void 0;
-  const ids = repeaterMeta?.templateNodeIds;
-  return Array.isArray(ids) ? ids.filter((id) => typeof id === "string" && !!id) : [];
-};
-var buildMetadataPayload = (metadata, templateNodeIds) => {
-  const base = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? { ...metadata } : {};
-  const repeaterMeta = base.repeater && typeof base.repeater === "object" ? { ...base.repeater } : {};
-  repeaterMeta.templateNodeIds = templateNodeIds;
-  base.repeater = repeaterMeta;
-  return base;
-};
-async function syncRepeaterTemplateIds(prisma70, repeaterNodeId, templateNodeIds) {
-  if (!repeaterNodeId || !templateNodeIds.length) {
-    return;
-  }
-  const repeater = await prisma70.treeBranchLeafNode.findUnique({
-    where: { id: repeaterNodeId },
-    select: { repeater_templateNodeIds: true, metadata: true }
-  });
-  if (!repeater) {
-    return;
-  }
-  const columnIds = parseJsonArray2(repeater.repeater_templateNodeIds);
-  const metaIds = extractMetaTemplateIds(repeater.metadata);
-  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-  const allIds = [...columnIds, ...metaIds].filter((id) => typeof id === "string" && !!id).filter((id) => !hasCopySuffix.test(id));
-  const nextIds = Array.from(new Set(allIds));
-  const columnChanged = columnIds.length !== nextIds.length || columnIds.some((id, idx) => id !== nextIds[idx]);
-  const metadataChanged = metaIds.length !== nextIds.length || metaIds.some((id, idx) => id !== nextIds[idx]);
-  if (!columnChanged && !metadataChanged) {
-    return;
-  }
-  await prisma70.treeBranchLeafNode.update({
-    where: { id: repeaterNodeId },
-    data: {
-      repeater_templateNodeIds: JSON.stringify(nextIds),
-      metadata: buildMetadataPayload(repeater.metadata, nextIds)
-    }
-  });
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-async function runRepeatExecution(prisma70, req2, execution) {
-  const { repeaterNodeId, scopeId, plan, blueprint } = execution;
-  const authCtx = getAuthCtx(req2);
-  const repeaterNode = await prisma70.treeBranchLeafNode.findUnique({
-    where: { id: repeaterNodeId },
-    include: { TreeBranchLeafTree: true }
-  });
-  if (!repeaterNode) {
-    throw new RepeatOperationError(`Repeater node ${repeaterNodeId} not found.`, 404);
-  }
-  if (!authCtx.isSuperAdmin && authCtx.organizationId && repeaterNode.TreeBranchLeafTree?.organizationId !== authCtx.organizationId) {
-    throw new RepeatOperationError("Access denied for this repeater tree.", 403);
-  }
-  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
-  const rawIds = blueprint.templateNodeIds;
-  const templateNodeIds = rawIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id) => !hasCopySuffix.test(id));
-  if (rawIds.length !== templateNodeIds.length) {
-    rawIds.forEach((id, idx) => {
-      const cleaned = id.replace(/(-\d+)+$/, "");
-      if (id !== cleaned) {
-      }
-    });
-  }
-  templateNodeIds.forEach((id, idx) => {
-  });
-  if (!templateNodeIds.length) {
-    throw new RepeatOperationError(`Repeater ${repeaterNodeId} does not declare template nodes to duplicate.`, 422);
-  }
-  const templateNodes = await loadTemplateNodesWithFallback(
-    prisma70,
-    templateNodeIds,
-    repeaterNode.treeId,
-    authCtx.organizationId,
-    authCtx.isSuperAdmin
-  );
-  const nodesToDuplicate = templateNodes.filter((node) => node.type !== "section");
-  const sectionNodes = templateNodes.filter((node) => node.type === "section");
-  void sectionNodes;
-  const templateById = new Map(nodesToDuplicate.map((node) => [node.id, node]));
-  const templateIdsForSuffix = Array.from(templateById.keys());
-  const existingMax = await computeTemplateCopySuffixMax(
-    prisma70,
-    repeaterNode.treeId,
-    templateIdsForSuffix
-  );
-  templateIdsForSuffix.forEach((id) => {
-  });
-  const plannedSuffixByTemplate = /* @__PURE__ */ new Map();
-  for (const templateId of templateIdsForSuffix) {
-    const maxSeen = existingMax.get(templateId) ?? 0;
-    plannedSuffixByTemplate.set(templateId, maxSeen + 1);
-  }
-  for (const nodePlan of plan.nodes) {
-    const planned = coerceSuffix(nodePlan.plannedSuffix);
-    const maxSeen = existingMax.get(nodePlan.templateNodeId) ?? 0;
-    const enforcedNext = Math.max(planned ?? 0, maxSeen + 1);
-    plannedSuffixByTemplate.set(nodePlan.templateNodeId, enforcedNext);
-  }
-  const duplicatedSummaries = [];
-  const duplicatedNodeIds = /* @__PURE__ */ new Set();
-  const originalNodeIdByCopyId = /* @__PURE__ */ new Map();
-  const plannedNodeIdToRealNodeId = /* @__PURE__ */ new Map();
-  const globalNodeIdMap = /* @__PURE__ */ new Map();
-  const globalFormulaIdMap = /* @__PURE__ */ new Map();
-  const globalConditionIdMap = /* @__PURE__ */ new Map();
-  const globalTableIdMap = /* @__PURE__ */ new Map();
-  const globalVariableCopyCache = /* @__PURE__ */ new Map();
-  for (const template of nodesToDuplicate) {
-    try {
-      if (!template) continue;
-      const plannedSuffix = plannedSuffixByTemplate.get(template.id);
-      const baseContext = {
-        repeaterNodeId,
-        templateNodeId: template.id,
-        duplicatedFromNodeId: template.id,
-        scopeId,
-        mode: "repeater"
-      };
-      const attemptCopy = async (forcedSuffix) => {
-        const context = forcedSuffix !== void 0 ? { ...baseContext, suffix: forcedSuffix } : { ...baseContext };
-        const options = {
-          preserveSharedReferences: true,
-          repeatContext: context
-        };
-        if (forcedSuffix !== void 0) {
-          options.forcedSuffix = forcedSuffix;
-          options.suffixNum = forcedSuffix;
-        }
-        try {
-          const result = await deepCopyNodeInternal(prisma70, req2, template.id, options);
-          return { result, appliedSuffix: forcedSuffix };
-        } catch (error) {
-          if (forcedSuffix !== void 0 && isUniqueConstraintError(error)) {
-            console.warn("[repeat-executor] Forced suffix already exists, retrying with auto suffix", {
-              templateId: template.id,
-              forcedSuffix
-            });
-            return attemptCopy(void 0);
-          }
-          throw error;
-        }
-      };
-      const { result: copyResult, appliedSuffix } = await attemptCopy(plannedSuffix);
-      const newRootId = copyResult.root.newId;
-      const created = await prisma70.treeBranchLeafNode.findUnique({
-        where: { id: newRootId }
-      });
-      if (!created) {
-        throw new RepeatOperationError(`Node copy failed to materialize for template ${template.id}.`, 500);
-      }
-      const createdMetadata = created.metadata && typeof created.metadata === "object" ? created.metadata : {};
-      const resolvedSuffix = coerceSuffix(createdMetadata.copySuffix) ?? extractSuffixFromId2(created.id) ?? appliedSuffix ?? null;
-      const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
-      const updatedMetadata = {
-        ...createdMetadata,
-        sourceTemplateId: template.id,
-        duplicatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        duplicatedFromRepeater: repeaterNodeId,
-        copiedFromNodeId: template.id,
-        copySuffix: effectiveSuffix,
-        repeatScopeId: scopeId
-      };
-      await prisma70.treeBranchLeafNode.update({
-        where: { id: newRootId },
-        data: {
-          metadata: updatedMetadata
-        }
-      });
-      duplicatedSummaries.push({
-        id: created.id,
-        label: created.label,
-        type: created.type,
-        parentId: created.parentId,
-        sourceTemplateId: template.id
-      });
-      duplicatedNodeIds.add(created.id);
-      originalNodeIdByCopyId.set(created.id, template.id);
-      const plannedRootId = `${template.id}-${effectiveSuffix}`;
-      plannedNodeIdToRealNodeId.set(plannedRootId, newRootId);
-      Object.entries(copyResult.idMap || {}).forEach(([oldId, newId]) => {
-        if (!newId) return;
-        duplicatedNodeIds.add(newId);
-        if (oldId) {
-          originalNodeIdByCopyId.set(newId, oldId);
-        }
-        const plannedChildId = `${oldId}-${effectiveSuffix}`;
-        plannedNodeIdToRealNodeId.set(plannedChildId, newId);
-        globalNodeIdMap.set(oldId, newId);
-      });
-      if (copyResult.formulaIdMap) {
-        Object.entries(copyResult.formulaIdMap).forEach(([oldId, newId]) => {
-          if (oldId && newId) globalFormulaIdMap.set(oldId, newId);
-        });
-      }
-      if (copyResult.conditionIdMap) {
-        Object.entries(copyResult.conditionIdMap).forEach(([oldId, newId]) => {
-          if (oldId && newId) globalConditionIdMap.set(oldId, newId);
-        });
-      }
-      if (copyResult.tableIdMap) {
-        Object.entries(copyResult.tableIdMap).forEach(([oldId, newId]) => {
-          if (oldId && newId) globalTableIdMap.set(oldId, newId);
-        });
-      }
-      if (copyResult.displayNodeIds && copyResult.displayNodeIds.length > 0) {
-        copyResult.displayNodeIds.forEach((displayNodeId2) => {
-          duplicatedNodeIds.add(displayNodeId2);
-          const originalDisplayNodeId = displayNodeId2.replace(/-\d+$/, "");
-          originalNodeIdByCopyId.set(displayNodeId2, originalDisplayNodeId);
-        });
-      }
-      try {
-        await applySharedReferencesFromOriginalInternal2({
-          prisma: prisma70,
-          nodeId: newRootId,
-          authCtx
-        });
-      } catch (sharedErr) {
-        console.warn("[repeat-executor] Failed to apply shared references", sharedErr);
-      }
-      try {
-        const selectorOptions = {
-          nodeIdMap: new Map(Object.entries(copyResult.idMap || {})),
-          tableCopyCache: /* @__PURE__ */ new Map(),
-          tableIdMap: new Map(Object.entries(copyResult.tableIdMap || {}))
-        };
-        await copySelectorTablesAfterNodeCopy(
-          prisma70,
-          newRootId,
-          template.id,
-          selectorOptions,
-          effectiveSuffix
-        );
-      } catch (selectorErr) {
-        console.warn("[repeat-executor] Failed to copy selector tables", selectorErr);
-      }
-    } catch (nodeExecErr) {
-      console.error(`[repeat-executor] Error during execution for template ${template?.id || "unknown"}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
-      throw nodeExecErr;
-    }
-  }
-  for (const variablePlan of plan.variables) {
-    try {
-      let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
-      const templateVar = await prisma70.treeBranchLeafNodeVariable.findUnique({
-        where: { id: templateVariableId },
-        select: { displayName: true }
-      });
-      const isLookup = templateVar?.displayName?.includes("Lookup Table");
-      if (isLookup) {
-        continue;
-      }
-      const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
-      if (realTargetNodeId) {
-        targetNodeId = realTargetNodeId;
-      } else {
-        console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  [REPEAT-EXECUTOR] Aucun mapping trouv\xC3\u0192\xC2\xA9 pour targetNodeId "${targetNodeId}", utilisation directe`);
-      }
-      const variableResult = await copyVariableWithCapacities(
-        templateVariableId,
-        plannedSuffix,
-        targetNodeId,
-        prisma70,
-        {
-          autoCreateDisplayNode: true,
-          isFromRepeaterDuplication: true,
-          // Ã°Å¸â€Â¥ PASSER LES MAPS GLOBALES pour que les capacitÃƒÂ©s utilisent les bons IDs
-          nodeIdMap: globalNodeIdMap,
-          formulaIdMap: globalFormulaIdMap,
-          conditionIdMap: globalConditionIdMap,
-          tableIdMap: globalTableIdMap,
-          variableCopyCache: globalVariableCopyCache,
-          repeatContext: {
-            repeaterNodeId,
-            templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ""),
-            duplicatedFromNodeId: targetNodeId.replace(`-${plannedSuffix}`, ""),
-            scopeId,
-            mode: "repeater"
-          }
-        }
-      );
-      if (variableResult.success) {
-        if (variableResult.formulaIdMap) {
-          for (const [oldId, newId] of variableResult.formulaIdMap.entries()) {
-            globalFormulaIdMap.set(oldId, newId);
-          }
-        }
-        if (variableResult.conditionIdMap) {
-          for (const [oldId, newId] of variableResult.conditionIdMap.entries()) {
-            globalConditionIdMap.set(oldId, newId);
-          }
-        }
-        if (variableResult.tableIdMap) {
-          for (const [oldId, newId] of variableResult.tableIdMap.entries()) {
-            globalTableIdMap.set(oldId, newId);
-          }
-        }
-      }
-      if (variableResult.success && variableResult.displayNodeId) {
-        const originalDisplayNodeId = variableResult.displayNodeId.replace(/-\d+$/, "");
-        globalNodeIdMap.set(originalDisplayNodeId, variableResult.displayNodeId);
-      }
-    } catch (varErr) {
-      console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
-    }
-  }
-  try {
-    await syncRepeaterTemplateIds(prisma70, repeaterNodeId, templateNodeIds);
-  } catch (syncErr) {
-    console.warn("[repeat-executor] Unable to sync repeater template IDs", syncErr);
-  }
-  if (duplicatedNodeIds.size > 0) {
-    try {
-      const completeDuplicationReport = await fixAllCompleteDuplications(prisma70, repeaterNodeId);
-      for (const nodeId of duplicatedNodeIds) {
-        const originalNodeId = originalNodeIdByCopyId.get(nodeId);
-        if (!originalNodeId) continue;
-        const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
-        if (!suffixToken) continue;
-        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma70, originalNodeId, {
-          copiedNodeId: nodeId,
-          suffixToken
-        });
-      }
-      await reassignCopiedNodesToDuplicatedParents(prisma70, duplicatedNodeIds, originalNodeIdByCopyId);
-      const isolationResult = await enforceStrictIsolation(
-        prisma70,
-        Array.from(duplicatedNodeIds)
-      );
-      await verifyIsolation(prisma70, Array.from(duplicatedNodeIds));
-      const resetCount = await resetCalculatedValuesAfterCopy(
-        prisma70,
-        Array.from(duplicatedNodeIds)
-      );
-      await forceIndependentCalculation(prisma70, Array.from(duplicatedNodeIds));
-      await createRecalculationTriggers(prisma70, Array.from(duplicatedNodeIds));
-      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma70, repeaterNodeId);
-      await blockFallbackToOriginalValues(prisma70, Array.from(duplicatedNodeIds));
-      const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
-        prisma70,
-        repeaterNodeId,
-        "-1"
-      );
-      interpreterRecalcReport.recalculated.forEach((r) => {
-        if (r.hasCapacity && r.newValue) {
-        }
-      });
-    } catch (isolationError) {
-      console.warn("[REPEAT-EXECUTOR] Erreur lors de l'isolation stricte:", isolationError);
-    }
-  }
-  let nodesPayload = [];
-  if (duplicatedNodeIds.size > 0) {
-    const nodes = await prisma70.treeBranchLeafNode.findMany({
-      where: {
-        treeId: repeaterNode.treeId,
-        id: { in: Array.from(duplicatedNodeIds) }
-      }
-    });
-    nodesPayload = nodes.map(buildResponseFromColumns);
-  }
-  return {
-    duplicated: duplicatedSummaries,
-    nodes: nodesPayload,
-    count: duplicatedSummaries.length,
-    debug: {
-      templateNodeIds,
-      nodesToDuplicateIds: nodesToDuplicate.map((n) => n.id),
-      sectionIds: sectionNodes.map((n) => n.id),
-      templateCount: templateNodeIds.length,
-      nodesToDuplicateCount: nodesToDuplicate.length,
-      sectionCount: sectionNodes.length
-    }
-  };
-}
-async function loadTemplateNodesWithFallback(prisma70, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
-  if (!templateNodeIds.length) {
-    throw new RepeatOperationError("Repeater does not declare template nodes to duplicate.", 422);
-  }
-  const scoped = await prisma70.treeBranchLeafNode.findMany({
-    where: {
-      id: { in: templateNodeIds },
-      treeId: repeaterTreeId
-    }
-  });
-  const foundIds = new Set(scoped.map((n) => n.id));
-  const missingIds = templateNodeIds.filter((id) => !foundIds.has(id));
-  let crossTree = [];
-  if (missingIds.length) {
-    crossTree = await prisma70.treeBranchLeafNode.findMany({
-      where: { id: { in: missingIds } },
-      include: {
-        TreeBranchLeafTree: { select: { organizationId: true } }
-      }
-    });
-    if (!crossTree.length) {
-      if (!scoped.length) {
-        throw new RepeatOperationError("No template nodes could be loaded for this repeater.", 404);
-      }
-    }
-    if (!isSuperAdmin2 && organizationId) {
-      const unauthorized = crossTree.find(
-        (node) => node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId
-      );
-      if (unauthorized) {
-        throw new RepeatOperationError("Access denied to template library for this repeater.", 403);
-      }
-    }
-  }
-  const merged = [
-    ...scoped,
-    ...crossTree.map(({ TreeBranchLeafTree, ...rest }) => rest)
-  ];
-  if (!merged.length) {
-    throw new RepeatOperationError("No template nodes could be loaded for this repeater.", 404);
-  }
-  return merged;
-}
-function coerceSuffix(value) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return null;
-}
-function extractSuffixFromId2(id) {
-  if (!id) return null;
-  const match = /-(\d+)$/.exec(id);
-  if (!match) return null;
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-function deriveCopySuffixToken(originalNodeId, copiedNodeId) {
-  const baseId = normalizeNodeBase2(originalNodeId);
-  if (!copiedNodeId.startsWith(baseId)) {
-    return null;
-  }
-  const remainder = copiedNodeId.slice(baseId.length);
-  if (!remainder.startsWith("-") || remainder.length <= 1) {
-    return null;
-  }
-  return remainder;
-}
-function normalizeNodeBase2(value) {
-  return value.replace(/-\d+(?:-\d+)*$/, "");
-}
-function isUniqueConstraintError(error) {
-  return error instanceof import_client69.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-}
-async function reassignCopiedNodesToDuplicatedParents(prisma70, copiedNodeIds, originalNodeIdByCopyId) {
-  if (!copiedNodeIds.size) {
-    return;
-  }
-  const copyIds = Array.from(copiedNodeIds);
-  const copies = await prisma70.treeBranchLeafNode.findMany({
-    where: { id: { in: copyIds } },
-    select: {
-      id: true,
-      parentId: true,
-      metadata: true
-    }
-  });
-  if (!copies.length) {
-    return;
-  }
-  const originalIds = Array.from(
-    new Set(
-      copies.map((copy) => originalNodeIdByCopyId.get(copy.id) ?? getOriginalNodeIdFromMetadata(copy.metadata)).filter((value) => Boolean(value))
-    )
-  );
-  if (!originalIds.length) {
-    return;
-  }
-  const originalNodes = await prisma70.treeBranchLeafNode.findMany({
-    where: { id: { in: originalIds } },
-    select: { id: true, parentId: true }
-  });
-  const originalParentMap = new Map(originalNodes.map((node) => [node.id, node.parentId]));
-  const parentIdsToCheck = /* @__PURE__ */ new Set();
-  const reassignmentTargets = [];
-  for (const copy of copies) {
-    const originalId = originalNodeIdByCopyId.get(copy.id) ?? getOriginalNodeIdFromMetadata(copy.metadata);
-    if (!originalId) {
-      continue;
-    }
-    const originalParentId = originalParentMap.get(originalId);
-    if (!originalParentId) {
-      continue;
-    }
-    const suffixToken = getCopySuffixToken(copy.id, copy.metadata);
-    if (!suffixToken) {
-      continue;
-    }
-    const sanitizedSuffix = sanitizeSuffixToken(suffixToken);
-    if (!sanitizedSuffix) {
-      continue;
-    }
-    const parentBaseId = normalizeNodeBase2(originalParentId);
-    if (!parentBaseId) {
-      continue;
-    }
-    const desiredParentId = `${parentBaseId}-${sanitizedSuffix}`;
-    if (!desiredParentId || desiredParentId === copy.parentId) {
-      continue;
-    }
-    parentIdsToCheck.add(desiredParentId);
-    reassignmentTargets.push({ nodeId: copy.id, targetParentId: desiredParentId });
-  }
-  if (!reassignmentTargets.length) {
-    return;
-  }
-  const existingParents = await prisma70.treeBranchLeafNode.findMany({
-    where: { id: { in: Array.from(parentIdsToCheck) } },
-    select: { id: true }
-  });
-  const existingParentIds = new Set(existingParents.map((parent) => parent.id));
-  const updates = [];
-  for (const target of reassignmentTargets) {
-    if (!existingParentIds.has(target.targetParentId)) {
-      continue;
-    }
-    updates.push(
-      prisma70.treeBranchLeafNode.update({
-        where: { id: target.nodeId },
-        data: { parentId: target.targetParentId }
-      })
-    );
-  }
-  if (!updates.length) {
-    return;
-  }
-  await prisma70.$transaction(updates);
-}
-function getCopySuffixToken(nodeId, metadata) {
-  const normalizedMetadata = normalizeMetadata(metadata);
-  const rawSuffix = normalizedMetadata?.copySuffix;
-  if (typeof rawSuffix === "number" && Number.isFinite(rawSuffix)) {
-    return String(rawSuffix);
-  }
-  if (typeof rawSuffix === "string" && rawSuffix.trim()) {
-    return rawSuffix.trim();
-  }
-  const parsed = extractSuffixFromId2(nodeId);
-  return parsed !== null ? String(parsed) : null;
-}
-function getOriginalNodeIdFromMetadata(metadata) {
-  const normalizedMetadata = normalizeMetadata(metadata);
-  if (!normalizedMetadata) {
-    return null;
-  }
-  const candidates = ["copiedFromNodeId", "duplicatedFromNodeId", "sourceTemplateId"];
-  for (const key2 of candidates) {
-    const value = normalizedMetadata[key2];
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-  return null;
-}
-function sanitizeSuffixToken(token) {
-  return token.replace(/^[-_]+/, "").trim();
-}
-function normalizeMetadata(metadata) {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return null;
-  }
-  return metadata;
-}
-
-// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-function createRepeatRouter(prisma70) {
-  const router84 = (0, import_express85.Router)();
-  const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router84.use(authenticateToken);
-  router84.post("/:repeaterNodeId/instances", async (req2, res) => {
-    const { repeaterNodeId } = req2.params;
-    const body2 = req2.body || {};
-    try {
-      const result = await planRepeatDuplication(prisma70, repeaterNodeId, {
-        suffix: body2.suffix,
-        includeTotals: body2.includeTotals,
-        targetParentId: body2.targetParentId,
-        scopeId: body2.scopeId
-      });
-      return res.status(200).json({
-        status: "planned",
-        repeaterNodeId,
-        scopeId: result.scopeId,
-        suffix: result.suffix,
-        plan: result.plan,
-        blueprint: result.blueprint
-      });
-    } catch (error) {
-      if (error instanceof RepeatOperationError) {
-        return res.status(error.status).json({
-          error: error.message,
-          details: error.details ?? null
-        });
-      }
-      console.error("[repeat-route] Unable to plan duplication", error);
-      return res.status(500).json({
-        error: "Failed to plan repeat duplication.",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  router84.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
-    const { repeaterNodeId } = req2.params;
-    const body2 = req2.body || {};
-    if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
-      return res.status(409).json({
-        error: "Repeat execution already in progress for this repeater.",
-        details: "Another request is currently duplicating this repeater. Please retry in a moment."
-      });
-    }
-    inFlightExecuteByRepeater.add(repeaterNodeId);
-    try {
-      const executionPlan = await executeRepeatDuplication(prisma70, repeaterNodeId, {
-        suffix: body2.suffix,
-        includeTotals: body2.includeTotals,
-        targetParentId: body2.targetParentId,
-        scopeId: body2.scopeId
-      });
-      const executionSummary = await runRepeatExecution(
-        prisma70,
-        req2,
-        executionPlan
-      );
-      return res.status(201).json({
-        status: "completed",
-        repeaterNodeId,
-        scopeId: executionPlan.scopeId,
-        suffix: executionPlan.suffix,
-        operations: executionPlan.operations,
-        plan: executionPlan.plan,
-        blueprint: executionPlan.blueprint,
-        duplicated: executionSummary.duplicated,
-        nodes: executionSummary.nodes,
-        count: executionSummary.count,
-        debug: executionSummary.debug
-      });
-    } catch (error) {
-      if (error instanceof RepeatOperationError) {
-        return res.status(error.status).json({
-          error: error.message,
-          details: error.details ?? null
-        });
-      }
-      const stack = error instanceof Error ? error.stack || error.message : String(error);
-      console.error("[repeat-route] Unable to execute duplication", stack);
-      return res.status(500).json({
-        error: "Failed to execute repeat duplication.",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    } finally {
-      inFlightExecuteByRepeater.delete(repeaterNodeId);
-    }
-  });
-  return router84;
-}
-
 // src/routes/documents.ts
-var import_express86 = require("express");
-var import_client70 = require("@prisma/client");
+var import_express71 = require("express");
+var import_client61 = require("@prisma/client");
 var import_nanoid = require("nanoid");
 
 // src/services/documentPdfRenderer.ts
 var import_pdfkit = __toESM(require("pdfkit"), 1);
 var import_stream = require("stream");
-var path7 = __toESM(require("path"), 1);
-var fs8 = __toESM(require("fs"), 1);
+var path6 = __toESM(require("path"), 1);
+var fs7 = __toESM(require("fs"), 1);
 
 // src/services/textAlignmentUtils.ts
 function calculateVerticalCenterOffset(actualHeight, textHeight) {
@@ -57880,8 +50192,8 @@ var DocumentPdfRenderer = class {
           this.renderImagePlaceholder(x, y, width, height, "Base64 vide");
         }
       } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
-        const localPath = path7.join(process.cwd(), "public", imageUrl);
-        if (fs8.existsSync(localPath)) {
+        const localPath = path6.join(process.cwd(), "public", imageUrl);
+        if (fs7.existsSync(localPath)) {
           this.doc.image(localPath, x, y, imageOptions);
         } else {
           console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
@@ -57935,9 +50247,9 @@ var DocumentPdfRenderer = class {
           }
           console.warn(`\u{1F4C4} [PDF] BACKGROUND: \u26A0\uFE0F pas de donn\xE9es base64`);
         } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
-          const localPath = path7.join(process.cwd(), "public", imageUrl);
-          if (fs8.existsSync(localPath)) {
-            this.drawBackgroundImage(fs8.readFileSync(localPath), x, y, width, height);
+          const localPath = path6.join(process.cwd(), "public", imageUrl);
+          if (fs7.existsSync(localPath)) {
+            this.drawBackgroundImage(fs7.readFileSync(localPath), x, y, width, height);
             return;
           }
           console.warn(`\u{1F4C4} [PDF] Image locale non trouv\xE9e: ${localPath}`);
@@ -59052,8 +51364,8 @@ async function renderDocumentPdf(context) {
 }
 
 // src/routes/documents.ts
-var router83 = (0, import_express86.Router)();
-var prisma67 = new import_client70.PrismaClient();
+var router70 = (0, import_express71.Router)();
+var prisma59 = new import_client61.PrismaClient();
 function extractAddressComponents(lead) {
   const data = lead?.data || {};
   const result = {
@@ -59116,7 +51428,7 @@ function parseAddress(address) {
   }
   return result;
 }
-router83.get("/templates", async (req2, res) => {
+router70.get("/templates", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const { treeId, isActive, type } = req2.query;
@@ -59139,7 +51451,7 @@ router83.get("/templates", async (req2, res) => {
     if (type) {
       where.type = type;
     }
-    const templates = await prisma67.documentTemplate.findMany({
+    const templates = await prisma59.documentTemplate.findMany({
       where,
       include: {
         sections: {
@@ -59172,11 +51484,11 @@ router83.get("/templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.get("/templates/:id", async (req2, res) => {
+router70.get("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma67.documentTemplate.findFirst({
+    const template = await prisma59.documentTemplate.findFirst({
       where: {
         id,
         organizationId
@@ -59197,7 +51509,7 @@ router83.get("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.post("/templates", async (req2, res) => {
+router70.post("/templates", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const userId = req2.headers["x-user-id"];
@@ -59213,7 +51525,7 @@ router83.post("/templates", async (req2, res) => {
     if (!name || !type) {
       return res.status(400).json({ error: "Nom et type requis" });
     }
-    const template = await prisma67.documentTemplate.create({
+    const template = await prisma59.documentTemplate.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         name,
@@ -59248,7 +51560,7 @@ router83.post("/templates", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.put("/templates/:id", async (req2, res) => {
+router70.put("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -59264,18 +51576,18 @@ router83.put("/templates/:id", async (req2, res) => {
       sections
     } = req2.body;
     console.log("\u{1F4DD} [TEMPLATE UPDATE] Mise \xE0 jour template:", { id, name, treeId, type });
-    const existing = await prisma67.documentTemplate.findFirst({
+    const existing = await prisma59.documentTemplate.findFirst({
       where: { id, organizationId }
     });
     if (!existing) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
     if (sections) {
-      await prisma67.documentSection.deleteMany({
+      await prisma59.documentSection.deleteMany({
         where: { templateId: id }
       });
     }
-    const template = await prisma67.documentTemplate.update({
+    const template = await prisma59.documentTemplate.update({
       where: { id },
       data: {
         name,
@@ -59316,17 +51628,17 @@ router83.put("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.delete("/templates/:id", async (req2, res) => {
+router70.delete("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma67.documentTemplate.findFirst({
+    const template = await prisma59.documentTemplate.findFirst({
       where: { id, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const documentsCount = await prisma67.generatedDocument.count({
+    const documentsCount = await prisma59.generatedDocument.count({
       where: { templateId: id }
     });
     if (documentsCount > 0) {
@@ -59335,7 +51647,7 @@ router83.delete("/templates/:id", async (req2, res) => {
         documentsCount
       });
     }
-    await prisma67.documentTemplate.delete({
+    await prisma59.documentTemplate.delete({
       where: { id }
     });
     res.json({ success: true, message: "Template supprim\xE9" });
@@ -59344,10 +51656,10 @@ router83.delete("/templates/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.get("/themes", async (req2, res) => {
+router70.get("/themes", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
-    const themes = await prisma67.documentTheme.findMany({
+    const themes = await prisma59.documentTheme.findMany({
       where: { organizationId },
       orderBy: [
         { isDefault: "desc" },
@@ -59360,17 +51672,17 @@ router83.get("/themes", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.post("/themes", async (req2, res) => {
+router70.post("/themes", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const themeData = req2.body;
     if (themeData.isDefault) {
-      await prisma67.documentTheme.updateMany({
+      await prisma59.documentTheme.updateMany({
         where: { organizationId, isDefault: true },
         data: { isDefault: false }
       });
     }
-    const theme = await prisma67.documentTheme.create({
+    const theme = await prisma59.documentTheme.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         ...themeData,
@@ -59383,13 +51695,13 @@ router83.post("/themes", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.put("/themes/:id", async (req2, res) => {
+router70.put("/themes/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
     const themeData = req2.body;
     if (themeData.isDefault) {
-      await prisma67.documentTheme.updateMany({
+      await prisma59.documentTheme.updateMany({
         where: {
           organizationId,
           isDefault: true,
@@ -59398,7 +51710,7 @@ router83.put("/themes/:id", async (req2, res) => {
         data: { isDefault: false }
       });
     }
-    const theme = await prisma67.documentTheme.update({
+    const theme = await prisma59.documentTheme.update({
       where: { id },
       data: themeData
     });
@@ -59408,10 +51720,10 @@ router83.put("/themes/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.delete("/themes/:id", async (req2, res) => {
+router70.delete("/themes/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const templatesCount = await prisma67.documentTemplate.count({
+    const templatesCount = await prisma59.documentTemplate.count({
       where: { themeId: id }
     });
     if (templatesCount > 0) {
@@ -59420,7 +51732,7 @@ router83.delete("/themes/:id", async (req2, res) => {
         templatesCount
       });
     }
-    await prisma67.documentTheme.delete({
+    await prisma59.documentTheme.delete({
       where: { id }
     });
     res.json({ success: true });
@@ -59429,17 +51741,17 @@ router83.delete("/themes/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.get("/templates/:templateId/sections", async (req2, res) => {
+router70.get("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma67.documentTemplate.findFirst({
+    const template = await prisma59.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const sections = await prisma67.documentSection.findMany({
+    const sections = await prisma59.documentSection.findMany({
       where: { templateId },
       orderBy: { order: "asc" }
     });
@@ -59449,18 +51761,18 @@ router83.get("/templates/:templateId/sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.post("/templates/:templateId/sections", async (req2, res) => {
+router70.post("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const { type, order, config } = req2.body;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma67.documentTemplate.findFirst({
+    const template = await prisma59.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const section = await prisma67.documentSection.create({
+    const section = await prisma59.documentSection.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         templateId,
@@ -59476,18 +51788,18 @@ router83.post("/templates/:templateId/sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router83.put("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+router70.put("/templates/:templateId/sections/:sectionId", async (req2, res) => {
   try {
     const { templateId, sectionId } = req2.params;
     const { order, config } = req2.body;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma67.documentTemplate.findFirst({
+    const template = await prisma59.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const section = await prisma67.documentSection.update({
+    const section = await prisma59.documentSection.update({
       where: { id: sectionId },
       data: {
         ...order !== void 0 && { order },
@@ -59500,17 +51812,17 @@ router83.put("/templates/:templateId/sections/:sectionId", async (req2, res) => 
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.delete("/templates/:templateId/sections/:sectionId", async (req2, res) => {
+router70.delete("/templates/:templateId/sections/:sectionId", async (req2, res) => {
   try {
     const { templateId, sectionId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma67.documentTemplate.findFirst({
+    const template = await prisma59.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    await prisma67.documentSection.delete({
+    await prisma59.documentSection.delete({
       where: { id: sectionId }
     });
     res.json({ success: true });
@@ -59519,7 +51831,7 @@ router83.delete("/templates/:templateId/sections/:sectionId", async (req2, res) 
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.get("/generated", async (req2, res) => {
+router70.get("/generated", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const { leadId, submissionId, templateId } = req2.query;
@@ -59538,7 +51850,7 @@ router83.get("/generated", async (req2, res) => {
     if (templateId) {
       where.templateId = templateId;
     }
-    const documents = await prisma67.generatedDocument.findMany({
+    const documents = await prisma59.generatedDocument.findMany({
       where,
       include: {
         template: {
@@ -59573,11 +51885,11 @@ router83.get("/generated", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router83.get("/generated/:id", async (req2, res) => {
+router70.get("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const document = await prisma67.generatedDocument.findFirst({
+    const document = await prisma59.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -59604,7 +51916,7 @@ router83.get("/generated/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.post("/generated/generate", async (req2, res) => {
+router70.post("/generated/generate", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const userId = req2.headers["x-user-id"];
@@ -59622,7 +51934,7 @@ router83.post("/generated/generate", async (req2, res) => {
       return res.status(400).json({ error: "Template ID requis" });
     }
     console.log("\u{1F4C4} [GENERATE DOC] Recherche du template...");
-    const template = await prisma67.documentTemplate.findFirst({
+    const template = await prisma59.documentTemplate.findFirst({
       where: {
         id: templateId,
         organizationId
@@ -59638,11 +51950,11 @@ router83.post("/generated/generate", async (req2, res) => {
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const documentCount = await prisma67.generatedDocument.count({
+    const documentCount = await prisma59.generatedDocument.count({
       where: { templateId }
     });
     const documentNumber = `${template.type}-${String(documentCount + 1).padStart(6, "0")}`;
-    const generatedDocument = await prisma67.generatedDocument.create({
+    const generatedDocument = await prisma59.generatedDocument.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         templateId,
@@ -59675,7 +51987,7 @@ router83.post("/generated/generate", async (req2, res) => {
     });
     console.log("\u{1F4C4} [GENERATE DOC] Document cr\xE9\xE9:", generatedDocument.id);
     console.log("\u{1F4C4} [GENERATE DOC] Mise \xE0 jour du document avec statut SENT...");
-    const updatedDocument = await prisma67.generatedDocument.update({
+    const updatedDocument = await prisma59.generatedDocument.update({
       where: { id: generatedDocument.id },
       data: {
         status: "SENT",
@@ -59719,11 +52031,11 @@ router83.post("/generated/generate", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur lors de la g\xE9n\xE9ration", details: error?.message });
   }
 });
-router83.delete("/generated/:id", async (req2, res) => {
+router70.delete("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const document = await prisma67.generatedDocument.findFirst({
+    const document = await prisma59.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -59732,7 +52044,7 @@ router83.delete("/generated/:id", async (req2, res) => {
     if (!document) {
       return res.status(404).json({ error: "Document non trouv\xE9" });
     }
-    await prisma67.generatedDocument.delete({
+    await prisma59.generatedDocument.delete({
       where: { id }
     });
     res.json({ success: true, message: "Document supprim\xE9" });
@@ -59741,12 +52053,12 @@ router83.delete("/generated/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router83.get("/generated/:id/download", async (req2, res) => {
+router70.get("/generated/:id/download", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
     console.log("\u{1F4E5} [DOWNLOAD] Demande de t\xE9l\xE9chargement:", { id, organizationId });
-    const document = await prisma67.generatedDocument.findFirst({
+    const document = await prisma59.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -59768,13 +52080,13 @@ router83.get("/generated/:id/download", async (req2, res) => {
       return res.status(404).json({ error: "Document non trouv\xE9" });
     }
     console.log("\u{1F4E5} [DOWNLOAD] Document trouv\xE9:", document.documentNumber);
-    const defaultTheme = await prisma67.documentTheme.findFirst({
+    const defaultTheme = await prisma59.documentTheme.findFirst({
       where: {
         organizationId,
         isDefault: true
       }
     });
-    const organization = await prisma67.organization.findFirst({
+    const organization = await prisma59.organization.findFirst({
       where: { id: organizationId }
     });
     const dataSnapshot = document.dataSnapshot || {};
@@ -59922,12 +52234,12 @@ router83.get("/generated/:id/download", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-router83.get("/generated/:id/preview", async (req2, res) => {
+router70.get("/generated/:id/preview", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
     console.log("\u{1F441}\uFE0F [PREVIEW] Demande d'aper\xE7u:", { id, organizationId });
-    const document = await prisma67.generatedDocument.findFirst({
+    const document = await prisma59.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -59975,10 +52287,7772 @@ router83.get("/generated/:id/preview", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
-var documents_default = router83;
+var documents_default = router70;
+
+// src/routes/sync-temp.ts
+var import_express72 = require("express");
+var import_client62 = require("@prisma/client");
+var router71 = (0, import_express72.Router)();
+var prisma60 = new import_client62.PrismaClient();
+router71.post("/sync-documents", async (req2, res) => {
+  const { secret } = req2.body;
+  if (secret !== "SYNC_2THIER_2024") {
+    return res.status(401).json({ error: "Non autoris\xE9" });
+  }
+  try {
+    const themes = [
+      { id: "zy-AWfNv7kwiFiAIxYCyy", name: "Corporate Bleu", primaryColor: "#1890ff", secondaryColor: "#096dd9", fontFamily: "Arial, Helvetica, sans-serif", organizationId: "1757366075153-otief8knu" },
+      { id: "LoVb38f8kOfL2r8rIpVMm", name: "\xC9l\xE9gant Gris", primaryColor: "#595959", secondaryColor: "#8c8c8c", fontFamily: "Georgia, serif", organizationId: "1757366075153-otief8knu" },
+      { id: "xMHttG0zrN81_Fu-gHnwN", name: "Moderne Vert", primaryColor: "#52c41a", secondaryColor: "#73d13d", fontFamily: "Verdana, Geneva, sans-serif", organizationId: "1757366075153-otief8knu" },
+      { id: "bfQB_aDQX2bs5d02ASZi7", name: "Professionnel Violet", primaryColor: "#722ed1", secondaryColor: "#9254de", fontFamily: "Trebuchet MS, sans-serif", organizationId: "1757366075153-otief8knu" },
+      { id: "QfHTFecgN_BB0me-PAZZG", name: "Dynamique Orange", primaryColor: "#fa8c16", secondaryColor: "#ffa940", fontFamily: "Arial, sans-serif", organizationId: "1757366075153-otief8knu" },
+      { id: "fw6tmVAi26iAEQBbVlkaw", name: "Sobre Noir & Blanc", primaryColor: "#000000", secondaryColor: "#262626", fontFamily: "Times New Roman, serif", organizationId: "1757366075153-otief8knu" },
+      { id: "vvZ4U2NJ_wxaP8rSmqOXD", name: "Corporate Bleu", primaryColor: "#1890ff", secondaryColor: "#096dd9", fontFamily: "Arial, Helvetica, sans-serif", organizationId: "1757366075154-i554z93kl" },
+      { id: "KZrfAoWjOYpKPVNd_CGEq", name: "\xC9l\xE9gant Gris", primaryColor: "#595959", secondaryColor: "#8c8c8c", fontFamily: "Georgia, serif", organizationId: "1757366075154-i554z93kl" },
+      { id: "ABaRcqHtCJyxsYkIL7bwV", name: "Moderne Vert", primaryColor: "#52c41a", secondaryColor: "#73d13d", fontFamily: "Verdana, Geneva, sans-serif", organizationId: "1757366075154-i554z93kl" },
+      { id: "EPG4Rme8JoZuAObPxlCfu", name: "Professionnel Violet", primaryColor: "#722ed1", secondaryColor: "#9254de", fontFamily: "Trebuchet MS, sans-serif", organizationId: "1757366075154-i554z93kl" },
+      { id: "ggBUu9jdk5qe0uyChmQoQ", name: "Dynamique Orange", primaryColor: "#fa8c16", secondaryColor: "#ffa940", fontFamily: "Arial, sans-serif", organizationId: "1757366075154-i554z93kl" },
+      { id: "Zgj4_Kicsk6_zGGkFKnV1", name: "Sobre Noir & Blanc", primaryColor: "#000000", secondaryColor: "#262626", fontFamily: "Times New Roman, serif", organizationId: "1757366075154-i554z93kl" }
+    ];
+    const templates = [
+      { id: "G7YU14mfKT9rEj7wD38lD", name: "Bilan \xE9nerg\xE9tique", type: "QUOTE", organizationId: "1757366075154-i554z93kl" },
+      { id: "lKcJIIkGPzAZZL6E7VGA9", name: "PV", type: "QUOTE", organizationId: "1757366075154-i554z93kl" }
+    ];
+    const sections = [
+      { id: "oySHrW8g46r5zbtrFxULg", templateId: "lKcJIIkGPzAZZL6E7VGA9", name: "Section", type: "MODULAR_PAGE", order: 0 },
+      { id: "pN8RSMjUtymo9balcF4ux", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 0 },
+      { id: "m2_i4PAXeQwgVM2O2HX_7", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 1 },
+      { id: "4Snr4bjuSzky1oG_Ex03o", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 2 },
+      { id: "q9v4OwgdrazlRQFdPBJs0", templateId: "G7YU14mfKT9rEj7wD38lD", name: "Section", type: "MODULAR_PAGE", order: 3 }
+    ];
+    for (const theme of themes) {
+      await prisma60.documentTheme.upsert({
+        where: { id: theme.id },
+        update: theme,
+        create: theme
+      });
+    }
+    for (const template of templates) {
+      await prisma60.documentTemplate.upsert({
+        where: { id: template.id },
+        update: template,
+        create: template
+      });
+    }
+    for (const section of sections) {
+      await prisma60.documentSection.upsert({
+        where: { id: section.id },
+        update: section,
+        create: section
+      });
+    }
+    res.json({
+      success: true,
+      synced: {
+        themes: themes.length,
+        templates: templates.length,
+        sections: sections.length
+      }
+    });
+  } catch (error) {
+    console.error("Sync error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+var sync_temp_default = router71;
+
+// src/routes/index.ts
+var apiRouter = (0, import_express73.Router)();
+apiRouter.use("/auth", authRoutes_default);
+console.log("[ROUTER] Routes d'authentification mont\xE9es sur /auth");
+apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
+apiRouter.use("/", misc_default);
+apiRouter.use("/profile", profile_default);
+apiRouter.post("/logout", logout);
+apiRouter.use("/organizations", organizations_default);
+apiRouter.use("/organizations", googleWorkspace_default);
+apiRouter.use("/google-workspace", googleWorkspace_default);
+apiRouter.use("/modules", modules_default);
+apiRouter.use("/admin-modules", admin_modules_default);
+apiRouter.use("/icons", icons_default);
+apiRouter.use("/blocks", blocks_default);
+apiRouter.use("/fields", fields_default);
+apiRouter.use("/sections", sections_default);
+apiRouter.use("/module-navigation", module_navigation_default);
+apiRouter.use("/form-sections", form_sections_default);
+apiRouter.use("/field-types", fieldTypes_default);
+apiRouter.use("/option-nodes", optionNodes_default);
+apiRouter.use("/notifications", notifications_default);
+apiRouter.use("/notifications-system", notificationSystemRoutes_default);
+apiRouter.use("/settings", settingsRoutes_default);
+apiRouter.use("/leads", leadsRoutes_default);
+apiRouter.use("/dashboard", dashboard_default);
+apiRouter.use("/clients", clients_default);
+apiRouter.use("/company", company_default);
+apiRouter.use("/projects", projects_default);
+apiRouter.use("/emails", emails_default);
+apiRouter.use("/gemini", gemini_default);
+apiRouter.use("/roles", rolesRoutes_default);
+apiRouter.use("/permissions", permissions_default);
+apiRouter.use("/users", usersRoutes_default);
+apiRouter.use("/admin", admin_default);
+apiRouter.use("/impersonate", impersonate_default);
+apiRouter.use("/admin-password", adminPasswordRoutes_default);
+apiRouter.use("/gmail", gmailRoutes_default);
+apiRouter.use("/calendar", calendar_default);
+apiRouter.use("/google-auth", google_auth_default);
+apiRouter.use("/google/scheduler", google_scheduler_default);
+apiRouter.use("/google-tokens", google_tokens_default);
+apiRouter.use("/auth/google", google_auth_default);
+apiRouter.use("/services", services_default);
+apiRouter.use("/telnyx", telnyx_default2);
+apiRouter.use("/quotes", quotes_default);
+apiRouter.use("/google-drive", google_drive_default);
+apiRouter.use("/google-meet", google_meet_default);
+apiRouter.use("/analytics", analytics_default);
+apiRouter.use("/ai", ai_default);
+apiRouter.use("/ai", ai_code_default);
+apiRouter.use("/advanced-select", advanced_select_default);
+apiRouter.use("/dynamic-formulas", dynamic_formulas_default);
+apiRouter.use("/treebranchleaf", treebranchleaf_routes_default);
+apiRouter.use("/tbl", tbl_intelligence_routes_default);
+apiRouter.use("/tbl", tbl_routes_default);
+apiRouter.use("/tbl", tbl_capabilities_default);
+apiRouter.use("/validations", validations_default);
+apiRouter.use("/formulas", formulas_default2);
+apiRouter.use("/dependencies", dependencies_default2);
+apiRouter.use("/invitations", invitations_default);
+apiRouter.use("/lead-generation", leadGeneration_default);
+apiRouter.use("/marketplace", marketplace_fixed_default);
+apiRouter.use("/partner", partner_default);
+apiRouter.use("/forms", publicForms_default);
+apiRouter.use("/public-forms", publicForms_default);
+apiRouter.use("/landing-pages", landingPages_default);
+apiRouter.use("/campaign-analytics", campaignAnalytics_default);
+apiRouter.use("/dispatch", dispatch_default);
+apiRouter.use("/integrations", integrations_default);
+apiRouter.use("/integrations", integrationsStatus_default);
+apiRouter.use("/public", publicLeads_default);
+apiRouter.use("/documents", documents_default);
+apiRouter.use("/sync", sync_temp_default);
+apiRouter.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+});
+var routes_default = apiRouter;
+
+// src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
+var import_express74 = require("express");
+var import_client63 = require("@prisma/client");
+init_operation_interpreter();
+
+// src/services/calculatedValuesService.ts
+async function storeCalculatedValues(values, submissionId) {
+  const result = {
+    success: true,
+    stored: 0,
+    failed: 0,
+    errors: []
+  };
+  for (const value of values) {
+    try {
+      const { nodeId, calculatedValue, calculatedBy = "unknown" } = value;
+      if (!nodeId) {
+        result.errors.push({ nodeId: "unknown", error: "nodeId manquant" });
+        result.failed++;
+        continue;
+      }
+      const node = await prisma.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        select: { id: true, label: true }
+      });
+      if (!node) {
+        result.errors.push({
+          nodeId,
+          error: "N\u0153ud non trouv\xE9"
+        });
+        result.failed++;
+        continue;
+      }
+      await prisma.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: {
+          calculatedValue: String(calculatedValue),
+          calculatedAt: /* @__PURE__ */ new Date(),
+          calculatedBy
+        }
+      });
+      result.stored++;
+    } catch (error) {
+      result.failed++;
+      result.errors.push({
+        nodeId: value.nodeId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      console.error(`\u274C [StoreCalculatedValues] Erreur stockage:`, {
+        nodeId: value.nodeId,
+        error,
+        submissionId
+      });
+    }
+  }
+  result.success = result.failed === 0;
+  return result;
+}
+
+// src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
+var router72 = (0, import_express74.Router)();
+var prisma61 = new import_client63.PrismaClient();
+var stagingStore = /* @__PURE__ */ new Map();
+var STAGE_TTL_MS = 1e3 * 60 * 60;
+function pruneStages() {
+  const now = Date.now();
+  for (const [k, v] of stagingStore) {
+    if (now - v.updatedAt > STAGE_TTL_MS) stagingStore.delete(k);
+  }
+}
+function newStageId() {
+  return `stage-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+function sanitizeFormData(input) {
+  if (Array.isArray(input)) {
+    return input.map(sanitizeFormData);
+  }
+  if (input && typeof input === "object") {
+    const result = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (k.startsWith("__") || k.startsWith("__mirror_") || k.startsWith("__formula_") || k.startsWith("__condition_")) {
+        continue;
+      }
+      if (v === null || v === void 0 || v === "") continue;
+      result[k] = sanitizeFormData(v);
+    }
+    return result;
+  }
+  return input;
+}
+var UUID_NODE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var GENERATED_NODE_REGEX = /^node_[0-9]+_[a-z0-9]+$/i;
+var SHARED_REFERENCE_REGEX = /^shared-ref-[a-z0-9-]+$/i;
+function isSharedReferenceId(nodeId) {
+  return SHARED_REFERENCE_REGEX.test(nodeId);
+}
+function isAcceptedNodeId(nodeId) {
+  return UUID_NODE_REGEX.test(nodeId) || GENERATED_NODE_REGEX.test(nodeId) || isSharedReferenceId(nodeId);
+}
+async function resolveSharedReferenceAliases(sharedRefs, treeId) {
+  if (!sharedRefs.length) {
+    return /* @__PURE__ */ new Map();
+  }
+  const where = {
+    sharedReferenceId: { in: sharedRefs }
+  };
+  if (treeId) {
+    where.treeId = treeId;
+  }
+  const aliases = await prisma61.treeBranchLeafNode.findMany({
+    where,
+    select: { id: true, sharedReferenceId: true }
+  });
+  const map = /* @__PURE__ */ new Map();
+  for (const alias of aliases) {
+    if (!alias.sharedReferenceId) continue;
+    if (!map.has(alias.sharedReferenceId)) {
+      map.set(alias.sharedReferenceId, []);
+    }
+    map.get(alias.sharedReferenceId).push(alias.id);
+  }
+  return map;
+}
+async function applySharedReferenceValues(target, entries, treeId) {
+  if (!entries.length) return;
+  const sharedRefKeys = entries.map(([key2]) => key2).filter(isSharedReferenceId);
+  const aliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
+  for (const [key2, value] of entries) {
+    target.set(key2, value);
+    if (!isSharedReferenceId(key2)) continue;
+    const aliases = aliasMap.get(key2) || [];
+    for (const alias of aliases) {
+      target.set(alias, value);
+    }
+  }
+}
+async function saveUserEntriesNeutral(submissionId, formData, treeId) {
+  if (!formData || typeof formData !== "object") return 0;
+  let saved = 0;
+  const entries = /* @__PURE__ */ new Map();
+  const displayNodes = treeId ? await prisma61.treeBranchLeafNode.findMany({
+    where: {
+      treeId,
+      calculatedBy: { contains: "preview-unknown-user" }
+      // ✅ Seulement les displays avec preview-unknown-user
+    },
+    select: { id: true, calculatedBy: true, label: true }
+  }) : [];
+  const displayNodeIds = new Set(displayNodes.map((n) => n.id));
+  if (displayNodeIds.size > 0) {
+    console.log(`\u{1F6AB} [SAVE] ${displayNodeIds.size} DISPLAY fields (preview-unknown-user) identifi\xE9s - ne seront PAS sauvegard\xE9s`);
+  }
+  const sharedRefKeys = Object.keys(formData).filter(isSharedReferenceId);
+  const sharedRefAliasMap = sharedRefKeys.length ? await resolveSharedReferenceAliases(sharedRefKeys, treeId) : /* @__PURE__ */ new Map();
+  for (const [key2, value] of Object.entries(formData)) {
+    if (key2.startsWith("__mirror_") || key2.startsWith("__formula_") || key2.startsWith("__condition_")) {
+      continue;
+    }
+    if (!isAcceptedNodeId(key2)) continue;
+    if (displayNodeIds.has(key2)) {
+      console.log(`\u{1F6AB} [SAVE] Display field ignor\xE9: ${key2} (preview-unknown-user dans calculatedBy)`);
+      continue;
+    }
+    if (value === null || value === void 0 || value === "") {
+      continue;
+    }
+    const storageIds = isSharedReferenceId(key2) ? [key2, ...sharedRefAliasMap.get(key2) || []] : [key2];
+    for (const nodeId of storageIds) {
+      if (!isAcceptedNodeId(nodeId)) continue;
+      const serializedValue = value === null || value === void 0 ? null : typeof value === "string" ? value : JSON.stringify(value);
+      const entry = {
+        id: `${submissionId}-${nodeId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        submissionId,
+        nodeId,
+        value: serializedValue,
+        operationSource: "neutral",
+        operationDetail: {
+          inputValue: value,
+          nodeId,
+          action: "user_input",
+          sourceNodeId: key2,
+          aliasResolved: nodeId !== key2
+        }
+      };
+      entries.set(nodeId, entry);
+    }
+  }
+  for (const entry of entries.values()) {
+    const key2 = { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } };
+    const existing = await prisma61.treeBranchLeafSubmissionData.findUnique({ where: key2 });
+    const normalize2 = (v) => {
+      if (v === null || v === void 0) return null;
+      if (typeof v === "string") return v;
+      try {
+        return JSON.stringify(v);
+      } catch {
+        return String(v);
+      }
+    };
+    if (existing) {
+      const changed = normalize2(existing.value) !== normalize2(entry.value) || (existing.operationSource || null) !== (entry.operationSource || null);
+      if (changed) {
+        await prisma61.treeBranchLeafSubmissionData.update({
+          where: key2,
+          data: {
+            value: entry.value,
+            operationSource: "neutral",
+            operationDetail: entry.operationDetail
+          }
+        });
+        saved++;
+      }
+    } else {
+      await prisma61.treeBranchLeafSubmissionData.create({ data: entry });
+      saved++;
+    }
+  }
+  return saved;
+}
+async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId) {
+  const capacities = await prisma61.treeBranchLeafNodeVariable.findMany({
+    where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
+    include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
+  });
+  const _tblContext = {
+    submissionId,
+    labelMap: /* @__PURE__ */ new Map(),
+    valueMap: /* @__PURE__ */ new Map(),
+    organizationId,
+    userId: userId || "unknown-user",
+    treeId
+  };
+  const results = { updated: 0, created: 0, stored: 0 };
+  const calculatedValuesToStore = [];
+  for (const capacity of capacities) {
+    const sourceRef = capacity.sourceRef;
+    const isDisplayField = capacity.TreeBranchLeafNode?.fieldType === "DISPLAY" || capacity.TreeBranchLeafNode?.type === "DISPLAY";
+    if (isDisplayField) {
+      console.log(`\u{1F6AB} [TBL CAPACITY] Display field ignor\xE9: ${capacity.nodeId} (${capacity.TreeBranchLeafNode?.label})`);
+      continue;
+    }
+    try {
+      const capacityResult = await evaluateVariableOperation(
+        capacity.nodeId,
+        submissionId,
+        prisma61
+      );
+      const normalizedOperationSource = typeof capacityResult.operationSource === "string" ? capacityResult.operationSource.toLowerCase() : "neutral";
+      let parsedDetail = null;
+      try {
+        parsedDetail = typeof capacityResult.operationDetail === "string" ? JSON.parse(capacityResult.operationDetail) : capacityResult.operationDetail;
+      } catch {
+        parsedDetail = capacityResult.operationDetail;
+      }
+      const key2 = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } };
+      const existing = await prisma61.treeBranchLeafSubmissionData.findUnique({ where: key2 });
+      const normalize2 = (v) => {
+        if (v === null || v === void 0) return null;
+        if (typeof v === "string") return v;
+        try {
+          return JSON.stringify(v);
+        } catch {
+          return String(v);
+        }
+      };
+      if (existing) {
+        const changed = (existing.sourceRef || null) !== (sourceRef || null) || (existing.operationSource || null) !== (normalizedOperationSource || null) || (existing.fieldLabel || null) !== (capacity.TreeBranchLeafNode?.label || null) || normalize2(existing.operationDetail) !== normalize2(parsedDetail);
+        if (changed) {
+          await prisma61.treeBranchLeafSubmissionData.update({
+            where: key2,
+            data: {
+              value: null,
+              sourceRef,
+              operationSource: normalizedOperationSource,
+              fieldLabel: capacity.TreeBranchLeafNode?.label || null,
+              operationDetail: parsedDetail,
+              lastResolved: /* @__PURE__ */ new Date()
+            }
+          });
+          results.updated++;
+        }
+      } else {
+        await prisma61.treeBranchLeafSubmissionData.create({
+          data: {
+            id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            submissionId,
+            nodeId: capacity.nodeId,
+            value: null,
+            sourceRef,
+            operationSource: normalizedOperationSource,
+            fieldLabel: capacity.TreeBranchLeafNode?.label || null,
+            operationDetail: parsedDetail,
+            lastResolved: /* @__PURE__ */ new Date()
+          }
+        });
+        results.created++;
+      }
+      const rawValue = capacityResult.value ?? capacityResult.calculatedValue ?? capacityResult.result;
+      const stringified = rawValue === null || rawValue === void 0 ? null : String(rawValue).trim();
+      if (rawValue !== null && rawValue !== void 0 && stringified !== "" && stringified !== "\u2205") {
+        let normalizedValue;
+        if (typeof rawValue === "number" || typeof rawValue === "boolean") {
+          normalizedValue = rawValue;
+        } else {
+          normalizedValue = String(rawValue);
+        }
+        calculatedValuesToStore.push({
+          nodeId: capacity.nodeId,
+          calculatedValue: normalizedValue,
+          calculatedBy: `submission-${submissionId}`
+        });
+      }
+    } catch (error) {
+      console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+    }
+  }
+  if (calculatedValuesToStore.length > 0) {
+    try {
+      const nodeIds = calculatedValuesToStore.map((v) => v.nodeId);
+      const nodesInfo = await prisma61.treeBranchLeafNode.findMany({
+        where: { id: { in: nodeIds } },
+        select: { id: true, fieldType: true, type: true }
+      });
+      const displayFieldIds = new Set(
+        nodesInfo.filter((n) => n.fieldType === "DISPLAY" || n.type === "DISPLAY").map((n) => n.id)
+      );
+      const valuesToStoreFiltered = calculatedValuesToStore.filter((v) => {
+        if (displayFieldIds.has(v.nodeId)) {
+          console.log(`\u{1F6AB} [TBL CAPACITY STORE] Display field exclu de la persistence: ${v.nodeId}`);
+          return false;
+        }
+        return true;
+      });
+      if (valuesToStoreFiltered.length > 0) {
+        const storeResult = await storeCalculatedValues(valuesToStoreFiltered, submissionId);
+        results.stored = storeResult.stored;
+        console.log(`[TBL CAPACITY STORE] \u2705 ${results.stored} valeurs stock\xE9es (${displayFieldIds.size} display fields exclus)`);
+        if (!storeResult.success && storeResult.errors.length > 0) {
+          console.warn("[TBL CAPACITY STORE] Certaines valeurs n'ont pas pu \xEAtre enregistr\xE9es:", storeResult.errors);
+        }
+      }
+    } catch (storeError) {
+      console.error("[TBL CAPACITY STORE] Erreur lors du stockage des valeurs calcul\xE9es:", storeError);
+    }
+  }
+  return results;
+}
+router72.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
+  try {
+    const { submissionId } = req2.params;
+    const { forceUpdate = false } = req2.body || {};
+    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
+    const userId = req2.user?.userId || "unknown-user";
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: "Organisation ID manquant - authentification requise"
+      });
+    }
+    console.log("\u{1F525} [TBL EVALUATE ALL] D\xE9but \xE9valuation compl\xE8te:", submissionId);
+    console.log(`\u{1F3E2} [TBL EVALUATE ALL] Organisation: ${organizationId}, Utilisateur: ${userId}`);
+    const submissionData = await prisma61.treeBranchLeafSubmissionData.findMany({
+      where: {
+        submissionId,
+        sourceRef: { not: null }
+      },
+      include: {
+        TreeBranchLeafNode: {
+          select: { label: true, type: true }
+        }
+      }
+    });
+    console.log(`\u{1F4CA} [TBL EVALUATE ALL] ${submissionData.length} \xE9l\xE9ments avec capacit\xE9s trouv\xE9s`);
+    if (submissionData.length === 0) {
+      return res.json({
+        success: true,
+        message: "Aucune capacit\xE9 \xE0 \xE9valuer",
+        evaluated: 0
+      });
+    }
+    const _context = {
+      submissionId,
+      organizationId,
+      // ✅ VRAIE ORGANISATION!
+      userId,
+      // ✅ VRAI UTILISATEUR!
+      labelMap: /* @__PURE__ */ new Map(),
+      // 🔥 MAPS INITIALISÉES
+      valueMap: /* @__PURE__ */ new Map()
+    };
+    let evaluatedCount = 0;
+    let errorCount = 0;
+    const results = [];
+    for (const data of submissionData) {
+      try {
+        if (!forceUpdate && data.operationResult && data.lastResolved) {
+          console.log(`\u23ED\uFE0F [TBL EVALUATE ALL] Skip ${data.sourceRef} (d\xE9j\xE0 \xE9valu\xE9)`);
+          continue;
+        }
+        console.log(`\u{1F504} [TBL EVALUATE ALL] \xC9valuation ${data.sourceRef}...`);
+        const calculationResult = await evaluateVariableOperation(
+          data.nodeId,
+          submissionId,
+          prisma61
+        );
+        console.log(`\u2705 [TBL EVALUATE ALL] R\xE9sultat pour ${data.sourceRef}:`, calculationResult.operationResult);
+        const normalize2 = (v) => {
+          if (v === null || v === void 0) return null;
+          if (typeof v === "string") return v;
+          try {
+            return JSON.stringify(v);
+          } catch {
+            return String(v);
+          }
+        };
+        const normalizedSource = typeof calculationResult.operationSource === "string" ? calculationResult.operationSource.toLowerCase() : "neutral";
+        const nextDetail = (() => {
+          try {
+            return typeof calculationResult.operationDetail === "string" ? JSON.parse(calculationResult.operationDetail) : calculationResult.operationDetail;
+          } catch {
+            return calculationResult.operationDetail;
+          }
+        })();
+        const changed = (data.operationSource || null) !== (normalizedSource || null) || normalize2(data.operationDetail) !== normalize2(nextDetail);
+        if (changed) {
+          await prisma61.treeBranchLeafSubmissionData.update({
+            where: { id: data.id },
+            data: {
+              operationDetail: nextDetail,
+              operationSource: normalizedSource,
+              lastResolved: /* @__PURE__ */ new Date()
+            }
+          });
+        } else {
+          console.log(`\u23ED\uFE0F [TBL EVALUATE ALL] NO-OP ${data.sourceRef} (inchang\xE9)`);
+        }
+        results.push({
+          id: data.id,
+          sourceRef: data.sourceRef,
+          nodeLabel: data.TreeBranchLeafNode?.label,
+          operationResult: calculationResult.operationResult,
+          success: true
+        });
+        evaluatedCount++;
+      } catch (error) {
+        console.error(`\u274C [TBL EVALUATE ALL] Erreur pour ${data.sourceRef}:`, error);
+        results.push({
+          id: data.id,
+          sourceRef: data.sourceRef,
+          nodeLabel: data.TreeBranchLeafNode?.label,
+          error: error instanceof Error ? error.message : "Erreur inconnue",
+          success: false
+        });
+        errorCount++;
+      }
+    }
+    console.log(`\u{1F389} [TBL EVALUATE ALL] Termin\xE9: ${evaluatedCount} \xE9valu\xE9s, ${errorCount} erreurs`);
+    return res.json({
+      success: true,
+      submissionId,
+      evaluated: evaluatedCount,
+      errors: errorCount,
+      total: submissionData.length,
+      results,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    console.error("\u274C [TBL EVALUATE ALL] Erreur globale:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Erreur lors de l'\xE9valuation compl\xE8te",
+      details: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router72.get("/submissions/:submissionId/verification", async (req2, res) => {
+  try {
+    const { submissionId } = req2.params;
+    console.log("\u{1F50D} [TBL VERIFICATION] V\xE9rification soumission:", submissionId);
+    const rows = await prisma61.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId, sourceRef: { not: null } },
+      select: { operationResult: true }
+    });
+    const total = rows.length;
+    const toStringSafely = (val) => {
+      if (val === null || val === void 0) return "";
+      if (typeof val === "string") return val;
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return String(val);
+      }
+    };
+    let withIntelligentTranslations = 0;
+    let withOldMessages = 0;
+    let withErrors = 0;
+    for (const r of rows) {
+      const s = toStringSafely(r.operationResult).trim();
+      if (!s) {
+        withErrors++;
+        continue;
+      }
+      if (s.includes("\xC9valu\xE9 dynamiquement par TBL Prisma")) {
+        withOldMessages++;
+      }
+      if (s.includes("Si ") || /(=) Result \(/.test(s) || s.includes("(/)")) {
+        withIntelligentTranslations++;
+      }
+    }
+    const successRate = total > 0 ? Math.round((total - withOldMessages - withErrors) / total * 100) : 100;
+    return res.json({
+      success: true,
+      submissionId,
+      verification: {
+        total,
+        withIntelligentTranslations,
+        withOldMessages,
+        withErrors,
+        successRate: `${successRate}%`
+      },
+      status: withOldMessages === 0 && withErrors === 0 ? "perfect" : "needs_improvement",
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    console.error("\u274C [TBL VERIFICATION] Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Erreur lors de la v\xE9rification"
+    });
+  }
+});
+router72.post("/submissions/create-and-evaluate", async (req2, res) => {
+  try {
+    const { treeId, clientId, formData, status = "draft", providedName, reuseSubmissionId } = req2.body;
+    const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
+    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
+    const userId = req2.user?.userId || "unknown-user";
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: "Organisation ID manquant - authentification requise"
+      });
+    }
+    console.log("\u{1F525} [TBL CREATE-AND-EVALUATE] D\xE9but cr\xE9ation compl\xE8te TBL Prisma");
+    console.log(`\u{1F3E2} [TBL CREATE-AND-EVALUATE] Organisation: ${organizationId}, Utilisateur: ${userId}`);
+    console.log(`\u{1F4CB} [TBL CREATE-AND-EVALUATE] TreeId re\xE7u: ${treeId}, ClientId: ${clientId}`);
+    let effectiveTreeId = treeId;
+    if (!effectiveTreeId) {
+      console.log("\u26A0\uFE0F [TBL CREATE-AND-EVALUATE] Aucun treeId fourni, recherche du premier arbre disponible...");
+      const firstTree = await prisma61.treeBranchLeafTree.findFirst({
+        select: { id: true, name: true }
+      });
+      if (!firstTree) {
+        throw new Error("Aucun arbre TreeBranchLeaf trouv\xE9 dans la base de donn\xE9es");
+      }
+      effectiveTreeId = firstTree.id;
+      console.log(`\u{1F333} [TBL CREATE-AND-EVALUATE] Arbre par d\xE9faut s\xE9lectionn\xE9: ${effectiveTreeId} (${firstTree.name})`);
+    } else {
+      const treeExists = await prisma61.treeBranchLeafTree.findUnique({
+        where: { id: effectiveTreeId },
+        select: { id: true, name: true }
+      });
+      if (!treeExists) {
+        console.log(`\u274C [TBL CREATE-AND-EVALUATE] Arbre ${effectiveTreeId} introuvable, recherche d'un arbre alternatif...`);
+        const firstTree = await prisma61.treeBranchLeafTree.findFirst({
+          select: { id: true, name: true }
+        });
+        if (!firstTree) {
+          throw new Error("Aucun arbre TreeBranchLeaf trouv\xE9 dans la base de donn\xE9es");
+        }
+        effectiveTreeId = firstTree.id;
+        console.log(`\u{1F333} [TBL CREATE-AND-EVALUATE] Arbre alternatif s\xE9lectionn\xE9: ${effectiveTreeId} (${firstTree.name})`);
+      } else {
+        console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Arbre valid\xE9: ${effectiveTreeId} (${treeExists.name})`);
+      }
+    }
+    if (!clientId) {
+      console.log("\u274C [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS");
+      return res.status(400).json({
+        success: false,
+        error: "Lead obligatoire",
+        message: "Un lead doit \xEAtre s\xE9lectionn\xE9 pour cr\xE9er un devis. Veuillez s\xE9lectionner ou cr\xE9er un lead."
+      });
+    }
+    let effectiveLeadId = clientId;
+    const leadExists = await prisma61.lead.findUnique({
+      where: { id: effectiveLeadId },
+      select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
+    });
+    if (!leadExists) {
+      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Lead ${effectiveLeadId} introuvable`);
+      return res.status(404).json({
+        success: false,
+        error: "Lead introuvable",
+        message: `Le lead ${effectiveLeadId} n'existe pas. Veuillez s\xE9lectionner un lead valide.`
+      });
+    }
+    if (leadExists.organizationId !== organizationId) {
+      console.log(`\u274C [TBL CREATE-AND-EVALUATE] Le lead ${effectiveLeadId} n'appartient pas \xE0 l'organisation ${organizationId}`);
+      return res.status(403).json({
+        success: false,
+        error: "Lead non autoris\xE9",
+        message: "Le lead s\xE9lectionn\xE9 n'appartient pas \xE0 votre organisation."
+      });
+    }
+    console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Lead valid\xE9: ${effectiveLeadId} (${leadExists.firstName} ${leadExists.lastName})`);
+    effectiveLeadId = leadExists.id;
+    let effectiveUserId = userId;
+    if (effectiveUserId) {
+      const userExists = await prisma61.user.findUnique({
+        where: { id: effectiveUserId },
+        select: { id: true, firstName: true, lastName: true }
+      });
+      if (!userExists) {
+        console.log(`\u274C [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
+        effectiveUserId = null;
+      } else {
+        console.log(`\u2705 [TBL CREATE-AND-EVALUATE] User valid\xE9: ${effectiveUserId} (${userExists.firstName} ${userExists.lastName})`);
+      }
+    }
+    let submissionId = reuseSubmissionId;
+    if (submissionId) {
+      const existing = await prisma61.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
+      if (!existing) submissionId = void 0;
+    }
+    if (!submissionId) {
+      const existingDraft = await prisma61.treeBranchLeafSubmission.findFirst({
+        where: {
+          treeId: effectiveTreeId,
+          leadId: effectiveLeadId,
+          organizationId,
+          status: "draft"
+        },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true }
+      });
+      if (existingDraft) {
+        submissionId = existingDraft.id;
+        console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] R\xE9utilisation du draft existant: ${submissionId} (leadId: ${effectiveLeadId})`);
+      }
+    }
+    if (!submissionId) {
+      submissionId = `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await prisma61.treeBranchLeafSubmission.create({
+        data: {
+          id: submissionId,
+          treeId: effectiveTreeId,
+          userId: effectiveUserId,
+          leadId: effectiveLeadId,
+          organizationId,
+          // 🔥 IMPORTANT pour retrouver les drafts
+          status: status || "draft",
+          summary: { name: providedName || `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` },
+          exportData: cleanFormData || {},
+          completedAt: status === "completed" ? /* @__PURE__ */ new Date() : null,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Soumission cr\xE9\xE9e: ${submissionId} pour organization ${organizationId}`);
+    } else {
+      await prisma61.treeBranchLeafSubmission.update({
+        where: { id: submissionId },
+        data: {
+          status: status || "draft",
+          summary: { name: providedName || `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` },
+          exportData: cleanFormData || {},
+          completedAt: status === "completed" ? /* @__PURE__ */ new Date() : null,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      console.log(`\u267B\uFE0F [TBL CREATE-AND-EVALUATE] Soumission mise \xE0 jour: ${submissionId}`);
+    }
+    if (cleanFormData && typeof cleanFormData === "object") {
+      const savedCount = await saveUserEntriesNeutral(submissionId, cleanFormData, effectiveTreeId);
+      if (savedCount > 0) console.log(`\u2705 [TBL CREATE-AND-EVALUATE] ${savedCount} entr\xE9es utilisateur enregistr\xE9es`);
+      const capacities = await prisma61.treeBranchLeafNodeVariable.findMany({
+        where: {
+          TreeBranchLeafNode: {
+            treeId: effectiveTreeId
+          },
+          sourceRef: { not: null }
+        },
+        include: {
+          TreeBranchLeafNode: {
+            select: { id: true, label: true }
+          }
+        }
+      });
+      console.log(`\u{1F3AF} [TBL CREATE-AND-EVALUATE] ${capacities.length} capacit\xE9s trouv\xE9es`);
+      const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId);
+      console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.stored} valeurs stock\xE9es`);
+    }
+    const finalSubmission = await prisma61.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        TreeBranchLeafSubmissionData: true
+      }
+    });
+    return res.status(201).json({
+      success: true,
+      message: "Soumission cr\xE9\xE9e et \xE9valu\xE9e avec TBL Prisma",
+      submission: finalSubmission
+    });
+  } catch (error) {
+    console.error("\u274C [TBL CREATE-AND-EVALUATE] Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Erreur interne"
+    });
+  }
+});
+router72.put("/submissions/:submissionId/update-and-evaluate", async (req2, res) => {
+  try {
+    const { submissionId } = req2.params;
+    const { formData, status } = req2.body || {};
+    const cleanFormData = formData && typeof formData === "object" ? sanitizeFormData(formData) : void 0;
+    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
+    const userId = req2.user?.userId || null;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: "Organisation ID manquant - authentification requise" });
+    }
+    const submission = await prisma61.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      select: { id: true, treeId: true, status: true, exportData: true }
+    });
+    if (!submission) {
+      return res.status(404).json({ success: false, error: "Soumission introuvable" });
+    }
+    const saved = await saveUserEntriesNeutral(submissionId, cleanFormData, submission.treeId);
+    const updateData = {};
+    if (status && status !== submission.status) {
+      updateData.status = status;
+    }
+    if (cleanFormData) {
+      const normalize2 = (v) => {
+        if (v === null || v === void 0) return null;
+        if (typeof v === "string") return v;
+        try {
+          return JSON.stringify(v);
+        } catch {
+          return String(v);
+        }
+      };
+      if (normalize2(submission.exportData) !== normalize2(cleanFormData)) {
+        updateData.exportData = cleanFormData;
+      }
+    }
+    if (Object.keys(updateData).length > 0) {
+      await prisma61.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
+    }
+    const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId);
+    const finalSubmission = await prisma61.treeBranchLeafSubmission.findUnique({
+      where: { id: submissionId },
+      include: { TreeBranchLeafSubmissionData: true }
+    });
+    return res.json({
+      success: true,
+      message: `Soumission mise \xE0 jour (${saved} entr\xE9es) et \xE9valu\xE9e (${stats.updated} mises \xE0 jour, ${stats.created} cr\xE9\xE9es, ${stats.stored} valeurs stock\xE9es)`,
+      submission: finalSubmission
+    });
+  } catch (error) {
+    console.error("\u274C [TBL UPDATE-AND-EVALUATE] Erreur:", error);
+    return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
+  }
+});
+router72.post("/submissions/preview-evaluate", async (req2, res) => {
+  try {
+    const { treeId, formData, baseSubmissionId, leadId } = req2.body || {};
+    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
+    const userId = req2.user?.userId || "unknown-user";
+    if (!organizationId) {
+      return res.status(400).json({ success: false, error: "Organisation ID manquant - authentification requise" });
+    }
+    let effectiveTreeId = treeId;
+    if (!effectiveTreeId) {
+      const firstTree = await prisma61.treeBranchLeafTree.findFirst({ select: { id: true } });
+      if (!firstTree) {
+        return res.status(404).json({ success: false, error: "Aucun arbre TreeBranchLeaf trouv\xE9" });
+      }
+      effectiveTreeId = firstTree.id;
+    } else {
+      const exists = await prisma61.treeBranchLeafTree.findUnique({ where: { id: effectiveTreeId }, select: { id: true } });
+      if (!exists) {
+        return res.status(404).json({ success: false, error: `Arbre introuvable: ${effectiveTreeId}` });
+      }
+    }
+    const nodes = await prisma61.treeBranchLeafNode.findMany({ where: { treeId: effectiveTreeId }, select: { id: true, label: true } });
+    const labelMap = /* @__PURE__ */ new Map();
+    for (const n of nodes) labelMap.set(n.id, n.label);
+    const valueMap = /* @__PURE__ */ new Map();
+    if (leadId) {
+      const lead = await prisma61.lead.findUnique({
+        where: { id: leadId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          company: true,
+          leadNumber: true,
+          linkedin: true,
+          website: true,
+          status: true,
+          notes: true,
+          data: true
+        }
+      });
+      if (lead) {
+        valueMap.set("lead.id", lead.id);
+        valueMap.set("lead.firstName", lead.firstName);
+        valueMap.set("lead.lastName", lead.lastName);
+        valueMap.set("lead.email", lead.email);
+        valueMap.set("lead.phone", lead.phone);
+        valueMap.set("lead.company", lead.company);
+        valueMap.set("lead.leadNumber", lead.leadNumber);
+        valueMap.set("lead.linkedin", lead.linkedin);
+        valueMap.set("lead.website", lead.website);
+        valueMap.set("lead.status", lead.status);
+        valueMap.set("lead.notes", lead.notes);
+        if (lead.data && typeof lead.data === "object") {
+          const leadData = lead.data;
+          if (leadData.postalCode) {
+            valueMap.set("lead.postalCode", leadData.postalCode);
+          } else if (leadData.address && typeof leadData.address === "string") {
+            const postalCodeMatch = leadData.address.match(/\b(\d{4})\b/);
+            if (postalCodeMatch) {
+              const extractedPostalCode = postalCodeMatch[1];
+              valueMap.set("lead.postalCode", extractedPostalCode);
+            }
+          }
+          if (leadData.address) {
+            valueMap.set("lead.address", leadData.address);
+          }
+          if (leadData.city) {
+            valueMap.set("lead.city", leadData.city);
+          }
+          if (leadData.country) {
+            valueMap.set("lead.country", leadData.country);
+          }
+        }
+      }
+    }
+    if (baseSubmissionId) {
+      const existingData = await prisma61.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId: baseSubmissionId },
+        select: { nodeId: true, value: true }
+      });
+      const existingEntries = existingData.map((row) => [row.nodeId, row.value]);
+      await applySharedReferenceValues(valueMap, existingEntries, effectiveTreeId);
+    }
+    if (formData && typeof formData === "object") {
+      const overrides = Object.entries(formData).filter(([k]) => !k.startsWith("__"));
+      await applySharedReferenceValues(valueMap, overrides, effectiveTreeId);
+    }
+    if (formData && typeof formData === "object") {
+      const formEntries = Object.entries(formData);
+      const sharedReferenceMapping = {
+        "plan": ["shared-ref-1764095668124-l53956", "shared-ref-1764095679973-fad7d7", "shared-ref-1764093957109-52vog", "shared-ref-1764093355187-f83m8h"],
+        "inclinaison": ["shared-ref-1764093957109-52vog", "shared-ref-1764093355187-f83m8h"]
+      };
+      for (const [nodeId, value] of formEntries) {
+        if (!nodeId.startsWith("__") && value !== null && value !== void 0 && value !== "") {
+          const nodeInfo = await prisma61.treeBranchLeafNode.findUnique({
+            where: { id: nodeId },
+            select: {
+              id: true,
+              label: true,
+              sharedReferenceIds: true,
+              TreeBranchLeafSelectConfig: {
+                select: {
+                  id: true,
+                  options: true
+                }
+              }
+            }
+          });
+          if (nodeInfo?.TreeBranchLeafSelectConfig?.options) {
+            const options = Array.isArray(nodeInfo.TreeBranchLeafSelectConfig.options) ? nodeInfo.TreeBranchLeafSelectConfig.options : [];
+            const selectedOption = options.find((opt) => opt.value === value);
+            if (selectedOption?.sharedReferenceIds?.length) {
+              let optionType = null;
+              if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.plan)) {
+                optionType = "plan";
+              } else if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.inclinaison)) {
+                optionType = "inclinaison";
+              }
+              if (optionType) {
+                const referencesToClean = optionType === "plan" ? sharedReferenceMapping.inclinaison : sharedReferenceMapping.plan;
+                const nodesToClean = await prisma61.treeBranchLeafNode.findMany({
+                  where: {
+                    treeId: effectiveTreeId,
+                    sharedReferenceIds: { hasSome: referencesToClean }
+                  },
+                  select: { id: true, label: true, sharedReferenceIds: true }
+                });
+                for (const nodeToClean of nodesToClean) {
+                  if (valueMap.has(nodeToClean.id)) {
+                    valueMap.delete(nodeToClean.id);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    const capacitiesRaw = await prisma61.treeBranchLeafNodeVariable.findMany({
+      where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
+      include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
+    });
+    const capacities = capacitiesRaw.sort((a, b) => {
+      const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
+      const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
+      return aIsSumFormula - bIsSumFormula;
+    });
+    const submissionId = baseSubmissionId || `preview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const context = {
+      submissionId,
+      organizationId,
+      userId,
+      treeId: effectiveTreeId,
+      labelMap,
+      valueMap
+    };
+    const results = [];
+    let evaluated = 0;
+    for (const cap of capacities) {
+      try {
+        const evaluation = await evaluateVariableOperation(
+          cap.nodeId,
+          // variableNodeId
+          context.submissionId,
+          // submissionId
+          prisma61,
+          // prismaClient
+          context.valueMap
+          // valueMap (données temporaires du formulaire)
+        );
+        if (evaluation.value !== null && evaluation.value !== void 0 && evaluation.value !== "\u2205") {
+          context.valueMap.set(cap.nodeId, evaluation.value);
+        }
+        results.push({
+          nodeId: cap.nodeId,
+          nodeLabel: cap.TreeBranchLeafNode?.label || null,
+          sourceRef: cap.sourceRef,
+          operationSource: evaluation.operationSource,
+          // 🔥 STRUCTURE CORRECTE: value directement au niveau racine pour SmartCalculatedField
+          value: evaluation.value,
+          // ✅ VALEUR CALCULÉE (utilisée par SmartCalculatedField)
+          calculatedValue: evaluation.value,
+          // ✅ ALIAS pour compatibilité
+          operationResult: {
+            value: evaluation.value,
+            // ✅ Aussi dans operationResult pour traçabilité
+            humanText: evaluation.operationResult,
+            // ✅ Le texte explicatif
+            detail: evaluation.operationDetail
+          },
+          operationDetail: evaluation.operationDetail,
+          // 🎨 NOUVEAU: Configuration d'affichage depuis TreeBranchLeafNodeVariable
+          displayConfig: {
+            displayFormat: cap.displayFormat || "number",
+            unit: cap.unit || null,
+            precision: cap.precision ?? 2,
+            visibleToUser: cap.visibleToUser ?? true
+          }
+        });
+        evaluated++;
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : "Erreur inconnue";
+        results.push({
+          nodeId: cap.nodeId,
+          nodeLabel: cap.TreeBranchLeafNode?.label || null,
+          sourceRef: cap.sourceRef,
+          operationSource: "error",
+          value: null,
+          // ✅ Valeur nulle pour les erreurs
+          calculatedValue: null,
+          // ✅ ALIAS
+          operationResult: {
+            value: null,
+            // ✅ Valeur nulle
+            humanText: errorMessage,
+            // ✅ Message d'erreur
+            error: errorMessage
+          },
+          operationDetail: null,
+          // 🎨 Configuration d'affichage même en cas d'erreur
+          displayConfig: {
+            displayFormat: cap.displayFormat || "number",
+            unit: cap.unit || null,
+            precision: cap.precision ?? 2,
+            visibleToUser: cap.visibleToUser ?? true
+          }
+        });
+      }
+    }
+    try {
+      const nodeIds = results.map((r) => r.nodeId);
+      const nodesInfo = await prisma61.treeBranchLeafNode.findMany({
+        where: { id: { in: nodeIds } },
+        select: { id: true, fieldType: true, type: true }
+      });
+      const displayFieldIds = new Set(
+        nodesInfo.filter((n) => n.fieldType === "DISPLAY" || n.type === "DISPLAY").map((n) => n.id)
+      );
+      const calculatedValues = results.map((r) => {
+        const candidate = r.value ?? r.calculatedValue;
+        return { ...r, candidate };
+      }).filter((r) => {
+        if (displayFieldIds.has(r.nodeId)) {
+          return false;
+        }
+        if (r.candidate === null || r.candidate === void 0) return false;
+        const strValue = String(r.candidate).trim();
+        if (strValue === "" || strValue === "\u2205") return false;
+        return true;
+      }).map((r) => ({
+        nodeId: r.nodeId,
+        calculatedValue: String(r.candidate),
+        calculatedBy: `preview-${userId}`
+      }));
+      if (calculatedValues.length > 0) {
+        await storeCalculatedValues(calculatedValues, submissionId);
+      }
+    } catch (storeError) {
+    }
+    return res.json({
+      success: true,
+      mode: "preview",
+      submissionId,
+      treeId: effectiveTreeId,
+      evaluated,
+      results
+    });
+  } catch (error) {
+    console.error("\u274C [TBL PREVIEW-EVALUATE] Erreur:", error);
+    return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
+  }
+});
+router72.post("/submissions/stage", async (req2, res) => {
+  try {
+    pruneStages();
+    const { stageId, treeId, submissionId, formData } = req2.body || {};
+    const organizationId = req2.headers["x-organization-id"] || req2.user?.organizationId;
+    const userId = req2.user?.userId || "unknown-user";
+    if (!organizationId) return res.status(400).json({ success: false, error: "Organisation ID manquant" });
+    let effectiveTreeId = treeId;
+    if (!effectiveTreeId) {
+      const firstTree = await prisma61.treeBranchLeafTree.findFirst({ select: { id: true } });
+      if (!firstTree) return res.status(404).json({ success: false, error: "Aucun arbre trouv\xE9" });
+      effectiveTreeId = firstTree.id;
+    }
+    const id = stageId || newStageId();
+    const clean = formData && typeof formData === "object" ? sanitizeFormData(formData) : {};
+    const existing = stagingStore.get(id);
+    const merged = {
+      id,
+      organizationId,
+      userId,
+      treeId: effectiveTreeId,
+      submissionId: submissionId || existing?.submissionId,
+      formData: { ...existing?.formData || {}, ...clean },
+      updatedAt: Date.now()
+    };
+    stagingStore.set(id, merged);
+    return res.json({ success: true, stage: merged });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
+  }
+});
+router72.post("/submissions/stage/preview", async (req2, res) => {
+  try {
+    pruneStages();
+    const { stageId } = req2.body || {};
+    const stage = stageId ? stagingStore.get(stageId) : void 0;
+    if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
+    const nodes = await prisma61.treeBranchLeafNode.findMany({ where: { treeId: stage.treeId }, select: { id: true, label: true } });
+    const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
+    const valueMap = /* @__PURE__ */ new Map();
+    if (stage.submissionId) {
+      const existingData = await prisma61.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId: stage.submissionId },
+        select: { nodeId: true, value: true }
+      });
+      const existingEntries = existingData.map((r) => [r.nodeId, r.value]);
+      await applySharedReferenceValues(valueMap, existingEntries, stage.treeId);
+    }
+    const stageEntries = Object.entries(stage.formData);
+    await applySharedReferenceValues(valueMap, stageEntries, stage.treeId);
+    const capacitiesRaw = await prisma61.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
+    const capacities = capacitiesRaw.sort((a, b) => {
+      const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
+      const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
+      return aIsSumFormula - bIsSumFormula;
+    });
+    const context = { submissionId: stage.submissionId || `preview-${Date.now()}`, organizationId: stage.organizationId, userId: stage.userId, treeId: stage.treeId, labelMap, valueMap };
+    const results = [];
+    for (const c of capacities) {
+      try {
+        const r = await evaluateVariableOperation(
+          c.nodeId,
+          context.submissionId,
+          prisma61,
+          context.valueMap
+        );
+        if (r.value !== null && r.value !== void 0 && r.value !== "\u2205") {
+          context.valueMap.set(c.nodeId, r.value);
+        }
+        results.push({
+          nodeId: c.nodeId,
+          nodeLabel: c.TreeBranchLeafNode?.label || null,
+          sourceRef: c.sourceRef,
+          operationSource: r.operationSource || "neutral",
+          value: r.value,
+          // ✅ VALEUR CALCULÉE
+          calculatedValue: r.value,
+          // ✅ ALIAS
+          operationResult: {
+            value: r.value,
+            humanText: r.operationResult,
+            detail: r.operationDetail
+          },
+          operationDetail: r.operationDetail
+        });
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : "Erreur";
+        results.push({
+          nodeId: c.nodeId,
+          nodeLabel: c.TreeBranchLeafNode?.label || null,
+          sourceRef: c.sourceRef,
+          operationSource: "error",
+          value: null,
+          // ✅ Valeur nulle
+          calculatedValue: null,
+          // ✅ ALIAS
+          operationResult: {
+            value: null,
+            humanText: errorMessage,
+            error: errorMessage
+          },
+          operationDetail: null
+        });
+      }
+    }
+    return res.json({ success: true, stageId: stage.id, results });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
+  }
+});
+router72.post("/submissions/stage/commit", async (req2, res) => {
+  try {
+    pruneStages();
+    const { stageId, asNew } = req2.body || {};
+    const stage = stageId ? stagingStore.get(stageId) : void 0;
+    if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
+    if (!asNew && stage.submissionId) {
+      const submission = await prisma61.treeBranchLeafSubmission.findUnique({ where: { id: stage.submissionId } });
+      if (!submission) return res.status(404).json({ success: false, error: "Soumission introuvable" });
+      await prisma61.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData } });
+      const saved2 = await saveUserEntriesNeutral(stage.submissionId, stage.formData, stage.treeId);
+      const stats2 = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId);
+      return res.json({ success: true, submissionId: stage.submissionId, saved: saved2, stats: stats2 });
+    }
+    const submissionId = `tbl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    await prisma61.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: "draft", summary: { name: `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` }, exportData: stage.formData, updatedAt: /* @__PURE__ */ new Date() } });
+    const saved = await saveUserEntriesNeutral(submissionId, stage.formData, stage.treeId);
+    const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId);
+    stage.submissionId = submissionId;
+    stage.updatedAt = Date.now();
+    stagingStore.set(stage.id, stage);
+    return res.status(201).json({ success: true, submissionId, saved, stats });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e instanceof Error ? e.message : "Erreur interne" });
+  }
+});
+router72.post("/submissions/stage/discard", (req2, res) => {
+  pruneStages();
+  const { stageId } = req2.body || {};
+  if (!stageId || !stagingStore.has(stageId)) return res.json({ success: true, discarded: false });
+  stagingStore.delete(stageId);
+  return res.json({ success: true, discarded: true });
+});
+router72.get("/tables/:tableId", async (req2, res) => {
+  try {
+    const { tableId } = req2.params;
+    console.log(`\u{1F4CA} [GET TABLE] R\xE9cup\xE9ration table: ${tableId}`);
+    const table = await prisma61.treeBranchLeafNodeTable.findUnique({
+      where: { id: tableId },
+      select: {
+        id: true,
+        name: true,
+        nodeId: true,
+        meta: true
+      }
+    });
+    if (!table) {
+      console.log(`\u274C [GET TABLE] Table introuvable: ${tableId}`);
+      return res.status(404).json({
+        success: false,
+        error: "Table introuvable"
+      });
+    }
+    console.log(`\u2705 [GET TABLE] Table trouv\xE9e: ${table.name || tableId}`);
+    const meta = table.meta;
+    const lookupConfig = meta?.lookup || {};
+    const tableData = meta?.data || {};
+    const columns = tableData.columns || [];
+    const rows = tableData.rows || [];
+    const data = tableData.matrix || [];
+    console.log(`\u{1F4CA} [GET TABLE] Donn\xE9es extraites:`, {
+      columnsCount: columns.length,
+      rowsCount: rows.length,
+      dataRowsCount: data.length,
+      lookupEnabled: lookupConfig.rowLookupEnabled || lookupConfig.columnLookupEnabled
+    });
+    return res.json({
+      success: true,
+      table: {
+        id: table.id,
+        nodeId: table.nodeId,
+        name: table.name || null,
+        type: "matrix",
+        // Type de table
+        sourceRef: `@table.${table.id}`,
+        // 🔥 DONNÉES DE LA TABLE (colonnes, lignes, data)
+        columns,
+        rows,
+        data,
+        // 🔥 CONFIGURATION DE LOOKUP
+        meta: {
+          lookup: {
+            enabled: lookupConfig.rowLookupEnabled || lookupConfig.columnLookupEnabled || false,
+            mode: lookupConfig.mode || "columns",
+            rowLookupEnabled: lookupConfig.rowLookupEnabled || false,
+            columnLookupEnabled: lookupConfig.columnLookupEnabled || false,
+            selectors: {
+              rowFieldId: lookupConfig.selectors?.rowFieldId || null,
+              columnFieldId: lookupConfig.selectors?.columnFieldId || null
+            },
+            displayRow: lookupConfig.displayRow || null,
+            displayColumn: lookupConfig.displayColumn || null
+          }
+        }
+      }
+    });
+  } catch (error) {
+    console.error("\u274C [GET TABLE] Erreur:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Erreur lors de la r\xE9cup\xE9ration de la table",
+      details: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+var tbl_submission_evaluator_default = router72;
+
+// src/controllers/calculatedValueController.ts
+var import_express75 = require("express");
+var import_crypto13 = require("crypto");
+var router73 = (0, import_express75.Router)();
+var parseStoredStringValue = (raw) => {
+  if (raw === null || raw === void 0) {
+    return null;
+  }
+  const trimmed = String(raw).trim();
+  if (!trimmed || trimmed === "\u2205") {
+    return null;
+  }
+  const looksJson = trimmed.startsWith("{") && trimmed.endsWith("}") || trimmed.startsWith("[") && trimmed.endsWith("]");
+  if (looksJson) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "object" && parsed !== null) {
+        const candidate = parsed;
+        if (candidate.value !== void 0) return candidate.value;
+        if (candidate.result !== void 0) return candidate.result;
+      }
+      if (typeof parsed === "string" || typeof parsed === "number" || typeof parsed === "boolean") {
+        return parsed;
+      }
+    } catch {
+    }
+  }
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  const numeric = Number(trimmed);
+  if (!Number.isNaN(numeric) && trimmed === numeric.toString()) {
+    return numeric;
+  }
+  return trimmed;
+};
+var extractValueFromOperationResult = (raw) => {
+  if (raw === null || raw === void 0) {
+    return null;
+  }
+  if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
+    return raw;
+  }
+  if (typeof raw === "object") {
+    const record = raw;
+    const candidate = record.value ?? record.result ?? record.humanText ?? record.text;
+    if (candidate === void 0 || candidate === null) {
+      return null;
+    }
+    if (typeof candidate === "string" || typeof candidate === "number" || typeof candidate === "boolean") {
+      return candidate;
+    }
+  }
+  return null;
+};
+var hasMeaningfulValue = (val) => {
+  if (val === null || val === void 0) return false;
+  if (typeof val === "string") {
+    return val.trim() !== "" && val.trim() !== "\u2205";
+  }
+  return true;
+};
+var toIsoString = (date) => {
+  if (!date) {
+    return void 0;
+  }
+  try {
+    return date instanceof Date ? date.toISOString() : new Date(date).toISOString();
+  } catch {
+    return void 0;
+  }
+};
+router73.get("/:nodeId/calculated-value", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    const pickQueryString = (key2) => {
+      const rawValue = req2.query[key2];
+      if (typeof rawValue === "string") return rawValue;
+      if (Array.isArray(rawValue) && rawValue.length > 0 && typeof rawValue[0] === "string") {
+        return rawValue[0];
+      }
+      return void 0;
+    };
+    const submissionId = pickQueryString("submissionId") || pickQueryString("_submissionId") || pickQueryString("subId") || pickQueryString("tblSubmissionId");
+    if (!nodeId) {
+      return res.status(400).json({ error: "nodeId requis" });
+    }
+    const node = await prisma.treeBranchLeafNode.findUnique({
+      where: {
+        id: nodeId
+      },
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true,
+        metadata: true,
+        calculatedAt: true,
+        calculatedBy: true,
+        type: true,
+        fieldType: true,
+        treeId: true
+        // ✨ Ajouté pour operation-interpreter
+      }
+    });
+    if (!node) {
+      return res.status(404).json({ error: "N\u0153ud non trouv\xE9" });
+    }
+    const preferSubmissionData = Boolean(submissionId);
+    const forceFlag = pickQueryString("force") || pickQueryString("forceRefresh") || pickQueryString("refresh") || pickQueryString("forceRecompute");
+    const forceRecompute = Boolean(
+      forceFlag && ["1", "true", "yes", "force"].includes(forceFlag.toLowerCase())
+    );
+    let submissionDataEntry = null;
+    let submissionResolvedValue = null;
+    if (preferSubmissionData && submissionId) {
+      submissionDataEntry = await prisma.treeBranchLeafSubmissionData.findUnique({
+        where: { submissionId_nodeId: { submissionId, nodeId } },
+        select: {
+          value: true,
+          lastResolved: true,
+          operationResult: true,
+          operationDetail: true,
+          operationSource: true,
+          sourceRef: true,
+          fieldLabel: true
+        }
+      });
+      if (submissionDataEntry) {
+        submissionResolvedValue = parseStoredStringValue(submissionDataEntry.value);
+        if (!hasMeaningfulValue(submissionResolvedValue)) {
+          submissionResolvedValue = extractValueFromOperationResult(submissionDataEntry.operationResult);
+        }
+      }
+      const needsSubmissionRecompute = forceRecompute || !submissionDataEntry || !hasMeaningfulValue(submissionResolvedValue);
+      if (needsSubmissionRecompute) {
+        const variableMeta = await prisma.treeBranchLeafNodeVariable.findUnique({
+          where: { nodeId },
+          select: { nodeId: true, displayName: true, exposedKey: true, unit: true }
+        });
+        if (variableMeta) {
+          try {
+            const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
+            const evaluation = await evaluateVariableOperation2(nodeId, submissionId, prisma);
+            const recomputedValue = evaluation.value ?? evaluation.operationResult ?? null;
+            const persistedValue = recomputedValue === null || recomputedValue === void 0 ? null : String(recomputedValue);
+            const resolvedAt = /* @__PURE__ */ new Date();
+            const isDisplayField = node.fieldType === "DISPLAY" || node.type === "DISPLAY";
+            if (!isDisplayField) {
+              await prisma.treeBranchLeafSubmissionData.upsert({
+                where: { submissionId_nodeId: { submissionId, nodeId } },
+                update: {
+                  value: persistedValue,
+                  operationDetail: evaluation.operationDetail,
+                  operationSource: evaluation.operationSource,
+                  sourceRef: evaluation.sourceRef,
+                  fieldLabel: node.label,
+                  isVariable: true,
+                  variableDisplayName: variableMeta.displayName,
+                  variableKey: variableMeta.exposedKey,
+                  variableUnit: variableMeta.unit,
+                  lastResolved: resolvedAt
+                },
+                create: {
+                  id: (0, import_crypto13.randomUUID)(),
+                  submissionId,
+                  nodeId,
+                  value: persistedValue,
+                  operationDetail: evaluation.operationDetail,
+                  operationSource: evaluation.operationSource,
+                  sourceRef: evaluation.sourceRef,
+                  fieldLabel: node.label,
+                  isVariable: true,
+                  variableDisplayName: variableMeta.displayName,
+                  variableKey: variableMeta.exposedKey,
+                  variableUnit: variableMeta.unit,
+                  lastResolved: resolvedAt
+                }
+              });
+            }
+            return res.json({
+              success: true,
+              nodeId: node.id,
+              label: node.label,
+              value: recomputedValue,
+              calculatedAt: resolvedAt.toISOString(),
+              calculatedBy: evaluation.operationSource || "operation-interpreter-auto",
+              type: node.type,
+              fieldType: node.fieldType,
+              submissionId,
+              sourceRef: evaluation.sourceRef,
+              operationDetail: evaluation.operationDetail,
+              freshCalculation: true
+            });
+          } catch (recomputeErr) {
+            console.error("\u274C [CalculatedValueController] Recompute error:", recomputeErr);
+          }
+        }
+      }
+      if (submissionDataEntry && hasMeaningfulValue(submissionResolvedValue)) {
+        return res.json({
+          success: true,
+          nodeId: node.id,
+          label: node.label || submissionDataEntry.fieldLabel,
+          value: submissionResolvedValue,
+          calculatedAt: toIsoString(submissionDataEntry.lastResolved) || toIsoString(node.calculatedAt),
+          calculatedBy: submissionDataEntry.operationSource || node.calculatedBy,
+          type: node.type,
+          fieldType: node.fieldType,
+          submissionId,
+          sourceRef: submissionDataEntry.sourceRef,
+          operationDetail: submissionDataEntry.operationDetail,
+          fromSubmission: true
+        });
+      }
+    }
+    const isTBLField = node.type === "field" && node.metadata && typeof node.metadata === "object";
+    const hasTableLookup = isTBLField && node.metadata?.lookup?.enabled === true && node.metadata?.lookup?.tableReference;
+    const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
+      where: { nodeId },
+      select: { sourceType: true, sourceRef: true }
+    });
+    const hasFormulaVariable = variableMeta2?.sourceRef?.startsWith("node-formula:");
+    const hasConditionVariable = variableMeta2?.sourceRef?.startsWith("condition:");
+    const hasTreeSourceVariable = variableMeta2?.sourceType === "tree" && (hasFormulaVariable || hasConditionVariable);
+    const existingValue = node.calculatedValue;
+    const hasValidExistingValue = existingValue && existingValue !== "" && existingValue !== "0" && existingValue !== "[]" && existingValue !== "null" && existingValue !== "undefined";
+    if (hasValidExistingValue) {
+      return res.json({
+        success: true,
+        nodeId: node.id,
+        label: node.label,
+        value: parseStoredStringValue(existingValue),
+        calculatedAt: toIsoString(node.calculatedAt),
+        calculatedBy: node.calculatedBy,
+        type: node.type,
+        fieldType: node.fieldType,
+        fromStoredValue: true
+      });
+    }
+    const isRealSubmission = submissionId && !submissionId.startsWith("preview-");
+    const canRecalculateHere = hasTableLookup && !hasConditionVariable && !hasTreeSourceVariable;
+    if (canRecalculateHere && node.treeId && isRealSubmission) {
+      console.log(`\u{1F525} [CalculatedValueController] Node "${node.label}" - recalcul table lookup:`, {
+        nodeId,
+        hasTableLookup,
+        submissionId
+      });
+      try {
+        const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
+        const result = await evaluateVariableOperation2(
+          nodeId,
+          submissionId,
+          prisma
+        );
+        console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
+        if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
+          const stringValue = String(result.value ?? result.operationResult);
+          if (stringValue && stringValue !== "0" && stringValue !== "") {
+            await prisma.treeBranchLeafNode.update({
+              where: { id: nodeId },
+              data: {
+                calculatedValue: stringValue,
+                calculatedAt: /* @__PURE__ */ new Date(),
+                calculatedBy: "operation-interpreter-auto"
+              }
+            });
+          }
+          return res.json({
+            success: true,
+            nodeId: node.id,
+            label: node.label,
+            value: stringValue,
+            calculatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            calculatedBy: "operation-interpreter-auto",
+            type: node.type,
+            fieldType: node.fieldType,
+            freshCalculation: true
+          });
+        }
+      } catch (operationErr) {
+        console.error("\u274C [CalculatedValueController] Erreur operation-interpreter:", operationErr);
+      }
+    }
+    return res.json({
+      success: true,
+      nodeId: node.id,
+      label: node.label,
+      value: node.calculatedValue,
+      calculatedAt: node.calculatedAt,
+      calculatedBy: node.calculatedBy,
+      type: node.type,
+      fieldType: node.fieldType
+    });
+  } catch (error) {
+    console.error("[CalculatedValueController] GET erreur:", error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+router73.post("/:nodeId/store-calculated-value", async (req2, res) => {
+  try {
+    const { nodeId } = req2.params;
+    const { calculatedValue, calculatedBy, submissionId } = req2.body;
+    if (!nodeId) {
+      return res.status(400).json({ error: "nodeId requis" });
+    }
+    if (calculatedValue === void 0) {
+      return res.status(400).json({ error: "calculatedValue requis" });
+    }
+    console.log("[CalculatedValueController] POST store-calculated-value", {
+      nodeId,
+      calculatedValue,
+      calculatedBy,
+      submissionId,
+      headers: {
+        organization: req2.headers["x-organization-id"],
+        referer: req2.headers["referer"]
+      }
+    });
+    const updated = await prisma.treeBranchLeafNode.update({
+      where: { id: nodeId },
+      data: {
+        calculatedValue: String(calculatedValue),
+        calculatedAt: /* @__PURE__ */ new Date(),
+        calculatedBy: calculatedBy || "unknown"
+      },
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true
+      }
+    });
+    console.log("\u2705 [CalculatedValueController] Valeur stock\xE9e:", {
+      nodeId,
+      calculatedValue,
+      calculatedBy,
+      submissionId
+    });
+    return res.json({
+      success: true,
+      nodeId: updated.id,
+      calculatedValue: updated.calculatedValue,
+      calculatedAt: updated.calculatedAt,
+      calculatedBy: updated.calculatedBy
+    });
+  } catch (error) {
+    console.error("[CalculatedValueController] POST erreur:", error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+router73.post("/store-batch-calculated-values", async (req2, res) => {
+  try {
+    const { values, submissionId } = req2.body;
+    if (!Array.isArray(values) || values.length === 0) {
+      return res.status(400).json({ error: "values doit \xEAtre un tableau non-vide" });
+    }
+    const results = [];
+    for (const { nodeId, calculatedValue, calculatedBy } of values) {
+      if (!nodeId) continue;
+      try {
+        const updated = await prisma.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: {
+            calculatedValue: String(calculatedValue),
+            calculatedAt: /* @__PURE__ */ new Date(),
+            calculatedBy: calculatedBy || "unknown"
+          }
+        });
+        results.push({
+          nodeId,
+          success: true,
+          calculatedValue: updated.calculatedValue
+        });
+      } catch (err) {
+        results.push({
+          nodeId,
+          success: false,
+          error: String(err)
+        });
+      }
+    }
+    console.log("\u2705 [CalculatedValueController] BATCH stockage:", {
+      submissionId,
+      total: values.length,
+      success: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length
+    });
+    return res.json({
+      success: true,
+      results,
+      submissionId
+    });
+  } catch (error) {
+    console.error("[CalculatedValueController] BATCH POST erreur:", error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+var calculatedValueController_default = router73;
+
+// src/api/websites.ts
+var import_express76 = require("express");
+var import_client64 = require("@prisma/client");
+var router74 = (0, import_express76.Router)();
+var prisma62 = new import_client64.PrismaClient();
+router74.get("/websites", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const showAll = req2.query.all === "true";
+    if (!organizationId && !showAll) {
+      return res.status(400).json({ error: "Organization ID is required" });
+    }
+    const whereClause = {
+      isActive: true
+    };
+    if (!showAll && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+    const websites = await prisma62.webSite.findMany({
+      where: whereClause,
+      include: {
+        config: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+    res.json(websites);
+  } catch (error) {
+    console.error("Error fetching websites:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.get("/websites/:slug", async (req2, res) => {
+  try {
+    const { slug } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    const whereClause = { slug, isActive: true };
+    if (organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+    const website = await prisma62.webSite.findFirst({
+      where: whereClause,
+      include: {
+        config: {
+          include: {
+            logoFile: true,
+            faviconFile: true,
+            heroBackgroundFile: true,
+            ogImageFile: true
+          }
+        },
+        sections: {
+          where: { isActive: true },
+          orderBy: { displayOrder: "asc" }
+        },
+        services: {
+          where: { isActive: true },
+          orderBy: { displayOrder: "asc" }
+        },
+        projects: {
+          where: { isActive: true },
+          orderBy: { displayOrder: "asc" }
+        },
+        testimonials: {
+          where: { isActive: true },
+          orderBy: { displayOrder: "asc" }
+        },
+        blogPosts: {
+          where: { isPublished: true },
+          orderBy: { publishedAt: "desc" },
+          take: 10,
+          include: {
+            author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true
+              }
+            }
+          }
+        },
+        mediaFiles: {
+          where: { isPublic: true },
+          orderBy: { createdAt: "desc" }
+        }
+      }
+    });
+    if (!website) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    if (website.maintenanceMode && !organizationId) {
+      return res.status(503).json({
+        error: "Site en maintenance",
+        message: website.maintenanceMessage || "Le site est temporairement indisponible."
+      });
+    }
+    res.json(website);
+  } catch (error) {
+    console.error("Error fetching website:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.get("/websites/:slug/services", async (req2, res) => {
+  try {
+    const { slug } = req2.params;
+    const website = await prisma62.webSite.findFirst({
+      where: { slug, isActive: true },
+      select: { id: true }
+    });
+    if (!website) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    const services = await prisma62.webSiteService.findMany({
+      where: {
+        websiteId: website.id,
+        isActive: true
+      },
+      orderBy: { displayOrder: "asc" }
+    });
+    res.json(services);
+  } catch (error) {
+    console.error("Error fetching services:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.get("/websites/:slug/projects", async (req2, res) => {
+  try {
+    const { slug } = req2.params;
+    const { featured } = req2.query;
+    const website = await prisma62.webSite.findFirst({
+      where: { slug, isActive: true },
+      select: { id: true }
+    });
+    if (!website) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    const whereClause = {
+      websiteId: website.id,
+      isActive: true
+    };
+    if (featured === "true") {
+      whereClause.isFeatured = true;
+    }
+    const projects = await prisma62.webSiteProject.findMany({
+      where: whereClause,
+      orderBy: { displayOrder: "asc" }
+    });
+    res.json(projects);
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.get("/websites/:slug/testimonials", async (req2, res) => {
+  try {
+    const { slug } = req2.params;
+    const { featured } = req2.query;
+    const website = await prisma62.webSite.findFirst({
+      where: { slug, isActive: true },
+      select: { id: true }
+    });
+    if (!website) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    const whereClause = {
+      websiteId: website.id,
+      isActive: true
+    };
+    if (featured === "true") {
+      whereClause.isFeatured = true;
+    }
+    const testimonials = await prisma62.webSiteTestimonial.findMany({
+      where: whereClause,
+      orderBy: { displayOrder: "asc" }
+    });
+    res.json(testimonials);
+  } catch (error) {
+    console.error("Error fetching testimonials:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.get("/websites/:slug/blog", async (req2, res) => {
+  try {
+    const { slug } = req2.params;
+    const { limit = "10", featured } = req2.query;
+    const website = await prisma62.webSite.findFirst({
+      where: { slug, isActive: true },
+      select: { id: true }
+    });
+    if (!website) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    const whereClause = {
+      websiteId: website.id,
+      isPublished: true
+    };
+    if (featured === "true") {
+      whereClause.isFeatured = true;
+    }
+    const blogPosts = await prisma62.webSiteBlogPost.findMany({
+      where: whereClause,
+      orderBy: { publishedAt: "desc" },
+      take: parseInt(limit),
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true
+          }
+        }
+      }
+    });
+    res.json(blogPosts);
+  } catch (error) {
+    console.error("Error fetching blog posts:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+  try {
+    const { slug, postSlug } = req2.params;
+    const website = await prisma62.webSite.findFirst({
+      where: { slug, isActive: true },
+      select: { id: true }
+    });
+    if (!website) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    const blogPost = await prisma62.webSiteBlogPost.findFirst({
+      where: {
+        websiteId: website.id,
+        slug: postSlug,
+        isPublished: true
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+            email: true
+          }
+        }
+      }
+    });
+    if (!blogPost) {
+      return res.status(404).json({ error: "Blog post not found" });
+    }
+    res.json(blogPost);
+  } catch (error) {
+    console.error("Error fetching blog post:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.put("/websites/:id", authenticateToken, async (req2, res) => {
+  try {
+    const websiteId = parseInt(req2.params.id);
+    const organizationId = req2.headers["x-organization-id"];
+    const data = req2.body;
+    if (!organizationId) {
+      return res.status(400).json({ error: "Organization ID is required" });
+    }
+    const existingWebsite = await prisma62.webSite.findFirst({
+      where: {
+        id: websiteId,
+        organizationId
+      }
+    });
+    if (!existingWebsite) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    const updatedWebsite = await prisma62.webSite.update({
+      where: { id: websiteId },
+      data: {
+        name: data.name,
+        slug: data.slug,
+        domain: data.domain,
+        description: data.description,
+        language: data.language,
+        timezone: data.timezone,
+        isActive: data.isActive,
+        maintenanceMode: data.maintenanceMode,
+        maintenanceMessage: data.maintenanceMessage,
+        analyticsCode: data.analyticsCode,
+        customCss: data.customCss,
+        customJs: data.customJs,
+        seoMetadata: data.seoMetadata
+      },
+      include: {
+        config: true
+      }
+    });
+    res.json(updatedWebsite);
+  } catch (error) {
+    console.error("Error updating website:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.post("/websites", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = req2.headers["x-organization-id"];
+    const data = req2.body;
+    if (!organizationId) {
+      return res.status(400).json({ error: "Organization ID is required" });
+    }
+    const newWebsite = await prisma62.webSite.create({
+      data: {
+        name: data.name,
+        slug: data.slug,
+        domain: data.domain,
+        description: data.description,
+        language: data.language || "fr",
+        timezone: data.timezone || "Europe/Brussels",
+        organizationId,
+        isActive: true,
+        maintenanceMode: false
+      },
+      include: {
+        config: true
+      }
+    });
+    res.status(201).json(newWebsite);
+  } catch (error) {
+    console.error("Error creating website:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router74.delete("/websites/:id", authenticateToken, async (req2, res) => {
+  console.log("\u{1F5D1}\uFE0F [WEBSITES] DELETE /websites/:id atteint!");
+  console.log("\u{1F5D1}\uFE0F [WEBSITES] ID du site:", req2.params.id);
+  try {
+    const websiteId = parseInt(req2.params.id);
+    const organizationId = req2.headers["x-organization-id"];
+    const user = req2.user;
+    console.log("\u{1F5D1}\uFE0F [WEBSITES] User:", user?.email, "isSuperAdmin:", user?.isSuperAdmin);
+    console.log("\u{1F5D1}\uFE0F [WEBSITES] OrganizationId:", organizationId);
+    if (!organizationId && !user?.isSuperAdmin) {
+      console.log("\u274C [WEBSITES] Organization ID requis et user n'est pas Super Admin");
+      return res.status(400).json({ error: "Organization ID is required" });
+    }
+    const whereClause = { id: websiteId };
+    if (!user?.isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+    const existingWebsite = await prisma62.webSite.findFirst({
+      where: whereClause
+    });
+    if (!existingWebsite) {
+      return res.status(404).json({ error: "Website not found" });
+    }
+    await prisma62.webSite.delete({
+      where: { id: websiteId }
+    });
+    console.log(`\u2705 Site web ${websiteId} (${existingWebsite.name}) supprim\xE9 par ${user?.email || "unknown"}`);
+    res.json({
+      success: true,
+      message: `Site "${existingWebsite.name}" supprim\xE9 avec succ\xE8s`
+    });
+  } catch (error) {
+    console.error("Error deleting website:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+var websites_default = router74;
+
+// src/api/website-services.ts
+var import_express77 = require("express");
+var import_client65 = require("@prisma/client");
+var router75 = (0, import_express77.Router)();
+var prisma63 = new import_client65.PrismaClient();
+router75.get("/website-services/:websiteId", async (req2, res) => {
+  try {
+    const { websiteId } = req2.params;
+    const services = await prisma63.webSiteService.findMany({
+      where: {
+        websiteId: parseInt(websiteId)
+      },
+      orderBy: {
+        displayOrder: "asc"
+      }
+    });
+    res.json(services);
+  } catch (error) {
+    console.error("Error fetching services:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router75.post("/website-services", async (req2, res) => {
+  try {
+    const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
+    if (!websiteId || !key2 || !title) {
+      return res.status(400).json({ error: "websiteId, key, and title are required" });
+    }
+    const maxOrder = await prisma63.webSiteService.aggregate({
+      where: { websiteId: parseInt(websiteId) },
+      _max: { displayOrder: true }
+    });
+    const service = await prisma63.webSiteService.create({
+      data: {
+        websiteId: parseInt(websiteId),
+        key: key2,
+        icon: icon || "CheckCircleOutlined",
+        title,
+        description: description || "",
+        features: features || [],
+        ctaText: ctaText || "En savoir plus",
+        ctaUrl: ctaUrl || "",
+        isActive: isActive !== void 0 ? isActive : true,
+        displayOrder: (maxOrder._max.displayOrder || 0) + 1
+      }
+    });
+    res.json(service);
+  } catch (error) {
+    console.error("Error creating service:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router75.put("/website-services/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
+    const service = await prisma63.webSiteService.update({
+      where: { id: parseInt(id) },
+      data: {
+        ...key2 && { key: key2 },
+        ...icon && { icon },
+        ...title && { title },
+        ...description !== void 0 && { description },
+        ...features && { features },
+        ...ctaText !== void 0 && { ctaText },
+        ...ctaUrl !== void 0 && { ctaUrl },
+        ...isActive !== void 0 && { isActive }
+      }
+    });
+    res.json(service);
+  } catch (error) {
+    console.error("Error updating service:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router75.delete("/website-services/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    await prisma63.webSiteService.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting service:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router75.post("/website-services/reorder", async (req2, res) => {
+  try {
+    const { services } = req2.body;
+    if (!Array.isArray(services)) {
+      return res.status(400).json({ error: "services array is required" });
+    }
+    await Promise.all(
+      services.map(
+        (service) => prisma63.webSiteService.update({
+          where: { id: service.id },
+          data: { displayOrder: service.displayOrder }
+        })
+      )
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error reordering services:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+var website_services_default = router75;
+
+// src/api/website-projects.ts
+var import_express78 = require("express");
+var import_client66 = require("@prisma/client");
+var router76 = (0, import_express78.Router)();
+var prisma64 = new import_client66.PrismaClient();
+router76.get("/website-projects/:websiteId", async (req2, res) => {
+  try {
+    const { websiteId } = req2.params;
+    const projects = await prisma64.webSiteProject.findMany({
+      where: {
+        websiteId: parseInt(websiteId)
+      },
+      orderBy: {
+        displayOrder: "asc"
+      }
+    });
+    res.json(projects);
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.post("/website-projects", async (req2, res) => {
+  try {
+    const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
+    if (!websiteId || !title) {
+      return res.status(400).json({ error: "websiteId and title are required" });
+    }
+    const maxOrder = await prisma64.webSiteProject.aggregate({
+      where: { websiteId: parseInt(websiteId) },
+      _max: { displayOrder: true }
+    });
+    const project = await prisma64.webSiteProject.create({
+      data: {
+        websiteId: parseInt(websiteId),
+        title,
+        location: location || "",
+        details: details || "",
+        tags: tags || [],
+        isActive: isActive !== void 0 ? isActive : true,
+        isFeatured: isFeatured || false,
+        displayOrder: (maxOrder._max.displayOrder || 0) + 1,
+        completedAt: completedAt ? new Date(completedAt) : /* @__PURE__ */ new Date()
+      }
+    });
+    res.json(project);
+  } catch (error) {
+    console.error("Error creating project:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.put("/website-projects/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
+    const project = await prisma64.webSiteProject.update({
+      where: { id: parseInt(id) },
+      data: {
+        ...title && { title },
+        ...location !== void 0 && { location },
+        ...details !== void 0 && { details },
+        ...tags && { tags },
+        ...isActive !== void 0 && { isActive },
+        ...isFeatured !== void 0 && { isFeatured },
+        ...completedAt && { completedAt: new Date(completedAt) }
+      }
+    });
+    res.json(project);
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.delete("/website-projects/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    await prisma64.webSiteProject.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router76.post("/website-projects/reorder", async (req2, res) => {
+  try {
+    const { projects } = req2.body;
+    if (!Array.isArray(projects)) {
+      return res.status(400).json({ error: "projects array is required" });
+    }
+    await Promise.all(
+      projects.map(
+        (project) => prisma64.webSiteProject.update({
+          where: { id: project.id },
+          data: { displayOrder: project.displayOrder }
+        })
+      )
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error reordering projects:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+var website_projects_default = router76;
+
+// src/api/website-testimonials.ts
+var import_express79 = require("express");
+var import_client67 = require("@prisma/client");
+var router77 = (0, import_express79.Router)();
+var prisma65 = new import_client67.PrismaClient();
+router77.get("/website-testimonials/:websiteId", async (req2, res) => {
+  try {
+    const { websiteId } = req2.params;
+    const testimonials = await prisma65.webSiteTestimonial.findMany({
+      where: {
+        websiteId: parseInt(websiteId)
+      },
+      orderBy: {
+        displayOrder: "asc"
+      }
+    });
+    res.json(testimonials);
+  } catch (error) {
+    console.error("Error fetching testimonials:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router77.post("/website-testimonials", async (req2, res) => {
+  try {
+    const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
+    if (!websiteId || !customerName || !text) {
+      return res.status(400).json({ error: "websiteId, customerName, and text are required" });
+    }
+    const maxOrder = await prisma65.webSiteTestimonial.aggregate({
+      where: { websiteId: parseInt(websiteId) },
+      _max: { displayOrder: true }
+    });
+    const testimonial = await prisma65.webSiteTestimonial.create({
+      data: {
+        websiteId: parseInt(websiteId),
+        customerName,
+        location: location || "",
+        service: service || "",
+        rating: rating || 5,
+        text,
+        isActive: isActive !== void 0 ? isActive : true,
+        isFeatured: isFeatured || false,
+        displayOrder: (maxOrder._max.displayOrder || 0) + 1,
+        publishedAt: publishedAt ? new Date(publishedAt) : /* @__PURE__ */ new Date()
+      }
+    });
+    res.json(testimonial);
+  } catch (error) {
+    console.error("Error creating testimonial:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router77.put("/website-testimonials/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
+    const testimonial = await prisma65.webSiteTestimonial.update({
+      where: { id: parseInt(id) },
+      data: {
+        ...customerName && { customerName },
+        ...location !== void 0 && { location },
+        ...service !== void 0 && { service },
+        ...rating !== void 0 && { rating },
+        ...text !== void 0 && { text },
+        ...isActive !== void 0 && { isActive },
+        ...isFeatured !== void 0 && { isFeatured },
+        ...publishedAt && { publishedAt: new Date(publishedAt) }
+      }
+    });
+    res.json(testimonial);
+  } catch (error) {
+    console.error("Error updating testimonial:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router77.delete("/website-testimonials/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    await prisma65.webSiteTestimonial.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting testimonial:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router77.post("/website-testimonials/reorder", async (req2, res) => {
+  try {
+    const { testimonials } = req2.body;
+    if (!Array.isArray(testimonials)) {
+      return res.status(400).json({ error: "testimonials array is required" });
+    }
+    await Promise.all(
+      testimonials.map(
+        (testimonial) => prisma65.webSiteTestimonial.update({
+          where: { id: testimonial.id },
+          data: { displayOrder: testimonial.displayOrder }
+        })
+      )
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error reordering testimonials:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+var website_testimonials_default = router77;
+
+// src/api/website-sections.ts
+var import_express80 = __toESM(require("express"), 1);
+var import_client68 = require("@prisma/client");
+var router78 = import_express80.default.Router();
+var prisma66 = new import_client68.PrismaClient();
+router78.get("/website-sections/:websiteId", async (req2, res) => {
+  try {
+    const { websiteId } = req2.params;
+    const sections = await prisma66.webSiteSection.findMany({
+      where: {
+        websiteId: parseInt(websiteId)
+      },
+      orderBy: {
+        displayOrder: "asc"
+      }
+    });
+    res.json(sections);
+  } catch (error) {
+    console.error("\u274C Erreur r\xE9cup\xE9ration sections:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router78.post("/website-sections", async (req2, res) => {
+  try {
+    const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
+    const maxOrder = await prisma66.webSiteSection.aggregate({
+      where: { websiteId: parseInt(websiteId) },
+      _max: { displayOrder: true }
+    });
+    const section = await prisma66.webSiteSection.create({
+      data: {
+        websiteId: parseInt(websiteId),
+        key: key2,
+        type,
+        name,
+        content: content || {},
+        backgroundColor,
+        textColor,
+        customCss,
+        displayOrder: (maxOrder._max.displayOrder || 0) + 1,
+        isActive: true,
+        isLocked: false
+      }
+    });
+    res.json(section);
+  } catch (error) {
+    console.error("\u274C Erreur cr\xE9ation section:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router78.put("/website-sections/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
+    console.log("\u{1F527} PUT /api/website-sections/:id");
+    console.log("  ID:", id);
+    console.log("  Body keys:", Object.keys(req2.body));
+    console.log("  Content keys:", content ? Object.keys(content) : "undefined");
+    const existing = await prisma66.webSiteSection.findUnique({
+      where: { id: parseInt(id) }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Section introuvable" });
+    }
+    const deepMerge = (target, source) => {
+      if (!source || typeof source !== "object" || Array.isArray(source)) {
+        return source;
+      }
+      const result = { ...target || {} };
+      for (const key2 in source) {
+        if (source[key2] !== void 0) {
+          if (result[key2] && typeof result[key2] === "object" && !Array.isArray(result[key2]) && typeof source[key2] === "object" && !Array.isArray(source[key2])) {
+            result[key2] = deepMerge(result[key2], source[key2]);
+          } else {
+            result[key2] = source[key2];
+          }
+        }
+      }
+      return result;
+    };
+    const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
+    console.log("  \u{1F50D} Existing content keys:", existing.content ? Object.keys(existing.content) : "none");
+    console.log("  \u{1F50D} Merged content keys:", mergedContent ? Object.keys(mergedContent) : "none");
+    const section = await prisma66.webSiteSection.update({
+      where: { id: parseInt(id) },
+      data: {
+        ...name !== void 0 && { name },
+        ...content !== void 0 && { content: mergedContent },
+        ...backgroundColor !== void 0 && { backgroundColor },
+        ...textColor !== void 0 && { textColor },
+        ...customCss !== void 0 && { customCss },
+        ...isActive !== void 0 && { isActive }
+      }
+    });
+    console.log("\u2705 Section mise \xE0 jour ID:", section.id);
+    res.json(section);
+  } catch (error) {
+    console.error("\u274C Erreur modification section:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router78.patch("/website-sections/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
+    console.log("\u{1F527} PATCH /api/website-sections/:id");
+    console.log("  ID:", id);
+    console.log("  Body keys:", Object.keys(req2.body));
+    const existing = await prisma66.webSiteSection.findUnique({
+      where: { id: parseInt(id) }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Section introuvable" });
+    }
+    const deepMerge = (target, source) => {
+      if (!source || typeof source !== "object" || Array.isArray(source)) {
+        return source;
+      }
+      const result = { ...target || {} };
+      for (const key2 in source) {
+        if (source[key2] !== void 0) {
+          if (result[key2] && typeof result[key2] === "object" && !Array.isArray(result[key2]) && typeof source[key2] === "object" && !Array.isArray(source[key2])) {
+            result[key2] = deepMerge(result[key2], source[key2]);
+          } else {
+            result[key2] = source[key2];
+          }
+        }
+      }
+      return result;
+    };
+    const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
+    const section = await prisma66.webSiteSection.update({
+      where: { id: parseInt(id) },
+      data: {
+        ...name !== void 0 && { name },
+        ...content !== void 0 && { content: mergedContent },
+        ...backgroundColor !== void 0 && { backgroundColor },
+        ...textColor !== void 0 && { textColor },
+        ...customCss !== void 0 && { customCss },
+        ...isActive !== void 0 && { isActive }
+      }
+    });
+    console.log("\u2705 Section mise \xE0 jour:", section);
+    res.json(section);
+  } catch (error) {
+    console.error("\u274C Erreur modification section:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router78.delete("/website-sections/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const section = await prisma66.webSiteSection.findUnique({
+      where: { id: parseInt(id) }
+    });
+    if (section?.isLocked) {
+      return res.status(403).json({ error: "Cette section est verrouill\xE9e et ne peut pas \xEAtre supprim\xE9e" });
+    }
+    await prisma66.webSiteSection.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("\u274C Erreur suppression section:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router78.post("/website-sections/reorder", async (req2, res) => {
+  try {
+    const { sections } = req2.body;
+    await prisma66.$transaction(
+      sections.map(
+        (section) => prisma66.webSiteSection.update({
+          where: { id: section.id },
+          data: { displayOrder: section.displayOrder }
+        })
+      )
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error("\u274C Erreur r\xE9organisation sections:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router78.post("/website-sections/duplicate/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const original = await prisma66.webSiteSection.findUnique({
+      where: { id: parseInt(id) }
+    });
+    if (!original) {
+      return res.status(404).json({ error: "Section introuvable" });
+    }
+    const newKey = `${original.key}-copy-${Date.now()}`;
+    const duplicate = await prisma66.webSiteSection.create({
+      data: {
+        websiteId: original.websiteId,
+        key: newKey,
+        type: original.type,
+        name: `${original.name} (Copie)`,
+        content: original.content,
+        backgroundColor: original.backgroundColor,
+        textColor: original.textColor,
+        customCss: original.customCss,
+        displayOrder: original.displayOrder + 1,
+        isActive: original.isActive,
+        isLocked: false
+      }
+    });
+    res.json(duplicate);
+  } catch (error) {
+    console.error("\u274C Erreur duplication section:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var website_sections_default = router78;
+
+// src/api/website-themes.ts
+var import_express81 = require("express");
+var router79 = (0, import_express81.Router)();
+router79.get("/:websiteId", async (req2, res) => {
+  try {
+    const { websiteId } = req2.params;
+    console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
+    const theme = await prisma.webSiteTheme.findUnique({
+      where: { websiteId: parseInt(websiteId) }
+    });
+    if (!theme) {
+      return res.status(404).json({ message: "Th\xE8me non trouv\xE9" });
+    }
+    res.json(theme);
+  } catch (error) {
+    console.error("\u274C [API] Erreur GET theme:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router79.post("/", async (req2, res) => {
+  try {
+    const themeData = req2.body;
+    console.log("\u{1F4E1} [API] POST theme:", themeData);
+    const theme = await prisma.webSiteTheme.create({
+      data: themeData
+    });
+    res.status(201).json(theme);
+  } catch (error) {
+    console.error("\u274C [API] Erreur POST theme:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router79.put("/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const themeData = req2.body;
+    console.log("\u{1F4E1} [API] PUT theme:", id, themeData);
+    const theme = await prisma.webSiteTheme.update({
+      where: { id: parseInt(id) },
+      data: themeData
+    });
+    res.json(theme);
+  } catch (error) {
+    console.error("\u274C [API] Erreur PUT theme:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router79.delete("/:id", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    console.log("\u{1F4E1} [API] DELETE theme:", id);
+    await prisma.webSiteTheme.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ message: "Th\xE8me supprim\xE9 avec succ\xE8s" });
+  } catch (error) {
+    console.error("\u274C [API] Erreur DELETE theme:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var website_themes_default = router79;
+
+// src/api/contact-form.ts
+var import_express82 = require("express");
+var import_client69 = require("@prisma/client");
+var router80 = (0, import_express82.Router)();
+var prisma67 = new import_client69.PrismaClient();
+var isValidEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+var isSpam = (data) => {
+  if (data.message) {
+    const urlCount = (data.message.match(/https?:\/\//g) || []).length;
+    if (urlCount > 3) return true;
+  }
+  const spamKeywords = ["viagra", "casino", "bitcoin", "forex", "seo service", "make money"];
+  const text = `${data.name} ${data.message || ""}`.toLowerCase();
+  if (spamKeywords.some((keyword) => text.includes(keyword))) {
+    return true;
+  }
+  return false;
+};
+router80.post("/contact-form", async (req2, res) => {
+  try {
+    const data = req2.body;
+    if (!data.name || data.name.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Le nom doit contenir au moins 2 caract\xE8res"
+      });
+    }
+    if (!data.email || !isValidEmail(data.email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Email invalide"
+      });
+    }
+    if (!data.websiteId) {
+      return res.status(400).json({
+        success: false,
+        message: "Website ID manquant"
+      });
+    }
+    const website = await prisma67.webSite.findUnique({
+      where: { id: data.websiteId },
+      select: { id: true, organizationId: true }
+    });
+    if (!website) {
+      return res.status(404).json({
+        success: false,
+        message: "Site web introuvable"
+      });
+    }
+    const spam = isSpam(data);
+    const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || "unknown";
+    const userAgent = req2.headers["user-agent"] || "unknown";
+    const submission = await prisma67.contactSubmission.create({
+      data: {
+        websiteId: data.websiteId,
+        organizationId: website.organizationId,
+        name: data.name.trim(),
+        email: data.email.toLowerCase().trim(),
+        phone: data.phone?.trim() || null,
+        service: data.service?.trim() || null,
+        message: data.message?.trim() || null,
+        source: "website",
+        ipAddress,
+        userAgent,
+        status: spam ? "spam" : "new",
+        isRead: false
+      }
+    });
+    console.log("\u{1F4E7} \u2705 Nouveau formulaire de contact re\xE7u:", {
+      id: submission.id,
+      name: data.name,
+      email: data.email,
+      service: data.service,
+      websiteId: data.websiteId,
+      organizationId: website.organizationId,
+      spam,
+      date: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (spam) {
+      console.log("\u26A0\uFE0F SPAM D\xC9TECT\xC9 - Marqu\xE9 comme spam dans la BDD");
+    }
+    res.json({
+      success: true,
+      message: "Merci ! Nous avons bien re\xE7u votre demande. Nous vous r\xE9pondrons sous 24h.",
+      submissionId: submission.id
+    });
+  } catch (error) {
+    console.error("\u274C Erreur lors de la soumission du formulaire:", error);
+    res.status(500).json({
+      success: false,
+      message: "Une erreur est survenue. Veuillez r\xE9essayer ou nous contacter directement par t\xE9l\xE9phone."
+    });
+  }
+});
+router80.get("/contact-submissions/:websiteId", async (req2, res) => {
+  try {
+    const websiteId = parseInt(req2.params.websiteId);
+    const submissions = await prisma67.contactSubmission.findMany({
+      where: { websiteId },
+      orderBy: { submittedAt: "desc" },
+      take: 100
+      // Limiter à 100 dernières soumissions
+    });
+    res.json(submissions);
+  } catch (error) {
+    console.error("Erreur r\xE9cup\xE9ration soumissions:", error);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router80.patch("/contact-submission/:id/read", async (req2, res) => {
+  try {
+    const id = parseInt(req2.params.id);
+    const submission = await prisma67.contactSubmission.update({
+      where: { id },
+      data: { isRead: true }
+    });
+    res.json({ success: true, submission });
+  } catch (error) {
+    console.error("Erreur marquage lu:", error);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router80.patch("/contact-submission/:id/status", async (req2, res) => {
+  try {
+    const id = parseInt(req2.params.id);
+    const { status, notes } = req2.body;
+    const validStatuses = ["new", "contacted", "converted", "spam"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: "Statut invalide" });
+    }
+    const submission = await prisma67.contactSubmission.update({
+      where: { id },
+      data: {
+        status,
+        notes: notes || void 0,
+        respondedAt: status === "contacted" ? /* @__PURE__ */ new Date() : void 0
+      }
+    });
+    res.json({ success: true, submission });
+  } catch (error) {
+    console.error("Erreur changement statut:", error);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router80.delete("/contact-submission/:id", async (req2, res) => {
+  try {
+    const id = parseInt(req2.params.id);
+    await prisma67.contactSubmission.delete({
+      where: { id }
+    });
+    res.json({ success: true, message: "Soumission supprim\xE9e" });
+  } catch (error) {
+    console.error("Erreur suppression:", error);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+var contact_form_default = router80;
+
+// src/api/image-upload.ts
+var import_express83 = require("express");
+var import_multer2 = __toESM(require("multer"), 1);
+var import_path6 = __toESM(require("path"), 1);
+var import_promises = __toESM(require("fs/promises"), 1);
+var import_client70 = require("@prisma/client");
+var router81 = (0, import_express83.Router)();
+var prisma68 = new import_client70.PrismaClient();
+var storage2 = import_multer2.default.diskStorage({
+  destination: async (req2, file, cb) => {
+    const uploadDir = import_path6.default.join(process.cwd(), "public", "uploads", "websites");
+    await import_promises.default.mkdir(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req2, file, cb) => {
+    const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
+    cb(null, uniqueName);
+  }
+});
+var fileFilter = (req2, file, cb) => {
+  const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Type de fichier non autoris\xE9. Utilisez JPG, PNG, GIF, WEBP ou SVG."));
+  }
+};
+var upload2 = (0, import_multer2.default)({
+  storage: storage2,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024
+    // 5MB max
+  }
+});
+router81.post("/upload", upload2.single("file"), async (req2, res) => {
+  try {
+    if (!req2.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Aucun fichier fourni"
+      });
+    }
+    console.log("\u{1F4F8} [IMAGE-UPLOAD] Fichier re\xE7u:", {
+      originalName: req2.file.originalname,
+      size: req2.file.size,
+      mimetype: req2.file.mimetype,
+      filename: req2.file.filename
+    });
+    const fileUrl = `/uploads/websites/${req2.file.filename}`;
+    const fullUrl = `http://localhost:4000${fileUrl}`;
+    console.log("\u{1F4F8} \u2705 Upload r\xE9ussi:", {
+      fileName: req2.file.originalname,
+      url: fullUrl,
+      size: `${(req2.file.size / 1024).toFixed(2)} KB`
+    });
+    res.json({
+      success: true,
+      message: "Image upload\xE9e avec succ\xE8s",
+      url: fullUrl,
+      // URL complète utilisable dans le frontend
+      fileUrl,
+      // Chemin relatif
+      file: {
+        fileName: req2.file.originalname,
+        size: req2.file.size,
+        mimetype: req2.file.mimetype
+      }
+    });
+  } catch (error) {
+    console.error("\u274C [IMAGE-UPLOAD] Erreur:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de l'upload",
+      error: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router81.post("/upload-image", upload2.single("image"), async (req2, res) => {
+  try {
+    if (!req2.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Aucune image fournie"
+      });
+    }
+    const { websiteId, category = "general" } = req2.body;
+    if (!websiteId) {
+      return res.status(400).json({
+        success: false,
+        message: "Website ID manquant"
+      });
+    }
+    const fileUrl = `/uploads/websites/${req2.file.filename}`;
+    const mediaFile = await prisma68.webSiteMediaFile.create({
+      data: {
+        websiteId: parseInt(websiteId),
+        fileName: req2.file.originalname,
+        fileType: req2.file.mimetype,
+        // ✅ CORRECTION: fileType au lieu de mimeType
+        fileUrl,
+        filePath: req2.file.path,
+        fileSize: req2.file.size,
+        category,
+        // 'logo', 'project', 'service', 'general'
+        uploadedById: req2.user?.id || null
+      }
+    });
+    console.log("\u{1F4F8} \u2705 Image upload\xE9e:", {
+      id: mediaFile.id,
+      fileName: mediaFile.fileName,
+      url: fileUrl,
+      size: `${(req2.file.size / 1024).toFixed(2)} KB`,
+      category
+    });
+    res.json({
+      success: true,
+      message: "Image upload\xE9e avec succ\xE8s",
+      file: {
+        id: mediaFile.id,
+        fileName: mediaFile.fileName,
+        url: fileUrl,
+        size: mediaFile.fileSize,
+        mimeType: mediaFile.fileType
+        // ✅ CORRECTION: retourne fileType
+      }
+    });
+  } catch (error) {
+    console.error("\u274C Erreur upload image:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de l'upload"
+    });
+  }
+});
+router81.get("/images/:websiteId", async (req2, res) => {
+  try {
+    const websiteId = parseInt(req2.params.websiteId);
+    const { category } = req2.query;
+    const where = { websiteId };
+    if (category) {
+      where.category = category;
+    }
+    const images = await prisma68.webSiteMediaFile.findMany({
+      where,
+      orderBy: { uploadedAt: "desc" }
+    });
+    res.json({
+      success: true,
+      images
+    });
+  } catch (error) {
+    console.error("Erreur r\xE9cup\xE9ration images:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
+});
+router81.delete("/image/:id", async (req2, res) => {
+  try {
+    const id = parseInt(req2.params.id);
+    const mediaFile = await prisma68.webSiteMediaFile.findUnique({
+      where: { id }
+    });
+    if (!mediaFile) {
+      return res.status(404).json({
+        success: false,
+        message: "Image introuvable"
+      });
+    }
+    try {
+      await import_promises.default.unlink(mediaFile.filePath);
+    } catch (err) {
+      console.warn("Fichier d\xE9j\xE0 supprim\xE9 ou inexistant");
+    }
+    await prisma68.webSiteMediaFile.delete({
+      where: { id }
+    });
+    res.json({
+      success: true,
+      message: "Image supprim\xE9e"
+    });
+  } catch (error) {
+    console.error("Erreur suppression image:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
+});
+var image_upload_default = router81;
+
+// src/api/ai-content.ts
+var import_express84 = require("express");
+
+// src/services/aiContentService.ts
+var AIContentService = class {
+  geminiService;
+  constructor() {
+    this.geminiService = new GoogleGeminiService();
+  }
+  /**
+   * Option A : Génère le contenu d'un service
+   */
+  async generateService(context) {
+    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
+
+G\xE9n\xE8re le contenu complet d'un service pour le site "${context.siteName}".
+
+Type de service : ${context.serviceType}
+${context.keywords ? `Mots-cl\xE9s sugg\xE9r\xE9s : ${context.keywords.join(", ")}` : ""}
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
+{
+  "key": "identifiant-technique-du-service (slug, kebab-case)",
+  "icon": "Nom d'une ic\xF4ne Ant Design pertinente (ex: ThunderboltOutlined, FireOutlined, etc.)",
+  "title": "Titre accrocheur du service (3-6 mots)",
+  "description": "Description persuasive en 1-2 phrases (max 150 caract\xE8res)",
+  "features": ["Caract\xE9ristique 1 (5-8 mots)", "Caract\xE9ristique 2", "Caract\xE9ristique 3", "Caract\xE9ristique 4"],
+  "ctaText": "Texte du call-to-action (3-5 mots)",
+  "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3", "mot-cl\xE9 4", "mot-cl\xE9 5", "mot-cl\xE9 6", "mot-cl\xE9 7", "mot-cl\xE9 8"]
+}
+
+\u26A0\uFE0F IMPORTANT pour les keywords :
+- G\xE9n\xE8re AU MINIMUM 8 mots-cl\xE9s SEO pertinents et vari\xE9s
+- Inclus des synonymes, termes techniques, b\xE9n\xE9fices clients
+- Pense r\xE9f\xE9rencement naturel (longue tra\xEEne + termes courts)
+- Exemples : "panneaux solaires", "installation photovolta\xEFque", "\xE9nergie renouvelable", "\xE9conomies \xE9lectricit\xE9", "autoconsommation", "primes photovolta\xEFques", "panneaux haute performance", "autonomie \xE9nerg\xE9tique"
+
+R\xE8gles :
+- Ton professionnel et convaincant
+- Orient\xE9 b\xE9n\xE9fices client
+- Optimis\xE9 SEO naturellement
+- Pas de texte superflu, UNIQUEMENT le JSON`;
+    const response = await this.geminiService.generateContentStream(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Format de r\xE9ponse invalide de l'IA");
+    }
+    return JSON.parse(jsonMatch[0]);
+  }
+  /**
+   * Option A : Génère le contenu d'un projet
+   */
+  async generateProject(context) {
+    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
+
+G\xE9n\xE8re le contenu complet d'un projet r\xE9alis\xE9 pour le site "${context.siteName}".
+
+Type de projet : ${context.projectType}
+${context.location ? `Localisation : ${context.location}` : ""}
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
+{
+  "title": "Titre technique du projet (ex: 12.5 kWp + Batterie 15 kWh)",
+  "location": "Ville ou r\xE9gion",
+  "details": "Description d\xE9taill\xE9e du projet en 2-3 phrases (max 200 caract\xE8res)",
+  "tags": ["Tag1", "Tag2", "Tag3"]
+}
+
+R\xE8gles :
+- Titre technique et pr\xE9cis
+- D\xE9tails concrets et mesurables
+- Tags pertinents (2-4 tags)
+- Pas de texte superflu, UNIQUEMENT le JSON`;
+    const response = await this.geminiService.generateContentStream(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Format de r\xE9ponse invalide de l'IA");
+    }
+    return JSON.parse(jsonMatch[0]);
+  }
+  /**
+   * Option A : Génère le contenu d'un témoignage
+   */
+  async generateTestimonial(context) {
+    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
+
+G\xE9n\xE8re un t\xE9moignage client r\xE9aliste et convaincant pour le site "${context.siteName}".
+
+Service concern\xE9 : ${context.serviceType}
+Type de client : ${context.customerType || "particulier"}
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
+{
+  "customerName": "Pr\xE9nom Nom (belge francophone)",
+  "location": "Ville belge",
+  "service": "Nom du service utilis\xE9",
+  "rating": 5,
+  "text": "T\xE9moignage authentique et d\xE9taill\xE9 (3-4 phrases, max 300 caract\xE8res). Doit mentionner des d\xE9tails concrets, l'exp\xE9rience v\xE9cue, et les r\xE9sultats obtenus."
+}
+
+R\xE8gles :
+- T\xE9moignage cr\xE9dible et authentique
+- D\xE9tails concrets et sp\xE9cifiques
+- Ton positif mais naturel
+- Pas de superlatifs exag\xE9r\xE9s
+- Pas de texte superflu, UNIQUEMENT le JSON`;
+    const response = await this.geminiService.generateContentStream(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Format de r\xE9ponse invalide de l'IA");
+    }
+    return JSON.parse(jsonMatch[0]);
+  }
+  /**
+   * Option B : Génère le contenu complet d'une page
+   */
+  async generatePageContent(context) {
+    const prompt = `Tu es un expert en r\xE9daction web et marketing pour le secteur ${context.industry}.
+
+G\xE9n\xE8re le contenu complet de la page d'accueil pour "${context.siteName}".
+
+Type de site : ${context.siteType}
+Services principaux : ${context.mainServices.join(", ")}
+${context.targetAudience ? `Audience cible : ${context.targetAudience}` : ""}
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
+{
+  "heroTitle": "Titre principal accrocheur (max 60 caract\xE8res)",
+  "heroSubtitle": "Sous-titre avec liste des services s\xE9par\xE9s par \u2022",
+  "heroCtaPrimary": "Texte bouton principal (3-5 mots)",
+  "heroCtaSecondary": "Texte bouton secondaire (2-4 mots)",
+  "metaTitle": "Titre SEO optimis\xE9 (50-60 caract\xE8res)",
+  "metaDescription": "Description SEO persuasive (140-160 caract\xE8res)",
+  "metaKeywords": "Liste de mots-cl\xE9s SEO s\xE9par\xE9s par des virgules",
+  "aboutText": "Texte de pr\xE9sentation de l'entreprise (3-4 phrases, max 400 caract\xE8res)"
+}
+
+R\xE8gles :
+- Titres percutants et orient\xE9s b\xE9n\xE9fices
+- SEO naturel et optimis\xE9
+- Ton professionnel et convaincant
+- Int\xE9grer les mots-cl\xE9s de mani\xE8re naturelle
+- Pas de texte superflu, UNIQUEMENT le JSON`;
+    const response = await this.geminiService.generateContentStream(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Format de r\xE9ponse invalide de l'IA");
+    }
+    return JSON.parse(jsonMatch[0]);
+  }
+  /**
+   * Option C : Optimisation SEO d'un contenu existant
+   */
+  async optimizeSEO(content) {
+    const prompt = `Tu es un expert SEO sp\xE9cialis\xE9 dans le secteur ${content.industry}.
+
+Analyse et optimise le contenu SEO pour "${content.siteName}".
+
+Titre actuel : ${content.currentTitle || "Non d\xE9fini"}
+Description actuelle : ${content.currentDescription || "Non d\xE9finie"}
+${content.targetKeywords ? `Mots-cl\xE9s cibles : ${content.targetKeywords.join(", ")}` : ""}
+
+Contenu de la page :
+${content.pageContent.substring(0, 1e3)}
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
+{
+  "metaTitle": "Titre SEO optimis\xE9 (50-60 caract\xE8res)",
+  "metaDescription": "Description SEO optimis\xE9e (140-160 caract\xE8res)",
+  "metaKeywords": "Liste de mots-cl\xE9s SEO pertinents s\xE9par\xE9s par des virgules",
+  "improvements": [
+    "Am\xE9lioration 1 sugg\xE9r\xE9e",
+    "Am\xE9lioration 2 sugg\xE9r\xE9e",
+    "Am\xE9lioration 3 sugg\xE9r\xE9e",
+    "Am\xE9lioration 4 sugg\xE9r\xE9e"
+  ]
+}
+
+R\xE8gles :
+- Optimisation SEO technique
+- Mots-cl\xE9s int\xE9gr\xE9s naturellement
+- Appel \xE0 l'action dans la description
+- Suggestions concr\xE8tes et actionnables
+- Pas de texte superflu, UNIQUEMENT le JSON`;
+    const response = await this.geminiService.generateContentStream(prompt);
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Format de r\xE9ponse invalide de l'IA");
+    }
+    return JSON.parse(jsonMatch[0]);
+  }
+  /**
+   * Génère plusieurs services d'un coup pour un site complet
+   */
+  async generateMultipleServices(context) {
+    const services = [];
+    for (const serviceType of context.serviceTypes) {
+      try {
+        const service = await this.generateService({
+          siteName: context.siteName,
+          industry: context.industry,
+          serviceType
+        });
+        services.push(service);
+      } catch (error) {
+        console.error(`Erreur g\xE9n\xE9ration service ${serviceType}:`, error);
+      }
+    }
+    return services;
+  }
+};
+var aiContentService = new AIContentService();
+
+// src/api/ai-content.ts
+var router82 = (0, import_express84.Router)();
+router82.post("/generate-service", async (req2, res) => {
+  try {
+    const { siteName, industry, serviceType, keywords } = req2.body;
+    if (!siteName || !industry || !serviceType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants : siteName, industry, serviceType requis"
+      });
+    }
+    const content = await aiContentService.generateService({
+      siteName,
+      industry,
+      serviceType,
+      keywords
+    });
+    res.json({
+      success: true,
+      content
+    });
+  } catch (error) {
+    console.error("Erreur g\xE9n\xE9ration service:", error);
+    res.status(500).json({
+      error: "Erreur lors de la g\xE9n\xE9ration du service",
+      details: error.message
+    });
+  }
+});
+router82.post("/generate-project", async (req2, res) => {
+  try {
+    const { siteName, industry, projectType, location } = req2.body;
+    if (!siteName || !industry || !projectType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants : siteName, industry, projectType requis"
+      });
+    }
+    const content = await aiContentService.generateProject({
+      siteName,
+      industry,
+      projectType,
+      location
+    });
+    res.json({
+      success: true,
+      content
+    });
+  } catch (error) {
+    console.error("Erreur g\xE9n\xE9ration projet:", error);
+    res.status(500).json({
+      error: "Erreur lors de la g\xE9n\xE9ration du projet",
+      details: error.message
+    });
+  }
+});
+router82.post("/generate-testimonial", async (req2, res) => {
+  try {
+    const { siteName, industry, serviceType, customerType } = req2.body;
+    if (!siteName || !industry || !serviceType) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants : siteName, industry, serviceType requis"
+      });
+    }
+    const content = await aiContentService.generateTestimonial({
+      siteName,
+      industry,
+      serviceType,
+      customerType
+    });
+    res.json({
+      success: true,
+      content
+    });
+  } catch (error) {
+    console.error("Erreur g\xE9n\xE9ration t\xE9moignage:", error);
+    res.status(500).json({
+      error: "Erreur lors de la g\xE9n\xE9ration du t\xE9moignage",
+      details: error.message
+    });
+  }
+});
+router82.post("/generate-page", async (req2, res) => {
+  try {
+    const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
+    if (!siteName || !siteType || !industry || !mainServices) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants : siteName, siteType, industry, mainServices requis"
+      });
+    }
+    const content = await aiContentService.generatePageContent({
+      siteName,
+      siteType,
+      industry,
+      mainServices,
+      targetAudience
+    });
+    res.json({
+      success: true,
+      content
+    });
+  } catch (error) {
+    console.error("Erreur g\xE9n\xE9ration page:", error);
+    res.status(500).json({
+      error: "Erreur lors de la g\xE9n\xE9ration de la page",
+      details: error.message
+    });
+  }
+});
+router82.post("/optimize-seo", async (req2, res) => {
+  try {
+    const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
+    if (!pageContent || !siteName || !industry) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants : pageContent, siteName, industry requis"
+      });
+    }
+    const suggestions = await aiContentService.optimizeSEO({
+      currentTitle,
+      currentDescription,
+      pageContent,
+      targetKeywords,
+      siteName,
+      industry
+    });
+    res.json({
+      success: true,
+      suggestions
+    });
+  } catch (error) {
+    console.error("Erreur optimisation SEO:", error);
+    res.status(500).json({
+      error: "Erreur lors de l'optimisation SEO",
+      details: error.message
+    });
+  }
+});
+router82.post("/generate-multiple-services", async (req2, res) => {
+  try {
+    const { siteName, industry, serviceTypes } = req2.body;
+    if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
+      return res.status(400).json({
+        error: "Param\xE8tres manquants : siteName, industry, serviceTypes (array) requis"
+      });
+    }
+    const services = await aiContentService.generateMultipleServices({
+      siteName,
+      industry,
+      serviceTypes
+    });
+    res.json({
+      success: true,
+      services,
+      count: services.length
+    });
+  } catch (error) {
+    console.error("Erreur g\xE9n\xE9ration multiple services:", error);
+    res.status(500).json({
+      error: "Erreur lors de la g\xE9n\xE9ration des services",
+      details: error.message
+    });
+  }
+});
+var ai_content_default = router82;
+
+// src/api/ai.ts
+var import_express85 = __toESM(require("express"), 1);
+var import_generative_ai2 = require("@google/generative-ai");
+var router83 = import_express85.default.Router();
+var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+var MODEL_NAME = "gemini-pro";
+router83.post("/generate", async (req2, res) => {
+  try {
+    const { prompt, context, sectionType, currentValue } = req2.body;
+    if (!prompt) {
+      return res.status(400).json({
+        success: false,
+        error: "Le prompt est requis"
+      });
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "GEMINI_API_KEY non configur\xE9e"
+      });
+    }
+    console.log(`[AI] G\xE9n\xE9ration pour context="${context}", section="${sectionType}"`);
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    const generationConfig = {
+      temperature: 0.8,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 2048
+    };
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig
+    });
+    const response = await result.response;
+    const text = response.text();
+    console.log(`[AI] R\xE9ponse re\xE7ue (${text.length} caract\xE8res)`);
+    let suggestions;
+    try {
+      const jsonMatch = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+      if (jsonMatch) {
+        suggestions = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("Pas de JSON trouv\xE9");
+      }
+    } catch (parseError) {
+      console.warn("[AI] R\xE9ponse non-JSON, conversion en array");
+      suggestions = parseNonJSONResponse(text, context);
+    }
+    const formattedSuggestions = formatSuggestions(suggestions, context);
+    res.json({
+      success: true,
+      suggestions: formattedSuggestions,
+      raw: text
+      // Pour debug
+    });
+  } catch (error) {
+    console.error("[AI] Erreur:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Erreur lors de la g\xE9n\xE9ration IA",
+      details: error.toString()
+    });
+  }
+});
+function parseNonJSONResponse(text, context) {
+  const lines = text.split(/\n\n+|\n\d+\.\s+/).filter((l) => l.trim());
+  switch (context) {
+    case "title":
+    case "subtitle":
+    case "description":
+      return lines.slice(0, 5).map((line) => line.trim());
+    case "fullSection":
+      return {
+        title: lines[0] || "Titre g\xE9n\xE9r\xE9",
+        subtitle: lines[1] || "Sous-titre g\xE9n\xE9r\xE9",
+        description: lines[2] || "Description g\xE9n\xE9r\xE9e",
+        items: lines.slice(3, 9).map((line, idx) => ({
+          title: `\xC9l\xE9ment ${idx + 1}`,
+          description: line
+        }))
+      };
+    default:
+      return lines;
+  }
+}
+function formatSuggestions(data, context) {
+  switch (context) {
+    case "title":
+    case "subtitle":
+    case "description":
+      if (Array.isArray(data)) {
+        return data.map((item) => ({
+          value: typeof item === "string" ? item : item.value || item.text || String(item),
+          reason: typeof item === "object" ? item.reason : void 0
+        }));
+      }
+      return [{ value: String(data) }];
+    case "fullSection":
+      if (Array.isArray(data)) {
+        return data.map((item) => ({
+          value: {
+            title: item.title || "Titre",
+            subtitle: item.subtitle || "Sous-titre",
+            description: item.description || "Description",
+            items: item.items || []
+          },
+          reason: item.reason
+        }));
+      }
+      return [{
+        value: {
+          title: data.title || "Titre",
+          subtitle: data.subtitle || "Sous-titre",
+          description: data.description || "Description",
+          items: data.items || []
+        }
+      }];
+    case "layout":
+      if (Array.isArray(data)) {
+        return data.map((item) => ({
+          value: {
+            columns: item.columns || 3,
+            rows: item.rows,
+            gap: item.gap || 24,
+            responsive: item.responsive || { mobile: 1, tablet: 2, desktop: 3 }
+          },
+          reason: item.reason
+        }));
+      }
+      return [{
+        value: {
+          columns: data.columns || 3,
+          rows: data.rows,
+          gap: data.gap || 24,
+          responsive: data.responsive || { mobile: 1, tablet: 2, desktop: 3 }
+        }
+      }];
+    case "colors":
+      if (Array.isArray(data)) {
+        return data.map((item) => ({
+          value: {
+            primary: item.primary || "#1890ff",
+            secondary: item.secondary || "#52c41a",
+            accent: item.accent || "#faad14",
+            background: item.background || "#ffffff",
+            text: item.text || "#000000"
+          },
+          reason: item.reason
+        }));
+      }
+      return [{
+        value: {
+          primary: data.primary || "#1890ff",
+          secondary: data.secondary || "#52c41a",
+          accent: data.accent || "#faad14",
+          background: data.background || "#ffffff",
+          text: data.text || "#000000"
+        }
+      }];
+    default:
+      if (Array.isArray(data)) {
+        return data.map((item) => ({
+          value: item,
+          reason: typeof item === "object" ? item.reason : void 0
+        }));
+      }
+      return [{ value: data }];
+  }
+}
+router83.post("/analyze-section", async (req2, res) => {
+  try {
+    const { sectionType, content, prompt } = req2.body;
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "GEMINI_API_KEY non configur\xE9e"
+      });
+    }
+    console.log(`[AI Analyze] Section="${sectionType}"`);
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    const generationConfig = {
+      temperature: 0.7,
+      // Moins créatif, plus factuel
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 4096
+      // Plus long pour analyse détaillée
+    };
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig
+    });
+    const response = await result.response;
+    const text = response.text();
+    console.log(`[AI Analyze] R\xE9ponse re\xE7ue (${text.length} caract\xE8res)`);
+    let analysis;
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        analysis = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("Pas de JSON trouv\xE9");
+      }
+    } catch (parseError) {
+      console.warn("[AI Analyze] Parsing \xE9chou\xE9, g\xE9n\xE9ration d'analyse par d\xE9faut");
+      analysis = generateFallbackAnalysis(sectionType, content);
+    }
+    const validatedAnalysis = validateAnalysis(analysis);
+    res.json(validatedAnalysis);
+  } catch (error) {
+    console.error("[AI Analyze] Erreur:", error);
+    res.json(generateFallbackAnalysis(req2.body.sectionType, req2.body.content));
+  }
+});
+function validateAnalysis(analysis) {
+  return {
+    score: analysis.score || 70,
+    suggestions: Array.isArray(analysis.suggestions) ? analysis.suggestions.map((s) => ({
+      id: s.id || `suggestion-${Date.now()}-${Math.random()}`,
+      category: s.category || "design",
+      type: s.type || "improvement",
+      title: s.title || "Am\xE9lioration sugg\xE9r\xE9e",
+      description: s.description || "D\xE9tails non disponibles",
+      impact: s.impact || "medium",
+      changes: s.changes || {},
+      preview: s.preview
+    })) : [],
+    summary: {
+      strengths: Array.isArray(analysis.summary?.strengths) ? analysis.summary.strengths : ["Contenu pr\xE9sent"],
+      weaknesses: Array.isArray(analysis.summary?.weaknesses) ? analysis.summary.weaknesses : ["Optimisation possible"],
+      opportunities: Array.isArray(analysis.summary?.opportunities) ? analysis.summary.opportunities : ["Am\xE9lioration continue"]
+    }
+  };
+}
+function generateFallbackAnalysis(sectionType, content) {
+  const itemCount = content?.values?.length || content?.stats?.length || content?.items?.length || 6;
+  return {
+    score: 65,
+    suggestions: [
+      {
+        id: "layout-optimize",
+        category: "layout",
+        type: "improvement",
+        title: "Optimiser le layout de la grille",
+        description: `Avec ${itemCount} \xE9l\xE9ments, une disposition diff\xE9rente pourrait am\xE9liorer l'\xE9quilibre visuel.`,
+        impact: "medium",
+        changes: {
+          "gridLayout": {
+            columns: itemCount <= 4 ? itemCount : 3,
+            gap: 32,
+            responsive: { mobile: 1, tablet: 2, desktop: itemCount <= 4 ? itemCount : 3 }
+          }
+        },
+        preview: {
+          before: `Layout actuel`,
+          after: `Layout optimis\xE9 pour ${itemCount} \xE9l\xE9ments`
+        }
+      },
+      {
+        id: "spacing-increase",
+        category: "design",
+        type: "improvement",
+        title: "Augmenter l'espacement",
+        description: "Un espacement de 32px am\xE9liorerait la respiration visuelle.",
+        impact: "low",
+        changes: {
+          "gridLayout.gap": 32
+        },
+        preview: {
+          before: "Espacement standard",
+          after: "Espacement am\xE9lior\xE9 (32px)"
+        }
+      },
+      {
+        id: "header-improve",
+        category: "content",
+        type: "improvement",
+        title: "Renforcer l'en-t\xEAte",
+        description: "Ajouter un sous-titre explicatif renforcerait le message.",
+        impact: "medium",
+        changes: {
+          "sectionHeader.subtitle": `D\xE9couvrez nos ${sectionType} adapt\xE9s \xE0 vos besoins`
+        }
+      }
+    ],
+    summary: {
+      strengths: [
+        "Structure claire",
+        "Contenu pr\xE9sent",
+        "Design coh\xE9rent"
+      ],
+      weaknesses: [
+        "Layout pourrait \xEAtre optimis\xE9",
+        "Espacement \xE0 am\xE9liorer",
+        "En-t\xEAte \xE0 renforcer"
+      ],
+      opportunities: [
+        "Meilleure utilisation de l'espace",
+        "Plus d'impact visuel",
+        "Message plus clair"
+      ]
+    }
+  };
+}
+router83.post("/optimize-seo", async (req2, res) => {
+  try {
+    const { content, sectionType } = req2.body;
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "GEMINI_API_KEY non configur\xE9e"
+      });
+    }
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    const prompt = `Tu es un expert SEO. Optimise ce contenu pour le r\xE9f\xE9rencement :
+
+Section : ${sectionType}
+Contenu actuel : ${JSON.stringify(content)}
+
+G\xE9n\xE8re :
+1. Meta title (max 60 caract\xE8res, optimis\xE9 SEO)
+2. Meta description (max 160 caract\xE8res, incite au clic)
+3. 5 mots-cl\xE9s pertinents
+4. Slug URL optimis\xE9
+5. Balises alt pour images (3 suggestions)
+
+Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slug, altTexts: [] }`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const seoData = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    res.json({
+      success: true,
+      seo: seoData
+    });
+  } catch (error) {
+    console.error("[AI SEO] Erreur:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Erreur lors de l'optimisation SEO"
+    });
+  }
+});
+router83.post("/improve-content", async (req2, res) => {
+  try {
+    const { content, instructions } = req2.body;
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "GEMINI_API_KEY non configur\xE9e"
+      });
+    }
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    const prompt = `Am\xE9liore ce contenu selon les instructions suivantes :
+
+Contenu actuel :
+${JSON.stringify(content, null, 2)}
+
+Instructions :
+${instructions || "Rendre plus engageant, professionnel et optimis\xE9 pour la conversion"}
+
+Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const improvedContent = jsonMatch ? JSON.parse(jsonMatch[0]) : content;
+    res.json({
+      success: true,
+      improved: improvedContent,
+      original: content
+    });
+  } catch (error) {
+    console.error("[AI Improve] Erreur:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Erreur lors de l'am\xE9lioration du contenu"
+    });
+  }
+});
+router83.post("/optimize-layout", async (req2, res) => {
+  try {
+    const { itemCount, sectionType, currentLayout } = req2.body;
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "GEMINI_API_KEY non configur\xE9e"
+      });
+    }
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    const prompt = `Tu es un expert en UI/UX et design responsive.
+
+Type de section : ${sectionType}
+Nombre d'\xE9l\xE9ments : ${itemCount}
+Layout actuel : ${JSON.stringify(currentLayout || {})}
+
+Sugg\xE8re 3 configurations de grille CSS optimales pour cette section.
+Pour chaque configuration, explique pourquoi elle est adapt\xE9e.
+
+Format de r\xE9ponse : JSON array avec :
+[
+  {
+    "preset": "3x2" (ou "custom"),
+    "columns": 3,
+    "rows": 2,
+    "gap": 24,
+    "responsive": {
+      "mobile": 1,
+      "tablet": 2,
+      "desktop": 3
+    },
+    "reason": "Explication de pourquoi ce layout est optimal"
+  }
+]`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    let layouts = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    if (!Array.isArray(layouts) || layouts.length === 0) {
+      layouts = generateFallbackLayouts(itemCount);
+    }
+    res.json({
+      success: true,
+      layouts: layouts.slice(0, 3)
+      // Max 3 suggestions
+    });
+  } catch (error) {
+    console.error("[AI Layout] Erreur:", error);
+    res.json({
+      success: true,
+      layouts: generateFallbackLayouts(req2.body.itemCount || 6)
+    });
+  }
+});
+router83.post("/generate-palette", async (req2, res) => {
+  try {
+    const { baseColor, mood, industry } = req2.body;
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "GEMINI_API_KEY non configur\xE9e"
+      });
+    }
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+    const prompt = `Tu es un expert en th\xE9orie des couleurs et design.
+
+Couleur de base : ${baseColor || "#1890ff"}
+Ambiance souhait\xE9e : ${mood || "professionnelle, moderne"}
+Secteur d'activit\xE9 : ${industry || "technologie"}
+
+G\xE9n\xE8re 3 palettes de couleurs harmonieuses avec :
+- primary : couleur principale
+- secondary : couleur secondaire
+- accent : couleur d'accentuation
+- background : couleur de fond
+- text : couleur de texte
+- success, warning, error : couleurs de statut
+
+Format : JSON array avec :
+[
+  {
+    "name": "Nom de la palette",
+    "primary": "#RRGGBB",
+    "secondary": "#RRGGBB",
+    "accent": "#RRGGBB",
+    "background": "#RRGGBB",
+    "text": "#RRGGBB",
+    "success": "#RRGGBB",
+    "warning": "#RRGGBB",
+    "error": "#RRGGBB",
+    "reason": "Pourquoi cette palette est adapt\xE9e"
+  }
+]`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    let palettes = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    if (!Array.isArray(palettes) || palettes.length === 0) {
+      palettes = generateFallbackPalettes(baseColor);
+    }
+    res.json({
+      success: true,
+      palettes: palettes.slice(0, 3)
+    });
+  } catch (error) {
+    console.error("[AI Palette] Erreur:", error);
+    res.json({
+      success: true,
+      palettes: generateFallbackPalettes(req2.body.baseColor || "#1890ff")
+    });
+  }
+});
+function generateFallbackLayouts(itemCount) {
+  const layouts = [];
+  if (itemCount <= 3) {
+    layouts.push({
+      preset: "1x1",
+      columns: itemCount,
+      gap: 24,
+      responsive: { mobile: 1, tablet: 2, desktop: itemCount },
+      reason: "Layout horizontal adapt\xE9 pour peu d'\xE9l\xE9ments"
+    });
+  } else if (itemCount <= 6) {
+    layouts.push({
+      preset: "3x2",
+      columns: 3,
+      rows: 2,
+      gap: 24,
+      responsive: { mobile: 1, tablet: 2, desktop: 3 },
+      reason: "Grille 3 colonnes \xE9quilibr\xE9e"
+    });
+  } else if (itemCount <= 9) {
+    layouts.push({
+      preset: "3x3",
+      columns: 3,
+      rows: 3,
+      gap: 20,
+      responsive: { mobile: 1, tablet: 2, desktop: 3 },
+      reason: "Grille 3x3 pour 7-9 \xE9l\xE9ments"
+    });
+  } else {
+    layouts.push({
+      preset: "4x3",
+      columns: 4,
+      rows: Math.ceil(itemCount / 4),
+      gap: 16,
+      responsive: { mobile: 1, tablet: 2, desktop: 4 },
+      reason: "Grille dense pour nombreux \xE9l\xE9ments"
+    });
+  }
+  return layouts;
+}
+function generateFallbackPalettes(baseColor) {
+  return [
+    {
+      name: "Palette Professionnelle",
+      primary: baseColor || "#1890ff",
+      secondary: "#52c41a",
+      accent: "#faad14",
+      background: "#ffffff",
+      text: "#000000",
+      success: "#52c41a",
+      warning: "#faad14",
+      error: "#ff4d4f",
+      reason: "Couleurs \xE9quilibr\xE9es et professionnelles"
+    },
+    {
+      name: "Palette Moderne",
+      primary: "#722ed1",
+      secondary: "#13c2c2",
+      accent: "#fadb14",
+      background: "#f0f2f5",
+      text: "#262626",
+      success: "#52c41a",
+      warning: "#fa8c16",
+      error: "#f5222d",
+      reason: "Design moderne avec contraste \xE9lev\xE9"
+    },
+    {
+      name: "Palette \xC9l\xE9gante",
+      primary: "#2f54eb",
+      secondary: "#eb2f96",
+      accent: "#faad14",
+      background: "#fafafa",
+      text: "#141414",
+      success: "#73d13d",
+      warning: "#ffc53d",
+      error: "#ff7875",
+      reason: "\xC9l\xE9gance et sophistication"
+    }
+  ];
+}
+var ai_default2 = router83;
+
+// src/routes/ai-field-generator.ts
+var import_express86 = __toESM(require("express"), 1);
+var router84 = import_express86.default.Router();
+var geminiService3 = new GoogleGeminiService();
+router84.use(authMiddleware);
+var SmartPromptBuilder = class {
+  /**
+   * Construit un prompt optimisé selon le type de champ
+   */
+  static buildPrompt(params) {
+    const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = params;
+    const language = aiContext.language || "fran\xE7ais";
+    const tone = aiContext.tone || "professionnel et convaincant";
+    const audience = aiContext.targetAudience || "clients potentiels";
+    const business = aiContext.businessType || "services \xE9nerg\xE9tiques";
+    const keywords = aiContext.keywords?.join(", ") || "";
+    const baseContext = `
+Tu es un expert en r\xE9daction web, marketing digital et SEO pour le secteur ${business}.
+
+CONTEXTE:
+- Type de section: ${aiContext.sectionType}
+- Champ \xE0 g\xE9n\xE9rer: ${fieldLabel} (${fieldId})
+- Public cible: ${audience}
+- Ton: ${tone}
+- Langue: ${language}
+${keywords ? `- Mots-cl\xE9s sugg\xE9r\xE9s: ${keywords}` : ""}
+${currentValue ? `- Valeur actuelle: "${currentValue}"` : ""}
+`;
+    switch (fieldType) {
+      case "text":
+        return this.buildTextPrompt(baseContext, fieldId, fieldLabel, currentValue);
+      case "textarea":
+        return this.buildTextareaPrompt(baseContext, fieldId, fieldLabel, currentValue);
+      case "select":
+      case "multiselect":
+        return this.buildSelectPrompt(baseContext, fieldId, fieldLabel, currentValue);
+      case "richtext":
+        return this.buildRichtextPrompt(baseContext, fieldId, fieldLabel, currentValue);
+      default:
+        return this.buildGenericPrompt(baseContext, fieldLabel, currentValue);
+    }
+  }
+  /**
+   * Prompt pour champs texte courts (titres, labels, CTA)
+   */
+  static buildTextPrompt(context, fieldId, label, current) {
+    const isTitle = fieldId.toLowerCase().includes("title") || label.toLowerCase().includes("titre");
+    const isCTA = fieldId.toLowerCase().includes("cta") || label.toLowerCase().includes("bouton");
+    const isLabel = fieldId.toLowerCase().includes("label");
+    let specificGuidelines = "";
+    let maxLength = 60;
+    if (isTitle) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES TITRE:
+- Accrocheur et m\xE9morable
+- Orient\xE9 b\xE9n\xE9fice client
+- Inclure un chiffre ou statistique si pertinent
+- \xC9voquer la transformation ou le r\xE9sultat
+- Cr\xE9er de la curiosit\xE9 ou urgence
+`;
+      maxLength = 60;
+    } else if (isCTA) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES CTA:
+- Verbe d'action \xE0 l'imp\xE9ratif
+- Court et percutant (3-5 mots maximum)
+- Cr\xE9er l'urgence ou la valeur
+- Exemples: "Demander un devis gratuit", "D\xE9couvrir nos solutions", "Calculer mes \xE9conomies"
+`;
+      maxLength = 40;
+    } else if (isLabel) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES LABEL:
+- Clair et descriptif
+- Terme professionnel mais accessible
+- Coh\xE9rent avec le secteur
+`;
+      maxLength = 40;
+    }
+    return `${context}
+
+${specificGuidelines}
+
+T\xC2CHE: G\xE9n\xE8re 3 PROPOSITIONS VARI\xC9ES pour ce champ texte court.
+
+CONTRAINTES:
+- Maximum ${maxLength} caract\xE8res par proposition
+- Ton professionnel et convaincant
+- Optimis\xE9 SEO naturellement
+- \xC9viter les clich\xE9s et phrases creuses
+- Vari\xE9t\xE9 dans les approches (angle diff\xE9rent pour chaque proposition)
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure:
+{
+  "suggestions": [
+    {
+      "content": "Proposition 1",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 85
+    },
+    {
+      "content": "Proposition 2", 
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 90
+    },
+    {
+      "content": "Proposition 3",
+      "reasoning": "Pourquoi cette proposition (1 phrase)", 
+      "score": 80
+    }
+  ],
+  "analysis": {
+    "fieldType": "${fieldId}",
+    "bestApproach": "Approche recommand\xE9e (1 phrase)",
+    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3"],
+    "avgScore": 85
+  }
+}
+
+\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
+  }
+  /**
+   * Prompt pour champs textarea (descriptions, paragraphes)
+   */
+  static buildTextareaPrompt(context, fieldId, label, current) {
+    const isDescription = fieldId.toLowerCase().includes("description") || label.toLowerCase().includes("description");
+    const isAbout = fieldId.toLowerCase().includes("about") || label.toLowerCase().includes("pr\xE9sentation");
+    let specificGuidelines = "";
+    let maxLength = 200;
+    if (isDescription) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES DESCRIPTION:
+- 2-3 phrases persuasives
+- Structure: Probl\xE8me \u2192 Solution \u2192 B\xE9n\xE9fice
+- Inclure des chiffres/donn\xE9es si pertinent
+- Call-to-action implicite
+- Optimis\xE9 pour la conversion
+`;
+      maxLength = 200;
+    } else if (isAbout) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES \xC0 PROPOS:
+- 3-4 phrases engageantes
+- Histoire/mission de l'entreprise
+- Valeurs et diff\xE9renciateurs
+- Preuve sociale ou chiffres cl\xE9s
+- Cr\xE9er la confiance
+`;
+      maxLength = 300;
+    }
+    return `${context}
+
+${specificGuidelines}
+
+T\xC2CHE: G\xE9n\xE8re 3 PROPOSITIONS VARI\xC9ES pour ce champ texte long.
+
+CONTRAINTES:
+- Maximum ${maxLength} caract\xE8res par proposition
+- Style fluide et naturel
+- Ponctuation et structure professionnelle
+- Int\xE9gration naturelle des mots-cl\xE9s
+- \xC9viter le jargon excessif
+- Vari\xE9t\xE9 dans les angles (rationnel, \xE9motionnel, social proof)
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure:
+{
+  "suggestions": [
+    {
+      "content": "Proposition 1 (2-3 phrases)",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 88,
+      "angle": "angle rationnel / \xE9motionnel / social proof"
+    },
+    {
+      "content": "Proposition 2 (2-3 phrases)",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 92,
+      "angle": "angle rationnel / \xE9motionnel / social proof"
+    },
+    {
+      "content": "Proposition 3 (2-3 phrases)",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 85,
+      "angle": "angle rationnel / \xE9motionnel / social proof"
+    }
+  ],
+  "analysis": {
+    "fieldType": "${fieldId}",
+    "bestApproach": "Approche recommand\xE9e (1 phrase)",
+    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3", "mot-cl\xE9 4"],
+    "avgScore": 88,
+    "readabilityTips": ["Conseil 1", "Conseil 2"]
+  }
+}
+
+\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
+  }
+  /**
+   * Prompt pour champs select/multiselect (features, tags, options)
+   */
+  static buildSelectPrompt(context, fieldId, label, current) {
+    const isFeatures = fieldId.toLowerCase().includes("feature") || label.toLowerCase().includes("caract\xE9ristique");
+    const isTags = fieldId.toLowerCase().includes("tag") || label.toLowerCase().includes("\xE9tiquette");
+    const isBenefits = fieldId.toLowerCase().includes("benefit") || label.toLowerCase().includes("avantage");
+    let specificGuidelines = "";
+    let itemCount = 4;
+    if (isFeatures) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES FEATURES:
+- Caract\xE9ristiques techniques ET b\xE9n\xE9fices
+- Format: "B\xE9n\xE9fice concret + d\xE9tail technique"
+- Exemples: "Garantie 25 ans sur les panneaux", "Installation en 2 jours chrono"
+- M\xE9langer aspects techniques, pratiques, et commerciaux
+`;
+      itemCount = 4;
+    } else if (isTags) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES TAGS:
+- Mots-cl\xE9s courts (1-3 mots)
+- Descriptifs et recherchables
+- Mix: technique + cat\xE9gorie + b\xE9n\xE9fice
+- Exemples: "\xC9nergie verte", "R\xE9sidentiel", "Haute performance"
+`;
+      itemCount = 5;
+    } else if (isBenefits) {
+      specificGuidelines = `
+GUIDELINES SP\xC9CIFIQUES AVANTAGES:
+- Orient\xE9 r\xE9sultat client
+- Quantifiable si possible
+- \xC9motionnel + rationnel
+- Exemples: "R\xE9duisez vos factures de 60%", "Installation garantie d\xE9cennale"
+`;
+      itemCount = 4;
+    }
+    return `${context}
+
+${specificGuidelines}
+
+T\xC2CHE: G\xE9n\xE8re ${itemCount} ITEMS PERTINENTS ET VARI\xC9S pour ce champ liste.
+
+CONTRAINTES:
+- ${itemCount} items par proposition
+- Chaque item: 5-12 mots maximum
+- Coh\xE9rence et compl\xE9mentarit\xE9 entre les items
+- \xC9viter les r\xE9p\xE9titions
+- Mix de types: technique, pratique, \xE9motionnel, chiffr\xE9
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure:
+{
+  "suggestions": [
+    {
+      "content": ["Item 1", "Item 2", "Item 3", "Item 4"],
+      "reasoning": "Logique de s\xE9lection (1 phrase)",
+      "score": 87
+    },
+    {
+      "content": ["Item 1", "Item 2", "Item 3", "Item 4"],
+      "reasoning": "Logique de s\xE9lection (1 phrase)",
+      "score": 91
+    },
+    {
+      "content": ["Item 1", "Item 2", "Item 3", "Item 4"],
+      "reasoning": "Logique de s\xE9lection (1 phrase)",
+      "score": 84
+    }
+  ],
+  "analysis": {
+    "fieldType": "${fieldId}",
+    "bestApproach": "Approche recommand\xE9e (1 phrase)",
+    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3"],
+    "avgScore": 87
+  }
+}
+
+\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
+  }
+  /**
+   * Prompt pour richtext (contenu HTML/Markdown enrichi)
+   */
+  static buildRichtextPrompt(context, fieldId, label, current) {
+    return `${context}
+
+T\xC2CHE: G\xE9n\xE8re 2 PROPOSITIONS VARI\xC9ES de contenu enrichi (paragraphes structur\xE9s).
+
+CONTRAINTES:
+- 2-4 paragraphes par proposition
+- Structure: Intro \u2192 D\xE9veloppement \u2192 Conclusion/CTA
+- Ton professionnel et engageant
+- Int\xE9gration naturelle des mots-cl\xE9s
+- Lisibilit\xE9 optimale (phrases courtes, transitions)
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure:
+{
+  "suggestions": [
+    {
+      "content": "Paragraphe 1
+
+Paragraphe 2
+
+Paragraphe 3",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 89,
+      "structure": "intro + b\xE9n\xE9fices + preuve sociale"
+    },
+    {
+      "content": "Paragraphe 1
+
+Paragraphe 2
+
+Paragraphe 3",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 92,
+      "structure": "probl\xE8me + solution + r\xE9sultats"
+    }
+  ],
+  "analysis": {
+    "fieldType": "${fieldId}",
+    "bestApproach": "Approche recommand\xE9e (1 phrase)",
+    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3", "mot-cl\xE9 4"],
+    "avgScore": 90,
+    "readabilityScore": 85
+  }
+}
+
+\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
+  }
+  /**
+   * Prompt générique pour types inconnus
+   */
+  static buildGenericPrompt(context, label, current) {
+    return `${context}
+
+T\xC2CHE: G\xE9n\xE8re 3 PROPOSITIONS PERTINENTES pour le champ "${label}".
+
+Retourne UNIQUEMENT un objet JSON valide avec cette structure:
+{
+  "suggestions": [
+    {
+      "content": "Proposition 1",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 85
+    },
+    {
+      "content": "Proposition 2",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 88
+    },
+    {
+      "content": "Proposition 3",
+      "reasoning": "Pourquoi cette proposition (1 phrase)",
+      "score": 82
+    }
+  ],
+  "analysis": {
+    "fieldType": "${label}",
+    "bestApproach": "Approche recommand\xE9e (1 phrase)",
+    "keywords": ["mot-cl\xE9 1", "mot-cl\xE9 2", "mot-cl\xE9 3"],
+    "avgScore": 85
+  }
+}
+
+\u26A0\uFE0F IMPORTANT: Retourne UNIQUEMENT le JSON, aucun texte avant ou apr\xE8s.`;
+  }
+};
+var QualityAnalyzer = class {
+  /**
+   * Analyse et enrichit les suggestions avec des métriques
+   */
+  static analyzeSuggestions(response, fieldType) {
+    try {
+      const scores = response.suggestions.map((s) => s.score || 0);
+      const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+      response.suggestions.sort((a, b) => (b.score || 0) - (a.score || 0));
+      response.analysis = {
+        ...response.analysis,
+        avgScore,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        fieldType,
+        qualityLevel: avgScore >= 90 ? "excellent" : avgScore >= 80 ? "good" : avgScore >= 70 ? "acceptable" : "needs-improvement"
+      };
+      return response;
+    } catch (error) {
+      console.error("\u274C [QualityAnalyzer] Erreur analyse:", error);
+      return response;
+    }
+  }
+};
+router84.post("/generate-field", async (req2, res) => {
+  const startTime = Date.now();
+  try {
+    const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
+    if (!fieldId || !fieldType || !fieldLabel) {
+      return res.status(400).json({
+        success: false,
+        error: "Param\xE8tres manquants",
+        details: "fieldId, fieldType et fieldLabel sont requis"
+      });
+    }
+    if (!aiContext || !aiContext.sectionType) {
+      return res.status(400).json({
+        success: false,
+        error: "Contexte IA manquant",
+        details: "aiContext.sectionType est requis"
+      });
+    }
+    console.log("\u{1F916} [AI] G\xE9n\xE9ration pour:", {
+      fieldId,
+      fieldType,
+      fieldLabel,
+      sectionType: aiContext.sectionType
+    });
+    const prompt = SmartPromptBuilder.buildPrompt({
+      fieldId,
+      fieldType,
+      fieldLabel,
+      currentValue,
+      aiContext
+    });
+    console.log("\u{1F4DD} [AI] Prompt construit, appel \xE0 Gemini...");
+    const geminiResult = await geminiService3.chat({ prompt, raw: true });
+    if (!geminiResult.success || !geminiResult.content) {
+      throw new Error(geminiResult.error || "Erreur lors de l'appel \xE0 Gemini");
+    }
+    console.log("\u2705 [AI] R\xE9ponse brute re\xE7ue:", geminiResult.content.substring(0, 200));
+    const jsonMatch = geminiResult.content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Format de r\xE9ponse invalide: JSON non trouv\xE9 dans la r\xE9ponse IA");
+    }
+    let parsedResponse = JSON.parse(jsonMatch[0]);
+    parsedResponse = QualityAnalyzer.analyzeSuggestions(parsedResponse, fieldType);
+    const duration = Date.now() - startTime;
+    const modelUsed = geminiResult.model || geminiService3.getStatus().model;
+    console.log(`\u2705 [AI] G\xE9n\xE9ration r\xE9ussie en ${duration}ms, score moyen: ${parsedResponse.analysis.avgScore}/100`);
+    return res.json({
+      success: true,
+      content: parsedResponse.suggestions[0]?.content,
+      // Meilleure suggestion par défaut
+      suggestions: parsedResponse.suggestions,
+      analysis: parsedResponse.analysis,
+      metadata: {
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        duration,
+        model: modelUsed,
+        fieldType,
+        fieldId
+      }
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error("\u274C [AI] Erreur g\xE9n\xE9ration:", error);
+    if (error.message?.includes("API key")) {
+      return res.status(500).json({
+        success: false,
+        error: "Configuration IA manquante",
+        details: "La cl\xE9 API Google Gemini n'est pas configur\xE9e",
+        duration
+      });
+    }
+    if (error.message?.includes("quota") || error.message?.includes("rate limit")) {
+      return res.status(429).json({
+        success: false,
+        error: "Limite de quota atteinte",
+        details: "Trop de requ\xEAtes IA. Attendez quelques instants.",
+        duration
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      error: "Erreur lors de la g\xE9n\xE9ration",
+      details: error.message || "Erreur inconnue",
+      duration
+    });
+  }
+});
+router84.get("/status", async (_req, res) => {
+  try {
+    const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
+    res.json({
+      success: true,
+      available: isAvailable,
+      service: "Google Gemini",
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      available: false,
+      error: error.message
+    });
+  }
+});
+var ai_field_generator_default = router84;
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
+var import_express87 = require("express");
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
+var parseJsonArray = (value) => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
+  if (!repeaterNodeId) {
+    console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
+    return null;
+  }
+  const cached = captureRepeatTemplate(repeaterNodeId);
+  if (cached) {
+    const repeaterNodeForCache = await prisma71.treeBranchLeafNode.findUnique({
+      where: { id: repeaterNodeId },
+      select: { metadata: true, repeater_templateNodeIds: true }
+    });
+    const candidateTemplateIds = repeaterNodeForCache ? extractTemplateIds(repeaterNodeForCache) : [];
+    const { validIds: cachedTemplateIds } = await filterExistingTemplateNodeIds(
+      prisma71,
+      repeaterNodeId,
+      candidateTemplateIds
+    );
+    if (cachedTemplateIds.length) {
+      const validTemplateSet = new Set(cachedTemplateIds);
+      return {
+        ...cached,
+        repeaterNodeId,
+        templateNodeIds: cachedTemplateIds,
+        variables: cached.variables?.filter((v) => !v.nodeId || validTemplateSet.has(v.nodeId)) ?? [],
+        capacities: cached.capacities?.filter((c) => !c.ownerNodeId || validTemplateSet.has(c.ownerNodeId)) ?? [],
+        totalField: cached.totalField
+      };
+    }
+    console.warn("[repeat-blueprint-builder] Cached blueprint invalid, falling back to Prisma lookup", {
+      repeaterNodeId,
+      candidateTemplateIds
+    });
+  }
+  const repeaterNode = await prisma71.treeBranchLeafNode.findUnique({
+    where: { id: repeaterNodeId },
+    select: {
+      id: true,
+      repeater_templateNodeIds: true,
+      metadata: true,
+      treeId: true
+    }
+  });
+  if (!repeaterNode) {
+    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC2\x9D\xC5\u2019 Repeater node not found: ${repeaterNodeId}`);
+    return null;
+  }
+  const extractedIds = extractTemplateIds(repeaterNode);
+  const candidateTemplateNodeIds = extractedIds;
+  const { validIds: templateNodeIds } = await filterExistingTemplateNodeIds(
+    prisma71,
+    repeaterNodeId,
+    candidateTemplateNodeIds
+  );
+  if (!templateNodeIds.length) {
+    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F No valid templates found!`);
+    return {
+      repeaterNodeId,
+      templateNodeIds: [],
+      variables: [],
+      capacities: [],
+      capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      lastUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  const directVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
+    where: { nodeId: { in: templateNodeIds } },
+    select: {
+      id: true,
+      nodeId: true,
+      sourceRef: true,
+      sourceType: true
+    }
+  });
+  const linkedVarsByNode = /* @__PURE__ */ new Map();
+  const templateNodesWithLinks = await prisma71.treeBranchLeafNode.findMany({
+    where: { id: { in: templateNodeIds } },
+    select: {
+      id: true,
+      linkedVariableIds: true
+    }
+  });
+  for (const node of templateNodesWithLinks) {
+    if (node.linkedVariableIds && node.linkedVariableIds.length > 0) {
+      for (const varId of node.linkedVariableIds) {
+        if (!linkedVarsByNode.has(varId)) {
+          linkedVarsByNode.set(varId, /* @__PURE__ */ new Set());
+        }
+        linkedVarsByNode.get(varId).add(node.id);
+      }
+    }
+  }
+  const linkedVariableIds = Array.from(linkedVarsByNode.keys()).filter(
+    (id) => !directVariables.some((v) => v.id === id)
+    // Avoid duplicates
+  );
+  const linkedVariables = linkedVariableIds.length > 0 ? await prisma71.treeBranchLeafNodeVariable.findMany({
+    where: { id: { in: linkedVariableIds } },
+    select: {
+      id: true,
+      nodeId: true,
+      sourceRef: true,
+      sourceType: true
+    }
+  }) : [];
+  const expandedVariables = [];
+  for (const directVar of directVariables) {
+    expandedVariables.push({
+      ...directVar,
+      variableId: directVar.id,
+      linkedToNodeIds: []
+      // Direct variables don't have this
+    });
+  }
+  for (const linkedVar of linkedVariables) {
+    const referencingNodeIds = Array.from(linkedVarsByNode.get(linkedVar.id) || []);
+    for (const nodeId of referencingNodeIds) {
+      expandedVariables.push({
+        ...linkedVar,
+        variableId: linkedVar.id,
+        linkedToNodeIds: [nodeId],
+        // This variable is linked to this template node
+        primaryTargetNodeId: nodeId
+        // Ã¢â€ Â The node that should receive the copied variable's display node
+      });
+    }
+  }
+  const variables = expandedVariables;
+  const [formulas, conditions, tables] = await Promise.all([
+    prisma71.treeBranchLeafNodeFormula.findMany({
+      where: { nodeId: { in: templateNodeIds } },
+      select: { id: true, nodeId: true }
+    }),
+    prisma71.treeBranchLeafNodeCondition.findMany({
+      where: { nodeId: { in: templateNodeIds } },
+      select: { id: true, nodeId: true }
+    }),
+    prisma71.treeBranchLeafNodeTable.findMany({
+      where: { nodeId: { in: templateNodeIds } },
+      select: { id: true, nodeId: true }
+    })
+  ]);
+  const totalField = extractTotalFieldConfig(repeaterNode.metadata);
+  return {
+    repeaterNodeId,
+    templateNodeIds,
+    variables: variables.map((v) => ({
+      nodeId: v.nodeId,
+      variableId: v.id,
+      sourceRef: v.sourceRef,
+      sourceType: v.sourceType,
+      displayNodeId: null,
+      metadata: void 0,
+      // Ã°Å¸â€Â§ PRESERVE: primaryTargetNodeId for linked variables
+      primaryTargetNodeId: v.primaryTargetNodeId || void 0
+    })),
+    capacities: [
+      ...formulas.map((f) => ({
+        ownerNodeId: f.nodeId,
+        capacityId: f.id,
+        capacityType: "formula"
+      })),
+      ...conditions.map((c) => ({
+        ownerNodeId: c.nodeId,
+        capacityId: c.id,
+        capacityType: "condition"
+      })),
+      ...tables.map((t) => ({
+        ownerNodeId: t.nodeId,
+        capacityId: t.id,
+        capacityType: "table"
+      }))
+    ],
+    totalField: totalField || void 0,
+    capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    lastUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function extractTemplateIds(node) {
+  const metaRepeater = typeof node.metadata === "object" && node.metadata !== null ? node.metadata.repeater : void 0;
+  if (metaRepeater && typeof metaRepeater === "object") {
+    const fromMetadata = metaRepeater.templateNodeIds;
+    if (Array.isArray(fromMetadata) && fromMetadata.length > 0) {
+      const filtered = fromMetadata.filter((id) => typeof id === "string");
+      return filtered;
+    }
+  }
+  const fromColumn = parseJsonArray(node.repeater_templateNodeIds);
+  if (fromColumn.length) {
+    return fromColumn;
+  }
+  console.warn(`\xC3\xA2\xC2\x9D\xC5\u2019 [extractTemplateIds] Aucun template trouv\xC3\u0192\xC2\xA9 !`);
+  return [];
+}
+function extractTotalFieldConfig(metadata) {
+  if (!metadata || typeof metadata !== "object") return null;
+  const repeaterMeta = metadata.repeater;
+  if (!repeaterMeta || typeof repeaterMeta !== "object") return null;
+  const total = repeaterMeta.totalField;
+  if (!total || typeof total !== "object") return null;
+  const typed = total;
+  if (!typed.aggregationType || !typed.repeaterNodeId) return null;
+  return {
+    repeaterNodeId: typed.repeaterNodeId,
+    aggregationType: typed.aggregationType,
+    targetDisplayNodeId: typed.targetDisplayNodeId ?? null,
+    targetVariableId: typed.targetVariableId ?? null,
+    metadata: typed.metadata ?? null
+  };
+}
+async function filterExistingTemplateNodeIds(prisma71, repeaterNodeId, candidateIds) {
+  const normalized = Array.from(new Set(candidateIds.filter((id) => typeof id === "string" && !!id)));
+  if (!normalized.length) {
+    return { validIds: [], missingIds: [] };
+  }
+  const existing = await prisma71.treeBranchLeafNode.findMany({
+    where: { id: { in: normalized } },
+    select: { id: true }
+  });
+  const existingSet = new Set(existing.map((node) => node.id));
+  const validIds = normalized.filter((id) => existingSet.has(id));
+  const missingIds = normalized.filter((id) => !existingSet.has(id));
+  if (missingIds.length) {
+    console.warn("[repeat-blueprint-builder] Missing template nodes detected", {
+      repeaterNodeId,
+      missingCount: missingIds.length,
+      missingIds
+    });
+  }
+  return { validIds, missingIds };
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-instantiator.ts
+function createInstantiationPlan(blueprint, options) {
+  const { suffix, perTemplateSuffixes } = options;
+  const resolveSuffix = (templateNodeId) => {
+    if (perTemplateSuffixes && perTemplateSuffixes[templateNodeId] !== void 0) {
+      return perTemplateSuffixes[templateNodeId];
+    }
+    return suffix;
+  };
+  const nodes = blueprint.templateNodeIds.map((templateNodeId) => {
+    const nodeSuffix = resolveSuffix(templateNodeId);
+    return {
+      templateNodeId,
+      plannedSuffix: nodeSuffix,
+      newNodeId: `${templateNodeId}-${nodeSuffix}`
+    };
+  });
+  const variables = blueprint.variables.map((variable) => {
+    const targetTemplateNodeId = variable.primaryTargetNodeId || variable.nodeId;
+    const variableSuffix = resolveSuffix(targetTemplateNodeId);
+    const plannedVariableId = `${variable.variableId}-${targetTemplateNodeId}-${variableSuffix}`;
+    const plannedTargetNodeId = `${targetTemplateNodeId}-${variableSuffix}`;
+    return {
+      templateVariableId: variable.variableId,
+      plannedSuffix: variableSuffix,
+      targetNodeId: plannedTargetNodeId,
+      // Ã¢â€ Â NOW uses the template node that REFERENCES the variable
+      plannedVariableId
+    };
+  });
+  let totalFieldPlan;
+  if (options.includeTotals && blueprint.totalField) {
+    totalFieldPlan = {
+      plannedSuffix: suffix,
+      plannedVariableId: `${blueprint.totalField.targetVariableId ?? "total"}-${suffix}`,
+      plannedDisplayNodeId: `${blueprint.totalField.targetDisplayNodeId ?? "display-total"}-${suffix}`
+    };
+  }
+  return {
+    nodes,
+    variables,
+    totalField: totalFieldPlan
+  };
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/suffix-utils.ts
+function extractNumericSuffix(candidate) {
+  if (typeof candidate === "number" && Number.isFinite(candidate)) {
+    return candidate;
+  }
+  if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
+    return Number(candidate);
+  }
+  return null;
+}
+function extractSuffixFromId(id) {
+  if (!id) return null;
+  const match = /-(\d+)$/.exec(id);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+async function computeTemplateCopySuffixMax(prisma71, treeId, templateNodeIds) {
+  if (!treeId || !templateNodeIds.length) {
+    return /* @__PURE__ */ new Map();
+  }
+  const templateSet = new Set(templateNodeIds);
+  const templateIds = Array.from(templateSet);
+  const orStartsWith = templateIds.map((templateId) => ({ id: { startsWith: `${templateId}-` } }));
+  const copies = await prisma71.treeBranchLeafNode.findMany({
+    where: {
+      treeId,
+      OR: orStartsWith
+    },
+    select: { id: true, metadata: true }
+  });
+  const metaCopies = await prisma71.treeBranchLeafNode.findMany({
+    where: {
+      treeId,
+      OR: templateIds.map((templateId) => ({
+        OR: [
+          { metadata: { path: ["copiedFromNodeId"], equals: templateId } },
+          { metadata: { path: ["sourceTemplateId"], equals: templateId } }
+        ]
+      }))
+    },
+    select: { id: true, metadata: true }
+  });
+  const maxMap = /* @__PURE__ */ new Map();
+  for (const copy of copies) {
+    let templateId = null;
+    for (const candidate of templateIds) {
+      if (copy.id.startsWith(`${candidate}-`)) {
+        templateId = candidate;
+        break;
+      }
+    }
+    if (!templateId || !templateSet.has(templateId)) continue;
+    const rest = copy.id.slice(templateId.length + 1);
+    const idSuffix = /^\d+$/.test(rest) ? Number(rest) : null;
+    const metadata = copy.metadata ?? {};
+    const metaSuffix = extractNumericSuffix(metadata.copySuffix);
+    const resolved = idSuffix ?? metaSuffix ?? 0;
+    const prev = maxMap.get(templateId) ?? 0;
+    if (resolved > prev) maxMap.set(templateId, resolved);
+  }
+  for (const copy of metaCopies) {
+    const meta = copy.metadata ?? {};
+    const metaTemplateId = meta.copiedFromNodeId || meta.sourceTemplateId || null;
+    if (!metaTemplateId || !templateSet.has(metaTemplateId)) continue;
+    const metaSuffix = extractNumericSuffix(meta.copySuffix) ?? extractSuffixFromId(copy.id) ?? 0;
+    const prev = maxMap.get(metaTemplateId) ?? 0;
+    if (metaSuffix > prev) {
+      maxMap.set(metaTemplateId, metaSuffix);
+    }
+  }
+  return maxMap;
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-service.ts
+var RepeatOperationError = class extends Error {
+  status;
+  details;
+  constructor(message, status = 400, details) {
+    super(message);
+    this.name = "RepeatOperationError";
+    this.status = status;
+    this.details = details;
+  }
+};
+var makeScopeId = (repeaterNodeId, suffix) => {
+  const trimmedSuffix = typeof suffix === "string" ? suffix.trim() : String(suffix);
+  return `${repeaterNodeId}:${trimmedSuffix}`;
+};
+async function planRepeatDuplication(prisma71, repeaterNodeId, options = {}) {
+  if (!repeaterNodeId) {
+    throw new RepeatOperationError("Missing repeaterNodeId in request path.", 400);
+  }
+  const blueprint = await buildBlueprintForRepeater(prisma71, repeaterNodeId);
+  if (!blueprint) {
+    throw new RepeatOperationError(`No blueprint available for repeater ${repeaterNodeId}.`, 404);
+  }
+  if (!blueprint.templateNodeIds?.length) {
+    throw new RepeatOperationError(
+      `Repeater ${repeaterNodeId} does not reference any template nodes.`,
+      422
+    );
+  }
+  const repeaterNode = await prisma71.treeBranchLeafNode.findUnique({
+    where: { id: repeaterNodeId },
+    select: { treeId: true }
+  });
+  if (!repeaterNode) {
+    throw new RepeatOperationError(`Repeater ${repeaterNodeId} was not found.`, 404);
+  }
+  const cleanedTemplateIds = blueprint.templateNodeIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id, idx, arr) => arr.indexOf(id) === idx);
+  const needsCleaning = blueprint.templateNodeIds.length !== cleanedTemplateIds.length;
+  if (needsCleaning) {
+    blueprint.templateNodeIds.forEach((id, idx) => {
+      const cleaned = id.replace(/(-\d+)+$/, "");
+      if (id !== cleaned) {
+      }
+    });
+  }
+  let actualSuffix;
+  let perTemplateSuffixes;
+  if (options.suffix) {
+    const parsed = parseInt(String(options.suffix), 10);
+    if (Number.isNaN(parsed)) {
+      throw new RepeatOperationError("Repeat suffix must be numeric when provided.", 422);
+    }
+    actualSuffix = parsed;
+    perTemplateSuffixes = Object.fromEntries(
+      cleanedTemplateIds.map((id) => [id, actualSuffix])
+    );
+  } else {
+    const existingMax = await computeTemplateCopySuffixMax(
+      prisma71,
+      repeaterNode.treeId,
+      cleanedTemplateIds
+    );
+    const globalMax = existingMax.size > 0 ? Math.max(...existingMax.values()) : 0;
+    actualSuffix = globalMax + 1;
+    cleanedTemplateIds.forEach((id) => {
+      const mx = existingMax.get(id) ?? 0;
+    });
+    perTemplateSuffixes = {};
+    for (const templateId of cleanedTemplateIds) {
+      perTemplateSuffixes[templateId] = actualSuffix;
+    }
+  }
+  const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, actualSuffix);
+  blueprint.templateNodeIds = cleanedTemplateIds;
+  const plan = createInstantiationPlan(blueprint, {
+    suffix: actualSuffix,
+    includeTotals: options.includeTotals ?? true,
+    targetParentId: options.targetParentId ?? null,
+    perTemplateSuffixes
+  });
+  return {
+    repeaterNodeId,
+    suffix: actualSuffix,
+    scopeId,
+    blueprint,
+    plan
+  };
+}
+async function executeRepeatDuplication(prisma71, repeaterNodeId, options = {}) {
+  try {
+    const planned = await planRepeatDuplication(prisma71, repeaterNodeId, options);
+    const operations = [
+      ...planned.plan.nodes.map((nodePlan) => ({
+        type: "node-copy",
+        templateId: nodePlan.templateNodeId,
+        targetId: nodePlan.newNodeId
+      })),
+      ...planned.plan.variables.map((variablePlan) => ({
+        type: "variable-copy",
+        templateId: variablePlan.templateVariableId,
+        targetId: variablePlan.plannedVariableId
+      }))
+    ];
+    return {
+      ...planned,
+      status: "pending-execution",
+      operations
+    };
+  } catch (error) {
+    console.error(`[repeat-service] \xC3\xA2\xC2\x9D\xC5\u2019 ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
+    throw error;
+  }
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
+var import_client71 = require("@prisma/client");
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
+function parseSourceRef3(sourceRef) {
+  if (!sourceRef || typeof sourceRef !== "string") return null;
+  const cleaned = sourceRef.trim();
+  if (!cleaned) return null;
+  if (cleaned.startsWith("node-formula:")) {
+    return {
+      type: "formula",
+      id: cleaned.replace("node-formula:", ""),
+      prefix: "node-formula:"
+    };
+  }
+  if (cleaned.startsWith("condition:")) {
+    return {
+      type: "condition",
+      id: cleaned.replace("condition:", ""),
+      prefix: "condition:"
+    };
+  }
+  if (cleaned.startsWith("node-condition:")) {
+    return {
+      type: "condition",
+      id: cleaned.replace("node-condition:", ""),
+      prefix: "node-condition:"
+    };
+  }
+  if (cleaned.startsWith("@table.")) {
+    return {
+      type: "table",
+      id: cleaned.replace("@table.", ""),
+      prefix: "@table."
+    };
+  }
+  if (cleaned.startsWith("node-table:")) {
+    return {
+      type: "table",
+      id: cleaned.replace("node-table:", ""),
+      prefix: "node-table:"
+    };
+  }
+  if (cleaned.startsWith("@calculated.")) {
+    return {
+      type: "calculated",
+      id: cleaned.replace("@calculated.", ""),
+      prefix: "@calculated."
+    };
+  }
+  return {
+    type: "field",
+    id: cleaned,
+    prefix: ""
+  };
+}
+function applySuffixToSourceRef2(sourceRef, suffix) {
+  if (!sourceRef) return null;
+  const parsed = parseSourceRef3(sourceRef);
+  if (!parsed) return sourceRef;
+  const newId = `${parsed.id}-${suffix}`;
+  return `${parsed.prefix}${newId}`;
+}
+async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma71, options = {}) {
+  const {
+    formulaIdMap = /* @__PURE__ */ new Map(),
+    conditionIdMap = /* @__PURE__ */ new Map(),
+    tableIdMap: tableIdMap2 = /* @__PURE__ */ new Map(),
+    nodeIdMap = /* @__PURE__ */ new Map(),
+    variableCopyCache = /* @__PURE__ */ new Map(),
+    autoCreateDisplayNode = false,
+    displaySectionLabel = "Nouveau Section",
+    linkToDisplaySection = false
+    // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
+  } = options;
+  try {
+    const cacheKey = `${originalVarId}|${newNodeId}`;
+    let cachedVariable = null;
+    if (variableCopyCache.has(cacheKey)) {
+      const cachedId = variableCopyCache.get(cacheKey);
+      const cached = await prisma71.treeBranchLeafNodeVariable.findUnique({
+        where: { id: cachedId }
+      });
+      if (cached) {
+        const parsed = parseSourceRef3(cached.sourceRef);
+        if (autoCreateDisplayNode) {
+          cachedVariable = cached;
+        } else {
+          return {
+            variableId: cached.id,
+            exposedKey: cached.exposedKey,
+            capacityType: parsed?.type || null,
+            sourceRef: cached.sourceRef,
+            success: true
+          };
+        }
+      }
+    }
+    const originalVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
+      where: { id: originalVarId }
+    });
+    if (!originalVar) {
+      console.error(`\xE2\x9D\u0152 Variable introuvable: ${originalVarId}`);
+      return {
+        variableId: "",
+        exposedKey: "",
+        capacityType: null,
+        sourceRef: null,
+        success: false,
+        error: `Variable introuvable: ${originalVarId}`
+      };
+    }
+    const stripTrailingNumeric = (raw) => {
+      if (!raw) return "";
+      const trimmed = raw.trim();
+      return trimmed.replace(/(?:-\d+)+\s*$/, "");
+    };
+    const appendSuffixOnce = (value) => {
+      if (!value) return value ?? "";
+      const base = stripTrailingNumeric(value);
+      return `${base}-${suffix}`;
+    };
+    let newVarId = appendSuffixOnce(originalVarId);
+    let newExposedKey = appendSuffixOnce(originalVar.exposedKey);
+    let newSourceRef = originalVar.sourceRef;
+    let capacityType = null;
+    if (originalVar.sourceRef) {
+      const parsed = parseSourceRef3(originalVar.sourceRef);
+      if (parsed) {
+        capacityType = parsed.type;
+        if (capacityType === "formula") {
+          if (formulaIdMap.has(parsed.id)) {
+            const mappedFormulaId = formulaIdMap.get(parsed.id);
+            newSourceRef = `${parsed.prefix}${mappedFormulaId}`;
+          } else {
+            try {
+              const formulaResult = await copyFormulaCapacity(
+                parsed.id,
+                newNodeId,
+                suffix,
+                prisma71,
+                { nodeIdMap, formulaCopyCache: formulaIdMap }
+              );
+              if (formulaResult.success) {
+                formulaIdMap.set(parsed.id, formulaResult.newFormulaId);
+                newSourceRef = `${parsed.prefix}${formulaResult.newFormulaId}`;
+              } else {
+                newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
+              }
+            } catch (e) {
+              console.error(`\xE2\x9D\u0152 [COPY-VAR] Exception copie formule:`, e.message, e.stack);
+              newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
+            }
+          }
+        } else if (capacityType === "condition") {
+          if (conditionIdMap.has(parsed.id)) {
+            const mappedConditionId = conditionIdMap.get(parsed.id);
+            newSourceRef = `${parsed.prefix}${mappedConditionId}`;
+          } else {
+            try {
+              const conditionResult = await copyConditionCapacity(
+                parsed.id,
+                newNodeId,
+                suffix,
+                prisma71,
+                { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
+              );
+              if (conditionResult.success) {
+                conditionIdMap.set(parsed.id, conditionResult.newConditionId);
+                newSourceRef = `${parsed.prefix}${conditionResult.newConditionId}`;
+              } else {
+                newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
+              }
+            } catch (e) {
+              console.error(`\xE2\x9D\u0152 Exception copie condition:`, e.message);
+              newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
+            }
+          }
+        } else if (capacityType === "table") {
+          if (tableIdMap2.has(parsed.id)) {
+            const mappedTableId = tableIdMap2.get(parsed.id);
+            newSourceRef = `${parsed.prefix}${mappedTableId}`;
+          } else {
+            try {
+              const tableResult = await copyTableCapacity2(
+                parsed.id,
+                newNodeId,
+                suffix,
+                prisma71,
+                { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
+              );
+              if (tableResult.success) {
+                tableIdMap2.set(parsed.id, tableResult.newTableId);
+                newSourceRef = `${parsed.prefix}${tableResult.newTableId}`;
+              } else {
+                newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
+              }
+            } catch (e) {
+              console.error(`\xE2\x9D\u0152 Exception copie table:`, e.message);
+              newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
+            }
+          }
+        } else if (capacityType === "field") {
+          if (nodeIdMap.has(parsed.id)) {
+            newSourceRef = nodeIdMap.get(parsed.id);
+          } else {
+            newSourceRef = `${parsed.id}-${suffix}`;
+          }
+        }
+      }
+    }
+    let finalNodeId2 = newNodeId;
+    if (originalVar.nodeId && nodeIdMap.has(originalVar.nodeId)) {
+      finalNodeId2 = nodeIdMap.get(originalVar.nodeId);
+    } else if (autoCreateDisplayNode) {
+      try {
+        const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
+          where: { id: originalVar.nodeId },
+          select: {
+            id: true,
+            parentId: true,
+            treeId: true,
+            order: true,
+            linkedTableIds: true,
+            hasTable: true,
+            table_name: true,
+            table_activeId: true,
+            table_instances: true,
+            // ðŸ”‘ IMPORTANT: RÃ©cupÃ©rer subtab pour que la copie soit dans le bon sous-onglet
+            subtab: true,
+            subtabs: true,
+            metadata: true
+          }
+        });
+        if (originalOwnerNode) {
+          const isLinkedVariable = options.isFromRepeaterDuplication && originalVar.nodeId !== newNodeId;
+          let displayParentId;
+          if (isLinkedVariable) {
+            displayParentId = newNodeId;
+          } else {
+            displayParentId = originalOwnerNode.parentId || null;
+          }
+          const baseDisplayNodeId = stripTrailingNumeric(originalVar.nodeId) || originalVar.nodeId;
+          const displayNodeId2 = `${baseDisplayNodeId}-${suffix}`;
+          finalNodeId2 = displayNodeId2;
+          const now = /* @__PURE__ */ new Date();
+          const displayNodeData = {
+            id: displayNodeId2,
+            treeId: originalOwnerNode.treeId,
+            parentId: displayParentId,
+            type: "leaf_field",
+            subType: null,
+            label: originalVar.displayName || "Donn\xC3\xA9e",
+            description: null,
+            value: null,
+            order: (originalOwnerNode.order ?? 0) + 1,
+            isRequired: false,
+            isVisible: true,
+            isActive: true,
+            isMultiple: false,
+            fieldConfig: null,
+            conditionConfig: null,
+            formulaConfig: null,
+            tableConfig: null,
+            apiConfig: null,
+            linkConfig: null,
+            defaultValue: null,
+            calculatedValue: null,
+            metadata: { fromVariableId: appendSuffixOnce(originalVar.id) },
+            // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
+            subtab: originalOwnerNode.subtab,
+            subtabs: originalOwnerNode.subtabs,
+            createdAt: now,
+            updatedAt: now,
+            hasAPI: false,
+            hasCondition: false,
+            hasData: false,
+            hasFormula: false,
+            hasLink: false,
+            hasMarkers: false,
+            // ðŸ“Š TABLE: Copier les colonnes table du nÅ“ud original
+            // âœ… IMPORTANT: Ajouter le suffixe aux IDs de table pour pointer aux tables copiÃ©es
+            hasTable: originalOwnerNode.hasTable ?? false,
+            table_name: originalOwnerNode.table_name,
+            table_activeId: originalOwnerNode.table_activeId ? `${originalOwnerNode.table_activeId}-${suffix}` : null,
+            table_instances: (() => {
+              if (!originalOwnerNode.table_instances) {
+                return originalOwnerNode.table_instances;
+              }
+              let rawInstances;
+              if (typeof originalOwnerNode.table_instances === "object") {
+                rawInstances = JSON.parse(JSON.stringify(originalOwnerNode.table_instances));
+              } else if (typeof originalOwnerNode.table_instances === "string") {
+                try {
+                  rawInstances = JSON.parse(originalOwnerNode.table_instances);
+                } catch {
+                  return originalOwnerNode.table_instances;
+                }
+              } else {
+                return originalOwnerNode.table_instances;
+              }
+              const updatedInstances = {};
+              for (const [key2, value] of Object.entries(rawInstances)) {
+                const hasSuffixRegex = /-\d+$/;
+                const newKey = hasSuffixRegex.test(key2) ? key2 : `${key2}-${suffix}`;
+                if (value && typeof value === "object") {
+                  const tableInstanceObj = value;
+                  const updatedObj = { ...tableInstanceObj };
+                  if (tableInstanceObj.tableId && typeof tableInstanceObj.tableId === "string") {
+                    updatedObj.tableId = hasSuffixRegex.test(tableInstanceObj.tableId) ? tableInstanceObj.tableId : `${tableInstanceObj.tableId}-${suffix}`;
+                  }
+                  updatedInstances[newKey] = updatedObj;
+                } else {
+                  updatedInstances[newKey] = value;
+                }
+              }
+              return updatedInstances;
+            })(),
+            linkedTableIds: Array.isArray(originalOwnerNode.linkedTableIds) ? originalOwnerNode.linkedTableIds.map((id) => `${id}-${suffix}`) : [],
+            linkedConditionIds: [],
+            linkedFormulaIds: [],
+            linkedVariableIds: [],
+            appearance_size: "md",
+            appearance_variant: null,
+            appearance_width: "100%",
+            fieldType: "TEXT",
+            fieldSubType: null,
+            field_label: originalVar.displayName
+          };
+          const maybeExisting = await prisma71.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+          if (maybeExisting) {
+            await prisma71.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
+          } else {
+            await prisma71.treeBranchLeafNode.create({ data: displayNodeData });
+          }
+          if (originalOwnerNode.hasTable && Array.isArray(originalOwnerNode.linkedTableIds) && originalOwnerNode.linkedTableIds.length > 0) {
+            for (const originalTableId of originalOwnerNode.linkedTableIds) {
+              const newTableId = `${originalTableId}-${suffix}`;
+              const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+                where: { id: newTableId }
+              });
+              if (existingTable) {
+                tableIdMap2.set(originalTableId, newTableId);
+                continue;
+              }
+              try {
+                const tableResult = await copyTableCapacity2(
+                  originalTableId,
+                  displayNodeId2,
+                  // La nouvelle table appartient au display node copiÃ©
+                  Number(suffix),
+                  prisma71,
+                  { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
+                );
+                if (tableResult.success) {
+                  tableIdMap2.set(originalTableId, tableResult.newTableId);
+                } else {
+                  console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [COPY-TABLES] \xC3\u2030chec copie table ${originalTableId}: ${tableResult.error}`);
+                }
+              } catch (e) {
+                console.error(`\xE2\x9D\u0152 [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
+              }
+            }
+            await prisma71.treeBranchLeafNode.update({
+              where: { id: displayNodeId2 },
+              data: { hasTable: true }
+            });
+          }
+        } else {
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de r\xC3\xA9cup\xC3\xA9rer le n\xC5\u201Cud propri\xC3\xA9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
+        }
+      } catch (e) {
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la cr\xC3\xA9ation du n\xC5\u201Cud d'affichage d\xC3\xA9di\xC3\xA9:`, e.message);
+      }
+    } else {
+    }
+    try {
+      const existingById = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      if (existingById) {
+        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
+        const adjusted = `${originalVarId}-${suffix}-${tail}`;
+        newVarId = adjusted;
+      }
+    } catch (e) {
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
+    }
+    try {
+      const existingByKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      if (existingByKey) {
+        const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
+        const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
+        newExposedKey = adjustedKey;
+      }
+    } catch (e) {
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision exposedKey \xC3\xA9chou\xC3\xA9e:`, e.message);
+    }
+    let _reusingExistingVariable = false;
+    let _existingVariableForReuse = null;
+    try {
+      const existingForNode = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      if (existingForNode) {
+        _reusingExistingVariable = true;
+        _existingVariableForReuse = existingForNode;
+        try {
+          await prisma71.treeBranchLeafNode.update({
+            where: { id: finalNodeId2 },
+            data: {
+              hasData: true,
+              data_activeId: existingForNode.id,
+              data_exposedKey: existingForNode.exposedKey,
+              data_displayFormat: existingForNode.displayFormat,
+              data_precision: existingForNode.precision,
+              data_unit: existingForNode.unit,
+              data_visibleToUser: existingForNode.visibleToUser,
+              label: existingForNode.displayName || void 0,
+              field_label: existingForNode.displayName || void 0
+            }
+          });
+          await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+        } catch (e) {
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
+        }
+        variableCopyCache.set(originalVarId, existingForNode.id);
+      }
+    } catch (e) {
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification variable existante par nodeId \xC3\xA9chou\xC3\xA9e:`, e.message);
+    }
+    let newVariable;
+    if (cachedVariable) {
+      newVariable = cachedVariable;
+    } else if (_reusingExistingVariable && _existingVariableForReuse) {
+      newVariable = _existingVariableForReuse;
+    } else {
+      newVariable = await prisma71.treeBranchLeafNodeVariable.create({
+        data: {
+          id: newVarId,
+          nodeId: finalNodeId2,
+          exposedKey: newExposedKey,
+          displayName: originalVar.displayName ? `${originalVar.displayName}-${suffix}` : originalVar.displayName,
+          displayFormat: originalVar.displayFormat,
+          unit: originalVar.unit,
+          precision: originalVar.precision,
+          visibleToUser: originalVar.visibleToUser,
+          isReadonly: originalVar.isReadonly,
+          defaultValue: originalVar.defaultValue,
+          fixedValue: originalVar.fixedValue,
+          selectedNodeId: originalVar.selectedNodeId ? nodeIdMap.get(originalVar.selectedNodeId) || appendSuffixOnce(originalVar.selectedNodeId) : null,
+          sourceRef: newSourceRef,
+          sourceType: originalVar.sourceType,
+          metadata: originalVar.metadata,
+          createdAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+    }
+    const verification = await prisma71.treeBranchLeafNodeVariable.findUnique({
+      where: { id: newVariable.id }
+    });
+    if (verification) {
+    } else {
+      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
+    }
+    try {
+      await prisma71.treeBranchLeafNode.update({
+        where: { id: finalNodeId2 },
+        data: {
+          hasData: true,
+          data_activeId: newVariable.id,
+          data_exposedKey: newVariable.exposedKey,
+          data_displayFormat: newVariable.displayFormat,
+          data_precision: newVariable.precision,
+          data_unit: newVariable.unit,
+          data_visibleToUser: newVariable.visibleToUser,
+          // Harmoniser le label du nÅ“ud d'affichage sur le displayName de la variable
+          label: newVariable.displayName || void 0,
+          field_label: newVariable.displayName || void 0
+        }
+      });
+    } catch (e) {
+      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la mise \xC3\xA0 jour des param\xC3\xA8tres capacit\xC3\xA9 (display node):`, e.message);
+    }
+    if (linkToDisplaySection) {
+      try {
+        const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
+          where: { id: originalVar.nodeId },
+          select: { parentId: true, treeId: true }
+        });
+        if (originalOwnerNode?.parentId) {
+          const displaySection = await prisma71.treeBranchLeafNode.findFirst({
+            where: {
+              treeId: originalOwnerNode.treeId,
+              parentId: originalOwnerNode.parentId,
+              type: "section",
+              label: { equals: displaySectionLabel }
+            },
+            select: { id: true }
+          });
+          if (displaySection) {
+            await addToNodeLinkedField8(prisma71, displaySection.id, "linkedVariableIds", [newVariable.id]);
+          } else {
+          }
+        }
+      } catch (e) {
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors du linkage vers la section d'affichage:`, e.message);
+      }
+    } else if (autoCreateDisplayNode) {
+      try {
+        await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+      } catch (e) {
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
+      }
+      try {
+        if (capacityType && newSourceRef) {
+          const parsedCap = parseSourceRef3(newSourceRef);
+          const capId = parsedCap?.id;
+          if (parsedCap && capId) {
+            if (parsedCap.type === "condition") {
+              await prisma71.treeBranchLeafNode.update({
+                where: { id: finalNodeId2 },
+                data: {
+                  hasCondition: true,
+                  condition_activeId: capId
+                }
+              });
+              await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedConditionIds", [capId]);
+            } else if (parsedCap.type === "formula") {
+              const frm = await prisma71.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true } });
+              await prisma71.treeBranchLeafNode.update({
+                where: { id: finalNodeId2 },
+                data: {
+                  hasFormula: true,
+                  formula_activeId: capId,
+                  formula_name: frm?.name || null
+                }
+              });
+              await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedFormulaIds", [capId]);
+            } else if (parsedCap.type === "table") {
+              const tbl = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
+              await prisma71.treeBranchLeafNode.update({
+                where: { id: finalNodeId2 },
+                data: {
+                  hasTable: true,
+                  table_activeId: capId,
+                  table_name: tbl?.name || null,
+                  table_type: tbl?.type || null
+                }
+              });
+              await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedTableIds", [capId]);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Synchronisation capacit\xC3\xA9s condition/table sur le n\xC5\u201Cud d'affichage:`, e.message);
+      }
+    }
+    variableCopyCache.set(cacheKey, newVariable.id);
+    if (capacityType && newSourceRef) {
+      const parsed = parseSourceRef3(newSourceRef);
+      if (parsed && parsed.id) {
+        try {
+          if (capacityType === "formula") {
+            const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+              where: { id: parsed.id },
+              select: { nodeId: true }
+            });
+            if (formula) {
+              await addToNodeLinkedField8(prisma71, formula.nodeId, "linkedFormulaIds", [parsed.id]);
+            }
+          } else if (capacityType === "condition") {
+            const condition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+              where: { id: parsed.id },
+              select: { nodeId: true }
+            });
+            if (condition) {
+              await addToNodeLinkedField8(prisma71, condition.nodeId, "linkedConditionIds", [parsed.id]);
+            }
+          } else if (capacityType === "table") {
+            const table = await prisma71.treeBranchLeafNodeTable.findUnique({
+              where: { id: parsed.id },
+              select: { nodeId: true }
+            });
+            if (table) {
+              await addToNodeLinkedField8(prisma71, table.nodeId, "linkedTableIds", [parsed.id]);
+            }
+          }
+        } catch (e) {
+          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ bidirectionnelle:`, e.message);
+        }
+      }
+    }
+    return {
+      variableId: newVariable.id,
+      exposedKey: newExposedKey,
+      capacityType,
+      sourceRef: newSourceRef,
+      success: true,
+      displayNodeId: finalNodeId2
+      // ðŸ”‘ IMPORTANT: Retourner l'ID du display node crÃ©Ã©!
+    };
+  } catch (error) {
+    console.error(`\xE2\x9D\u0152 Erreur lors de la copie de la variable:`, error);
+    return {
+      variableId: "",
+      exposedKey: "",
+      capacityType: null,
+      sourceRef: null,
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      displayNodeId: void 0
+      // Pas de display node en cas d'erreur
+    };
+  }
+}
+async function addToNodeLinkedField8(prisma71, nodeId, field, idsToAdd) {
+  if (!idsToAdd || idsToAdd.length === 0) return;
+  const node = await prisma71.treeBranchLeafNode.findUnique({
+    where: { id: nodeId },
+    select: { [field]: true }
+  });
+  if (!node) {
+    console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F N\xC5\u201Cud ${nodeId} introuvable pour MAJ ${field}`);
+    return;
+  }
+  const current = node[field] || [];
+  const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
+  await prisma71.treeBranchLeafNode.update({
+    where: { id: nodeId },
+    data: { [field]: { set: newIds } }
+  });
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/shared/shared-reference-helpers.ts
+async function applySharedReferencesFromOriginalInternal2(params) {
+  const { prisma: prisma71, nodeId, authCtx } = params;
+  const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
+  const copyRoot = await prisma71.treeBranchLeafNode.findFirst({
+    where: { id: nodeId },
+    include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
+  });
+  if (!copyRoot) throw new Error("N\u0153ud introuvable");
+  if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
+    throw new Error("Acc\xE8s non autoris\xE9");
+  }
+  const all = await prisma71.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
+  const nodeVariableIdByNodeId = /* @__PURE__ */ new Map();
+  if (all.length > 0) {
+    const nodeVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
+      where: { nodeId: { in: all.map((n) => n.id) } },
+      select: { nodeId: true, id: true }
+    });
+    for (const variable of nodeVariables) {
+      if (variable.nodeId && variable.id) {
+        nodeVariableIdByNodeId.set(variable.nodeId, variable.id);
+      }
+    }
+  }
+  const byId = new Map(all.map((n) => [n.id, n]));
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const n of all) {
+    if (!n.parentId) continue;
+    const arr = childrenByParent.get(n.parentId) || [];
+    arr.push(n.id);
+    childrenByParent.set(n.parentId, arr);
+  }
+  const collectedCopyIds = /* @__PURE__ */ new Set();
+  const queue = [copyRoot.id];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (collectedCopyIds.has(cur)) continue;
+    collectedCopyIds.add(cur);
+    for (const c of childrenByParent.get(cur) || []) queue.push(c);
+  }
+  const originalToCopy = /* @__PURE__ */ new Map();
+  for (const id of collectedCopyIds) {
+    const n = byId.get(id);
+    if (!n) continue;
+    const meta = n.metadata || {};
+    const origId = String(meta.copiedFromNodeId || "");
+    if (origId) originalToCopy.set(origId, n.id);
+  }
+  if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
+  const originalIds = Array.from(originalToCopy.keys());
+  const originals = await prisma71.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
+  const allRefIds = /* @__PURE__ */ new Set();
+  for (const orig of originals) {
+    if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
+    if (Array.isArray(orig.sharedReferenceIds)) orig.sharedReferenceIds.forEach((id) => id && allRefIds.add(id));
+  }
+  const metaRoot = copyRoot.metadata || {};
+  let chosenSuffix = typeof metaRoot.copySuffix === "number" ? metaRoot.copySuffix : null;
+  if (!chosenSuffix) {
+    let maxSuffix = 0;
+    const SUFFIX_RE = /^(shared-ref-[A-Za-z0-9_\-]+)-(\d+)$/;
+    for (const n of all) {
+      const m = typeof n.id === "string" ? n.id.match(SUFFIX_RE) : null;
+      if (m) {
+        const num = Number(m[2]);
+        if (!Number.isNaN(num)) maxSuffix = Math.max(maxSuffix, num);
+      }
+    }
+    chosenSuffix = maxSuffix + 1 || 1;
+    await prisma71.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
+  }
+  const refCopyIdByOriginal = /* @__PURE__ */ new Map();
+  const desiredIds = Array.from(allRefIds).map((id) => `${id}-${chosenSuffix}`);
+  const existingRefCopies = desiredIds.length > 0 ? await prisma71.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
+  const existingSet = new Set(existingRefCopies.map((n) => n.id));
+  const ensureRefCopy = async (origRefId) => {
+    const desiredRootId = `${origRefId}-${chosenSuffix}`;
+    if (existingSet.has(desiredRootId)) {
+      refCopyIdByOriginal.set(origRefId, desiredRootId);
+      return desiredRootId;
+    }
+    const subtreeIds = [];
+    const q = [origRefId];
+    const seen = /* @__PURE__ */ new Set();
+    while (q.length) {
+      const cur = q.shift();
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      subtreeIds.push(cur);
+      const kids = childrenByParent.get(cur) || [];
+      for (const cid of kids) q.push(cid);
+    }
+    const origSubtree = subtreeIds.map((id) => byId.get(id)).filter(Boolean);
+    const desired = new Set(subtreeIds.map((id) => `${id}-${chosenSuffix}`));
+    if (desired.size > 0) {
+      const already = await prisma71.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
+      for (const n of already) desired.delete(n.id);
+    }
+    const idMap = /* @__PURE__ */ new Map();
+    for (const id of subtreeIds) idMap.set(id, `${id}-${chosenSuffix}`);
+    for (const orig of origSubtree) {
+      const newId = idMap.get(orig.id);
+      if (!desired.has(newId)) continue;
+      const newParentId = orig.parentId ? idMap.get(orig.parentId) ?? null : null;
+      const toCreate = {
+        id: newId,
+        treeId: copyRoot.treeId,
+        type: orig.type,
+        subType: orig.subType,
+        fieldType: orig.fieldType ?? "TEXT",
+        label: orig.label,
+        description: orig.description,
+        parentId: newParentId,
+        order: orig.order ?? 9999,
+        isVisible: orig.isVisible ?? true,
+        isActive: orig.isActive ?? true,
+        isRequired: orig.isRequired ?? false,
+        isMultiple: orig.isMultiple ?? false,
+        hasData: false,
+        hasFormula: false,
+        hasCondition: false,
+        hasTable: false,
+        hasAPI: false,
+        hasLink: false,
+        hasMarkers: false,
+        isSharedReference: orig.id === origRefId ? true : orig.isSharedReference ?? false,
+        sharedReferenceId: null,
+        sharedReferenceIds: [],
+        sharedReferenceName: orig.sharedReferenceName ?? orig.label ?? null,
+        sharedReferenceDescription: orig.sharedReferenceDescription ?? orig.description ?? null,
+        linkedFormulaIds: Array.isArray(orig.linkedFormulaIds) ? orig.linkedFormulaIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
+        linkedConditionIds: Array.isArray(orig.linkedConditionIds) ? orig.linkedConditionIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
+        linkedTableIds: Array.isArray(orig.linkedTableIds) ? orig.linkedTableIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
+        linkedVariableIds: Array.isArray(orig.linkedVariableIds) ? orig.linkedVariableIds.map((id) => `${id}-${chosenSuffix}`).filter(Boolean) : [],
+        metadata: { ...orig.metadata || {}, copiedFromNodeId: orig.id },
+        updatedAt: /* @__PURE__ */ new Date()
+      };
+      await prisma71.treeBranchLeafNode.create({ data: toCreate });
+      const sourceVariableIds = /* @__PURE__ */ new Set();
+      if (Array.isArray(orig.linkedVariableIds)) {
+        for (const rawId of orig.linkedVariableIds) {
+          if (typeof rawId === "string") {
+            const normalized = rawId.trim();
+            if (normalized) {
+              sourceVariableIds.add(normalized);
+            }
+          }
+        }
+      }
+      const directVarId = nodeVariableIdByNodeId.get(orig.id);
+      if (directVarId) {
+        sourceVariableIds.add(directVarId);
+      }
+      if (sourceVariableIds.size > 0) {
+        const variableCopyCache = /* @__PURE__ */ new Map();
+        const formulaIdMap = /* @__PURE__ */ new Map();
+        const conditionIdMap = /* @__PURE__ */ new Map();
+        const tableIdMap2 = /* @__PURE__ */ new Map();
+        const globalNodeIdMap = new Map([...originalToCopy, ...idMap]);
+        for (const originalVarId of sourceVariableIds) {
+          try {
+            const copyResult = await copyVariableWithCapacities2(
+              originalVarId,
+              chosenSuffix,
+              newId,
+              prisma71,
+              {
+                formulaIdMap,
+                conditionIdMap,
+                tableIdMap: tableIdMap2,
+                nodeIdMap: globalNodeIdMap,
+                variableCopyCache,
+                autoCreateDisplayNode: true
+              }
+            );
+            if (!copyResult.success) {
+              console.warn(`\u26A0\uFE0F [SHARED-REF] \xC9chec copie variable ${originalVarId}: ${copyResult.error}`);
+            }
+          } catch (e) {
+            console.warn(`\u26A0\uFE0F [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
+          }
+        }
+      }
+    }
+    refCopyIdByOriginal.set(origRefId, desiredRootId);
+    return desiredRootId;
+  };
+  for (const rid of allRefIds) await ensureRefCopy(rid);
+  const updates = [];
+  let applied = 0;
+  for (const orig of originals) {
+    const copyId = originalToCopy.get(orig.id);
+    const origMultiple = Array.isArray(orig.sharedReferenceIds) ? orig.sharedReferenceIds.filter(Boolean) : [];
+    const origSingle = orig.sharedReferenceId ?? null;
+    const mappedMultiple = origMultiple.map((id) => refCopyIdByOriginal.get(id) || `${id}-${chosenSuffix}`);
+    const mappedSingle = origSingle ? refCopyIdByOriginal.get(origSingle) || `${origSingle}-${chosenSuffix}` : null;
+    const finalArray = mappedMultiple.length > 0 ? mappedMultiple : mappedSingle ? [mappedSingle] : [];
+    const finalSingle = finalArray.length > 0 ? finalArray[0] : null;
+    updates.push(prisma71.treeBranchLeafNode.update({
+      where: { id: copyId },
+      data: {
+        sharedReferenceId: finalSingle,
+        sharedReferenceIds: finalArray,
+        sharedReferenceName: orig.sharedReferenceName ?? null,
+        sharedReferenceDescription: orig.sharedReferenceDescription ?? null,
+        isSharedReference: false,
+        hasData: orig.hasData,
+        updatedAt: /* @__PURE__ */ new Date()
+      }
+    }));
+    applied++;
+  }
+  await prisma71.$transaction(updates);
+  return { success: true, applied, suffix: chosenSuffix };
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-values-service.ts
+async function resetCalculatedValuesAfterCopy(prisma71, copiedNodeIds) {
+  const nodesWithCapacities = await prisma71.treeBranchLeafNode.findMany({
+    where: {
+      id: { in: copiedNodeIds },
+      OR: [
+        { hasFormula: true },
+        { hasCondition: true },
+        { hasTable: true }
+      ]
+    },
+    select: {
+      id: true,
+      label: true,
+      calculatedValue: true,
+      hasFormula: true,
+      hasCondition: true,
+      hasTable: true
+    }
+  });
+  for (const node of nodesWithCapacities) {
+  }
+  const result = await prisma71.treeBranchLeafNode.updateMany({
+    where: {
+      id: { in: copiedNodeIds },
+      OR: [
+        { hasFormula: true },
+        { hasCondition: true },
+        { hasTable: true }
+      ]
+    },
+    data: {
+      calculatedValue: null
+    }
+  });
+  return result.count;
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/strict-isolation-service.ts
+async function enforceStrictIsolation(prisma71, copiedNodeIds) {
+  const result = {
+    isolatedNodes: [],
+    errors: []
+  };
+  for (const nodeId of copiedNodeIds) {
+    try {
+      const changes = [];
+      const node = await prisma71.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        include: {
+          TreeBranchLeafNodeFormula: true,
+          TreeBranchLeafNodeCondition: true,
+          TreeBranchLeafNodeTable: true,
+          TreeBranchLeafNodeVariable: true
+        }
+      });
+      if (!node) {
+        result.errors.push({ nodeId, error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
+        continue;
+      }
+      if (node.hasFormula || node.hasCondition || node.hasTable) {
+        if (node.calculatedValue !== null) {
+          await prisma71.treeBranchLeafNode.update({
+            where: { id: nodeId },
+            data: { calculatedValue: null }
+          });
+          changes.push(`calculatedValue: ${node.calculatedValue} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 null`);
+        }
+      }
+      if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
+        await prisma71.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: { hasFormula: false }
+        });
+        changes.push("hasFormula: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune formule trouv\xC3\u0192\xC2\xA9e)");
+      }
+      if (node.hasCondition && node.TreeBranchLeafNodeCondition.length === 0) {
+        await prisma71.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: { hasCondition: false }
+        });
+        changes.push("hasCondition: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune condition trouv\xC3\u0192\xC2\xA9e)");
+      }
+      if (node.hasTable && node.TreeBranchLeafNodeTable.length === 0) {
+        await prisma71.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: { hasTable: false }
+        });
+        changes.push("hasTable: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune table trouv\xC3\u0192\xC2\xA9e)");
+      }
+      const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
+      const updatedMetadata = {
+        ...currentMetadata,
+        strictlyIsolated: true,
+        isolatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        calculatedValueReset: true,
+        independentCalculation: true
+      };
+      await prisma71.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: { metadata: updatedMetadata }
+      });
+      changes.push("metadata: marqu\xC3\u0192\xC2\xA9 comme strictement isol\xC3\u0192\xC2\xA9");
+      result.isolatedNodes.push({
+        nodeId: node.id,
+        label: node.label,
+        changes
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      result.errors.push({ nodeId, error: errorMsg });
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
+    }
+  }
+  return result;
+}
+async function verifyIsolation(prisma71, copiedNodeIds) {
+  for (const nodeId of copiedNodeIds) {
+    const node = await prisma71.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true,
+        hasFormula: true,
+        hasCondition: true,
+        hasTable: true,
+        metadata: true
+      }
+    });
+    if (!node) continue;
+    const metadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
+    const isIsolated = metadata.strictlyIsolated === true;
+    const hasCapacity = node.hasFormula || node.hasCondition || node.hasTable;
+    if (hasCapacity && node.calculatedValue !== null) {
+    }
+    if (!isIsolated) {
+    }
+  }
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-independent-calculation.ts
+async function forceIndependentCalculation(prisma71, copiedNodeIds) {
+  for (const nodeId of copiedNodeIds) {
+    try {
+      const node = await prisma71.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        include: {
+          TreeBranchLeafNodeFormula: true,
+          TreeBranchLeafNodeCondition: true,
+          TreeBranchLeafNodeTable: true,
+          TreeBranchLeafNodeVariable: true
+        }
+      });
+      if (!node) continue;
+      if (node.hasFormula || node.hasCondition || node.hasTable) {
+        const currentMetadata = node.metadata && typeof node.metadata === "object" ? node.metadata : {};
+        const updatedMetadata = {
+          ...currentMetadata,
+          lastForceRecalc: (/* @__PURE__ */ new Date()).toISOString(),
+          forceIndependentCalc: true,
+          // Marquer comme devant ÃƒÂªtre recalculÃƒÂ© cÃƒÂ´tÃƒÂ© frontend
+          requiresFreshCalculation: true,
+          calculationInvalidated: Date.now()
+        };
+        await prisma71.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: {
+            calculatedValue: null,
+            metadata: updatedMetadata
+          }
+        });
+      } else if (!node.hasFormula && !node.hasCondition && !node.hasTable) {
+        if (node.calculatedValue !== null) {
+          await prisma71.treeBranchLeafNode.update({
+            where: { id: nodeId },
+            data: { calculatedValue: null }
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [FORCE-CALC] Erreur pour ${nodeId}:`, error);
+    }
+  }
+}
+async function createRecalculationTriggers(prisma71, copiedNodeIds) {
+  const triggerTimestamp = Date.now();
+  for (const nodeId of copiedNodeIds) {
+    try {
+      const currentMetadata = await prisma71.treeBranchLeafNode.findUnique({
+        where: { id: nodeId },
+        select: { metadata: true, label: true }
+      });
+      if (!currentMetadata) continue;
+      const metadata = currentMetadata.metadata && typeof currentMetadata.metadata === "object" ? currentMetadata.metadata : {};
+      const updatedMetadata = {
+        ...metadata,
+        // Marqueurs pour forcer le recalcul cÃƒÂ´tÃƒÂ© frontend
+        recalcTrigger: triggerTimestamp,
+        mustRecalculate: true,
+        independentNode: true,
+        noFallbackToOriginal: true
+      };
+      await prisma71.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: { metadata: updatedMetadata }
+      });
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TRIGGERS] Erreur pour ${nodeId}:`, error);
+    }
+  }
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/complete-duplication-fix.ts
+async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, suffix = "-1") {
+  const result = {
+    nodeId: copiedNodeId,
+    nodeLabel: null,
+    capacitiesFixed: {
+      formulas: 0,
+      conditions: 0,
+      tables: 0,
+      lookups: 0
+    },
+    fieldConfigUpdated: false,
+    calculatedValueReset: false
+  };
+  const [originalNode, copiedNode] = await Promise.all([
+    prisma71.treeBranchLeafNode.findUnique({
+      where: { id: originalNodeId },
+      include: {
+        TreeBranchLeafNodeFormula: true,
+        TreeBranchLeafNodeCondition: true,
+        TreeBranchLeafNodeTable: {
+          include: {
+            tableColumns: true,
+            tableRows: true
+          }
+        }
+      }
+    }),
+    prisma71.treeBranchLeafNode.findUnique({
+      where: { id: copiedNodeId }
+    })
+  ]);
+  if (!originalNode) {
+    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud original ${originalNodeId} non trouv\xC3\u0192\xC2\xA9`);
+  }
+  if (!copiedNode) {
+    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
+  }
+  result.nodeLabel = copiedNode.label;
+  const formulaIdMap = /* @__PURE__ */ new Map();
+  const suffixNum = parseInt(suffix.replace("-", "")) || 1;
+  const nodeIdMap = /* @__PURE__ */ new Map();
+  const treeId = copiedNode.treeId;
+  if (treeId) {
+    const allNodesInTree = await prisma71.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true }
+    });
+    for (const node of allNodesInTree) {
+      if (node.id.match(/-\d+$/)) {
+        const baseId = node.id.replace(/-\d+$/, "");
+        if (!nodeIdMap.has(baseId)) {
+          nodeIdMap.set(baseId, node.id);
+        }
+      }
+    }
+  }
+  for (const formula of originalNode.TreeBranchLeafNodeFormula) {
+    try {
+      const formulaResult = await copyFormulaCapacity(
+        formula.id,
+        copiedNodeId,
+        suffixNum,
+        prisma71,
+        { formulaIdMap, nodeIdMap }
+      );
+      if (formulaResult.success) {
+        formulaIdMap.set(formula.id, formulaResult.newFormulaId);
+        result.capacitiesFixed.formulas++;
+      } else {
+        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule: ${formula.id}`);
+      }
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${formula.id}:`, error);
+    }
+  }
+  for (const condition of originalNode.TreeBranchLeafNodeCondition) {
+    const newConditionId = `${condition.id}${suffix}`;
+    const existingCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+      where: { id: newConditionId }
+    });
+    if (!existingCondition) {
+      const adaptedConditionSet = adaptReferencesForCopiedNode(condition.conditionSet, suffix);
+      await prisma71.treeBranchLeafNodeCondition.create({
+        data: {
+          id: newConditionId,
+          nodeId: copiedNodeId,
+          organizationId: condition.organizationId,
+          name: condition.name ? `${condition.name}${suffix}` : condition.name,
+          conditionSet: adaptedConditionSet,
+          description: condition.description,
+          isDefault: condition.isDefault,
+          order: condition.order
+        }
+      });
+      result.capacitiesFixed.conditions++;
+    }
+  }
+  for (const table of originalNode.TreeBranchLeafNodeTable) {
+    const newTableId = `${table.id}${suffix}`;
+    const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+      where: { id: newTableId }
+    });
+    if (!existingTable) {
+      await prisma71.treeBranchLeafNodeTable.create({
+        data: {
+          id: newTableId,
+          nodeId: copiedNodeId,
+          organizationId: table.organizationId,
+          name: table.name ? `${table.name}${suffix}` : table.name,
+          description: table.description,
+          type: table.type,
+          rowCount: table.rowCount,
+          columnCount: table.columnCount,
+          // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer comparisonColumn et UUIDs si c'est du texte
+          meta: (() => {
+            if (!table.meta) return table.meta;
+            try {
+              const metaObj = typeof table.meta === "string" ? JSON.parse(table.meta) : JSON.parse(JSON.stringify(table.meta));
+              const suffixNum2 = parseInt(suffix.replace("-", "")) || 1;
+              if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum2}`)) {
+                metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum2}`;
+              }
+              if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                  metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                }
+              }
+              return metaObj;
+            } catch {
+              return table.meta;
+            }
+          })(),
+          isDefault: table.isDefault,
+          order: table.order,
+          lookupDisplayColumns: table.lookupDisplayColumns,
+          lookupSelectColumn: table.lookupSelectColumn
+        }
+      });
+      await Promise.all([
+        ...table.tableColumns.map(
+          (col) => prisma71.treeBranchLeafNodeTableColumn.create({
+            data: {
+              id: `${col.id}${suffix}`,
+              tableId: newTableId,
+              columnIndex: col.columnIndex,
+              // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+              name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
+              type: col.type,
+              width: col.width,
+              format: col.format,
+              metadata: col.metadata
+            }
+          })
+        ),
+        ...table.tableRows.map(
+          (row) => prisma71.treeBranchLeafNodeTableRow.create({
+            data: {
+              id: `${row.id}${suffix}`,
+              tableId: newTableId,
+              rowIndex: row.rowIndex,
+              cells: row.cells
+            }
+          })
+        )
+      ]);
+      result.capacitiesFixed.tables++;
+    }
+  }
+  await fixAssociatedLookups(prisma71, originalNode, copiedNode, suffix);
+  result.capacitiesFixed.lookups = 1;
+  if (copiedNode.fieldConfig) {
+    const newFieldConfig = updateFieldConfigReferences(copiedNode.fieldConfig, suffix);
+    if (newFieldConfig !== copiedNode.fieldConfig) {
+      await prisma71.treeBranchLeafNode.update({
+        where: { id: copiedNodeId },
+        data: { fieldConfig: newFieldConfig }
+      });
+      result.fieldConfigUpdated = true;
+    }
+  }
+  await prisma71.treeBranchLeafNode.update({
+    where: { id: copiedNodeId },
+    data: {
+      hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
+      hasCondition: originalNode.TreeBranchLeafNodeCondition.length > 0,
+      hasTable: originalNode.TreeBranchLeafNodeTable.length > 0,
+      calculatedValue: null,
+      calculatedAt: null,
+      calculatedBy: null
+    }
+  });
+  result.calculatedValueReset = true;
+  return result;
+}
+async function fixAssociatedLookups(prisma71, originalNode, copiedNode, suffix) {
+  const measureNodes = await prisma71.treeBranchLeafNode.findMany({
+    where: {
+      AND: [
+        { label: { contains: "Mesure" } },
+        { label: { endsWith: suffix } },
+        { treeId: copiedNode.treeId }
+      ]
+    },
+    include: {
+      TreeBranchLeafNodeTable: {
+        include: {
+          tableColumns: true,
+          tableRows: true
+        }
+      }
+    }
+  });
+  for (const originalTable of originalNode.TreeBranchLeafNodeTable) {
+    const lookupName = `Lookup ${originalNode.label}${suffix}`;
+    for (const measureNode of measureNodes) {
+      const lookupTable = measureNode.TreeBranchLeafNodeTable.find(
+        (t) => t.name.includes("Lookup") && (t.name.includes(originalNode.label) || t.name === lookupName)
+      );
+      if (lookupTable && lookupTable.tableRows.length === 0) {
+        await Promise.all([
+          prisma71.treeBranchLeafNodeTableColumn.deleteMany({
+            where: { tableId: lookupTable.id }
+          }),
+          prisma71.treeBranchLeafNodeTableRow.deleteMany({
+            where: { tableId: lookupTable.id }
+          })
+        ]);
+        await Promise.all([
+          ...originalTable.tableColumns.map(
+            (col) => prisma71.treeBranchLeafNodeTableColumn.create({
+              data: {
+                id: `${col.id}-lookup${suffix}`,
+                tableId: lookupTable.id,
+                columnIndex: col.columnIndex,
+                name: col.name,
+                type: col.type,
+                width: col.width,
+                format: col.format,
+                metadata: col.metadata
+              }
+            })
+          ),
+          ...originalTable.tableRows.map(
+            (row) => prisma71.treeBranchLeafNodeTableRow.create({
+              data: {
+                id: `${row.id}-lookup${suffix}`,
+                tableId: lookupTable.id,
+                rowIndex: row.rowIndex,
+                cells: row.cells
+              }
+            })
+          )
+        ]);
+        await prisma71.treeBranchLeafNodeTable.update({
+          where: { id: lookupTable.id },
+          data: {
+            rowCount: originalTable.rowCount,
+            columnCount: originalTable.columnCount,
+            lookupSelectColumn: originalTable.lookupSelectColumn || "Orientation",
+            lookupDisplayColumns: originalTable.lookupDisplayColumns.length > 0 ? originalTable.lookupDisplayColumns : ["Orientation"]
+          }
+        });
+      }
+    }
+  }
+}
+function adaptReferencesForCopiedNode(data, suffix) {
+  if (!data) return data;
+  const adaptString = (str) => {
+    return str.replace(/@value\.([A-Za-z0-9_:-]+)/g, (match, nodeId) => {
+      if (nodeId.includes("shared-ref") || nodeId.endsWith(suffix.replace("-", ""))) {
+        return match;
+      }
+      return `@value.${nodeId}${suffix}`;
+    }).replace(/node-formula:([a-f0-9-]{36})/gi, (match, formulaId) => {
+      return `node-formula:${formulaId}${suffix}`;
+    });
+  };
+  if (Array.isArray(data)) {
+    return data.map(
+      (item) => typeof item === "string" ? adaptString(item) : item
+    );
+  }
+  if (typeof data === "string") {
+    return adaptString(data);
+  }
+  try {
+    const str = JSON.stringify(data);
+    const adapted = adaptString(str);
+    return JSON.parse(adapted);
+  } catch {
+    return data;
+  }
+}
+function updateFieldConfigReferences(fieldConfig, suffix) {
+  if (!fieldConfig || typeof fieldConfig !== "object") return fieldConfig;
+  const config = { ...fieldConfig };
+  if (config.lookupTableId) {
+    config.lookupTableId = `${config.lookupTableId}${suffix}`;
+  }
+  if (config.lookupNodeId) {
+    config.lookupNodeId = `${config.lookupNodeId}${suffix}`;
+  }
+  return config;
+}
+async function fixAllCompleteDuplications(prisma71, repeaterNodeId) {
+  const report = {
+    totalNodesProcessed: 0,
+    nodesFixed: [],
+    errors: []
+  };
+  try {
+    const whereClause = {
+      AND: [
+        { label: { endsWith: "-1" } }
+      ]
+    };
+    if (repeaterNodeId) {
+      whereClause.AND.push({
+        metadata: {
+          path: ["duplicatedFromRepeater"],
+          equals: repeaterNodeId
+        }
+      });
+    }
+    const copiedNodes = await prisma71.treeBranchLeafNode.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        label: true,
+        metadata: true
+      }
+    });
+    for (const node of copiedNodes) {
+      report.totalNodesProcessed++;
+      try {
+        let originalNodeId = null;
+        if (node.metadata && typeof node.metadata === "object") {
+          const meta = node.metadata;
+          originalNodeId = meta.sourceTemplateId || meta.copiedFromNodeId || null;
+        }
+        if (!originalNodeId && node.label) {
+          const originalLabel = node.label.replace("-1", "");
+          const originalNode = await prisma71.treeBranchLeafNode.findFirst({
+            where: {
+              label: originalLabel,
+              id: { not: node.id }
+            },
+            select: { id: true }
+          });
+          if (originalNode) {
+            originalNodeId = originalNode.id;
+          }
+        }
+        if (!originalNodeId) {
+          report.errors.push({
+            nodeId: node.id,
+            error: "Impossible de trouver le n\xC3\u2026\xE2\u20AC\u0153ud original"
+          });
+          continue;
+        }
+        const result = await fixCompleteDuplication(prisma71, originalNodeId, node.id, "-1");
+        report.nodesFixed.push(result);
+      } catch (error) {
+        report.errors.push({
+          nodeId: node.id,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+  } catch (error) {
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [COMPLETE-DUPLICATION-FIX] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
+  }
+  return report;
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-recalculation-service.ts
+async function forceNodeRecalculationWithOwnData(prisma71, copiedNodeId) {
+  const result = {
+    nodeId: copiedNodeId,
+    nodeLabel: null,
+    oldCalculatedValue: null,
+    newCalculatedValue: null,
+    recalculationForced: false,
+    referencesUpdated: []
+  };
+  const copiedNode = await prisma71.treeBranchLeafNode.findUnique({
+    where: { id: copiedNodeId },
+    include: {
+      TreeBranchLeafNodeFormula: true,
+      TreeBranchLeafNodeCondition: true,
+      TreeBranchLeafNodeTable: {
+        include: {
+          tableColumns: true,
+          tableRows: true
+        }
+      }
+    }
+  });
+  if (!copiedNode) {
+    throw new Error(`N\xC3\u2026\xE2\u20AC\u0153ud copi\xC3\u0192\xC2\xA9 ${copiedNodeId} non trouv\xC3\u0192\xC2\xA9`);
+  }
+  result.nodeLabel = copiedNode.label;
+  result.oldCalculatedValue = copiedNode.calculatedValue;
+  for (const formula of copiedNode.TreeBranchLeafNodeFormula) {
+    if (formula.tokens) {
+      let tokensStr = JSON.stringify(formula.tokens);
+      let updated = false;
+      const updatedTokensStr = tokensStr.replace(
+        /@value\.([A-Za-z0-9_:-]+)(?!-1)/g,
+        (match, nodeId) => {
+          if (nodeId.includes("shared-ref") || nodeId.endsWith("1")) {
+            return match;
+          }
+          updated = true;
+          result.referencesUpdated.push(`Formula ${formula.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
+          return `@value.${nodeId}-1`;
+        }
+      );
+      if (updated) {
+        const newTokens = JSON.parse(updatedTokensStr);
+        await prisma71.treeBranchLeafNodeFormula.update({
+          where: { id: formula.id },
+          data: { tokens: newTokens }
+        });
+      }
+    }
+  }
+  for (const condition of copiedNode.TreeBranchLeafNodeCondition) {
+    if (condition.conditionSet) {
+      let conditionStr = JSON.stringify(condition.conditionSet);
+      let updated = false;
+      const updatedConditionStr = conditionStr.replace(
+        /@value\.([A-Za-z0-9_:-]+)(?!-1)/g,
+        (match, nodeId) => {
+          if (nodeId.includes("shared-ref") || nodeId.endsWith("1")) {
+            return match;
+          }
+          updated = true;
+          result.referencesUpdated.push(`Condition ${condition.name}: ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 ${nodeId}-1`);
+          return `@value.${nodeId}-1`;
+        }
+      );
+      if (updated) {
+        const newConditionSet = JSON.parse(updatedConditionStr);
+        await prisma71.treeBranchLeafNodeCondition.update({
+          where: { id: condition.id },
+          data: { conditionSet: newConditionSet }
+        });
+      }
+    }
+  }
+  const forceRecalcMetadata = {
+    ...copiedNode.metadata && typeof copiedNode.metadata === "object" ? copiedNode.metadata : {},
+    forceRecalculation: true,
+    lastForceRecalc: (/* @__PURE__ */ new Date()).toISOString(),
+    independentCalculation: true,
+    noFallbackToOriginal: true,
+    recalculationReason: "Duplication independence enforcement"
+  };
+  await prisma71.treeBranchLeafNode.update({
+    where: { id: copiedNodeId },
+    data: {
+      calculatedValue: null,
+      calculatedAt: null,
+      calculatedBy: null,
+      metadata: forceRecalcMetadata
+    }
+  });
+  result.recalculationForced = true;
+  result.newCalculatedValue = null;
+  return result;
+}
+async function forceAllNodesRecalculationWithOwnData(prisma71, repeaterNodeId) {
+  const report = {
+    totalNodesProcessed: 0,
+    nodesRecalculated: [],
+    errors: []
+  };
+  try {
+    const whereClause = {
+      AND: [
+        { label: { endsWith: "-1" } }
+      ]
+    };
+    if (repeaterNodeId) {
+      whereClause.AND.push({
+        metadata: {
+          path: ["duplicatedFromRepeater"],
+          equals: repeaterNodeId
+        }
+      });
+    }
+    const copiedNodes = await prisma71.treeBranchLeafNode.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        label: true,
+        calculatedValue: true
+      }
+    });
+    for (const node of copiedNodes) {
+      report.totalNodesProcessed++;
+      try {
+        if (node.calculatedValue !== null) {
+          const result = await forceNodeRecalculationWithOwnData(prisma71, node.id);
+          report.nodesRecalculated.push(result);
+        } else {
+        }
+      } catch (error) {
+        report.errors.push({
+          nodeId: node.id,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+  } catch (error) {
+    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [FORCE-RECALC-ALL] Erreur g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9rale:", error);
+  }
+  return report;
+}
+async function blockFallbackToOriginalValues(prisma71, copiedNodeIds) {
+  for (const nodeId of copiedNodeIds) {
+    const node = await prisma71.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: { metadata: true }
+    });
+    if (node) {
+      const antiFactbackMetadata = {
+        ...node.metadata && typeof node.metadata === "object" ? node.metadata : {},
+        blockFallbackToOriginal: true,
+        enforceIndependentCalculation: true,
+        lastAntiFactbackUpdate: (/* @__PURE__ */ new Date()).toISOString(),
+        calculationIsolationLevel: "STRICT"
+      };
+      await prisma71.treeBranchLeafNode.update({
+        where: { id: nodeId },
+        data: {
+          metadata: antiFactbackMetadata,
+          // S'assurer que la valeur est null pour forcer un nouveau calcul
+          calculatedValue: null,
+          calculatedAt: null
+        }
+      });
+    }
+  }
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
+var TableLookupDuplicationService = class {
+  /**
+   * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
+   * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
+   */
+  async duplicateTableLookupSystem(prisma71, originalNodeId, arg) {
+    let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
+    if (!suffixToken) suffixToken = "-1";
+    if (!suffixToken.startsWith("-")) {
+      suffixToken = `-${suffixToken}`;
+    }
+    const normalizedOriginalId = normalizeNodeBase(originalNodeId);
+    const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
+    try {
+      const originalSelectConfigs = await prisma71.treeBranchLeafSelectConfig.findMany({
+        where: { nodeId: originalNodeId }
+      });
+      if (originalSelectConfigs.length === 0) {
+        return;
+      }
+      for (const selectConfig of originalSelectConfigs) {
+        await this.duplicateTableAndSelectConfig(prisma71, selectConfig, copiedNodeId, suffixToken);
+      }
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
+      throw error;
+    }
+  }
+  /**
+   * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
+   */
+  async duplicateTableAndSelectConfig(prisma71, originalSelectConfig, copiedNodeId, suffix) {
+    const originalTableId = originalSelectConfig.tableReference;
+    const copiedTableId = `${originalTableId}${suffix}`;
+    try {
+      const originalTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+        where: { id: originalTableId },
+        include: {
+          tableColumns: true,
+          tableRows: true
+        }
+      });
+      if (!originalTable) {
+        return;
+      }
+      const existingCopiedTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+        where: { id: copiedTableId }
+      });
+      if (!existingCopiedTable) {
+        await prisma71.treeBranchLeafNodeTable.create({
+          data: {
+            id: copiedTableId,
+            nodeId: copiedNodeId,
+            name: originalTable.name + suffix,
+            type: originalTable.type,
+            description: originalTable.description,
+            // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer UUIDs et comparisonColumn
+            meta: (() => {
+              if (!originalTable.meta) return originalTable.meta;
+              try {
+                const metaObj = typeof originalTable.meta === "string" ? JSON.parse(originalTable.meta) : JSON.parse(JSON.stringify(originalTable.meta));
+                const suffixNum = parseInt(suffix.replace("-", "")) || 1;
+                if (metaObj?.lookup?.selectors?.columnFieldId && !metaObj.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.selectors.columnFieldId = `${metaObj.lookup.selectors.columnFieldId}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.selectors?.rowFieldId && !metaObj.lookup.selectors.rowFieldId.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.selectors.rowFieldId = `${metaObj.lookup.selectors.rowFieldId}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.rowSourceOption?.sourceField && !metaObj.lookup.rowSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.rowSourceOption.sourceField = `${metaObj.lookup.rowSourceOption.sourceField}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.columnSourceOption?.sourceField && !metaObj.lookup.columnSourceOption.sourceField.endsWith(`-${suffixNum}`)) {
+                  metaObj.lookup.columnSourceOption.sourceField = `${metaObj.lookup.columnSourceOption.sourceField}-${suffixNum}`;
+                }
+                if (metaObj?.lookup?.rowSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.rowSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    metaObj.lookup.rowSourceOption.comparisonColumn = `${val}${suffix}`;
+                  }
+                }
+                if (metaObj?.lookup?.columnSourceOption?.comparisonColumn) {
+                  const val = metaObj.lookup.columnSourceOption.comparisonColumn;
+                  if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                    metaObj.lookup.columnSourceOption.comparisonColumn = `${val}${suffix}`;
+                  }
+                }
+                if (metaObj?.lookup?.displayColumn) {
+                  if (Array.isArray(metaObj.lookup.displayColumn)) {
+                    metaObj.lookup.displayColumn = metaObj.lookup.displayColumn.map((col) => {
+                      if (col && !/^-?\d+(\.\d+)?$/.test(col.trim()) && !col.endsWith(suffix)) {
+                        return `${col}${suffix}`;
+                      }
+                      return col;
+                    });
+                  } else if (typeof metaObj.lookup.displayColumn === "string") {
+                    const val = metaObj.lookup.displayColumn;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      metaObj.lookup.displayColumn = `${val}${suffix}`;
+                    }
+                  }
+                }
+                if (metaObj?.lookup?.displayRow) {
+                  if (Array.isArray(metaObj.lookup.displayRow)) {
+                    metaObj.lookup.displayRow = metaObj.lookup.displayRow.map((row) => {
+                      if (row && !/^-?\d+(\.\d+)?$/.test(row.trim()) && !row.endsWith(suffix)) {
+                        return `${row}${suffix}`;
+                      }
+                      return row;
+                    });
+                  } else if (typeof metaObj.lookup.displayRow === "string") {
+                    const val = metaObj.lookup.displayRow;
+                    if (!/^-?\d+(\.\d+)?$/.test(val.trim()) && !val.endsWith(suffix)) {
+                      metaObj.lookup.displayRow = `${val}${suffix}`;
+                    }
+                  }
+                }
+                return metaObj;
+              } catch {
+                return originalTable.meta;
+              }
+            })(),
+            organizationId: originalTable.organizationId,
+            rowCount: originalTable.rowCount,
+            columnCount: originalTable.columnCount,
+            lookupDisplayColumns: originalTable.lookupDisplayColumns,
+            lookupSelectColumn: originalTable.lookupSelectColumn,
+            // Duplication des colonnes
+            // Ã°Å¸â€Â¢ COPIE TABLE COLUMN: suffixe seulement pour texte, pas pour nombres
+            tableColumns: {
+              create: originalTable.tableColumns.map((col) => ({
+                columnIndex: col.columnIndex,
+                name: col.name ? /^-?\d+(\.\d+)?$/.test(col.name.trim()) ? col.name : `${col.name}${suffix}` : col.name,
+                type: col.type,
+                width: col.width,
+                format: col.format,
+                metadata: col.metadata
+              }))
+            },
+            // Duplication des lignes
+            tableRows: {
+              create: originalTable.tableRows.map((row) => ({
+                rowIndex: row.rowIndex,
+                cells: row.cells
+              }))
+            }
+          }
+        });
+      } else {
+      }
+      const existingSelectConfig = await prisma71.treeBranchLeafSelectConfig.findFirst({
+        where: {
+          nodeId: copiedNodeId,
+          tableReference: copiedTableId
+        }
+      });
+      if (!existingSelectConfig) {
+        await prisma71.treeBranchLeafSelectConfig.create({
+          data: {
+            nodeId: copiedNodeId,
+            tableReference: copiedTableId,
+            keyColumn: originalSelectConfig.keyColumn,
+            keyRow: originalSelectConfig.keyRow,
+            valueColumn: originalSelectConfig.valueColumn,
+            valueRow: originalSelectConfig.valueRow,
+            displayColumn: originalSelectConfig.displayColumn,
+            displayRow: originalSelectConfig.displayRow,
+            createdAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date()
+          }
+        });
+        try {
+          const node = await prisma71.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
+          const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
+          currentCapabilities.table = currentCapabilities.table || {};
+          currentCapabilities.table.enabled = true;
+          currentCapabilities.table.activeId = copiedTableId;
+          currentCapabilities.table.instances = currentCapabilities.table.instances || {};
+          currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
+          const currentLinked = node?.linkedTableIds || [];
+          const newLinked = Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
+          await prisma71.treeBranchLeafNode.update({
+            where: { id: copiedNodeId },
+            data: {
+              hasTable: true,
+              table_activeId: copiedTableId,
+              table_instances: { set: currentCapabilities.table.instances },
+              table_name: originalTable.name + suffix,
+              table_type: originalTable.type,
+              capabilities: currentCapabilities,
+              linkedTableIds: { set: newLinked }
+            }
+          });
+        } catch (nodeUpdateErr) {
+          console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
+        }
+      } else {
+      }
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur duplication table/config ${originalTableId}:`, error);
+      throw error;
+    }
+  }
+  /**
+   * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
+   */
+  async repairMissingSelectConfigs(prisma71) {
+    try {
+      const copiedNodes = await prisma71.treeBranchLeafNode.findMany({
+        where: {
+          id: {
+            endsWith: "-1"
+          }
+        }
+      });
+      for (const copiedNode of copiedNodes) {
+        const originalNodeId = copiedNode.id.replace("-1", "");
+        const copiedSelectConfigs = await prisma71.treeBranchLeafSelectConfig.findMany({
+          where: { nodeId: copiedNode.id }
+        });
+        if (copiedSelectConfigs.length === 0) {
+          await this.duplicateTableLookupSystem(prisma71, originalNodeId, {
+            copiedNodeId: copiedNode.id,
+            suffixToken: "-1"
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
+      throw error;
+    }
+  }
+};
+var tableLookupDuplicationService = new TableLookupDuplicationService();
+function normalizeNodeBase(value) {
+  return value.replace(/-\d+(?:-\d+)*$/, "");
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
+init_operation_interpreter();
+async function recalculateNodeWithOperationInterpreter(prisma71, nodeId, submissionId) {
+  const result = {
+    nodeId,
+    label: null,
+    hasCapacity: false,
+    capacityType: "none",
+    oldValue: null,
+    newValue: null,
+    recalculationSuccess: false
+  };
+  try {
+    const node = await prisma71.treeBranchLeafNode.findUnique({
+      where: { id: nodeId },
+      select: {
+        id: true,
+        field_label: true,
+        calculatedValue: true,
+        hasFormula: true,
+        hasCondition: true,
+        hasTable: true,
+        linkedFormulaIds: true,
+        linkedConditionIds: true,
+        linkedTableIds: true,
+        TreeBranchLeafNodeFormula: { select: { id: true } },
+        TreeBranchLeafNodeCondition: { select: { id: true } },
+        TreeBranchLeafNodeTable: { select: { id: true } }
+      }
+    });
+    if (!node) {
+      result.error = `N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9`;
+      return result;
+    }
+    result.label = node.field_label;
+    result.oldValue = node.calculatedValue;
+    if (node.TreeBranchLeafNodeFormula?.length > 0) {
+      result.capacityType = "formula";
+      result.hasCapacity = true;
+    } else if (node.TreeBranchLeafNodeCondition?.length > 0) {
+      result.capacityType = "condition";
+      result.hasCapacity = true;
+    } else if (node.TreeBranchLeafNodeTable?.length > 0) {
+      result.capacityType = "table";
+      result.hasCapacity = true;
+    }
+    if (!result.hasCapacity) {
+      return result;
+    }
+    let sourceRef = "";
+    if (result.capacityType === "formula" && node.linkedFormulaIds?.length > 0) {
+      sourceRef = `node-formula:${node.linkedFormulaIds[0]}`;
+    } else if (result.capacityType === "condition" && node.linkedConditionIds?.length > 0) {
+      sourceRef = `condition:${node.linkedConditionIds[0]}`;
+    } else if (result.capacityType === "table" && node.linkedTableIds?.length > 0) {
+      sourceRef = `node-table:${node.linkedTableIds[0]}`;
+    }
+    if (!sourceRef) {
+      result.error = `Impossible de construire sourceRef`;
+      return result;
+    }
+    try {
+      const valuesCache = /* @__PURE__ */ new Map();
+      const interpretResult = await interpretReference(
+        sourceRef,
+        submissionId || "",
+        prisma71,
+        valuesCache,
+        0,
+        /* @__PURE__ */ new Map(),
+        /* @__PURE__ */ new Map()
+      );
+      result.newValue = interpretResult.result;
+      result.recalculationSuccess = true;
+      if (result.newValue && result.newValue !== "null" && result.newValue !== "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6") {
+        await prisma71.treeBranchLeafNode.update({
+          where: { id: nodeId },
+          data: {
+            calculatedValue: result.newValue,
+            calculatedAt: /* @__PURE__ */ new Date(),
+            calculatedBy: `interpreter-${result.capacityType}`
+          }
+        });
+      }
+    } catch (interpretError) {
+      result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
+      console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  ${result.error}`);
+    }
+  } catch (error) {
+    result.error = error instanceof Error ? error.message : String(error);
+    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Erreur: ${result.error}`);
+  }
+  return result;
+}
+async function recalculateAllCopiedNodesWithOperationInterpreter(prisma71, repeaterNodeId, suffixMarker = "-1") {
+  const report = {
+    totalNodes: 0,
+    recalculated: [],
+    errors: []
+  };
+  try {
+    const repeaterChildren = await prisma71.treeBranchLeafNode.findMany({
+      where: {
+        parentId: repeaterNodeId
+      },
+      select: {
+        id: true,
+        field_label: true
+      }
+    });
+    const allDescendants = [];
+    const queue = [...repeaterChildren];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) continue;
+      allDescendants.push(current);
+      const children = await prisma71.treeBranchLeafNode.findMany({
+        where: {
+          parentId: current.id
+        },
+        select: {
+          id: true,
+          field_label: true
+        }
+      });
+      queue.push(...children);
+    }
+    const copiedNodes = allDescendants.filter((node) => node.id.includes(suffixMarker));
+    report.totalNodes = copiedNodes.length;
+    for (const node of copiedNodes) {
+      try {
+        const recalcResult = await recalculateNodeWithOperationInterpreter(
+          prisma71,
+          node.id
+        );
+        report.recalculated.push(recalcResult);
+        if (recalcResult.recalculationSuccess && recalcResult.newValue) {
+        } else if (!recalcResult.recalculationSuccess) {
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        report.errors.push({ nodeId: node.id, error: errorMsg });
+        console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${node.field_label}: ${errorMsg}`);
+      }
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
+    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur globale: ${errorMsg}`);
+  }
+  const successCount = report.recalculated.filter((r) => r.recalculationSuccess).length;
+  return report;
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/repeater-template-sync.ts
+var parseJsonArray2 = (value) => {
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+var extractMetaTemplateIds = (metadata) => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return [];
+  }
+  const meta = metadata;
+  const repeaterMeta = meta.repeater && typeof meta.repeater === "object" ? meta.repeater : void 0;
+  const ids = repeaterMeta?.templateNodeIds;
+  return Array.isArray(ids) ? ids.filter((id) => typeof id === "string" && !!id) : [];
+};
+var buildMetadataPayload = (metadata, templateNodeIds) => {
+  const base = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? { ...metadata } : {};
+  const repeaterMeta = base.repeater && typeof base.repeater === "object" ? { ...base.repeater } : {};
+  repeaterMeta.templateNodeIds = templateNodeIds;
+  base.repeater = repeaterMeta;
+  return base;
+};
+async function syncRepeaterTemplateIds(prisma71, repeaterNodeId, templateNodeIds) {
+  if (!repeaterNodeId || !templateNodeIds.length) {
+    return;
+  }
+  const repeater = await prisma71.treeBranchLeafNode.findUnique({
+    where: { id: repeaterNodeId },
+    select: { repeater_templateNodeIds: true, metadata: true }
+  });
+  if (!repeater) {
+    return;
+  }
+  const columnIds = parseJsonArray2(repeater.repeater_templateNodeIds);
+  const metaIds = extractMetaTemplateIds(repeater.metadata);
+  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
+  const allIds = [...columnIds, ...metaIds].filter((id) => typeof id === "string" && !!id).filter((id) => !hasCopySuffix.test(id));
+  const nextIds = Array.from(new Set(allIds));
+  const columnChanged = columnIds.length !== nextIds.length || columnIds.some((id, idx) => id !== nextIds[idx]);
+  const metadataChanged = metaIds.length !== nextIds.length || metaIds.some((id, idx) => id !== nextIds[idx]);
+  if (!columnChanged && !metadataChanged) {
+    return;
+  }
+  await prisma71.treeBranchLeafNode.update({
+    where: { id: repeaterNodeId },
+    data: {
+      repeater_templateNodeIds: JSON.stringify(nextIds),
+      metadata: buildMetadataPayload(repeater.metadata, nextIds)
+    }
+  });
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
+async function runRepeatExecution(prisma71, req2, execution) {
+  const { repeaterNodeId, scopeId, plan, blueprint } = execution;
+  const authCtx = getAuthCtx(req2);
+  const repeaterNode = await prisma71.treeBranchLeafNode.findUnique({
+    where: { id: repeaterNodeId },
+    include: { TreeBranchLeafTree: true }
+  });
+  if (!repeaterNode) {
+    throw new RepeatOperationError(`Repeater node ${repeaterNodeId} not found.`, 404);
+  }
+  if (!authCtx.isSuperAdmin && authCtx.organizationId && repeaterNode.TreeBranchLeafTree?.organizationId !== authCtx.organizationId) {
+    throw new RepeatOperationError("Access denied for this repeater tree.", 403);
+  }
+  const hasCopySuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-\d+)+$/i;
+  const rawIds = blueprint.templateNodeIds;
+  const templateNodeIds = rawIds.filter((id) => typeof id === "string" && !!id).map((id) => id.replace(/(-\d+)+$/, "")).filter((id) => !hasCopySuffix.test(id));
+  if (rawIds.length !== templateNodeIds.length) {
+    rawIds.forEach((id, idx) => {
+      const cleaned = id.replace(/(-\d+)+$/, "");
+      if (id !== cleaned) {
+      }
+    });
+  }
+  templateNodeIds.forEach((id, idx) => {
+  });
+  if (!templateNodeIds.length) {
+    throw new RepeatOperationError(`Repeater ${repeaterNodeId} does not declare template nodes to duplicate.`, 422);
+  }
+  const templateNodes = await loadTemplateNodesWithFallback(
+    prisma71,
+    templateNodeIds,
+    repeaterNode.treeId,
+    authCtx.organizationId,
+    authCtx.isSuperAdmin
+  );
+  const nodesToDuplicate = templateNodes.filter((node) => node.type !== "section");
+  const sectionNodes = templateNodes.filter((node) => node.type === "section");
+  void sectionNodes;
+  const templateById = new Map(nodesToDuplicate.map((node) => [node.id, node]));
+  const templateIdsForSuffix = Array.from(templateById.keys());
+  const existingMax = await computeTemplateCopySuffixMax(
+    prisma71,
+    repeaterNode.treeId,
+    templateIdsForSuffix
+  );
+  templateIdsForSuffix.forEach((id) => {
+  });
+  const plannedSuffixByTemplate = /* @__PURE__ */ new Map();
+  for (const templateId of templateIdsForSuffix) {
+    const maxSeen = existingMax.get(templateId) ?? 0;
+    plannedSuffixByTemplate.set(templateId, maxSeen + 1);
+  }
+  for (const nodePlan of plan.nodes) {
+    const planned = coerceSuffix(nodePlan.plannedSuffix);
+    const maxSeen = existingMax.get(nodePlan.templateNodeId) ?? 0;
+    const enforcedNext = Math.max(planned ?? 0, maxSeen + 1);
+    plannedSuffixByTemplate.set(nodePlan.templateNodeId, enforcedNext);
+  }
+  const duplicatedSummaries = [];
+  const duplicatedNodeIds = /* @__PURE__ */ new Set();
+  const originalNodeIdByCopyId = /* @__PURE__ */ new Map();
+  const plannedNodeIdToRealNodeId = /* @__PURE__ */ new Map();
+  const globalNodeIdMap = /* @__PURE__ */ new Map();
+  const globalFormulaIdMap = /* @__PURE__ */ new Map();
+  const globalConditionIdMap = /* @__PURE__ */ new Map();
+  const globalTableIdMap = /* @__PURE__ */ new Map();
+  const globalVariableCopyCache = /* @__PURE__ */ new Map();
+  for (const template of nodesToDuplicate) {
+    try {
+      if (!template) continue;
+      const plannedSuffix = plannedSuffixByTemplate.get(template.id);
+      const baseContext = {
+        repeaterNodeId,
+        templateNodeId: template.id,
+        duplicatedFromNodeId: template.id,
+        scopeId,
+        mode: "repeater"
+      };
+      const attemptCopy = async (forcedSuffix) => {
+        const context = forcedSuffix !== void 0 ? { ...baseContext, suffix: forcedSuffix } : { ...baseContext };
+        const options = {
+          preserveSharedReferences: true,
+          repeatContext: context
+        };
+        if (forcedSuffix !== void 0) {
+          options.forcedSuffix = forcedSuffix;
+          options.suffixNum = forcedSuffix;
+        }
+        try {
+          const result = await deepCopyNodeInternal(prisma71, req2, template.id, options);
+          return { result, appliedSuffix: forcedSuffix };
+        } catch (error) {
+          if (forcedSuffix !== void 0 && isUniqueConstraintError(error)) {
+            console.warn("[repeat-executor] Forced suffix already exists, retrying with auto suffix", {
+              templateId: template.id,
+              forcedSuffix
+            });
+            return attemptCopy(void 0);
+          }
+          throw error;
+        }
+      };
+      const { result: copyResult, appliedSuffix } = await attemptCopy(plannedSuffix);
+      const newRootId = copyResult.root.newId;
+      const created = await prisma71.treeBranchLeafNode.findUnique({
+        where: { id: newRootId }
+      });
+      if (!created) {
+        throw new RepeatOperationError(`Node copy failed to materialize for template ${template.id}.`, 500);
+      }
+      const createdMetadata = created.metadata && typeof created.metadata === "object" ? created.metadata : {};
+      const resolvedSuffix = coerceSuffix(createdMetadata.copySuffix) ?? extractSuffixFromId2(created.id) ?? appliedSuffix ?? null;
+      const effectiveSuffix = resolvedSuffix ?? plannedSuffix ?? 1;
+      const updatedMetadata = {
+        ...createdMetadata,
+        sourceTemplateId: template.id,
+        duplicatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        duplicatedFromRepeater: repeaterNodeId,
+        copiedFromNodeId: template.id,
+        copySuffix: effectiveSuffix,
+        repeatScopeId: scopeId
+      };
+      await prisma71.treeBranchLeafNode.update({
+        where: { id: newRootId },
+        data: {
+          metadata: updatedMetadata
+        }
+      });
+      duplicatedSummaries.push({
+        id: created.id,
+        label: created.label,
+        type: created.type,
+        parentId: created.parentId,
+        sourceTemplateId: template.id
+      });
+      duplicatedNodeIds.add(created.id);
+      originalNodeIdByCopyId.set(created.id, template.id);
+      const plannedRootId = `${template.id}-${effectiveSuffix}`;
+      plannedNodeIdToRealNodeId.set(plannedRootId, newRootId);
+      Object.entries(copyResult.idMap || {}).forEach(([oldId, newId]) => {
+        if (!newId) return;
+        duplicatedNodeIds.add(newId);
+        if (oldId) {
+          originalNodeIdByCopyId.set(newId, oldId);
+        }
+        const plannedChildId = `${oldId}-${effectiveSuffix}`;
+        plannedNodeIdToRealNodeId.set(plannedChildId, newId);
+        globalNodeIdMap.set(oldId, newId);
+      });
+      if (copyResult.formulaIdMap) {
+        Object.entries(copyResult.formulaIdMap).forEach(([oldId, newId]) => {
+          if (oldId && newId) globalFormulaIdMap.set(oldId, newId);
+        });
+      }
+      if (copyResult.conditionIdMap) {
+        Object.entries(copyResult.conditionIdMap).forEach(([oldId, newId]) => {
+          if (oldId && newId) globalConditionIdMap.set(oldId, newId);
+        });
+      }
+      if (copyResult.tableIdMap) {
+        Object.entries(copyResult.tableIdMap).forEach(([oldId, newId]) => {
+          if (oldId && newId) globalTableIdMap.set(oldId, newId);
+        });
+      }
+      if (copyResult.displayNodeIds && copyResult.displayNodeIds.length > 0) {
+        copyResult.displayNodeIds.forEach((displayNodeId2) => {
+          duplicatedNodeIds.add(displayNodeId2);
+          const originalDisplayNodeId = displayNodeId2.replace(/-\d+$/, "");
+          originalNodeIdByCopyId.set(displayNodeId2, originalDisplayNodeId);
+        });
+      }
+      try {
+        await applySharedReferencesFromOriginalInternal2({
+          prisma: prisma71,
+          nodeId: newRootId,
+          authCtx
+        });
+      } catch (sharedErr) {
+        console.warn("[repeat-executor] Failed to apply shared references", sharedErr);
+      }
+      try {
+        const selectorOptions = {
+          nodeIdMap: new Map(Object.entries(copyResult.idMap || {})),
+          tableCopyCache: /* @__PURE__ */ new Map(),
+          tableIdMap: new Map(Object.entries(copyResult.tableIdMap || {}))
+        };
+        await copySelectorTablesAfterNodeCopy(
+          prisma71,
+          newRootId,
+          template.id,
+          selectorOptions,
+          effectiveSuffix
+        );
+      } catch (selectorErr) {
+        console.warn("[repeat-executor] Failed to copy selector tables", selectorErr);
+      }
+    } catch (nodeExecErr) {
+      console.error(`[repeat-executor] Error during execution for template ${template?.id || "unknown"}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
+      throw nodeExecErr;
+    }
+  }
+  for (const variablePlan of plan.variables) {
+    try {
+      let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
+      const templateVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
+        where: { id: templateVariableId },
+        select: { displayName: true }
+      });
+      const isLookup = templateVar?.displayName?.includes("Lookup Table");
+      if (isLookup) {
+        continue;
+      }
+      const realTargetNodeId = plannedNodeIdToRealNodeId.get(targetNodeId);
+      if (realTargetNodeId) {
+        targetNodeId = realTargetNodeId;
+      } else {
+        console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F  [REPEAT-EXECUTOR] Aucun mapping trouv\xC3\u0192\xC2\xA9 pour targetNodeId "${targetNodeId}", utilisation directe`);
+      }
+      const variableResult = await copyVariableWithCapacities(
+        templateVariableId,
+        plannedSuffix,
+        targetNodeId,
+        prisma71,
+        {
+          autoCreateDisplayNode: true,
+          isFromRepeaterDuplication: true,
+          // Ã°Å¸â€Â¥ PASSER LES MAPS GLOBALES pour que les capacitÃƒÂ©s utilisent les bons IDs
+          nodeIdMap: globalNodeIdMap,
+          formulaIdMap: globalFormulaIdMap,
+          conditionIdMap: globalConditionIdMap,
+          tableIdMap: globalTableIdMap,
+          variableCopyCache: globalVariableCopyCache,
+          repeatContext: {
+            repeaterNodeId,
+            templateNodeId: targetNodeId.replace(`-${plannedSuffix}`, ""),
+            duplicatedFromNodeId: targetNodeId.replace(`-${plannedSuffix}`, ""),
+            scopeId,
+            mode: "repeater"
+          }
+        }
+      );
+      if (variableResult.success) {
+        if (variableResult.formulaIdMap) {
+          for (const [oldId, newId] of variableResult.formulaIdMap.entries()) {
+            globalFormulaIdMap.set(oldId, newId);
+          }
+        }
+        if (variableResult.conditionIdMap) {
+          for (const [oldId, newId] of variableResult.conditionIdMap.entries()) {
+            globalConditionIdMap.set(oldId, newId);
+          }
+        }
+        if (variableResult.tableIdMap) {
+          for (const [oldId, newId] of variableResult.tableIdMap.entries()) {
+            globalTableIdMap.set(oldId, newId);
+          }
+        }
+      }
+      if (variableResult.success && variableResult.displayNodeId) {
+        const originalDisplayNodeId = variableResult.displayNodeId.replace(/-\d+$/, "");
+        globalNodeIdMap.set(originalDisplayNodeId, variableResult.displayNodeId);
+      }
+    } catch (varErr) {
+      console.error(`[repeat-executor] Erreur lors de la copie de la variable ${variablePlan.templateVariableId}:`, varErr instanceof Error ? varErr.message : String(varErr));
+    }
+  }
+  try {
+    await syncRepeaterTemplateIds(prisma71, repeaterNodeId, templateNodeIds);
+  } catch (syncErr) {
+    console.warn("[repeat-executor] Unable to sync repeater template IDs", syncErr);
+  }
+  if (duplicatedNodeIds.size > 0) {
+    try {
+      const completeDuplicationReport = await fixAllCompleteDuplications(prisma71, repeaterNodeId);
+      for (const nodeId of duplicatedNodeIds) {
+        const originalNodeId = originalNodeIdByCopyId.get(nodeId);
+        if (!originalNodeId) continue;
+        const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
+        if (!suffixToken) continue;
+        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma71, originalNodeId, {
+          copiedNodeId: nodeId,
+          suffixToken
+        });
+      }
+      await reassignCopiedNodesToDuplicatedParents(prisma71, duplicatedNodeIds, originalNodeIdByCopyId);
+      const isolationResult = await enforceStrictIsolation(
+        prisma71,
+        Array.from(duplicatedNodeIds)
+      );
+      await verifyIsolation(prisma71, Array.from(duplicatedNodeIds));
+      const resetCount = await resetCalculatedValuesAfterCopy(
+        prisma71,
+        Array.from(duplicatedNodeIds)
+      );
+      await forceIndependentCalculation(prisma71, Array.from(duplicatedNodeIds));
+      await createRecalculationTriggers(prisma71, Array.from(duplicatedNodeIds));
+      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma71, repeaterNodeId);
+      await blockFallbackToOriginalValues(prisma71, Array.from(duplicatedNodeIds));
+      const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
+        prisma71,
+        repeaterNodeId,
+        "-1"
+      );
+      interpreterRecalcReport.recalculated.forEach((r) => {
+        if (r.hasCapacity && r.newValue) {
+        }
+      });
+    } catch (isolationError) {
+      console.warn("[REPEAT-EXECUTOR] Erreur lors de l'isolation stricte:", isolationError);
+    }
+  }
+  let nodesPayload = [];
+  if (duplicatedNodeIds.size > 0) {
+    const nodes = await prisma71.treeBranchLeafNode.findMany({
+      where: {
+        treeId: repeaterNode.treeId,
+        id: { in: Array.from(duplicatedNodeIds) }
+      }
+    });
+    nodesPayload = nodes.map(buildResponseFromColumns);
+  }
+  return {
+    duplicated: duplicatedSummaries,
+    nodes: nodesPayload,
+    count: duplicatedSummaries.length,
+    debug: {
+      templateNodeIds,
+      nodesToDuplicateIds: nodesToDuplicate.map((n) => n.id),
+      sectionIds: sectionNodes.map((n) => n.id),
+      templateCount: templateNodeIds.length,
+      nodesToDuplicateCount: nodesToDuplicate.length,
+      sectionCount: sectionNodes.length
+    }
+  };
+}
+async function loadTemplateNodesWithFallback(prisma71, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
+  if (!templateNodeIds.length) {
+    throw new RepeatOperationError("Repeater does not declare template nodes to duplicate.", 422);
+  }
+  const scoped = await prisma71.treeBranchLeafNode.findMany({
+    where: {
+      id: { in: templateNodeIds },
+      treeId: repeaterTreeId
+    }
+  });
+  const foundIds = new Set(scoped.map((n) => n.id));
+  const missingIds = templateNodeIds.filter((id) => !foundIds.has(id));
+  let crossTree = [];
+  if (missingIds.length) {
+    crossTree = await prisma71.treeBranchLeafNode.findMany({
+      where: { id: { in: missingIds } },
+      include: {
+        TreeBranchLeafTree: { select: { organizationId: true } }
+      }
+    });
+    if (!crossTree.length) {
+      if (!scoped.length) {
+        throw new RepeatOperationError("No template nodes could be loaded for this repeater.", 404);
+      }
+    }
+    if (!isSuperAdmin2 && organizationId) {
+      const unauthorized = crossTree.find(
+        (node) => node.TreeBranchLeafTree?.organizationId && node.TreeBranchLeafTree.organizationId !== organizationId
+      );
+      if (unauthorized) {
+        throw new RepeatOperationError("Access denied to template library for this repeater.", 403);
+      }
+    }
+  }
+  const merged = [
+    ...scoped,
+    ...crossTree.map(({ TreeBranchLeafTree, ...rest }) => rest)
+  ];
+  if (!merged.length) {
+    throw new RepeatOperationError("No template nodes could be loaded for this repeater.", 404);
+  }
+  return merged;
+}
+function coerceSuffix(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+function extractSuffixFromId2(id) {
+  if (!id) return null;
+  const match = /-(\d+)$/.exec(id);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function deriveCopySuffixToken(originalNodeId, copiedNodeId) {
+  const baseId = normalizeNodeBase2(originalNodeId);
+  if (!copiedNodeId.startsWith(baseId)) {
+    return null;
+  }
+  const remainder = copiedNodeId.slice(baseId.length);
+  if (!remainder.startsWith("-") || remainder.length <= 1) {
+    return null;
+  }
+  return remainder;
+}
+function normalizeNodeBase2(value) {
+  return value.replace(/-\d+(?:-\d+)*$/, "");
+}
+function isUniqueConstraintError(error) {
+  return error instanceof import_client71.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+async function reassignCopiedNodesToDuplicatedParents(prisma71, copiedNodeIds, originalNodeIdByCopyId) {
+  if (!copiedNodeIds.size) {
+    return;
+  }
+  const copyIds = Array.from(copiedNodeIds);
+  const copies = await prisma71.treeBranchLeafNode.findMany({
+    where: { id: { in: copyIds } },
+    select: {
+      id: true,
+      parentId: true,
+      metadata: true
+    }
+  });
+  if (!copies.length) {
+    return;
+  }
+  const originalIds = Array.from(
+    new Set(
+      copies.map((copy) => originalNodeIdByCopyId.get(copy.id) ?? getOriginalNodeIdFromMetadata(copy.metadata)).filter((value) => Boolean(value))
+    )
+  );
+  if (!originalIds.length) {
+    return;
+  }
+  const originalNodes = await prisma71.treeBranchLeafNode.findMany({
+    where: { id: { in: originalIds } },
+    select: { id: true, parentId: true }
+  });
+  const originalParentMap = new Map(originalNodes.map((node) => [node.id, node.parentId]));
+  const parentIdsToCheck = /* @__PURE__ */ new Set();
+  const reassignmentTargets = [];
+  for (const copy of copies) {
+    const originalId = originalNodeIdByCopyId.get(copy.id) ?? getOriginalNodeIdFromMetadata(copy.metadata);
+    if (!originalId) {
+      continue;
+    }
+    const originalParentId = originalParentMap.get(originalId);
+    if (!originalParentId) {
+      continue;
+    }
+    const suffixToken = getCopySuffixToken(copy.id, copy.metadata);
+    if (!suffixToken) {
+      continue;
+    }
+    const sanitizedSuffix = sanitizeSuffixToken(suffixToken);
+    if (!sanitizedSuffix) {
+      continue;
+    }
+    const parentBaseId = normalizeNodeBase2(originalParentId);
+    if (!parentBaseId) {
+      continue;
+    }
+    const desiredParentId = `${parentBaseId}-${sanitizedSuffix}`;
+    if (!desiredParentId || desiredParentId === copy.parentId) {
+      continue;
+    }
+    parentIdsToCheck.add(desiredParentId);
+    reassignmentTargets.push({ nodeId: copy.id, targetParentId: desiredParentId });
+  }
+  if (!reassignmentTargets.length) {
+    return;
+  }
+  const existingParents = await prisma71.treeBranchLeafNode.findMany({
+    where: { id: { in: Array.from(parentIdsToCheck) } },
+    select: { id: true }
+  });
+  const existingParentIds = new Set(existingParents.map((parent) => parent.id));
+  const updates = [];
+  for (const target of reassignmentTargets) {
+    if (!existingParentIds.has(target.targetParentId)) {
+      continue;
+    }
+    updates.push(
+      prisma71.treeBranchLeafNode.update({
+        where: { id: target.nodeId },
+        data: { parentId: target.targetParentId }
+      })
+    );
+  }
+  if (!updates.length) {
+    return;
+  }
+  await prisma71.$transaction(updates);
+}
+function getCopySuffixToken(nodeId, metadata) {
+  const normalizedMetadata = normalizeMetadata(metadata);
+  const rawSuffix = normalizedMetadata?.copySuffix;
+  if (typeof rawSuffix === "number" && Number.isFinite(rawSuffix)) {
+    return String(rawSuffix);
+  }
+  if (typeof rawSuffix === "string" && rawSuffix.trim()) {
+    return rawSuffix.trim();
+  }
+  const parsed = extractSuffixFromId2(nodeId);
+  return parsed !== null ? String(parsed) : null;
+}
+function getOriginalNodeIdFromMetadata(metadata) {
+  const normalizedMetadata = normalizeMetadata(metadata);
+  if (!normalizedMetadata) {
+    return null;
+  }
+  const candidates = ["copiedFromNodeId", "duplicatedFromNodeId", "sourceTemplateId"];
+  for (const key2 of candidates) {
+    const value = normalizedMetadata[key2];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+function sanitizeSuffixToken(token) {
+  return token.replace(/^[-_]+/, "").trim();
+}
+function normalizeMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+  return metadata;
+}
+
+// src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
+function createRepeatRouter(prisma71) {
+  const router85 = (0, import_express87.Router)();
+  const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
+  router85.use(authenticateToken);
+  router85.post("/:repeaterNodeId/instances", async (req2, res) => {
+    const { repeaterNodeId } = req2.params;
+    const body2 = req2.body || {};
+    try {
+      const result = await planRepeatDuplication(prisma71, repeaterNodeId, {
+        suffix: body2.suffix,
+        includeTotals: body2.includeTotals,
+        targetParentId: body2.targetParentId,
+        scopeId: body2.scopeId
+      });
+      return res.status(200).json({
+        status: "planned",
+        repeaterNodeId,
+        scopeId: result.scopeId,
+        suffix: result.suffix,
+        plan: result.plan,
+        blueprint: result.blueprint
+      });
+    } catch (error) {
+      if (error instanceof RepeatOperationError) {
+        return res.status(error.status).json({
+          error: error.message,
+          details: error.details ?? null
+        });
+      }
+      console.error("[repeat-route] Unable to plan duplication", error);
+      return res.status(500).json({
+        error: "Failed to plan repeat duplication.",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  router85.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+    const { repeaterNodeId } = req2.params;
+    const body2 = req2.body || {};
+    if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
+      return res.status(409).json({
+        error: "Repeat execution already in progress for this repeater.",
+        details: "Another request is currently duplicating this repeater. Please retry in a moment."
+      });
+    }
+    inFlightExecuteByRepeater.add(repeaterNodeId);
+    try {
+      const executionPlan = await executeRepeatDuplication(prisma71, repeaterNodeId, {
+        suffix: body2.suffix,
+        includeTotals: body2.includeTotals,
+        targetParentId: body2.targetParentId,
+        scopeId: body2.scopeId
+      });
+      const executionSummary = await runRepeatExecution(
+        prisma71,
+        req2,
+        executionPlan
+      );
+      return res.status(201).json({
+        status: "completed",
+        repeaterNodeId,
+        scopeId: executionPlan.scopeId,
+        suffix: executionPlan.suffix,
+        operations: executionPlan.operations,
+        plan: executionPlan.plan,
+        blueprint: executionPlan.blueprint,
+        duplicated: executionSummary.duplicated,
+        nodes: executionSummary.nodes,
+        count: executionSummary.count,
+        debug: executionSummary.debug
+      });
+    } catch (error) {
+      if (error instanceof RepeatOperationError) {
+        return res.status(error.status).json({
+          error: error.message,
+          details: error.details ?? null
+        });
+      }
+      const stack = error instanceof Error ? error.stack || error.message : String(error);
+      console.error("[repeat-route] Unable to execute duplication", stack);
+      return res.status(500).json({
+        error: "Failed to execute repeat duplication.",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      inFlightExecuteByRepeater.delete(repeaterNodeId);
+    }
+  });
+  return router85;
+}
 
 // src/middleware/websiteDetection.ts
-var import_client71 = require("@prisma/client");
+var import_client72 = require("@prisma/client");
 
 // src/middleware/websiteRenderer.ts
 function renderSection(section) {
@@ -60211,7 +60285,7 @@ async function renderWebsite(req2, res) {
 }
 
 // src/middleware/websiteDetection.ts
-var prisma68 = new import_client71.PrismaClient();
+var prisma69 = new import_client72.PrismaClient();
 var CRM_DOMAINS = [
   "app.2thier.be",
   "api.2thier.be",
@@ -60233,7 +60307,7 @@ async function detectWebsite(req2, res, next) {
     }
     const cleanDomain = hostname.replace(/^www\./, "");
     console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
-    const website = await prisma68.webSite.findFirst({
+    const website = await prisma69.webSite.findFirst({
       where: {
         OR: [
           { domain: cleanDomain },
@@ -60450,11 +60524,11 @@ var inputSanitization = (req2, res, next) => {
 };
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts
-var import_client72 = require("@prisma/client");
-var prisma69 = new import_client72.PrismaClient();
+var import_client73 = require("@prisma/client");
+var prisma70 = new import_client73.PrismaClient();
 async function syncVariableSourceRefs() {
   try {
-    const nodes = await prisma69.treeBranchLeafNode.findMany({
+    const nodes = await prisma70.treeBranchLeafNode.findMany({
       where: {
         data_instances: { not: null }
       },
@@ -60485,7 +60559,7 @@ async function syncVariableSourceRefs() {
       if (jsonSourceRef === dbSourceRef) {
         continue;
       }
-      await prisma69.treeBranchLeafNodeVariable.update({
+      await prisma70.treeBranchLeafNodeVariable.update({
         where: { id: node.TreeBranchLeafNodeVariable.id },
         data: { sourceRef: jsonSourceRef }
       });
@@ -60507,7 +60581,7 @@ async function initializeTreeBranchLeafSync() {
   } catch (error) {
     console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [INIT SYNC] Erreur:", error);
   } finally {
-    await prisma69.$disconnect();
+    await prisma70.$disconnect();
   }
 }
 
@@ -60520,7 +60594,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express87.default)();
+var app = (0, import_express88.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 4e3);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
@@ -60607,7 +60681,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express87.default.json({
+app.use(import_express88.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -60621,7 +60695,7 @@ app.use(import_express87.default.json({
     }
   }
 }));
-app.use(import_express87.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express88.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
@@ -60647,7 +60721,7 @@ app.use("/uploads", (req2, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-}, import_express87.default.static(uploadsDir, {
+}, import_express88.default.static(uploadsDir, {
   maxAge: "1h",
   // Cache 1 heure
   etag: true,
@@ -60703,7 +60777,7 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs7.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express87.default.static(assetsDir, {
+    app.use("/assets", import_express88.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
