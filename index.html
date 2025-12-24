@@ -13,21 +13,29 @@
     <script>
       (function() {
         // Déterminer si c'est production ou développement
-        const isDev = !window.location.hostname.includes('2thier.be') && 
-                      !window.location.hostname.includes('devis1min.be') &&
-                      window.location.hostname !== '127.0.0.1';
+        // Liste des domaines de production (URLs relatives = même serveur pour API)
+        const productionDomains = [
+          '2thier.be',
+          'devis1min.be',
+          'railway.app',      // Railway deployments
+          'up.railway.app'    // Railway preview URLs
+        ];
         
-        // En production: URLs relatives (même domaine app.2thier.be/api)
-        // En développement: localhost:4000
-        const apiBaseUrl = isDev ? 'http://localhost:4000' : '';
+        const hostname = window.location.hostname;
+        const isProduction = productionDomains.some(domain => hostname.includes(domain));
+        const isDev = !isProduction && hostname !== '127.0.0.1';
+        
+        // En production: URLs relatives (même domaine = API sur le même serveur)
+        // En développement local: localhost:4000
+        const apiBaseUrl = isProduction ? '' : (isDev ? 'http://localhost:4000' : '');
         
         // Injecter les configurations globales IMMÉDIATEMENT
         window.__API_BASE_URL = apiBaseUrl;
         window.__BACKEND_URL = apiBaseUrl;
         
-        console.log('[ENV-CONFIG] API Base URL:', apiBaseUrl);
-        console.log('[ENV-CONFIG] Host:', window.location.hostname);
-        console.log('[ENV-CONFIG] Mode:', isDev ? 'DEVELOPMENT' : 'PRODUCTION');
+        console.log('[ENV-CONFIG] API Base URL:', apiBaseUrl || '(relative - same origin)');
+        console.log('[ENV-CONFIG] Host:', hostname);
+        console.log('[ENV-CONFIG] Mode:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
       })();
     </script>
   </head>
