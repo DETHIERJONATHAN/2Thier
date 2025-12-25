@@ -131,14 +131,15 @@ function parseAddress(address: string): {
 router.get('/templates', async (req: Request, res: Response) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
     const { treeId, isActive, type } = req.query;
     
-    if (!organizationId) {
+    if (!organizationId && !isSuperAdmin) {
       return res.status(400).json({ error: 'Organization ID requis' });
     }
 
-    // Construire les filtres
-    const where: any = { organizationId };
+    // Construire les filtres - Super Admin voit tout
+    const where: any = isSuperAdmin ? {} : { organizationId };
     
     // Filtrer par arbre TBL si spécifié
     if (treeId) {

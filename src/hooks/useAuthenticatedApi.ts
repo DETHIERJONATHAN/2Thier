@@ -57,7 +57,7 @@ export function useAuthenticatedApi() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { logout: authLogout, currentOrganization } = useAuth();
+  const { logout: authLogout, currentOrganization, isSuperAdmin } = useAuth();
 
   const apiBaseUrl = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -106,6 +106,7 @@ export function useAuthenticatedApi() {
 
       const organizationId = currentOrganization?.id;
       if (organizationId) headers.set('X-Organization-Id', organizationId);
+      if (isSuperAdmin) headers.set('X-Is-Super-Admin', 'true');
 
       const impersonatedUserId = sessionStorage.getItem('impersonatedUserId');
       const impersonatedOrgId = sessionStorage.getItem('impersonatedOrgId');
