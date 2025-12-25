@@ -5,6 +5,7 @@ import { db } from '../lib/database';
 import { z } from 'zod';
 import { decrypt } from '../utils/crypto.js';
 import { authMiddleware } from '../middlewares/auth.js';
+import { nanoid } from 'nanoid';
 
 const router = Router();
 const prisma = db;
@@ -14,14 +15,14 @@ router.use(authMiddleware as unknown as RequestHandler);
 
 // Schéma de validation pour la configuration Google Workspace
 const googleWorkspaceConfigSchema = z.object({
-  clientId: z.string().min(1, 'Client ID requis'),
+  clientId: z.string().optional().default(''), // Optionnel pour l'activation simple
   clientSecret: z.string().optional(), // Optionnel pour la mise à jour
-  redirectUri: z.string().url('URL de redirection invalide').optional(),
-  domain: z.string().min(1, 'Domaine requis'),
-  adminEmail: z.string().email('Email admin invalide'),
+  redirectUri: z.string().optional(), // URL optionnelle
+  domain: z.string().optional().default(''), // Optionnel pour l'activation simple
+  adminEmail: z.string().optional().default(''), // Optionnel pour l'activation simple
   
   // Champs compte de service
-  serviceAccountEmail: z.string().email('Email du compte de service invalide').optional(),
+  serviceAccountEmail: z.string().optional(),
   privateKey: z.string().optional(),
   
   // État de la configuration
@@ -196,6 +197,7 @@ router.post('/:id/google-workspace/config', requireRole(['super_admin']), async 
       where: { organizationId: id },
       update: configData,
       create: {
+        id: nanoid(), // Génération d'un ID unique pour le nouveau record
         organizationId: id,
         ...configData
       }
@@ -214,9 +216,12 @@ router.post('/:id/google-workspace/config', requireRole(['super_admin']), async 
     
   } catch (error) {
     console.error('[GOOGLE-WORKSPACE] Erreur POST config:', error);
+    console.error('[GOOGLE-WORKSPACE] Détails erreur:', error instanceof Error ? error.message : String(error));
+    console.error('[GOOGLE-WORKSPACE] Stack:', error instanceof Error ? error.stack : 'N/A');
     res.status(500).json({
       success: false,
-      message: 'Erreur serveur lors de la sauvegarde de la configuration'
+      message: 'Erreur serveur lors de la sauvegarde de la configuration',
+      error: error instanceof Error ? error.message : String(error)
     });
   }
 });
