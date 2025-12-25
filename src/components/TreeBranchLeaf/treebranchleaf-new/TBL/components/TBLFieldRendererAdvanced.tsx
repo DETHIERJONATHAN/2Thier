@@ -1734,6 +1734,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // Quand les filtres changent (via formData), gérer automatiquement la sélection :
   // - Si aucune option disponible : vider la sélection
   // - Si la valeur actuelle est invalide : auto-sélectionner la première option
+  // 🔥 FIX: Utiliser des refs pour éviter les boucles de rendu infinies (React Error #185)
+  const lastAutoSelectedValueRef = useRef<unknown>(null);
+  const lastOptionsSignatureRef = useRef<string>('');
+  
   useEffect(() => {
     // Ne s'applique qu'aux champs SELECT avec table lookup activé
     if (fieldConfig.fieldType !== 'SELECT' || !fieldConfig.hasTable) return;
@@ -1741,12 +1745,18 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // Ne rien faire pendant le chargement initial
     if (tableLookup.loading) return;
     
+    // Calculer une signature des options pour éviter les re-exécutions inutiles
+    const optionsSignature = (tableLookup.options || []).map(o => o.value).join(',');
+    if (optionsSignature === lastOptionsSignatureRef.current) return;
+    lastOptionsSignatureRef.current = optionsSignature;
+    
     const currentValue = localValue;
     
     // CAS 1 : Aucune option disponible → VIDER la sélection
     if (!tableLookup.options || tableLookup.options.length === 0) {
-      if (currentValue !== null && currentValue !== undefined && currentValue !== '') {
+      if (currentValue !== null && currentValue !== undefined && currentValue !== '' && lastAutoSelectedValueRef.current !== null) {
         console.log(`🧹 [Auto-Clear] Champ "${field.label}": Aucune option disponible, vidage de la sélection`);
+        lastAutoSelectedValueRef.current = null;
         onChange?.(null);
         setLocalValue(null);
       }
@@ -1759,13 +1769,18 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     );
     
     // CAS 3 : Si la valeur actuelle n'est plus valide, auto-sélectionner la première option
+    // 🔥 FIX: Ne pas re-sélectionner si on vient déjà d'auto-sélectionner cette valeur
     if (!isCurrentValueValid && tableLookup.options.length > 0) {
       const firstOption = tableLookup.options[0];
-      console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
-      onChange?.(firstOption.value);
-      setLocalValue(firstOption.value);
+      if (lastAutoSelectedValueRef.current !== firstOption.value) {
+        console.log(`🔄 [Auto-Select] Champ "${field.label}": Valeur "${currentValue}" invalide, sélection automatique de "${firstOption.label}"`);
+        lastAutoSelectedValueRef.current = firstOption.value;
+        onChange?.(firstOption.value);
+        setLocalValue(firstOption.value);
+      }
     }
-  }, [tableLookup.options, tableLookup.loading, fieldConfig.fieldType, fieldConfig.hasTable, field.label, localValue, onChange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableLookup.options, tableLookup.loading, fieldConfig.fieldType, fieldConfig.hasTable, field.label]);
 
   // Gestionnaire de changement unifié
   const handleChange = (newValue: unknown) => {

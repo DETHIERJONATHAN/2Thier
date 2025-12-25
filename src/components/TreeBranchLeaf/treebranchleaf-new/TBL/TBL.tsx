@@ -235,85 +235,21 @@ const TBL: React.FC<TBLProps> = ({
   const [saveModalVisible, setSaveModalVisible] = useState(false);
 
   // LOGS AUTOMATIQUES pour analyser l'état des mirrors et cartes
+  // 🔥 DÉSACTIVÉ: Effet de debug qui causait des re-renders excessifs
+  // Le useEffect avec [formData] en dépendance créait un nouveau timer à chaque changement
+  // Si besoin de debug, utilisez window.runTBLDiagnostic() manuellement
+  /*
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       const timer = setTimeout(() => {
         // console.log('🚀 [TBL AUTO] ANALYSE AUTOMATIQUE DES MIRRORS');
-        // console.log('='.repeat(50));
-        
-        // 1. Analyse des données formData
-        const allKeys = Object.keys(formData);
-        const mirrorKeys = allKeys.filter(k => k.startsWith('__mirror_'));
-  const _dataKeys = allKeys.filter(k => !k.startsWith('__mirror_'));
-        
-        // console.log(`📊 FormData - Total: ${allKeys.length}, Données: ${dataKeys.length}, Mirrors: ${mirrorKeys.length}`);
-        
-        if (mirrorKeys.length > 0) {
-          // console.log('🪞 MIRRORS DÉTECTÉS:');
-          
-          // Séparer par type de mirror
-          const dataMirrors = mirrorKeys.filter(k => k.startsWith('__mirror_data_'));
-          const formulaMirrors = mirrorKeys.filter(k => k.startsWith('__mirror_formula_'));
-          const conditionMirrors = mirrorKeys.filter(k => k.startsWith('__mirror_condition_'));
-          
-          // Afficher TOUS les miroirs avec valeurs non-null/non-undefined/non-0
-          const _dataWithValues = dataMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== 0).map(k => `${k}=${formData[k]}`);
-          const _formulaWithValues = formulaMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== 0).map(k => `${k}=${formData[k]}`);
-          const _conditionWithValues = conditionMirrors.filter(k => formData[k] != null && formData[k] !== '' && formData[k] !== false).map(k => `${k}=${formData[k]}`);
-          
-          // console.log(`  📊 DONNÉES (${dataMirrors.length} total, ${dataWithValues.length} avec valeurs):`, dataWithValues.length > 0 ? dataWithValues : dataMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
-          // console.log(`  🧮 FORMULES (${formulaMirrors.length} total, ${formulaWithValues.length} avec valeurs):`, formulaWithValues.length > 0 ? formulaWithValues : formulaMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
-          // console.log(`  🔀 CONDITIONS (${conditionMirrors.length} total, ${conditionWithValues.length} avec valeurs):`, conditionWithValues.length > 0 ? conditionWithValues : conditionMirrors.slice(0, 3).map(k => `${k}=${formData[k]}`));
-        }
-        
-        // 2. Analyse des cartes SmartCalculatedField
-        const smartFields = document.querySelectorAll('[data-testid*="smart-calculated-field"]');
-        // console.log(`🎴 SmartCalculatedField détectés: ${smartFields.length}`);
-        
-        if (smartFields.length > 0) {
-          const stats = { calculating: 0, withMirror: 0, resolved: 0, empty: 0 };
-          
-          smartFields.forEach((field) => {
-            const text = field.textContent || '';
-            
-            if (text.includes('Calcul...')) {
-              stats.calculating++;
-            } else if (text.includes('(mirror)')) {
-              stats.withMirror++;
-            } else if (text.trim() && text !== '---') {
-              stats.resolved++;
-            } else {
-              stats.empty++;
-            }
-          });
-          
-          // console.log(`📈 ÉTAT DES CARTES:`);
-          // console.log(`  🔄 En calcul: ${stats.calculating}`);
-          // console.log(`  🪞 Avec mirror: ${stats.withMirror}`);
-          // console.log(`  ✅ Résolues: ${stats.resolved}`);
-          // console.log(`  ⚪ Vides: ${stats.empty}`);
-          
-          const total = smartFields.length;
-          const working = stats.withMirror + stats.resolved;
-          const _successRate = Math.round((working / total) * 100);
-          
-          // console.log(`🎯 TAUX DE SUCCÈS: ${successRate}% (${working}/${total})`);
-          
-          if (stats.withMirror > 0) {
-            // console.log('🎉 EXCELLENT! Le système mirror automatique FONCTIONNE!');
-          } else if (stats.calculating > 0) {
-            // console.log('⚠️ Des cartes sont en calcul - Mirrors pas encore appliqués');
-          } else {
-            // console.log('❌ Aucun mirror automatique détecté');
-          }
-        }
-        
-        // console.log('='.repeat(50));
-      }, 2000); // Attendre 2 secondes pour que tout soit chargé
+        // ... code de debug ...
+      }, 2000);
       
       return () => clearTimeout(timer);
     }
-  }, [formData]); // Se relance quand formData change
+  }, [formData]);
+  */
 
   // Charger la configuration TBL
   const { 
