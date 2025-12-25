@@ -2984,7 +2984,19 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   }, [sections, fields, tabSubTabs]);
 
   const [activeSubTab, setActiveSubTab] = useState<string | undefined>(allSubTabs.length > 0 ? allSubTabs[0].key : undefined);
-  useEffect(() => { if (allSubTabs.length > 0 && !allSubTabs.find(st => st.key === activeSubTab)) setActiveSubTab(allSubTabs[0].key); }, [allSubTabs, activeSubTab]);
+  
+  // 🔧 FIX: Retirer activeSubTab des dépendances pour éviter la boucle infinie (React Error #185)
+  // On utilise une ref pour accéder à la valeur actuelle sans créer de dépendance
+  useEffect(() => { 
+    setActiveSubTab(prev => {
+      // Si allSubTabs est vide, garder la valeur actuelle
+      if (allSubTabs.length === 0) return prev;
+      // Si l'onglet actuel n'existe plus dans allSubTabs, sélectionner le premier
+      if (!allSubTabs.find(st => st.key === prev)) return allSubTabs[0].key;
+      // Sinon garder la valeur actuelle
+      return prev;
+    });
+  }, [allSubTabs]);
 
   // Log ActiveSubTab supprimé pour performance (utilisez window.enableTBLDebug() si besoin)
 
