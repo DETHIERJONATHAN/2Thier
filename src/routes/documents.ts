@@ -519,13 +519,21 @@ router.get('/templates/:templateId/sections', async (req: Request, res: Response
   try {
     const { templateId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
-    // Vérifier que le template appartient à l'organisation
+    // Construire la clause where en fonction du rôle
+    const whereClause: any = { id: templateId };
+    if (!isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+
+    // Vérifier que le template existe (et appartient à l'organisation si non SuperAdmin)
     const template = await prisma.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
 
     if (!template) {
+      console.log(`[DOCUMENTS] Template ${templateId} non trouvé (orgId: ${organizationId}, isSuperAdmin: ${isSuperAdmin})`);
       return res.status(404).json({ error: 'Template non trouvé' });
     }
 
@@ -547,10 +555,17 @@ router.post('/templates/:templateId/sections', async (req: Request, res: Respons
     const { templateId } = req.params;
     const { type, order, config } = req.body;
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
-    // Vérifier que le template appartient à l'organisation
+    // Construire la clause where en fonction du rôle
+    const whereClause: any = { id: templateId };
+    if (!isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+
+    // Vérifier que le template existe
     const template = await prisma.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
 
     if (!template) {
@@ -581,10 +596,17 @@ router.put('/templates/:templateId/sections/:sectionId', async (req: Request, re
     const { templateId, sectionId } = req.params;
     const { order, config } = req.body;
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
-    // Vérifier que le template appartient à l'organisation
+    // Construire la clause where en fonction du rôle
+    const whereClause: any = { id: templateId };
+    if (!isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+
+    // Vérifier que le template existe
     const template = await prisma.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
 
     if (!template) {
@@ -611,10 +633,17 @@ router.delete('/templates/:templateId/sections/:sectionId', async (req: Request,
   try {
     const { templateId, sectionId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
+    const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
-    // Vérifier que le template appartient à l'organisation
+    // Construire la clause where en fonction du rôle
+    const whereClause: any = { id: templateId };
+    if (!isSuperAdmin && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+
+    // Vérifier que le template existe
     const template = await prisma.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
 
     if (!template) {
