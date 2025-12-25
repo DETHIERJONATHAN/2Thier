@@ -203,6 +203,16 @@ if (verbose()) {
 const VALUE_CACHE_TTL_MS = 30_000;
 const valueResolutionCache = new Map<string, { timestamp: number; result: { value: string | number | boolean | null; variableConfig?: Record<string, unknown> } }>();
 
+// 🚀 Cache global pour données batch (partagé par tous les appels resolveFieldValue)
+let batchNodeDataCache: Record<string, unknown> | null = null;
+let batchNodeDataTreeId: string | null = null;
+
+// Fonction pour initialiser/mettre à jour le cache batch depuis le contexte
+export const setBatchNodeDataCache = (treeId: string, dataByNode: Record<string, unknown>) => {
+  batchNodeDataCache = dataByNode;
+  batchNodeDataTreeId = treeId;
+};
+
 // 🎯 NOUVELLE FONCTION: Résolution des valeurs dynamiques depuis TreeBranchLeafNodeVariable
 const resolveFieldValue = async (
   node: TreeBranchLeafNode,
@@ -222,28 +232,39 @@ const resolveFieldValue = async (
   }
 
   try {
-    // ♻️ Cache
+    // ♻️ Cache local
     const cached = valueResolutionCache.get(node.id);
     if (cached && Date.now() - cached.timestamp < VALUE_CACHE_TTL_MS) {
       if (verbose()) dlog(`♻️ [RESOLVE_VALUE] Cache hit pour "${node.label}"`);
       return cached.result;
     }
-    // Récupérer la configuration de la variable depuis l'API
-    const variableResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}/data`);
-    if (verbose()) dlog('🧾 [RESOLVE_VALUE] Payload brut /data pour', node.label, ':', variableResponse);
 
-    // 🔄 Normalisation: supporter deux formats possibles
-    // 1) fetch/json direct => { exposedKey, sourceType, ... }
-    // 2) axios-like       => { data: { exposedKey, sourceType, ... } }
+    // 🚀 BATCH: Essayer d'abord le cache batch
     let variableConfig: Record<string, unknown> | undefined;
-    if (variableResponse && typeof variableResponse === 'object') {
-      const vrAny = variableResponse as { data?: unknown } & Record<string, unknown>;
-      if (vrAny.data && typeof vrAny.data === 'object' && !Array.isArray(vrAny.data)) {
-        variableConfig = vrAny.data as Record<string, unknown>;
-        if (verbose()) dlog('🧪 [RESOLVE_VALUE] Forme axios détectée (utilisation de .data)');
-      } else {
-        variableConfig = vrAny as Record<string, unknown>;
-        if (verbose()) dlog('🧪 [RESOLVE_VALUE] Forme plate détectée (objet direct sans .data)');
+    
+    if (batchNodeDataCache && batchNodeDataTreeId === treeId) {
+      const batchData = batchNodeDataCache[node.id] as { variable?: Record<string, unknown> } | undefined;
+      if (batchData?.variable) {
+        variableConfig = batchData.variable;
+        if (verbose()) dlog(`🚀 [RESOLVE_VALUE] Batch cache hit pour "${node.label}"`);
+      }
+    }
+
+    // Fallback: Récupérer la configuration de la variable depuis l'API
+    if (!variableConfig) {
+      const variableResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}/data`);
+      if (verbose()) dlog('🧾 [RESOLVE_VALUE] Payload brut /data pour', node.label, ':', variableResponse);
+
+      // 🔄 Normalisation: supporter deux formats possibles
+      if (variableResponse && typeof variableResponse === 'object') {
+        const vrAny = variableResponse as { data?: unknown } & Record<string, unknown>;
+        if (vrAny.data && typeof vrAny.data === 'object' && !Array.isArray(vrAny.data)) {
+          variableConfig = vrAny.data as Record<string, unknown>;
+          if (verbose()) dlog('🧪 [RESOLVE_VALUE] Forme axios détectée (utilisation de .data)');
+        } else {
+          variableConfig = vrAny as Record<string, unknown>;
+          if (verbose()) dlog('🧪 [RESOLVE_VALUE] Forme plate détectée (objet direct sans .data)');
+        }
       }
     }
 

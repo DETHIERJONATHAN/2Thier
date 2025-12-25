@@ -384,4 +384,104 @@ router.get('/trees/:treeId/all', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/tbl/batch/trees/:treeId/node-data
+ * 
+ * 🚀 Récupère TOUTES les configurations de données (variables) de tous les nodes
+ * Remplace les ~50+ appels à /nodes/:nodeId/data
+ */
+router.get('/trees/:treeId/node-data', async (req, res) => {
+  try {
+    const { treeId } = req.params;
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as any);
+
+    // Vérifier l'accès au tree
+    const treeWhereFilter = isSuperAdmin || !organizationId 
+      ? { id: treeId } 
+      : { id: treeId, organizationId };
+    
+    const tree = await db.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
+    // Récupérer tous les nodes avec hasData=true et leurs variables liées
+    const nodesWithData = await db.treeBranchLeafNode.findMany({
+      where: { 
+        treeId,
+        hasData: true
+      },
+      select: { 
+        id: true,
+        data_activeId: true,
+        linkedVariableIds: true
+      }
+    });
+
+    // Récupérer tous les IDs de variables potentiels
+    const allVariableIds = new Set<string>();
+    for (const node of nodesWithData) {
+      if (node.data_activeId) allVariableIds.add(node.data_activeId);
+      if (node.linkedVariableIds && Array.isArray(node.linkedVariableIds)) {
+        for (const vid of node.linkedVariableIds) {
+          if (typeof vid === 'string') allVariableIds.add(vid);
+        }
+      }
+    }
+
+    // Charger toutes les variables en une seule requête
+    const allVariables = await db.treeBranchLeafNodeVariable.findMany({
+      where: {
+        id: { in: Array.from(allVariableIds) }
+      }
+    });
+
+    // Map des variables par ID
+    const variablesMap = new Map(allVariables.map(v => [v.id, v]));
+
+    // Construire le résultat par nodeId
+    const dataByNode: Record<string, {
+      usedVariableId: string | null;
+      variable: typeof allVariables[0] | null;
+      ownerNodeId: string | null;
+    }> = {};
+
+    for (const node of nodesWithData) {
+      // Logique simplifiée de résolution de variable (similaire à resolveNodeVariable)
+      let variable: typeof allVariables[0] | null = null;
+      let ownerNodeId: string | null = null;
+
+      if (node.data_activeId) {
+        variable = variablesMap.get(node.data_activeId) || null;
+        ownerNodeId = variable?.nodeId || null;
+      } else if (node.linkedVariableIds && Array.isArray(node.linkedVariableIds)) {
+        // Prendre la première variable liée
+        for (const vid of node.linkedVariableIds) {
+          if (typeof vid === 'string' && variablesMap.has(vid)) {
+            variable = variablesMap.get(vid) || null;
+            ownerNodeId = variable?.nodeId || null;
+            break;
+          }
+        }
+      }
+
+      dataByNode[node.id] = {
+        usedVariableId: node.data_activeId || variable?.id || null,
+        variable,
+        ownerNodeId
+      };
+    }
+
+    return res.json({
+      success: true,
+      treeId,
+      totalNodesWithData: Object.keys(dataByNode).length,
+      dataByNode
+    });
+  } catch (error) {
+    console.error('[TBL Batch API] Error batch fetching node data:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération batch des données de noeuds' });
+  }
+});
+
 export default router;

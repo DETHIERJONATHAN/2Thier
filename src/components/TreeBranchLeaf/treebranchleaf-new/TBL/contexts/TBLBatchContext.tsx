@@ -17,14 +17,16 @@
  * ```
  */
 
-import React, { createContext, useContext, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, useEffect, ReactNode } from 'react';
 import { 
   useTBLBatchData, 
   TBLBatchData, 
   BatchFormula, 
   BatchCalculatedValue, 
-  BatchSelectConfig 
+  BatchSelectConfig,
+  BatchNodeData
 } from '../hooks/useTBLBatchData';
+import { setBatchNodeDataCache } from '../hooks/useTBLDataPrismaComplete';
 
 // Interface du contexte
 interface TBLBatchContextValue {
@@ -42,6 +44,8 @@ interface TBLBatchContextValue {
   getCalculatedValueForNode: (nodeId: string) => BatchCalculatedValue | null;
   /** Récupère la config select d'un noeud depuis le cache batch */
   getSelectConfigForNode: (nodeId: string) => BatchSelectConfig | null;
+  /** Récupère la config data/variable d'un noeud depuis le cache batch */
+  getNodeDataForNode: (nodeId: string) => BatchNodeData | null;
   /** Force un rechargement du batch */
   refresh: () => void;
   /** ID du tree actuel */
@@ -59,6 +63,7 @@ const defaultContextValue: TBLBatchContextValue = {
   getFormulasForNode: () => [],
   getCalculatedValueForNode: () => null,
   getSelectConfigForNode: () => null,
+  getNodeDataForNode: () => null,
   refresh: () => {},
   treeId: undefined,
   leadId: undefined
@@ -91,8 +96,17 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getFormulasForNode,
     getCalculatedValueForNode,
     getSelectConfigForNode,
+    getNodeDataForNode,
     refresh
   } = useTBLBatchData(treeId, leadId);
+
+  // 🚀 Synchroniser le cache global quand les données batch sont prêtes
+  useEffect(() => {
+    if (isReady && treeId && batchData?.dataByNode) {
+      setBatchNodeDataCache(treeId, batchData.dataByNode);
+      console.log(`🚀 [TBLBatchProvider] Cache node-data synchronisé (${Object.keys(batchData.dataByNode).length} nodes)`);
+    }
+  }, [isReady, treeId, batchData?.dataByNode]);
 
   // Mémoriser la valeur du contexte pour éviter les re-rendus inutiles
   const contextValue = useMemo<TBLBatchContextValue>(() => ({
@@ -103,6 +117,7 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getFormulasForNode,
     getCalculatedValueForNode,
     getSelectConfigForNode,
+    getNodeDataForNode,
     refresh,
     treeId,
     leadId
@@ -114,6 +129,7 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
     getFormulasForNode,
     getCalculatedValueForNode,
     getSelectConfigForNode,
+    getNodeDataForNode,
     refresh,
     treeId,
     leadId

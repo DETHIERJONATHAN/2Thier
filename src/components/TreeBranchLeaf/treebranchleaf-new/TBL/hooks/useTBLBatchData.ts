@@ -50,16 +50,36 @@ export interface BatchSelectConfig {
   lookupConfig: unknown;
 }
 
+export interface BatchNodeData {
+  usedVariableId: string | null;
+  variable: {
+    id: string;
+    nodeId: string;
+    sourceType?: string | null;
+    sourceRef?: string | null;
+    fixedValue?: unknown;
+    selectedNodeId?: string | null;
+    exposedKey?: string | null;
+    displayFormat?: string | null;
+    unit?: string | null;
+    precision?: number | null;
+    metadata?: unknown;
+  } | null;
+  ownerNodeId: string | null;
+}
+
 export interface TBLBatchData {
   formulasByNode: Record<string, BatchFormula[]>;
   valuesByNode: Record<string, BatchCalculatedValue>;
   configsByNode: Record<string, BatchSelectConfig>;
+  dataByNode: Record<string, BatchNodeData>;
   stats: {
     totalNodes: number;
     totalFormulas: number;
     nodesWithFormulas: number;
     nodesWithValues: number;
     selectFields: number;
+    nodesWithData: number;
   };
 }
 
@@ -78,6 +98,8 @@ interface UseTBLBatchDataResult {
   getCalculatedValueForNode: (nodeId: string) => BatchCalculatedValue | null;
   /** Récupère la config select d'un noeud depuis le cache batch */
   getSelectConfigForNode: (nodeId: string) => BatchSelectConfig | null;
+  /** Récupère la configuration data/variable d'un noeud depuis le cache batch */
+  getNodeDataForNode: (nodeId: string) => BatchNodeData | null;
   /** Force un rechargement du batch */
   refresh: () => void;
 }
@@ -136,36 +158,50 @@ export const useTBLBatchData = (
       setError(null);
 
       try {
-        const url = leadId
+        // 🚀 Charger les données de base ET les node-data en parallèle
+        const baseUrl = leadId
           ? `/api/tbl/batch/trees/${treeId}/all?leadId=${leadId}`
           : `/api/tbl/batch/trees/${treeId}/all`;
+        const nodeDataUrl = `/api/tbl/batch/trees/${treeId}/node-data`;
 
         console.log(`🚀 [useTBLBatchData] Chargement batch pour tree ${treeId}...`);
         const startTime = performance.now();
 
-        const response = await api.get<{
-          success: boolean;
-          treeId: string;
-          leadId: string | null;
-          stats: TBLBatchData['stats'];
-          formulasByNode: TBLBatchData['formulasByNode'];
-          valuesByNode: TBLBatchData['valuesByNode'];
-          configsByNode: TBLBatchData['configsByNode'];
-        }>(url);
+        const [baseResponse, nodeDataResponse] = await Promise.all([
+          api.get<{
+            success: boolean;
+            treeId: string;
+            leadId: string | null;
+            stats: Omit<TBLBatchData['stats'], 'nodesWithData'>;
+            formulasByNode: TBLBatchData['formulasByNode'];
+            valuesByNode: TBLBatchData['valuesByNode'];
+            configsByNode: TBLBatchData['configsByNode'];
+          }>(baseUrl),
+          api.get<{
+            success: boolean;
+            treeId: string;
+            totalNodesWithData: number;
+            dataByNode: TBLBatchData['dataByNode'];
+          }>(nodeDataUrl).catch(() => null) // Ne pas bloquer si node-data échoue
+        ]);
 
         const duration = performance.now() - startTime;
 
-        if (mountedRef.current && response?.success) {
+        if (mountedRef.current && baseResponse?.success) {
           const data: TBLBatchData = {
-            formulasByNode: response.formulasByNode || {},
-            valuesByNode: response.valuesByNode || {},
-            configsByNode: response.configsByNode || {},
-            stats: response.stats || {
-              totalNodes: 0,
-              totalFormulas: 0,
-              nodesWithFormulas: 0,
-              nodesWithValues: 0,
-              selectFields: 0
+            formulasByNode: baseResponse.formulasByNode || {},
+            valuesByNode: baseResponse.valuesByNode || {},
+            configsByNode: baseResponse.configsByNode || {},
+            dataByNode: nodeDataResponse?.dataByNode || {},
+            stats: {
+              ...(baseResponse.stats || {
+                totalNodes: 0,
+                totalFormulas: 0,
+                nodesWithFormulas: 0,
+                nodesWithValues: 0,
+                selectFields: 0
+              }),
+              nodesWithData: nodeDataResponse?.totalNodesWithData || 0
             }
           };
 
@@ -177,7 +213,8 @@ export const useTBLBatchData = (
             `✅ [useTBLBatchData] Batch chargé en ${duration.toFixed(0)}ms:`,
             `${data.stats.totalFormulas} formules,`,
             `${data.stats.nodesWithValues} valeurs,`,
-            `${data.stats.selectFields} selects`
+            `${data.stats.selectFields} selects,`,
+            `${data.stats.nodesWithData} node-data`
           );
         }
       } catch (err) {
@@ -275,6 +312,31 @@ export const useTBLBatchData = (
     return null;
   }, [batchData]);
 
+  const getNodeDataForNode = useCallback((nodeId: string): BatchNodeData | null => {
+    if (!batchData?.dataByNode) return null;
+    
+    // Même logique de fallback pour les suffixes
+    if (batchData.dataByNode[nodeId]) {
+      return batchData.dataByNode[nodeId];
+    }
+    
+    if (nodeId.endsWith('-1')) {
+      const baseId = nodeId.slice(0, -2);
+      if (batchData.dataByNode[baseId]) {
+        return batchData.dataByNode[baseId];
+      }
+    }
+    
+    if (!nodeId.endsWith('-1')) {
+      const suffixedId = `${nodeId}-1`;
+      if (batchData.dataByNode[suffixedId]) {
+        return batchData.dataByNode[suffixedId];
+      }
+    }
+    
+    return null;
+  }, [batchData]);
+
   const refresh = useCallback(() => {
     lastLoadedTreeId.current = null;
     lastLoadedLeadId.current = undefined;
@@ -293,6 +355,7 @@ export const useTBLBatchData = (
     getFormulasForNode,
     getCalculatedValueForNode,
     getSelectConfigForNode,
+    getNodeDataForNode,
     refresh
   };
 };
