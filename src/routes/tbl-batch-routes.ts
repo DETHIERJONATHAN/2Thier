@@ -267,32 +267,36 @@ router.get('/trees/:treeId/all', async (req, res) => {
     }
 
     // 🚀 Exécuter toutes les requêtes en parallèle pour max perf
-    const [nodes, allFormulas, submission] = await Promise.all([
-      // 1. Tous les nodes
-      db.treeBranchLeafNode.findMany({
-        where: { treeId },
-        select: { 
-          id: true, 
-          fieldType: true,
-          calculatedValue: true,
-          calculatedAt: true,
-          calculatedBy: true,
-          select_options: true,
-          select_sourceType: true,
-          select_sourceTableId: true,
-          select_sourceColumn: true,
-          select_displayColumn: true,
-          table_lookupConfig: true
-        }
-      }),
-      // 2. Toutes les formules
+    // D'abord récupérer les nodes pour avoir leurs IDs
+    const nodes = await db.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { 
+        id: true, 
+        fieldType: true,
+        calculatedValue: true,
+        calculatedAt: true,
+        calculatedBy: true,
+        select_options: true,
+        select_sourceType: true,
+        select_sourceTableId: true,
+        select_sourceColumn: true,
+        select_displayColumn: true,
+        table_lookupConfig: true
+      }
+    });
+
+    const nodeIds = nodes.map(n => n.id);
+
+    // Ensuite exécuter formules et submission en parallèle
+    const [allFormulas, submission] = await Promise.all([
+      // Toutes les formules (en utilisant nodeId: { in: nodeIds })
       db.treeBranchLeafNodeFormula.findMany({
         where: { 
-          node: { treeId }
+          nodeId: { in: nodeIds }
         },
         orderBy: { createdAt: 'asc' }
       }),
-      // 3. Submission si leadId
+      // Submission si leadId
       leadId && typeof leadId === 'string'
         ? db.tBLSubmission.findFirst({
             where: { treeId, leadId },
