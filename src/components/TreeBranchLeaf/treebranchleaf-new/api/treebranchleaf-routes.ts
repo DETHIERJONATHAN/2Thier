@@ -16,7 +16,8 @@ import {
   clearRpnCache
 } from './formulaEngine.js';
 import { evaluateFormulaOrchestrated } from './evaluation/orchestrator.js';
-import { Prisma } from '@prisma/client';\nimport { db } from '../../../../lib/database';
+import { Prisma } from '@prisma/client';
+import { db } from '../../../../lib/database';
 import { linkVariableToAllCapacityNodes } from './universal-linking-system.js';
 // import { authenticateToken } from '../../../../middleware/auth'; // Temporairement dÃƒÆ’Ã‚Â©sactivÃƒÆ’Ã‚Â©
 import { 

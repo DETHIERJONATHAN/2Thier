@@ -29,6 +29,137 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// src/lib/database.ts
+var database_exports = {};
+__export(database_exports, {
+  Prisma: () => import_client.Prisma,
+  checkDatabaseConnection: () => checkDatabaseConnection,
+  db: () => db,
+  disconnectDatabase: () => disconnectDatabase,
+  getDatabaseInfo: () => getDatabaseInfo,
+  prisma: () => prisma
+});
+function buildDatabaseUrl() {
+  const direct = process.env.DATABASE_URL;
+  if (direct && direct.trim().length > 0) {
+    return direct;
+  }
+  const user = process.env.PGUSER || "postgres";
+  const password = process.env.PGPASSWORD || "";
+  const db2 = process.env.PGDATABASE || "2thier";
+  const host = process.env.PGHOST || "localhost";
+  const port2 = process.env.PGPORT || "5432";
+  const instance = process.env.CLOUDSQL_INSTANCE;
+  if (instance) {
+    const pgHost = process.env.PGHOST;
+    const socketHost = pgHost && pgHost.startsWith("/cloudsql/") ? pgHost : `/cloudsql/${instance}`;
+    const encodedPwd2 = encodeURIComponent(password);
+    const url = `postgresql://${user}:${encodedPwd2}@localhost:5432/${db2}?host=${encodeURIComponent(socketHost)}`;
+    console.warn("[Database] URL reconstruite depuis Cloud SQL:", {
+      PGUSER: user,
+      PGDATABASE: db2,
+      CLOUDSQL_INSTANCE: instance
+    });
+    return url;
+  }
+  const encodedPwd = encodeURIComponent(password);
+  return `postgresql://${user}:${encodedPwd}@${host}:${port2}/${db2}`;
+}
+function createPrismaInstance() {
+  if (globalForDb.__db_instance) {
+    return globalForDb.__db_instance;
+  }
+  const env = process.env.NODE_ENV || "development";
+  const config = DB_CONFIG[env] || DB_CONFIG.development;
+  const instance = new import_client.PrismaClient({
+    log: config.logLevel,
+    datasources: {
+      db: {
+        url: buildDatabaseUrl()
+      }
+    }
+  });
+  if (process.env.NODE_ENV !== "production") {
+    globalForDb.__db_instance = instance;
+  }
+  if (!globalForDb.__db_initialized) {
+    globalForDb.__db_initialized = true;
+    void (async () => {
+      try {
+        await instance.$connect();
+        console.log("[Database] \u2705 Connexion \xE9tablie avec succ\xE8s");
+      } catch (err) {
+        console.error("[Database] \u274C \xC9chec de connexion:", err?.message);
+      }
+    })();
+  }
+  return instance;
+}
+async function disconnectDatabase() {
+  try {
+    await db.$disconnect();
+    console.log("[Database] Connexion ferm\xE9e proprement");
+  } catch (err) {
+    console.error("[Database] Erreur lors de la fermeture:", err?.message);
+  }
+}
+async function checkDatabaseConnection() {
+  try {
+    await db.$queryRaw`SELECT 1`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+function getDatabaseInfo() {
+  return {
+    adapter: CURRENT_ADAPTER,
+    environment: process.env.NODE_ENV || "development",
+    connected: globalForDb.__db_initialized || false
+  };
+}
+var import_client, CURRENT_ADAPTER, DB_CONFIG, globalForDb, db, prisma;
+var init_database = __esm({
+  "src/lib/database.ts"() {
+    import_client = require("@prisma/client");
+    CURRENT_ADAPTER = "prisma";
+    DB_CONFIG = {
+      development: {
+        connectionLimit: 5,
+        poolTimeout: 30,
+        connectTimeout: 10,
+        logLevel: ["warn", "error"]
+      },
+      production: {
+        connectionLimit: 20,
+        poolTimeout: 30,
+        connectTimeout: 10,
+        logLevel: []
+      },
+      test: {
+        connectionLimit: 2,
+        poolTimeout: 10,
+        connectTimeout: 5,
+        logLevel: ["error"]
+      }
+    };
+    globalForDb = globalThis;
+    db = createPrismaInstance();
+    prisma = db;
+    process.on("beforeExit", async () => {
+      await disconnectDatabase();
+    });
+    console.log(`[Database] Adaptateur: ${CURRENT_ADAPTER} | Env: ${process.env.NODE_ENV || "development"}`);
+  }
+});
+
+// src/lib/prisma.ts
+var init_prisma = __esm({
+  "src/lib/prisma.ts"() {
+    init_database();
+  }
+});
+
 // src/utils/crypto.ts
 function encrypt(text) {
   if (!key) {
@@ -97,12 +228,11 @@ var init_crypto = __esm({
 });
 
 // src/services/UniversalNotificationService.ts
-var import_client14, import_events, prisma14, NOTIFICATION_CONFIG, UniversalNotificationService, UniversalNotificationService_default;
+var import_events, NOTIFICATION_CONFIG, UniversalNotificationService, UniversalNotificationService_default;
 var init_UniversalNotificationService = __esm({
   "src/services/UniversalNotificationService.ts"() {
-    import_client14 = require("@prisma/client");
     import_events = require("events");
-    prisma14 = new import_client14.PrismaClient();
+    init_prisma();
     NOTIFICATION_CONFIG = {
       NEW_EMAIL: { icon: "\u{1F4E7}", color: "#1890ff", sound: "email.wav" },
       NEW_LEAD: { icon: "\u{1F465}", color: "#52c41a", sound: "success.wav" },
@@ -173,7 +303,7 @@ var init_UniversalNotificationService = __esm({
         try {
           const config = NOTIFICATION_CONFIG[data.type];
           console.log(`\u{1F514} [UniversalNotification] Cr\xE9ation notification: ${data.type} - ${data.title}`);
-          const notification = await prisma14.notification.create({
+          const notification = await db.notification.create({
             data: {
               organizationId: data.organizationId,
               userId: data.userId,
@@ -361,7 +491,7 @@ var init_UniversalNotificationService = __esm({
        */
       async cleanExpiredNotifications() {
         try {
-          const result = await prisma14.notification.deleteMany({
+          const result = await db.notification.deleteMany({
             where: {
               expiresAt: {
                 lt: /* @__PURE__ */ new Date()
@@ -380,7 +510,7 @@ var init_UniversalNotificationService = __esm({
        */
       async getStats(organizationId) {
         try {
-          const stats = await prisma14.notification.groupBy({
+          const stats = await db.notification.groupBy({
             by: ["type", "status"],
             where: {
               organizationId,
@@ -413,13 +543,13 @@ var init_UniversalNotificationService = __esm({
 });
 
 // src/services/RealTimeEmailNotificationService.ts
-var import_client15, import_events2, prisma15, RealTimeEmailNotificationService2, RealTimeEmailNotificationService_default;
+var import_events2, prisma9, RealTimeEmailNotificationService2, RealTimeEmailNotificationService_default;
 var init_RealTimeEmailNotificationService = __esm({
   "src/services/RealTimeEmailNotificationService.ts"() {
-    import_client15 = require("@prisma/client");
+    init_database();
     import_events2 = require("events");
     init_UniversalNotificationService();
-    prisma15 = new import_client15.PrismaClient();
+    prisma9 = db;
     RealTimeEmailNotificationService2 = class _RealTimeEmailNotificationService extends import_events2.EventEmitter {
       static instance;
       backupCheckInterval;
@@ -507,7 +637,7 @@ var init_RealTimeEmailNotificationService = __esm({
       async performBackupCheck() {
         try {
           const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1e3);
-          const usersWithMail = await prisma15.emailAccount.findMany({
+          const usersWithMail = await prisma9.emailAccount.findMany({
             where: {
               isActive: true,
               encryptedPassword: { not: null }
@@ -519,13 +649,13 @@ var init_RealTimeEmailNotificationService = __esm({
             // Limite pour la sécurité
           });
           for (const emailAccount of usersWithMail) {
-            const userOrg = await prisma15.userOrganization.findFirst({
+            const userOrg = await prisma9.userOrganization.findFirst({
               where: { userId: emailAccount.userId },
               select: { organizationId: true }
             });
             if (!userOrg) continue;
             const organizationId = userOrg.organizationId;
-            const recentEmails = await prisma15.email.findMany({
+            const recentEmails = await prisma9.email.findMany({
               where: {
                 userId: emailAccount.userId,
                 createdAt: { gte: tenMinutesAgo },
@@ -533,7 +663,7 @@ var init_RealTimeEmailNotificationService = __esm({
                 // Vérifier qu'il n'y a pas déjà une notification
                 NOT: {
                   id: {
-                    in: await prisma15.notification.findMany({
+                    in: await prisma9.notification.findMany({
                       where: {
                         userId: emailAccount.userId,
                         type: "NEW_MAIL_RECEIVED",
@@ -674,15 +804,14 @@ function fixUtf8Encoding(text) {
   }
   return fixedText;
 }
-var import_client16, import_events3, import_imap_simple, prisma16, AutoMailSyncService, autoMailSync, AutoMailSyncService_default;
+var import_events3, import_imap_simple, AutoMailSyncService, autoMailSync, AutoMailSyncService_default;
 var init_AutoMailSyncService = __esm({
   "src/services/AutoMailSyncService.ts"() {
-    import_client16 = require("@prisma/client");
     import_events3 = require("events");
     import_imap_simple = __toESM(require("imap-simple"), 1);
     init_crypto();
     init_RealTimeEmailNotificationService();
-    prisma16 = new import_client16.PrismaClient();
+    init_prisma();
     AutoMailSyncService = class extends import_events3.EventEmitter {
       isRunning = false;
       syncInterval = null;
@@ -713,7 +842,7 @@ var init_AutoMailSyncService = __esm({
       async syncForUser(userId) {
         try {
           console.log(`\u{1F3AF} [AUTO-SYNC] Synchronisation manuelle pour l'utilisateur: ${userId}`);
-          const emailAccount = await prisma16.emailAccount.findFirst({
+          const emailAccount = await db.emailAccount.findFirst({
             where: {
               userId,
               isActive: true
@@ -771,7 +900,7 @@ var init_AutoMailSyncService = __esm({
       async performSync() {
         try {
           console.log("\u23F0 [AUTO-SYNC] D\xE9but de la synchronisation automatique...");
-          const usersWithMail = await prisma16.emailAccount.findMany({
+          const usersWithMail = await db.emailAccount.findMany({
             where: {
               isActive: true,
               encryptedPassword: { not: null }
@@ -856,7 +985,7 @@ var init_AutoMailSyncService = __esm({
             for (const folder of foldersToSync) {
               try {
                 await connection.openBox(folder.imapName);
-                const existingEmailsCount = await prisma16.email.count({
+                const existingEmailsCount = await db.email.count({
                   where: {
                     userId: emailAccount.userId,
                     folder: folder.dbName
@@ -996,7 +1125,7 @@ var init_AutoMailSyncService = __esm({
                       }
                       let existingEmail;
                       if (uid) {
-                        existingEmail = await prisma16.email.findFirst({
+                        existingEmail = await db.email.findFirst({
                           where: {
                             userId: emailAccount.userId,
                             uid: uid.toString(),
@@ -1006,7 +1135,7 @@ var init_AutoMailSyncService = __esm({
                         });
                       }
                       if (!existingEmail && messageId) {
-                        existingEmail = await prisma16.email.findFirst({
+                        existingEmail = await db.email.findFirst({
                           where: {
                             userId: emailAccount.userId,
                             body: { contains: messageId },
@@ -1018,7 +1147,7 @@ var init_AutoMailSyncService = __esm({
                       if (!existingEmail) {
                         const dateStart = new Date(date.getTime() - 3e4);
                         const dateEnd = new Date(date.getTime() + 3e4);
-                        existingEmail = await prisma16.email.findFirst({
+                        existingEmail = await db.email.findFirst({
                           where: {
                             userId: emailAccount.userId,
                             subject,
@@ -1035,7 +1164,7 @@ var init_AutoMailSyncService = __esm({
                       if (!existingEmail) {
                         let isInBlacklist = false;
                         if (uid) {
-                          const deletedByUID = await prisma16.deletedEmail.findFirst({
+                          const deletedByUID = await db.deletedEmail.findFirst({
                             where: {
                               userId: emailAccount.userId,
                               uid: uid.toString(),
@@ -1045,7 +1174,7 @@ var init_AutoMailSyncService = __esm({
                           isInBlacklist = !!deletedByUID;
                         }
                         if (!isInBlacklist && messageId) {
-                          const deletedByMessageId = await prisma16.deletedEmail.findFirst({
+                          const deletedByMessageId = await db.deletedEmail.findFirst({
                             where: {
                               userId: emailAccount.userId,
                               messageId,
@@ -1063,7 +1192,7 @@ var init_AutoMailSyncService = __esm({
                         const finalBody = messageId ? `Message-ID: ${messageId}
 
 ${cleanBody}` : cleanBody;
-                        const newEmail = await prisma16.email.create({
+                        const newEmail = await db.email.create({
                           data: {
                             userId: emailAccount.userId,
                             from,
@@ -1081,7 +1210,7 @@ ${cleanBody}` : cleanBody;
                         newEmails++;
                         if (folder.dbName === "inbox" && !isRead) {
                           console.log("\u{1F514} [AUTO-SYNC] D\xE9clenchement notification temps r\xE9el !");
-                          const userOrg = await prisma16.userOrganization.findFirst({
+                          const userOrg = await db.userOrganization.findFirst({
                             where: { userId: emailAccount.userId },
                             select: { organizationId: true }
                           });
@@ -1110,7 +1239,7 @@ ${cleanBody}` : cleanBody;
                         console.log(`\u2705 [AUTO-SYNC] Nouvel email cr\xE9\xE9: "${subject}" (UID: ${uid}, ${contentType})`);
                       } else if (existingEmail.isRead !== isRead) {
                         console.log(`\u{1F4DD} [AUTO-SYNC] Mise \xE0 jour statut email: "${subject}"`);
-                        await prisma16.email.update({
+                        await db.email.update({
                           where: { id: existingEmail.id },
                           data: { isRead }
                         });
@@ -1147,7 +1276,7 @@ ${cleanBody}` : cleanBody;
         } catch (error) {
           console.error(`\u274C [AUTO-SYNC] Erreur pour ${emailAccount.emailAddress}:`, error);
         }
-        const totalEmails = await prisma16.email.count({
+        const totalEmails = await db.email.count({
           where: { userId: emailAccount.userId }
         });
         return {
@@ -2321,9 +2450,9 @@ function identifyReferenceType(ref) {
   }
   return "field";
 }
-async function identifyReferenceTypeFromDB(id, prisma71) {
+async function identifyReferenceTypeFromDB(id, prisma51) {
   try {
-    const conditionNode = await prisma71.treeBranchLeafNode.findUnique({
+    const conditionNode = await prisma51.treeBranchLeafNode.findUnique({
       where: { id },
       select: { type: true }
     });
@@ -2348,9 +2477,9 @@ async function identifyReferenceTypeFromDB(id, prisma71) {
 function normalizeRef(ref) {
   return ref.replace("@value.", "").replace("@table.", "").replace("node-formula:", "").replace("node-table:", "").replace("node-condition:", "").replace("condition:", "").trim();
 }
-async function enrichDataFromSubmission(submissionId, prisma71, valueMap, labelMap, treeId) {
+async function enrichDataFromSubmission(submissionId, prisma51, valueMap, labelMap, treeId) {
   try {
-    const submissionData = await prisma71.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma51.treeBranchLeafSubmissionData.findMany({
       where: { submissionId },
       select: {
         nodeId: true,
@@ -2358,14 +2487,14 @@ async function enrichDataFromSubmission(submissionId, prisma71, valueMap, labelM
       }
     });
     if (!treeId) {
-      const firstSubmissionNode = await prisma71.treeBranchLeafSubmissionData.findFirst({
+      const firstSubmissionNode = await prisma51.treeBranchLeafSubmissionData.findFirst({
         where: { submissionId },
         include: { TreeBranchLeafNode: { select: { treeId: true } } }
       });
       treeId = firstSubmissionNode?.TreeBranchLeafNode?.treeId;
     }
     if (treeId) {
-      const allNodes = await prisma71.treeBranchLeafNode.findMany({
+      const allNodes = await prisma51.treeBranchLeafNode.findMany({
         where: { treeId },
         select: {
           id: true,
@@ -2402,7 +2531,7 @@ async function enrichDataFromSubmission(submissionId, prisma71, valueMap, labelM
     console.error(`[ENRICHMENT] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur enrichissement:`, error);
   }
 }
-async function getNodeValue(nodeId, submissionId, prisma71, valueMap, options) {
+async function getNodeValue(nodeId, submissionId, prisma51, valueMap, options) {
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     if (val === null || val === void 0) {
@@ -2410,7 +2539,7 @@ async function getNodeValue(nodeId, submissionId, prisma71, valueMap, options) {
     }
     return String(val);
   }
-  const data = await prisma71.treeBranchLeafSubmissionData.findFirst({
+  const data = await prisma51.treeBranchLeafSubmissionData.findFirst({
     where: {
       nodeId,
       submissionId
@@ -2422,7 +2551,7 @@ async function getNodeValue(nodeId, submissionId, prisma71, valueMap, options) {
   if (data?.value !== null && data?.value !== void 0) {
     return String(data.value);
   }
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { calculatedValue: true, label: true }
   });
@@ -2431,12 +2560,12 @@ async function getNodeValue(nodeId, submissionId, prisma71, valueMap, options) {
   }
   return options?.preserveEmpty ? null : "0";
 }
-async function getNodeLabel(nodeId, prisma71, labelMap) {
+async function getNodeLabel(nodeId, prisma51, labelMap) {
   if (labelMap && labelMap.has(nodeId)) {
     const label = labelMap.get(nodeId);
     return label || "Inconnu";
   }
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: {
       label: true,
@@ -2446,7 +2575,7 @@ async function getNodeLabel(nodeId, prisma71, labelMap) {
   });
   return node?.sharedReferenceName || node?.field_label || node?.label || "Inconnu";
 }
-async function interpretReference(ref, submissionId, prisma71, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
+async function interpretReference(ref, submissionId, prisma51, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
   if (depth > 10) {
     console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 R\xC3\u0192\xC2\xA9cursion trop profonde (depth=${depth}) pour ref:`, ref);
     return {
@@ -2466,23 +2595,23 @@ async function interpretReference(ref, submissionId, prisma71, valuesCache = /* 
   let type = knownType || identifyReferenceType(ref);
   const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   if (type === "field" && uuidRegex.test(cleanRef)) {
-    type = await identifyReferenceTypeFromDB(cleanRef, prisma71);
+    type = await identifyReferenceTypeFromDB(cleanRef, prisma51);
   }
   let result;
   try {
     switch (type) {
       case "condition":
-        result = await interpretCondition(cleanRef, submissionId, prisma71, valuesCache, depth, valueMap, labelMap);
+        result = await interpretCondition(cleanRef, submissionId, prisma51, valuesCache, depth, valueMap, labelMap);
         break;
       case "formula":
-        result = await interpretFormula(cleanRef, submissionId, prisma71, valuesCache, depth, valueMap, labelMap);
+        result = await interpretFormula(cleanRef, submissionId, prisma51, valuesCache, depth, valueMap, labelMap);
         break;
       case "table":
-        result = await interpretTable(cleanRef, submissionId, prisma71, valuesCache, depth, valueMap, labelMap);
+        result = await interpretTable(cleanRef, submissionId, prisma51, valuesCache, depth, valueMap, labelMap);
         break;
       case "value":
       case "field":
-        result = await interpretField(cleanRef, submissionId, prisma71, valueMap, labelMap);
+        result = await interpretField(cleanRef, submissionId, prisma51, valueMap, labelMap);
         break;
       default:
         console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Type inconnu: ${type}`);
@@ -2506,9 +2635,9 @@ async function interpretReference(ref, submissionId, prisma71, valuesCache = /* 
   valuesCache.set(cleanRef, result);
   return result;
 }
-async function interpretCondition(conditionId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
+async function interpretCondition(conditionId, submissionId, prisma51, valuesCache, depth, valueMap, labelMap) {
   const cleanId = conditionId.replace("condition:", "");
-  const condition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+  const condition = await prisma51.treeBranchLeafNodeCondition.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2540,7 +2669,7 @@ async function interpretCondition(conditionId, submissionId, prisma71, valuesCac
     }
     if (ref.startsWith("@select.")) {
       const optionNodeId = ref.slice("@select.".length).split(".")[0];
-      const optionNode = await prisma71.treeBranchLeafNode.findUnique({
+      const optionNode = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: optionNodeId },
         select: { id: true, label: true, parentId: true }
       });
@@ -2552,14 +2681,14 @@ async function interpretCondition(conditionId, submissionId, prisma71, valuesCac
     const operandType = identifyReferenceType(ref);
     if (operandType === "field" || operandType === "value") {
       const operandId = normalizeRef(ref);
-      const value = await getNodeValue(operandId, submissionId, prisma71, valueMap, { preserveEmpty: true });
-      const label = await getNodeLabel(operandId, prisma71, labelMap);
+      const value = await getNodeValue(operandId, submissionId, prisma51, valueMap, { preserveEmpty: true });
+      const label = await getNodeLabel(operandId, prisma51, labelMap);
       return { value, label };
     }
     const interpreted = await interpretReference(
       ref,
       submissionId,
-      prisma71,
+      prisma51,
       valuesCache,
       depth + 1,
       valueMap,
@@ -2603,7 +2732,7 @@ async function interpretCondition(conditionId, submissionId, prisma71, valuesCac
       alorsResult = await interpretReference(
         alorsNodeId,
         submissionId,
-        prisma71,
+        prisma51,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2619,7 +2748,7 @@ async function interpretCondition(conditionId, submissionId, prisma71, valuesCac
       sinonResult = await interpretReference(
         sinonNodeId,
         submissionId,
-        prisma71,
+        prisma51,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2886,9 +3015,9 @@ function buildFormulaExpression(tokens2) {
   const expression = exprSegments.join(" ");
   return { expression, parts, roleToEncoded, encodedMeta };
 }
-async function interpretFormula(formulaId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
+async function interpretFormula(formulaId, submissionId, prisma51, valuesCache, depth, valueMap, labelMap) {
   const cleanId = formulaId.replace("node-formula:", "");
-  let formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+  let formula = await prisma51.treeBranchLeafNodeFormula.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -2899,7 +3028,7 @@ async function interpretFormula(formulaId, submissionId, prisma71, valuesCache, 
   });
   if (!formula) {
     try {
-      const byNode = await prisma71.treeBranchLeafNodeFormula.findFirst({
+      const byNode = await prisma51.treeBranchLeafNodeFormula.findFirst({
         where: { nodeId: cleanId },
         select: { id: true, name: true, tokens: true, nodeId: true },
         orderBy: { isDefault: "desc" }
@@ -2953,7 +3082,7 @@ async function interpretFormula(formulaId, submissionId, prisma71, valuesCache, 
       const refResult = await interpretReference(
         meta.refId,
         submissionId,
-        prisma71,
+        prisma51,
         valuesCache,
         depth + 1,
         valueMap,
@@ -2968,7 +3097,7 @@ async function interpretFormula(formulaId, submissionId, prisma71, valuesCache, 
         const label = refResult.details?.formulaName || refResult.details?.label || `Formule ${meta.refId}`;
         labelCacheByEncoded.set(encoded, label);
       } else {
-        const label = await getNodeLabel(meta.refId, prisma71, labelMap).catch(() => meta.refId);
+        const label = await getNodeLabel(meta.refId, prisma51, labelMap).catch(() => meta.refId);
         labelCacheByEncoded.set(encoded, label || meta.refId);
       }
       return safeValue;
@@ -3040,12 +3169,12 @@ async function interpretFormula(formulaId, submissionId, prisma71, valuesCache, 
     }
   };
 }
-async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
+async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId, prisma51, valuesCache, depth, valueMap, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeValue(fieldId, submissionId, prisma71, valueMap) : null;
+    return fieldId ? await getNodeValue(fieldId, submissionId, prisma51, valueMap) : null;
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
-    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma71, valueMap);
+    const result = await getNodeValue(sourceOption.sourceField, submissionId, prisma51, valueMap);
     return result;
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
@@ -3053,7 +3182,7 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
       const capacityResult = await interpretReference(
         sourceOption.capacityRef,
         submissionId,
-        prisma71,
+        prisma51,
         valuesCache,
         depth + 1,
         valueMap,
@@ -3067,12 +3196,12 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
   }
   return null;
 }
-async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma71, labelMap) {
+async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma51, labelMap) {
   if (!sourceOption || sourceOption.type === "select") {
-    return fieldId ? await getNodeLabel(fieldId, prisma71, labelMap) : "Source";
+    return fieldId ? await getNodeLabel(fieldId, prisma51, labelMap) : "Source";
   }
   if (sourceOption.type === "field" && sourceOption.sourceField) {
-    return await getNodeLabel(sourceOption.sourceField, prisma71, labelMap);
+    return await getNodeLabel(sourceOption.sourceField, prisma51, labelMap);
   }
   if (sourceOption.type === "capacity" && sourceOption.capacityRef) {
     const capacityId = sourceOption.capacityRef.replace("@value.", "").replace("formula:", "").replace("condition:", "").replace("table:", "");
@@ -3083,9 +3212,9 @@ async function getSourceLabel(sourceOption, lookupConfig, fieldId, prisma71, lab
   }
   return "Source";
 }
-async function interpretTable(tableId, submissionId, prisma71, valuesCache, depth, valueMap, labelMap) {
+async function interpretTable(tableId, submissionId, prisma51, valuesCache, depth, valueMap, labelMap) {
   const cleanId = tableId.replace("@table.", "").replace("node-table:", "");
-  let table = await prisma71.treeBranchLeafNodeTable.findUnique({
+  let table = await prisma51.treeBranchLeafNodeTable.findUnique({
     where: { id: cleanId },
     select: {
       id: true,
@@ -3119,7 +3248,7 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
   });
   if (!table) {
     try {
-      const byNode = await prisma71.treeBranchLeafNodeTable.findFirst({
+      const byNode = await prisma51.treeBranchLeafNodeTable.findFirst({
         where: { nodeId: cleanId },
         select: {
           id: true,
@@ -3214,13 +3343,13 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
       lookup,
       colFieldId,
       submissionId,
-      prisma71,
+      prisma51,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma71, labelMap);
+    const colLabel2 = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma51, labelMap);
     const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
     if (!colSelectorValue2) {
       return {
@@ -3234,7 +3363,7 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
       const filterRefResult = await interpretReference(
         colSourceOption.filterValueRef,
         submissionId,
-        prisma71,
+        prisma51,
         valuesCache,
         depth + 1,
         valueMap,
@@ -3263,7 +3392,7 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
     }
     const results = [];
     if (lookup.extractValueRef) {
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma71, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma51, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedColSelector2 = String(colSelectorValue2 || "").trim().toLowerCase();
       const colSelectorInCols2 = columns.findIndex((c) => String(c).trim().toLowerCase() === normalizedColSelector2);
@@ -3439,13 +3568,13 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
       lookup,
       rowFieldId,
       submissionId,
-      prisma71,
+      prisma51,
       valuesCache,
       depth,
       valueMap,
       labelMap
     );
-    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma71, labelMap);
+    const rowLabel2 = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma51, labelMap);
     const displayRows = Array.isArray(lookup.displayRow) ? lookup.displayRow : [lookup.displayRow];
     if (!rowSelectorValue2) {
       return {
@@ -3456,7 +3585,7 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
     }
     const results = [];
     if (lookup.extractValueRef) {
-      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma71, valuesCache, depth + 1, valueMap, labelMap);
+      const refResult = await interpretReference(lookup.extractValueRef, submissionId, prisma51, valuesCache, depth + 1, valueMap, labelMap);
       const targetValue = refResult.result;
       const normalizedRowSelector2 = String(rowSelectorValue2 || "").trim().toLowerCase();
       const rowSelectorInRows2 = rows.findIndex((r) => String(r).trim().toLowerCase() === normalizedRowSelector2);
@@ -3651,7 +3780,7 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
     lookup,
     rowFieldId,
     submissionId,
-    prisma71,
+    prisma51,
     valuesCache,
     depth,
     valueMap,
@@ -3662,14 +3791,14 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
     lookup,
     colFieldId,
     submissionId,
-    prisma71,
+    prisma51,
     valuesCache,
     depth,
     valueMap,
     labelMap
   );
-  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma71, labelMap);
-  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma71, labelMap);
+  const rowLabel = await getSourceLabel(rowSourceOption, lookup, rowFieldId, prisma51, labelMap);
+  const colLabel = await getSourceLabel(colSourceOption, lookup, colFieldId, prisma51, labelMap);
   const rowSourceType = rowSourceOption?.type || (rowFieldId ? "select" : void 0);
   const colSourceType = colSourceOption?.type || (colFieldId ? "select" : void 0);
   if (!rowSelectorValue || !colSelectorValue) {
@@ -3777,21 +3906,21 @@ async function interpretTable(tableId, submissionId, prisma71, valuesCache, dept
     }
   };
 }
-async function interpretField(fieldId, submissionId, prisma71, valueMap, labelMap) {
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+async function interpretField(fieldId, submissionId, prisma51, valueMap, labelMap) {
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: fieldId },
     select: { type: true, label: true }
   });
   if (node && node.type) {
     if (node.type.startsWith("leaf_table_")) {
-      return await interpretTable(fieldId, submissionId, prisma71, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma51, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
     if (node.type.includes("table")) {
-      return await interpretTable(fieldId, submissionId, prisma71, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
+      return await interpretTable(fieldId, submissionId, prisma51, /* @__PURE__ */ new Map(), 0, valueMap, labelMap);
     }
   }
-  const value = await getNodeValue(fieldId, submissionId, prisma71, valueMap);
-  const label = await getNodeLabel(fieldId, prisma71, labelMap);
+  const value = await getNodeValue(fieldId, submissionId, prisma51, valueMap);
+  const label = await getNodeLabel(fieldId, prisma51, labelMap);
   const humanText = `${label}(${value})`;
   return {
     result: value || "0",
@@ -3804,16 +3933,16 @@ async function interpretField(fieldId, submissionId, prisma71, valueMap, labelMa
     }
   };
 }
-async function evaluateVariableOperation(variableNodeId, submissionId, prisma71, valueMap) {
-  const variableNode = await prisma71.treeBranchLeafNode.findUnique({
+async function evaluateVariableOperation(variableNodeId, submissionId, prisma51, valueMap) {
+  const variableNode = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: variableNodeId },
     select: { treeId: true }
   });
   const treeId = variableNode?.treeId;
   const localValueMap = valueMap || /* @__PURE__ */ new Map();
   const labelMap = /* @__PURE__ */ new Map();
-  await enrichDataFromSubmission(submissionId, prisma71, localValueMap, labelMap, treeId);
-  const variable = await prisma71.treeBranchLeafNodeVariable.findUnique({
+  await enrichDataFromSubmission(submissionId, prisma51, localValueMap, labelMap, treeId);
+  const variable = await prisma51.treeBranchLeafNodeVariable.findUnique({
     where: { nodeId: variableNodeId },
     select: {
       id: true,
@@ -3843,7 +3972,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma71,
     const result = await interpretReference(
       variable.sourceRef,
       submissionId,
-      prisma71,
+      prisma51,
       valuesCache,
       0,
       // Profondeur initiale = 0
@@ -3867,7 +3996,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma71,
     const result = await interpretReference(
       variable.sourceRef,
       submissionId,
-      prisma71,
+      prisma51,
       valuesCache,
       0,
       // Profondeur initiale = 0
@@ -3933,68 +4062,8 @@ var import_express73 = require("express");
 // src/routes/authRoutes.ts
 var import_express = require("express");
 
-// src/lib/prisma.ts
-var import_client = require("@prisma/client");
-function buildDatabaseUrl() {
-  const direct = process.env.DATABASE_URL;
-  if (direct && direct.trim().length > 0) {
-    return direct;
-  }
-  const user = process.env.PGUSER || "postgres";
-  const password = process.env.PGPASSWORD || "";
-  const db = process.env.PGDATABASE || "2thier";
-  const instance = process.env.CLOUDSQL_INSTANCE || "thiernew:europe-west1:crm-db";
-  const pgHost = process.env.PGHOST;
-  const socketHost = pgHost && pgHost.startsWith("/cloudsql/") ? pgHost : `/cloudsql/${instance}`;
-  const encodedPwd = encodeURIComponent(password);
-  const url = `postgresql://${user}:${encodedPwd}@localhost:5432/${db}?host=${encodeURIComponent(socketHost)}`;
-  console.warn("[Prisma] DATABASE_URL non d\xE9fini. URL reconstruite depuis PG* et Cloud SQL:", {
-    PGUSER: user,
-    PGDATABASE: db,
-    PGHOST: pgHost,
-    CLOUDSQL_INSTANCE: instance,
-    effectiveHostParam: socketHost
-  });
-  return url;
-}
-var globalForPrisma = global;
-var prismaClient = globalForPrisma.prisma ?? new import_client.PrismaClient({
-  // ⚠️ Désactivé les logs 'query' en dev car TBL génère des centaines de requêtes
-  // Pour réactiver: ['query', 'info', 'warn', 'error']
-  log: process.env.NODE_ENV === "development" ? ["warn", "error"] : [],
-  // 🚀 Configuration optimisée du connection pool
-  datasources: {
-    db: {
-      url: buildDatabaseUrl()
-    }
-  },
-  // ⚡ Optimisations de performance
-  // @ts-expect-error - Configuration avancée non typée
-  __internal: {
-    engine: {
-      // Connection pool optimisé selon l'environnement
-      connection_limit: process.env.NODE_ENV === "production" ? 20 : 5,
-      pool_timeout: 30,
-      // secondes
-      connect_timeout: 10
-      // secondes
-    }
-  }
-});
-var prisma = prismaClient;
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prismaClient;
-}
-void (async () => {
-  try {
-    await prismaClient.$connect();
-    console.log("[Prisma] Connexion \xE9tablie avec succ\xE8s");
-  } catch (err) {
-    console.warn("[Prisma] \xC9chec de connexion au d\xE9marrage (le serveur continue). D\xE9tails:", err?.message);
-  }
-})();
-
 // src/controllers/authController.ts
+init_prisma();
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
 var import_fs = __toESM(require("fs"), 1);
@@ -4025,7 +4094,7 @@ var login = async (req2, res) => {
     if (!email || !password) {
       return res.status(400).json({ message: "Email et mot de passe requis" });
     }
-    const user = await prisma.user.findUnique({
+    const user = await db.user.findUnique({
       where: { email },
       include: {
         UserOrganization: {
@@ -4078,11 +4147,11 @@ var login = async (req2, res) => {
       getJWTSecret(),
       { expiresIn: "24h" }
     );
-    const isProduction2 = process.env.NODE_ENV === "production";
+    const isProduction3 = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction2,
-      sameSite: isProduction2 ? "none" : "lax",
+      secure: isProduction3,
+      sameSite: isProduction3 ? "none" : "lax",
       // 'none' requis pour cross-site en production avec secure
       maxAge: 24 * 60 * 60 * 1e3,
       // 24 heures
@@ -4102,7 +4171,7 @@ var getMe = async (req2, res) => {
       return res.status(401).json({ message: "Non authentifi\xE9" });
     }
     const decoded = import_jsonwebtoken.default.verify(token, getJWTSecret());
-    const user = await prisma.user.findUnique({
+    const user = await db.user.findUnique({
       where: { id: decoded.userId },
       include: {
         UserOrganization: {
@@ -4182,8 +4251,7 @@ var import_express2 = __toESM(require("express"), 1);
 var import_jsonwebtoken2 = __toESM(require("jsonwebtoken"), 1);
 
 // src/prisma.ts
-var import_client2 = require("@prisma/client");
-var prisma2 = new import_client2.PrismaClient();
+init_database();
 
 // src/config.prod.ts
 var config_prod_exports = {};
@@ -4312,8 +4380,8 @@ var extractOrganization = (req2, res, next) => {
 
 // src/google-auth/core/GoogleOAuthCore.ts
 var import_googleapis = require("googleapis");
-var import_client3 = require("@prisma/client");
 var import_crypto = require("crypto");
+init_prisma();
 
 // src/auth/googleConfig.ts
 var import_meta = {};
@@ -4417,7 +4485,6 @@ function describeGoogleOAuthConfig() {
 }
 
 // src/google-auth/core/GoogleOAuthCore.ts
-var prisma3 = new import_client3.PrismaClient();
 var { clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI } = googleOAuthConfig;
 var GOOGLE_SCOPES_LIST = [...GOOGLE_OAUTH_SCOPES];
 var SCOPES = GOOGLE_SCOPES_LIST;
@@ -4464,11 +4531,11 @@ var GoogleOAuthService = class {
       scope: tokens2.scope,
       updatedAt: /* @__PURE__ */ new Date()
     };
-    const existingToken = await prisma3.googleToken.findUnique({
+    const existingToken = await db.googleToken.findUnique({
       where: { organizationId }
     });
     if (existingToken) {
-      await prisma3.googleToken.update({
+      await db.googleToken.update({
         where: { organizationId },
         data: {
           accessToken: updateData.accessToken,
@@ -4482,7 +4549,7 @@ var GoogleOAuthService = class {
         }
       });
     } else {
-      await prisma3.googleToken.create({
+      await db.googleToken.create({
         data: {
           id: (0, import_crypto.randomUUID)(),
           organizationId,
@@ -4499,7 +4566,7 @@ var GoogleOAuthService = class {
   }
   // Récupérer les tokens par userId (en passant par l'utilisateur et son organisation)
   async getUserTokens(userId) {
-    const userWithOrg = await prisma3.user.findUnique({
+    const userWithOrg = await db.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -4514,13 +4581,13 @@ var GoogleOAuthService = class {
       return null;
     }
     const organizationId = userWithOrg.UserOrganization[0].organizationId;
-    return await prisma3.googleToken.findUnique({
+    return await db.googleToken.findUnique({
       where: { organizationId }
     });
   }
   // Client authentifié avec email administrateur Google Workspace
   async getAuthenticatedClientForOrganization(organizationId) {
-    const organization = await prisma3.organization.findUnique({
+    const organization = await db.organization.findUnique({
       where: { id: organizationId },
       include: {
         GoogleWorkspaceConfig: true
@@ -4533,7 +4600,7 @@ var GoogleOAuthService = class {
     if (!googleConfig || !googleConfig.adminEmail || !googleConfig.domain) {
       return null;
     }
-    const tokens2 = await prisma3.googleToken.findUnique({
+    const tokens2 = await db.googleToken.findUnique({
       where: { organizationId: organization.id }
     });
     if (!tokens2) {
@@ -4557,7 +4624,7 @@ var GoogleOAuthService = class {
       try {
         const { credentials: newCredentials } = await adminOAuth2Client.refreshAccessToken();
         if (newCredentials.access_token && newCredentials.expiry_date) {
-          await prisma3.googleToken.update({
+          await db.googleToken.update({
             where: { organizationId: organization.id },
             data: {
               accessToken: newCredentials.access_token,
@@ -4646,7 +4713,7 @@ var GoogleOAuthService = class {
   }
   // Méthode pour mettre à jour les tokens existants
   async updateUserTokens(userId, tokenData) {
-    const userWithOrg = await prisma3.user.findUnique({
+    const userWithOrg = await db.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -4659,7 +4726,7 @@ var GoogleOAuthService = class {
       throw new Error(`Utilisateur ${userId} ou organisation non trouv\xE9`);
     }
     const organizationId = userWithOrg.UserOrganization[0].organizationId;
-    await prisma3.googleToken.update({
+    await db.googleToken.update({
       where: { organizationId },
       data: {
         accessToken: tokenData.accessToken,
@@ -4685,7 +4752,7 @@ var GoogleOAuthService = class {
     } catch (error) {
       console.error(`[GoogleOAuthService] \xC9chec de la r\xE9vocation du token pour ${userId}:`, error);
     }
-    const userWithOrg = await prisma3.user.findUnique({
+    const userWithOrg = await db.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -4697,7 +4764,7 @@ var GoogleOAuthService = class {
     });
     if (userWithOrg?.UserOrganization[0]) {
       const organizationId = userWithOrg.UserOrganization[0].organizationId;
-      await prisma3.googleToken.delete({ where: { organizationId } });
+      await db.googleToken.delete({ where: { organizationId } });
       console.log(`[GoogleOAuthService] Tokens supprim\xE9s de la DB pour l'utilisateur ${userId} (org: ${organizationId})`);
     } else {
       console.log(`[GoogleOAuthService] Impossible de trouver l'organization pour l'utilisateur ${userId}`);
@@ -4937,9 +5004,8 @@ var GoogleGmailService = class _GoogleGmailService {
    */
   async loadOrganizationInfo() {
     try {
-      const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-      const prisma71 = new PrismaClient73();
-      const organization = await prisma71.organization.findUnique({
+      const { db: db2 } = await Promise.resolve().then(() => (init_database(), database_exports));
+      const organization = await db2.organization.findUnique({
         where: { id: this.organizationId },
         include: {
           GoogleWorkspaceConfig: true
@@ -4951,7 +5017,6 @@ var GoogleGmailService = class _GoogleGmailService {
       } else {
         console.warn(`[GoogleGmailService] \u26A0\uFE0F Email admin non trouv\xE9 pour l'organisation ${this.organizationId}`);
       }
-      await prisma71.$disconnect();
     } catch (error) {
       console.error("[GoogleGmailService] Erreur lors du chargement des infos organisation:", error);
     }
@@ -7059,15 +7124,15 @@ var gmailRoutes_default = router;
 
 // src/routes/misc.ts
 var import_express3 = require("express");
-var import_client6 = require("@prisma/client");
-var import_bcryptjs2 = __toESM(require("bcryptjs"), 1);
+var import_client2 = require("@prisma/client");
+var import_bcryptjs3 = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken4 = __toESM(require("jsonwebtoken"), 1);
 
 // src/middlewares/auth.ts
 var import_jsonwebtoken3 = __toESM(require("jsonwebtoken"), 1);
-var import_client4 = require("@prisma/client");
-var import_bcrypt = __toESM(require("bcrypt"), 1);
-var prisma4 = new import_client4.PrismaClient();
+init_database();
+var import_bcryptjs2 = __toESM(require("bcryptjs"), 1);
+var prisma2 = db;
 var authMiddleware = async (req2, res, next) => {
   const authHeader = req2.headers.authorization;
   const cookieToken = req2.cookies?.token;
@@ -7086,7 +7151,7 @@ var authMiddleware = async (req2, res, next) => {
   }
   try {
     const decoded = import_jsonwebtoken3.default.verify(token, JWT_SECRET2);
-    const user = await prisma4.user.findUnique({
+    const user = await prisma2.user.findUnique({
       where: { id: decoded.userId }
     });
     if (!user) {
@@ -7102,7 +7167,7 @@ var authMiddleware = async (req2, res, next) => {
       organizationId = orgIdFromHeader;
     }
     if (organizationId) {
-      const organization = await prisma4.organization.findUnique({ where: { id: organizationId } });
+      const organization = await prisma2.organization.findUnique({ where: { id: organizationId } });
       if (!organization) {
         console.error("[AUTH] Organisation non trouv\xE9e pour l'ID:", organizationId);
         return res.status(404).json({ error: "Organisation non trouv\xE9e" });
@@ -7142,8 +7207,8 @@ var requireRole = (roles) => {
 };
 
 // src/middlewares/impersonation.ts
-var import_client5 = require("@prisma/client");
-var prisma5 = new import_client5.PrismaClient();
+init_database();
+var prisma3 = db;
 async function impersonationMiddleware(req2, res, next) {
   const authReq = req2;
   const impersonateUserId = authReq.headers["x-impersonate-user-id"];
@@ -7157,7 +7222,7 @@ async function impersonationMiddleware(req2, res, next) {
   );
   try {
     if (impersonateUserId) {
-      const userToImpersonate = await prisma5.user.findUnique({
+      const userToImpersonate = await prisma3.user.findUnique({
         where: { id: impersonateUserId }
       });
       if (!userToImpersonate) {
@@ -7184,8 +7249,8 @@ async function impersonationMiddleware(req2, res, next) {
 }
 
 // src/routes/misc.ts
+init_prisma();
 var router2 = (0, import_express3.Router)();
-var prisma6 = new import_client6.PrismaClient();
 var userWithOrgsArgs = {
   include: {
     UserOrganization: {
@@ -7207,8 +7272,8 @@ router2.post("/register", async (req2, res) => {
     return res.status(400).json({ error: "Email, mot de passe et pr\xE9nom sont requis" });
   }
   try {
-    const hashedPassword = await import_bcryptjs2.default.hash(password, 10);
-    const user = await prisma6.user.create({
+    const hashedPassword = await import_bcryptjs3.default.hash(password, 10);
+    const user = await db.user.create({
       data: {
         email,
         passwordHash: hashedPassword,
@@ -7221,7 +7286,7 @@ router2.post("/register", async (req2, res) => {
     res.status(201).json({ success: true, id: user.id, email: user.email });
   } catch (error) {
     console.error("[API][register] Erreur lors de l'inscription:", error);
-    if (error instanceof import_client6.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    if (error instanceof import_client2.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return res.status(409).json({ error: "Cette adresse email est d\xE9j\xE0 utilis\xE9e." });
     }
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de l'utilisateur" });
@@ -7233,18 +7298,18 @@ router2.post("/login", async (req2, res) => {
     return res.status(400).json({ error: "L'email et le mot de passe sont requis" });
   }
   try {
-    const user = await prisma6.user.findUnique({
+    const user = await db.user.findUnique({
       where: { email },
       ...userWithOrgsArgs
     });
     if (!user) {
       return res.status(401).json({ error: "Identifiants invalides" });
     }
-    const isPasswordValid = await import_bcryptjs2.default.compare(password, user.passwordHash);
+    const isPasswordValid = await import_bcryptjs3.default.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       return res.status(401).json({ error: "Identifiants invalides" });
     }
-    const freshUser = await prisma6.user.findUnique({
+    const freshUser = await db.user.findUnique({
       where: { id: user.id },
       ...userWithOrgsArgs
     });
@@ -7252,7 +7317,7 @@ router2.post("/login", async (req2, res) => {
       return res.status(404).json({ error: "Utilisateur non trouv\xE9 apr\xE8s la v\xE9rification." });
     }
     const isSuperAdmin2 = freshUser.role === "super_admin";
-    const mainOrg = freshUser.UserOrganization && freshUser.UserOrganization.length > 0 ? freshUser.UserOrganization.find((uo) => uo.Organization && uo.Role && uo.status === import_client6.UserOrganizationStatus.ACTIVE) || freshUser.UserOrganization.find((uo) => uo.Organization && uo.Role) : null;
+    const mainOrg = freshUser.UserOrganization && freshUser.UserOrganization.length > 0 ? freshUser.UserOrganization.find((uo) => uo.Organization && uo.Role && uo.status === import_client2.UserOrganizationStatus.ACTIVE) || freshUser.UserOrganization.find((uo) => uo.Organization && uo.Role) : null;
     if (!isSuperAdmin2 && !mainOrg) {
       console.log(`[API][login] Utilisateur ${user.id} se connecte sans organisation principale. C'est un utilisateur "flottant".`);
     }
@@ -7323,7 +7388,7 @@ router2.get(
         console.log("[/me] \xC9chec: req.user ou req.user.userId manquant");
         return res.status(401).json({ error: "Utilisateur non authentifi\xE9" });
       }
-      const user = await prisma6.user.findUnique({
+      const user = await db.user.findUnique({
         where: { id: req2.user.userId },
         // On peut maintenant y accéder en toute sécurité
         ...userWithOrgsArgs
@@ -7332,7 +7397,7 @@ router2.get(
         return res.status(404).json({ error: "Utilisateur non trouv\xE9" });
       }
       const isSuperAdmin2 = user.role === "super_admin";
-      const mainOrg = user.UserOrganization && user.UserOrganization.length > 0 ? user.UserOrganization.find((uo) => uo.Organization && uo.Role && uo.status === import_client6.UserOrganizationStatus.ACTIVE) || user.UserOrganization.find((uo) => uo.Organization && uo.Role) : null;
+      const mainOrg = user.UserOrganization && user.UserOrganization.length > 0 ? user.UserOrganization.find((uo) => uo.Organization && uo.Role && uo.status === import_client2.UserOrganizationStatus.ACTIVE) || user.UserOrganization.find((uo) => uo.Organization && uo.Role) : null;
       if (!isSuperAdmin2 && !mainOrg) {
         return res.status(403).json({ error: "Vous n'\xEAtes associ\xE9 \xE0 aucune organisation valide ou votre r\xF4le n'est pas correctement configur\xE9." });
       }
@@ -7420,7 +7485,7 @@ router2.get(
       }
       let organizations = [];
       if (isSuperAdmin2 && !isImpersonating) {
-        const allOrgs = await prisma6.organization.findMany({
+        const allOrgs = await db.organization.findMany({
           orderBy: { name: "asc" }
         });
         organizations = allOrgs.map((org) => ({
@@ -7432,7 +7497,7 @@ router2.get(
           // Le statut de la relation n'existe pas ici
         }));
       } else {
-        const userWithOrgs = await prisma6.user.findUnique({
+        const userWithOrgs = await db.user.findUnique({
           where: { id: effectiveUserId },
           ...userWithOrgsArgs
         });
@@ -7472,7 +7537,7 @@ router2.get(
     }
     try {
       if (req2.user?.role === "super_admin" && req2.impersonatedUser) {
-        const userOrg2 = await prisma6.userOrganization.findFirst({
+        const userOrg2 = await db.userOrganization.findFirst({
           where: { userId: req2.impersonatedUser.id, organizationId },
           include: { Role: true, Organization: true }
         });
@@ -7492,7 +7557,7 @@ router2.get(
         res.json({ role: "super_admin", roleLabel: "Super administrateur", orgStatus: null });
         return;
       }
-      const userOrg = await prisma6.userOrganization.findFirst({
+      const userOrg = await db.userOrganization.findFirst({
         where: { userId, organizationId },
         include: { Role: true, Organization: true }
       });
@@ -7519,11 +7584,11 @@ var misc_default = router2;
 
 // src/routes/profile.ts
 var import_express4 = require("express");
-var import_client7 = require("@prisma/client");
+init_database();
 var import_multer = __toESM(require("multer"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_fs3 = __toESM(require("fs"), 1);
-var prisma7 = new import_client7.PrismaClient();
+var prisma4 = db;
 var router3 = (0, import_express4.Router)();
 var buildAvatarUrl = (req2, avatarPath) => {
   if (!avatarPath) {
@@ -7568,7 +7633,7 @@ router3.get("/", async (req2, res) => {
     if (!userId) {
       return res.status(401).json({ error: "Utilisateur non authentifi\xE9" });
     }
-    const user = await prisma7.user.findUnique({
+    const user = await prisma4.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -7625,7 +7690,7 @@ router3.post("/avatar", upload.single("avatar"), async (req2, res) => {
       return;
     }
     const avatarUrl = `/uploads/avatars/${req2.file.filename}`;
-    const updatedUser = await prisma7.user.update({
+    const updatedUser = await prisma4.user.update({
       where: { id: userId },
       data: { avatarUrl },
       select: {
@@ -7678,7 +7743,7 @@ router3.get("/permissions", (async (req2, res) => {
     if (!userId) {
       return res.status(400).json({ error: "User ID not found in token" });
     }
-    const user = await prisma7.user.findUnique({
+    const user = await prisma4.user.findUnique({
       where: { id: userId },
       select: { role: true }
       // On vérifie le rôle global de l'utilisateur
@@ -7689,7 +7754,7 @@ router3.get("/permissions", (async (req2, res) => {
     if (!organizationId) {
       return res.json({ permissions: [] });
     }
-    const userOrgLink = await prisma7.userOrganization.findUnique({
+    const userOrgLink = await prisma4.userOrganization.findUnique({
       where: {
         userId_organizationId: {
           userId,
@@ -7745,7 +7810,7 @@ router3.put("/", (async (req2, res) => {
         }
       }
     }
-    const updatedUser = await prisma7.user.update({
+    const updatedUser = await prisma4.user.update({
       where: { id: userId },
       data: {
         firstName: sanitizeText(firstName),
@@ -7802,8 +7867,8 @@ var profile_default = router3;
 
 // src/routes/modules.ts
 var import_express5 = require("express");
-var import_client8 = require("@prisma/client");
-var prisma8 = new import_client8.PrismaClient();
+init_database();
+var prisma5 = db;
 var router4 = (0, import_express5.Router)();
 function deriveRoute(key2, provided) {
   if (!key2 && !provided) return null;
@@ -7858,7 +7923,7 @@ function mapModule(m, orgStatuses, organizationId) {
 router4.get("/", async (req2, res) => {
   const { organizationId } = req2.query;
   try {
-    const modules = await prisma8.module.findMany({
+    const modules = await prisma5.module.findMany({
       orderBy: { order: "asc" },
       include: {
         Category: {
@@ -7873,7 +7938,7 @@ router4.get("/", async (req2, res) => {
     });
     let orgStatuses = null;
     if (organizationId) {
-      const statuses = await prisma8.organizationModuleStatus.findMany({
+      const statuses = await prisma5.organizationModuleStatus.findMany({
         where: { organizationId },
         select: { moduleId: true, active: true }
       });
@@ -7892,7 +7957,7 @@ router4.get("/", async (req2, res) => {
 });
 router4.get("/all", async (_req, res) => {
   try {
-    const modules = await prisma8.module.findMany({
+    const modules = await prisma5.module.findMany({
       orderBy: { order: "asc" },
       include: {
         Category: {
@@ -7918,7 +7983,7 @@ router4.patch("/status", async (req2, res) => {
     return res.status(400).json({ success: false, message: "Param\xE8tres invalides" });
   }
   try {
-    const status = await prisma8.organizationModuleStatus.upsert({
+    const status = await prisma5.organizationModuleStatus.upsert({
       where: { organizationId_moduleId: { organizationId, moduleId } },
       update: { active },
       create: { organizationId, moduleId, active }
@@ -7936,7 +8001,7 @@ router4.post("/", async (req2, res) => {
       return res.status(400).json({ success: false, message: "key et label requis" });
     }
     const finalRoute = deriveRoute(key2, route);
-    const created = await prisma8.module.create({
+    const created = await prisma5.module.create({
       data: {
         key: key2,
         label,
@@ -7970,7 +8035,7 @@ router4.put("/:id", async (req2, res) => {
     }
     console.log(`[modules] PUT /${id} - Mise \xE0 jour module avec categoryId:`, categoryId);
     console.log(`[modules] PUT /${id} - Body complet:`, req2.body);
-    const updated = await prisma8.module.update({
+    const updated = await prisma5.module.update({
       where: { id },
       data: {
         label: label !== void 0 ? label : void 0,
@@ -8000,10 +8065,10 @@ router4.put("/:id", async (req2, res) => {
 router4.delete("/:id", async (req2, res) => {
   const { id } = req2.params;
   try {
-    await prisma8.organizationModuleStatus.deleteMany({ where: { moduleId: id } });
-    await prisma8.permission.deleteMany({ where: { moduleId: id } }).catch(() => {
+    await prisma5.organizationModuleStatus.deleteMany({ where: { moduleId: id } });
+    await prisma5.permission.deleteMany({ where: { moduleId: id } }).catch(() => {
     });
-    const deleted = await prisma8.module.delete({ where: { id } });
+    const deleted = await prisma5.module.delete({ where: { id } });
     res.json({ success: true, data: { id: deleted.id } });
   } catch (e) {
     console.error("[modules] DELETE /:id erreur", e);
@@ -8043,6 +8108,7 @@ function requireRole2(roles) {
 }
 
 // src/routes/admin-modules.ts
+init_prisma();
 var router5 = (0, import_express6.Router)();
 router5.use(authMiddleware, impersonationMiddleware);
 router5.get("/", async (req2, res) => {
@@ -8053,7 +8119,7 @@ router5.get("/", async (req2, res) => {
     console.log("[ADMIN-MODULES-V1] GET - R\xE9cup\xE9ration modules par sections (syst\xE8me hybride)");
     console.log("[ADMIN-MODULES-V1] \u{1F464} User:", user?.email, "Role:", user?.role, "IsSuperAdmin:", isSuperAdmin2);
     const fallbackIcon = "AppstoreOutlined";
-    const modules = await prisma.module.findMany({
+    const modules = await db.module.findMany({
       where: organizationId ? {
         OR: [
           { organizationId },
@@ -8072,7 +8138,7 @@ router5.get("/", async (req2, res) => {
         Permission: true
       }
     });
-    const allCategories = await prisma.category.findMany({
+    const allCategories = await db.category.findMany({
       where: {
         AND: [
           // Filtrage par organisation
@@ -8182,7 +8248,7 @@ router5.get("/categories", async (req2, res) => {
   try {
     const organizationId = req2.query.organizationId;
     console.log("[ADMIN-MODULES] GET /categories - R\xE9cup\xE9ration des categories");
-    const categories = await prisma.category.findMany({
+    const categories = await db.category.findMany({
       where: organizationId ? {
         OR: [
           { organizationId },
@@ -8226,7 +8292,7 @@ router5.post("/categories", requireRole2(["admin", "super_admin"]), async (req2,
     const { randomUUID: randomUUID9 } = await import("crypto");
     const categoryId = randomUUID9();
     const now = /* @__PURE__ */ new Date();
-    const category = await prisma.category.create({
+    const category = await db.category.create({
       data: {
         id: categoryId,
         name: name.trim(),
@@ -8264,7 +8330,7 @@ router5.put("/categories/reorder", requireRole2(["admin", "super_admin"]), async
     const { updates } = req2.body;
     console.log("[ADMIN-MODULES] PUT /categories/reorder - R\xE9organisation categories:", updates.length);
     for (const update of updates) {
-      await prisma.category.update({
+      await db.category.update({
         where: { id: update.id },
         data: {
           order: update.order,
@@ -8295,7 +8361,7 @@ router5.put("/categories/:id", requireRole2(["admin", "super_admin"]), async (re
     if (superAdminOnly && active) {
       console.log("[ADMIN-MODULES] SuperAdminOnly activ\xE9 - D\xE9sactivation automatique du module pour les organisations");
     }
-    const category = await prisma.category.update({
+    const category = await db.category.update({
       where: { id },
       data: {
         name,
@@ -8326,7 +8392,7 @@ router5.delete("/categories/:id", requireRole2(["admin", "super_admin"]), async 
   try {
     const { id } = req2.params;
     console.log("[ADMIN-MODULES] DELETE /categories/:id - Suppression category:", { id });
-    const moduleCount = await prisma.module.count({
+    const moduleCount = await db.module.count({
       where: { categoryId: id }
     });
     if (moduleCount > 0) {
@@ -8336,7 +8402,7 @@ router5.delete("/categories/:id", requireRole2(["admin", "super_admin"]), async 
       });
       return;
     }
-    await prisma.category.delete({
+    await db.category.delete({
       where: { id }
     });
     console.log(`[ADMIN-MODULES] Category supprim\xE9e: ${id}`);
@@ -8362,7 +8428,7 @@ router5.put("/modules/:id", requireRole2(["admin", "super_admin"]), async (req2,
     if (superAdminOnly && active) {
       console.log("[ADMIN-MODULES] SuperAdminOnly activ\xE9 - D\xE9sactivation automatique du module pour les organisations");
     }
-    const module2 = await prisma.module.update({
+    const module2 = await db.module.update({
       where: { id },
       data: {
         active: finalActive,
@@ -8388,10 +8454,10 @@ router5.delete("/modules/:id", requireRole2(["admin", "super_admin"]), async (re
   try {
     const { id } = req2.params;
     console.log("[ADMIN-MODULES] DELETE /modules/:id (alias) - Suppression module:", { id });
-    await prisma.organizationModuleStatus.deleteMany({ where: { moduleId: id } });
-    await prisma.permission.deleteMany({ where: { moduleId: id } }).catch(() => {
+    await db.organizationModuleStatus.deleteMany({ where: { moduleId: id } });
+    await db.permission.deleteMany({ where: { moduleId: id } }).catch(() => {
     });
-    await prisma.module.delete({ where: { id } });
+    await db.module.delete({ where: { id } });
     res.json({ success: true, data: { id } });
   } catch (error) {
     console.error("[ADMIN-MODULES] Erreur DELETE /modules/:id (alias):", error);
@@ -8406,8 +8472,8 @@ var admin_modules_default = router5;
 
 // src/routes/icons.ts
 var import_express7 = require("express");
-var import_client9 = require("@prisma/client");
-var prisma9 = new import_client9.PrismaClient();
+init_database();
+var prisma6 = db;
 var router6 = (0, import_express7.Router)();
 router6.use(authMiddleware, impersonationMiddleware);
 router6.get("/", async (req2, res) => {
@@ -8429,7 +8495,7 @@ router6.get("/", async (req2, res) => {
         { tags: { hasSome: [searchTerm] } }
       ];
     }
-    const icons = await prisma9.icon.findMany({
+    const icons = await prisma6.icon.findMany({
       where: whereClause,
       orderBy: [
         { category: "asc" },
@@ -8464,7 +8530,7 @@ router6.get("/", async (req2, res) => {
 router6.get("/categories", async (req2, res) => {
   try {
     console.log("[ICONS-API] GET - R\xE9cup\xE9ration des cat\xE9gories d'ic\xF4nes");
-    const categories = await prisma9.icon.groupBy({
+    const categories = await prisma6.icon.groupBy({
       by: ["category"],
       where: { active: true },
       _count: { id: true },
@@ -8497,7 +8563,7 @@ router6.post("/", requireRole2(["super_admin"]), async (req2, res) => {
       });
       return;
     }
-    const newIcon = await prisma9.icon.create({
+    const newIcon = await prisma6.icon.create({
       data: {
         name,
         category,
@@ -8528,7 +8594,7 @@ router6.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
     delete updateData.id;
     delete updateData.createdAt;
     delete updateData.updatedAt;
-    const updatedIcon = await prisma9.icon.update({
+    const updatedIcon = await prisma6.icon.update({
       where: { id },
       data: updateData
     });
@@ -8550,7 +8616,7 @@ router6.delete("/:id", requireRole2(["super_admin"]), async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("[ICONS-API] DELETE - D\xE9sactivation de l'ic\xF4ne:", id);
-    const disabledIcon = await prisma9.icon.update({
+    const disabledIcon = await prisma6.icon.update({
       where: { id },
       data: { active: false }
     });
@@ -8647,8 +8713,8 @@ var company_default = router7;
 var import_express9 = require("express");
 var import_uuid = require("uuid");
 var import_zod = require("zod");
-var import_client10 = require("@prisma/client");
-var import_bcryptjs3 = __toESM(require("bcryptjs"), 1);
+var import_client3 = require("@prisma/client");
+var import_bcryptjs4 = __toESM(require("bcryptjs"), 1);
 
 // src/services/EmailService.ts
 var EmailService = class {
@@ -8711,7 +8777,7 @@ var EmailService = class {
 var emailService = new EmailService();
 
 // src/routes/invitations.ts
-var prisma10 = new import_client10.PrismaClient();
+init_prisma();
 var router8 = (0, import_express9.Router)();
 router8.use(authMiddleware, impersonationMiddleware);
 var createInvitationSchema = import_zod.z.object({
@@ -8723,7 +8789,7 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
   try {
     const { email, roleName, organizationId } = createInvitationSchema.parse(req2.body);
     const inviterId = req2.user.userId;
-    const existingUserInOrg = await prisma10.userOrganization.findFirst({
+    const existingUserInOrg = await db.userOrganization.findFirst({
       where: {
         organizationId,
         User: { email }
@@ -8733,7 +8799,7 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
       res.status(409).json({ message: "Un utilisateur avec cet e-mail est d\xE9j\xE0 membre de cette organisation." });
       return;
     }
-    const role = await prisma10.role.findFirst({
+    const role = await db.role.findFirst({
       where: {
         name: roleName,
         OR: [
@@ -8748,7 +8814,7 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
       res.status(404).json({ message: `Le r\xF4le '${roleName}' n'a pas \xE9t\xE9 trouv\xE9.` });
       return;
     }
-    const existingInvitation = await prisma10.invitation.findUnique({
+    const existingInvitation = await db.invitation.findUnique({
       where: { email_organizationId: { email, organizationId } }
     });
     if (existingInvitation && existingInvitation.status === "PENDING" && existingInvitation.expiresAt > /* @__PURE__ */ new Date()) {
@@ -8756,9 +8822,9 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
       return;
     }
     if (existingInvitation) {
-      await prisma10.invitation.delete({ where: { id: existingInvitation.id } });
+      await db.invitation.delete({ where: { id: existingInvitation.id } });
     }
-    const targetUser = await prisma10.user.findUnique({
+    const targetUser = await db.user.findUnique({
       where: { email }
     });
     const token = (0, import_uuid.v4)();
@@ -8778,7 +8844,7 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
     if (targetUser) {
       invitationData.User_Invitation_targetUserIdToUser = { connect: { id: targetUser.id } };
     }
-    const newInvitation = await prisma10.invitation.create({
+    const newInvitation = await db.invitation.create({
       data: invitationData,
       include: {
         Organization: true,
@@ -8810,7 +8876,7 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
       res.status(400).json({ message: "Donn\xE9es invalides.", details: error.errors });
       return;
     }
-    if (error instanceof import_client10.Prisma.PrismaClientKnownRequestError) {
+    if (error instanceof import_client3.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         const target = error.meta?.target ?? "champs inconnus";
         console.error(`Erreur de contrainte unique (P2002) sur ${target}:`, error);
@@ -8827,7 +8893,7 @@ router8.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
 router8.post("/:id/resend", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
-    const invitation = await prisma10.invitation.findFirst({
+    const invitation = await db.invitation.findFirst({
       where: { id, status: { in: ["PENDING", "DISABLED"] } }
     });
     if (!invitation) {
@@ -8837,7 +8903,7 @@ router8.post("/:id/resend", authMiddleware, requireRole2(["admin", "super_admin"
     const newToken = (0, import_uuid.v4)();
     const newExpiresAt = /* @__PURE__ */ new Date();
     newExpiresAt.setDate(newExpiresAt.getDate() + 7);
-    const updatedInvitation = await prisma10.invitation.update({
+    const updatedInvitation = await db.invitation.update({
       where: { id },
       data: {
         token: newToken,
@@ -8860,7 +8926,7 @@ router8.patch("/:id/status", authMiddleware, requireRole2(["admin", "super_admin
     return;
   }
   try {
-    const invitation = await prisma10.invitation.findUnique({ where: { id } });
+    const invitation = await db.invitation.findUnique({ where: { id } });
     if (!invitation) {
       res.status(404).json({ message: "Invitation non trouv\xE9e." });
       return;
@@ -8869,7 +8935,7 @@ router8.patch("/:id/status", authMiddleware, requireRole2(["admin", "super_admin
       res.status(400).json({ message: `L'invitation ne peut pas \xEAtre modifi\xE9e car son statut est ${invitation.status}.` });
       return;
     }
-    const updatedInvitation = await prisma10.invitation.update({
+    const updatedInvitation = await db.invitation.update({
       where: { id },
       data: { status }
     });
@@ -8885,7 +8951,7 @@ var verifyTokenSchema = import_zod.z.object({
 router8.get("/verify", async (req2, res) => {
   try {
     const { token } = verifyTokenSchema.parse(req2.query);
-    const invitation = await prisma10.invitation.findUnique({
+    const invitation = await db.invitation.findUnique({
       where: {
         token,
         expiresAt: { gte: /* @__PURE__ */ new Date() },
@@ -8929,7 +8995,7 @@ var acceptInvitationSchema = import_zod.z.object({
 router8.post("/accept", async (req2, res) => {
   try {
     const invitationToken = import_zod.z.string().uuid("Le format du jeton est invalide.").parse(req2.body.token);
-    const invitation = await prisma10.invitation.findUnique({
+    const invitation = await db.invitation.findUnique({
       where: {
         token: invitationToken,
         expiresAt: { gte: /* @__PURE__ */ new Date() },
@@ -8941,12 +9007,12 @@ router8.post("/accept", async (req2, res) => {
       return;
     }
     if (invitation.targetUserId) {
-      const user = await prisma10.user.findUnique({ where: { id: invitation.targetUserId } });
+      const user = await db.user.findUnique({ where: { id: invitation.targetUserId } });
       if (!user) {
         res.status(404).json({ message: "L'utilisateur associ\xE9 \xE0 cette invitation n'existe plus." });
         return;
       }
-      await prisma10.$transaction(async (tx) => {
+      await db.$transaction(async (tx) => {
         await tx.userOrganization.create({
           data: {
             userId: user.id,
@@ -8964,13 +9030,13 @@ router8.post("/accept", async (req2, res) => {
       return;
     }
     const { firstName, lastName, password } = acceptInvitationSchema.parse(req2.body);
-    const existingUser = await prisma10.user.findUnique({ where: { email: invitation.email } });
+    const existingUser = await db.user.findUnique({ where: { email: invitation.email } });
     if (existingUser) {
       res.status(409).json({ message: "Un utilisateur avec cette adresse e-mail existe d\xE9j\xE0. Veuillez vous connecter pour accepter l'invitation." });
       return;
     }
-    const passwordHash = await import_bcryptjs3.default.hash(password, 10);
-    const newUser = await prisma10.$transaction(async (tx) => {
+    const passwordHash = await import_bcryptjs4.default.hash(password, 10);
+    const newUser = await db.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
           firstName,
@@ -9007,17 +9073,17 @@ router8.post("/accept", async (req2, res) => {
 router8.delete("/:id", authMiddleware, requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
-    const invitation = await prisma10.invitation.findFirst({
+    const invitation = await db.invitation.findFirst({
       where: { id, status: { in: ["PENDING", "DISABLED"] } }
     });
     if (!invitation) {
       res.status(404).json({ success: false, message: "Invitation non trouv\xE9e, d\xE9j\xE0 utilis\xE9e ou expir\xE9e." });
       return;
     }
-    await prisma10.invitation.delete({
+    await db.invitation.delete({
       where: { id }
     });
-    await prisma10.user.deleteMany({
+    await db.user.deleteMany({
       where: {
         email: invitation.email,
         status: "invited"
@@ -9032,20 +9098,20 @@ router8.delete("/:id", authMiddleware, requireRole2(["admin", "super_admin"]), a
 router8.post("/:id/force-accept", requireRole2(["super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
-    const invitation = await prisma10.invitation.findUnique({ where: { id } });
+    const invitation = await db.invitation.findUnique({ where: { id } });
     if (!invitation) {
       return res.status(404).json({ success: false, message: "Invitation non trouv\xE9e." });
     }
     if (invitation.status !== "PENDING") {
       return res.status(400).json({ success: false, message: `L'invitation a d\xE9j\xE0 le statut ${invitation.status}.` });
     }
-    const existingUser = await prisma10.user.findUnique({ where: { email: invitation.email } });
+    const existingUser = await db.user.findUnique({ where: { email: invitation.email } });
     if (existingUser) {
       return res.status(409).json({ success: false, message: "Un utilisateur avec cet e-mail existe d\xE9j\xE0." });
     }
     const tempPassword = (0, import_uuid.v4)();
-    const passwordHash = await import_bcryptjs3.default.hash(tempPassword, 10);
-    const newUser = await prisma10.$transaction(async (tx) => {
+    const passwordHash = await import_bcryptjs4.default.hash(tempPassword, 10);
+    const newUser = await db.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
           email: invitation.email,
@@ -9104,7 +9170,7 @@ router8.get("/", authMiddleware, requireRole2(["admin", "super_admin"]), async (
       where.organizationId = requestingUser.organizationId;
     }
     where.status = { in: ["PENDING", "DISABLED"] };
-    const invitationsRaw = await prisma10.invitation.findMany({
+    const invitationsRaw = await db.invitation.findMany({
       where,
       include: {
         Role: true,
@@ -9127,12 +9193,12 @@ var invitations_default = router8;
 
 // src/routes/organizations.ts
 var import_express10 = require("express");
-var import_client11 = require("@prisma/client");
+init_database();
 var import_zod2 = require("zod");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_crypto2 = require("crypto");
 var router9 = (0, import_express10.Router)();
-var prisma11 = new import_client11.PrismaClient();
+var prisma7 = db;
 var sanitizeString = (input) => {
   return input.trim().replace(/[<>]/g, "");
 };
@@ -9170,7 +9236,7 @@ var getActiveGoogleModules = (moduleStatuses = []) => {
   );
 };
 async function countRealActiveModules(organizationId) {
-  const organization = await prisma11.organization.findUnique({
+  const organization = await prisma7.organization.findUnique({
     where: { id: organizationId },
     select: {
       GoogleWorkspaceConfig: true,
@@ -9178,7 +9244,7 @@ async function countRealActiveModules(organizationId) {
     }
   });
   const hasGoogleWorkspace = !!organization?.GoogleWorkspaceConfig;
-  const allActiveModules = await prisma11.module.findMany({
+  const allActiveModules = await prisma7.module.findMany({
     where: {
       active: true
     },
@@ -9404,7 +9470,7 @@ router9.get("/active", async (req2, res) => {
       };
     }
     if (userId && typeof userId === "string") {
-      const userOrgs = await prisma11.userOrganization.findMany({
+      const userOrgs = await prisma7.userOrganization.findMany({
         where: { userId: sanitizeString(userId) },
         select: { organizationId: true }
       });
@@ -9426,7 +9492,7 @@ router9.get("/active", async (req2, res) => {
         message: "Acc\xE8s refus\xE9"
       });
     }
-    const organizations = await prisma11.organization.findMany({
+    const organizations = await prisma7.organization.findMany({
       where,
       include: {
         _count: {
@@ -9501,7 +9567,7 @@ router9.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
       };
     }
     if (userId && typeof userId === "string") {
-      const userOrgs = await prisma11.userOrganization.findMany({
+      const userOrgs = await prisma7.userOrganization.findMany({
         where: { userId: sanitizeString(userId) },
         select: { organizationId: true }
       });
@@ -9520,7 +9586,7 @@ router9.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
         message: "Acc\xE8s refus\xE9"
       });
     }
-    const organizations = await prisma11.organization.findMany({
+    const organizations = await prisma7.organization.findMany({
       where,
       include: {
         _count: {
@@ -9604,7 +9670,7 @@ router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), a
       address: data.address ? sanitizeString(data.address) : null
     };
     console.log("[ORGANIZATIONS] Donn\xE9es sanitis\xE9es:", sanitizedData);
-    const existingOrg = await prisma11.organization.findFirst({
+    const existingOrg = await prisma7.organization.findFirst({
       where: {
         name: {
           equals: sanitizedData.name,
@@ -9620,7 +9686,7 @@ router9.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), a
     }
     const now = /* @__PURE__ */ new Date();
     const generatedId = (0, import_crypto2.randomUUID)();
-    const newOrganization = await prisma11.$transaction(async (tx) => {
+    const newOrganization = await prisma7.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
           id: generatedId,
@@ -9666,7 +9732,7 @@ router9.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =>
         message: "Acc\xE8s refus\xE9 \xE0 cette organisation"
       });
     }
-    const organization = await prisma11.organization.findUnique({
+    const organization = await prisma7.organization.findUnique({
       where: { id: sanitizedId },
       include: {
         UserOrganization: {
@@ -9783,7 +9849,7 @@ router9.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
       updateData.address = data.address ? sanitizeString(data.address) : null;
     }
     console.log("[ORGANIZATIONS] Donn\xE9es de mise \xE0 jour sanitis\xE9es:", updateData);
-    const existingOrg = await prisma11.organization.findUnique({
+    const existingOrg = await prisma7.organization.findUnique({
       where: { id: sanitizedId }
     });
     if (!existingOrg) {
@@ -9793,7 +9859,7 @@ router9.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
       });
     }
     if (updateData.name && updateData.name !== existingOrg.name) {
-      const duplicateOrg = await prisma11.organization.findFirst({
+      const duplicateOrg = await prisma7.organization.findFirst({
         where: {
           name: {
             equals: updateData.name,
@@ -9809,7 +9875,7 @@ router9.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
         });
       }
     }
-    const updatedOrganization = await prisma11.$transaction(async (tx) => {
+    const updatedOrganization = await prisma7.$transaction(async (tx) => {
       const updated = await tx.organization.update({
         where: { id: sanitizedId },
         data: updateData
@@ -9876,7 +9942,7 @@ router9.delete("/:id", organizationsDeleteRateLimit, requireRole2(["super_admin"
   try {
     const { id } = req2.params;
     const sanitizedId = validateAndSanitizeId(id, "ID organisation");
-    const existingOrg = await prisma11.organization.findUnique({
+    const existingOrg = await prisma7.organization.findUnique({
       where: { id: sanitizedId },
       include: {
         _count: {
@@ -9898,7 +9964,7 @@ router9.delete("/:id", organizationsDeleteRateLimit, requireRole2(["super_admin"
         message: "Impossible de supprimer une organisation ayant des utilisateurs"
       });
     }
-    await prisma11.$transaction(async (tx) => {
+    await prisma7.$transaction(async (tx) => {
       await cleanupOrganizationData(tx, sanitizedId);
       await tx.organization.delete({
         where: { id: sanitizedId }
@@ -9910,7 +9976,7 @@ router9.delete("/:id", organizationsDeleteRateLimit, requireRole2(["super_admin"
     });
   } catch (error) {
     console.error("[ORGANIZATIONS] Erreur DELETE:", error);
-    if (error instanceof import_client11.Prisma.PrismaClientKnownRequestError) {
+    if (error instanceof import_client.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2003") {
         return res.status(409).json({
           success: false,
@@ -9935,7 +10001,7 @@ router9.get("/:id/google-modules", requireRole2(["admin", "super_admin"]), async
         message: "Acc\xE8s refus\xE9 \xE0 cette organisation"
       });
     }
-    const moduleStatuses = await prisma11.organizationModuleStatus.findMany({
+    const moduleStatuses = await prisma7.organizationModuleStatus.findMany({
       where: {
         organizationId: sanitizedId,
         Module: {
@@ -9996,7 +10062,7 @@ router9.post("/:id/google-modules/:module/toggle", requireRole2(["super_admin"])
         message: "Le param\xE8tre enabled doit \xEAtre un bool\xE9en"
       });
     }
-    await prisma11.$transaction(async (tx) => {
+    await prisma7.$transaction(async (tx) => {
       let moduleRecord = await tx.module.findFirst({
         where: { key: sanitizedModule }
       });
@@ -10051,7 +10117,7 @@ router9.get("/:id/google-workspace/domain-status", requireRole2(["admin", "super
         message: "Acc\xE8s refus\xE9 \xE0 cette organisation"
       });
     }
-    const organization = await prisma11.organization.findUnique({
+    const organization = await prisma7.organization.findUnique({
       where: { id: sanitizedId }
     });
     if (!organization) {
@@ -10060,7 +10126,7 @@ router9.get("/:id/google-workspace/domain-status", requireRole2(["admin", "super
         message: "Organisation non trouv\xE9e"
       });
     }
-    const googleConfig = await prisma11.googleWorkspaceConfig.findUnique({
+    const googleConfig = await prisma7.googleWorkspaceConfig.findUnique({
       where: { organizationId: sanitizedId }
     });
     const domain = googleConfig?.domain || "2thier.be";
@@ -10103,6 +10169,7 @@ var organizations_default = router9;
 
 // src/routes/autoGoogleAuthRoutes.ts
 var import_express11 = require("express");
+init_prisma();
 var router10 = (0, import_express11.Router)();
 var connectCache = /* @__PURE__ */ new Map();
 router10.get("/status", authMiddleware, async (req2, res) => {
@@ -10120,7 +10187,7 @@ router10.get("/status", authMiddleware, async (req2, res) => {
     });
   }
   try {
-    const tokens2 = await prisma.googleToken.findUnique({
+    const tokens2 = await db.googleToken.findUnique({
       where: { organizationId }
     });
     if (!tokens2 || !tokens2.accessToken) {
@@ -10134,7 +10201,7 @@ router10.get("/status", authMiddleware, async (req2, res) => {
         }
       });
     }
-    const gwConfig = await prisma.googleWorkspaceConfig.findUnique({
+    const gwConfig = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId }
     });
     return res.json({
@@ -10175,7 +10242,7 @@ router10.post("/connect", authMiddleware, async (req2, res) => {
     return res.status(403).json({ success: false, error: "Acc\xE8s interdit: utilisateur non autoris\xE9." });
   }
   if (!isSuperAdmin2) {
-    const membership = await prisma.userOrganization.findFirst({ where: { userId: caller.userId, organizationId } });
+    const membership = await db.userOrganization.findFirst({ where: { userId: caller.userId, organizationId } });
     if (!membership) {
       return res.status(403).json({ success: false, error: "Acc\xE8s interdit: organisation non autoris\xE9e." });
     }
@@ -10197,7 +10264,7 @@ router10.post("/connect", authMiddleware, async (req2, res) => {
       return res.json(payload2);
     }
     console.log("[AutoGoogleAuth] \u{1F510} Connexion Google non active, g\xE9n\xE9ration de l'URL d'autorisation...");
-    const org = await prisma.organization.findUnique({
+    const org = await db.organization.findUnique({
       where: { id: organizationId },
       include: { GoogleWorkspaceConfig: true }
     });
@@ -10242,15 +10309,17 @@ var autoGoogleAuthRoutes_default = router10;
 
 // src/routes/google-auth.ts
 var import_express13 = require("express");
+init_prisma();
 init_crypto();
 var import_googleapis6 = require("googleapis");
 
 // src/utils/googleTokenRefresh.ts
 var import_googleapis5 = require("googleapis");
+init_prisma();
 async function refreshGoogleTokenIfNeeded(organizationId) {
   try {
     console.log("[REFRESH-TOKEN] \u{1F50D} V\xE9rification token pour organisation:", organizationId);
-    const googleToken = await prisma.googleToken.findUnique({
+    const googleToken = await db.googleToken.findUnique({
       where: { organizationId }
     });
     if (!googleToken) {
@@ -10285,7 +10354,7 @@ async function refreshGoogleTokenIfNeeded(organizationId) {
       return { success: false, error: "no_refresh_token" };
     }
     console.log("[REFRESH-TOKEN] \u{1F504} Token expir\xE9/expirant (moins de 30min), tentative de refresh...");
-    const googleConfig = await prisma.googleWorkspaceConfig.findUnique({
+    const googleConfig = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId }
     });
     if (!googleConfig || !googleConfig.clientId || !googleConfig.clientSecret) {
@@ -10316,7 +10385,7 @@ async function refreshGoogleTokenIfNeeded(organizationId) {
       console.log("[REFRESH-TOKEN] \u{1F4CB} Nouveau refresh token re\xE7u:", !!credentials.refresh_token);
       const newExpiresAt = credentials.expiry_date ? new Date(credentials.expiry_date) : null;
       console.log("[REFRESH-TOKEN] \u{1F4BE} Sauvegarde du nouveau token...");
-      await prisma.googleToken.update({
+      await db.googleToken.update({
         where: { organizationId },
         data: {
           accessToken: credentials.access_token,
@@ -10595,7 +10664,7 @@ var GOOGLE_SCOPES = GOOGLE_SCOPES_LIST.join(" ");
 async function getGoogleWorkspaceConfig(organizationId) {
   try {
     console.log("[GOOGLE-AUTH] \u{1F4CB} Recherche config pour organisation:", organizationId);
-    const config = await prisma.googleWorkspaceConfig.findUnique({
+    const config = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId }
     });
     console.log("[GOOGLE-AUTH] \u{1F4CA} Config brute depuis BDD:", config ? "Trouv\xE9e" : "Non trouv\xE9e");
@@ -10679,7 +10748,7 @@ async function activateGoogleModules(organizationId, grantedScopes) {
     }
     if (Object.keys(configUpdates).length > 0) {
       console.log("[GOOGLE-AUTH] \u{1F4BE} Mise \xE0 jour config avec modules:", configUpdates);
-      await prisma.googleWorkspaceConfig.update({
+      await db.googleWorkspaceConfig.update({
         where: { organizationId },
         data: {
           ...configUpdates,
@@ -10692,7 +10761,7 @@ async function activateGoogleModules(organizationId, grantedScopes) {
     console.log("[GOOGLE-AUTH] \u{1F527} Activation des modules CRM...");
     for (const moduleName of modulesToActivate) {
       try {
-        const module2 = await prisma.module.findFirst({
+        const module2 = await db.module.findFirst({
           where: {
             label: {
               contains: moduleName,
@@ -10701,7 +10770,7 @@ async function activateGoogleModules(organizationId, grantedScopes) {
           }
         });
         if (module2) {
-          await prisma.organizationModule.upsert({
+          await db.organizationModule.upsert({
             where: {
               organizationId_moduleId: {
                 organizationId,
@@ -10898,7 +10967,7 @@ router12.get("/callback", async (req2, res) => {
       console.log("[GOOGLE-AUTH] \u2705 Connexion Google valid\xE9e pour l'admin:", config.adminEmail);
       console.log("[GOOGLE-AUTH] \u{1F4BE} Sauvegarde des tokens pour l'organisation:", organizationId);
       await googleOAuthService.saveUserTokens(userId, organizationId, tokens2);
-      const googleTokenRecord = await prisma.googleToken.findUnique({ where: { organizationId } });
+      const googleTokenRecord = await db.googleToken.findUnique({ where: { organizationId } });
       console.log("[GOOGLE-AUTH] \u2705 Tokens sauvegard\xE9s pour l'organisation:", googleTokenRecord?.id);
       console.log("[GOOGLE-AUTH] \u{1F527} Activation des modules Google Workspace...");
       await activateGoogleModules(organizationId, tokens2.scope || "");
@@ -11022,7 +11091,7 @@ router12.get("/status", authMiddleware, async (req2, res) => {
       const userInfo = await oauth2.userinfo.get();
       userEmail = userInfo.data.email;
       tokenValid = true;
-      const googleToken2 = await prisma.googleToken.findUnique({
+      const googleToken2 = await db.googleToken.findUnique({
         where: { organizationId }
       });
       scopes = googleToken2?.scope ? googleToken2.scope.split(" ") : [];
@@ -11031,7 +11100,7 @@ router12.get("/status", authMiddleware, async (req2, res) => {
       console.log("[GOOGLE-AUTH] \u274C Erreur validation token final:", tokenError);
       tokenValid = false;
     }
-    const googleToken = await prisma.googleToken.findUnique({
+    const googleToken = await db.googleToken.findUnique({
       where: { organizationId }
     });
     res.json({
@@ -11082,7 +11151,7 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
     } catch (e) {
       console.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (REQUESTED):", e?.message);
     }
-    const googleToken = await prisma.googleToken.findUnique({
+    const googleToken = await db.googleToken.findUnique({
       where: { organizationId }
     });
     if (googleToken) {
@@ -11098,13 +11167,13 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
         console.log("[GOOGLE-AUTH] \u26A0\uFE0F Erreur r\xE9vocation c\xF4t\xE9 Google (peut-\xEAtre d\xE9j\xE0 r\xE9voqu\xE9):", revokeError);
       }
       console.log("[GOOGLE-AUTH] \u{1F5D1}\uFE0F Suppression du token de la base...");
-      await prisma.googleToken.delete({
+      await db.googleToken.delete({
         where: { organizationId }
       });
       console.log("[GOOGLE-AUTH] \u2705 Token supprim\xE9 de la base");
     }
     console.log("[GOOGLE-AUTH] \u{1F527} D\xE9sactivation des modules Google...");
-    await prisma.googleWorkspaceConfig.update({
+    await db.googleWorkspaceConfig.update({
       where: { organizationId },
       data: {
         enabled: false,
@@ -11118,7 +11187,7 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    const googleModules = await prisma.module.findMany({
+    const googleModules = await db.module.findMany({
       where: {
         name: {
           in: ["Gmail", "Calendar", "Drive", "Docs", "Sheets", "Meet"],
@@ -11127,7 +11196,7 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
       }
     });
     for (const module2 of googleModules) {
-      await prisma.organizationModule.updateMany({
+      await db.organizationModule.updateMany({
         where: {
           organizationId,
           moduleId: module2.id
@@ -11191,7 +11260,7 @@ router12.post("/toggle-module", authMiddleware, async (req2, res) => {
         message: "Param\xE8tres invalides (moduleName et enabled requis)"
       });
     }
-    const googleToken = await prisma.googleToken.findUnique({
+    const googleToken = await db.googleToken.findUnique({
       where: { organizationId }
     });
     if (!googleToken && enabled) {
@@ -11220,11 +11289,11 @@ router12.post("/toggle-module", authMiddleware, async (req2, res) => {
       [configField]: enabled,
       updatedAt: /* @__PURE__ */ new Date()
     };
-    await prisma.googleWorkspaceConfig.update({
+    await db.googleWorkspaceConfig.update({
       where: { organizationId },
       data: updateData
     });
-    const module2 = await prisma.module.findFirst({
+    const module2 = await db.module.findFirst({
       where: {
         name: {
           contains: moduleName,
@@ -11233,7 +11302,7 @@ router12.post("/toggle-module", authMiddleware, async (req2, res) => {
       }
     });
     if (module2) {
-      await prisma.organizationModule.upsert({
+      await db.organizationModule.upsert({
         where: {
           organizationId_moduleId: {
             organizationId,
@@ -11278,6 +11347,7 @@ var google_auth_default = router12;
 var import_express14 = require("express");
 
 // src/services/GoogleTokenRefreshScheduler.ts
+init_prisma();
 var GoogleTokenRefreshScheduler = class {
   intervalId = null;
   isRunning = false;
@@ -11324,7 +11394,7 @@ var GoogleTokenRefreshScheduler = class {
     try {
       console.log("\u{1F504} [GoogleTokenScheduler] D\xE9but du refresh de tous les tokens...");
       this.lastRefreshTime = /* @__PURE__ */ new Date();
-      const tokensToRefresh = await prisma.googleToken.findMany({
+      const tokensToRefresh = await db.googleToken.findMany({
         where: {
           OR: [
             // Tokens qui expirent dans moins de 10 minutes
@@ -11409,7 +11479,7 @@ var GoogleTokenRefreshScheduler = class {
       }
       const tokenData = await response.json();
       const newExpiresAt = new Date(Date.now() + tokenData.expires_in * 1e3);
-      await prisma.googleToken.update({
+      await db.googleToken.update({
         where: { organizationId: token.organizationId },
         data: {
           accessToken: tokenData.access_token,
@@ -11456,7 +11526,7 @@ var GoogleTokenRefreshScheduler = class {
     newExpiresAt
   }) {
     try {
-      await prisma.googleTokenRefreshHistory.create({
+      await db.googleTokenRefreshHistory.create({
         data: {
           organizationId,
           success,
@@ -11475,6 +11545,7 @@ var GoogleTokenRefreshScheduler = class {
 var googleTokenScheduler = new GoogleTokenRefreshScheduler();
 
 // src/routes/google-scheduler.ts
+init_prisma();
 var router13 = (0, import_express14.Router)();
 router13.use(authMiddleware);
 router13.use(requireRole2(["admin", "super_admin"]));
@@ -11561,7 +11632,7 @@ router13.post("/restart", (_req, res) => {
 });
 router13.get("/tokens-info", async (_req, res) => {
   try {
-    const tokens2 = await prisma.googleToken.findMany({
+    const tokens2 = await db.googleToken.findMany({
       include: {
         organization: {
           select: {
@@ -11622,14 +11693,15 @@ var google_scheduler_default = router13;
 
 // src/routes/google-tokens.ts
 var import_express15 = require("express");
+init_prisma();
 var router14 = (0, import_express15.Router)();
 router14.use(authMiddleware);
 router14.use(requireRole2(["admin", "super_admin"]));
 router14.get("/scheduler/status", async (_req, res) => {
   try {
     const status = googleTokenScheduler.getStatus();
-    const totalTokens = await prisma.googleToken.count();
-    const activeTokens = await prisma.googleToken.count({
+    const totalTokens = await db.googleToken.count();
+    const activeTokens = await db.googleToken.count({
       where: {
         expiresAt: {
           gt: /* @__PURE__ */ new Date()
@@ -11665,7 +11737,7 @@ router14.get("/scheduler/status", async (_req, res) => {
 router14.get("/organization/:organizationId", async (req2, res) => {
   try {
     const { organizationId } = req2.params;
-    const token = await prisma.googleToken.findUnique({
+    const token = await db.googleToken.findUnique({
       where: { organizationId }
     });
     if (!token) {
@@ -11766,7 +11838,7 @@ router14.post("/scheduler/refresh-now", async (_req, res) => {
 router14.get("/refresh-history/:organizationId", async (req2, res) => {
   try {
     const { organizationId } = req2.params;
-    const history = await prisma.googleTokenRefreshHistory.findMany({
+    const history = await db.googleTokenRefreshHistory.findMany({
       where: {
         organizationId
       },
@@ -11802,11 +11874,11 @@ var google_tokens_default = router14;
 
 // src/routes/googleWorkspace.ts
 var import_express16 = require("express");
-var import_client12 = require("@prisma/client");
+init_database();
 var import_zod3 = require("zod");
 init_crypto();
 var router15 = (0, import_express16.Router)();
-var prisma12 = new import_client12.PrismaClient();
+var prisma8 = db;
 router15.use(authMiddleware);
 var googleWorkspaceConfigSchema = import_zod3.z.object({
   clientId: import_zod3.z.string().min(1, "Client ID requis"),
@@ -11840,7 +11912,7 @@ router15.get("/:id/google-workspace/config", requireRole2(["admin", "super_admin
         message: "Acc\xE8s refus\xE9 \xE0 cette organisation"
       });
     }
-    const config = await prisma12.googleWorkspaceConfig.findUnique({
+    const config = await prisma8.googleWorkspaceConfig.findUnique({
       where: { organizationId: id }
     });
     if (!config) {
@@ -11924,7 +11996,7 @@ router15.post("/:id/google-workspace/config", requireRole2(["super_admin"]), asy
       });
     }
     const data = validationResult2.data;
-    const organization = await prisma12.organization.findUnique({
+    const organization = await prisma8.organization.findUnique({
       where: { id }
     });
     if (!organization) {
@@ -11934,7 +12006,7 @@ router15.post("/:id/google-workspace/config", requireRole2(["super_admin"]), asy
       });
     }
     const redirectUri = data.redirectUri || `${process.env.FRONTEND_URL || "http://localhost:3000"}/api/auth/google/callback`;
-    const existingConfig = await prisma12.googleWorkspaceConfig.findUnique({
+    const existingConfig = await prisma8.googleWorkspaceConfig.findUnique({
       where: { organizationId: id }
     });
     const configData = {
@@ -11956,7 +12028,7 @@ router15.post("/:id/google-workspace/config", requireRole2(["super_admin"]), asy
       voiceEnabled: data.voiceEnabled,
       updatedAt: /* @__PURE__ */ new Date()
     };
-    const config = await prisma12.googleWorkspaceConfig.upsert({
+    const config = await prisma8.googleWorkspaceConfig.upsert({
       where: { organizationId: id },
       update: configData,
       create: {
@@ -11992,7 +12064,7 @@ router15.get("/:id/google-workspace/auth-url", requireRole2(["admin", "super_adm
         message: "Acc\xE8s refus\xE9 \xE0 cette organisation"
       });
     }
-    const config = await prisma12.googleWorkspaceConfig.findUnique({
+    const config = await prisma8.googleWorkspaceConfig.findUnique({
       where: { organizationId: id }
     });
     if (!config) {
@@ -12068,7 +12140,7 @@ router15.get("/users/:userId/status", requireRole2(["admin", "super_admin"]), as
   try {
     const { userId } = req2.params;
     const requestingUser = req2.user;
-    const targetUser = await prisma12.user.findUnique({
+    const targetUser = await prisma8.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -12096,7 +12168,7 @@ router15.get("/users/:userId/status", requireRole2(["admin", "super_admin"]), as
       });
     }
     const googleConfig = userOrg?.Organization?.GoogleWorkspaceConfig;
-    const googleUserStatus = await prisma12.googleWorkspaceUser.findUnique({
+    const googleUserStatus = await prisma8.googleWorkspaceUser.findUnique({
       where: { userId }
     });
     const normalizeString = (str) => {
@@ -12147,7 +12219,7 @@ router15.post("/users/create", requireRole2(["admin", "super_admin"]), async (re
         message: "userId et email sont requis"
       });
     }
-    const targetUser = await prisma12.user.findUnique({
+    const targetUser = await prisma8.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -12181,11 +12253,11 @@ router15.post("/users/create", requireRole2(["admin", "super_admin"]), async (re
         message: "Google Workspace n'est pas configur\xE9 pour cette organisation"
       });
     }
-    const existingGoogleUser = await prisma12.googleWorkspaceUser.findUnique({
+    const existingGoogleUser = await prisma8.googleWorkspaceUser.findUnique({
       where: { userId }
     });
     if (existingGoogleUser) {
-      const updatedGoogleUser = await prisma12.googleWorkspaceUser.update({
+      const updatedGoogleUser = await prisma8.googleWorkspaceUser.update({
         where: { userId },
         data: {
           email,
@@ -12203,7 +12275,7 @@ router15.post("/users/create", requireRole2(["admin", "super_admin"]), async (re
         data: updatedGoogleUser
       });
     } else {
-      const newGoogleUser = await prisma12.googleWorkspaceUser.create({
+      const newGoogleUser = await prisma8.googleWorkspaceUser.create({
         data: {
           userId,
           email,
@@ -12234,7 +12306,7 @@ router15.post("/users/:userId/sync", requireRole2(["admin", "super_admin"]), asy
   try {
     const { userId } = req2.params;
     const requestingUser = req2.user;
-    const googleUser = await prisma12.googleWorkspaceUser.findUnique({
+    const googleUser = await prisma8.googleWorkspaceUser.findUnique({
       where: { userId },
       include: {
         User: {
@@ -12257,7 +12329,7 @@ router15.post("/users/:userId/sync", requireRole2(["admin", "super_admin"]), asy
         message: "Acc\xE8s refus\xE9 \xE0 cet utilisateur"
       });
     }
-    const updatedGoogleUser = await prisma12.googleWorkspaceUser.update({
+    const updatedGoogleUser = await prisma8.googleWorkspaceUser.update({
       where: { userId },
       data: {
         lastSync: /* @__PURE__ */ new Date()
@@ -12281,7 +12353,7 @@ router15.post("/users/:userId/deactivate", requireRole2(["admin", "super_admin"]
   try {
     const { userId } = req2.params;
     const requestingUser = req2.user;
-    const googleUser = await prisma12.googleWorkspaceUser.findUnique({
+    const googleUser = await prisma8.googleWorkspaceUser.findUnique({
       where: { userId },
       include: {
         User: {
@@ -12304,7 +12376,7 @@ router15.post("/users/:userId/deactivate", requireRole2(["admin", "super_admin"]
         message: "Acc\xE8s refus\xE9 \xE0 cet utilisateur"
       });
     }
-    const updatedGoogleUser = await prisma12.googleWorkspaceUser.update({
+    const updatedGoogleUser = await prisma8.googleWorkspaceUser.update({
       where: { userId },
       data: {
         isActive: false,
@@ -12332,7 +12404,6 @@ var googleWorkspace_default = router15;
 
 // src/routes/blocks.ts
 var import_express17 = require("express");
-var import_client13 = require("@prisma/client");
 var import_uuid2 = require("uuid");
 
 // src/helpers/adaptBlockStructure.ts
@@ -12351,12 +12422,12 @@ var adaptBlockStructure = (block) => {
 };
 
 // src/routes/blocks.ts
+init_prisma();
 var router16 = (0, import_express17.Router)();
-var prisma13 = new import_client13.PrismaClient();
 router16.use(authMiddleware, impersonationMiddleware);
 async function ensureSectionTypeColumnExists() {
   try {
-    await prisma13.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `ALTER TABLE "Section" ADD COLUMN IF NOT EXISTS "sectionType" TEXT NOT NULL DEFAULT 'normal'`
     );
   } catch (e) {
@@ -12391,7 +12462,7 @@ router16.get(
       return;
     }
     try {
-      const blocks = await prisma13.block.findMany({
+      const blocks = await db.block.findMany({
         where: whereClause,
         include: {
           Section: {
@@ -12433,7 +12504,7 @@ router16.get("/read", async (req2, res) => {
       res.json({ success: true, data: [] });
       return;
     }
-    const blocks = await prisma13.block.findMany({
+    const blocks = await db.block.findMany({
       where: { organizationId },
       include: {
         Section: {
@@ -12464,7 +12535,7 @@ router16.get("/:id/read", async (req2, res) => {
       res.status(404).json({ success: false, message: "Formulaire non trouv\xE9" });
       return;
     }
-    const block = await prisma13.block.findFirst({
+    const block = await db.block.findFirst({
       where: { id, organizationId },
       include: {
         Section: {
@@ -12495,24 +12566,24 @@ router16.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     res.status(400).json({ success: false, message: "Nom et organisation requis." });
     return;
   }
-  const block = await prisma13.block.create({ data: { id: (0, import_uuid2.v4)(), name, organizationId, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() } });
+  const block = await db.block.create({ data: { id: (0, import_uuid2.v4)(), name, organizationId, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() } });
   res.json({ success: true, data: block });
 });
 router16.put("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   const { name } = req2.body;
-  const block = await prisma13.block.update({ where: { id }, data: { name, updatedAt: /* @__PURE__ */ new Date() } });
+  const block = await db.block.update({ where: { id }, data: { name, updatedAt: /* @__PURE__ */ new Date() } });
   res.json({ success: true, data: block });
 });
 router16.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
-    const sections = await prisma13.section.findMany({ where: { blockId: id } });
+    const sections = await db.section.findMany({ where: { blockId: id } });
     for (const section of sections) {
-      await prisma13.field.deleteMany({ where: { sectionId: section.id } });
+      await db.field.deleteMany({ where: { sectionId: section.id } });
     }
-    await prisma13.section.deleteMany({ where: { blockId: id } });
-    await prisma13.block.delete({ where: { id } });
+    await db.section.deleteMany({ where: { blockId: id } });
+    await db.block.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     console.error(`[API] Erreur lors de la suppression du block ${id}:`, error);
@@ -12531,7 +12602,7 @@ router16.post("/:blockId/sections", requireRole2(["admin", "super_admin"]), asyn
       await ensureSectionTypeColumnExists();
     }
     try {
-      await prisma13.section.create({
+      await db.section.create({
         data: {
           id: (0, import_uuid2.v4)(),
           name,
@@ -12544,7 +12615,7 @@ router16.post("/:blockId/sections", requireRole2(["admin", "super_admin"]), asyn
       const msg = String(err?.message || "");
       if (msg.includes("sectionType") && (msg.includes("does not exist") || msg.includes("doesn't exist") || msg.includes("column") || msg.includes("relation"))) {
         await ensureSectionTypeColumnExists();
-        await prisma13.section.create({
+        await db.section.create({
           data: {
             id: (0, import_uuid2.v4)(),
             name,
@@ -12554,7 +12625,7 @@ router16.post("/:blockId/sections", requireRole2(["admin", "super_admin"]), asyn
           }
         });
       } else if (msg.includes("Unknown arg") && msg.includes("sectionType")) {
-        const created = await prisma13.section.create({
+        const created = await db.section.create({
           data: {
             id: (0, import_uuid2.v4)(),
             name,
@@ -12564,13 +12635,13 @@ router16.post("/:blockId/sections", requireRole2(["admin", "super_admin"]), asyn
         });
         if (typeof type !== "undefined") {
           await ensureSectionTypeColumnExists();
-          await prisma13.$executeRaw`UPDATE "Section" SET "sectionType" = ${type || "normal"} WHERE id = ${created.id}`;
+          await db.$executeRaw`UPDATE "Section" SET "sectionType" = ${type || "normal"} WHERE id = ${created.id}`;
         }
       } else {
         throw err;
       }
     }
-    const updatedBlockWithRelations = await prisma13.block.findUnique({
+    const updatedBlockWithRelations = await db.block.findUnique({
       where: { id: blockId },
       include: {
         Section: {
@@ -12605,13 +12676,13 @@ router16.post("/:blockId/sections", requireRole2(["admin", "super_admin"]), asyn
 router16.delete("/:blockId/sections/:sectionId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { blockId, sectionId } = req2.params;
   try {
-    await prisma13.field.deleteMany({
+    await db.field.deleteMany({
       where: { sectionId }
     });
-    await prisma13.section.delete({
+    await db.section.delete({
       where: { id: sectionId }
     });
-    const updatedBlockWithRelations = await prisma13.block.findUnique({
+    const updatedBlockWithRelations = await db.block.findUnique({
       where: { id: blockId },
       include: {
         Section: {
@@ -12653,7 +12724,7 @@ router16.put("/:blockId/sections/reorder", requireRole2(["admin", "super_admin"]
   }
   try {
     const sectionIds = sections.map((s) => s.id);
-    const sectionsInDb = await prisma13.section.findMany({
+    const sectionsInDb = await db.section.findMany({
       where: {
         id: { in: sectionIds },
         blockId
@@ -12663,9 +12734,9 @@ router16.put("/:blockId/sections/reorder", requireRole2(["admin", "super_admin"]
       res.status(400).json({ success: false, message: "Certaines sections n'appartiennent pas au bon formulaire ou n'existent pas." });
       return;
     }
-    await prisma13.$transaction(
+    await db.$transaction(
       sections.map(
-        (section) => prisma13.section.update({
+        (section) => db.section.update({
           where: {
             id: section.id,
             // On s'assure aussi que la section appartient bien au bloc pour la sécurité
@@ -12675,7 +12746,7 @@ router16.put("/:blockId/sections/reorder", requireRole2(["admin", "super_admin"]
         })
       )
     );
-    const updatedBlockWithRelations = await prisma13.block.findUnique({
+    const updatedBlockWithRelations = await db.block.findUnique({
       where: { id: blockId },
       include: {
         Section: {
@@ -12711,9 +12782,8 @@ var blocks_default = router16;
 
 // src/routes/notifications.ts
 var import_express18 = require("express");
-var import_client17 = require("@prisma/client");
 init_UniversalNotificationService();
-var prisma17 = new import_client17.PrismaClient();
+init_prisma();
 var router17 = (0, import_express18.Router)();
 router17.use(authMiddleware);
 router17.get("/", async (req2, res) => {
@@ -12725,7 +12795,7 @@ router17.get("/", async (req2, res) => {
     }
     const userId = user.userId;
     if (user.role === "super_admin") {
-      const notifications2 = await prisma17.notification.findMany({
+      const notifications2 = await db.notification.findMany({
         where: {
           status: "PENDING"
         },
@@ -12740,12 +12810,12 @@ router17.get("/", async (req2, res) => {
       res.json({ success: true, data: notifications2 });
       return;
     }
-    const userOrganizations = await prisma17.userOrganization.findMany({
+    const userOrganizations = await db.userOrganization.findMany({
       where: { userId },
       select: { organizationId: true }
     });
     const orgIds = userOrganizations.map((uo) => uo.organizationId);
-    const notifications = await prisma17.notification.findMany({
+    const notifications = await db.notification.findMany({
       where: {
         OR: [
           { organizationId: { in: orgIds } },
@@ -12782,13 +12852,13 @@ router17.post("/", async (req2, res) => {
     }
     let targetOrgId = organizationId;
     if (!targetOrgId) {
-      const userOrg = await prisma17.userOrganization.findFirst({
+      const userOrg = await db.userOrganization.findFirst({
         where: { userId },
         select: { organizationId: true }
       });
       targetOrgId = userOrg?.organizationId;
     }
-    const notification = await prisma17.notification.create({
+    const notification = await db.notification.create({
       data: {
         type,
         data,
@@ -12815,14 +12885,14 @@ router17.patch("/:id/read", async (req2, res) => {
       return;
     }
     const userId = user.userId;
-    const notification = await prisma17.notification.findUnique({
+    const notification = await db.notification.findUnique({
       where: { id: notificationId }
     });
     if (!notification) {
       res.status(404).json({ success: false, message: "Notification non trouv\xE9e" });
       return;
     }
-    const userOrganizations = await prisma17.userOrganization.findMany({
+    const userOrganizations = await db.userOrganization.findMany({
       where: { userId },
       select: { organizationId: true }
     });
@@ -12832,7 +12902,7 @@ router17.patch("/:id/read", async (req2, res) => {
       res.status(403).json({ success: false, message: "Interdit: Vous n'avez pas acc\xE8s \xE0 cette notification." });
       return;
     }
-    const updatedNotification = await prisma17.notification.update({
+    const updatedNotification = await db.notification.update({
       where: { id: notificationId },
       data: { status: "READ" }
     });
@@ -12851,14 +12921,14 @@ router17.delete("/:id", async (req2, res) => {
       return;
     }
     const userId = user.userId;
-    const notification = await prisma17.notification.findUnique({
+    const notification = await db.notification.findUnique({
       where: { id: notificationId }
     });
     if (!notification) {
       res.status(404).json({ success: false, message: "Notification non trouv\xE9e" });
       return;
     }
-    const userOrganizations = await prisma17.userOrganization.findMany({
+    const userOrganizations = await db.userOrganization.findMany({
       where: { userId },
       select: { organizationId: true }
     });
@@ -12868,7 +12938,7 @@ router17.delete("/:id", async (req2, res) => {
       res.status(403).json({ success: false, message: "Interdit: Vous n'avez pas acc\xE8s \xE0 cette notification." });
       return;
     }
-    await prisma17.notification.delete({
+    await db.notification.delete({
       where: { id: notificationId }
     });
     res.json({ success: true, message: "Notification supprim\xE9e avec succ\xE8s." });
@@ -13082,9 +13152,8 @@ var notificationSystemRoutes_default = router18;
 
 // src/routes/settingsRoutes.ts
 var import_express20 = require("express");
-var import_client18 = require("@prisma/client");
+init_prisma();
 var router19 = (0, import_express20.Router)();
-var prisma18 = new import_client18.PrismaClient();
 router19.use(authMiddleware);
 router19.get("/lead-statuses", async (req2, res) => {
   try {
@@ -13096,7 +13165,7 @@ router19.get("/lead-statuses", async (req2, res) => {
       });
     }
     console.log("[LEAD-STATUSES] R\xE9cup\xE9ration des statuts pour l'organisation:", organizationId);
-    const statuses = await prisma18.leadStatus.findMany({
+    const statuses = await db.leadStatus.findMany({
       where: {
         organizationId
       },
@@ -13125,7 +13194,7 @@ router19.post("/lead-statuses", async (req2, res) => {
     }
     const { name, color, order, isDefault } = req2.body;
     if (isDefault) {
-      await prisma18.leadStatus.updateMany({
+      await db.leadStatus.updateMany({
         where: {
           organizationId,
           isDefault: true
@@ -13135,7 +13204,7 @@ router19.post("/lead-statuses", async (req2, res) => {
         }
       });
     }
-    const newStatus = await prisma18.leadStatus.create({
+    const newStatus = await db.leadStatus.create({
       data: {
         name,
         color,
@@ -13186,7 +13255,7 @@ router19.put("/lead-statuses/reorder", async (req2, res) => {
     }
     const updatePromises = statuses.map(async (status) => {
       console.log(`[LEAD-STATUSES] \u{1F504} Mise \xE0 jour ${status.id} -> order: ${status.order}`);
-      const result = await prisma18.leadStatus.updateMany({
+      const result = await db.leadStatus.updateMany({
         where: { id: status.id, organizationId },
         data: { order: status.order }
       });
@@ -13224,7 +13293,7 @@ router19.get("/call-statuses", async (req2, res) => {
       });
     }
     console.log("[CALL-STATUSES] R\xE9cup\xE9ration des statuts pour l'organisation:", organizationId);
-    const callStatuses = await prisma18.callStatus.findMany({
+    const callStatuses = await db.callStatus.findMany({
       where: {
         organizationId
       },
@@ -13261,7 +13330,7 @@ router19.post("/call-statuses", async (req2, res) => {
       });
     }
     console.log(`[CALL-STATUSES] Sauvegarde en lot de ${statuses.length} statuts`);
-    await prisma18.callStatus.deleteMany({
+    await db.callStatus.deleteMany({
       where: {
         organizationId
       }
@@ -13269,7 +13338,7 @@ router19.post("/call-statuses", async (req2, res) => {
     const savedStatuses = [];
     for (let i = 0; i < statuses.length; i++) {
       const status = statuses[i];
-      const savedStatus = await prisma18.callStatus.create({
+      const savedStatus = await db.callStatus.create({
         data: {
           name: status.name,
           color: status.color,
@@ -13306,7 +13375,7 @@ router19.post("/call-statuses/reorder", async (req2, res) => {
     }
     console.log(`[CALL-STATUSES] R\xE9organisation de ${statusIds.length} statuts`);
     for (let i = 0; i < statusIds.length; i++) {
-      await prisma18.callStatus.update({
+      await db.callStatus.update({
         where: {
           id: statusIds[i],
           organizationId
@@ -13316,7 +13385,7 @@ router19.post("/call-statuses/reorder", async (req2, res) => {
         }
       });
     }
-    const updatedStatuses = await prisma18.callStatus.findMany({
+    const updatedStatuses = await db.callStatus.findMany({
       where: {
         organizationId
       },
@@ -13351,7 +13420,7 @@ router19.put("/call-statuses/reorder", async (req2, res) => {
     }
     console.log(`[CALL-STATUSES] PUT R\xE9organisation de ${statuses.length} statuts`);
     const updatePromises = statuses.map(
-      (status) => prisma18.callStatus.update({
+      (status) => db.callStatus.update({
         where: { id: status.id },
         data: { order: status.order }
       })
@@ -13385,7 +13454,7 @@ router19.post("/call-statuses/add", async (req2, res) => {
         error: "Le nom et la couleur sont requis"
       });
     }
-    const maxOrder = await prisma18.callStatus.aggregate({
+    const maxOrder = await db.callStatus.aggregate({
       where: {
         organizationId
       },
@@ -13394,7 +13463,7 @@ router19.post("/call-statuses/add", async (req2, res) => {
       }
     });
     const nextOrder = (maxOrder._max.order || 0) + 1;
-    const newStatus = await prisma18.callStatus.create({
+    const newStatus = await db.callStatus.create({
       data: {
         name,
         color,
@@ -13424,7 +13493,7 @@ router19.put("/call-statuses/:id", async (req2, res) => {
     const { id } = req2.params;
     const { name, color } = req2.body;
     console.log(`[CALL-STATUSES] Mise \xE0 jour du statut ${id}`);
-    const updatedStatus = await prisma18.callStatus.update({
+    const updatedStatus = await db.callStatus.update({
       where: {
         id,
         organizationId
@@ -13455,7 +13524,7 @@ router19.delete("/call-statuses/:id", async (req2, res) => {
     }
     const { id } = req2.params;
     console.log(`[CALL-STATUSES] Suppression du statut ${id}`);
-    await prisma18.callStatus.delete({
+    await db.callStatus.delete({
       where: {
         id,
         organizationId
@@ -13481,7 +13550,7 @@ router19.get("/call-to-lead-mappings", async (req2, res) => {
       });
     }
     console.log("[MAPPINGS] R\xE9cup\xE9ration des mappings pour l'organisation:", organizationId);
-    const mappings = await prisma18.callToLeadMapping.findMany({
+    const mappings = await db.callToLeadMapping.findMany({
       where: {
         organizationId,
         isActive: true
@@ -13520,7 +13589,7 @@ router19.post("/call-to-lead-mappings", async (req2, res) => {
       });
     }
     console.log(`[MAPPINGS] Cr\xE9ation d'un mapping: ${callStatusId} -> ${leadStatusId}`);
-    const mapping = await prisma18.callToLeadMapping.create({
+    const mapping = await db.callToLeadMapping.create({
       data: {
         organizationId,
         callStatusId,
@@ -13555,7 +13624,7 @@ router19.put("/call-to-lead-mappings/:id", async (req2, res) => {
     const { id } = req2.params;
     const { callStatusId, leadStatusId, condition, priority, isActive } = req2.body;
     console.log(`[MAPPINGS] Mise \xE0 jour du mapping ${id}`);
-    const mapping = await prisma18.callToLeadMapping.update({
+    const mapping = await db.callToLeadMapping.update({
       where: {
         id,
         organizationId
@@ -13593,7 +13662,7 @@ router19.delete("/call-to-lead-mappings/:id", async (req2, res) => {
     }
     const { id } = req2.params;
     console.log(`[MAPPINGS] Suppression du mapping ${id}`);
-    await prisma18.callToLeadMapping.delete({
+    await db.callToLeadMapping.delete({
       where: {
         id,
         organizationId
@@ -13625,7 +13694,7 @@ router19.post("/call-to-lead-mappings/bulk", async (req2, res) => {
       });
     }
     console.log(`[MAPPINGS] Sauvegarde en lot de ${mappings.length} mappings`);
-    await prisma18.callToLeadMapping.deleteMany({
+    await db.callToLeadMapping.deleteMany({
       where: {
         organizationId
       }
@@ -13633,7 +13702,7 @@ router19.post("/call-to-lead-mappings/bulk", async (req2, res) => {
     const savedMappings = [];
     for (let i = 0; i < mappings.length; i++) {
       const mapping = mappings[i];
-      const savedMapping = await prisma18.callToLeadMapping.create({
+      const savedMapping = await db.callToLeadMapping.create({
         data: {
           organizationId,
           callStatusId: mapping.callStatusId,
@@ -13669,7 +13738,7 @@ router19.get("/call-lead-mappings", async (req2, res) => {
       });
     }
     console.log("[MAPPINGS] R\xE9cup\xE9ration des mappings pour l'organisation:", organizationId);
-    const mappings = await prisma18.callToLeadMapping.findMany({
+    const mappings = await db.callToLeadMapping.findMany({
       where: {
         organizationId
       },
@@ -13701,7 +13770,7 @@ router19.get("/call-lead-mappings", async (req2, res) => {
       });
     }
     console.log("[MAPPINGS] R\xE9cup\xE9ration des mappings pour l'organisation:", organizationId);
-    const mappings = await prisma18.callToLeadMapping.findMany({
+    const mappings = await db.callToLeadMapping.findMany({
       where: {
         organizationId
       },
@@ -13732,7 +13801,7 @@ router19.get("/email-templates", async (req2, res) => {
         error: "Organisation non sp\xE9cifi\xE9e"
       });
     }
-    const templates = await prisma18.emailTemplate.findMany({
+    const templates = await db.emailTemplate.findMany({
       where: { organizationId }
     });
     res.json(templates);
@@ -13753,7 +13822,7 @@ router19.get("/lead-sources", async (req2, res) => {
         error: "Organisation non sp\xE9cifi\xE9e"
       });
     }
-    const sources = await prisma18.leadSource.findMany({
+    const sources = await db.leadSource.findMany({
       where: { organizationId }
     });
     res.json(sources);
@@ -13781,7 +13850,7 @@ router19.post("/call-lead-mappings", async (req2, res) => {
       organizationId,
       priority
     });
-    const newMapping = await prisma18.callToLeadMapping.create({
+    const newMapping = await db.callToLeadMapping.create({
       data: {
         callStatusId,
         leadStatusId,
@@ -13816,7 +13885,7 @@ router19.put("/call-lead-mappings/:id", async (req2, res) => {
     }
     const { callStatusId, leadStatusId, priority, description } = req2.body;
     console.log("[MAPPINGS] Mise \xE0 jour du mapping:", mappingId);
-    const updatedMapping = await prisma18.callToLeadMapping.update({
+    const updatedMapping = await db.callToLeadMapping.update({
       where: {
         id: mappingId,
         organizationId
@@ -13853,7 +13922,7 @@ router19.delete("/call-lead-mappings/:id", async (req2, res) => {
       });
     }
     console.log("[MAPPINGS] Suppression du mapping:", mappingId);
-    await prisma18.callToLeadMapping.delete({
+    await db.callToLeadMapping.delete({
       where: {
         id: mappingId,
         organizationId
@@ -13885,14 +13954,14 @@ router19.post("/call-lead-mappings", async (req2, res) => {
       });
     }
     console.log("[MAPPING] Cr\xE9ation d'un nouveau mapping:", { callStatusId, leadStatusId, priority });
-    const existingMapping = await prisma18.callToLeadMapping.findFirst({
+    const existingMapping = await db.callToLeadMapping.findFirst({
       where: {
         callStatusId,
         organizationId
       }
     });
     if (existingMapping) {
-      const updatedMapping = await prisma18.callToLeadMapping.update({
+      const updatedMapping = await db.callToLeadMapping.update({
         where: { id: existingMapping.id },
         data: {
           leadStatusId,
@@ -13906,7 +13975,7 @@ router19.post("/call-lead-mappings", async (req2, res) => {
       console.log("[MAPPING] Mapping mis \xE0 jour:", updatedMapping.id);
       return res.json(updatedMapping);
     } else {
-      const newMapping = await prisma18.callToLeadMapping.create({
+      const newMapping = await db.callToLeadMapping.create({
         data: {
           callStatusId,
           leadStatusId,
@@ -13941,7 +14010,7 @@ router19.put("/call-lead-mappings/:id", async (req2, res) => {
     }
     const { callStatusId, leadStatusId, priority } = req2.body;
     console.log("[MAPPING] Modification du mapping:", mappingId, { callStatusId, leadStatusId, priority });
-    const updatedMapping = await prisma18.callToLeadMapping.update({
+    const updatedMapping = await db.callToLeadMapping.update({
       where: {
         id: mappingId,
         organizationId
@@ -13977,7 +14046,7 @@ router19.delete("/call-lead-mappings/:id", async (req2, res) => {
       });
     }
     console.log("[MAPPING] Suppression du mapping:", mappingId);
-    await prisma18.callToLeadMapping.delete({
+    await db.callToLeadMapping.delete({
       where: {
         id: mappingId,
         organizationId
@@ -14035,7 +14104,7 @@ router19.post("/initialize-default-statuses", async (req2, res) => {
     ];
     for (const status of defaultCallStatuses) {
       try {
-        await prisma18.callStatus.upsert({
+        await db.callStatus.upsert({
           where: {
             organizationId_name: {
               organizationId,
@@ -14058,7 +14127,7 @@ router19.post("/initialize-default-statuses", async (req2, res) => {
     }
     for (const status of defaultLeadStatuses) {
       try {
-        await prisma18.leadStatus.upsert({
+        await db.leadStatus.upsert({
           where: {
             organizationId_name: {
               organizationId,
@@ -14093,14 +14162,14 @@ router19.post("/initialize-default-statuses", async (req2, res) => {
       { callStatusName: "\u{1F4DE} Contact\xE9 \u2013 En n\xE9gociation", leadStatusName: "\u{1F7E0} En n\xE9gociation" },
       { callStatusName: "\u{1F4DE} Contact\xE9 \u2013 Gagn\xE9 (vente conclue)", leadStatusName: "\u{1F7E2} Gagn\xE9" }
     ];
-    const callStatuses = await prisma18.callStatus.findMany({ where: { organizationId } });
-    const leadStatuses = await prisma18.leadStatus.findMany({ where: { organizationId } });
+    const callStatuses = await db.callStatus.findMany({ where: { organizationId } });
+    const leadStatuses = await db.leadStatus.findMany({ where: { organizationId } });
     for (const mapping of mappings) {
       const callStatus = callStatuses.find((cs) => cs.name === mapping.callStatusName);
       const leadStatus = leadStatuses.find((ls) => ls.name === mapping.leadStatusName);
       if (callStatus && leadStatus) {
         try {
-          await prisma18.callToLeadMapping.upsert({
+          await db.callToLeadMapping.upsert({
             where: {
               organizationId_callStatusId_leadStatusId: {
                 organizationId,
@@ -14147,9 +14216,8 @@ var settingsRoutes_default = router19;
 
 // src/routes/leadsRoutes.ts
 var import_express21 = require("express");
-var import_client19 = require("@prisma/client");
+init_prisma();
 var router20 = (0, import_express21.Router)();
-var prisma19 = new import_client19.PrismaClient();
 router20.use(authMiddleware);
 router20.get("/", async (req2, res) => {
   try {
@@ -14157,7 +14225,7 @@ router20.get("/", async (req2, res) => {
     const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
     if (isSuperAdmin2) {
       try {
-        const allLeads = await prisma19.lead.findMany({
+        const allLeads = await db.lead.findMany({
           include: {
             User: {
               select: {
@@ -14224,7 +14292,7 @@ router20.get("/", async (req2, res) => {
       });
     }
     console.log("[LEADS] \u{1F464} Utilisateur normal - R\xE9cup\xE9ration des leads pour l'organisation:", organizationId);
-    const leads = await prisma19.lead.findMany({
+    const leads = await db.lead.findMany({
       where: {
         organizationId
       },
@@ -14310,7 +14378,7 @@ router20.post("/", async (req2, res) => {
     }
     let finalStatusId = statusId;
     if (statusId) {
-      const statusExists = await prisma19.leadStatus.findUnique({
+      const statusExists = await db.leadStatus.findUnique({
         where: { id: statusId }
       });
       if (!statusExists) {
@@ -14319,7 +14387,7 @@ router20.post("/", async (req2, res) => {
       }
     }
     if (!finalStatusId) {
-      const defaultStatus = await prisma19.leadStatus.findFirst({
+      const defaultStatus = await db.leadStatus.findFirst({
         where: {
           organizationId,
           isDefault: true
@@ -14331,7 +14399,7 @@ router20.post("/", async (req2, res) => {
       }
     }
     const now = /* @__PURE__ */ new Date();
-    const newLead = await prisma19.lead.create({
+    const newLead = await db.lead.create({
       data: {
         firstName,
         lastName,
@@ -14422,7 +14490,7 @@ router20.get("/:id", async (req2, res) => {
         // Sécurité: s'assurer que le lead appartient à l'organisation
       };
     }
-    const lead = await prisma19.lead.findFirst({
+    const lead = await db.lead.findFirst({
       where: whereCondition,
       include: {
         User: {
@@ -14493,7 +14561,7 @@ router20.put("/:id", async (req2, res) => {
         error: "Organisation non sp\xE9cifi\xE9e"
       });
     }
-    const existingLead = await prisma19.lead.findFirst({
+    const existingLead = await db.lead.findFirst({
       where: {
         id,
         organizationId
@@ -14558,7 +14626,7 @@ router20.put("/:id", async (req2, res) => {
     if (assignedToId !== void 0) updateData.assignedToId = assignedToId;
     if (nextFollowUpDate !== void 0) updateData.nextFollowUpDate = nextFollowUpDate ? new Date(nextFollowUpDate) : null;
     if (data !== void 0) updateData.data = data;
-    const updatedLead = await prisma19.lead.update({
+    const updatedLead = await db.lead.update({
       where: { id },
       data: {
         ...updateData,
@@ -14629,12 +14697,12 @@ router20.delete("/:id", async (req2, res) => {
       }
       whereCondition.organizationId = organizationId;
     }
-    const existing = await prisma19.lead.findFirst({ where: whereCondition });
+    const existing = await db.lead.findFirst({ where: whereCondition });
     if (!existing) {
       console.log("[LEADS] \u274C Lead non trouv\xE9 ou non autoris\xE9 pour suppression:", id);
       return res.status(404).json({ error: "Lead non trouv\xE9 ou non autoris\xE9" });
     }
-    await prisma19.lead.delete({ where: { id } });
+    await db.lead.delete({ where: { id } });
     console.log("[LEADS] \u2705 Lead supprim\xE9 avec succ\xE8s:", id);
     return res.status(204).send();
   } catch (error) {
@@ -14651,7 +14719,7 @@ router20.get("/:id/history", async (req2, res) => {
     const { id } = req2.params;
     const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
     const whereCond = isSuperAdmin2 ? { id } : { id, organizationId: authReq.user?.organizationId };
-    const lead = await prisma19.lead.findFirst({ where: whereCond });
+    const lead = await db.lead.findFirst({ where: whereCond });
     if (!lead) return res.status(404).json({ success: false, error: "Lead non trouv\xE9 ou non autoris\xE9" });
     const dataObj = lead.data || {};
     const history = Array.isArray(dataObj.history) ? dataObj.history : [];
@@ -14668,7 +14736,7 @@ router20.post("/:id/history", async (req2, res) => {
     const organizationId = authReq.user?.organizationId;
     const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
     const whereCond = isSuperAdmin2 ? { id } : { id, organizationId };
-    const lead = await prisma19.lead.findFirst({ where: whereCond });
+    const lead = await db.lead.findFirst({ where: whereCond });
     if (!lead) return res.status(404).json({ success: false, error: "Lead non trouv\xE9 ou non autoris\xE9" });
     const { type = "internal", content = "", author } = req2.body || {};
     const historyItem = {
@@ -14680,7 +14748,7 @@ router20.post("/:id/history", async (req2, res) => {
     const dataObj = lead.data || {};
     const existing = Array.isArray(dataObj.history) ? dataObj.history : [];
     dataObj.history = [historyItem, ...existing];
-    await prisma19.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
+    await db.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
     return res.status(201).json({ success: true, item: historyItem });
   } catch (e) {
     console.error("[LEADS] POST history error", e);
@@ -14693,7 +14761,7 @@ router20.get("/:id/documents", async (req2, res) => {
     const { id } = req2.params;
     const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
     const whereCond = isSuperAdmin2 ? { id } : { id, organizationId: authReq.user?.organizationId };
-    const lead = await prisma19.lead.findFirst({ where: whereCond });
+    const lead = await db.lead.findFirst({ where: whereCond });
     if (!lead) return res.status(404).json({ success: false, error: "Lead non trouv\xE9 ou non autoris\xE9" });
     const dataObj = lead.data || {};
     const docs = Array.isArray(dataObj.documents) ? dataObj.documents : [];
@@ -14710,7 +14778,7 @@ router20.post("/:id/documents", async (req2, res) => {
     const organizationId = authReq.user?.organizationId;
     const isSuperAdmin2 = authReq.user?.role === "super_admin" || authReq.user?.isSuperAdmin === true || authReq.user?.role?.toLowerCase().includes("super");
     const whereCond = isSuperAdmin2 ? { id } : { id, organizationId };
-    const lead = await prisma19.lead.findFirst({ where: whereCond });
+    const lead = await db.lead.findFirst({ where: whereCond });
     if (!lead) return res.status(404).json({ success: false, error: "Lead non trouv\xE9 ou non autoris\xE9" });
     const body2 = req2.body || {};
     const newDoc = {
@@ -14725,7 +14793,7 @@ router20.post("/:id/documents", async (req2, res) => {
     const existingDocs = Array.isArray(dataObj.documents) ? dataObj.documents : [];
     const updatedDocs = [newDoc, ...existingDocs];
     dataObj.documents = updatedDocs;
-    await prisma19.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
+    await db.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
     return res.status(201).json({ success: true, item: newDoc });
   } catch (e) {
     console.error("[LEADS] POST documents error", e);
@@ -14736,11 +14804,11 @@ var leadsRoutes_default = router20;
 
 // src/routes/rolesRoutes.ts
 var import_express22 = require("express");
-var import_client20 = require("@prisma/client");
+init_database();
 var import_zod4 = require("zod");
 var import_express_rate_limit2 = __toESM(require("express-rate-limit"), 1);
 var router21 = (0, import_express22.Router)();
-var prisma20 = new import_client20.PrismaClient();
+var prisma10 = db;
 var sanitizeString2 = (input) => {
   return input.trim().replace(/[<>]/g, "");
 };
@@ -14825,7 +14893,7 @@ router21.get("/", async (req2, res) => {
       console.log("[ROLES] SuperAdmin: Returning all roles (global and organization-specific)");
     }
     console.log("[ROLES] Final where clause:", whereClause);
-    const roles = await prisma20.role.findMany({
+    const roles = await prisma10.role.findMany({
       where: whereClause,
       include: {
         Permission: true,
@@ -14864,7 +14932,7 @@ router21.get("/:id", async (req2, res) => {
     }
     const requestingUser = req2.user;
     const sanitizedId = sanitizeString2(id.trim());
-    const role = await prisma20.role.findUnique({
+    const role = await prisma10.role.findUnique({
       where: { id: sanitizedId },
       include: {
         Permission: true,
@@ -14940,7 +15008,7 @@ router21.post("/", rolesCreateRateLimit, async (req2, res) => {
       }
     }
     const finalOrgId = organizationId || requestingUser.organizationId;
-    const existingRole = await prisma20.role.findFirst({
+    const existingRole = await prisma10.role.findFirst({
       where: {
         name: sanitizedName,
         organizationId: finalOrgId
@@ -14960,7 +15028,7 @@ router21.post("/", rolesCreateRateLimit, async (req2, res) => {
       });
       return;
     }
-    const newRole = await prisma20.role.create({
+    const newRole = await prisma10.role.create({
       data: {
         id: `role_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: sanitizedName,
@@ -15019,7 +15087,7 @@ router21.put("/:id", async (req2, res) => {
     const { name, description } = bodyValidation.data;
     const sanitizedName = name ? sanitizeString2(name) : void 0;
     const sanitizedDescription = description ? sanitizeString2(description) : void 0;
-    const existingRole = await prisma20.role.findUnique({
+    const existingRole = await prisma10.role.findUnique({
       where: { id: id.trim() }
     });
     if (!existingRole) {
@@ -15046,7 +15114,7 @@ router21.put("/:id", async (req2, res) => {
       return;
     }
     if (sanitizedName && sanitizedName !== existingRole.name) {
-      const duplicateRole = await prisma20.role.findFirst({
+      const duplicateRole = await prisma10.role.findFirst({
         where: {
           name: sanitizedName,
           organizationId: existingRole.organizationId,
@@ -15071,7 +15139,7 @@ router21.put("/:id", async (req2, res) => {
     if (sanitizedDescription !== void 0) {
       updateData.description = sanitizedDescription;
     }
-    const updatedRole = await prisma20.role.update({
+    const updatedRole = await prisma10.role.update({
       where: { id: id.trim() },
       data: updateData,
       include: {
@@ -15118,7 +15186,7 @@ router21.delete("/:id", async (req2, res) => {
     }
     const requestingUser = req2.user;
     const roleId = id.trim();
-    const existingRole = await prisma20.role.findUnique({
+    const existingRole = await prisma10.role.findUnique({
       where: { id: roleId },
       include: {
         UserOrganizations: true
@@ -15155,7 +15223,7 @@ router21.delete("/:id", async (req2, res) => {
       });
       return;
     }
-    await prisma20.role.delete({
+    await prisma10.role.delete({
       where: { id: roleId }
     });
     console.log(`[ROLES] R\xF4le supprim\xE9 avec succ\xE8s: ${roleId} (${existingRole.name})`);
@@ -15172,11 +15240,11 @@ var rolesRoutes_default = router21;
 
 // src/routes/usersRoutes.ts
 var import_express23 = require("express");
-var import_client21 = require("@prisma/client");
+init_database();
 var import_zod5 = require("zod");
 var import_express_rate_limit3 = __toESM(require("express-rate-limit"), 1);
 var router22 = (0, import_express23.Router)();
-var prisma21 = new import_client21.PrismaClient();
+var prisma11 = db;
 var sanitizeString3 = (input) => {
   return input.trim().replace(/[<>]/g, "");
 };
@@ -15226,7 +15294,7 @@ router22.use("/invitations", invitations_default);
 router22.get("/free", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   console.log("[USERS] GET /users/free - R\xE9cup\xE9ration utilisateurs libres S\xC9CURIS\xC9E");
   try {
-    const freeUsers = await prisma21.user.findMany({
+    const freeUsers = await prisma11.user.findMany({
       where: {
         UserOrganization: {
           none: {}
@@ -15258,7 +15326,7 @@ router22.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     const sessionUser = req2.user;
     if (sessionUser?.isSuperAdmin) {
       console.log("[USERS] SuperAdmin request - showing ALL users");
-      const allUsers = await prisma21.user.findMany({
+      const allUsers = await prisma11.user.findMany({
         include: {
           UserOrganization: {
             include: {
@@ -15284,7 +15352,7 @@ router22.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
       });
     }
     console.log(`[USERS] Standard user request - org: ${organizationId}`);
-    const usersInOrg = await prisma21.user.findMany({
+    const usersInOrg = await prisma11.user.findMany({
       where: {
         UserOrganization: {
           some: { organizationId }
@@ -15325,7 +15393,7 @@ router22.get("/:userId/organizations", requireRole2(["admin", "super_admin"]), a
         message: "ID utilisateur invalide ou manquant"
       });
     }
-    const userOrganizations = await prisma21.userOrganization.findMany({
+    const userOrganizations = await prisma11.userOrganization.findMany({
       where: { userId: sanitizeString3(userId) },
       include: {
         Organization: true,
@@ -15356,7 +15424,7 @@ router22.post("/user-organizations", usersModifyRateLimit, requireRole2(["admin"
     const { userId, organizationId, roleId } = validation.data;
     const newId = `uo_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const now = /* @__PURE__ */ new Date();
-    const existingAssignment = await prisma21.userOrganization.findFirst({
+    const existingAssignment = await prisma11.userOrganization.findFirst({
       where: { userId, organizationId }
     });
     if (existingAssignment) {
@@ -15365,7 +15433,7 @@ router22.post("/user-organizations", usersModifyRateLimit, requireRole2(["admin"
         message: "L'utilisateur est d\xE9j\xE0 dans cette organisation"
       });
     }
-    const newUserOrganization = await prisma21.userOrganization.create({
+    const newUserOrganization = await prisma11.userOrganization.create({
       data: {
         id: newId,
         userId,
@@ -15415,7 +15483,7 @@ router22.patch("/user-organizations/:userOrganizationId", usersModifyRateLimit, 
         message: "Aucune donn\xE9e de mise \xE0 jour fournie"
       });
     }
-    const updatedUserOrganization = await prisma21.userOrganization.update({
+    const updatedUserOrganization = await prisma11.userOrganization.update({
       where: { id: sanitizeString3(userOrganizationId) },
       data: updateData,
       include: {
@@ -15451,7 +15519,7 @@ router22.delete("/user-organizations/:userOrganizationId", usersModifyRateLimit,
         message: "ID relation utilisateur-organisation invalide ou manquant"
       });
     }
-    const relationToDelete = await prisma21.userOrganization.findUnique({
+    const relationToDelete = await prisma11.userOrganization.findUnique({
       where: { id: sanitizeString3(userOrganizationId) },
       select: { userId: true }
     });
@@ -15461,7 +15529,7 @@ router22.delete("/user-organizations/:userOrganizationId", usersModifyRateLimit,
         message: "Relation non trouv\xE9e"
       });
     }
-    const remainingRelations = await prisma21.userOrganization.count({
+    const remainingRelations = await prisma11.userOrganization.count({
       where: {
         userId: relationToDelete.userId,
         id: { not: sanitizeString3(userOrganizationId) }
@@ -15473,7 +15541,7 @@ router22.delete("/user-organizations/:userOrganizationId", usersModifyRateLimit,
         message: "Impossible de supprimer la derni\xE8re organisation de l'utilisateur"
       });
     }
-    await prisma21.userOrganization.delete({
+    await prisma11.userOrganization.delete({
       where: { id: sanitizeString3(userOrganizationId) }
     });
     console.log(`[USERS] Suppression relation r\xE9ussie: ${userOrganizationId}`);
@@ -15510,7 +15578,7 @@ router22.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_a
     }
     const updateData = validationResult2.data;
     const sessionUser = req2.user;
-    const userToUpdate = await prisma21.user.findUnique({
+    const userToUpdate = await prisma11.user.findUnique({
       where: { id: sanitizeString3(userId) }
     });
     if (!userToUpdate) {
@@ -15520,7 +15588,7 @@ router22.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_a
       });
     }
     if (!sessionUser?.isSuperAdmin) {
-      const userOrganization = await prisma21.userOrganization.findFirst({
+      const userOrganization = await prisma11.userOrganization.findFirst({
         where: {
           userId: sanitizeString3(userId),
           organizationId: sessionUser?.organizationId
@@ -15533,7 +15601,7 @@ router22.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_a
         });
       }
     }
-    const updatedUser = await prisma21.user.update({
+    const updatedUser = await prisma11.user.update({
       where: { id: sanitizeString3(userId) },
       data: updateData,
       include: {
@@ -15574,7 +15642,7 @@ router22.delete("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_
         message: "ID utilisateur invalide ou manquant"
       });
     }
-    const userToDelete = await prisma21.user.findUnique({
+    const userToDelete = await prisma11.user.findUnique({
       where: { id: sanitizeString3(userId) },
       include: { UserOrganization: true }
     });
@@ -15602,7 +15670,7 @@ router22.delete("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_
         });
       }
     }
-    await prisma21.$transaction(async (tx) => {
+    await prisma11.$transaction(async (tx) => {
       await tx.userOrganization.deleteMany({
         where: { userId: sanitizeString3(userId) }
       });
@@ -15634,7 +15702,7 @@ router22.get("/:userId/rights-summary", requireRole2(["admin", "super_admin"]), 
         message: "ID utilisateur et organisation requis"
       });
     }
-    const userWithOrgInfo = await prisma21.user.findUnique({
+    const userWithOrgInfo = await prisma11.user.findUnique({
       where: { id: sanitizeString3(userId) },
       include: {
         UserOrganization: {
@@ -15714,7 +15782,7 @@ router22.get("/:userId/rights-summary", requireRole2(["admin", "super_admin"]), 
       console.log("[USERS][rights-summary] Aucun permission explicite trouv\xE9e pour un r\xF4le SuperAdmin \u2013 g\xE9n\xE9ration synth\xE9tique de toutes les permissions actives.");
       const moduleIds = organization.Module.map((m) => m.id);
       if (moduleIds.length > 0) {
-        const rawPerms = await prisma21.permission.findMany({
+        const rawPerms = await prisma11.permission.findMany({
           where: { moduleId: { in: moduleIds } },
           include: { Module: true }
         });
@@ -15845,8 +15913,7 @@ var adminPasswordRoutes_default = router23;
 var import_express25 = __toESM(require("express"), 1);
 var import_express_rate_limit4 = __toESM(require("express-rate-limit"), 1);
 var import_zod6 = require("zod");
-var import_client22 = require("@prisma/client");
-var prisma22 = new import_client22.PrismaClient();
+init_prisma();
 var router24 = import_express25.default.Router();
 var servicesRateLimit = (0, import_express_rate_limit4.default)({
   windowMs: 15 * 60 * 1e3,
@@ -15870,7 +15937,7 @@ router24.use(servicesRateLimit);
 var handleServiceToggle = async (res, userId, serviceType, isActive) => {
   try {
     const validatedUserId = import_zod6.z.string().min(1).parse(userId);
-    await prisma22.userService.upsert({
+    await db.userService.upsert({
       where: {
         userId_serviceType: { userId: validatedUserId, serviceType }
       },
@@ -15907,7 +15974,7 @@ var mapService = (s) => ({
 router24.get("/status/:userId", async (req2, res) => {
   try {
     const { userId } = import_zod6.z.object({ userId: import_zod6.z.string().min(1) }).parse(req2.params);
-    const services = await prisma22.userService.findMany({ where: { userId } });
+    const services = await db.userService.findMany({ where: { userId } });
     res.json({ success: true, data: services.map(mapService) });
   } catch (error) {
     console.error(`[API/Services] Erreur GET /status/${req2.params.userId}:`, error);
@@ -15923,7 +15990,7 @@ router24.post("/status/bulk", async (req2, res) => {
     if (userIds.length === 0) {
       return res.json({ success: true, data: {} });
     }
-    const services = await prisma22.userService.findMany({
+    const services = await db.userService.findMany({
       where: { userId: { in: userIds } }
     });
     const servicesByUser = services.reduce((acc, service) => {
@@ -15952,15 +16019,15 @@ var services_default = router24;
 
 // src/routes/permissions.ts
 var import_express26 = require("express");
-var import_client23 = require("@prisma/client");
-var prisma23 = new import_client23.PrismaClient();
+init_database();
+var prisma12 = db;
 var router25 = (0, import_express26.Router)();
 router25.use(authMiddleware, impersonationMiddleware);
 var getEffectiveUser = async (req2) => {
   const originalUser = req2.user;
   const impersonatedUser = req2.impersonatedUser;
   if (originalUser && originalUser.role === "super_admin" && impersonatedUser) {
-    const userOrg = await prisma23.userOrganization.findFirst({
+    const userOrg = await prisma12.userOrganization.findFirst({
       where: { userId: impersonatedUser.id },
       select: { organizationId: true }
     });
@@ -15988,7 +16055,7 @@ router25.get("/", async (req2, res) => {
     return;
   }
   try {
-    const role = await prisma23.role.findUnique({
+    const role = await prisma12.role.findUnique({
       where: { id: roleId }
     });
     if (!role) {
@@ -16007,7 +16074,7 @@ router25.get("/", async (req2, res) => {
         return;
       }
     }
-    const permissions = await prisma23.permission.findMany({
+    const permissions = await prisma12.permission.findMany({
       where: {
         roleId
       }
@@ -16034,7 +16101,7 @@ router25.post("/bulk", async (req2, res) => {
     return;
   }
   try {
-    const roleToUpdate = await prisma23.role.findUnique({
+    const roleToUpdate = await prisma12.role.findUnique({
       where: { id: roleId }
     });
     if (!roleToUpdate) {
@@ -16053,13 +16120,13 @@ router25.post("/bulk", async (req2, res) => {
         return;
       }
     }
-    await prisma23.$transaction([
-      prisma23.permission.deleteMany({
+    await prisma12.$transaction([
+      prisma12.permission.deleteMany({
         where: {
           roleId
         }
       }),
-      ...permissions.length > 0 ? [prisma23.permission.createMany({
+      ...permissions.length > 0 ? [prisma12.permission.createMany({
         data: permissions.map((p) => ({
           id: `perm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           roleId,
@@ -16096,7 +16163,7 @@ router25.post("/", async (req2, res) => {
     return;
   }
   try {
-    const roleToUpdate = await prisma23.role.findUnique({
+    const roleToUpdate = await prisma12.role.findUnique({
       where: { id: roleId }
     });
     if (!roleToUpdate) {
@@ -16115,13 +16182,13 @@ router25.post("/", async (req2, res) => {
         return;
       }
     }
-    await prisma23.$transaction([
-      prisma23.permission.deleteMany({
+    await prisma12.$transaction([
+      prisma12.permission.deleteMany({
         where: {
           roleId
         }
       }),
-      ...permissions.length > 0 ? [prisma23.permission.createMany({
+      ...permissions.length > 0 ? [prisma12.permission.createMany({
         data: permissions.map((p) => ({
           id: `perm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           roleId,
@@ -16146,15 +16213,15 @@ var permissions_default = router25;
 
 // src/routes/admin.ts
 var import_express27 = __toESM(require("express"), 1);
-var import_client24 = require("@prisma/client");
+init_database();
 init_crypto();
-var prisma24 = new import_client24.PrismaClient();
+var prisma13 = db;
 var router26 = import_express27.default.Router();
 router26.use(authMiddleware, impersonationMiddleware);
 router26.get("/users/:id", requireRole2(["super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
-    const user = await prisma24.user.findUnique({
+    const user = await prisma13.user.findUnique({
       where: { id },
       select: {
         // On ne sélectionne que les champs nécessaires
@@ -16178,7 +16245,7 @@ router26.get("/users/:id", requireRole2(["super_admin"]), async (req2, res) => {
 });
 router26.get("/users/mail-status", requireRole2(["super_admin"]), async (_req, res) => {
   try {
-    const users = await prisma24.user.findMany({
+    const users = await prisma13.user.findMany({
       include: {
         mailSettings: true
       }
@@ -16204,7 +16271,7 @@ router26.post("/mail/settings", requireRole2(["super_admin"]), async (req2, res)
     return;
   }
   try {
-    const user = await prisma24.user.findUnique({ where: { id: userId } });
+    const user = await prisma13.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({ error: "Utilisateur non trouv\xE9." });
       return;
@@ -16216,7 +16283,7 @@ router26.post("/mail/settings", requireRole2(["super_admin"]), async (req2, res)
     }
     const encryptedPassword = encrypt(password);
     const userEmail = `${userName.replace(/\s+/g, ".").toLowerCase()}@2thier.be`;
-    await prisma24.mailSettings.upsert({
+    await prisma13.mailSettings.upsert({
       where: { userId },
       update: {
         encryptedPassword,
@@ -16246,7 +16313,7 @@ router26.get("/mail/settings", async (req2, res) => {
       res.status(401).json({ error: "Utilisateur non authentifi\xE9." });
       return;
     }
-    const mailSettings = await prisma24.mailSettings.findUnique({
+    const mailSettings = await prisma13.mailSettings.findUnique({
       where: { userId }
     });
     if (!mailSettings) {
@@ -16320,7 +16387,6 @@ var impersonate_default = router27;
 
 // src/routes/calendar.ts
 var import_express29 = require("express");
-var import_client25 = require("@prisma/client");
 
 // src/middlewares/impersonation.js
 var impersonationMiddleware2 = (req2, res, next) => {
@@ -16328,6 +16394,7 @@ var impersonationMiddleware2 = (req2, res, next) => {
 };
 
 // src/routes/calendar.ts
+init_prisma();
 var router28 = (0, import_express29.Router)();
 router28.use((req2, _res, next) => {
   try {
@@ -16338,7 +16405,6 @@ router28.use((req2, _res, next) => {
   }
   next();
 });
-var prisma25 = new import_client25.PrismaClient();
 var sseClients = [];
 function broadcast(orgId, event, payload) {
   const data = `event: ${event}
@@ -16397,7 +16463,7 @@ router28.get("/events", async (req2, res) => {
     if (startDate && endDate) {
       whereClause.startDate = { gte: new Date(startDate), lte: new Date(endDate) };
     }
-    let events = await prisma25.calendarEvent.findMany({
+    let events = await db.calendarEvent.findMany({
       where: whereClause,
       include: {
         CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
@@ -16413,7 +16479,7 @@ router28.get("/events", async (req2, res) => {
       if (notesToCarry.length) {
         console.log("[CALENDAR ROUTES] \u{1F501} Report automatique de", notesToCarry.length, "notes non termin\xE9es");
         for (const n of notesToCarry) {
-          await prisma25.calendarEvent.update({
+          await db.calendarEvent.update({
             where: { id: n.id },
             data: {
               startDate: todayStart,
@@ -16423,7 +16489,7 @@ router28.get("/events", async (req2, res) => {
             }
           });
         }
-        events = await prisma25.calendarEvent.findMany({
+        events = await db.calendarEvent.findMany({
           where: whereClause,
           include: {
             CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
@@ -16446,7 +16512,7 @@ router28.get("/events", async (req2, res) => {
         for (const gEvent of googleEvents) {
           const gId = gEvent.id;
           if (!gId || !gEvent.start?.dateTime || !gEvent.end?.dateTime) continue;
-          const existing = await prisma25.calendarEvent.findFirst({
+          const existing = await db.calendarEvent.findFirst({
             where: { organizationId, externalCalendarId: gId }
           });
           const baseData = {
@@ -16463,12 +16529,12 @@ router28.get("/events", async (req2, res) => {
             updatedAt: /* @__PURE__ */ new Date()
           };
           if (existing) {
-            await prisma25.calendarEvent.update({ where: { id: existing.id }, data: baseData });
+            await db.calendarEvent.update({ where: { id: existing.id }, data: baseData });
           } else {
-            await prisma25.calendarEvent.create({ data: baseData });
+            await db.calendarEvent.create({ data: baseData });
           }
         }
-        events = await prisma25.calendarEvent.findMany({
+        events = await db.calendarEvent.findMany({
           where: whereClause,
           include: {
             CalendarParticipant: { include: { User: { select: { id: true, firstName: true, lastName: true, email: true } } } },
@@ -16494,7 +16560,7 @@ router28.get("/ai-suggestions", async (req2, res) => {
     if (!leadId) {
       return res.status(400).json({ error: "Param\xE8tre leadId requis" });
     }
-    const lead = await prisma25.lead.findFirst({
+    const lead = await db.lead.findFirst({
       where: { id: leadId, organizationId },
       select: { id: true, firstName: true, lastName: true, lastContactDate: true, nextFollowUpDate: true, status: true, createdAt: true }
     });
@@ -16503,7 +16569,7 @@ router28.get("/ai-suggestions", async (req2, res) => {
     const now = /* @__PURE__ */ new Date();
     const horizon = /* @__PURE__ */ new Date();
     horizon.setDate(horizon.getDate() + horizonDays);
-    const events = await prisma25.calendarEvent.findMany({
+    const events = await db.calendarEvent.findMany({
       where: {
         organizationId,
         startDate: { gte: now, lte: horizon }
@@ -16609,7 +16675,7 @@ router28.post("/sync", async (req2, res) => {
     let updatedCount = 0;
     for (const gEvent of googleEvents) {
       if (!gEvent.start?.dateTime || !gEvent.end?.dateTime) continue;
-      const existingEvent = gEvent.id ? await prisma25.calendarEvent.findFirst({
+      const existingEvent = gEvent.id ? await db.calendarEvent.findFirst({
         where: { organizationId, externalCalendarId: gEvent.id }
       }) : null;
       const eventData = {
@@ -16626,10 +16692,10 @@ router28.post("/sync", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       };
       if (existingEvent) {
-        await prisma25.calendarEvent.update({ where: { id: existingEvent.id }, data: eventData });
+        await db.calendarEvent.update({ where: { id: existingEvent.id }, data: eventData });
         updatedCount++;
       } else {
-        await prisma25.calendarEvent.create({ data: eventData });
+        await db.calendarEvent.create({ data: eventData });
         createdCount++;
       }
     }
@@ -16673,7 +16739,7 @@ router28.post("/events", async (req2, res) => {
       "priority \u2192 status": eventData.priority + " \u2192 " + prismaData.status,
       "organizer": eventData.organizer + " (ignor\xE9 - pas de champ dans Prisma)"
     });
-    const event = await prisma25.calendarEvent.create({
+    const event = await db.calendarEvent.create({
       data: prismaData
     });
     console.log("[CALENDAR ROUTES] \xC9v\xE9nement cr\xE9\xE9:", event);
@@ -16691,7 +16757,7 @@ router28.post("/events", async (req2, res) => {
         }
       };
       const externalCalendarId = await googleCalendarService.createEvent(organizationId, googleEventData);
-      const updatedEvent = await prisma25.calendarEvent.update({
+      const updatedEvent = await db.calendarEvent.update({
         where: { id: event.id },
         data: {
           externalCalendarId
@@ -16771,7 +16837,7 @@ router28.post("/notes", async (req2, res) => {
     console.log("[CALENDAR ROUTES] \u2795 Cr\xE9ation Prisma calendarEvent avec data:", data);
     let note;
     try {
-      note = await prisma25.calendarEvent.create({ data });
+      note = await db.calendarEvent.create({ data });
     } catch (prismaCreateError) {
       console.error("[CALENDAR ROUTES] \u274C Prisma create a \xE9chou\xE9");
       if (prismaCreateError?.code) {
@@ -16804,9 +16870,9 @@ router28.patch("/notes/:id/done", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.user.organizationId;
-    const existing = await prisma25.calendarEvent.findFirst({ where: { id, organizationId, type: "note" } });
+    const existing = await db.calendarEvent.findFirst({ where: { id, organizationId, type: "note" } });
     if (!existing) return res.status(404).json({ error: "Note introuvable" });
-    const updated = await prisma25.calendarEvent.update({
+    const updated = await db.calendarEvent.update({
       where: { id },
       data: { status: "done", completedAt: /* @__PURE__ */ new Date() }
     });
@@ -16822,7 +16888,7 @@ router28.get("/notes/summary", async (req2, res) => {
     const organizationId = req2.user.organizationId;
     const todayStart = /* @__PURE__ */ new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const active = await prisma25.calendarEvent.findMany({
+    const active = await db.calendarEvent.findMany({
       where: { organizationId, type: "note", status: { not: "done" } },
       select: { id: true, dueDate: true, startDate: true, title: true }
     });
@@ -16843,7 +16909,7 @@ router28.get("/notes/history", async (req2, res) => {
       if (from) where.startDate.gte = /* @__PURE__ */ new Date(from + "T00:00:00");
       if (to) where.startDate.lte = /* @__PURE__ */ new Date(to + "T23:59:59");
     }
-    const notes = await prisma25.calendarEvent.findMany({ where, orderBy: { completedAt: "desc" } });
+    const notes = await db.calendarEvent.findMany({ where, orderBy: { completedAt: "desc" } });
     const enriched = notes.map((n) => ({
       id: n.id,
       title: n.title,
@@ -16874,7 +16940,7 @@ router28.put("/events/:id", async (req2, res) => {
     const { id } = req2.params;
     const eventData = req2.body;
     const organizationId = req2.user.organizationId;
-    const updatedEvent = await prisma25.calendarEvent.update({
+    const updatedEvent = await db.calendarEvent.update({
       where: { id, organizationId },
       data: eventData
     });
@@ -16910,14 +16976,14 @@ router28.delete("/events/:id", async (req2, res) => {
     const organizationId = req2.user.organizationId;
     console.log("[CALENDAR ROUTES] ID \xE0 supprimer:", id);
     console.log("[CALENDAR ROUTES] OrganizationId:", organizationId);
-    const eventToDelete = await prisma25.calendarEvent.findUnique({ where: { id, organizationId } });
+    const eventToDelete = await db.calendarEvent.findUnique({ where: { id, organizationId } });
     console.log("[CALENDAR ROUTES] \xC9v\xE9nement trouv\xE9:", eventToDelete);
     if (!eventToDelete) {
       console.log("[CALENDAR ROUTES] \u274C \xC9v\xE9nement non trouv\xE9");
       return res.status(404).json({ error: "\xC9v\xE9nement non trouv\xE9." });
     }
     console.log("[CALENDAR ROUTES] \u{1F5D1}\uFE0F Suppression de l'\xE9v\xE9nement...");
-    await prisma25.calendarEvent.delete({ where: { id } });
+    await db.calendarEvent.delete({ where: { id } });
     console.log("[CALENDAR ROUTES] \u2705 \xC9v\xE9nement supprim\xE9 de la base de donn\xE9es");
     if (eventToDelete.externalCalendarId) {
       try {
@@ -16939,14 +17005,14 @@ var calendar_default = router28;
 
 // src/routes/clients.ts
 var import_express30 = require("express");
-var import_client26 = require("@prisma/client");
+init_database();
 var router29 = (0, import_express30.Router)();
-var prisma26 = new import_client26.PrismaClient();
+var prisma14 = db;
 router29.use(authenticateToken);
 router29.get("/", async (req2, res) => {
   try {
     console.log("[CLIENTS] R\xE9cup\xE9ration des clients pour l'organisation:", req2.organizationId);
-    const leads = await prisma26.lead.findMany({
+    const leads = await prisma14.lead.findMany({
       where: {
         organizationId: req2.organizationId,
         // Filtrer pour obtenir les leads qui sont devenus des clients
@@ -16999,7 +17065,7 @@ router29.get("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("[CLIENTS] R\xE9cup\xE9ration du client:", id);
-    const lead = await prisma26.lead.findFirst({
+    const lead = await prisma14.lead.findFirst({
       where: {
         id,
         organizationId: req2.organizationId
@@ -17045,7 +17111,7 @@ router29.post("/", async (req2, res) => {
   try {
     const { name, email, phone, company } = req2.body;
     console.log("[CLIENTS] Cr\xE9ation d'un nouveau client:", { name, email, company });
-    const lead = await prisma26.lead.create({
+    const lead = await prisma14.lead.create({
       data: {
         organizationId: req2.organizationId,
         status: "client",
@@ -17092,14 +17158,14 @@ var clients_default = router29;
 
 // src/routes/projects.ts
 var import_express31 = require("express");
-var import_client27 = require("@prisma/client");
+init_database();
 var router30 = (0, import_express31.Router)();
-var prisma27 = new import_client27.PrismaClient();
+var prisma15 = db;
 router30.use(authenticateToken);
 router30.get("/", async (req2, res) => {
   try {
     console.log("[PROJECTS] R\xE9cup\xE9ration des projets pour l'organisation:", req2.organizationId);
-    const projectLeads = await prisma27.lead.findMany({
+    const projectLeads = await prisma15.lead.findMany({
       where: {
         organizationId: req2.organizationId,
         OR: [
@@ -17201,7 +17267,7 @@ router30.get("/:id", async (req2, res) => {
       };
       return res.json(sampleProject);
     }
-    const lead = await prisma27.lead.findFirst({
+    const lead = await prisma15.lead.findFirst({
       where: {
         id,
         organizationId: req2.organizationId
@@ -17248,7 +17314,7 @@ router30.post("/", async (req2, res) => {
   try {
     const { name, description, clientName, budget, deadline, priority } = req2.body;
     console.log("[PROJECTS] Cr\xE9ation d'un nouveau projet:", { name, clientName });
-    const lead = await prisma27.lead.create({
+    const lead = await prisma15.lead.create({
       data: {
         organizationId: req2.organizationId,
         status: "projet",
@@ -17304,8 +17370,7 @@ var import_express32 = require("express");
 var import_googleapis7 = require("googleapis");
 
 // src/services/AutoGoogleAuthService.ts
-var import_client28 = require("@prisma/client");
-var prisma28 = new import_client28.PrismaClient();
+init_prisma();
 var AutoGoogleAuthService = class _AutoGoogleAuthService {
   static instance = null;
   constructor() {
@@ -17408,7 +17473,7 @@ var AutoGoogleAuthService = class _AutoGoogleAuthService {
    */
   async checkOrganizationGoogleConnection(organizationId) {
     try {
-      const workspaceConfig = await prisma28.googleWorkspaceConfig.findFirst({
+      const workspaceConfig = await db.googleWorkspaceConfig.findFirst({
         where: { isActive: true }
       });
       if (workspaceConfig) {
@@ -18554,11 +18619,11 @@ var import_express35 = require("express");
 
 // src/api/telnyx.ts
 var import_express34 = require("express");
-var import_client29 = require("@prisma/client");
+init_database();
 var import_zod7 = require("zod");
 var import_axios = __toESM(require("axios"), 1);
 var router33 = (0, import_express34.Router)();
-var prisma29 = new import_client29.PrismaClient();
+var prisma16 = db;
 var TELNYX_API_URL = "https://api.telnyx.com/v2";
 async function getTelnyxHeaders(organizationId) {
   try {
@@ -18624,7 +18689,7 @@ router33.get("/connections", async (req2, res) => {
       updated_at: conn.updated_at
     }));
     for (const conn of connections) {
-      await prisma29.telnyxConnection.upsert({
+      await prisma16.telnyxConnection.upsert({
         where: { id: conn.id },
         update: {
           name: conn.name,
@@ -18678,7 +18743,7 @@ router33.get("/phone-numbers", async (req2, res) => {
       purchased_at: number.purchased_at
     }));
     for (const number of phoneNumbers) {
-      await prisma29.telnyxPhoneNumber.upsert({
+      await prisma16.telnyxPhoneNumber.upsert({
         where: { id: number.id },
         update: {
           phoneNumber: number.phone_number,
@@ -18753,7 +18818,7 @@ router33.get("/calls", async (req2, res) => {
     const limit = parseInt(req2.query.limit) || 50;
     const organizationId = req2.user.organizationId;
     console.log(`\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des appels (${limit})...`);
-    const calls = await prisma29.telnyxCall.findMany({
+    const calls = await prisma16.telnyxCall.findMany({
       where: { organizationId },
       orderBy: { startedAt: "desc" },
       take: limit
@@ -18796,7 +18861,7 @@ router33.post("/calls", async (req2, res) => {
       command_id: `call-${Date.now()}`
     }, { headers });
     const callData = response.data.data;
-    const call = await prisma29.telnyxCall.create({
+    const call = await prisma16.telnyxCall.create({
       data: {
         id: `call-${Date.now()}`,
         callId: callData.call_control_id,
@@ -18829,7 +18894,7 @@ router33.post("/calls/:callId/hangup", async (req2, res) => {
     const { callId } = req2.params;
     const organizationId = req2.user.organizationId;
     console.log("\u260E\uFE0F [Telnyx API] Raccrocher appel:", callId);
-    const call = await prisma29.telnyxCall.findFirst({
+    const call = await prisma16.telnyxCall.findFirst({
       where: {
         callId,
         organizationId
@@ -18845,7 +18910,7 @@ router33.post("/calls/:callId/hangup", async (req2, res) => {
     await import_axios.default.post(`${TELNYX_API_URL}/calls/${callId}/actions/hangup`, {}, {
       headers
     });
-    await prisma29.telnyxCall.update({
+    await prisma16.telnyxCall.update({
       where: { id: call.id },
       data: {
         status: "completed",
@@ -18903,7 +18968,7 @@ router33.get("/messages", async (req2, res) => {
     const limit = parseInt(req2.query.limit) || 50;
     const organizationId = req2.user.organizationId;
     console.log(`\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des messages (${limit})...`);
-    const messages = await prisma29.telnyxMessage.findMany({
+    const messages = await prisma16.telnyxMessage.findMany({
       where: { organizationId },
       orderBy: { sentAt: "desc" },
       take: limit
@@ -18948,7 +19013,7 @@ router33.post("/messages", async (req2, res) => {
       webhook_url: `${process.env.APP_URL}/api/telnyx/webhooks/messages`
     }, { headers });
     const messageData = response.data.data;
-    const message = await prisma29.telnyxMessage.create({
+    const message = await prisma16.telnyxMessage.create({
       data: {
         id: `msg-${Date.now()}`,
         messageId: messageData.id,
@@ -18985,7 +19050,7 @@ router33.post("/webhooks/calls", async (req2, res) => {
     if (!callData) {
       return res.json({ received: true });
     }
-    const call = await prisma29.telnyxCall.findFirst({
+    const call = await prisma16.telnyxCall.findFirst({
       where: { callId: callData.call_control_id }
     });
     if (call) {
@@ -18999,7 +19064,7 @@ router33.post("/webhooks/calls", async (req2, res) => {
         updateData.endedAt = /* @__PURE__ */ new Date();
         updateData.duration = callData.hangup_duration_millis ? Math.floor(callData.hangup_duration_millis / 1e3) : 0;
       }
-      await prisma29.telnyxCall.update({
+      await prisma16.telnyxCall.update({
         where: { id: call.id },
         data: updateData
       });
@@ -19021,7 +19086,7 @@ router33.post("/webhooks/messages", async (req2, res) => {
     }
     const eventType = webhook.data.event_type;
     if (eventType === "message.received") {
-      await prisma29.telnyxMessage.create({
+      await prisma16.telnyxMessage.create({
         data: {
           id: `msg-${Date.now()}`,
           messageId: messageData.id,
@@ -19041,11 +19106,11 @@ router33.post("/webhooks/messages", async (req2, res) => {
       });
       console.log("\u2705 [Telnyx Webhook] Message entrant sauvegard\xE9:", messageData.id);
     } else if (eventType === "message.sent") {
-      const message = await prisma29.telnyxMessage.findFirst({
+      const message = await prisma16.telnyxMessage.findFirst({
         where: { messageId: messageData.id }
       });
       if (message) {
-        await prisma29.telnyxMessage.update({
+        await prisma16.telnyxMessage.update({
           where: { id: message.id },
           data: {
             status: "delivered",
@@ -19080,7 +19145,7 @@ router33.post("/sync", async (req2, res) => {
       })
     ]);
     for (const conn of connectionsRes.data.data) {
-      await prisma29.telnyxConnection.upsert({
+      await prisma16.telnyxConnection.upsert({
         where: { id: conn.id },
         update: {
           name: conn.connection_name || `Connection ${conn.id.substring(0, 8)}`,
@@ -19102,7 +19167,7 @@ router33.post("/sync", async (req2, res) => {
       });
     }
     for (const number of numbersRes.data.data) {
-      await prisma29.telnyxPhoneNumber.upsert({
+      await prisma16.telnyxPhoneNumber.upsert({
         where: { id: number.id },
         update: {
           phoneNumber: number.phone_number,
@@ -19163,7 +19228,7 @@ router33.post("/user-config", async (req2, res) => {
     const { userId, assignedNumber, canMakeCalls, canSendSms, monthlyLimit } = req2.body;
     const organizationId = req2.user.organizationId;
     console.log("\u2699\uFE0F [Telnyx API] Configuration utilisateur:", { userId, assignedNumber });
-    const userConfig = await prisma29.telnyxUserConfig.upsert({
+    const userConfig = await prisma16.telnyxUserConfig.upsert({
       where: { userId },
       update: {
         assignedNumber,
@@ -19184,7 +19249,7 @@ router33.post("/user-config", async (req2, res) => {
       }
     });
     if (assignedNumber) {
-      await prisma29.telnyxPhoneNumber.updateMany({
+      await prisma16.telnyxPhoneNumber.updateMany({
         where: {
           phoneNumber: assignedNumber,
           organizationId
@@ -19194,7 +19259,7 @@ router33.post("/user-config", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      await prisma29.telnyxPhoneNumber.updateMany({
+      await prisma16.telnyxPhoneNumber.updateMany({
         where: {
           assignedUserId: userId,
           phoneNumber: { not: assignedNumber },
@@ -19206,7 +19271,7 @@ router33.post("/user-config", async (req2, res) => {
         }
       });
     } else {
-      await prisma29.telnyxPhoneNumber.updateMany({
+      await prisma16.telnyxPhoneNumber.updateMany({
         where: {
           assignedUserId: userId,
           organizationId
@@ -19229,7 +19294,7 @@ router33.get("/user-config/:userId", async (req2, res) => {
     const { userId } = req2.params;
     const organizationId = req2.user.organizationId;
     console.log("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration config utilisateur:", userId);
-    const userConfig = await prisma29.telnyxUserConfig.findFirst({
+    const userConfig = await prisma16.telnyxUserConfig.findFirst({
       where: {
         userId,
         organizationId
@@ -19253,33 +19318,33 @@ router33.get("/stats", async (req2, res) => {
     const organizationId = req2.user.organizationId;
     console.log("\u{1F4CA} [Telnyx API] R\xE9cup\xE9ration statistiques...");
     const [totalCalls, totalSms, activeNumbers] = await Promise.all([
-      prisma29.telnyxCall.count({
+      prisma16.telnyxCall.count({
         where: {
           organizationId,
           startedAt: { gte: new Date((/* @__PURE__ */ new Date()).getFullYear(), (/* @__PURE__ */ new Date()).getMonth(), 1) }
         }
       }),
-      prisma29.telnyxMessage.count({
+      prisma16.telnyxMessage.count({
         where: {
           organizationId,
           createdAt: { gte: new Date((/* @__PURE__ */ new Date()).getFullYear(), (/* @__PURE__ */ new Date()).getMonth(), 1) }
         }
       }),
-      prisma29.telnyxPhoneNumber.count({
+      prisma16.telnyxPhoneNumber.count({
         where: {
           organizationId,
           status: "active"
         }
       })
     ]);
-    const calls = await prisma29.telnyxCall.findMany({
+    const calls = await prisma16.telnyxCall.findMany({
       where: {
         organizationId,
         startedAt: { gte: new Date((/* @__PURE__ */ new Date()).getFullYear(), (/* @__PURE__ */ new Date()).getMonth(), 1) }
       },
       select: { cost: true }
     });
-    const numbers = await prisma29.telnyxPhoneNumber.findMany({
+    const numbers = await prisma16.telnyxPhoneNumber.findMany({
       where: {
         organizationId,
         status: "active"
@@ -19309,7 +19374,7 @@ router33.post("/webhooks", async (req2, res) => {
     if (eventType?.startsWith("call.")) {
       const callData = webhook.data?.payload;
       if (callData) {
-        const call = await prisma29.telnyxCall.findFirst({
+        const call = await prisma16.telnyxCall.findFirst({
           where: { callId: callData.call_control_id }
         });
         if (call) {
@@ -19323,7 +19388,7 @@ router33.post("/webhooks", async (req2, res) => {
             updateData.endedAt = /* @__PURE__ */ new Date();
             updateData.duration = callData.hangup_duration_millis ? Math.floor(callData.hangup_duration_millis / 1e3) : 0;
           }
-          await prisma29.telnyxCall.update({
+          await prisma16.telnyxCall.update({
             where: { id: call.id },
             data: updateData
           });
@@ -19334,7 +19399,7 @@ router33.post("/webhooks", async (req2, res) => {
       const messageData = webhook.data?.payload;
       if (messageData) {
         if (eventType === "message.received") {
-          await prisma29.telnyxMessage.create({
+          await prisma16.telnyxMessage.create({
             data: {
               id: `msg-${Date.now()}`,
               messageId: messageData.id,
@@ -19353,11 +19418,11 @@ router33.post("/webhooks", async (req2, res) => {
           });
           console.log("\u2705 [Telnyx Webhook] Message entrant sauvegard\xE9:", messageData.id);
         } else if (eventType === "message.sent") {
-          const message = await prisma29.telnyxMessage.findFirst({
+          const message = await prisma16.telnyxMessage.findFirst({
             where: { messageId: messageData.id }
           });
           if (message) {
-            await prisma29.telnyxMessage.update({
+            await prisma16.telnyxMessage.update({
               where: { id: message.id },
               data: {
                 status: "delivered",
@@ -19388,9 +19453,9 @@ var telnyx_default2 = router34;
 
 // src/routes/quotes.ts
 var import_express36 = require("express");
-var import_client30 = require("@prisma/client");
+init_database();
 var router35 = (0, import_express36.Router)();
-var prisma30 = new import_client30.PrismaClient();
+var prisma17 = db;
 router35.use(authMiddleware);
 var allowedTransitions = {
   ["DRAFT" /* DRAFT */]: ["SENT" /* SENT */, "CANCELLED" /* CANCELLED */],
@@ -19440,7 +19505,7 @@ function round4(n) {
   return Math.round((n + Number.EPSILON) * 1e4) / 1e4;
 }
 function toDecimal(value) {
-  return new import_client30.Prisma.Decimal(value.toString());
+  return new import_client.Prisma.Decimal(value.toString());
 }
 router35.get("/", async (req2, res) => {
   try {
@@ -19458,8 +19523,8 @@ router35.get("/", async (req2, res) => {
     const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
     const sizeNum = Math.min(100, Math.max(1, parseInt(String(pageSize), 10) || 20));
     const [total, data] = await Promise.all([
-      prisma30.quote.count({ where }),
-      prisma30.quote.findMany({
+      prisma17.quote.count({ where }),
+      prisma17.quote.findMany({
         where,
         orderBy: [{ updatedAt: "desc" }],
         skip: (pageNum - 1) * sizeNum,
@@ -19484,7 +19549,7 @@ router35.get("/:id", async (req2, res) => {
     const { user } = req2;
     const organizationId = user?.organizationId;
     if (!organizationId) return res.status(400).json({ error: "Organisation non sp\xE9cifi\xE9e" });
-    const quote = await prisma30.quote.findFirst({
+    const quote = await prisma17.quote.findFirst({
       where: { id, organizationId },
       include: {
         items: { orderBy: { order: "asc" } },
@@ -19505,9 +19570,9 @@ router35.post("/", async (req2, res) => {
     if (!organizationId) return res.status(400).json({ error: "Organisation non sp\xE9cifi\xE9e" });
     const { leadId, blockId, title, currency = "EUR", validUntil, notes, data } = req2.body;
     if (!leadId || !blockId) return res.status(400).json({ error: "leadId et blockId requis" });
-    const lead = await prisma30.lead.findFirst({ where: { id: leadId, organizationId } });
+    const lead = await prisma17.lead.findFirst({ where: { id: leadId, organizationId } });
     if (!lead) return res.status(404).json({ error: "Lead non trouv\xE9 ou non autoris\xE9" });
-    const created = await prisma30.quote.create({
+    const created = await prisma17.quote.create({
       data: {
         organizationId,
         leadId,
@@ -19536,7 +19601,7 @@ router35.patch("/:id", async (req2, res) => {
     const { user } = req2;
     const organizationId = user?.organizationId;
     if (!organizationId) return res.status(400).json({ error: "Organisation non sp\xE9cifi\xE9e" });
-    const existing = await prisma30.quote.findFirst({ where: { id, organizationId } });
+    const existing = await prisma17.quote.findFirst({ where: { id, organizationId } });
     if (!existing) return res.status(404).json({ error: "Devis introuvable" });
     const { title, notes, currency, validUntil, status } = req2.body;
     const data = {};
@@ -19552,7 +19617,7 @@ router35.patch("/:id", async (req2, res) => {
       }
       data.status = to;
     }
-    const updated = await prisma30.quote.update({ where: { id }, data });
+    const updated = await prisma17.quote.update({ where: { id }, data });
     res.json(updated);
   } catch (e) {
     console.error("[QUOTES] PATCH update error", e);
@@ -19565,9 +19630,9 @@ router35.delete("/:id", async (req2, res) => {
     const { user } = req2;
     const organizationId = user?.organizationId;
     if (!organizationId) return res.status(400).json({ error: "Organisation non sp\xE9cifi\xE9e" });
-    const existing = await prisma30.quote.findFirst({ where: { id, organizationId } });
+    const existing = await prisma17.quote.findFirst({ where: { id, organizationId } });
     if (!existing) return res.status(404).json({ error: "Devis introuvable" });
-    await prisma30.quote.update({ where: { id }, data: { status: "CANCELLED" /* CANCELLED */ } });
+    await prisma17.quote.update({ where: { id }, data: { status: "CANCELLED" /* CANCELLED */ } });
     res.status(204).send();
   } catch (e) {
     console.error("[QUOTES] DELETE error", e);
@@ -19580,7 +19645,7 @@ router35.post("/:id/items", async (req2, res) => {
     const { user } = req2;
     const organizationId = user?.organizationId;
     if (!organizationId) return res.status(400).json({ error: "Organisation non sp\xE9cifi\xE9e" });
-    const existing = await prisma30.quote.findFirst({ where: { id, organizationId } });
+    const existing = await prisma17.quote.findFirst({ where: { id, organizationId } });
     if (!existing) return res.status(404).json({ error: "Devis introuvable" });
     const items = req2.body?.items || [];
     if (!Array.isArray(items)) return res.status(400).json({ error: "items doit \xEAtre un tableau" });
@@ -19592,7 +19657,7 @@ router35.post("/:id/items", async (req2, res) => {
       taxPct: Number(i.taxPct ?? 21)
     })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const totals = aggregateTotals(prepared);
-    await prisma30.$transaction(async (tx) => {
+    await prisma17.$transaction(async (tx) => {
       await tx.quoteItem.deleteMany({ where: { quoteId: id } });
       for (const it of prepared) {
         const { totalExcl, totalIncl } = computeItemTotals(it);
@@ -19622,7 +19687,7 @@ router35.post("/:id/items", async (req2, res) => {
         }
       });
     });
-    const updated = await prisma30.quote.findUnique({
+    const updated = await prisma17.quote.findUnique({
       where: { id },
       include: { items: { orderBy: { order: "asc" } } }
     });
@@ -19638,12 +19703,12 @@ router35.post("/:id/duplicate", async (req2, res) => {
     const { user } = req2;
     const organizationId = user?.organizationId;
     if (!organizationId) return res.status(400).json({ error: "Organisation non sp\xE9cifi\xE9e" });
-    const existing = await prisma30.quote.findFirst({
+    const existing = await prisma17.quote.findFirst({
       where: { id, organizationId },
       include: { items: true }
     });
     if (!existing) return res.status(404).json({ error: "Devis introuvable" });
-    const newQuote = await prisma30.$transaction(async (tx) => {
+    const newQuote = await prisma17.$transaction(async (tx) => {
       const created = await tx.quote.create({
         data: {
           organizationId,
@@ -20175,10 +20240,10 @@ var google_meet_default = router37;
 
 // src/routes/analytics.ts
 var import_express39 = require("express");
-var import_client31 = require("@prisma/client");
+init_database();
 var import_express_rate_limit5 = __toESM(require("express-rate-limit"), 1);
 var router38 = (0, import_express39.Router)();
-var prisma31 = new import_client31.PrismaClient();
+var prisma18 = db;
 var analyticsRateLimit = (0, import_express_rate_limit5.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -20200,10 +20265,10 @@ router38.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     let metrics;
     if (requestingUser?.role === "super_admin") {
       const [totalUsers, totalOrganizations, activeModules, totalLeads] = await Promise.all([
-        prisma31.user.count({ where: { createdAt: dateFilter } }),
-        prisma31.organization.count({ where: { createdAt: dateFilter } }),
-        prisma31.organizationModuleStatus.count({ where: { active: true } }),
-        prisma31.lead?.count({ where: { createdAt: dateFilter } }) || 0
+        prisma18.user.count({ where: { createdAt: dateFilter } }),
+        prisma18.organization.count({ where: { createdAt: dateFilter } }),
+        prisma18.organizationModuleStatus.count({ where: { active: true } }),
+        prisma18.lead?.count({ where: { createdAt: dateFilter } }) || 0
       ]);
       metrics = {
         totalUsers,
@@ -20218,13 +20283,13 @@ router38.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     } else {
       const orgId = requestingUser.organizationId;
       const [orgUsers, orgModules, orgLeads] = await Promise.all([
-        prisma31.userOrganization.count({
+        prisma18.userOrganization.count({
           where: { organizationId: orgId, createdAt: dateFilter }
         }),
-        prisma31.organizationModuleStatus.count({
+        prisma18.organizationModuleStatus.count({
           where: { organizationId: orgId, active: true }
         }),
-        prisma31.lead?.count({
+        prisma18.lead?.count({
           where: { organizationId: orgId, createdAt: dateFilter }
         }) || 0
       ]);
@@ -20287,7 +20352,7 @@ router38.get("/audit-trail", requireRole2(["admin", "super_admin"]), async (req2
     if (userId) whereClause.userId = userId;
     if (action2) whereClause.action = { contains: action2 };
     const [auditLogs, total] = await Promise.all([
-      prisma31.auditLog?.findMany({
+      prisma18.auditLog?.findMany({
         where: whereClause,
         include: {
           User: { select: { firstName: true, lastName: true, email: true } }
@@ -20296,7 +20361,7 @@ router38.get("/audit-trail", requireRole2(["admin", "super_admin"]), async (req2
         skip: (Number(page) - 1) * Number(limit),
         take: Number(limit)
       }) || [],
-      prisma31.auditLog?.count({ where: whereClause }) || 0
+      prisma18.auditLog?.count({ where: whereClause }) || 0
     ]);
     res.json({
       success: true,
@@ -20315,10 +20380,10 @@ router38.get("/audit-trail", requireRole2(["admin", "super_admin"]), async (req2
 });
 async function calculateGrowth(model, dateFilter) {
   try {
-    const currentPeriod = await (model === "user" ? prisma31.user : prisma31.organization).count({
+    const currentPeriod = await (model === "user" ? prisma18.user : prisma18.organization).count({
       where: { createdAt: dateFilter }
     });
-    const previousPeriod = await (model === "user" ? prisma31.user : prisma31.organization).count({
+    const previousPeriod = await (model === "user" ? prisma18.user : prisma18.organization).count({
       where: {
         createdAt: {
           gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1e3),
@@ -20335,10 +20400,10 @@ async function calculateGrowth(model, dateFilter) {
 async function calculateConversionRate(organizationId, dateFilter) {
   try {
     const [totalLeads, convertedLeads] = await Promise.all([
-      prisma31.lead?.count({
+      prisma18.lead?.count({
         where: { organizationId, createdAt: dateFilter }
       }) || 0,
-      prisma31.lead?.count({
+      prisma18.lead?.count({
         where: {
           organizationId,
           status: "converted",
@@ -20353,7 +20418,7 @@ async function calculateConversionRate(organizationId, dateFilter) {
 }
 async function exportUsers(requestingUser) {
   const whereClause = requestingUser?.role === "super_admin" ? {} : { organizationId: requestingUser.organizationId };
-  return prisma31.user.findMany({
+  return prisma18.user.findMany({
     where: whereClause,
     select: {
       firstName: true,
@@ -20370,7 +20435,7 @@ async function exportUsers(requestingUser) {
   });
 }
 async function exportOrganizations() {
-  return prisma31.organization.findMany({
+  return prisma18.organization.findMany({
     select: {
       name: true,
       status: true,
@@ -20400,10 +20465,9 @@ var analytics_default = router38;
 var import_express40 = __toESM(require("express"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
-var import_client32 = require("@prisma/client");
+init_prisma();
 var import_crypto7 = require("crypto");
 var geminiSingleton = new GoogleGeminiService_default();
-var prisma32 = new import_client32.PrismaClient();
 var router39 = import_express40.default.Router();
 router39.use(authMiddleware);
 var aiUsageTableEnsured = null;
@@ -20411,7 +20475,7 @@ async function ensureAiUsageLogTable() {
   if (!aiUsageTableEnsured) {
     aiUsageTableEnsured = (async () => {
       try {
-        await prisma32.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AiUsageLog" (
+        await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AiUsageLog" (
           id TEXT PRIMARY KEY,
           "userId" TEXT NULL,
           "organizationId" TEXT NULL,
@@ -20426,10 +20490,10 @@ async function ensureAiUsageLogTable() {
           meta JSONB NULL,
           "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         );`);
-        await prisma32.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_userId_idx" ON "AiUsageLog"("userId");');
-        await prisma32.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_orgId_idx" ON "AiUsageLog"("organizationId");');
-        await prisma32.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_type_idx" ON "AiUsageLog"(type);');
-        await prisma32.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_createdAt_idx" ON "AiUsageLog"("createdAt");');
+        await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_userId_idx" ON "AiUsageLog"("userId");');
+        await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_orgId_idx" ON "AiUsageLog"("organizationId");');
+        await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_type_idx" ON "AiUsageLog"(type);');
+        await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_createdAt_idx" ON "AiUsageLog"("createdAt");');
       } catch (e) {
         console.warn("\u26A0\uFE0F Impossible de garantir la table AiUsageLog (continuation sans log):", e.message);
       }
@@ -20474,7 +20538,7 @@ async function logAiUsage(params) {
       tokensOutputRaw: params.tokensOutput,
       ...params.extraMeta || {}
     };
-    await prisma32.aiUsageLog?.create?.({
+    await db.aiUsageLog?.create?.({
       data: {
         id: (0, import_crypto7.randomUUID)(),
         organizationId: organizationId || void 0,
@@ -20490,7 +20554,7 @@ async function logAiUsage(params) {
         meta
       }
     }).catch(async () => {
-      await prisma32.$executeRawUnsafe(
+      await db.$executeRawUnsafe(
         'INSERT INTO "AiUsageLog" (id, "userId", "organizationId", type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12);',
         (0, import_crypto7.randomUUID)(),
         userId,
@@ -21271,7 +21335,7 @@ async function handleChatLike(req2, res, endpoint) {
       const isSuper2 = !!(u?.isSuperAdmin || u?.roles?.includes?.("super_admin"));
       if (isSuper2) {
         const orgId = authReq.user?.organizationId || null;
-        const memEntries = await prisma32.aiUsageLog.findMany({
+        const memEntries = await db.aiUsageLog.findMany({
           where: { type: "system_memory", ...orgId ? { organizationId: orgId } : {} },
           orderBy: { createdAt: "desc" },
           take: 8,
@@ -21289,7 +21353,7 @@ async function handleChatLike(req2, res, endpoint) {
     let internalFunctionalContext = "";
     try {
       if (/gmail|email|mail|délivrabi|deliverab/i.test(message)) {
-        const googleModules = await prisma32.module.findMany({
+        const googleModules = await db.module.findMany({
           where: { key: { in: ["google_gmail", "google_drive", "google_calendar"] } },
           select: { key: true, label: true, route: true, feature: true }
         });
@@ -21756,13 +21820,13 @@ router39.get("/context/summary", async (req2, res) => {
       });
     }
     const [organization, moduleStatuses, leads, events] = await Promise.all([
-      prisma32.organization.findUnique({ where: { id: orgId }, select: { id: true, name: true } }),
-      wanted.has("modules") ? prisma32.organizationModuleStatus.findMany({
+      db.organization.findUnique({ where: { id: orgId }, select: { id: true, name: true } }),
+      wanted.has("modules") ? db.organizationModuleStatus.findMany({
         where: { organizationId: orgId, active: true },
         include: { Module: { select: { key: true, feature: true, label: true, route: true, description: true } } },
         orderBy: { createdAt: "asc" }
       }) : Promise.resolve([]),
-      wanted.has("leads") ? prisma32.lead.findMany({
+      wanted.has("leads") ? db.lead.findMany({
         where: { organizationId: orgId },
         orderBy: { updatedAt: "desc" },
         take: 5,
@@ -21777,7 +21841,7 @@ router39.get("/context/summary", async (req2, res) => {
           assignedToId: true
         }
       }) : Promise.resolve([]),
-      wanted.has("events") ? prisma32.calendarEvent.findMany({
+      wanted.has("events") ? db.calendarEvent.findMany({
         where: { organizationId: orgId, startDate: { gte: /* @__PURE__ */ new Date() } },
         orderBy: { startDate: "asc" },
         take: 5,
@@ -21823,7 +21887,7 @@ router39.get("/context/lead/:id", async (req2, res) => {
     const fieldsParam = req2.query.fields?.toLowerCase();
     const wanted = new Set((fieldsParam ? fieldsParam.split(",") : ["calls", "messages", "events", "timeline"]).map((s) => s.trim()).filter(Boolean));
     const whereCondition = isSuperAdmin2 ? { id: leadId } : { id: leadId, organizationId: orgId };
-    const lead = await prisma32.lead.findFirst({
+    const lead = await db.lead.findFirst({
       where: whereCondition,
       select: {
         id: true,
@@ -21845,25 +21909,25 @@ router39.get("/context/lead/:id", async (req2, res) => {
     if (!lead) return res.status(404).json({ success: false, error: "Lead introuvable" });
     const leadOrgId = lead.organizationId;
     const [calls, messages, upcomingEvents, timeline] = await Promise.all([
-      wanted.has("calls") ? prisma32.telnyxCall.findMany({
+      wanted.has("calls") ? db.telnyxCall.findMany({
         where: { leadId, organizationId: leadOrgId },
         orderBy: { startedAt: "desc" },
         take: 5,
         select: { id: true, direction: true, status: true, duration: true, startedAt: true }
       }) : Promise.resolve([]),
-      wanted.has("messages") ? prisma32.telnyxMessage.findMany({
+      wanted.has("messages") ? db.telnyxMessage.findMany({
         where: { leadId, organizationId: leadOrgId },
         orderBy: { sentAt: "desc" },
         take: 5,
         select: { id: true, direction: true, type: true, status: true, sentAt: true, text: true }
       }) : Promise.resolve([]),
-      wanted.has("events") ? prisma32.calendarEvent.findMany({
+      wanted.has("events") ? db.calendarEvent.findMany({
         where: { linkedLeadId: leadId, organizationId: leadOrgId, startDate: { gte: /* @__PURE__ */ new Date() } },
         orderBy: { startDate: "asc" },
         take: 3,
         select: { id: true, title: true, startDate: true, endDate: true, type: true, status: true }
       }) : Promise.resolve([]),
-      wanted.has("timeline") ? prisma32.timelineEvent.findMany({
+      wanted.has("timeline") ? db.timelineEvent.findMany({
         where: { leadId, organizationId: leadOrgId },
         orderBy: { createdAt: "desc" },
         take: 8,
@@ -21904,7 +21968,7 @@ router39.get("/context/leads", async (req2, res) => {
   const t0 = Date.now();
   try {
     const whereCondition = isSuperAdmin2 ? { id: { in: ids } } : { id: { in: ids }, organizationId: orgId };
-    const leads = await prisma32.lead.findMany({
+    const leads = await db.lead.findMany({
       where: whereCondition,
       select: { id: true, firstName: true, lastName: true, company: true, status: true, updatedAt: true, nextFollowUpDate: true }
     });
@@ -22072,8 +22136,8 @@ router39.get("/usage/recent", async (req2, res) => {
     let logs = [];
     let usedPrisma = false;
     try {
-      if (prisma32.aiUsageLog) {
-        logs = await prisma32.aiUsageLog.findMany({
+      if (db.aiUsageLog) {
+        logs = await db.aiUsageLog.findMany({
           where: {
             ...type ? { type } : {},
             ...successFilter !== void 0 ? { success: successFilter } : {}
@@ -22113,7 +22177,7 @@ router39.get("/usage/recent", async (req2, res) => {
       }
       const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
       const sql = `SELECT id, type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", "createdAt", meta FROM "AiUsageLog" ${where} ORDER BY "createdAt" DESC LIMIT ${limit}`;
-      logs = await prisma32.$queryRawUnsafe(sql, ...params);
+      logs = await db.$queryRawUnsafe(sql, ...params);
     }
     const total = logs.length;
     const successCount = logs.filter((l) => l.success).length;
@@ -22640,13 +22704,13 @@ var ai_code_default = router40;
 // src/routes/fields.ts
 var import_express45 = require("express");
 var import_uuid5 = require("uuid");
-var import_client36 = require("@prisma/client");
+init_database();
 
 // src/routes/formulas.ts
 var import_express42 = require("express");
-var import_client33 = require("@prisma/client");
+init_database();
 var import_uuid3 = require("uuid");
-var prisma33 = new import_client33.PrismaClient();
+var prisma19 = db;
 var router41 = (0, import_express42.Router)({ mergeParams: true });
 router41.use((req2, _res, next) => {
   console.log("[DEBUG FORMULAS] Request URL:", req2.originalUrl);
@@ -22659,7 +22723,7 @@ router41.use((req2, _res, next) => {
 router41.use(authMiddleware, impersonationMiddleware);
 router41.get("/all", requireRole2(["admin", "super_admin"]), async (_req, res) => {
   try {
-    const formulas = await prisma33.fieldFormula.findMany({
+    const formulas = await prisma19.fieldFormula.findMany({
       include: {
         Field: {
           select: {
@@ -22684,7 +22748,7 @@ router41.get("/all", requireRole2(["admin", "super_admin"]), async (_req, res) =
 router41.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { fieldId } = req2.params;
-    const formulas = await prisma33.fieldFormula.findMany({
+    const formulas = await prisma19.fieldFormula.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
     });
@@ -22720,7 +22784,7 @@ router41.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     }
     if (typeof order !== "number") {
       try {
-        const lastFormula = await prisma33.fieldFormula.findFirst({
+        const lastFormula = await prisma19.fieldFormula.findFirst({
           where: { fieldId: effectiveFieldId },
           orderBy: { order: "desc" }
         });
@@ -22732,7 +22796,7 @@ router41.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     }
     const newFormulaId = (0, import_uuid3.v4)();
     try {
-      await prisma33.fieldFormula.create({
+      await prisma19.fieldFormula.create({
         data: {
           id: newFormulaId,
           name: name || "",
@@ -22743,7 +22807,7 @@ router41.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
           }
         }
       });
-      const formulas = await prisma33.fieldFormula.findMany({
+      const formulas = await prisma19.fieldFormula.findMany({
         where: { fieldId: effectiveFieldId },
         orderBy: { order: "asc" }
       });
@@ -22800,7 +22864,7 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
       dataToUpdate.order = order;
     }
     try {
-      const existingFormula = await prisma33.fieldFormula.findUnique({
+      const existingFormula = await prisma19.fieldFormula.findUnique({
         where: { id: formulaId }
       });
       if (!existingFormula) {
@@ -22814,7 +22878,7 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
           updatedAt: /* @__PURE__ */ new Date()
         }]);
       }
-      const updatedFormula = await prisma33.fieldFormula.update({
+      const updatedFormula = await prisma19.fieldFormula.update({
         where: { id: formulaId },
         data: dataToUpdate
       });
@@ -22822,7 +22886,7 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
         id: updatedFormula.id,
         name: updatedFormula.name
       });
-      const formulas = await prisma33.fieldFormula.findMany({
+      const formulas = await prisma19.fieldFormula.findMany({
         where: { fieldId },
         orderBy: { order: "asc" }
       });
@@ -22858,7 +22922,7 @@ router41.delete("/:formulaId", requireRole2(["admin", "super_admin"]), async (re
   const { formulaId, fieldId } = req2.params;
   try {
     console.log(`[AUDIT_API_DELETE] Demande de suppression formule ${formulaId} pour champ ${fieldId}`);
-    const formulaToDelete = await prisma33.fieldFormula.findFirst({
+    const formulaToDelete = await prisma19.fieldFormula.findFirst({
       where: { id: formulaId, fieldId }
     });
     if (!formulaToDelete) {
@@ -22870,11 +22934,11 @@ router41.delete("/:formulaId", requireRole2(["admin", "super_admin"]), async (re
       `[AUDIT_API_DELETE] Formule trouv\xE9e, s\xE9quence avant suppression:`,
       formulaToDelete.sequence ? JSON.parse(formulaToDelete.sequence) : []
     );
-    await prisma33.fieldFormula.delete({
+    await prisma19.fieldFormula.delete({
       where: { id: formulaId }
     });
     console.log(`[AUDIT_API_DELETE] Formule ${formulaId} supprim\xE9e avec succ\xE8s`);
-    const formulas = await prisma33.fieldFormula.findMany({
+    const formulas = await prisma19.fieldFormula.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
     });
@@ -22902,7 +22966,7 @@ router41.delete("/:formulaId/sequence/:index", requireRole2(["admin", "super_adm
   }
   try {
     console.log(`[AUDIT_API_DELETE_ITEM] Suppression de l'\xE9l\xE9ment \xE0 l'index ${index} de la formule ${formulaId}`);
-    const formula = await prisma33.fieldFormula.findFirst({
+    const formula = await prisma19.fieldFormula.findFirst({
       where: { id: formulaId, fieldId }
     });
     if (!formula) {
@@ -22921,12 +22985,12 @@ router41.delete("/:formulaId/sequence/:index", requireRole2(["admin", "super_adm
     const newSequence = [...currentSequence.slice(0, index), ...currentSequence.slice(index + 1)];
     console.log(`[AUDIT_API_DELETE_ITEM] \xC9l\xE9ment supprim\xE9: ${elementToRemove}`);
     console.log(`[AUDIT_API_DELETE_ITEM] Nouvelle s\xE9quence (${newSequence.length} \xE9l\xE9ments):`, newSequence);
-    await prisma33.fieldFormula.update({
+    await prisma19.fieldFormula.update({
       where: { id: formulaId },
       data: { sequence: JSON.stringify(newSequence) }
     });
     console.log(`[AUDIT_API_DELETE_ITEM] Formule mise \xE0 jour avec succ\xE8s`);
-    const formulas = await prisma33.fieldFormula.findMany({
+    const formulas = await prisma19.fieldFormula.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
     });
@@ -22952,9 +23016,9 @@ router41.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, r
     return;
   }
   try {
-    await prisma33.$transaction(
+    await prisma19.$transaction(
       formulas.map(
-        (formula) => prisma33.fieldFormula.update({
+        (formula) => prisma19.fieldFormula.update({
           where: { id: formula.id, fieldId },
           data: { order: formula.order }
         })
@@ -22970,9 +23034,8 @@ var formulas_default = router41;
 
 // src/routes/dependencies.ts
 var import_express43 = require("express");
-var import_client34 = require("@prisma/client");
+init_prisma();
 var import_uuid4 = require("uuid");
-var prisma34 = new import_client34.PrismaClient();
 var router42 = (0, import_express43.Router)({ mergeParams: true });
 router42.use(authMiddleware, impersonationMiddleware);
 router42.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
@@ -22982,7 +23045,7 @@ router42.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     return;
   }
   try {
-    const dependencies = await prisma34.fieldDependency.findMany({
+    const dependencies = await db.fieldDependency.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
     });
@@ -23011,7 +23074,7 @@ router42.get("/read", async (req2, res) => {
     return;
   }
   try {
-    const dependencies = await prisma34.fieldDependency.findMany({
+    const dependencies = await db.fieldDependency.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
     });
@@ -23038,7 +23101,7 @@ router42.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
   }
   const { name, description, sequence, order, targetFieldId, operator, value, action: action2, prefillValue } = req2.body || {};
   try {
-    const lastDep = await prisma34.fieldDependency.findFirst({
+    const lastDep = await db.fieldDependency.findFirst({
       where: { fieldId },
       orderBy: { order: "desc" }
     });
@@ -23053,7 +23116,7 @@ router42.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
       return res.status(400).json({ error: "targetFieldId requis pour cr\xE9er une d\xE9pendance" });
     }
     const params = action2 || prefillValue ? { action: action2, prefillValue } : void 0;
-    await prisma34.fieldDependency.create({
+    await db.fieldDependency.create({
       data: {
         id: (0, import_uuid4.v4)(),
         fieldId,
@@ -23067,7 +23130,7 @@ router42.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
         params
       }
     });
-    const deps = await prisma34.fieldDependency.findMany({ where: { fieldId }, orderBy: { order: "asc" } });
+    const deps = await db.fieldDependency.findMany({ where: { fieldId }, orderBy: { order: "asc" } });
     const processed = deps.map((d) => ({
       ...d,
       sequence: typeof d.sequence === "string" ? JSON.parse(d.sequence) : d.sequence ?? []
@@ -23086,9 +23149,9 @@ router42.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, r
     return;
   }
   try {
-    await prisma34.$transaction(
+    await db.$transaction(
       dependencies.map(
-        (dep) => prisma34.fieldDependency.update({
+        (dep) => db.fieldDependency.update({
           where: { id: dep.id },
           data: { order: dep.order }
         })
@@ -23104,7 +23167,7 @@ router42.put("/:dependencyId", requireRole2(["admin", "super_admin"]), async (re
   const { dependencyId } = req2.params;
   const { name, description, sequence, order, targetFieldId, operator, value, action: action2, prefillValue } = req2.body || {};
   try {
-    const existing = await prisma34.fieldDependency.findUnique({ where: { id: dependencyId } });
+    const existing = await db.fieldDependency.findUnique({ where: { id: dependencyId } });
     if (!existing) {
       return res.status(404).json({ error: "D\xE9pendance non trouv\xE9e" });
     }
@@ -23117,11 +23180,11 @@ router42.put("/:dependencyId", requireRole2(["admin", "super_admin"]), async (re
     if (operator !== void 0) dataToUpdate.condition = operator;
     if (value !== void 0) dataToUpdate.value = value;
     if (action2 !== void 0 || prefillValue !== void 0) dataToUpdate.params = { action: action2, prefillValue };
-    const dep = await prisma34.fieldDependency.update({
+    const dep = await db.fieldDependency.update({
       where: { id: dependencyId },
       data: dataToUpdate
     });
-    const deps = await prisma34.fieldDependency.findMany({ where: { fieldId: dep.fieldId }, orderBy: { order: "asc" } });
+    const deps = await db.fieldDependency.findMany({ where: { fieldId: dep.fieldId }, orderBy: { order: "asc" } });
     const processed = deps.map((d) => ({
       ...d,
       sequence: typeof d.sequence === "string" ? JSON.parse(d.sequence) : d.sequence ?? []
@@ -23135,7 +23198,7 @@ router42.put("/:dependencyId", requireRole2(["admin", "super_admin"]), async (re
 router42.delete("/:dependencyId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { dependencyId } = req2.params;
   try {
-    await prisma34.fieldDependency.delete({ where: { id: dependencyId } });
+    await db.fieldDependency.delete({ where: { id: dependencyId } });
     res.status(200).json({ id: dependencyId, success: true });
   } catch (error) {
     console.error(`[API] Erreur DELETE /api/fields/${req2.params.fieldId}/dependencies/${dependencyId}:`, error);
@@ -23153,17 +23216,16 @@ var dependencies_default = router42;
 var import_express44 = __toESM(require("express"), 1);
 
 // src/services/validationService.ts
-var import_client35 = require("@prisma/client");
-var prisma35 = new import_client35.PrismaClient();
+init_prisma();
 var getValidationsByFieldId = async (fieldId) => {
   console.log(`[ValidationService] Tentative de r\xE9cup\xE9ration des validations pour le champ ${fieldId}`);
   try {
-    if (!prisma35.fieldValidation) {
+    if (!db.fieldValidation) {
       console.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
       return [];
     }
     console.log(`[ValidationService] Recherche des validations avec fieldId=${fieldId}`);
-    const validations = await prisma35.fieldValidation.findMany({
+    const validations = await db.fieldValidation.findMany({
       where: {
         fieldId
       }
@@ -23179,7 +23241,7 @@ var getValidationsByFieldId = async (fieldId) => {
 var createValidation = async (fieldId, validationData) => {
   console.log(`[ValidationService] Cr\xE9ation d'une validation pour le champ ${fieldId}:`, validationData);
   try {
-    const field = await prisma35.field.findUnique({
+    const field = await db.field.findUnique({
       where: {
         id: fieldId
       }
@@ -23188,7 +23250,7 @@ var createValidation = async (fieldId, validationData) => {
       console.error(`[ValidationService] Le champ ${fieldId} n'existe pas`);
       throw new Error(`Le champ avec l'ID ${fieldId} n'existe pas.`);
     }
-    const validation = await prisma35.fieldValidation.create({
+    const validation = await db.fieldValidation.create({
       data: {
         fieldId,
         type: validationData.type,
@@ -23208,7 +23270,7 @@ var createValidation = async (fieldId, validationData) => {
 var updateValidation = async (validationId, updateData) => {
   console.log(`[ValidationService] Mise \xE0 jour de la validation ${validationId}:`, updateData);
   try {
-    if (!prisma35.fieldValidation) {
+    if (!db.fieldValidation) {
       console.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
       return {
         id: validationId,
@@ -23216,7 +23278,7 @@ var updateValidation = async (validationId, updateData) => {
         updatedAt: /* @__PURE__ */ new Date()
       };
     }
-    const existingValidation = await prisma35.fieldValidation.findUnique({
+    const existingValidation = await db.fieldValidation.findUnique({
       where: {
         id: validationId
       }
@@ -23243,7 +23305,7 @@ var updateValidation = async (validationId, updateData) => {
       console.log(`[ValidationService] Aucune donn\xE9e \xE0 mettre \xE0 jour pour la validation ${validationId}`);
       return existingValidation;
     }
-    const updatedValidation = await prisma35.fieldValidation.update({
+    const updatedValidation = await db.fieldValidation.update({
       where: {
         id: validationId
       },
@@ -23268,14 +23330,14 @@ var updateValidation = async (validationId, updateData) => {
 var deleteValidationById = async (validationId) => {
   try {
     console.log(`[ValidationService] Tentative de suppression de la validation ${validationId}`);
-    if (!prisma35.fieldValidation) {
+    if (!db.fieldValidation) {
       console.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
       return {
         id: validationId,
         message: "Simulation de suppression r\xE9ussie (mod\xE8le non disponible)"
       };
     }
-    const existingValidation = await prisma35.fieldValidation.findUnique({
+    const existingValidation = await db.fieldValidation.findUnique({
       where: {
         id: validationId
       }
@@ -23284,7 +23346,7 @@ var deleteValidationById = async (validationId) => {
       console.log(`[ValidationService] Validation ${validationId} non trouv\xE9e`);
       return { id: validationId, message: "Validation non trouv\xE9e" };
     }
-    const deletedValidation = await prisma35.fieldValidation.delete({
+    const deletedValidation = await db.fieldValidation.delete({
       where: {
         id: validationId
       }
@@ -23452,7 +23514,7 @@ var validations_default = router43;
 
 // src/routes/fields.ts
 var router44 = (0, import_express45.Router)();
-var prisma36 = new import_client36.PrismaClient();
+var prisma20 = db;
 router44.use(authMiddleware);
 function mapFieldForFrontend(field) {
   if (!field || typeof field !== "object") return field;
@@ -23474,7 +23536,7 @@ router44.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
       }
       whereClause.organizationId = organizationId;
     }
-    const fields = await prisma36.field.findMany({
+    const fields = await prisma20.field.findMany({
       where: whereClause,
       orderBy: {
         label: "asc"
@@ -23496,9 +23558,9 @@ router44.post("/:id/reorder-dependencies", requireRole2(["admin", "super_admin"]
   }
   const dependencies = dependencyIds.map((depId, index) => ({ id: depId, order: index }));
   try {
-    await prisma36.$transaction(
+    await prisma20.$transaction(
       dependencies.map(
-        (dep) => prisma36.fieldDependency.update({ where: { id: dep.id }, data: { order: dep.order } })
+        (dep) => prisma20.fieldDependency.update({ where: { id: dep.id }, data: { order: dep.order } })
       )
     );
     res.json({ success: true });
@@ -23514,7 +23576,7 @@ router44.put("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =
   console.log("[fields.ts] PUT /:id - body re\xE7u:", req2.body);
   console.log("[fields.ts] PUT /:id - advancedConfig:", advancedConfig);
   try {
-    const field = await prisma36.field.update({
+    const field = await prisma20.field.update({
       where: { id },
       data: { label, type, required, width, advancedConfig }
     });
@@ -23535,14 +23597,14 @@ router44.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async
   }
   console.log("[API] [POST /fields/:fieldId/options] Re\xE7u pour fieldId:", fieldId, "body:", req2.body);
   try {
-    const existingOption = await prisma36.fieldOption.findFirst({
+    const existingOption = await prisma20.fieldOption.findFirst({
       where: {
         fieldId,
         value
       }
     });
     if (!existingOption) {
-      await prisma36.fieldOption.create({
+      await prisma20.fieldOption.create({
         data: {
           id: (0, import_uuid5.v4)(),
           label,
@@ -23555,7 +23617,7 @@ router44.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async
     } else {
       console.log("[API] [POST /fields/:fieldId/options] Option d\xE9j\xE0 existante, retour du champ \xE0 jour");
     }
-    const updatedField = await prisma36.field.findUnique({
+    const updatedField = await prisma20.field.findUnique({
       where: { id: fieldId },
       include: { FieldOption: true }
     });
@@ -23568,7 +23630,7 @@ router44.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async
 router44.delete("/field-options/:optionId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { optionId } = req2.params;
   try {
-    await prisma36.fieldOption.delete({ where: { id: optionId } });
+    await prisma20.fieldOption.delete({ where: { id: optionId } });
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: "Erreur lors de la suppression de l'option", details: err.message });
@@ -23577,8 +23639,8 @@ router44.delete("/field-options/:optionId", requireRole2(["admin", "super_admin"
 router44.delete("/:fieldId/options/:optionId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { fieldId, optionId } = req2.params;
   try {
-    await prisma36.fieldOption.delete({ where: { id: optionId } });
-    const updatedField = await prisma36.field.findUnique({
+    await prisma20.fieldOption.delete({ where: { id: optionId } });
+    const updatedField = await prisma20.field.findUnique({
       where: { id: fieldId },
       include: { FieldOption: true }
     });
@@ -23594,7 +23656,7 @@ router44.delete("/:fieldId/options/:optionId", requireRole2(["admin", "super_adm
 router44.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
-    const field = await prisma36.field.findUnique({
+    const field = await prisma20.field.findUnique({
       where: { id },
       include: { FieldOption: true }
     });
@@ -23615,9 +23677,9 @@ router44.post("/meta-counts", requireRole2(["admin", "super_admin"]), async (req
   }
   try {
     const counts = await Promise.all(fieldIds.map(async (fieldId) => {
-      const formulas = await prisma36.fieldFormula.count({ where: { fieldId } });
-      const validations = await prisma36.fieldValidation.count({ where: { fieldId } });
-      const dependencies = await prisma36.fieldDependency.count({ where: { fieldId } });
+      const formulas = await prisma20.fieldFormula.count({ where: { fieldId } });
+      const validations = await prisma20.fieldValidation.count({ where: { fieldId } });
+      const dependencies = await prisma20.fieldDependency.count({ where: { fieldId } });
       return {
         fieldId,
         counts: { formulas, validations, dependencies }
@@ -23636,7 +23698,7 @@ router44.post("/meta-counts", requireRole2(["admin", "super_admin"]), async (req
 router44.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { id } = req2.params;
   try {
-    const field = await prisma36.field.findUnique({
+    const field = await prisma20.field.findUnique({
       where: { id },
       include: { Section: true }
     });
@@ -23649,21 +23711,21 @@ router44.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res
       res.status(404).json({ error: "Block parent non trouv\xE9" });
       return;
     }
-    await prisma36.field.delete({
+    await prisma20.field.delete({
       where: { id }
     });
-    const remainingFields = await prisma36.field.findMany({
+    const remainingFields = await prisma20.field.findMany({
       where: { sectionId: field.sectionId },
       orderBy: { order: "asc" }
     });
     const updatePromises = remainingFields.map(
-      (f, index) => prisma36.field.update({
+      (f, index) => prisma20.field.update({
         where: { id: f.id },
         data: { order: index }
       })
     );
-    await prisma36.$transaction(updatePromises);
-    const updatedBlock = await prisma36.block.findUnique({
+    await prisma20.$transaction(updatePromises);
+    const updatedBlock = await prisma20.block.findUnique({
       where: { id: blockId },
       include: {
         Section: {
@@ -23697,7 +23759,7 @@ router44.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, r
     return res.status(400).json({ error: "Les informations de section cible et d'ordre sont requises." });
   }
   try {
-    const fieldToMove = await prisma36.field.findUnique({
+    const fieldToMove = await prisma20.field.findUnique({
       where: { id },
       include: { Section: true }
     });
@@ -23707,7 +23769,7 @@ router44.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, r
     const blockId = fieldToMove.Section.blockId;
     const sourceSectionId = fieldToMove.sectionId;
     if (sourceSectionId === targetSectionId) {
-      const fieldsInSection = await prisma36.field.findMany({
+      const fieldsInSection = await prisma20.field.findMany({
         where: { sectionId: targetSectionId },
         orderBy: { order: "asc" }
       });
@@ -23718,13 +23780,13 @@ router44.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, r
       const reorderedFields = [...fieldsInSection];
       const [movedItem] = reorderedFields.splice(fieldIndex, 1);
       reorderedFields.splice(newOrder, 0, movedItem);
-      await prisma36.$transaction(
+      await prisma20.$transaction(
         reorderedFields.map(
-          (field, index) => prisma36.field.update({ where: { id: field.id }, data: { order: index } })
+          (field, index) => prisma20.field.update({ where: { id: field.id }, data: { order: index } })
         )
       );
     } else {
-      await prisma36.$transaction(async (tx) => {
+      await prisma20.$transaction(async (tx) => {
         await tx.field.updateMany({
           where: { sectionId: sourceSectionId, order: { gt: fieldToMove.order } },
           data: { order: { decrement: 1 } }
@@ -23739,7 +23801,7 @@ router44.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, r
         });
       });
     }
-    const updatedBlock = await prisma36.block.findUnique({
+    const updatedBlock = await prisma20.block.findUnique({
       where: { id: blockId },
       include: {
         Section: { orderBy: { order: "asc" }, include: { Field: { orderBy: { order: "asc" }, include: { FieldOption: { orderBy: { order: "asc" } } } } } }
@@ -23759,14 +23821,14 @@ router44.put("/:id/reorder", requireRole2(["admin", "super_admin"]), async (req2
   const { newIndex } = req2.body;
   const { id } = req2.params;
   try {
-    const fieldToMove = await prisma36.field.findUnique({
+    const fieldToMove = await prisma20.field.findUnique({
       where: { id }
     });
     if (!fieldToMove) {
       res.status(404).json({ error: "Field not found" });
       return;
     }
-    const allFieldsInSection = await prisma36.field.findMany({
+    const allFieldsInSection = await prisma20.field.findMany({
       where: { sectionId: fieldToMove.sectionId },
       orderBy: { order: "asc" }
     });
@@ -23779,13 +23841,13 @@ router44.put("/:id/reorder", requireRole2(["admin", "super_admin"]), async (req2
     const [movedItem] = reorderedFields.splice(oldIndex, 1);
     reorderedFields.splice(newIndex, 0, movedItem);
     const updatePromises = reorderedFields.map(
-      (field, index) => prisma36.field.update({
+      (field, index) => prisma20.field.update({
         where: { id: field.id },
         data: { order: index }
       })
     );
-    await prisma36.$transaction(updatePromises);
-    const updatedSection = await prisma36.section.findUnique({
+    await prisma20.$transaction(updatePromises);
+    const updatedSection = await prisma20.section.findUnique({
       where: { id: fieldToMove.sectionId },
       include: {
         Field: {
@@ -23805,7 +23867,7 @@ var fields_default = router44;
 
 // src/routes/api/formulas.ts
 var import_express46 = __toESM(require("express"), 1);
-var import_client37 = require("@prisma/client");
+init_database();
 
 // src/global-mock-formulas.ts
 if (!global._globalFormulasStore) {
@@ -24286,10 +24348,10 @@ var evaluateFormula = (formula, fieldValues, context) => {
 
 // src/routes/api/formulas.ts
 var router45 = import_express46.default.Router({ mergeParams: true });
-var prisma37 = new import_client37.PrismaClient();
+var prisma21 = db;
 router45.get("/all", async (_req, res) => {
   try {
-    const formulas = await prisma37.fieldFormula.findMany({
+    const formulas = await prisma21.fieldFormula.findMany({
       include: {
         Field: {
           select: {
@@ -24315,7 +24377,7 @@ router45.get("/all", async (_req, res) => {
 router45.get("/field/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
-    const formulas = await prisma37.fieldFormula.findMany({
+    const formulas = await prisma21.fieldFormula.findMany({
       where: {
         fieldId
       },
@@ -24361,7 +24423,7 @@ router45.get("/:formulaId/debug", async (req2, res) => {
   const { formulaId } = req2.params;
   try {
     if (!formulaId) return res.status(400).json({ error: "formulaId manquant" });
-    const f = await prisma37.fieldFormula.findUnique({ where: { id: formulaId } });
+    const f = await prisma21.fieldFormula.findUnique({ where: { id: formulaId } });
     if (!f) return res.status(404).json({ error: "Formule non trouv\xE9e" });
     let seq = [];
     try {
@@ -24393,12 +24455,12 @@ router45.put("/:formulaId", async (req2, res) => {
       return res.status(400).json({ error: "ID du champ manquant" });
     }
     try {
-      const existingFormula = await prisma37.fieldFormula.findUnique({
+      const existingFormula = await prisma21.fieldFormula.findUnique({
         where: { id: formulaId }
       });
       if (!existingFormula) {
         console.log(`[API] Formule ${formulaId} n'existe pas encore, cr\xE9ation...`);
-        await prisma37.fieldFormula.create({
+        await prisma21.fieldFormula.create({
           data: {
             id: formulaId,
             fieldId,
@@ -24424,7 +24486,7 @@ router45.put("/:formulaId", async (req2, res) => {
     }
     let updatedFormula;
     try {
-      updatedFormula = await prisma37.fieldFormula.update({
+      updatedFormula = await prisma21.fieldFormula.update({
         where: { id: formulaId },
         data: dataToUpdate
       });
@@ -24434,7 +24496,7 @@ router45.put("/:formulaId", async (req2, res) => {
       });
     } catch (updateError) {
       console.error(`[API] Erreur lors de la mise \xE0 jour de la formule:`, updateError);
-      updatedFormula = await prisma37.fieldFormula.create({
+      updatedFormula = await prisma21.fieldFormula.create({
         data: {
           id: formulaId,
           fieldId,
@@ -24448,7 +24510,7 @@ router45.put("/:formulaId", async (req2, res) => {
         name: updatedFormula.name
       });
     }
-    const formulas = await prisma37.fieldFormula.findMany({
+    const formulas = await prisma21.fieldFormula.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
     });
@@ -24487,13 +24549,13 @@ router45.delete("/:formulaId", async (req2, res) => {
     if (!formulaId) {
       return res.status(400).json({ error: "ID de formule manquant" });
     }
-    const existing = await prisma37.fieldFormula.findUnique({ where: { id: formulaId } });
+    const existing = await prisma21.fieldFormula.findUnique({ where: { id: formulaId } });
     if (!existing) {
       return res.status(404).json({ error: "Formule non trouv\xE9e" });
     }
     const fieldId = existing.fieldId;
-    await prisma37.fieldFormula.delete({ where: { id: formulaId } });
-    const formulas = await prisma37.fieldFormula.findMany({
+    await prisma21.fieldFormula.delete({ where: { id: formulaId } });
+    const formulas = await prisma21.fieldFormula.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
     });
@@ -24515,14 +24577,14 @@ var formulas_default2 = router45;
 
 // src/routes/api/dependencies.ts
 var import_express47 = __toESM(require("express"), 1);
-var import_client38 = require("@prisma/client");
+init_database();
 var router46 = import_express47.default.Router({ mergeParams: true });
-var prisma38 = new import_client38.PrismaClient();
+var prisma22 = db;
 router46.put("/:dependencyId", async (req2, res) => {
   const { dependencyId } = req2.params;
   const { name, description, sequence, order, targetFieldId, operator, value, action: action2, prefillValue } = req2.body || {};
   try {
-    const existing = await prisma38.fieldDependency.findUnique({ where: { id: dependencyId } });
+    const existing = await prisma22.fieldDependency.findUnique({ where: { id: dependencyId } });
     if (!existing) {
       return res.status(404).json({ error: "D\xE9pendance non trouv\xE9e" });
     }
@@ -24535,8 +24597,8 @@ router46.put("/:dependencyId", async (req2, res) => {
     if (operator !== void 0) dataToUpdate.condition = operator;
     if (value !== void 0) dataToUpdate.value = value;
     if (action2 !== void 0 || prefillValue !== void 0) dataToUpdate.params = { action: action2, prefillValue };
-    await prisma38.fieldDependency.update({ where: { id: dependencyId }, data: dataToUpdate });
-    const deps = await prisma38.fieldDependency.findMany({
+    await prisma22.fieldDependency.update({ where: { id: dependencyId }, data: dataToUpdate });
+    const deps = await prisma22.fieldDependency.findMany({
       where: { fieldId: existing.fieldId },
       orderBy: { order: "asc" }
     });
@@ -24553,13 +24615,13 @@ router46.put("/:dependencyId", async (req2, res) => {
 router46.delete("/:dependencyId", async (req2, res) => {
   const { dependencyId } = req2.params;
   try {
-    const existing = await prisma38.fieldDependency.findUnique({ where: { id: dependencyId } });
+    const existing = await prisma22.fieldDependency.findUnique({ where: { id: dependencyId } });
     if (!existing) {
       return res.status(404).json({ error: "D\xE9pendance non trouv\xE9e" });
     }
     const fieldId = existing.fieldId;
-    await prisma38.fieldDependency.delete({ where: { id: dependencyId } });
-    const deps = await prisma38.fieldDependency.findMany({ where: { fieldId }, orderBy: { order: "asc" } });
+    await prisma22.fieldDependency.delete({ where: { id: dependencyId } });
+    const deps = await prisma22.fieldDependency.findMany({ where: { fieldId }, orderBy: { order: "asc" } });
     const processed = deps.map((d) => ({
       ...d,
       sequence: typeof d.sequence === "string" ? JSON.parse(d.sequence) : d.sequence ?? []
@@ -24578,15 +24640,14 @@ var dependencies_default2 = router46;
 
 // src/routes/sections.ts
 var import_express48 = require("express");
-var import_client39 = require("@prisma/client");
-var prisma39 = new import_client39.PrismaClient();
+init_prisma();
 var router47 = (0, import_express48.Router)();
 router47.use(authMiddleware, impersonationMiddleware);
 router47.get("/", async (req2, res) => {
   try {
     const organizationId = req2.query.organizationId;
     console.log("[SECTIONS\u2192CATEGORIES] GET - R\xE9cup\xE9ration des Categories existantes depuis admin-modules");
-    const categories = await prisma39.category.findMany({
+    const categories = await db.category.findMany({
       where: organizationId ? {
         OR: [
           { organizationId },
@@ -24635,7 +24696,7 @@ router47.post("/bulk", async (req2, res) => {
     }));
     const createdCategories = await Promise.all(
       categoriesToCreate.map(
-        (category) => prisma39.category.create({ data: category })
+        (category) => db.category.create({ data: category })
       )
     );
     const sectionsFormat = createdCategories.map((category) => ({
@@ -24664,7 +24725,7 @@ router47.post("/", async (req2, res) => {
   try {
     const { name, description, iconName, iconColor, order, active, organizationId } = req2.body;
     console.log(`[SECTIONS\u2192CATEGORIES] POST - Cr\xE9ation Category "${name}"`);
-    const category = await prisma39.category.create({
+    const category = await db.category.create({
       data: {
         name,
         description: description || `Category ${name}`,
@@ -24710,7 +24771,7 @@ router47.patch("/:id", async (req2, res) => {
     if (updateData.iconColor) categoryUpdateData.iconColor = updateData.iconColor;
     if (updateData.order !== void 0) categoryUpdateData.order = updateData.order;
     if (updateData.active !== void 0) categoryUpdateData.active = updateData.active;
-    const category = await prisma39.category.update({
+    const category = await db.category.update({
       where: { id },
       data: categoryUpdateData
     });
@@ -24740,7 +24801,7 @@ router47.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log(`[SECTIONS\u2192CATEGORIES] DELETE - Suppression Category ${id}`);
-    await prisma39.category.delete({
+    await db.category.delete({
       where: { id }
     });
     console.log(`[SECTIONS\u2192CATEGORIES] Category ${id} supprim\xE9e avec succ\xE8s`);
@@ -24757,6 +24818,7 @@ var sections_default = router47;
 
 // src/routes/module-navigation.ts
 var import_express49 = require("express");
+init_prisma();
 var router48 = (0, import_express49.Router)();
 router48.use(authMiddleware, impersonationMiddleware);
 router48.get("/", async (req2, res) => {
@@ -24770,7 +24832,7 @@ router48.get("/", async (req2, res) => {
     const isSuperAdmin2 = user?.role === "super_admin";
     let userOrganizationId = user?.organizationId;
     if (!userOrganizationId && user?.id) {
-      const userOrg = await prisma.userOrganization.findFirst({
+      const userOrg = await db.userOrganization.findFirst({
         where: { userId: user.id }
       });
       userOrganizationId = userOrg?.organizationId;
@@ -24792,7 +24854,7 @@ router48.get("/", async (req2, res) => {
         ...isSuperAdmin2 ? [] : [{ superAdminOnly: false }]
       ]
     };
-    const categories = await prisma.category.findMany({
+    const categories = await db.category.findMany({
       where: whereCategories,
       include: {
         // Inclure les modules associés
@@ -24850,14 +24912,14 @@ var module_navigation_default = router48;
 
 // src/routes/form-sections.ts
 var import_express50 = require("express");
-var import_client40 = require("@prisma/client");
+init_database();
 var router49 = (0, import_express50.Router)();
-var prisma40 = new import_client40.PrismaClient();
+var prisma23 = db;
 router49.get("/:blockId", async (req2, res) => {
   const { blockId } = req2.params;
   try {
     console.log(`[API] GET /api/form-sections/${blockId} - R\xE9cup\xE9ration sections de formulaire`);
-    const sections = await prisma40.section.findMany({
+    const sections = await prisma23.section.findMany({
       where: { blockId },
       include: {
         Field: {
@@ -24891,7 +24953,7 @@ router49.post("/", async (req2, res) => {
       res.status(400).json({ error: "Name et blockId requis" });
       return;
     }
-    const section = await prisma40.section.create({
+    const section = await prisma23.section.create({
       data: {
         id: `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
@@ -24916,7 +24978,7 @@ router49.put("/:sectionId", async (req2, res) => {
     const { sectionId } = req2.params;
     const { name, order, sectionType, active } = req2.body;
     console.log(`[API] PUT /api/form-sections/${sectionId} - Modification section`);
-    const section = await prisma40.section.update({
+    const section = await prisma23.section.update({
       where: { id: sectionId },
       data: {
         ...name && { name },
@@ -24939,7 +25001,7 @@ router49.delete("/:sectionId", async (req2, res) => {
   try {
     const { sectionId } = req2.params;
     console.log(`[API] DELETE /api/form-sections/${sectionId} - Suppression section`);
-    await prisma40.section.delete({
+    await prisma23.section.delete({
       where: { id: sectionId }
     });
     console.log(`[API] \u2705 Section de formulaire supprim\xE9e: ${sectionId}`);
@@ -24953,13 +25015,13 @@ var form_sections_default = router49;
 
 // src/routes/fieldTypes.ts
 var import_express51 = require("express");
-var import_client41 = require("@prisma/client");
+init_database();
 var router50 = (0, import_express51.Router)();
-var prisma41 = new import_client41.PrismaClient();
+var prisma24 = db;
 router50.use(authMiddleware);
 router50.get("/", async (_req, res) => {
   try {
-    const types = await prisma41.fieldType.findMany({
+    const types = await prisma24.fieldType.findMany({
       orderBy: { label: "asc" }
     });
     res.json({ success: true, data: types });
@@ -24972,9 +25034,9 @@ var fieldTypes_default = router50;
 
 // src/routes/optionNodes.ts
 var import_express52 = require("express");
-var import_client42 = require("@prisma/client");
+init_database();
 var router51 = (0, import_express52.Router)();
-var prisma42 = new import_client42.PrismaClient();
+var prisma25 = db;
 router51.use(authMiddleware);
 function buildTree(nodes) {
   const byId = new Map(nodes.map((n) => [n.id, { ...n, children: [] }]));
@@ -24997,7 +25059,7 @@ function buildTree(nodes) {
 router51.get("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const node = await prisma42.fieldOptionNode.findUnique({ where: { id }, select: { id: true, label: true, value: true, parentId: true, order: true, data: true, fieldId: true } });
+    const node = await prisma25.fieldOptionNode.findUnique({ where: { id }, select: { id: true, label: true, value: true, parentId: true, order: true, data: true, fieldId: true } });
     if (!node) return res.status(404).json({ success: false, message: "Not found" });
     return res.json({ success: true, data: node });
   } catch (e) {
@@ -25008,7 +25070,7 @@ router51.get("/:id", async (req2, res) => {
 router51.get("/field/:fieldId/tree", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
-    const nodes = await prisma42.fieldOptionNode.findMany({
+    const nodes = await prisma25.fieldOptionNode.findMany({
       where: { fieldId },
       orderBy: [{ parentId: "asc" }, { order: "asc" }],
       select: { id: true, label: true, value: true, parentId: true, order: true, data: true }
@@ -25052,7 +25114,7 @@ router51.get("/field/:fieldId/children", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const parentId = req2.query.parentId || null;
-    const base = await prisma42.fieldOptionNode.findMany({ where: { fieldId, parentId }, orderBy: { order: "asc" } });
+    const base = await prisma25.fieldOptionNode.findMany({ where: { fieldId, parentId }, orderBy: { order: "asc" } });
     const children = base.map((b) => ({ id: b.id, label: b.label, value: b.value ?? void 0 }));
     return res.json({ success: true, data: children });
   } catch (e) {
@@ -25064,7 +25126,7 @@ router51.post("/", async (req2, res) => {
   try {
     const { fieldId, parentId, label, value, order, data } = req2.body;
     if (!fieldId || !label) return res.status(400).json({ success: false, message: "fieldId et label requis" });
-    const created = await prisma42.fieldOptionNode.create({
+    const created = await prisma25.fieldOptionNode.create({
       data: {
         fieldId,
         parentId: parentId ?? null,
@@ -25085,7 +25147,7 @@ router51.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { label, value, order, data, parentId } = req2.body;
-    const updated = await prisma42.fieldOptionNode.update({ where: { id }, data: { label: label ?? void 0, value: value === void 0 ? void 0 : value, order: order ?? void 0, data: data === void 0 ? void 0 : data, parentId: parentId === void 0 ? void 0 : parentId } });
+    const updated = await prisma25.fieldOptionNode.update({ where: { id }, data: { label: label ?? void 0, value: value === void 0 ? void 0 : value, order: order ?? void 0, data: data === void 0 ? void 0 : data, parentId: parentId === void 0 ? void 0 : parentId } });
     return res.json({ success: true, data: updated });
   } catch (e) {
     console.error("[API] PUT option-nodes update error:", e);
@@ -25097,23 +25159,23 @@ router51.delete("/:id", async (req2, res) => {
     const { id } = req2.params;
     const mode = req2.query.mode || "with-children";
     if (mode === "only") {
-      const node = await prisma42.fieldOptionNode.findUnique({ where: { id }, select: { parentId: true } });
+      const node = await prisma25.fieldOptionNode.findUnique({ where: { id }, select: { parentId: true } });
       if (!node) return res.status(404).json({ success: false, message: "Not found" });
-      await prisma42.$transaction([
-        prisma42.fieldOptionNode.updateMany({ where: { parentId: id }, data: { parentId: node.parentId } }),
-        prisma42.fieldOptionNode.delete({ where: { id } })
+      await prisma25.$transaction([
+        prisma25.fieldOptionNode.updateMany({ where: { parentId: id }, data: { parentId: node.parentId } }),
+        prisma25.fieldOptionNode.delete({ where: { id } })
       ]);
       return res.json({ success: true });
     }
     const collectIds = async (ids) => {
-      const children = await prisma42.fieldOptionNode.findMany({ where: { parentId: { in: ids } }, select: { id: true } });
+      const children = await prisma25.fieldOptionNode.findMany({ where: { parentId: { in: ids } }, select: { id: true } });
       if (children.length === 0) return ids;
       const childIds = children.map((c) => c.id);
       const all = await collectIds(childIds);
       return [...ids, ...all];
     };
     const allIds = await collectIds([id]);
-    await prisma42.fieldOptionNode.deleteMany({ where: { id: { in: allIds } } });
+    await prisma25.fieldOptionNode.deleteMany({ where: { id: { in: allIds } } });
     return res.json({ success: true });
   } catch (e) {
     console.error("[API] DELETE option-nodes error:", e);
@@ -25124,7 +25186,7 @@ router51.post("/reorder", async (req2, res) => {
   try {
     const { fieldId, orderedIds } = req2.body;
     if (!fieldId || !Array.isArray(orderedIds)) return res.status(400).json({ success: false, message: "Payload invalide" });
-    await prisma42.$transaction(orderedIds.map((id, idx) => prisma42.fieldOptionNode.update({ where: { id }, data: { order: idx } })));
+    await prisma25.$transaction(orderedIds.map((id, idx) => prisma25.fieldOptionNode.update({ where: { id }, data: { order: idx } })));
     return res.json({ success: true });
   } catch (e) {
     console.error("[API] POST option-nodes reorder error:", e);
@@ -25135,12 +25197,12 @@ router51.post("/import", async (req2, res) => {
   try {
     const { fieldId, tree } = req2.body;
     if (!fieldId || !Array.isArray(tree)) return res.status(400).json({ success: false, message: "Payload invalide" });
-    await prisma42.fieldOptionNode.deleteMany({ where: { fieldId } });
+    await prisma25.fieldOptionNode.deleteMany({ where: { fieldId } });
     const inserts = [];
     const walk = (nodes, parentId) => {
       nodes.forEach((n, idx) => {
         const id = n.id || void 0;
-        inserts.push(prisma42.fieldOptionNode.create({ data: { id, fieldId, parentId, label: n.label, value: n.value ?? null, order: idx, data: n.data ?? void 0 } }));
+        inserts.push(prisma25.fieldOptionNode.create({ data: { id, fieldId, parentId, label: n.label, value: n.value ?? null, order: idx, data: n.data ?? void 0 } }));
         if (Array.isArray(n.children) && n.children.length > 0) {
           if (!n.id) {
             throw new Error("Chaque n\u0153ud avec enfants doit fournir un id pour import");
@@ -25160,7 +25222,7 @@ router51.post("/import", async (req2, res) => {
 router51.get("/export/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
-    const nodes = await prisma42.fieldOptionNode.findMany({ where: { fieldId }, orderBy: [{ parentId: "asc" }, { order: "asc" }], select: { id: true, label: true, value: true, parentId: true, order: true, data: true } });
+    const nodes = await prisma25.fieldOptionNode.findMany({ where: { fieldId }, orderBy: [{ parentId: "asc" }, { order: "asc" }], select: { id: true, label: true, value: true, parentId: true, order: true, data: true } });
     return res.json({ success: true, data: buildTree(nodes) });
   } catch (e) {
     console.error("[API] GET option-nodes export error:", e);
@@ -25173,8 +25235,8 @@ var optionNodes_default = router51;
 var import_express53 = __toESM(require("express"), 1);
 
 // src/services/AdvancedSelectService.js
-var import_client43 = require("@prisma/client");
-var prisma43 = new import_client43.PrismaClient();
+init_database();
+var prisma26 = db;
 var AdvancedSelectService = class {
   constructor() {
     this.validationRules = {
@@ -25200,7 +25262,7 @@ var AdvancedSelectService = class {
    */
   async getAdvancedSelectField(fieldId, organizationId) {
     try {
-      const field = await prisma43.field.findFirst({
+      const field = await prisma26.field.findFirst({
         where: {
           id: fieldId,
           Section: {
@@ -25249,7 +25311,7 @@ var AdvancedSelectService = class {
    */
   async performCalculation(fieldId, optionValue, inputData2, relatedFieldsData2 = {}) {
     try {
-      const option = await prisma43.fieldOptionNode.findFirst({
+      const option = await prisma26.fieldOptionNode.findFirst({
         where: {
           fieldId,
           value: optionValue
@@ -25432,7 +25494,7 @@ var AdvancedSelectService = class {
    */
   async updateCalculatedField(targetFieldId, value, organizationId, metadata = {}) {
     try {
-      const field = await prisma43.field.findFirst({
+      const field = await prisma26.field.findFirst({
         where: {
           id: targetFieldId,
           Section: {
@@ -25454,7 +25516,7 @@ var AdvancedSelectService = class {
           metadata
         }
       };
-      await prisma43.field.update({
+      await prisma26.field.update({
         where: { id: targetFieldId },
         data: { advancedConfig: updatedConfig }
       });
@@ -25803,7 +25865,7 @@ function getFieldMapping(organizationId) {
 var import_express54 = __toESM(require("express"), 1);
 
 // src/services/DynamicFormulaEngine.ts
-var import_client44 = require("@prisma/client");
+init_database();
 var DynamicFormulaEngine = class {
   prisma;
   configCache = /* @__PURE__ */ new Map();
@@ -25811,7 +25873,7 @@ var DynamicFormulaEngine = class {
   fieldMapping = getFieldMapping();
   // Mapping des champs centralisé
   constructor() {
-    this.prisma = new import_client44.PrismaClient();
+    this.prisma = db;
   }
   /**
    * 🔄 Charge toutes les configurations de champs dynamiquement
@@ -26618,9 +26680,9 @@ var dynamic_formulas_default = router53;
 
 // src/routes/dashboard.ts
 var import_express55 = __toESM(require("express"), 1);
-var import_client45 = require("@prisma/client");
+init_database();
 var router54 = import_express55.default.Router();
-var prisma44 = new import_client45.PrismaClient();
+var prisma27 = db;
 router54.get("/stats", authMiddleware, async (req2, res) => {
   try {
     const organizationId = req2.user?.organizationId;
@@ -26643,11 +26705,11 @@ router54.get("/stats", authMiddleware, async (req2, res) => {
       monthlyRevenue
     ] = await Promise.all([
       // Total des leads
-      prisma44.lead.count({
+      prisma27.lead.count({
         where: whereCondition
       }),
       // Nouveaux leads aujourd'hui
-      prisma44.lead.count({
+      prisma27.lead.count({
         where: {
           ...whereCondition,
           createdAt: {
@@ -26656,18 +26718,18 @@ router54.get("/stats", authMiddleware, async (req2, res) => {
         }
       }),
       // Total clients actifs
-      prisma44.user.count({
+      prisma27.user.count({
         where: {
           ...whereCondition,
           status: "active"
         }
       }),
       // Total utilisateurs
-      prisma44.user.count({
+      prisma27.user.count({
         where: whereCondition
       }),
       // Leads convertis (pour calculer le taux de conversion)
-      prisma44.lead.count({
+      prisma27.lead.count({
         where: {
           ...whereCondition,
           status: "converti"
@@ -26725,7 +26787,7 @@ router54.get("/activities", authMiddleware, async (req2, res) => {
       timelineEvents
     ] = await Promise.all([
       // Leads récents
-      prisma44.lead.findMany({
+      prisma27.lead.findMany({
         where: {
           ...whereCondition,
           createdAt: {
@@ -26745,7 +26807,7 @@ router54.get("/activities", authMiddleware, async (req2, res) => {
         take: limit
       }),
       // Emails récents (si applicable)
-      organizationId ? prisma44.email.findMany({
+      organizationId ? prisma27.email.findMany({
         where: {
           createdAt: {
             gte: new Date(Date.now() - 24 * 60 * 60 * 1e3)
@@ -26770,7 +26832,7 @@ router54.get("/activities", authMiddleware, async (req2, res) => {
         take: Math.floor(limit / 2)
       }) : [],
       // Événements de calendrier récents
-      prisma44.calendarEvent.findMany({
+      prisma27.calendarEvent.findMany({
         where: {
           ...whereCondition,
           createdAt: {
@@ -26789,7 +26851,7 @@ router54.get("/activities", authMiddleware, async (req2, res) => {
         take: Math.floor(limit / 2)
       }),
       // Événements de timeline
-      prisma44.timelineEvent.findMany({
+      prisma27.timelineEvent.findMany({
         where: {
           ...whereCondition,
           createdAt: {
@@ -26878,7 +26940,7 @@ router54.get("/top-leads", authMiddleware, async (req2, res) => {
       });
     }
     const whereCondition = isSuperAdmin2 ? {} : { organizationId };
-    const topLeads = await prisma44.lead.findMany({
+    const topLeads = await prisma27.lead.findMany({
       where: {
         ...whereCondition,
         status: {
@@ -27000,7 +27062,7 @@ router54.get("/tasks", authMiddleware, async (req2, res) => {
       overdueFollowUps
     ] = await Promise.all([
       // Leads avec suivi prévu aujourd'hui
-      prisma44.lead.count({
+      prisma27.lead.count({
         where: {
           ...whereCondition,
           nextFollowUpDate: {
@@ -27010,7 +27072,7 @@ router54.get("/tasks", authMiddleware, async (req2, res) => {
         }
       }),
       // Événements d'aujourd'hui
-      prisma44.calendarEvent.count({
+      prisma27.calendarEvent.count({
         where: {
           ...whereCondition,
           startDate: {
@@ -27020,7 +27082,7 @@ router54.get("/tasks", authMiddleware, async (req2, res) => {
         }
       }),
       // Suivis en retard
-      prisma44.lead.count({
+      prisma27.lead.count({
         where: {
           ...whereCondition,
           nextFollowUpDate: {
@@ -27128,7 +27190,7 @@ function evaluateFormulaOrchestrated(opts) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_client48 = require("@prisma/client");
+init_database();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/universal-linking-system.ts
 function normalizeCapacityRef(raw) {
@@ -27961,8 +28023,9 @@ function applySuffixToSourceRef(sourceRef, suffix) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sum-display-field-routes.ts
-var import_client46 = require("@prisma/client");
-var prisma45 = new import_client46.PrismaClient();
+var import_client4 = require("@prisma/client");
+init_database();
+var prisma28 = db;
 function getOrgId(req2) {
   const user = req2.user || {};
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
@@ -27973,13 +28036,13 @@ function registerSumDisplayFieldRoutes(router85) {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
-      const tree = await prisma45.treeBranchLeafTree.findFirst({
+      const tree = await prisma28.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
       if (!tree) {
         return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xA9" });
       }
-      const node = await prisma45.treeBranchLeafNode.findFirst({
+      const node = await prisma28.treeBranchLeafNode.findFirst({
         where: { id: nodeId, treeId },
         select: {
           id: true,
@@ -27994,7 +28057,7 @@ function registerSumDisplayFieldRoutes(router85) {
       if (!node) {
         return res.status(404).json({ error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
       }
-      const mainVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
+      const mainVariable = await prisma28.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId },
         select: {
           id: true,
@@ -28009,7 +28072,7 @@ function registerSumDisplayFieldRoutes(router85) {
         return res.status(404).json({ error: "Variable non trouv\xC3\u0192\xC2\xA9e pour ce n\xC3\u2026\xE2\u20AC\u0153ud" });
       }
       const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
-      const allCopies = await prisma45.treeBranchLeafNodeVariable.findMany({
+      const allCopies = await prisma28.treeBranchLeafNodeVariable.findMany({
         where: {
           OR: [
             { exposedKey: baseExposedKey },
@@ -28019,7 +28082,7 @@ function registerSumDisplayFieldRoutes(router85) {
         select: { id: true, exposedKey: true, nodeId: true }
       });
       const copyNodeIds = allCopies.map((c) => c.nodeId);
-      const copyNodes = await prisma45.treeBranchLeafNode.findMany({
+      const copyNodes = await prisma28.treeBranchLeafNode.findMany({
         where: { id: { in: copyNodeIds } },
         select: { id: true, order: true }
       });
@@ -28028,7 +28091,7 @@ function registerSumDisplayFieldRoutes(router85) {
       const sumFieldVariableId = `${mainVariable.id}-sum-total`;
       const sumDisplayName = `${mainVariable.displayName} - Total`;
       const sumExposedKey = `${baseExposedKey}_TOTAL`;
-      const existingSumNode = await prisma45.treeBranchLeafNode.findUnique({
+      const existingSumNode = await prisma28.treeBranchLeafNode.findUnique({
         where: { id: sumFieldNodeId },
         select: { id: true, metadata: true }
       });
@@ -28083,13 +28146,13 @@ function registerSumDisplayFieldRoutes(router85) {
         updatedAt: now
       };
       if (existingSumNode) {
-        await prisma45.treeBranchLeafNode.update({
+        await prisma28.treeBranchLeafNode.update({
           where: { id: sumFieldNodeId },
           data: sumNodeData
         });
       } else {
         try {
-          await prisma45.treeBranchLeafNode.create({
+          await prisma28.treeBranchLeafNode.create({
             data: {
               id: sumFieldNodeId,
               treeId,
@@ -28112,15 +28175,15 @@ function registerSumDisplayFieldRoutes(router85) {
             }
           });
         } catch (err) {
-          if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-            await prisma45.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
+          if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            await prisma28.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
             console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] N\xC3\u2026\xE2\u20AC\u0153ud Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existant, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
         }
       }
-      const existingSumVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
+      const existingSumVariable = await prisma28.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId: sumFieldNodeId }
       });
       const sumVariableData = {
@@ -28140,15 +28203,15 @@ function registerSumDisplayFieldRoutes(router85) {
         updatedAt: now
       };
       if (existingSumVariable) {
-        await prisma45.treeBranchLeafNodeVariable.update({
+        await prisma28.treeBranchLeafNodeVariable.update({
           where: { nodeId: sumFieldNodeId },
           data: sumVariableData
         });
       } else {
-        const existingKey = await prisma45.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: sumExposedKey } });
+        const existingKey = await prisma28.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: sumExposedKey } });
         const finalExposedKey = existingKey ? `${sumExposedKey}_${Date.now()}` : sumExposedKey;
         try {
-          await prisma45.treeBranchLeafNodeVariable.create({
+          await prisma28.treeBranchLeafNodeVariable.create({
             data: {
               id: sumFieldVariableId,
               nodeId: sumFieldNodeId,
@@ -28158,15 +28221,15 @@ function registerSumDisplayFieldRoutes(router85) {
             }
           });
         } catch (err) {
-          if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-            await prisma45.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
+          if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            await prisma28.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
             console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Variable Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
         }
       }
-      const existingSumFormula = await prisma45.treeBranchLeafNodeFormula.findUnique({
+      const existingSumFormula = await prisma28.treeBranchLeafNodeFormula.findUnique({
         where: { id: sumFormulaId }
       });
       const formulaOrgId = tree.organizationId || organizationId;
@@ -28176,10 +28239,10 @@ function registerSumDisplayFieldRoutes(router85) {
         updatedAt: now
       };
       if (existingSumFormula) {
-        await prisma45.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
+        await prisma28.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
       } else {
         try {
-          await prisma45.treeBranchLeafNodeFormula.create({
+          await prisma28.treeBranchLeafNodeFormula.create({
             data: {
               id: sumFormulaId,
               nodeId: sumFieldNodeId,
@@ -28191,8 +28254,8 @@ function registerSumDisplayFieldRoutes(router85) {
             }
           });
         } catch (err) {
-          if (err instanceof import_client46.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-            await prisma45.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
+          if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            await prisma28.treeBranchLeafNodeFormula.update({ where: { id: sumFormulaId }, data: sumFormulaData });
             console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Formule Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFormulaId}`);
           } else {
             throw err;
@@ -28200,7 +28263,7 @@ function registerSumDisplayFieldRoutes(router85) {
         }
       }
       const existingMeta = node.metadata || {};
-      await prisma45.treeBranchLeafNode.update({
+      await prisma28.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: {
           metadata: {
@@ -28230,13 +28293,13 @@ function registerSumDisplayFieldRoutes(router85) {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId(req2);
-      const tree = await prisma45.treeBranchLeafTree.findFirst({
+      const tree = await prisma28.treeBranchLeafTree.findFirst({
         where: organizationId ? { id: treeId, organizationId } : { id: treeId }
       });
       if (!tree) {
         return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xA9" });
       }
-      const node = await prisma45.treeBranchLeafNode.findFirst({
+      const node = await prisma28.treeBranchLeafNode.findFirst({
         where: { id: nodeId, treeId },
         select: { id: true, metadata: true }
       });
@@ -28244,33 +28307,33 @@ function registerSumDisplayFieldRoutes(router85) {
         return res.status(404).json({ error: "N\xC3\u2026\xE2\u20AC\u0153ud non trouv\xC3\u0192\xC2\xA9" });
       }
       const sumFieldNodeId = `${nodeId}-sum-total`;
-      const mainVariable = await prisma45.treeBranchLeafNodeVariable.findUnique({
+      const mainVariable = await prisma28.treeBranchLeafNodeVariable.findUnique({
         where: { nodeId },
         select: { id: true }
       });
       const sumFormulaId = mainVariable ? `${mainVariable.id}-sum-formula` : null;
       if (sumFormulaId) {
         try {
-          await prisma45.treeBranchLeafNodeFormula.delete({
+          await prisma28.treeBranchLeafNodeFormula.delete({
             where: { id: sumFormulaId }
           });
         } catch {
         }
       }
       try {
-        await prisma45.treeBranchLeafNodeVariable.delete({
+        await prisma28.treeBranchLeafNodeVariable.delete({
           where: { nodeId: sumFieldNodeId }
         });
       } catch {
       }
       try {
-        await prisma45.treeBranchLeafNode.delete({
+        await prisma28.treeBranchLeafNode.delete({
           where: { id: sumFieldNodeId }
         });
       } catch {
       }
       const existingMeta = node.metadata || {};
-      await prisma45.treeBranchLeafNode.update({
+      await prisma28.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: {
           metadata: {
@@ -28287,10 +28350,10 @@ function registerSumDisplayFieldRoutes(router85) {
     }
   });
 }
-async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2) {
-  const db = prismaClient2 || prisma45;
+async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) {
+  const db2 = prismaClient || prisma28;
   try {
-    const sourceNode = await db.treeBranchLeafNode.findUnique({
+    const sourceNode = await db2.treeBranchLeafNode.findUnique({
       where: { id: sourceNodeId },
       select: {
         id: true,
@@ -28305,13 +28368,13 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
     if (!hasSum || !sumFieldNodeId) {
       return;
     }
-    const mainVariable = await db.treeBranchLeafNodeVariable.findUnique({
+    const mainVariable = await db2.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId: sourceNodeId },
       select: { id: true, exposedKey: true, displayName: true }
     });
     if (!mainVariable) return;
     const baseExposedKey = mainVariable.exposedKey.replace(/-\d+$/, "");
-    const allCopies = await db.treeBranchLeafNodeVariable.findMany({
+    const allCopies = await db2.treeBranchLeafNodeVariable.findMany({
       where: {
         OR: [
           { exposedKey: baseExposedKey },
@@ -28334,14 +28397,14 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
       tokens: sumTokens,
       description: `Somme automatique de toutes les copies de ${mainVariable.displayName}`
     };
-    const sumNodeExists = await db.treeBranchLeafNode.findUnique({
+    const sumNodeExists = await db2.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { id: true }
     });
     if (!sumNodeExists) {
       return;
     }
-    await db.treeBranchLeafNodeFormula.upsert({
+    await db2.treeBranchLeafNodeFormula.upsert({
       where: { id: sumFormulaId },
       update: { tokens: sumTokens, updatedAt: now },
       create: {
@@ -28354,7 +28417,7 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
       }
     });
     const copyNodeIds = allCopies.map((c) => c.nodeId);
-    const copyNodes = await db.treeBranchLeafNode.findMany({
+    const copyNodes = await db2.treeBranchLeafNode.findMany({
       where: { id: { in: copyNodeIds } },
       select: { id: true, calculatedValue: true }
     });
@@ -28362,12 +28425,12 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient2)
     for (const node of copyNodes) {
       newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
     }
-    const sumNode = await db.treeBranchLeafNode.findUnique({
+    const sumNode = await db2.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
       select: { metadata: true }
     });
     if (sumNode) {
-      await db.treeBranchLeafNode.update({
+      await db2.treeBranchLeafNode.update({
         where: { id: sumFieldNodeId },
         data: {
           updatedAt: now,
@@ -28620,7 +28683,7 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
-async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma71, options = {}) {
+async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma51, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaCopyCache = /* @__PURE__ */ new Map()
@@ -28628,7 +28691,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
   try {
     if (formulaCopyCache.has(originalFormulaId)) {
       const cachedId = formulaCopyCache.get(originalFormulaId);
-      const cached = await prisma71.treeBranchLeafNodeFormula.findUnique({
+      const cached = await prisma51.treeBranchLeafNodeFormula.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -28641,7 +28704,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
       }
     }
     const cleanFormulaId = originalFormulaId.replace(/-\d+$/, "");
-    const originalFormula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+    const originalFormula = await prisma51.treeBranchLeafNodeFormula.findUnique({
       where: { id: cleanFormulaId }
     });
     if (!originalFormula) {
@@ -28657,7 +28720,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
     const newFormulaId = `${originalFormula.id}-${suffix}`;
     const originalOwnerNodeId = originalFormula.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma71.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
@@ -28686,7 +28749,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
       } else {
       }
     }
-    const newFormula = await prisma71.treeBranchLeafNodeFormula.upsert({
+    const newFormula = await prisma51.treeBranchLeafNodeFormula.upsert({
       where: { id: newFormulaId },
       update: {
         nodeId: finalOwnerNodeId,
@@ -28719,7 +28782,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    const savedFormula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+    const savedFormula = await prisma51.treeBranchLeafNodeFormula.findUnique({
       where: { id: newFormula.id }
     });
     if (savedFormula && Array.isArray(savedFormula.tokens)) {
@@ -28734,20 +28797,20 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
       }
     }
     try {
-      await linkFormulaToAllNodes(prisma71, newFormulaId, rewrittenTokens);
+      await linkFormulaToAllNodes(prisma51, newFormulaId, rewrittenTokens);
     } catch (e) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     if (ownerNodeExistsForUpdate) {
       try {
-        await addToNodeLinkedField2(prisma71, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
+        await addToNodeLinkedField2(prisma51, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
       } catch (e) {
         console.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, e.message);
       }
     }
     if (ownerNodeExistsForUpdate) {
       try {
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: finalOwnerNodeId },
           data: {
             hasFormula: true,
@@ -28777,9 +28840,9 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma7
     };
   }
 }
-async function addToNodeLinkedField2(prisma71, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField2(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -28789,7 +28852,7 @@ async function addToNodeLinkedField2(prisma71, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -28884,7 +28947,7 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet) {
   }
   return ids;
 }
-async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma71, options = {}) {
+async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma51, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaIdMap = /* @__PURE__ */ new Map(),
@@ -28893,7 +28956,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
   try {
     if (conditionCopyCache.has(originalConditionId)) {
       const cachedId = conditionCopyCache.get(originalConditionId);
-      const cached = await prisma71.treeBranchLeafNodeCondition.findUnique({
+      const cached = await prisma51.treeBranchLeafNodeCondition.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -28906,7 +28969,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       }
     }
     const cleanConditionId = originalConditionId.replace(/-\d+$/, "");
-    const originalCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+    const originalCondition = await prisma51.treeBranchLeafNodeCondition.findUnique({
       where: { id: cleanConditionId }
     });
     if (!originalCondition) {
@@ -28922,7 +28985,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
     const newConditionId = `${originalCondition.id}-${suffix}`;
     const originalOwnerNodeId = originalCondition.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma71.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
@@ -28930,7 +28993,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
     const linkedFormulaIdsFromSet = extractLinkedFormulaIdsFromConditionSet(originalCondition.conditionSet);
     if (linkedFormulaIdsFromSet.size > 0) {
       for (const formId of linkedFormulaIdsFromSet) {
-        const existingForm = await prisma71.treeBranchLeafNodeFormula.findUnique({
+        const existingForm = await prisma51.treeBranchLeafNodeFormula.findUnique({
           where: { id: formId }
         });
         if (existingForm) {
@@ -28955,11 +29018,11 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
               finalOwnerNodeId,
               // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma71,
+              prisma51,
               { nodeIdMap: enrichedNodeIdMap, formulaIdMap }
             );
             if (linkedFormResult.success) {
-              const copiedForm = await prisma71.treeBranchLeafNodeFormula.findUnique({
+              const copiedForm = await prisma51.treeBranchLeafNodeFormula.findUnique({
                 where: { id: linkedFormResult.newFormulaId }
               });
               if (copiedForm) {
@@ -29030,7 +29093,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
               finalOwnerNodeId,
               // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma71,
+              prisma51,
               { nodeIdMap, formulaIdMap, conditionCopyCache }
             );
             if (linkedCondResult.success) {
@@ -29070,7 +29133,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
               finalOwnerNodeId,
               // MÃƒÂªme nÃ…â€œud propriÃƒÂ©taire (corrigÃƒÂ©)
               suffix,
-              prisma71,
+              prisma51,
               { nodeIdMap, tableIdMap }
             );
             if (linkedTableResult.success) {
@@ -29092,9 +29155,9 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       }
     } else {
     }
-    let newCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+    let newCondition = await prisma51.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
     if (newCondition) {
-      newCondition = await prisma71.treeBranchLeafNodeCondition.update({
+      newCondition = await prisma51.treeBranchLeafNodeCondition.update({
         where: { id: newConditionId },
         data: {
           nodeId: finalOwnerNodeId,
@@ -29106,7 +29169,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
         }
       });
     } else {
-      newCondition = await prisma71.treeBranchLeafNodeCondition.create({
+      newCondition = await prisma51.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: finalOwnerNodeId,
@@ -29121,17 +29184,17 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       });
     }
     try {
-      await linkConditionToAllNodes(prisma71, newConditionId, rewrittenConditionSet);
+      await linkConditionToAllNodes(prisma51, newConditionId, rewrittenConditionSet);
     } catch (e) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField3(prisma71, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
+      await addToNodeLinkedField3(prisma51, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
     } catch (e) {
       console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedConditionIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasCondition: true,
@@ -29159,9 +29222,9 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
     };
   }
 }
-async function addToNodeLinkedField3(prisma71, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField3(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -29171,7 +29234,7 @@ async function addToNodeLinkedField3(prisma71, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -29186,7 +29249,7 @@ function stripNumericSuffix(value) {
   if (numericOnly.test(value)) return value;
   return value;
 }
-async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, options = {}) {
+async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma51, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     tableCopyCache = /* @__PURE__ */ new Map(),
@@ -29195,7 +29258,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
   try {
     if (tableCopyCache.has(originalTableId)) {
       const cachedId = tableCopyCache.get(originalTableId);
-      const cached = await prisma71.treeBranchLeafNodeTable.findUnique({
+      const cached = await prisma51.treeBranchLeafNodeTable.findUnique({
         where: { id: cachedId },
         include: {
           tableColumns: true,
@@ -29219,7 +29282,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
       }
     }
     const cleanTableId = originalTableId.replace(/-\d+$/, "");
-    const originalTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+    const originalTable = await prisma51.treeBranchLeafNodeTable.findUnique({
       where: { id: cleanTableId },
       include: {
         tableColumns: { orderBy: { columnIndex: "asc" } },
@@ -29246,7 +29309,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
     const newTableId = `${originalTable.id}-${suffix}`;
     const originalOwnerNodeId = originalTable.nodeId;
     const correctOwnerNodeId = `${originalOwnerNodeId}-${suffix}`;
-    const ownerNodeExists = await prisma71.treeBranchLeafNode.findUnique({
+    const ownerNodeExists = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: correctOwnerNodeId },
       select: { id: true, label: true }
     });
@@ -29254,10 +29317,10 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
     const columnIdMap = /* @__PURE__ */ new Map();
     const rowIdMap = /* @__PURE__ */ new Map();
     let tableAlreadyExisted = false;
-    let newTable = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+    let newTable = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
     if (newTable) {
       tableAlreadyExisted = true;
-      newTable = await prisma71.treeBranchLeafNodeTable.update({
+      newTable = await prisma51.treeBranchLeafNodeTable.update({
         where: { id: newTableId },
         data: {
           nodeId: finalOwnerNodeId,
@@ -29329,7 +29392,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
         }
       });
     } else {
-      newTable = await prisma71.treeBranchLeafNodeTable.create({
+      newTable = await prisma51.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: finalOwnerNodeId,
@@ -29406,12 +29469,12 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
     let columnsCount = 0;
     let rowsCount = 0;
     if (tableAlreadyExisted) {
-      const existingCols = await prisma71.treeBranchLeafNodeTableColumn.count({ where: { tableId: newTableId } });
-      const existingRows = await prisma71.treeBranchLeafNodeTableRow.count({ where: { tableId: newTableId } });
+      const existingCols = await prisma51.treeBranchLeafNodeTableColumn.count({ where: { tableId: newTableId } });
+      const existingRows = await prisma51.treeBranchLeafNodeTableRow.count({ where: { tableId: newTableId } });
       columnsCount = existingCols;
       rowsCount = existingRows;
     } else {
-      const originalColumnsRaw = await prisma71.$queryRaw`
+      const originalColumnsRaw = await prisma51.$queryRaw`
       SELECT "id", "tableId", "columnIndex", "name", "type", "width", "format", "metadata"
       FROM "TreeBranchLeafNodeTableColumn"
       WHERE "tableId" = ${originalTable.id}
@@ -29427,7 +29490,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
             if (/^-?\d+(\.\d+)?$/.test(raw.trim())) return raw;
             return `${raw}-${suffix}`;
           })();
-          await prisma71.treeBranchLeafNodeTableColumn.create({
+          await prisma51.treeBranchLeafNodeTableColumn.create({
             data: {
               id: newColumnId,
               tableId: newTableId,
@@ -29445,7 +29508,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
           console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
         }
       }
-      const originalRowsRaw = await prisma71.$queryRaw`
+      const originalRowsRaw = await prisma51.$queryRaw`
       SELECT "id", "tableId", "rowIndex", "cells"
       FROM "TreeBranchLeafNodeTableRow"
       WHERE "tableId" = ${originalTable.id}
@@ -29455,7 +29518,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
         try {
           const newRowId = `${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
           rowIdMap.set(row.id, newRowId);
-          await prisma71.treeBranchLeafNodeTableRow.create({
+          await prisma51.treeBranchLeafNodeTableRow.create({
             data: {
               id: newRowId,
               tableId: newTableId,
@@ -29473,14 +29536,14 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
       }
     }
     try {
-      const cols = await prisma71.treeBranchLeafNodeTableColumn.findMany({
+      const cols = await prisma51.treeBranchLeafNodeTableColumn.findMany({
         where: { tableId: newTableId },
         select: { id: true, name: true }
       });
       for (const c of cols) {
         const cleaned = stripNumericSuffix(c.name);
         if (cleaned !== c.name) {
-          await prisma71.treeBranchLeafNodeTableColumn.update({
+          await prisma51.treeBranchLeafNodeTableColumn.update({
             where: { id: c.id },
             data: { name: cleaned }
           });
@@ -29489,7 +29552,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
     } catch (e) {
       console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Normalisation des noms de colonnes \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:`, e.message);
     }
-    await prisma71.treeBranchLeafNodeTable.update({
+    await prisma51.treeBranchLeafNodeTable.update({
       where: { id: newTableId },
       data: {
         rowCount: rowsCount,
@@ -29501,17 +29564,17 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
     let rewrittenTableData = rewriteJsonReferences(originalTable.tableData, rewriteMaps, suffix);
     rewrittenTableData = forceSharedRefSuffixesInJson(rewrittenTableData, suffix);
     try {
-      await linkTableToAllNodes(prisma71, newTableId, rewrittenTableData);
+      await linkTableToAllNodes(prisma51, newTableId, rewrittenTableData);
     } catch (e) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
-      await addToNodeLinkedField4(prisma71, finalOwnerNodeId, "linkedTableIds", [newTableId]);
+      await addToNodeLinkedField4(prisma51, finalOwnerNodeId, "linkedTableIds", [newTableId]);
     } catch (e) {
       console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedTableIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
-      const originalNode = await prisma71.treeBranchLeafNode.findUnique({
+      const originalNode = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: originalTable.nodeId },
         select: {
           table_activeId: true,
@@ -29537,7 +29600,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
       if (!newTableInstances[newTableId]) {
         newTableInstances[newTableId] = {};
       }
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: finalOwnerNodeId },
         data: {
           hasTable: true,
@@ -29573,9 +29636,9 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma71, 
     };
   }
 }
-async function addToNodeLinkedField4(prisma71, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField4(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -29585,14 +29648,14 @@ async function addToNodeLinkedField4(prisma71, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/variable-copy-engine.ts
-async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma71, options = {}) {
+async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma51, options = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionIdMap = /* @__PURE__ */ new Map(),
@@ -29611,7 +29674,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     const cacheKey = `${originalVarId}|${newNodeId}`;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
-      const cached = await prisma71.treeBranchLeafNodeVariable.findUnique({
+      const cached = await prisma51.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -29626,13 +29689,13 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         };
       }
     }
-    const originalVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
       if (newNodeId) {
         try {
-          const orphanLinkedVarIds = await prisma71.treeBranchLeafNode.findMany({
+          const orphanLinkedVarIds = await prisma51.treeBranchLeafNode.findMany({
             where: {
               linkedVariableIds: {
                 hasSome: [originalVarId]
@@ -29643,7 +29706,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           for (const node of orphanLinkedVarIds) {
             const cleaned = (node.linkedVariableIds || []).filter((id) => id !== originalVarId);
             if (cleaned.length !== node.linkedVariableIds?.length) {
-              await prisma71.treeBranchLeafNode.update({
+              await prisma51.treeBranchLeafNode.update({
                 where: { id: node.id },
                 data: { linkedVariableIds: cleaned }
               });
@@ -29721,7 +29784,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, formulaCopyCache: formulaIdMap }
               );
               if (formulaResult.success) {
@@ -29746,7 +29809,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
               );
               if (conditionResult.success) {
@@ -29771,7 +29834,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -29822,7 +29885,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               return value;
             }
           };
-          const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
+          const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
             where: { id: originalVar.nodeId },
             select: {
               id: true,
@@ -29928,7 +29991,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             const withoutRepeater = nodes.find((node) => !hasRepeaterMetadata(node.metadata));
             return withoutRepeater ?? nodes[0];
           };
-          let originalDisplayNode = await prisma71.treeBranchLeafNode.findFirst({
+          let originalDisplayNode = await prisma51.treeBranchLeafNode.findFirst({
             where: {
               metadata: {
                 path: ["fromVariableId"],
@@ -29938,7 +30001,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             select: displayNodeSelect
           });
           if (!originalDisplayNode) {
-            const templateNodeIds = await prisma71.treeBranchLeafNode.findMany({
+            const templateNodeIds = await prisma51.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
@@ -29947,7 +30010,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               select: { id: true }
             });
             const templateIds = new Set(templateNodeIds.map((t) => t.id));
-            const candidates = await prisma71.treeBranchLeafNode.findMany({
+            const candidates = await prisma51.treeBranchLeafNode.findMany({
               where: {
                 linkedVariableIds: {
                   has: originalVar.id
@@ -29970,7 +30033,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             });
             originalDisplayNode = pickDisplayCandidate(candidates);
           }
-          const duplicatedOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
+          const duplicatedOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
             where: { id: newNodeId },
             select: {
               id: true,
@@ -29980,9 +30043,9 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           if (originalOwnerNode && duplicatedOwnerNode) {
             const inheritedDisplayParentId = originalDisplayNode?.parentId ?? null;
             let resolvedParentId = inheritedDisplayParentId ?? originalOwnerNode.parentId ?? displayParentId ?? duplicatedOwnerNode.parentId ?? null;
-            if (resolvedParentId && prisma71) {
+            if (resolvedParentId && prisma51) {
               try {
-                const parentExists = await prisma71.treeBranchLeafNode.findUnique({
+                const parentExists = await prisma51.treeBranchLeafNode.findUnique({
                   where: { id: resolvedParentId },
                   select: { id: true }
                 });
@@ -30148,22 +30211,22 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               fieldSubType: tableSourceNode.fieldSubType,
               field_label: displayLabel
             };
-            const maybeExisting = await prisma71.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+            const maybeExisting = await prisma51.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
             if (maybeExisting) {
-              await prisma71.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
+              await prisma51.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
             } else {
-              await prisma71.treeBranchLeafNode.create({ data: displayNodeData });
+              await prisma51.treeBranchLeafNode.create({ data: displayNodeData });
             }
             const copiedFormulaIds = [];
             const copiedConditionIds = [];
             try {
               if (capacityType === "formula") {
-                const originalFormulas = await prisma71.treeBranchLeafNodeFormula.findMany({
+                const originalFormulas = await prisma51.treeBranchLeafNodeFormula.findMany({
                   where: { nodeId: tableSourceNode.id }
                 });
                 for (const f of originalFormulas) {
                   const newFormulaId = appendSuffixOnce(stripTrailingNumeric(f.id));
-                  const existingFormula = await prisma71.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
+                  const existingFormula = await prisma51.treeBranchLeafNodeFormula.findUnique({ where: { id: newFormulaId } });
                   if (existingFormula) {
                     if (existingFormula.nodeId === displayNodeId2) {
                       copiedFormulaIds.push(newFormulaId);
@@ -30176,7 +30239,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       f.id,
                       displayNodeId2,
                       suffix,
-                      prisma71,
+                      prisma51,
                       { formulaIdMap, nodeIdMap }
                     );
                     if (formulaResult.success) {
@@ -30188,12 +30251,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 }
               }
               if (capacityType === "condition") {
-                const originalConditions = await prisma71.treeBranchLeafNodeCondition.findMany({
+                const originalConditions = await prisma51.treeBranchLeafNodeCondition.findMany({
                   where: { nodeId: tableSourceNode.id }
                 });
                 for (const c of originalConditions) {
                   const newConditionId = appendSuffixOnce(stripTrailingNumeric(c.id));
-                  const existingCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
+                  const existingCondition = await prisma51.treeBranchLeafNodeCondition.findUnique({ where: { id: newConditionId } });
                   if (existingCondition) {
                     if (existingCondition.nodeId === displayNodeId2) {
                       copiedConditionIds.push(newConditionId);
@@ -30206,7 +30269,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       c.id,
                       displayNodeId2,
                       suffix,
-                      prisma71,
+                      prisma51,
                       { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
                     );
                     if (conditionResult.success) {
@@ -30239,7 +30302,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 }
               }
               if (Object.keys(updateData).length > 0) {
-                await prisma71.treeBranchLeafNode.update({
+                await prisma51.treeBranchLeafNode.update({
                   where: { id: displayNodeId2 },
                   data: updateData
                 });
@@ -30248,7 +30311,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               if (tableSourceNode.hasTable && Array.isArray(tableSourceNode.linkedTableIds) && tableSourceNode.linkedTableIds.length > 0) {
                 for (const originalTableId of tableSourceNode.linkedTableIds) {
                   const newTableId = appendSuffixOnce(stripTrailingNumeric(String(originalTableId)));
-                  const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
+                  const existingTable = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: newTableId } });
                   if (existingTable) {
                     copiedTableIds.push(newTableId);
                     tableIdMap2.set(String(originalTableId), newTableId);
@@ -30259,7 +30322,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       String(originalTableId),
                       displayNodeId2,
                       suffix,
-                      prisma71,
+                      prisma51,
                       { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
                     );
                     if (tableResult.success) {
@@ -30270,7 +30333,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   }
                 }
                 if (copiedTableIds.length > 0) {
-                  await prisma71.treeBranchLeafNode.update({
+                  await prisma51.treeBranchLeafNode.update({
                     where: { id: displayNodeId2 },
                     data: { hasTable: true, linkedTableIds: copiedTableIds }
                   });
@@ -30285,7 +30348,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     }
     try {
-      const existingById = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      const existingById = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         newVarId = `${originalVarId}-${suffix}-${tail}`;
@@ -30293,7 +30356,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     } catch (e) {
     }
     try {
-      const existingByKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      const existingByKey = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
@@ -30303,7 +30366,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
       if (existingForNode) {
         const expectedVarId = `${originalVarId}-${suffix}`;
         const hasSuffixMatch = existingForNode.id === expectedVarId || existingForNode.id === newVarId;
@@ -30312,7 +30375,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           _existingVariableForReuse = existingForNode;
           try {
             const normalizedExistingName = forceSingleSuffix(existingForNode.displayName);
-            await prisma71.treeBranchLeafNode.update({
+            await prisma51.treeBranchLeafNode.update({
               where: { id: finalNodeId2 },
               data: {
                 hasData: true,
@@ -30328,7 +30391,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             });
             const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
             if (isCopiedNode) {
-              await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+              await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
             }
           } catch (e) {
           }
@@ -30336,7 +30399,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           variableCopyCache.set(cacheKey2, existingForNode.id);
         } else {
           try {
-            await prisma71.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
+            await prisma51.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
           }
           _reusingExistingVariable = false;
@@ -30368,7 +30431,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 formulaId,
                 finalNodeId2,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (formulaResult.success) {
@@ -30393,7 +30456,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 conditionId,
                 finalNodeId2,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, formulaIdMap, conditionIdMap }
               );
               if (conditionResult.success) {
@@ -30418,7 +30481,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 tableId,
                 finalNodeId2,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, formulaIdMap, conditionIdMap, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -30432,7 +30495,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         }
-        newVariable = await prisma71.treeBranchLeafNodeVariable.create({
+        newVariable = await prisma51.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: finalNodeId2,
@@ -30471,11 +30534,11 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     if (!isFromRepeaterDuplication) {
       try {
-        await linkVariableToAllCapacityNodes(prisma71, newVariable.id, newVariable.sourceRef);
+        await linkVariableToAllCapacityNodes(prisma51, newVariable.id, newVariable.sourceRef);
       } catch (e) {
       }
     }
-    const verification = await prisma71.treeBranchLeafNodeVariable.findUnique({
+    const verification = await prisma51.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (!verification) {
@@ -30483,7 +30546,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     try {
       const normalizedNodeLabel = forceSingleSuffix(newVariable.displayName);
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: finalNodeId2 },
         data: {
           hasData: true,
@@ -30501,12 +30564,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     if (linkToDisplaySection) {
       try {
-        const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: { parentId: true, treeId: true }
         });
         if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma71.treeBranchLeafNode.findFirst({
+          const displaySection = await prisma51.treeBranchLeafNode.findFirst({
             where: {
               treeId: originalOwnerNode.treeId,
               parentId: originalOwnerNode.parentId,
@@ -30516,7 +30579,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             select: { id: true }
           });
           if (displaySection) {
-            await addToNodeLinkedField5(prisma71, displaySection.id, "linkedVariableIds", [newVariable.id]);
+            await addToNodeLinkedField5(prisma51, displaySection.id, "linkedVariableIds", [newVariable.id]);
           }
         }
       } catch (e) {
@@ -30525,7 +30588,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       try {
         const isCopiedNode = finalNodeId2.includes("-") && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId2);
         if (isCopiedNode) {
-          await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+          await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedVariableIds", [newVariable.id]);
         }
       } catch (e) {
       }
@@ -30535,18 +30598,18 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              await prisma71.treeBranchLeafNode.update({
+              await prisma51.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
                   condition_activeId: capId
                 }
               });
-              await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedConditionIds", [capId]);
               try {
                 if (newNodeId) {
                   const suffixedVarId = `${originalVarId}-${suffix}`;
-                  const targetNode = await prisma71.treeBranchLeafNode.findUnique({
+                  const targetNode = await prisma51.treeBranchLeafNode.findUnique({
                     where: { id: newNodeId },
                     select: { linkedVariableIds: true }
                   });
@@ -30557,7 +30620,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                     const next = Array.from(/* @__PURE__ */ new Set([...withoutOriginal, ...candidates]));
                     const changed = current.length !== next.length || current.some((id) => !next.includes(id));
                     if (changed) {
-                      await prisma71.treeBranchLeafNode.update({
+                      await prisma51.treeBranchLeafNode.update({
                         where: { id: newNodeId },
                         data: {
                           linkedVariableIds: { set: next }
@@ -30569,8 +30632,8 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               } catch (e) {
               }
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
-              await prisma71.treeBranchLeafNode.update({
+              const tbl = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
+              await prisma51.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
@@ -30579,7 +30642,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField5(prisma71, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField5(prisma51, finalNodeId2, "linkedTableIds", [capId]);
             }
           }
         }
@@ -30588,10 +30651,10 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     }
     try {
       if (newNodeId) {
-        await replaceLinkedVariableId(prisma71, newNodeId, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma51, newNodeId, originalVarId, newVariable.id, suffix);
       }
       if (finalNodeId2 && finalNodeId2 !== newNodeId) {
-        await replaceLinkedVariableId(prisma71, finalNodeId2, originalVarId, newVariable.id, suffix);
+        await replaceLinkedVariableId(prisma51, finalNodeId2, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
     }
@@ -30602,28 +30665,28 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       if (parsed && parsed.id) {
         try {
           if (capacityType === "formula") {
-            const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+            const formula = await prisma51.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (formula) {
-              await addToNodeLinkedField5(prisma71, formula.nodeId, "linkedFormulaIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma51, formula.nodeId, "linkedFormulaIds", [parsed.id]);
             }
           } else if (capacityType === "condition") {
-            const condition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+            const condition = await prisma51.treeBranchLeafNodeCondition.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (condition) {
-              await addToNodeLinkedField5(prisma71, condition.nodeId, "linkedConditionIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma51, condition.nodeId, "linkedConditionIds", [parsed.id]);
             }
           } else if (capacityType === "table") {
-            const table = await prisma71.treeBranchLeafNodeTable.findUnique({
+            const table = await prisma51.treeBranchLeafNodeTable.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (table) {
-              await addToNodeLinkedField5(prisma71, table.nodeId, "linkedTableIds", [parsed.id]);
+              await addToNodeLinkedField5(prisma51, table.nodeId, "linkedTableIds", [parsed.id]);
             }
           }
         } catch (e) {
@@ -30631,12 +30694,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
     }
     try {
-      const originalVariable = await prisma71.treeBranchLeafNodeVariable.findUnique({
+      const originalVariable = await prisma51.treeBranchLeafNodeVariable.findUnique({
         where: { id: originalVarId },
         select: { nodeId: true }
       });
       if (originalVariable?.nodeId) {
-        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma71).catch(() => {
+        updateSumDisplayFieldAfterCopyChange(originalVariable.nodeId, prisma51).catch(() => {
         });
       }
     } catch (sumErr) {
@@ -30667,10 +30730,10 @@ ${"\u2550".repeat(80)}`);
     throw error;
   }
 }
-async function createDisplayNodeForExistingVariable(variableId, prisma71, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
-  const v = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+async function createDisplayNodeForExistingVariable(variableId, prisma51, displaySectionLabel = "Nouveau Section", suffix = "nouveau") {
+  const v = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
   if (!v) throw new Error(`Variable introuvable: ${variableId}`);
-  const owner = await prisma71.treeBranchLeafNode.findUnique({
+  const owner = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: v.nodeId },
     select: {
       id: true,
@@ -30741,13 +30804,13 @@ async function createDisplayNodeForExistingVariable(variableId, prisma71, displa
     fieldSubType: null,
     field_label: v.displayName
   };
-  const existing = await prisma71.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
+  const existing = await prisma51.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
   if (existing) {
-    await prisma71.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
+    await prisma51.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
   } else {
-    await prisma71.treeBranchLeafNode.create({ data: baseData });
+    await prisma51.treeBranchLeafNode.create({ data: baseData });
   }
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: displayNodeId },
     data: {
       hasData: true,
@@ -30761,9 +30824,9 @@ async function createDisplayNodeForExistingVariable(variableId, prisma71, displa
   });
   return { displayNodeId, created: !existing };
 }
-async function addToNodeLinkedField5(prisma71, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField5(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -30773,14 +30836,14 @@ async function addToNodeLinkedField5(prisma71, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
 }
-async function replaceLinkedVariableId(prisma71, nodeId, originalVarId, newVarId, suffix) {
+async function replaceLinkedVariableId(prisma51, nodeId, originalVarId, newVarId, suffix) {
   const stripNumericSuffix2 = (raw) => raw.replace(/-\d+(?:-\d+)*$/, "");
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { linkedVariableIds: true }
   });
@@ -30792,14 +30855,14 @@ async function replaceLinkedVariableId(prisma71, nodeId, originalVarId, newVarId
   const next = Array.from(/* @__PURE__ */ new Set([...filtered, newVarId, suffixedId]));
   const changed = current.length !== next.length || current.some((id) => !next.includes(id));
   if (!changed) return;
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { linkedVariableIds: { set: next } }
   });
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-selector-tables.ts
-async function copySelectorTablesAfterNodeCopy(prisma71, copiedRootNodeId, originalRootNodeId, options, suffix) {
+async function copySelectorTablesAfterNodeCopy(prisma51, copiedRootNodeId, originalRootNodeId, options, suffix) {
   try {
     const getAllDescendants = async (nodeId) => {
       const results = [];
@@ -30807,7 +30870,7 @@ async function copySelectorTablesAfterNodeCopy(prisma71, copiedRootNodeId, origi
       while (queue.length > 0) {
         const currentId = queue.shift();
         results.push(currentId);
-        const children = await prisma71.treeBranchLeafNode.findMany({
+        const children = await prisma51.treeBranchLeafNode.findMany({
           where: { parentId: currentId },
           select: { id: true }
         });
@@ -30817,7 +30880,7 @@ async function copySelectorTablesAfterNodeCopy(prisma71, copiedRootNodeId, origi
     };
     const originalNodeIds = await getAllDescendants(originalRootNodeId);
     const copiedNodeIds = await getAllDescendants(copiedRootNodeId);
-    const selectorsInOriginal = await prisma71.treeBranchLeafNode.findMany({
+    const selectorsInOriginal = await prisma51.treeBranchLeafNode.findMany({
       where: {
         id: { in: originalNodeIds },
         table_activeId: { not: null }
@@ -30837,13 +30900,13 @@ async function copySelectorTablesAfterNodeCopy(prisma71, copiedRootNodeId, origi
       if (!copiedSelectorId) {
         continue;
       }
-      const hasSelectConfig = await prisma71.treeBranchLeafSelectConfig.findUnique({
+      const hasSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: originalSelector.id }
       });
       if (hasSelectConfig) {
         continue;
       }
-      const originalTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+      const originalTable = await prisma51.treeBranchLeafNodeTable.findUnique({
         where: { id: originalTableId },
         select: {
           id: true,
@@ -30867,7 +30930,7 @@ async function copySelectorTablesAfterNodeCopy(prisma71, copiedRootNodeId, origi
           copiedSelectorId,
           // Ã°Å¸â€˜Ë† Le nÃ…â€œud selector copiÃƒÂ© sera propriÃƒÂ©taire de la table copiÃƒÂ©e
           suffix,
-          prisma71,
+          prisma51,
           {
             nodeIdMap: options.nodeIdMap,
             tableCopyCache: options.tableCopyCache,
@@ -31349,7 +31412,7 @@ function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
-async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
+async function deepCopyNodeInternal(prisma51, req2, nodeId, opts) {
   const {
     targetParentId,
     suffixNum,
@@ -31414,7 +31477,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
       return conditionSet;
     }
   };
-  const source = await prisma71.treeBranchLeafNode.findUnique({
+  const source = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { organizationId: true } } }
   });
@@ -31437,7 +31500,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     } else if (copySuffixNum != null && Number.isFinite(copySuffixNum)) {
     } else {
       const baseSourceId = source.id.replace(/-\d+(?:-\d+)*$/, "");
-      const existingIdsWithSuffix = await prisma71.treeBranchLeafNode.findMany({
+      const existingIdsWithSuffix = await prisma51.treeBranchLeafNode.findMany({
         where: {
           treeId: source.treeId,
           id: {
@@ -31489,7 +31552,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     ...derivedRepeatContext,
     suffix: derivedRepeatContext.suffix ?? suffixToken
   } : void 0;
-  const allNodes = await prisma71.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
+  const allNodes = await prisma51.treeBranchLeafNode.findMany({ where: { treeId: source.treeId } });
   const byId = new Map(allNodes.map((n) => [n.id, n]));
   const existingNodeIds = new Set(byId.keys());
   const childrenByParent = /* @__PURE__ */ new Map();
@@ -31519,7 +31582,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
   const displayNodeIds = [];
   const directVariableIdByNodeId = /* @__PURE__ */ new Map();
   if (toCopy.size > 0) {
-    const nodeVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
+    const nodeVariables = await prisma51.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: Array.from(toCopy) } },
       select: { nodeId: true, id: true }
     });
@@ -31826,7 +31889,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
       }
       const parentOfParentId = await ensureExternalParentChain(parentNode.parentId ?? null);
       const parentCloneData = buildCloneData(parentNode, clonedParentId, parentOfParentId);
-      await prisma71.treeBranchLeafNode.create({ data: parentCloneData });
+      await prisma51.treeBranchLeafNode.create({ data: parentCloneData });
       createdNodes.push({ oldId: originalParentId, newId: clonedParentId });
       existingNodeIds.add(clonedParentId);
       resolvedExternalParents.set(originalParentId, clonedParentId);
@@ -31884,7 +31947,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     const isRoot = oldId === source.id;
     const newParentId = await resolveParentId(oldNode, isRoot);
     const cloneData = buildCloneData(oldNode, newId, newParentId);
-    await prisma71.treeBranchLeafNode.create({ data: cloneData });
+    await prisma51.treeBranchLeafNode.create({ data: cloneData });
     createdNodes.push({ oldId, newId, newParentId });
     existingNodeIds.add(newId);
     if (Array.isArray(cloneData.linkedTableIds) && cloneData.linkedTableIds.length > 0) {
@@ -31894,7 +31957,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
   for (const { oldId, newId, newParentId } of createdNodes) {
     const oldNode = byId.get(oldId);
     const linkedFormulaIdOrder = Array.isArray(oldNode.linkedFormulaIds) ? oldNode.linkedFormulaIds : [];
-    const formulas = await prisma71.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
+    const formulas = await prisma51.treeBranchLeafNodeFormula.findMany({ where: { nodeId: oldId } });
     const formulaMap = new Map(formulas.map((f) => [f.id, f]));
     const sortedFormulas = [];
     const validLinkedIds = [];
@@ -31916,7 +31979,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
           f.id,
           newId,
           suffixNum,
-          prisma71,
+          prisma51,
           {
             formulaIdMap,
             nodeIdMap: idMap
@@ -31947,12 +32010,12 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     }
     if (newLinkedFormulaIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma71, newId, "linkedFormulaIds", newLinkedFormulaIds);
+        await addToNodeLinkedField6(prisma51, newId, "linkedFormulaIds", newLinkedFormulaIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds for node:", e.message);
       }
     }
-    const conditions = await prisma71.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
+    const conditions = await prisma51.treeBranchLeafNodeCondition.findMany({ where: { nodeId: oldId } });
     const linkedConditionIdOrder = Array.isArray(oldNode.linkedConditionIds) ? oldNode.linkedConditionIds : [];
     const copiedNodeIds = new Set(idMap.values());
     const conditionMap = new Map(conditions.map((c) => [c.id, c]));
@@ -31974,7 +32037,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
       const newConditionId = appendSuffix(c.id);
       conditionIdMap.set(c.id, newConditionId);
       const newSet = replaceIdsInConditionSet(c.conditionSet, idMap, formulaIdMap, conditionIdMap);
-      const existingCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+      const existingCondition = await prisma51.treeBranchLeafNodeCondition.findUnique({
         where: { id: newConditionId }
       });
       if (existingCondition) {
@@ -31983,7 +32046,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
         }
         continue;
       }
-      await prisma71.treeBranchLeafNodeCondition.create({
+      await prisma51.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: newId,
@@ -32017,7 +32080,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
           if (normalizedRepeatContext && !copiedNodeIds.has(normalizedRefId)) {
             continue;
           }
-          await addToNodeLinkedField6(prisma71, normalizedRefId, "linkedConditionIds", [newConditionId]);
+          await addToNodeLinkedField6(prisma51, normalizedRefId, "linkedConditionIds", [newConditionId]);
         }
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
@@ -32025,7 +32088,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     }
     if (newLinkedConditionIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma71, newId, "linkedConditionIds", newLinkedConditionIds);
+        await addToNodeLinkedField6(prisma51, newId, "linkedConditionIds", newLinkedConditionIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds for node:", e.message);
       }
@@ -32049,7 +32112,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     }
     if (Object.keys(updateActiveIds).length > 0) {
       try {
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: newId },
           data: updateActiveIds
         });
@@ -32057,7 +32120,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
         console.warn("[DEEP-COPY] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur mise \xC3\u0192\xC2\xA0 jour activeIds:", e.message);
       }
     }
-    const tables = await prisma71.treeBranchLeafNodeTable.findMany({
+    const tables = await prisma51.treeBranchLeafNodeTable.findMany({
       where: { nodeId: oldId },
       include: { tableColumns: true, tableRows: true }
     });
@@ -32075,7 +32138,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     if (source.table_activeId && !tables.some((t) => t.id === source.table_activeId)) {
       additionalTableIds.push(source.table_activeId);
     }
-    const additionalTables = additionalTableIds.length > 0 ? await prisma71.treeBranchLeafNodeTable.findMany({
+    const additionalTables = additionalTableIds.length > 0 ? await prisma51.treeBranchLeafNodeTable.findMany({
       where: { id: { in: additionalTableIds } },
       include: { tableColumns: true, tableRows: true }
     }) : [];
@@ -32089,7 +32152,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     for (const t of allTablesToCopy) {
       const newTableId = appendSuffix(t.id);
       tableIdMap2.set(t.id, newTableId);
-      const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+      const existingTable = await prisma51.treeBranchLeafNodeTable.findUnique({
         where: { id: newTableId }
       });
       if (existingTable) {
@@ -32098,7 +32161,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
       if (linkedTableIdOrder.includes(t.id)) {
         newLinkedTableIds.push(newTableId);
       }
-      await prisma71.treeBranchLeafNodeTable.create({
+      await prisma51.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: newId,
@@ -32214,22 +32277,22 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     }
     if (newLinkedTableIds.length > 0) {
       try {
-        await addToNodeLinkedField6(prisma71, newId, "linkedTableIds", newLinkedTableIds);
+        await addToNodeLinkedField6(prisma51, newId, "linkedTableIds", newLinkedTableIds);
       } catch (e) {
         console.warn("[TreeBranchLeaf API] Warning updating linkedTableIds for node:", e.message);
       }
     }
-    const originalSelectConfig = await prisma71.treeBranchLeafSelectConfig.findUnique({
+    const originalSelectConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
       where: { nodeId: oldId }
     });
     if (originalSelectConfig) {
-      const existingCopyConfig = await prisma71.treeBranchLeafSelectConfig.findUnique({
+      const existingCopyConfig = await prisma51.treeBranchLeafSelectConfig.findUnique({
         where: { nodeId: newId }
       });
       if (!existingCopyConfig) {
         const newTableReference = originalSelectConfig.tableReference ? appendSuffix(originalSelectConfig.tableReference) : null;
         try {
-          await prisma71.treeBranchLeafSelectConfig.create({
+          await prisma51.treeBranchLeafSelectConfig.create({
             data: {
               id: appendSuffix(originalSelectConfig.id),
               nodeId: newId,
@@ -32257,16 +32320,16 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
       } else {
       }
     }
-    const originalNumberConfig = await prisma71.treeBranchLeafNumberConfig.findUnique({
+    const originalNumberConfig = await prisma51.treeBranchLeafNumberConfig.findUnique({
       where: { nodeId: oldId }
     });
     if (originalNumberConfig) {
-      const existingCopyNumberConfig = await prisma71.treeBranchLeafNumberConfig.findUnique({
+      const existingCopyNumberConfig = await prisma51.treeBranchLeafNumberConfig.findUnique({
         where: { nodeId: newId }
       });
       if (!existingCopyNumberConfig) {
         try {
-          await prisma71.treeBranchLeafNumberConfig.create({
+          await prisma51.treeBranchLeafNumberConfig.create({
             data: {
               id: appendSuffix(originalNumberConfig.id),
               nodeId: newId,
@@ -32333,7 +32396,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
               linkedVarId,
               suffixToken,
               newNodeId,
-              prisma71,
+              prisma51,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -32360,7 +32423,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
     }
     if (newLinkedFormulaIds.length > 0 || newLinkedConditionIds.length > 0 || newLinkedTableIds.length > 0) {
       try {
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: newNodeId },
           data: {
             linkedFormulaIds: newLinkedFormulaIds.length > 0 ? { set: newLinkedFormulaIds } : { set: [] },
@@ -32378,7 +32441,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
   if (displayNodeIds.length > 0) {
     for (const nodeId2 of displayNodeIds) {
       try {
-        const copiedNode = await prisma71.treeBranchLeafNode.findUnique({
+        const copiedNode = await prisma51.treeBranchLeafNode.findUnique({
           where: { id: nodeId2 },
           select: { id: true, label: true, field_label: true, linkedTableIds: true }
         });
@@ -32386,7 +32449,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
           continue;
         }
         const originalNodeId = nodeId2.replace(/-\d+$/, "");
-        const originalVar = await prisma71.treeBranchLeafNodeVariable.findFirst({
+        const originalVar = await prisma51.treeBranchLeafNodeVariable.findFirst({
           where: { nodeId: originalNodeId }
         });
         if (!originalVar) {
@@ -32394,13 +32457,13 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
         }
         const newVarId = appendSuffix(originalVar.id);
         const newExposedKey = appendSuffix(originalVar.exposedKey);
-        const existingVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
+        const existingVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
           where: { id: newVarId }
         });
         if (existingVar) {
           continue;
         }
-        await prisma71.treeBranchLeafNodeVariable.create({
+        await prisma51.treeBranchLeafNodeVariable.create({
           data: {
             id: newVarId,
             nodeId: nodeId2,
@@ -32420,7 +32483,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: nodeId2 },
           data: {
             hasData: true,
@@ -32442,7 +32505,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
   try {
     const newNodeIds = Array.from(idMap.values());
     if (newNodeIds.length > 0) {
-      const copiedVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
+      const copiedVariables = await prisma51.treeBranchLeafNodeVariable.findMany({
         where: { nodeId: { in: newNodeIds } },
         select: {
           nodeId: true,
@@ -32457,7 +32520,7 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
       });
       for (const variable of copiedVariables) {
         try {
-          await prisma71.treeBranchLeafNode.updateMany({
+          await prisma51.treeBranchLeafNode.updateMany({
             where: {
               id: variable.nodeId,
               OR: [{ data_activeId: null }, { hasData: false }]
@@ -32494,10 +32557,11 @@ async function deepCopyNodeInternal(prisma71, req2, nodeId, opts) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/table-routes-new.ts
 var import_express56 = require("express");
-var import_client47 = require("@prisma/client");
+var import_client5 = require("@prisma/client");
+init_database();
 var import_crypto9 = require("crypto");
 var router55 = (0, import_express56.Router)();
-var prisma46 = new import_client47.PrismaClient();
+var prisma29 = db;
 function getAuthCtx2(req2) {
   const user = req2 && req2.user || {};
   const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
@@ -32520,7 +32584,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
     return res.status(400).json({ error: "Les donn\xC3\u0192\xC2\xA9es (rows) sont requises (array)" });
   }
   try {
-    const node = await prisma46.treeBranchLeafNode.findUnique({
+    const node = await prisma29.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
@@ -32531,11 +32595,11 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9 \xC3\u0192\xC2\xA0 ce n\xC3\u2026\xE2\u20AC\u0153ud" });
     }
     let finalName = name;
-    const existingTable = await prisma46.treeBranchLeafNodeTable.findFirst({
+    const existingTable = await prisma29.treeBranchLeafNodeTable.findFirst({
       where: { nodeId, name: finalName }
     });
     if (existingTable) {
-      const existingCount = await prisma46.treeBranchLeafNodeTable.count({
+      const existingCount = await prisma29.treeBranchLeafNodeTable.count({
         where: { nodeId }
       });
       finalName = `${name} (${existingCount + 1})`;
@@ -32581,7 +32645,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       }
     } else {
     }
-    const result = await prisma46.$transaction(async (tx) => {
+    const result = await prisma29.$transaction(async (tx) => {
       const newTable = await tx.treeBranchLeafNodeTable.create({
         data: tableData
       });
@@ -32616,30 +32680,30 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
       timeout: 6e4
       // 60 secondes pour les gros fichiers (43k+ lignes)
     });
-    await prisma46.treeBranchLeafNode.update({
+    await prisma29.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { hasTable: true }
     });
     try {
-      const node2 = await prisma46.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
+      const node2 = await prisma29.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { linkedTableIds: true } });
       const current = node2?.linkedTableIds ?? [];
       const next = Array.from(/* @__PURE__ */ new Set([...current || [], result.id]));
-      await prisma46.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
+      await prisma29.treeBranchLeafNode.update({ where: { id: nodeId }, data: { linkedTableIds: { set: next } } });
     } catch (e) {
       console.warn("[NEW POST /tables] Warning updating linkedTableIds:", e.message);
     }
     try {
-      const selectConfig = await prisma46.treeBranchLeafSelectConfig.findFirst({
+      const selectConfig = await prisma29.treeBranchLeafSelectConfig.findFirst({
         where: { nodeId }
       });
       if (selectConfig) {
         const oldTableRef = selectConfig.tableReference;
-        await prisma46.treeBranchLeafSelectConfig.update({
+        await prisma29.treeBranchLeafSelectConfig.update({
           where: { id: selectConfig.id },
           data: { tableReference: result.id }
         });
         if (oldTableRef) {
-          const otherConfigs = await prisma46.treeBranchLeafSelectConfig.findMany({
+          const otherConfigs = await prisma29.treeBranchLeafSelectConfig.findMany({
             where: {
               tableReference: oldTableRef,
               nodeId: { not: nodeId }
@@ -32647,7 +32711,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
             }
           });
           if (otherConfigs.length > 0) {
-            const updateResult = await prisma46.treeBranchLeafSelectConfig.updateMany({
+            const updateResult = await prisma29.treeBranchLeafSelectConfig.updateMany({
               where: {
                 tableReference: oldTableRef,
                 nodeId: { not: nodeId }
@@ -32663,7 +32727,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
     } catch (updateError) {
       console.error(`[NEW POST /tables] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des SelectConfigs:`, updateError);
     }
-    const createdTable = await prisma46.treeBranchLeafNodeTable.findUnique({
+    const createdTable = await prisma29.treeBranchLeafNodeTable.findUnique({
       where: { id: result.id },
       include: {
         tableColumns: {
@@ -32710,7 +32774,7 @@ router55.post("/nodes/:nodeId/tables", async (req2, res) => {
     });
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW POST /tables] Erreur lors de la cr\xC3\u0192\xC2\xA9ation de la table:`, error);
-    if (error instanceof import_client47.Prisma.PrismaClientKnownRequestError) {
+    if (error instanceof import_client5.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         return res.status(409).json({
           error: "Une table avec ce nom existe d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 pour ce champ. Veuillez choisir un autre nom.",
@@ -32733,7 +32797,7 @@ router55.get("/tables/:id", async (req2, res) => {
   const limit = parseInt(req2.query.limit) || 100;
   const offset = (page - 1) * limit;
   try {
-    const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma29.treeBranchLeafNodeTable.findUnique({
       where: { id },
       include: {
         TreeBranchLeafNode: {
@@ -32753,11 +32817,11 @@ router55.get("/tables/:id", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9 \xC3\u0192\xC2\xA0 cette table" });
     }
-    const columns = await prisma46.treeBranchLeafNodeTableColumn.findMany({
+    const columns = await prisma29.treeBranchLeafNodeTableColumn.findMany({
       where: { tableId: id },
       orderBy: { columnIndex: "asc" }
     });
-    const rows = await prisma46.treeBranchLeafNodeTableRow.findMany({
+    const rows = await prisma29.treeBranchLeafNodeTableRow.findMany({
       where: { tableId: id },
       orderBy: { rowIndex: "asc" },
       take: limit,
@@ -32794,7 +32858,7 @@ router55.put("/tables/:id", async (req2, res) => {
   const { name, description, columns, rows, type, lookupSelectColumn, lookupDisplayColumns } = req2.body;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
-    const updatedTable = await prisma46.$transaction(async (tx) => {
+    const updatedTable = await prisma29.$transaction(async (tx) => {
       const table = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id },
         include: {
@@ -32856,7 +32920,7 @@ router55.put("/tables/:id", async (req2, res) => {
       }
       return tableUpdated;
     });
-    const finalTableData = await prisma46.treeBranchLeafNodeTable.findUnique({ where: { id } });
+    const finalTableData = await prisma29.treeBranchLeafNodeTable.findUnique({ where: { id } });
     res.json(finalTableData);
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /tables/:id] Erreur lors de la mise \xC3\u0192\xC2\xA0 jour:`, error);
@@ -32871,7 +32935,7 @@ router55.delete("/tables/:id", async (req2, res) => {
   const { id } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
-    const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma29.treeBranchLeafNodeTable.findUnique({
       where: { id },
       include: {
         TreeBranchLeafNode: {
@@ -32886,15 +32950,15 @@ router55.delete("/tables/:id", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9" });
     }
-    await prisma46.treeBranchLeafNodeTable.delete({ where: { id } });
+    await prisma29.treeBranchLeafNodeTable.delete({ where: { id } });
     try {
-      const selectConfigsUsingTable = await prisma46.treeBranchLeafSelectConfig.findMany({
+      const selectConfigsUsingTable = await prisma29.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: id },
         select: { nodeId: true }
       });
       if (selectConfigsUsingTable.length > 0) {
         for (const config of selectConfigsUsingTable) {
-          const selectNode = await prisma46.treeBranchLeafNode.findUnique({
+          const selectNode = await prisma29.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
             select: {
               label: true,
@@ -32917,7 +32981,7 @@ router55.delete("/tables/:id", async (req2, res) => {
               ...oldMetadata,
               capabilities: newCapabilities
             };
-            await prisma46.treeBranchLeafNode.update({
+            await prisma29.treeBranchLeafNode.update({
               where: { id: config.nodeId },
               data: {
                 hasTable: false,
@@ -32934,7 +32998,7 @@ router55.delete("/tables/:id", async (req2, res) => {
                 updatedAt: /* @__PURE__ */ new Date()
               }
             });
-            await prisma46.treeBranchLeafSelectConfig.deleteMany({
+            await prisma29.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
           }
@@ -32944,7 +33008,7 @@ router55.delete("/tables/:id", async (req2, res) => {
       console.error(`[NEW DELETE /tables/:id] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur d\xC3\u0192\xC2\xA9sactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
-      const node = await prisma46.treeBranchLeafNode.findUnique({
+      const node = await prisma29.treeBranchLeafNode.findUnique({
         where: { id: table.nodeId },
         select: {
           linkedTableIds: true,
@@ -32963,10 +33027,10 @@ router55.delete("/tables/:id", async (req2, res) => {
           cleanedInstances = instances;
         }
       }
-      const remainingTables = await prisma46.treeBranchLeafNodeTable.count({
+      const remainingTables = await prisma29.treeBranchLeafNodeTable.count({
         where: { nodeId: table.nodeId }
       });
-      await prisma46.treeBranchLeafNode.update({
+      await prisma29.treeBranchLeafNode.update({
         where: { id: table.nodeId },
         data: {
           hasTable: remainingTables > 0,
@@ -33000,7 +33064,7 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
     if (meta && !columns && !rows) {
-      const table = await prisma46.treeBranchLeafNodeTable.findUnique({
+      const table = await prisma29.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
         include: {
           TreeBranchLeafNode: {
@@ -33015,7 +33079,7 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
         return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9" });
       }
-      const updatedTable2 = await prisma46.treeBranchLeafNodeTable.update({
+      const updatedTable2 = await prisma29.treeBranchLeafNodeTable.update({
         where: { id: tableId },
         data: {
           meta,
@@ -33024,7 +33088,7 @@ router55.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       });
       return res.json(updatedTable2);
     }
-    const updatedTable = await prisma46.$transaction(async (tx) => {
+    const updatedTable = await prisma29.$transaction(async (tx) => {
       const table = await tx.treeBranchLeafNodeTable.findUnique({
         where: { id: tableId },
         include: {
@@ -33097,7 +33161,7 @@ router55.get("/nodes/:nodeId/tables", async (req2, res) => {
   const { nodeId } = req2.params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx2(req2);
   try {
-    const node = await prisma46.treeBranchLeafNode.findUnique({
+    const node = await prisma29.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
@@ -33107,7 +33171,7 @@ router55.get("/nodes/:nodeId/tables", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && node.TreeBranchLeafTree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9 \xC3\u0192\xC2\xA0 ce n\xC3\u2026\xE2\u20AC\u0153ud" });
     }
-    const tables = await prisma46.treeBranchLeafNodeTable.findMany({
+    const tables = await prisma29.treeBranchLeafNodeTable.findMany({
       where: { nodeId },
       include: {
         tableColumns: {
@@ -33160,7 +33224,7 @@ var table_routes_new_default = router55;
 var router56 = (0, import_express57.Router)();
 router56.use("/", table_routes_new_default);
 registerSumDisplayFieldRoutes(router56);
-var prisma47 = new import_client48.PrismaClient();
+var prisma30 = db;
 var normalizeRolesMap = (rolesMap) => {
   if (!rolesMap || typeof rolesMap !== "object") {
     return {};
@@ -33233,7 +33297,7 @@ function getAuthCtx3(req2) {
   return { organizationId, isSuperAdmin: isSuperAdmin2 };
 }
 var resolveNodeVariable = async (nodeId, linkedVariableIds) => {
-  const directVariable = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { nodeId } });
+  const directVariable = await prisma30.treeBranchLeafNodeVariable.findUnique({ where: { nodeId } });
   if (directVariable) {
     return { variable: directVariable, ownerNodeId: nodeId, proxiedFromNodeId: null };
   }
@@ -33241,7 +33305,7 @@ var resolveNodeVariable = async (nodeId, linkedVariableIds) => {
   if (candidateIds.length === 0) {
     return { variable: null, ownerNodeId: null, proxiedFromNodeId: null };
   }
-  const linkedVariable = await prisma47.treeBranchLeafNodeVariable.findFirst({
+  const linkedVariable = await prisma30.treeBranchLeafNodeVariable.findFirst({
     where: { id: { in: candidateIds } }
   });
   if (!linkedVariable) {
@@ -33465,7 +33529,7 @@ function buildResultText(prefixExpr, resultValue, unit) {
   if (prefixExpr) return prefixExpr;
   return right ? `${right}${u}` : "";
 }
-async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma71, submissionId, organizationId, userId) {
+async function buildDetailAndResultForOperation(type, record, display, valueStr, unit, labelMap, valuesMap, prisma51, submissionId, organizationId, userId) {
   return {
     detail: {
       type: "legacy-disabled",
@@ -33513,7 +33577,7 @@ router56.get("/trees", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const whereFilter = isSuperAdmin2 || !organizationId ? {} : { organizationId };
-    const trees = await prisma47.treeBranchLeafTree.findMany({
+    const trees = await prisma30.treeBranchLeafTree.findMany({
       where: whereFilter,
       include: {
         _count: {
@@ -33537,7 +33601,7 @@ router56.get("/trees/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: isSuperAdmin2 || !organizationId ? { id } : { id, organizationId },
       include: {
         _count: {
@@ -33580,7 +33644,7 @@ router56.post("/trees", async (req2, res) => {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
     const id = (0, import_crypto10.randomUUID)();
-    const tree = await prisma47.treeBranchLeafTree.create({
+    const tree = await prisma30.treeBranchLeafTree.create({
       data: {
         id,
         organizationId: targetOrgId,
@@ -33611,7 +33675,7 @@ router56.put("/trees/:id", async (req2, res) => {
     delete updateData.id;
     delete updateData.organizationId;
     delete updateData.createdAt;
-    const tree = await prisma47.treeBranchLeafTree.updateMany({
+    const tree = await prisma30.treeBranchLeafTree.updateMany({
       where: {
         id,
         organizationId
@@ -33624,7 +33688,7 @@ router56.put("/trees/:id", async (req2, res) => {
     if (tree.count === 0) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const updatedTree = await prisma47.treeBranchLeafTree.findFirst({
+    const updatedTree = await prisma30.treeBranchLeafTree.findFirst({
       where: { id, organizationId }
     });
     res.json(updatedTree);
@@ -33637,10 +33701,10 @@ router56.delete("/trees/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId } = req2.user;
-    await prisma47.treeBranchLeafNode.deleteMany({
+    await prisma30.treeBranchLeafNode.deleteMany({
       where: { treeId: id }
     });
-    const result = await prisma47.treeBranchLeafTree.deleteMany({
+    const result = await prisma30.treeBranchLeafTree.deleteMany({
       where: {
         id,
         organizationId
@@ -33660,13 +33724,13 @@ router56.get("/trees/:treeId/nodes", async (req2, res) => {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const nodes = await prisma47.treeBranchLeafNode.findMany({
+    const nodes = await prisma30.treeBranchLeafNode.findMany({
       where: { treeId },
       include: {
         _count: {
@@ -33707,13 +33771,13 @@ router56.get("/trees/:treeId/repeater-fields", async (req2, res) => {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const allNodesRaw = await prisma47.treeBranchLeafNode.findMany({
+    const allNodesRaw = await prisma30.treeBranchLeafNode.findMany({
       where: { treeId }
     });
     const allNodes = allNodesRaw.map((node) => buildResponseFromColumns2(node));
@@ -33761,13 +33825,13 @@ router56.get("/trees/:treeId/shared-references", async (req2, res) => {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const sharedReferencesRaw = await prisma47.treeBranchLeafNode.findMany({
+    const sharedReferencesRaw = await prisma30.treeBranchLeafNode.findMany({
       where: {
         treeId,
         isSharedReference: true
@@ -33799,7 +33863,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     if (!Array.isArray(templateNodeIds) || templateNodeIds.length === 0) {
       return res.status(400).json({ error: "templateNodeIds doit \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre un tableau non vide" });
     }
-    const parentNode = await prisma47.treeBranchLeafNode.findUnique({
+    const parentNode = await prisma30.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: true }
     });
@@ -33809,12 +33873,12 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && parentNode.TreeBranchLeafTree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cet arbre" });
     }
-    const existingChildrenByParent = await prisma47.treeBranchLeafNode.findMany({
+    const existingChildrenByParent = await prisma30.treeBranchLeafNode.findMany({
       where: { parentId: nodeId },
       select: { id: true, metadata: true, parentId: true }
     });
     const newTemplateIds = templateNodeIds;
-    const requestedNodes = await prisma47.treeBranchLeafNode.findMany({
+    const requestedNodes = await prisma30.treeBranchLeafNode.findMany({
       where: {
         id: { in: newTemplateIds },
         treeId: parentNode.treeId
@@ -33834,7 +33898,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       return found ? resolveBaseTemplateId(found) : id;
     });
     const uniqueBaseTemplateIds = Array.from(new Set(baseTemplateIdsInOrder));
-    const baseTemplateNodes = await prisma47.treeBranchLeafNode.findMany({
+    const baseTemplateNodes = await prisma30.treeBranchLeafNode.findMany({
       where: {
         id: { in: uniqueBaseTemplateIds },
         treeId: parentNode.treeId
@@ -33859,7 +33923,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       const parsed = Number(match[1]);
       return Number.isFinite(parsed) ? parsed : null;
     };
-    const copyRootCandidates = await prisma47.treeBranchLeafNode.findMany({
+    const copyRootCandidates = await prisma30.treeBranchLeafNode.findMany({
       where: {
         treeId: parentNode.treeId,
         OR: uniqueBaseTemplateIds.map((t) => ({ id: { startsWith: `${t}-` } }))
@@ -33884,7 +33948,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       const baseTemplateId = template.id;
       const copyNumber = nextSuffix;
       const labelSuffix = `-${copyNumber}`;
-      const result = await deepCopyNodeInternal(prisma47, req2, template.id, {
+      const result = await deepCopyNodeInternal(prisma30, req2, template.id, {
         targetParentId: nodeId,
         suffixNum: copyNumber,
         preserveSharedReferences: true,
@@ -33892,7 +33956,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       });
       const newRootId = result.root.newId;
       const normalizedCopyLabel = `${template.label || baseTemplateId}-${copyNumber}`;
-      await prisma47.treeBranchLeafNode.update({
+      await prisma30.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
           label: normalizedCopyLabel,
@@ -33906,7 +33970,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
           }
         }
       });
-      const created = await prisma47.treeBranchLeafNode.findUnique({
+      const created = await prisma30.treeBranchLeafNode.findUnique({
         where: { id: newRootId },
         select: { id: true, label: true, type: true, parentId: true }
       });
@@ -33931,7 +33995,7 @@ router56.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
             // ? Utiliser le tableIdMap peuplÃƒÂ¯Ã‚Â¿Ã‚Â½
           };
           await copySelectorTablesAfterNodeCopy(
-            prisma47,
+            prisma30,
             newRootId,
             template.id,
             selectorCopyOptions,
@@ -33956,7 +34020,7 @@ router56.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { targetParentId, labelSuffix } = req2.body || {};
-    const result = await deepCopyNodeInternal(prisma47, req2, nodeId, { targetParentId });
+    const result = await deepCopyNodeInternal(prisma30, req2, nodeId, { targetParentId });
     res.json(result);
   } catch (error) {
     console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/deep-copy] Erreur:", error);
@@ -33968,7 +34032,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
     const { treeId } = req2.params;
     const { organizationId } = req2.user;
     const nodeData = req2.body;
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: { id: treeId, organizationId }
     });
     if (!tree) {
@@ -34013,7 +34077,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
       });
     }
     if (nodeData.parentId) {
-      const parentNode = await prisma47.treeBranchLeafNode.findFirst({
+      const parentNode = await prisma30.treeBranchLeafNode.findFirst({
         where: { id: nodeData.parentId, treeId }
       });
       if (!parentNode) {
@@ -34063,7 +34127,7 @@ router56.post("/trees/:treeId/nodes", async (req2, res) => {
     }
     const { randomUUID: randomUUID9 } = await import("crypto");
     const nodeId = randomUUID9();
-    const node = await prisma47.treeBranchLeafNode.create({
+    const node = await prisma30.treeBranchLeafNode.create({
       data: {
         id: nodeId,
         treeId,
@@ -34591,7 +34655,7 @@ var updateOrMoveNode = async (req2, res) => {
     for (const k of ["markers", "hasMarkers"]) {
       if (k in updateObj) delete updateObj[k];
     }
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: { id: treeId, organizationId }
     });
     if (!tree) {
@@ -34600,11 +34664,11 @@ var updateOrMoveNode = async (req2, res) => {
     delete updateObj.id;
     delete updateObj.treeId;
     delete updateObj.createdAt;
-    const existingNode = await prisma47.treeBranchLeafNode.findFirst({
+    const existingNode = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId }
     });
     if (!existingNode) {
-      const nodeAnyTree = await prisma47.treeBranchLeafNode.findFirst({
+      const nodeAnyTree = await prisma30.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
       });
       console.error("? [updateOrMoveNode] N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD - DEBUG:", {
@@ -34613,7 +34677,7 @@ var updateOrMoveNode = async (req2, res) => {
         organizationId,
         nodeExistsElsewhere: !!nodeAnyTree,
         nodeActualTreeId: nodeAnyTree?.treeId,
-        allNodesInTree: await prisma47.treeBranchLeafNode.count({ where: { treeId } })
+        allNodesInTree: await prisma30.treeBranchLeafNode.count({ where: { treeId } })
       });
       return res.status(404).json({
         error: "N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD",
@@ -34630,7 +34694,7 @@ var updateOrMoveNode = async (req2, res) => {
     let newParentId = updateData.parentId;
     let desiredIndex = void 0;
     if (targetId) {
-      const targetNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: targetId, treeId } });
+      const targetNode = await prisma30.treeBranchLeafNode.findFirst({ where: { id: targetId, treeId } });
       if (!targetNode) {
         return res.status(400).json({ error: "Cible de d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9placement non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
       }
@@ -34644,7 +34708,7 @@ var updateOrMoveNode = async (req2, res) => {
     }
     if (newParentId !== void 0) {
       if (newParentId) {
-        const newParentNode = await prisma47.treeBranchLeafNode.findFirst({
+        const newParentNode = await prisma30.treeBranchLeafNode.findFirst({
           where: { id: newParentId, treeId }
         });
         if (!newParentNode) {
@@ -34682,7 +34746,7 @@ var updateOrMoveNode = async (req2, res) => {
     const isMoveOperation = targetId && position || newParentId !== void 0 || typeof updateObj.order === "number";
     if (isMoveOperation) {
       const destinationParentId = newParentId !== void 0 ? newParentId : existingNode.parentId;
-      const siblings = await prisma47.treeBranchLeafNode.findMany({
+      const siblings = await prisma30.treeBranchLeafNode.findMany({
         where: { treeId, parentId: destinationParentId || null, NOT: { id: nodeId } },
         orderBy: [{ order: "asc" }, { createdAt: "asc" }]
       });
@@ -34705,7 +34769,7 @@ var updateOrMoveNode = async (req2, res) => {
       }
       const finalOrder = [...siblings.map((s) => s.id)];
       finalOrder.splice(insertIndex, 0, nodeId);
-      await prisma47.$transaction(async (tx) => {
+      await prisma30.$transaction(async (tx) => {
         if (destinationParentId !== existingNode.parentId) {
           await tx.treeBranchLeafNode.update({
             where: { id: nodeId },
@@ -34720,7 +34784,7 @@ var updateOrMoveNode = async (req2, res) => {
           });
         }
       });
-      const updatedNode2 = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+      const updatedNode2 = await prisma30.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
       const responseData2 = updatedNode2 ? buildResponseFromColumns2(updatedNode2) : updatedNode2;
       return res.json(responseData2);
     }
@@ -34749,11 +34813,11 @@ var updateOrMoveNode = async (req2, res) => {
         console.warn("[updateOrMoveNode] Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
       }
     }
-    await prisma47.treeBranchLeafNode.update({
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { ...updateObj, updatedAt: /* @__PURE__ */ new Date() }
     });
-    const updatedNode = await prisma47.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
+    const updatedNode = await prisma30.treeBranchLeafNode.findFirst({ where: { id: nodeId, treeId } });
     const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
     return res.json(responseData);
   } catch (error) {
@@ -34775,7 +34839,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: { id: treeId }
     });
     if (!tree) {
@@ -34784,7 +34848,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tree.organizationId && tree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const allNodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
+    const allNodes = await prisma30.treeBranchLeafNode.findMany({ where: { treeId } });
     const childrenByParent = /* @__PURE__ */ new Map();
     for (const n of allNodes) {
       if (!n.parentId) continue;
@@ -34818,7 +34882,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     }
     toDelete.sort((a, b) => depth.get(b) - depth.get(a));
     const deletedSubtreeIds = [];
-    await prisma47.$transaction(async (tx) => {
+    await prisma30.$transaction(async (tx) => {
       for (const id of toDelete) {
         try {
           await tx.treeBranchLeafNode.delete({ where: { id } });
@@ -34833,7 +34897,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     let deletedExtra = 0;
     const deletedExtraIds = [];
     if (referencedIds.size > 0) {
-      const remaining = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
+      const remaining = await prisma30.treeBranchLeafNode.findMany({ where: { treeId } });
       const stillRef = /* @__PURE__ */ new Set();
       for (const n of remaining) {
         if (n.sharedReferenceId && referencedIds.has(n.sharedReferenceId)) stillRef.add(n.sharedReferenceId);
@@ -34868,7 +34932,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
           }
         }
         const ordered = Array.from(delSet).sort((a, b) => ddepth.get(b) - ddepth.get(a));
-        await prisma47.$transaction(async (tx) => {
+        await prisma30.$transaction(async (tx) => {
           for (const id of ordered) {
             await tx.treeBranchLeafNode.delete({ where: { id } });
             deletedOrphans++;
@@ -34878,7 +34942,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       }
     }
     try {
-      const remainingNodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
+      const remainingNodes = await prisma30.treeBranchLeafNode.findMany({ where: { treeId } });
       const nodesToScan = remainingNodes;
       const removedSet = new Set(toDelete);
       const removedRepeaterCopyPairs = /* @__PURE__ */ new Set();
@@ -35082,7 +35146,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
           }
         }
         const ordered = Array.from(delSet).sort((a, b) => ddepth.get(b) - ddepth.get(a));
-        await prisma47.$transaction(async (tx) => {
+        await prisma30.$transaction(async (tx) => {
           for (const id of ordered) {
             try {
               await tx.treeBranchLeafNode.delete({ where: { id } });
@@ -35100,7 +35164,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     const allDeletedSet = /* @__PURE__ */ new Set([...deletedSubtreeIds, ...deletedOrphansIds, ...deletedExtraIds]);
     const allDeletedIds = Array.from(allDeletedSet);
     try {
-      const variablesToCheck = await prisma47.treeBranchLeafNodeVariable.findMany({
+      const variablesToCheck = await prisma30.treeBranchLeafNodeVariable.findMany({
         where: {
           nodeId: { in: allDeletedIds }
           // Variables attachées aux nodes supprimés
@@ -35116,7 +35180,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         }
       }
       if (varIdsToDelete.length > 0) {
-        const deletedVarCount = await prisma47.treeBranchLeafNodeVariable.deleteMany({
+        const deletedVarCount = await prisma30.treeBranchLeafNodeVariable.deleteMany({
           where: { id: { in: varIdsToDelete } }
         });
       } else {
@@ -35124,14 +35188,14 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
     } catch (varCleanError) {
     }
     try {
-      const remainingNodes = await prisma47.treeBranchLeafNode.findMany({
+      const remainingNodes = await prisma30.treeBranchLeafNode.findMany({
         where: { treeId },
         select: { id: true, metadata: true }
       });
       for (const node of remainingNodes) {
         const meta = node.metadata;
         if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
-          updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma47).catch((err) => {
+          updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma30).catch((err) => {
             console.warn(`[DELETE] ?? Erreur mise \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD jour champ Total ${node.id}:`, err);
           });
         }
@@ -35151,7 +35215,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       deletedExtraIds
     });
     try {
-      const remainingAfterFirstPass = await prisma47.treeBranchLeafNode.findMany({ where: { treeId } });
+      const remainingAfterFirstPass = await prisma30.treeBranchLeafNode.findMany({ where: { treeId } });
       const deeperDeletedIds = [];
       const removedIdStrings = allDeletedIds.map((i) => String(i));
       const containsRemovedId = (val) => {
@@ -35189,7 +35253,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       }).map((x) => x.id);
       if (extraToDelete.length > 0) {
         const dd = [];
-        await prisma47.$transaction(async (tx) => {
+        await prisma30.$transaction(async (tx) => {
           for (const id of extraToDelete) {
             try {
               await tx.treeBranchLeafNode.delete({ where: { id } });
@@ -35214,7 +35278,7 @@ router56.get("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: {
         id: true,
@@ -35251,7 +35315,7 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const root = await prisma47.treeBranchLeafNode.findFirst({
+    const root = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -35259,7 +35323,7 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
+    const all = await prisma30.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
     const childrenByParent = /* @__PURE__ */ new Map();
     for (const n of all) {
@@ -35284,7 +35348,7 @@ router56.get("/nodes/:nodeId/full", async (req2, res) => {
       if (n.sharedReferenceId) sharedIds.add(n.sharedReferenceId);
       if (Array.isArray(n.sharedReferenceIds)) for (const rid of n.sharedReferenceIds) sharedIds.add(rid);
     }
-    const sharedNodes = sharedIds.size > 0 ? await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(sharedIds) } } }) : [];
+    const sharedNodes = sharedIds.size > 0 ? await prisma30.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(sharedIds) } } }) : [];
     const sharedById = new Map(sharedNodes.map((n) => [n.id, n]));
     const nodes = Array.from(collected).map((id) => {
       const node = byId.get(id);
@@ -35322,7 +35386,7 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -35336,9 +35400,9 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
     if (ids.size === 0) {
       return res.json({ nodeId, count: 0, shared: { ids: { single: node.sharedReferenceId ?? null, multiple: [] }, resolved: [] } });
     }
-    const refs = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(ids) } } });
+    const refs = await prisma30.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(ids) } } });
     const refIds = refs.map((r) => r.id);
-    const conditionCounts = await prisma47.treeBranchLeafNodeCondition.groupBy({
+    const conditionCounts = await prisma30.treeBranchLeafNodeCondition.groupBy({
       by: ["nodeId"],
       _count: { nodeId: true },
       where: { nodeId: { in: refIds } }
@@ -35367,7 +35431,7 @@ router56.get("/nodes/:nodeId/shared-references", async (req2, res) => {
 });
 async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-  const copyRoot = await prisma47.treeBranchLeafNode.findFirst({
+  const copyRoot = await prisma30.treeBranchLeafNode.findFirst({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
@@ -35375,7 +35439,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
   if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
     throw new Error("Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9");
   }
-  const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
+  const all = await prisma30.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const byId = new Map(all.map((n) => [n.id, n]));
   const childrenByParent = /* @__PURE__ */ new Map();
   for (const n of all) {
@@ -35402,7 +35466,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
   }
   if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
   const originalIds = Array.from(originalToCopy.keys());
-  const originals = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
+  const originals = await prisma30.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
   const allRefIds = /* @__PURE__ */ new Set();
   for (const orig of originals) {
     if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
@@ -35421,11 +35485,11 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
       }
     }
     chosenSuffix = maxSuffix + 1 || 1;
-    await prisma47.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
+    await prisma30.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
   }
   const refCopyIdByOriginal = /* @__PURE__ */ new Map();
   const desiredIds = Array.from(allRefIds).map((id) => `${id}-${chosenSuffix}`);
-  const existingRefCopies = desiredIds.length > 0 ? await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
+  const existingRefCopies = desiredIds.length > 0 ? await prisma30.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
   const existingSet = new Set(existingRefCopies.map((n) => n.id));
   const ensureRefCopy = async (origRefId) => {
     const desiredRootId = `${origRefId}-${chosenSuffix}`;
@@ -35447,7 +35511,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     const origSubtree = subtreeIds.map((id) => byId.get(id)).filter(Boolean);
     const desired = new Set(subtreeIds.map((id) => `${id}-${chosenSuffix}`));
     if (desired.size > 0) {
-      const already = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
+      const already = await prisma30.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
       for (const n of already) desired.delete(n.id);
     }
     const idMap = /* @__PURE__ */ new Map();
@@ -35490,7 +35554,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
         metadata: { ...orig.metadata || {}, copiedFromNodeId: orig.id },
         updatedAt: /* @__PURE__ */ new Date()
       };
-      await prisma47.treeBranchLeafNode.create({ data: toCreate });
+      await prisma30.treeBranchLeafNode.create({ data: toCreate });
       if (Array.isArray(orig.linkedVariableIds) && orig.linkedVariableIds.length > 0) {
         const variableCopyCache = /* @__PURE__ */ new Map();
         const formulaIdMap = /* @__PURE__ */ new Map();
@@ -35504,7 +35568,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
               chosenSuffix,
               newId,
               // Le nouveau nÃƒÂ¯Ã‚Â¿Ã‚Â½ud qui possÃƒÂ¯Ã‚Â¿Ã‚Â½de cette variable
-              prisma47,
+              prisma30,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -35539,7 +35603,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     const mappedSingle = origSingle ? refCopyIdByOriginal.get(origSingle) || `${origSingle}-${chosenSuffix}` : null;
     const finalArray = mappedMultiple.length > 0 ? mappedMultiple : mappedSingle ? [mappedSingle] : [];
     const finalSingle = finalArray.length > 0 ? finalArray[0] : null;
-    updates.push(prisma47.treeBranchLeafNode.update({
+    updates.push(prisma30.treeBranchLeafNode.update({
       where: { id: copyId },
       data: {
         sharedReferenceId: finalSingle,
@@ -35553,7 +35617,7 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
     }));
     applied++;
   }
-  await prisma47.$transaction(updates);
+  await prisma30.$transaction(updates);
   return { success: true, applied, suffix: chosenSuffix };
 }
 router56.post("/nodes/:nodeId/apply-shared-references-from-original", async (req2, res) => {
@@ -35571,7 +35635,7 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     const { nodeId } = req2.params;
     const { deleteOrphans } = req2.body || {};
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const root = await prisma47.treeBranchLeafNode.findFirst({
+    const root = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -35579,7 +35643,7 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && root.TreeBranchLeafTree?.organizationId && root.TreeBranchLeafTree.organizationId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const all = await prisma47.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
+    const all = await prisma30.treeBranchLeafNode.findMany({ where: { treeId: root.treeId } });
     const byId = new Map(all.map((n) => [n.id, n]));
     const childrenByParent = /* @__PURE__ */ new Map();
     for (const n of all) {
@@ -35605,9 +35669,9 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     }
     const updates = [];
     for (const id of collected) {
-      updates.push(prisma47.treeBranchLeafNode.update({ where: { id }, data: { sharedReferenceId: null, sharedReferenceIds: [] } }));
+      updates.push(prisma30.treeBranchLeafNode.update({ where: { id }, data: { sharedReferenceId: null, sharedReferenceIds: [] } }));
     }
-    await prisma47.$transaction(updates);
+    await prisma30.$transaction(updates);
     let deletedCount = 0;
     let orphanCandidates = [];
     if (deleteOrphans && referencedIds.size > 0) {
@@ -35640,7 +35704,7 @@ router56.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
         }
         const ordered = Array.from(delSet);
         ordered.sort((a, b) => depth.get(b) - depth.get(a));
-        await prisma47.$transaction(async (tx) => {
+        await prisma30.$transaction(async (tx) => {
           for (const id of ordered) {
             await tx.treeBranchLeafNode.delete({ where: { id } });
             deletedCount++;
@@ -35658,13 +35722,13 @@ router56.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD" });
     }
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
       select: { id: true, data_activeId: true, linkedVariableIds: true }
     });
@@ -35707,13 +35771,13 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       fixedValue,
       selectedNodeId
     } = req2.body || {};
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         treeId
@@ -35733,7 +35797,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const proxiedTargetNodeId = nodeId === targetNodeId ? null : nodeId;
     if (proxiedTargetNodeId) {
     }
-    const updated = await prisma47.$transaction(async (tx) => {
+    const updated = await prisma30.$transaction(async (tx) => {
       const variable = await tx.treeBranchLeafNodeVariable.upsert({
         where: { nodeId: targetNodeId },
         update: {
@@ -35977,7 +36041,7 @@ router56.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     const ownerIdForResponse = targetNodeId;
     const proxiedNodeIdForResponse = proxiedTargetNodeId;
     try {
-      const nodeAfter = await prisma47.treeBranchLeafNode.findUnique({
+      const nodeAfter = await prisma30.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { data_activeId: true }
       });
@@ -35999,13 +36063,13 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
   try {
     const { treeId, nodeId } = req2.params;
     const { organizationId } = req2.user;
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: organizationId ? { id: treeId, organizationId } : { id: treeId }
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId, treeId },
       select: { id: true, linkedVariableIds: true }
     });
@@ -36016,18 +36080,18 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     if (!variable || !ownerNodeId) {
       return res.status(404).json({ error: "Variable non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    await prisma47.treeBranchLeafNodeVariable.delete({
+    await prisma30.treeBranchLeafNodeVariable.delete({
       where: { nodeId: ownerNodeId }
     });
     const nodesToDisable = Array.from(new Set([ownerNodeId, proxiedFromNodeId].filter(Boolean)));
     if (nodesToDisable.length > 0) {
-      await prisma47.treeBranchLeafNode.updateMany({
+      await prisma30.treeBranchLeafNode.updateMany({
         where: { id: { in: nodesToDisable } },
         data: { hasData: false, updatedAt: /* @__PURE__ */ new Date() }
       });
     }
     try {
-      const dependentNodes = await prisma47.treeBranchLeafNode.findMany({
+      const dependentNodes = await prisma30.treeBranchLeafNode.findMany({
         where: {
           treeId,
           linkedVariableIds: { has: variable.id }
@@ -36037,7 +36101,7 @@ router56.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
       });
       for (const nodeToClean of dependentNodes) {
         const updatedLinkedIds = nodeToClean.linkedVariableIds.filter((id) => id !== variable.id);
-        await prisma47.treeBranchLeafNode.update({
+        await prisma30.treeBranchLeafNode.update({
           where: { id: nodeToClean.id },
           data: { linkedVariableIds: updatedLinkedIds }
         });
@@ -36060,7 +36124,7 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
     if (!isObject) {
       return res.status(400).json({ error: "Payload de conditions invalide" });
     }
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
@@ -36072,7 +36136,7 @@ router56.put("/nodes/:nodeId/conditions", async (req2, res) => {
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const updated = await prisma47.treeBranchLeafNode.update({
+    const updated = await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         conditionConfig: payload,
@@ -36091,7 +36155,7 @@ router56.get("/nodes/:nodeId/formula", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = req2.user;
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: {
         formulaConfig: true,
@@ -36121,7 +36185,7 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
     if (!isObject) {
       return res.status(400).json({ error: "Payload de formule invalide" });
     }
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { id: true, TreeBranchLeafTree: { select: { organizationId: true } } }
     });
@@ -36133,7 +36197,7 @@ router56.put("/nodes/:nodeId/formula", async (req2, res) => {
     if (!isSuperAdmin2 && hasOrgCtx && nodeOrg && nodeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const updated = await prisma47.treeBranchLeafNode.update({
+    const updated = await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         formulaConfig: payload,
@@ -36152,9 +36216,9 @@ router56.get("/nodes/:nodeId/formulas", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const formulas = await prisma47.treeBranchLeafNodeFormula.findMany({
+    const formulas = await prisma30.treeBranchLeafNodeFormula.findMany({
       where: { nodeId },
       orderBy: { createdAt: "asc" }
     });
@@ -36169,7 +36233,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, tokens: tokens2, description, targetProperty, constraintMessage } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     if (!name || !Array.isArray(tokens2)) {
       return res.status(400).json({ error: "Name et tokens requis" });
@@ -36178,7 +36242,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
     let counter = 1;
     while (true) {
       try {
-        const existingFormula = await prisma47.treeBranchLeafNodeFormula.findFirst({
+        const existingFormula = await prisma30.treeBranchLeafNodeFormula.findFirst({
           where: {
             nodeId,
             name: uniqueName
@@ -36194,7 +36258,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
         break;
       }
     }
-    const formula = await prisma47.treeBranchLeafNodeFormula.create({
+    const formula = await prisma30.treeBranchLeafNodeFormula.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
         nodeId,
@@ -36209,7 +36273,7 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    await prisma47.treeBranchLeafNode.update({
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasFormula: true,
@@ -36218,10 +36282,10 @@ router56.post("/nodes/:nodeId/formulas", async (req2, res) => {
       }
     });
     try {
-      await addToNodeLinkedField7(prisma47, nodeId, "linkedFormulaIds", [formula.id]);
+      await addToNodeLinkedField7(prisma30, nodeId, "linkedFormulaIds", [formula.id]);
       const refIds = Array.from(extractNodeIdsFromTokens2(tokens2));
       for (const refId of refIds) {
-        await addToNodeLinkedField7(prisma47, normalizeRefId2(refId), "linkedFormulaIds", [formula.id]);
+        await addToNodeLinkedField7(prisma30, normalizeRefId2(refId), "linkedFormulaIds", [formula.id]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds after create:", e.message);
@@ -36237,15 +36301,15 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
     const { nodeId, formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, tokens: tokens2, description, targetProperty, constraintMessage } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingFormula = await prisma47.treeBranchLeafNodeFormula.findFirst({
+    const existingFormula = await prisma30.treeBranchLeafNodeFormula.findFirst({
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
       return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    const updated = await prisma47.treeBranchLeafNodeFormula.update({
+    const updated = await prisma30.treeBranchLeafNodeFormula.update({
       where: { id: formulaId },
       data: {
         name: name ? String(name) : void 0,
@@ -36266,12 +36330,12 @@ router56.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       const toAdd = Array.from(newSet).filter((id) => !oldSet.has(id));
       const toRemove = Array.from(oldSet).filter((id) => !newSet.has(id));
       if (toAdd.length) {
-        for (const refId of toAdd) await addToNodeLinkedField7(prisma47, refId, "linkedFormulaIds", [formulaId]);
+        for (const refId of toAdd) await addToNodeLinkedField7(prisma30, refId, "linkedFormulaIds", [formulaId]);
       }
       if (toRemove.length) {
-        for (const refId of toRemove) await removeFromNodeLinkedField(prisma47, refId, "linkedFormulaIds", [formulaId]);
+        for (const refId of toRemove) await removeFromNodeLinkedField(prisma30, refId, "linkedFormulaIds", [formulaId]);
       }
-      await addToNodeLinkedField7(prisma47, nodeId, "linkedFormulaIds", [formulaId]);
+      await addToNodeLinkedField7(prisma30, nodeId, "linkedFormulaIds", [formulaId]);
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating inverse linkedFormulaIds after update:", e.message);
     }
@@ -36285,26 +36349,26 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
   try {
     const { nodeId, formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingFormula = await prisma47.treeBranchLeafNodeFormula.findFirst({
+    const existingFormula = await prisma30.treeBranchLeafNodeFormula.findFirst({
       where: { id: formulaId, nodeId }
     });
     if (!existingFormula) {
       return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    await prisma47.treeBranchLeafNodeFormula.delete({
+    await prisma30.treeBranchLeafNodeFormula.delete({
       where: { id: formulaId }
     });
     try {
-      const variableWithFormula = await prisma47.treeBranchLeafNodeVariable.findFirst({
+      const variableWithFormula = await prisma30.treeBranchLeafNodeVariable.findFirst({
         where: {
           nodeId,
           sourceRef: `node-formula:${formulaId}`
         }
       });
       if (variableWithFormula) {
-        await prisma47.treeBranchLeafNodeVariable.delete({
+        await prisma30.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
       }
@@ -36312,16 +36376,16 @@ router56.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
     }
     try {
-      await removeFromNodeLinkedField(prisma47, nodeId, "linkedFormulaIds", [formulaId]);
+      await removeFromNodeLinkedField(prisma30, nodeId, "linkedFormulaIds", [formulaId]);
       const refIds = Array.from(extractNodeIdsFromTokens2(existingFormula.tokens));
       for (const refId of refIds) {
-        await removeFromNodeLinkedField(prisma47, normalizeRefId2(refId), "linkedFormulaIds", [formulaId]);
+        await removeFromNodeLinkedField(prisma30, normalizeRefId2(refId), "linkedFormulaIds", [formulaId]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning cleaning linkedFormulaIds after delete:", e.message);
     }
-    const remainingFormulas = await prisma47.treeBranchLeafNodeFormula.count({ where: { nodeId } });
-    await prisma47.treeBranchLeafNode.update({
+    const remainingFormulas = await prisma30.treeBranchLeafNodeFormula.count({ where: { nodeId } });
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { hasFormula: remainingFormulas > 0 }
     });
@@ -36341,7 +36405,7 @@ router56.get("/reusables/formulas", async (req2, res) => {
         ...hasOrg ? [{ organizationId }] : []
       ]
     };
-    const allFormulas = await prisma47.treeBranchLeafNodeFormula.findMany({
+    const allFormulas = await prisma30.treeBranchLeafNodeFormula.findMany({
       where: whereFilter,
       include: {
         TreeBranchLeafNode: {
@@ -36369,7 +36433,7 @@ router56.get("/reusables/formulas/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const item = await prisma47.treeBranchLeafNodeFormula.findUnique({
+    const item = await prisma30.treeBranchLeafNodeFormula.findUnique({
       where: { id },
       include: {
         TreeBranchLeafNode: {
@@ -36407,7 +36471,7 @@ router56.get("/reusables/conditions", async (req2, res) => {
         ...hasOrg ? [{ organizationId }] : []
       ]
     };
-    const allConditions = await prisma47.treeBranchLeafNodeCondition.findMany({
+    const allConditions = await prisma30.treeBranchLeafNodeCondition.findMany({
       where: whereFilter,
       include: {
         TreeBranchLeafNode: {
@@ -36436,7 +36500,7 @@ router56.get("/reusables/conditions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const item = await prisma47.treeBranchLeafNodeCondition.findUnique({
+    const item = await prisma30.treeBranchLeafNodeCondition.findUnique({
       where: { id },
       include: {
         TreeBranchLeafNode: {
@@ -36474,7 +36538,7 @@ router56.get("/reusables/tables", async (req2, res) => {
         ...hasOrg ? [{ organizationId }] : []
       ]
     };
-    const allTables = await prisma47.treeBranchLeafNodeTable.findMany({
+    const allTables = await prisma30.treeBranchLeafNodeTable.findMany({
       where: whereFilter,
       include: {
         TreeBranchLeafNode: {
@@ -36507,13 +36571,13 @@ router56.get("/nodes/:nodeId/conditions", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const whereClause = { nodeId };
     if (!isSuperAdmin2 && organizationId) {
       whereClause.organizationId = organizationId;
     }
-    const conditions = await prisma47.treeBranchLeafNodeCondition.findMany({
+    const conditions = await prisma30.treeBranchLeafNodeCondition.findMany({
       where: whereClause,
       orderBy: { createdAt: "asc" }
     });
@@ -36529,7 +36593,7 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
     const { fieldValues = {}, values = {}, submissionId, testMode = true } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const allValues = { ...fieldValues, ...values };
-    const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
+    const condition = await prisma30.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
         TreeBranchLeafNode: {
@@ -36555,7 +36619,7 @@ router56.post("/evaluate/condition/:conditionId", async (req2, res) => {
       const calculationResult = await evaluateVariableOperation2(
         condition.nodeId,
         submissionId || conditionId,
-        prisma47,
+        prisma30,
         valueMapLocal
       );
       const result = {
@@ -36590,7 +36654,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, conditionSet, description } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     if (!name || !conditionSet) {
       return res.status(400).json({ error: "Name et conditionSet requis" });
@@ -36598,7 +36662,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
     let uniqueName = String(name);
     let counter = 1;
     while (true) {
-      const existingCondition = await prisma47.treeBranchLeafNodeCondition.findFirst({
+      const existingCondition = await prisma30.treeBranchLeafNodeCondition.findFirst({
         where: {
           nodeId,
           name: uniqueName,
@@ -36615,7 +36679,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
         break;
       }
     }
-    const condition = await prisma47.treeBranchLeafNodeCondition.create({
+    const condition = await prisma30.treeBranchLeafNodeCondition.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
         nodeId,
@@ -36626,7 +36690,7 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    await prisma47.treeBranchLeafNode.update({
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasCondition: true,
@@ -36635,10 +36699,10 @@ router56.post("/nodes/:nodeId/conditions", async (req2, res) => {
       }
     });
     try {
-      await addToNodeLinkedField7(prisma47, nodeId, "linkedConditionIds", [condition.id]);
+      await addToNodeLinkedField7(prisma30, nodeId, "linkedConditionIds", [condition.id]);
       const refIds = Array.from(extractNodeIdsFromConditionSet2(conditionSet));
       for (const refId of refIds) {
-        await addToNodeLinkedField7(prisma47, normalizeRefId2(refId), "linkedConditionIds", [condition.id]);
+        await addToNodeLinkedField7(prisma30, normalizeRefId2(refId), "linkedConditionIds", [condition.id]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds after create:", e.message);
@@ -36654,15 +36718,15 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
     const { nodeId, conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { name, conditionSet, description } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingCondition = await prisma47.treeBranchLeafNodeCondition.findFirst({
+    const existingCondition = await prisma30.treeBranchLeafNodeCondition.findFirst({
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
       return res.status(404).json({ error: "Condition non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    const updated = await prisma47.treeBranchLeafNodeCondition.update({
+    const updated = await prisma30.treeBranchLeafNodeCondition.update({
       where: { id: conditionId },
       data: {
         name: name ? String(name) : void 0,
@@ -36679,12 +36743,12 @@ router56.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       const toAdd = Array.from(newSet).filter((id) => !oldSet.has(id));
       const toRemove = Array.from(oldSet).filter((id) => !newSet.has(id));
       if (toAdd.length) {
-        for (const refId of toAdd) await addToNodeLinkedField7(prisma47, refId, "linkedConditionIds", [conditionId]);
+        for (const refId of toAdd) await addToNodeLinkedField7(prisma30, refId, "linkedConditionIds", [conditionId]);
       }
       if (toRemove.length) {
-        for (const refId of toRemove) await removeFromNodeLinkedField(prisma47, refId, "linkedConditionIds", [conditionId]);
+        for (const refId of toRemove) await removeFromNodeLinkedField(prisma30, refId, "linkedConditionIds", [conditionId]);
       }
-      await addToNodeLinkedField7(prisma47, nodeId, "linkedConditionIds", [conditionId]);
+      await addToNodeLinkedField7(prisma30, nodeId, "linkedConditionIds", [conditionId]);
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning updating inverse linkedConditionIds after update:", e.message);
     }
@@ -36698,26 +36762,26 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
   try {
     const { nodeId, conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const existingCondition = await prisma47.treeBranchLeafNodeCondition.findFirst({
+    const existingCondition = await prisma30.treeBranchLeafNodeCondition.findFirst({
       where: { id: conditionId, nodeId }
     });
     if (!existingCondition) {
       return res.status(404).json({ error: "Condition non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    await prisma47.treeBranchLeafNodeCondition.delete({
+    await prisma30.treeBranchLeafNodeCondition.delete({
       where: { id: conditionId }
     });
     try {
-      const variableWithCondition = await prisma47.treeBranchLeafNodeVariable.findFirst({
+      const variableWithCondition = await prisma30.treeBranchLeafNodeVariable.findFirst({
         where: {
           nodeId,
           sourceRef: `node-condition:${conditionId}`
         }
       });
       if (variableWithCondition) {
-        await prisma47.treeBranchLeafNodeVariable.delete({
+        await prisma30.treeBranchLeafNodeVariable.delete({
           where: { nodeId }
         });
       }
@@ -36725,16 +36789,16 @@ router56.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
     }
     try {
-      await removeFromNodeLinkedField(prisma47, nodeId, "linkedConditionIds", [conditionId]);
+      await removeFromNodeLinkedField(prisma30, nodeId, "linkedConditionIds", [conditionId]);
       const refIds = Array.from(extractNodeIdsFromConditionSet2(existingCondition.conditionSet));
       for (const refId of refIds) {
-        await removeFromNodeLinkedField(prisma47, normalizeRefId2(refId), "linkedConditionIds", [conditionId]);
+        await removeFromNodeLinkedField(prisma30, normalizeRefId2(refId), "linkedConditionIds", [conditionId]);
       }
     } catch (e) {
       console.warn("[TreeBranchLeaf API] Warning cleaning linkedConditionIds after delete:", e.message);
     }
-    const remainingConditions = await prisma47.treeBranchLeafNodeCondition.count({ where: { nodeId } });
-    await prisma47.treeBranchLeafNode.update({
+    const remainingConditions = await prisma30.treeBranchLeafNodeCondition.count({ where: { nodeId } });
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: { hasCondition: remainingConditions > 0 }
     });
@@ -36751,7 +36815,7 @@ router56.get("/tables/:id", async (req2, res) => {
   const limit = parseInt(req2.query.limit) || 100;
   const offset = (page - 1) * limit;
   try {
-    const table = await prisma47.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma30.treeBranchLeafNodeTable.findUnique({
       where: { id },
       include: {
         node: {
@@ -36773,7 +36837,7 @@ router56.get("/tables/:id", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s non autoris\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette table" });
     }
-    const rows = await prisma47.treeBranchLeafNodeTableRow.findMany({
+    const rows = await prisma30.treeBranchLeafNodeTableRow.findMany({
       where: { tableId: id },
       orderBy: { rowIndex: "asc" },
       take: limit,
@@ -36860,7 +36924,7 @@ var normalizeTableInstance = (table) => {
     throw error;
   }
 };
-var fetchNormalizedTable = async (nodeId, options = {}, client = prisma47) => {
+var fetchNormalizedTable = async (nodeId, options = {}, client = prisma30) => {
   const tablesRaw = await client.treeBranchLeafNodeTable.findMany({
     where: { nodeId },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }]
@@ -36938,7 +37002,7 @@ async function resolveFilterValueRef(valueRef, formValues) {
       }
       return value;
     }
-    const node = await prisma47.treeBranchLeafNode.findUnique({
+    const node = await prisma30.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { id: true, label: true, calculatedValue: true }
     });
@@ -36955,7 +37019,7 @@ async function resolveFilterValueRef(valueRef, formValues) {
       value = objValue;
     }
     if (value && typeof value === "string" && value.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      const optionNode = await prisma47.treeBranchLeafNode.findUnique({
+      const optionNode = await prisma30.treeBranchLeafNode.findUnique({
         where: { id: value },
         select: { id: true, label: true, value: true }
       });
@@ -37047,9 +37111,9 @@ router56.get("/nodes/:nodeId/tables", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
-    const tables = await prisma47.treeBranchLeafNodeTable.findMany({
+    const tables = await prisma30.treeBranchLeafNodeTable.findMany({
       where: { nodeId },
       include: {
         tableColumns: {
@@ -37072,7 +37136,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
   const { tableId } = req2.params;
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const table = await prisma47.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma30.treeBranchLeafNodeTable.findUnique({
       where: { id: tableId },
       include: {
         TreeBranchLeafNode: {
@@ -37087,15 +37151,15 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
     if (!isSuperAdmin2 && organizationId && tableOrgId !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDs non autoris\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD" });
     }
-    await prisma47.treeBranchLeafNodeTable.delete({ where: { id: tableId } });
+    await prisma30.treeBranchLeafNodeTable.delete({ where: { id: tableId } });
     try {
-      const selectConfigsUsingTable = await prisma47.treeBranchLeafSelectConfig.findMany({
+      const selectConfigsUsingTable = await prisma30.treeBranchLeafSelectConfig.findMany({
         where: { tableReference: tableId },
         select: { nodeId: true }
       });
       if (selectConfigsUsingTable.length > 0) {
         for (const config of selectConfigsUsingTable) {
-          const selectNode = await prisma47.treeBranchLeafNode.findUnique({
+          const selectNode = await prisma30.treeBranchLeafNode.findUnique({
             where: { id: config.nodeId },
             select: {
               label: true,
@@ -37118,7 +37182,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
               ...oldMetadata,
               capabilities: newCapabilities
             };
-            await prisma47.treeBranchLeafNode.update({
+            await prisma30.treeBranchLeafNode.update({
               where: { id: config.nodeId },
               data: {
                 hasTable: false,
@@ -37135,7 +37199,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
                 updatedAt: /* @__PURE__ */ new Date()
               }
             });
-            await prisma47.treeBranchLeafSelectConfig.deleteMany({
+            await prisma30.treeBranchLeafSelectConfig.deleteMany({
               where: { nodeId: config.nodeId }
             });
           }
@@ -37145,7 +37209,7 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       console.error(`[DELETE Table] ?? Erreur d\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDsactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
-      const node = await prisma47.treeBranchLeafNode.findUnique({
+      const node = await prisma30.treeBranchLeafNode.findUnique({
         where: { id: table.nodeId },
         select: {
           linkedTableIds: true,
@@ -37164,10 +37228,10 @@ router56.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
           cleanedInstances = instances;
         }
       }
-      const remainingTables = await prisma47.treeBranchLeafNodeTable.count({
+      const remainingTables = await prisma30.treeBranchLeafNodeTable.count({
         where: { nodeId: table.nodeId }
       });
-      await prisma47.treeBranchLeafNode.update({
+      await prisma30.treeBranchLeafNode.update({
         where: { id: table.nodeId },
         data: {
           hasTable: remainingTables > 0,
@@ -37198,7 +37262,7 @@ router56.get("/nodes/:nodeId/tables/options", async (req2, res) => {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { tableId, dimension = "columns" } = req2.query;
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const normalized = await fetchNormalizedTable(nodeId, {
       tableId: typeof tableId === "string" && tableId ? tableId : void 0
@@ -37238,7 +37302,7 @@ router56.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       keyValue,
       valueColumn
     } = req2.query;
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const normalized = await fetchNormalizedTable(nodeId, {
       tableId: tableId && tableId.length ? tableId : void 0
@@ -37332,7 +37396,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       labelColumns,
       labelRows
     } = req2.body || {};
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
     const normalized = await fetchNormalizedTable(nodeId, {
       tableId: typeof requestedTableId === "string" && requestedTableId.trim().length ? requestedTableId.trim() : void 0
@@ -37344,7 +37408,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     if (!table.columns.length) {
       return res.status(400).json({ error: "Le tableau ne contient aucune colonne exploitable" });
     }
-    const baseNode = await prisma47.treeBranchLeafNode.findUnique({
+    const baseNode = await prisma30.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { id: true, treeId: true, parentId: true }
     });
@@ -37352,7 +37416,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud de base introuvable" });
     }
     const parentId = baseNode.parentId ?? null;
-    const siblingsCount = await prisma47.treeBranchLeafNode.count({
+    const siblingsCount = await prisma30.treeBranchLeafNode.count({
       where: { treeId: baseNode.treeId, parentId }
     });
     const tableMeta = table.meta || {};
@@ -37381,7 +37445,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
         tableId: table.id,
         tableDimension: item.dimension
       };
-      const newNode = await prisma47.treeBranchLeafNode.create({
+      const newNode = await prisma30.treeBranchLeafNode.create({
         data: {
           id: newNodeId,
           treeId: baseNode.treeId,
@@ -37411,7 +37475,7 @@ router56.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
           updatedAt: now
         }
       });
-      await prisma47.treeBranchLeafSelectConfig.create({
+      await prisma30.treeBranchLeafSelectConfig.create({
         data: {
           id: (0, import_crypto10.randomUUID)(),
           nodeId: newNode.id,
@@ -37444,7 +37508,7 @@ router56.get("/effective-values", async (req2, res) => {
     if (!idsParam) return res.json({ success: true, data: {} });
     const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean);
     if (!ids.length) return res.json({ success: true, data: {} });
-    const nodes = await prisma47.treeBranchLeafNode.findMany({
+    const nodes = await prisma30.treeBranchLeafNode.findMany({
       where: { id: { in: ids } },
       include: { TreeBranchLeafNodeVariable: true }
     });
@@ -37464,7 +37528,7 @@ router56.get("/effective-values", async (req2, res) => {
 });
 router56.get("/debug/formula-vars", async (req2, res) => {
   try {
-    const vars = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const vars = await prisma30.treeBranchLeafNodeVariable.findMany({
       include: {
         node: {
           select: {
@@ -37491,13 +37555,13 @@ router56.get("/debug/formula-eval", async (req2, res) => {
     if (typeof formulaId !== "string" || typeof nodeId !== "string") {
       return res.status(400).json({ error: "formulaId et nodeId requis" });
     }
-    const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma30.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId }
     });
     if (!formula) {
       return res.status(404).json({ error: "Formule non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    const node = await prisma47.treeBranchLeafNode.findUnique({
+    const node = await prisma30.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       include: { TreeBranchLeafNodeVariable: true }
     });
@@ -37621,7 +37685,7 @@ router56.post("/evaluate/formula/:formulaId", async (req2, res) => {
     const { formulaId } = req2.params;
     const { fieldValues = {}, testMode = true } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma30.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
         TreeBranchLeafNode: {
@@ -37920,7 +37984,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
       finalRequests = requests;
     } else if (Array.isArray(nodeIds) && nodeIds.length > 0) {
       for (const nodeId of nodeIds) {
-        const nodeFormulas = await prisma47.treeBranchLeafNodeFormula.findMany({
+        const nodeFormulas = await prisma30.treeBranchLeafNodeFormula.findMany({
           where: { nodeId },
           select: { id: true, name: true }
         });
@@ -37948,7 +38012,7 @@ router56.post("/evaluate/batch", async (req2, res) => {
         continue;
       }
       try {
-        const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
+        const formula = await prisma30.treeBranchLeafNodeFormula.findUnique({
           where: { id: formulaId },
           include: {
             TreeBranchLeafNode: {
@@ -38068,9 +38132,9 @@ router56.post("/evaluate/batch", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation batch" });
   }
 });
-async function ensureNodeOrgAccess(prisma71, nodeId, auth) {
+async function ensureNodeOrgAccess(prisma51, nodeId, auth) {
   try {
-    const node = await prisma71.treeBranchLeafNode.findFirst({
+    const node = await prisma51.treeBranchLeafNode.findFirst({
       where: { id: nodeId },
       select: { treeId: true }
     });
@@ -38080,7 +38144,7 @@ async function ensureNodeOrgAccess(prisma71, nodeId, auth) {
     if (auth.isSuperAdmin) {
       return { ok: true };
     }
-    const tree = await prisma71.treeBranchLeafTree.findFirst({
+    const tree = await prisma51.treeBranchLeafTree.findFirst({
       where: { id: node.treeId },
       select: { organizationId: true }
     });
@@ -38100,7 +38164,7 @@ router56.get("/conditions/:conditionId", async (req2, res) => {
   try {
     const { conditionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const condition = await prisma47.treeBranchLeafNodeCondition.findUnique({
+    const condition = await prisma30.treeBranchLeafNodeCondition.findUnique({
       where: { id: conditionId },
       include: {
         TreeBranchLeafNode: {
@@ -38131,7 +38195,7 @@ router56.get("/formulas/:formulaId", async (req2, res) => {
   try {
     const { formulaId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const formula = await prisma47.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma30.treeBranchLeafNodeFormula.findUnique({
       where: { id: formulaId },
       include: {
         TreeBranchLeafNode: {
@@ -38171,7 +38235,7 @@ router56.get("/submissions", async (req2, res) => {
         organizationId
       };
     }
-    const submissions = await prisma47.treeBranchLeafSubmission.findMany({
+    const submissions = await prisma30.treeBranchLeafSubmission.findMany({
       where: whereClause,
       include: {
         TreeBranchLeafTree: {
@@ -38249,7 +38313,7 @@ router56.get("/submissions/by-leads", async (req2, res) => {
         { email: { contains: search, mode: "insensitive" } }
       ];
     }
-    const leadsWithSubmissions = await prisma47.lead.findMany({
+    const leadsWithSubmissions = await prisma30.lead.findMany({
       where: {
         ...leadWhere,
         TreeBranchLeafSubmission: {
@@ -38302,7 +38366,7 @@ router56.get("/submissions/:id", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
         TreeBranchLeafTree: {
@@ -38381,7 +38445,7 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
   try {
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const { id } = req2.params;
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
         TreeBranchLeafTree: { select: { id: true, organizationId: true } },
@@ -38408,7 +38472,7 @@ router56.get("/submissions/:id/fields", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
+    const dataRows = await prisma30.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
         TreeBranchLeafNode: {
@@ -38483,7 +38547,7 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -38494,7 +38558,7 @@ router56.get("/submissions/:id/summary", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
-    const dataRows = await prisma47.treeBranchLeafSubmissionData.findMany({
+    const dataRows = await prisma30.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
         TreeBranchLeafNode: { select: { id: true, type: true, label: true } }
@@ -38537,7 +38601,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       select: {
         id: true,
@@ -38550,7 +38614,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
-    const rows = await prisma47.treeBranchLeafSubmissionData.findMany({
+    const rows = await prisma30.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       include: {
         TreeBranchLeafNode: { select: { id: true, label: true, type: true } }
@@ -38563,7 +38627,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     });
     if (rows.length === 0) {
       if (submission?.treeId) {
-        const treeVariables = await prisma47.treeBranchLeafNodeVariable.findMany({
+        const treeVariables = await prisma30.treeBranchLeafNodeVariable.findMany({
           where: { TreeBranchLeafNode: { treeId: submission.treeId } },
           select: {
             id: true,
@@ -38610,7 +38674,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
     if (!treeId) {
       return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e" });
     }
-    const allTreeNodes = await prisma47.treeBranchLeafNode.findMany({
+    const allTreeNodes = await prisma30.treeBranchLeafNode.findMany({
       where: { treeId },
       select: { id: true, label: true }
     });
@@ -38626,7 +38690,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       const list = Array.isArray(ids) ? ids : Array.from(ids);
       const missing = list.filter((id2) => !!id2 && !labelMap.has(id2));
       if (missing.length === 0) return;
-      const extra = await prisma47.treeBranchLeafNode.findMany({ where: { id: { in: missing } }, select: { id: true, label: true } });
+      const extra = await prisma30.treeBranchLeafNode.findMany({ where: { id: { in: missing } }, select: { id: true, label: true } });
       for (const n of extra) labelMap.set(n.id, n.label || null);
     };
     const resolveDetailForRow = async (r) => {
@@ -38634,15 +38698,15 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       if (det && det.type) {
         const parsed2 = parseSourceRef(r.sourceRef);
         if (parsed2?.type === "condition") {
-          const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+          const rec = await prisma30.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
           return buildOperationDetail("condition", rec);
         }
         if (parsed2?.type === "formula") {
-          const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+          const rec = await prisma30.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
           return buildOperationDetail("formula", rec);
         }
         if (parsed2?.type === "table") {
-          const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+          const rec = await prisma30.treeBranchLeafNodeTable.findUnique({ where: { id: parsed2.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
           return buildOperationDetail("table", rec);
         }
         return det;
@@ -38650,15 +38714,15 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
       const parsed = parseSourceRef(r.sourceRef);
       if (!parsed) return det || null;
       if (parsed.type === "condition") {
-        const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+        const rec = await prisma30.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
         return buildOperationDetail("condition", rec);
       }
       if (parsed.type === "formula") {
-        const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+        const rec = await prisma30.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
         return buildOperationDetail("formula", rec);
       }
       if (parsed.type === "table") {
-        const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+        const rec = await prisma30.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
         return buildOperationDetail("table", rec);
       }
       return det || null;
@@ -38694,7 +38758,7 @@ router56.get("/submissions/:id/operations", async (req2, res) => {
               while ((m = re.exec(str)) !== null) ids.add(m[1]);
               if (ids.size === 0) return extended;
               const list = Array.from(ids);
-              const formulas = await prisma47.treeBranchLeafNodeFormula.findMany({ where: { id: { in: list } }, select: { id: true, nodeId: true } });
+              const formulas = await prisma30.treeBranchLeafNodeFormula.findMany({ where: { id: { in: list } }, select: { id: true, nodeId: true } });
               for (const f of formulas) {
                 const nodeLbl = labelMap.get(f.nodeId) ?? null;
                 if (nodeLbl) extended.set(f.id, nodeLbl);
@@ -38778,7 +38842,7 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -38788,9 +38852,9 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
-    const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
+    const nodes = await prisma30.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
-    const variables = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const variables = await prisma30.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       include: { TreeBranchLeafNode: { select: { label: true } } }
     });
@@ -38811,11 +38875,11 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
       if (s.includes("table")) return "table";
       return "neutral";
     };
-    const rows = await prisma47.treeBranchLeafSubmissionData.findMany({
+    const rows = await prisma30.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       select: { nodeId: true, isVariable: true, value: true, sourceRef: true }
     });
-    const submissionValues = await prisma47.treeBranchLeafSubmissionData.findMany({
+    const submissionValues = await prisma30.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id },
       select: { nodeId: true, value: true }
     });
@@ -38833,23 +38897,23 @@ router56.post("/submissions/:id/repair-ops", async (req2, res) => {
       const parsed = parseSourceRef(row.sourceRef);
       if (isVar && parsed) {
         if (parsed.type === "condition") {
-          const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
-          const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma47, id, organizationId || "", req2.user?.id || "");
+          const rec = await prisma30.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+          const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma30, id, organizationId || "", req2.user?.id || "");
           opDetail = detail;
           opRes = result;
         } else if (parsed.type === "formula") {
-          const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
-          const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma47, id, organizationId || "", req2.user?.id || "");
+          const rec = await prisma30.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+          const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma30, id, organizationId || "", req2.user?.id || "");
           opDetail = detail;
           opRes = result;
         } else if (parsed.type === "table") {
-          const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
-          const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma47, id, organizationId || "", req2.user?.id || "");
+          const rec = await prisma30.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+          const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMap, valuesMapAll, prisma30, id, organizationId || "", req2.user?.id || "");
           opDetail = detail;
           opRes = result;
         }
       }
-      await prisma47.treeBranchLeafSubmissionData.updateMany({
+      await prisma30.treeBranchLeafSubmissionData.updateMany({
         where: { submissionId: id, nodeId: row.nodeId },
         data: {
           operationSource: opSrc,
@@ -38889,7 +38953,7 @@ router56.post("/submissions", async (req2, res) => {
     if (!name || typeof name !== "string") {
       return res.status(400).json({ error: "name est requis et doit \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre une cha\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAEne" });
     }
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: {
         id: normalizedTreeId,
         ...isSuperAdmin2 ? {} : { organizationId }
@@ -38900,7 +38964,7 @@ router56.post("/submissions", async (req2, res) => {
     }
     let lead = null;
     if (normalizedLeadId) {
-      lead = await prisma47.lead.findFirst({
+      lead = await prisma30.lead.findFirst({
         where: {
           id: normalizedLeadId,
           ...isSuperAdmin2 ? {} : { organizationId }
@@ -38911,7 +38975,7 @@ router56.post("/submissions", async (req2, res) => {
       }
     } else {
     }
-    const validNodes = await prisma47.treeBranchLeafNode.findMany({
+    const validNodes = await prisma30.treeBranchLeafNode.findMany({
       where: { treeId: normalizedTreeId },
       select: { id: true }
     });
@@ -38939,7 +39003,7 @@ router56.post("/submissions", async (req2, res) => {
       let safeUserId = null;
       if (userId) {
         try {
-          const existingUser = await prisma47.user.findUnique({ where: { id: userId } });
+          const existingUser = await prisma30.user.findUnique({ where: { id: userId } });
           if (existingUser) {
             safeUserId = userId;
           } else {
@@ -38950,7 +39014,7 @@ router56.post("/submissions", async (req2, res) => {
         }
       }
       const now = /* @__PURE__ */ new Date();
-      const created = await prisma47.treeBranchLeafSubmission.create({
+      const created = await prisma30.treeBranchLeafSubmission.create({
         data: {
           id: (0, import_crypto10.randomUUID)(),
           treeId: normalizedTreeId,
@@ -38962,19 +39026,19 @@ router56.post("/submissions", async (req2, res) => {
       });
       if (filteredEntries.length > 0) {
         const keys = filteredEntries.map(({ nodeId }) => nodeId);
-        const nodesForLabels = await prisma47.treeBranchLeafNode.findMany({
+        const nodesForLabels = await prisma30.treeBranchLeafNode.findMany({
           where: { id: { in: keys } },
           select: { id: true, label: true }
         });
         const labelMap = new Map(nodesForLabels.map((n) => [n.id, n.label]));
-        const existing = await prisma47.treeBranchLeafSubmissionData.findMany({
+        const existing = await prisma30.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: created.id, nodeId: { in: keys } },
           select: { nodeId: true }
         });
         const existingSet = new Set(existing.map((e) => e.nodeId));
         const toCreate = filteredEntries.filter(({ nodeId }) => !existingSet.has(nodeId));
         const toUpdate = filteredEntries.filter(({ nodeId }) => existingSet.has(nodeId));
-        await prisma47.$transaction(async (tx) => {
+        await prisma30.$transaction(async (tx) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
@@ -39008,8 +39072,8 @@ router56.post("/submissions", async (req2, res) => {
       try {
         const treeIdForBackfill = created.treeId;
         const [nodesForBackfill, varsForBackfill] = await Promise.all([
-          prisma47.treeBranchLeafNode.findMany({ where: { treeId: treeIdForBackfill }, select: { id: true, label: true } }),
-          prisma47.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: treeIdForBackfill } }, include: { TreeBranchLeafNode: { select: { label: true } } } })
+          prisma30.treeBranchLeafNode.findMany({ where: { treeId: treeIdForBackfill }, select: { id: true, label: true } }),
+          prisma30.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: treeIdForBackfill } }, include: { TreeBranchLeafNode: { select: { label: true } } } })
         ]);
         const labelMapBF = new Map(nodesForBackfill.map((n) => [n.id, n.label]));
         const varMetaByNodeIdBF = new Map(
@@ -39022,7 +39086,7 @@ router56.post("/submissions", async (req2, res) => {
             }
           ])
         );
-        const rowsBF = await prisma47.treeBranchLeafSubmissionData.findMany({
+        const rowsBF = await prisma30.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: created.id },
           select: { nodeId: true, isVariable: true, value: true, sourceRef: true }
         });
@@ -39046,23 +39110,23 @@ router56.post("/submissions", async (req2, res) => {
           const parsed = parseSourceRef(row.sourceRef || meta?.sourceRef || null);
           if (parsed) {
             if (parsed.type === "condition") {
-              const rec = await prisma47.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
-              const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma47, created.id, organizationId || "", userId || "");
+              const rec = await prisma30.treeBranchLeafNodeCondition.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, conditionSet: true, nodeId: true } });
+              const { detail, result } = await buildDetailAndResultForOperation("condition", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma30, created.id, organizationId || "", userId || "");
               opDetail = detail;
               opRes = result;
             } else if (parsed.type === "formula") {
-              const rec = await prisma47.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
-              const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma47, created.id, organizationId || "", userId || "");
+              const rec = await prisma30.treeBranchLeafNodeFormula.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, tokens: true, nodeId: true } });
+              const { detail, result } = await buildDetailAndResultForOperation("formula", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma30, created.id, organizationId || "", userId || "");
               opDetail = detail;
               opRes = result;
             } else if (parsed.type === "table") {
-              const rec = await prisma47.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
-              const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma47, created.id, organizationId || "", userId || "");
+              const rec = await prisma30.treeBranchLeafNodeTable.findUnique({ where: { id: parsed.id }, select: { id: true, name: true, description: true, type: true, nodeId: true } });
+              const { detail, result } = await buildDetailAndResultForOperation("table", rec, display, valueStr, meta?.unit || null, labelMapBF, valuesMapBF, prisma30, created.id, organizationId || "", userId || "");
               opDetail = detail;
               opRes = result;
             }
           }
-          await prisma47.treeBranchLeafSubmissionData.updateMany({
+          await prisma30.treeBranchLeafSubmissionData.updateMany({
             where: { submissionId: created.id, nodeId: row.nodeId },
             data: {
               operationSource: opSrc,
@@ -39075,7 +39139,7 @@ router56.post("/submissions", async (req2, res) => {
       } catch (enrichErr) {
         console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Backfill post-cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations non critique a \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9chou\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9:", enrichErr?.message);
       }
-      const full = await prisma47.treeBranchLeafSubmission.findUnique({
+      const full = await prisma30.treeBranchLeafSubmission.findUnique({
         where: { id: created.id },
         include: {
           TreeBranchLeafTree: { select: { id: true, name: true } },
@@ -39132,7 +39196,7 @@ router56.delete("/submissions/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const submission = await prisma47.treeBranchLeafSubmission.findFirst({
+    const submission = await prisma30.treeBranchLeafSubmission.findFirst({
       where: {
         id,
         ...isSuperAdmin2 ? {} : { Lead: { organizationId } }
@@ -39146,10 +39210,10 @@ router56.delete("/submissions/:id", async (req2, res) => {
     if (!submission) {
       return res.status(404).json({ error: "Soumission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e ou acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9" });
     }
-    await prisma47.treeBranchLeafSubmissionData.deleteMany({
+    await prisma30.treeBranchLeafSubmissionData.deleteMany({
       where: { submissionId: id }
     });
-    await prisma47.treeBranchLeafSubmission.delete({
+    await prisma30.treeBranchLeafSubmission.delete({
       where: { id }
     });
     res.json({ success: true, message: "Soumission supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
@@ -39162,15 +39226,15 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const access = await ensureNodeOrgAccess(prisma47, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    let selectConfig = await prisma47.treeBranchLeafSelectConfig.findFirst({
+    let selectConfig = await prisma30.treeBranchLeafSelectConfig.findFirst({
       where: { nodeId: fieldId }
     });
     if (!selectConfig) {
-      const node = await prisma47.treeBranchLeafNode.findUnique({
+      const node = await prisma30.treeBranchLeafNode.findUnique({
         where: { id: fieldId },
         select: {
           id: true,
@@ -39185,7 +39249,7 @@ router56.get("/nodes/:fieldId/select-config", async (req2, res) => {
         const isRowBased = activeInstance?.rowBased === true;
         const isColumnBased = activeInstance?.columnBased === true;
         if (isRowBased || isColumnBased) {
-          selectConfig = await prisma47.treeBranchLeafSelectConfig.create({
+          selectConfig = await prisma30.treeBranchLeafSelectConfig.create({
             data: {
               id: (0, import_crypto10.randomUUID)(),
               nodeId: fieldId,
@@ -39230,11 +39294,11 @@ router56.post("/nodes/:fieldId/select-config", async (req2, res) => {
       displayRow,
       dependsOnNodeId
     } = req2.body;
-    const access = await ensureNodeOrgAccess(prisma47, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, fieldId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    const selectConfig = await prisma47.treeBranchLeafSelectConfig.upsert({
+    const selectConfig = await prisma30.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
         id: (0, import_crypto10.randomUUID)(),
@@ -39287,11 +39351,11 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
         console.warn(`[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Erreur parsing formValues:`, e);
       }
     }
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    let selectConfig = await prisma47.treeBranchLeafSelectConfig.findFirst({
+    let selectConfig = await prisma30.treeBranchLeafSelectConfig.findFirst({
       where: { nodeId },
       select: {
         tableReference: true,
@@ -39304,12 +39368,12 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       }
     });
     if (!selectConfig?.tableReference) {
-      const node = await prisma47.treeBranchLeafNode.findUnique({
+      const node = await prisma30.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { hasTable: true, table_activeId: true, table_instances: true }
       });
       if (node?.hasTable && node.table_activeId) {
-        await prisma47.treeBranchLeafSelectConfig.upsert({
+        await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
             id: (0, import_crypto10.randomUUID)(),
@@ -39336,7 +39400,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        selectConfig = await prisma47.treeBranchLeafSelectConfig.findFirst({
+        selectConfig = await prisma30.treeBranchLeafSelectConfig.findFirst({
           where: { nodeId },
           select: {
             tableReference: true,
@@ -39353,7 +39417,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
     if (!selectConfig?.tableReference) {
       return res.json({ tableColumns: [], tableRows: [], options: [] });
     }
-    const table = await prisma47.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma30.treeBranchLeafNodeTable.findUnique({
       where: { id: selectConfig.tableReference },
       select: {
         id: true,
@@ -39500,7 +39564,7 @@ router56.get("/nodes/:nodeId/table/lookup", async (req2, res) => {
       if (hasNoConfig && firstColHeader && a1 && firstColHeader === a1) {
         const autoOptions = filteredRowIndices.filter((idx) => idx > 0).map((idx) => rows[idx]).filter((r) => r && r !== "undefined" && r !== "null").map((r) => ({ value: r, label: r }));
         try {
-          await prisma47.treeBranchLeafSelectConfig.upsert({
+          await prisma30.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
               id: (0, import_crypto10.randomUUID)(),
@@ -39549,11 +39613,11 @@ router56.patch("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const access = await ensureNodeOrgAccess(prisma47, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
+    const access = await ensureNodeOrgAccess(prisma30, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
-    const updatedNode = await prisma47.treeBranchLeafNode.update({
+    const updatedNode = await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         ...req2.body,
@@ -39570,7 +39634,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { enabled, activeId, currentTable } = req2.body;
-    const node = await prisma47.treeBranchLeafNode.findUnique({
+    const node = await prisma30.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -39599,7 +39663,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       ...oldMetadata,
       capabilities: newCapabilities
     };
-    await prisma47.treeBranchLeafNode.update({
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         hasTable: enabled === true,
@@ -39618,7 +39682,7 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       const displayColumn = currentTable?.displayColumn || null;
       const displayRow = currentTable?.displayRow || null;
       try {
-        await prisma47.treeBranchLeafSelectConfig.upsert({
+        await prisma30.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
             id: (0, import_crypto10.randomUUID)(),
@@ -39655,14 +39719,14 @@ router56.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       }
     } else if (!enabled) {
       try {
-        await prisma47.treeBranchLeafSelectConfig.deleteMany({
+        await prisma30.treeBranchLeafSelectConfig.deleteMany({
           where: { nodeId }
         });
       } catch (deleteError) {
         console.error(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
       }
     }
-    const verifyNode = await prisma47.treeBranchLeafNode.findUnique({
+    const verifyNode = await prisma30.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true, hasTable: true }
     });
@@ -39683,7 +39747,7 @@ router56.put("/submissions/:id", async (req2, res) => {
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
   const { data, status } = req2.body;
   try {
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
     });
@@ -39695,10 +39759,10 @@ router56.put("/submissions/:id", async (req2, res) => {
     if (!isSuperAdmin2 && treeOrg && treeOrg !== organizationId) {
       return res.status(403).json({ error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission" });
     }
-    const nodes = await prisma47.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
+    const nodes = await prisma30.treeBranchLeafNode.findMany({ where: { treeId }, select: { id: true, label: true } });
     const validNodeIds = new Set(nodes.map((n) => n.id));
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
-    const variablesMeta = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const variablesMeta = await prisma30.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       include: { TreeBranchLeafNode: { select: { label: true } } }
     });
@@ -39746,7 +39810,7 @@ router56.put("/submissions/:id", async (req2, res) => {
       return e;
     });
     const entries = mappedEntries.filter(({ nodeId }) => validNodeIds.has(nodeId)).map((e) => ({ ...e, effectiveValue: e.calculatedValue !== void 0 ? e.calculatedValue : e.value }));
-    await prisma47.$transaction(async (tx) => {
+    await prisma30.$transaction(async (tx) => {
       const now = /* @__PURE__ */ new Date();
       const inferSource = (sourceRef) => {
         const s = (sourceRef || "").toLowerCase();
@@ -40128,7 +40192,7 @@ router56.put("/submissions/:id", async (req2, res) => {
         await tx.treeBranchLeafSubmission.update({ where: { id }, data: { updatedAt: /* @__PURE__ */ new Date() } });
       }
     });
-    const full = await prisma47.treeBranchLeafSubmission.findUnique({
+    const full = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       include: {
         TreeBranchLeafTree: { select: { id: true, name: true } },
@@ -40161,7 +40225,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
         error: "submissionId requis dans le body"
       });
     }
-    const node = await prisma47.treeBranchLeafNode.findUnique({
+    const node = await prisma30.treeBranchLeafNode.findUnique({
       where: { id: variableNodeId },
       include: {
         TreeBranchLeafTree: {
@@ -40207,7 +40271,7 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
         error: "Ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud ne contient pas de variable"
       });
     }
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       select: {
         id: true,
@@ -40227,10 +40291,10 @@ router56.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     const evaluationResult = await evaluateVariableOperation(
       variableNodeId,
       submissionId,
-      prisma47
+      prisma30
     );
     const duration = Date.now() - startTime;
-    await prisma47.treeBranchLeafSubmissionData.upsert({
+    await prisma30.treeBranchLeafSubmissionData.upsert({
       where: {
         submissionId_nodeId: {
           submissionId,
@@ -40301,7 +40365,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: {
         TreeBranchLeafTree: {
@@ -40325,7 +40389,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
         error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 cette soumission"
       });
     }
-    const variables = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const variables = await prisma30.treeBranchLeafNodeVariable.findMany({
       where: {
         TreeBranchLeafNode: {
           treeId: submission.treeId
@@ -40341,7 +40405,7 @@ router56.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
         }
       }
     });
-    const submissionData = await prisma47.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma30.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         nodeId: {
@@ -40398,7 +40462,7 @@ router56.post("/submissions/stage", async (req2, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     let stage;
     if (stageId) {
-      stage = await prisma47.treeBranchLeafStage.update({
+      stage = await prisma30.treeBranchLeafStage.update({
         where: { id: stageId },
         data: {
           formData: formData || {},
@@ -40416,13 +40480,13 @@ router56.post("/submissions/stage", async (req2, res) => {
       }
       let currentBaseVersion = baseVersion || 1;
       if (submissionId && !baseVersion) {
-        const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+        const submission = await prisma30.treeBranchLeafSubmission.findUnique({
           where: { id: submissionId },
           select: { currentVersion: true }
         });
         currentBaseVersion = submission?.currentVersion || 1;
       }
-      stage = await prisma47.treeBranchLeafStage.create({
+      stage = await prisma30.treeBranchLeafStage.create({
         data: {
           id: (0, import_crypto10.randomUUID)(),
           treeId,
@@ -40461,7 +40525,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    const stage = await prisma47.treeBranchLeafStage.findUnique({
+    const stage = await prisma30.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
@@ -40471,7 +40535,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
       });
     }
     const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-    const variableNodes = await prisma47.treeBranchLeafNode.findMany({
+    const variableNodes = await prisma30.treeBranchLeafNode.findMany({
       where: {
         treeId: stage.treeId,
         subType: "variable"
@@ -40488,7 +40552,7 @@ router56.post("/submissions/stage/preview", async (req2, res) => {
           const evalResult = await evaluateVariableOperation2(
             node.id,
             stage.submissionId || stage.id,
-            prisma47,
+            prisma30,
             valueMapLocal
           );
           return {
@@ -40543,7 +40607,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    const stage = await prisma47.treeBranchLeafStage.findUnique({
+    const stage = await prisma30.treeBranchLeafStage.findUnique({
       where: { id: stageId }
     });
     if (!stage) {
@@ -40563,7 +40627,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
     let newVersion = 1;
     if (asNew || !stage.submissionId) {
       const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-      const variableNodes = await prisma47.treeBranchLeafNode.findMany({
+      const variableNodes = await prisma30.treeBranchLeafNode.findMany({
         where: {
           treeId: stage.treeId,
           subType: "variable"
@@ -40580,7 +40644,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
             const evalResult = await evaluateVariableOperation2(
               node.id,
               stage.id,
-              prisma47,
+              prisma30,
               valueMapLocal
             );
             return {
@@ -40597,7 +40661,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           }
         })
       ).then((res2) => res2.filter((r) => r !== null));
-      const result = await prisma47.$transaction(async (tx) => {
+      const result = await prisma30.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
             id: (0, import_crypto10.randomUUID)(),
@@ -40645,7 +40709,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
       submissionId = result.id;
       newVersion = 1;
     } else {
-      const currentSubmission = await prisma47.treeBranchLeafSubmission.findUnique({
+      const currentSubmission = await prisma30.treeBranchLeafSubmission.findUnique({
         where: { id: stage.submissionId },
         select: {
           id: true,
@@ -40663,7 +40727,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
         });
       }
       if (currentSubmission.currentVersion > stage.baseVersion) {
-        const currentData = await prisma47.treeBranchLeafSubmissionData.findMany({
+        const currentData = await prisma30.treeBranchLeafSubmissionData.findMany({
           where: { submissionId: stage.submissionId },
           select: { nodeId: true, value: true }
         });
@@ -40702,7 +40766,7 @@ router56.post("/submissions/stage/commit", async (req2, res) => {
           });
         }
       }
-      const result = await prisma47.$transaction(async (tx) => {
+      const result = await prisma30.$transaction(async (tx) => {
         const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
         const variableNodes = await tx.treeBranchLeafNode.findMany({
           where: {
@@ -40821,7 +40885,7 @@ router56.post("/submissions/stage/discard", async (req2, res) => {
         error: "stageId requis"
       });
     }
-    await prisma47.treeBranchLeafStage.delete({
+    await prisma30.treeBranchLeafStage.delete({
       where: { id: stageId }
     });
     return res.json({
@@ -40848,7 +40912,7 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
     };
     if (leadId) where.leadId = leadId;
     if (treeId) where.treeId = treeId;
-    const drafts = await prisma47.treeBranchLeafStage.findMany({
+    const drafts = await prisma30.treeBranchLeafStage.findMany({
       where,
       orderBy: { lastActivity: "desc" },
       include: {
@@ -40887,7 +40951,7 @@ router56.get("/submissions/my-drafts", async (req2, res) => {
 router56.get("/submissions/:id/versions", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const versions = await prisma47.treeBranchLeafSubmissionVersion.findMany({
+    const versions = await prisma30.treeBranchLeafSubmissionVersion.findMany({
       where: { submissionId: id },
       orderBy: { version: "desc" },
       include: {
@@ -40928,7 +40992,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
   try {
     const { id, version } = req2.params;
     const userId = req2.user?.id || "system";
-    const versionToRestore = await prisma47.treeBranchLeafSubmissionVersion.findUnique({
+    const versionToRestore = await prisma30.treeBranchLeafSubmissionVersion.findUnique({
       where: {
         submissionId_version: {
           submissionId: id,
@@ -40942,7 +41006,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
         error: "Version non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e"
       });
     }
-    const submission = await prisma47.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma30.treeBranchLeafSubmission.findUnique({
       where: { id },
       select: { treeId: true, leadId: true, currentVersion: true }
     });
@@ -40952,7 +41016,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
         error: "Submission non trouv\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e"
       });
     }
-    const stage = await prisma47.treeBranchLeafStage.create({
+    const stage = await prisma30.treeBranchLeafStage.create({
       data: {
         id: (0, import_crypto10.randomUUID)(),
         treeId: submission.treeId,
@@ -40981,7 +41045,7 @@ router56.post("/submissions/:id/restore/:version", async (req2, res) => {
 router56.get("/shared-references", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx3(req2);
-    const templates = await prisma47.treeBranchLeafNode.findMany({
+    const templates = await prisma30.treeBranchLeafNode.findMany({
       where: {
         isSharedReference: true,
         sharedReferenceId: null,
@@ -41036,7 +41100,7 @@ router56.get("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
     const { organizationId } = getAuthCtx3(req2);
-    const template = await prisma47.treeBranchLeafNode.findFirst({
+    const template = await prisma30.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
         isSharedReference: true,
@@ -41088,7 +41152,7 @@ router56.put("/shared-references/:refId", async (req2, res) => {
     const { refId } = req2.params;
     const { name, description } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    const template = await prisma47.treeBranchLeafNode.findFirst({
+    const template = await prisma30.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
         isSharedReference: true,
@@ -41101,7 +41165,7 @@ router56.put("/shared-references/:refId", async (req2, res) => {
     if (!template) {
       return res.status(404).json({ error: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence introuvable" });
     }
-    const updated = await prisma47.treeBranchLeafNode.update({
+    const updated = await prisma30.treeBranchLeafNode.update({
       where: { id: refId },
       data: {
         sharedReferenceName: name || template.sharedReferenceName,
@@ -41126,7 +41190,7 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
   try {
     const { refId } = req2.params;
     const { organizationId } = getAuthCtx3(req2);
-    const template = await prisma47.treeBranchLeafNode.findFirst({
+    const template = await prisma30.treeBranchLeafNode.findFirst({
       where: {
         id: refId,
         isSharedReference: true,
@@ -41143,7 +41207,7 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
       return res.status(404).json({ error: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence introuvable" });
     }
     if (template.referenceUsages.length > 0) {
-      await prisma47.treeBranchLeafNode.updateMany({
+      await prisma30.treeBranchLeafNode.updateMany({
         where: {
           sharedReferenceId: refId
         },
@@ -41155,7 +41219,7 @@ router56.delete("/shared-references/:refId", async (req2, res) => {
         }
       });
     }
-    await prisma47.treeBranchLeafNode.delete({
+    await prisma30.treeBranchLeafNode.delete({
       where: { id: refId }
     });
     res.json({ success: true, message: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
@@ -41169,7 +41233,7 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
     const { treeId } = req2.params;
     const { name, description, fieldType, label } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: {
         id: treeId,
         organizationId
@@ -41179,7 +41243,7 @@ router56.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
       return res.status(404).json({ error: "Arbre introuvable" });
     }
     const newNodeId = `shared-ref-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const newNode = await prisma47.treeBranchLeafNode.create({
+    const newNode = await prisma30.treeBranchLeafNode.create({
       data: {
         id: newNodeId,
         treeId,
@@ -41222,7 +41286,7 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
     const { nodeId } = req2.params;
     const { referenceIds } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         TreeBranchLeafTree: {
@@ -41233,7 +41297,7 @@ router56.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
     if (!node) {
       return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable" });
     }
-    await prisma47.treeBranchLeafNode.update({
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         sharedReferenceIds: referenceIds
@@ -41253,7 +41317,7 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
     const { nodeId } = req2.params;
     const { name, description } = req2.body;
     const { organizationId } = getAuthCtx3(req2);
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         TreeBranchLeafTree: {
@@ -41264,7 +41328,7 @@ router56.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
     if (!node) {
       return res.status(404).json({ error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable" });
     }
-    await prisma47.treeBranchLeafNode.update({
+    await prisma30.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         isSharedReference: true,
@@ -41301,7 +41365,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
         error: "newSuffix doit \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre un nombre entier positif"
       });
     }
-    const node = await prisma47.treeBranchLeafNode.findFirst({
+    const node = await prisma30.treeBranchLeafNode.findFirst({
       where: {
         id: nodeId,
         TreeBranchLeafTree: {
@@ -41317,7 +41381,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     const shouldDuplicateNode = duplicateNode === void 0 ? true : Boolean(duplicateNode);
     let ownerNodeIdForMap = null;
     if (!shouldDuplicateNode && bodyTargetNodeId) {
-      const targetNode = await prisma47.treeBranchLeafNode.findUnique({ where: { id: bodyTargetNodeId } });
+      const targetNode = await prisma30.treeBranchLeafNode.findUnique({ where: { id: bodyTargetNodeId } });
       if (!targetNode) {
         return res.status(404).json({ error: "targetNodeId introuvable" });
       }
@@ -41326,23 +41390,23 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       }
       targetNodeId = targetNode.id;
       if (variableId) {
-        const originalVarForMap = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+        const originalVarForMap = await prisma30.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
         if (originalVarForMap) ownerNodeIdForMap = originalVarForMap.nodeId;
       }
     } else if (shouldDuplicateNode) {
-      const originalVar = await prisma47.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
+      const originalVar = await prisma30.treeBranchLeafNodeVariable.findUnique({ where: { id: variableId } });
       if (!originalVar) {
         return res.status(404).json({ error: "Variable introuvable" });
       }
-      const ownerNode = await prisma47.treeBranchLeafNode.findUnique({ where: { id: originalVar.nodeId } });
+      const ownerNode = await prisma30.treeBranchLeafNode.findUnique({ where: { id: originalVar.nodeId } });
       if (!ownerNode) {
         return res.status(404).json({ error: "N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud propri\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDtaire introuvable" });
       }
       ownerNodeIdForMap = ownerNode.id;
       const candidateId = `${ownerNode.id}-${newSuffix}`;
-      const exists = await prisma47.treeBranchLeafNode.findUnique({ where: { id: candidateId } });
+      const exists = await prisma30.treeBranchLeafNode.findUnique({ where: { id: candidateId } });
       targetNodeId = exists ? `${candidateId}-${Date.now()}` : candidateId;
-      await prisma47.treeBranchLeafNode.create({
+      await prisma30.treeBranchLeafNode.create({
         data: {
           id: targetNodeId,
           treeId: ownerNode.treeId,
@@ -41373,7 +41437,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       variableId,
       newSuffix,
       targetNodeId,
-      prisma47,
+      prisma30,
       {
         autoCreateDisplayNode: true,
         nodeIdMap,
@@ -41386,7 +41450,7 @@ router56.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
       return res.status(400).json({ error: result.error || "Erreur lors de la copie" });
     }
     try {
-      await addToNodeLinkedField7(prisma47, targetNodeId, "linkedVariableIds", [result.variableId]);
+      await addToNodeLinkedField7(prisma30, targetNodeId, "linkedVariableIds", [result.variableId]);
     } catch (e) {
       console.warn("?? [COPY-LINKED-VAR] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec MAJ linkedVariableIds:", e.message);
     }
@@ -41401,7 +41465,7 @@ router56.post("/variables/:variableId/create-display", async (req2, res) => {
   try {
     const { variableId } = req2.params;
     const { label, suffix } = req2.body || {};
-    const result = await createDisplayNodeForExistingVariable(variableId, prisma47, label || "Nouveau Section", suffix ?? "nouveau");
+    const result = await createDisplayNodeForExistingVariable(variableId, prisma30, label || "Nouveau Section", suffix ?? "nouveau");
     res.status(201).json(result);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -41413,7 +41477,7 @@ router56.get("/variables/search", async (req2, res) => {
   try {
     const q = String(req2.query.displayName || "").trim();
     if (!q) return res.status(400).json({ error: "displayName query string requis" });
-    const found = await prisma47.treeBranchLeafNodeVariable.findMany({
+    const found = await prisma30.treeBranchLeafNodeVariable.findMany({
       where: { displayName: { contains: q, mode: "insensitive" } },
       select: { id: true, nodeId: true, exposedKey: true, displayName: true, sourceType: true, sourceRef: true }
     });
@@ -41428,13 +41492,13 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
-    const tree = await prisma47.treeBranchLeafTree.findFirst({
+    const tree = await prisma30.treeBranchLeafTree.findFirst({
       where: treeWhereFilter
     });
     if (!tree) {
       return res.status(404).json({ error: "Arbre non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD" });
     }
-    const nodesWithCalculatedValue = await prisma47.treeBranchLeafNode.findMany({
+    const nodesWithCalculatedValue = await prisma30.treeBranchLeafNode.findMany({
       where: {
         treeId,
         calculatedValue: {
@@ -41451,7 +41515,7 @@ router56.get("/trees/:treeId/calculated-values", async (req2, res) => {
       }
     });
     const parentIds = nodesWithCalculatedValue.map((n) => n.parentId).filter((id) => !!id);
-    const parentNodes = await prisma47.treeBranchLeafNode.findMany({
+    const parentNodes = await prisma30.treeBranchLeafNode.findMany({
       where: { id: { in: parentIds } },
       select: { id: true, label: true }
     });
@@ -41474,9 +41538,9 @@ var treebranchleaf_routes_default = router56;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes.ts
 var import_express58 = __toESM(require("express"), 1);
-var import_client49 = require("@prisma/client");
+init_database();
 var router57 = import_express58.default.Router();
-var prisma48 = new import_client49.PrismaClient();
+var prisma31 = db;
 function getAuthCtx4(req2) {
   const role = (req2.user?.role || "").toLowerCase();
   const possibleFlag = req2.user?.isSuperAdmin;
@@ -41487,7 +41551,7 @@ function getAuthCtx4(req2) {
 router57.get("/variables", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
-    const raw = await prisma48.treeBranchLeafNodeVariable.findMany({
+    const raw = await prisma31.treeBranchLeafNodeVariable.findMany({
       include: {
         TreeBranchLeafNode: {
           select: {
@@ -41532,7 +41596,7 @@ router57.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
       return "1";
     };
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
-    const rawVariables = await prisma48.treeBranchLeafNodeVariable.findMany({
+    const rawVariables = await prisma31.treeBranchLeafNodeVariable.findMany({
       include: {
         TreeBranchLeafNode: {
           select: {
@@ -41591,7 +41655,7 @@ router57.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
 router57.get("/fields", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
-    const nodes = await prisma48.treeBranchLeafNode.findMany({
+    const nodes = await prisma31.treeBranchLeafNode.findMany({
       where: {
         OR: [
           { type: { startsWith: "leaf_" } },
@@ -41671,14 +41735,14 @@ router57.post("/devis", authMiddleware, requireRole(["user", "admin", "super_adm
 router57.get("/config/health", authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
     const [varCount, formulaCount, conditionCount, tableCount] = await Promise.all([
-      prisma48.treeBranchLeafNodeVariable.count(),
-      prisma48.treeBranchLeafNodeFormula.count().catch(() => 0),
+      prisma31.treeBranchLeafNodeVariable.count(),
+      prisma31.treeBranchLeafNodeFormula.count().catch(() => 0),
       // @ts-expect-error table potentielle condition pas toujours générée
-      prisma48.treeBranchLeafNodeCondition?.count?.().catch?.(() => 0) || 0,
+      prisma31.treeBranchLeafNodeCondition?.count?.().catch?.(() => 0) || 0,
       // @ts-expect-error table potentielle table pas toujours générée
-      prisma48.treeBranchLeafNodeTable?.count?.().catch?.(() => 0) || 0
+      prisma31.treeBranchLeafNodeTable?.count?.().catch?.(() => 0) || 0
     ]);
-    const sample = await prisma48.treeBranchLeafNodeVariable.findMany({
+    const sample = await prisma31.treeBranchLeafNodeVariable.findMany({
       select: { id: true, sourceRef: true },
       take: 500,
       orderBy: { updatedAt: "desc" }
@@ -41764,7 +41828,7 @@ var tbl_routes_default = router57;
 var import_express59 = __toESM(require("express"), 1);
 
 // src/components/TreeBranchLeaf/tbl-bridge/intelligence/TBLIntelligence.ts
-var import_client50 = require("@prisma/client");
+init_database();
 var TBLIntelligence = class {
   prisma;
   elementRegistry = /* @__PURE__ */ new Map();
@@ -41773,7 +41837,7 @@ var TBLIntelligence = class {
   tableRegistry = /* @__PURE__ */ new Map();
   dataCache = /* @__PURE__ */ new Map();
   constructor() {
-    this.prisma = new import_client50.PrismaClient();
+    this.prisma = db;
   }
   /**
    * 📖 LECTURE ET DÉCODAGE DES DONNÉES ENCODÉES
@@ -43196,6 +43260,7 @@ var TBLEvaluationEngine_default = TBLEvaluationEngine;
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-intelligence-routes.ts
 init_operation_interpreter();
+init_database();
 var router58 = import_express59.default.Router();
 console.log("\u{1F9E0} [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)");
 var evaluationEngine = new TBLEvaluationEngine_default();
@@ -43204,8 +43269,7 @@ function logRouteHit(route) {
 }
 router58.post("/evaluate", async (req2, res) => {
   logRouteHit("POST /api/tbl/evaluate");
-  const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-  const prisma71 = new PrismaClient73();
+  const prisma51 = db;
   try {
     const { elementId, elementIds, contextData = {}, evalType } = req2.body || {};
     if (Array.isArray(elementIds) && elementIds.length > 0) {
@@ -43218,7 +43282,7 @@ router58.post("/evaluate", async (req2, res) => {
           continue;
         }
         try {
-          const single = await resolveSingleEvaluation(prisma71, id, contextData);
+          const single = await resolveSingleEvaluation(prisma51, id, contextData);
           results[id] = single.payload;
           traces[id] = single.trace;
         } catch (e) {
@@ -43241,7 +43305,7 @@ router58.post("/evaluate", async (req2, res) => {
     const trace = [];
     let resolvedNodeId = null;
     let variable = null;
-    const byKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const byKey = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (byKey) {
       resolvedNodeId = byKey.nodeId;
       variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -43250,7 +43314,7 @@ router58.post("/evaluate", async (req2, res) => {
       trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
     }
     if (!resolvedNodeId) {
-      const node = await prisma71.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+      const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
       if (node) {
         resolvedNodeId = node.id;
         trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -43259,7 +43323,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+      const formula = await prisma51.treeBranchLeafNodeFormula.findUnique({
         where: { id: elementId },
         select: { id: true, nodeId: true, name: true, tokens: true }
       });
@@ -43267,8 +43331,7 @@ router58.post("/evaluate", async (req2, res) => {
         resolvedNodeId = formula.nodeId;
         trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
         try {
-          const { PrismaClient: PrismaClient74 } = await import("@prisma/client");
-          const prismaInstance = new PrismaClient74();
+          const prismaInstance = db;
           const submissionId = contextData.submissionId || "temp-evaluation";
           const valueMap = /* @__PURE__ */ new Map();
           for (const [key2, value] of Object.entries(contextData)) {
@@ -43289,7 +43352,6 @@ router58.post("/evaluate", async (req2, res) => {
             valueMap,
             labelMap
           );
-          await prismaInstance.$disconnect();
           trace.push({ step: "formula_direct_eval", info: `R\xE9sultat: ${result.result}`, success: true });
           return res.json({
             success: true,
@@ -43309,7 +43371,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceFormula = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceFormula = await prisma51.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceFormula) {
         resolvedNodeId = viaSourceFormula.nodeId;
         variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -43319,7 +43381,7 @@ router58.post("/evaluate", async (req2, res) => {
       }
     }
     if (!resolvedNodeId) {
-      const viaSourceRaw = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+      const viaSourceRaw = await prisma51.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
       if (viaSourceRaw) {
         resolvedNodeId = viaSourceRaw.nodeId;
         variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -43338,7 +43400,7 @@ router58.post("/evaluate", async (req2, res) => {
       });
     }
     if (!variable) {
-      const v = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+      const v = await prisma51.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
       if (v) {
         variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
         trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -43375,16 +43437,14 @@ router58.post("/evaluate", async (req2, res) => {
   } catch (e) {
     console.error("\u{1F4A5} [TBL INTELLIGENCE] Erreur /evaluate:", e);
     return res.status(500).json({ success: false, error: "Erreur interne /evaluate", details: e instanceof Error ? e.message : "unknown" });
-  } finally {
-    await prisma71.$disconnect();
   }
 });
-async function resolveSingleEvaluation(prisma71, elementId, contextData) {
+async function resolveSingleEvaluation(prisma51, elementId, contextData) {
   const evaluationEngine2 = new TBLEvaluationEngine_default();
   const trace = [];
   let resolvedNodeId = null;
   let variable = null;
-  const byKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+  const byKey = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
   if (byKey) {
     resolvedNodeId = byKey.nodeId;
     variable = { exposedKey: byKey.exposedKey, displayName: byKey.displayName, sourceRef: byKey.sourceRef };
@@ -43393,7 +43453,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
     trace.push({ step: "variable_exposedKey", info: "Aucune variable avec cet exposedKey", success: false });
   }
   if (!resolvedNodeId) {
-    const node = await prisma71.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
+    const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: elementId }, select: { id: true } });
     if (node) {
       resolvedNodeId = node.id;
       trace.push({ step: "node_direct", info: "Correspondance trouv\xE9e dans TreeBranchLeafNode", success: true });
@@ -43402,7 +43462,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+    const formula = await prisma51.treeBranchLeafNodeFormula.findUnique({
       where: { id: elementId },
       select: { id: true, nodeId: true, name: true, tokens: true }
     });
@@ -43410,8 +43470,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
       resolvedNodeId = formula.nodeId;
       trace.push({ step: "formula_id", info: `Formule trouv\xE9e: ${formula.name}`, success: true });
       try {
-        const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-        const prismaInstance = new PrismaClient73();
+        const prismaInstance = db;
         const submissionId = contextData.submissionId || "temp-evaluation";
         const valueMap = /* @__PURE__ */ new Map();
         for (const [key2, value] of Object.entries(contextData)) {
@@ -43432,7 +43491,6 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
           valueMap,
           labelMap
         );
-        await prismaInstance.$disconnect();
         trace.push({ step: "formula_direct_eval", info: `R\xE9sultat: ${result.result}`, success: true });
         return {
           payload: {
@@ -43454,7 +43512,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceFormula = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceFormula = await prisma51.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: `formula:${elementId}` }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceFormula) {
       resolvedNodeId = viaSourceFormula.nodeId;
       variable = { exposedKey: viaSourceFormula.exposedKey, displayName: viaSourceFormula.displayName, sourceRef: viaSourceFormula.sourceRef };
@@ -43464,7 +43522,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
     }
   }
   if (!resolvedNodeId) {
-    const viaSourceRaw = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
+    const viaSourceRaw = await prisma51.treeBranchLeafNodeVariable.findFirst({ where: { sourceRef: elementId }, select: { nodeId: true, exposedKey: true, displayName: true, sourceRef: true } });
     if (viaSourceRaw) {
       resolvedNodeId = viaSourceRaw.nodeId;
       variable = { exposedKey: viaSourceRaw.exposedKey, displayName: viaSourceRaw.displayName, sourceRef: viaSourceRaw.sourceRef };
@@ -43477,7 +43535,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
     return { payload: { success: false, error: "Impossible de r\xE9soudre elementId", trace }, trace };
   }
   if (!variable) {
-    const v = await prisma71.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
+    const v = await prisma51.treeBranchLeafNodeVariable.findFirst({ where: { nodeId: resolvedNodeId }, select: { exposedKey: true, displayName: true, sourceRef: true } });
     if (v) {
       variable = { exposedKey: v.exposedKey, displayName: v.displayName, sourceRef: v.sourceRef };
       trace.push({ step: "variable_from_node", info: "Variable trouv\xE9e via nodeId", success: true });
@@ -43494,8 +43552,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
   trace.push({ step: "capacity_detect", info: `Capacit\xE9 d\xE9tect\xE9e=${capacity}`, success: true });
   if (capacity === "2") {
     try {
-      const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-      const prismaInstance = new PrismaClient73();
+      const prismaInstance = db;
       const formulaId = sr.replace(/^(formula:|node-formula:)/, "");
       const submissionId = contextData.submissionId || "temp-evaluation";
       const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
@@ -43531,7 +43588,6 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
         valueMap,
         labelMap
       );
-      await prismaInstance.$disconnect();
       trace.push({ step: "formula_interpret", info: `R\xE9sultat: ${result.result}`, success: true });
       return {
         payload: {
@@ -43561,8 +43617,7 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
   }
   if (capacity === "3") {
     try {
-      const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-      const prismaInstance = new PrismaClient73();
+      const prismaInstance = db;
       const conditionId = sr.replace(/^condition:/, "");
       const submissionId = contextData.submissionId || "temp-evaluation";
       const allNodes = await prismaInstance.treeBranchLeafNode.findMany({
@@ -43601,7 +43656,6 @@ async function resolveSingleEvaluation(prisma71, elementId, contextData) {
         valueMap,
         labelMap
       );
-      await prismaInstance.$disconnect();
       trace.push({ step: "condition_interpret", info: `R\xE9sultat: ${result.result}`, success: true });
       return {
         payload: {
@@ -43688,10 +43742,9 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     });
   }
   console.log("\u{1F527} [TBL EVALUATE CONDITION] \xC9valuation avec operation-interpreter:", tblCode);
-  const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-  const prisma71 = new PrismaClient73();
+  const prisma51 = db;
   try {
-    const conditionRecord = await prisma71.treeBranchLeafNodeCondition.findUnique({
+    const conditionRecord = await prisma51.treeBranchLeafNodeCondition.findUnique({
       where: { id: tblCode },
       select: { nodeId: true }
     });
@@ -43704,7 +43757,7 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
     const result = await evaluateVariableOperation(
       conditionRecord.nodeId,
       submissionId || tblCode,
-      prisma71
+      prisma51
     );
     console.log("\u2705 [TBL EVALUATE CONDITION] R\xE9sultat operation-interpreter:", result);
     return res.json({
@@ -43723,8 +43776,6 @@ router58.post("/evaluate/condition/:tblCode", async (req2, res) => {
       error: "Erreur interne",
       details: error instanceof Error ? error.message : "unknown"
     });
-  } finally {
-    await prisma71.$disconnect();
   }
 });
 router58.post("/evaluate/table/:tblCode", async (req2, res) => {
@@ -43741,9 +43792,8 @@ router58.post("/update-database-results", async (req2, res) => {
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F504} [TBL UPDATE] D\xE9but mise \xE0 jour base de donn\xE9es avec CapacityCalculator");
-    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-    const prisma71 = new PrismaClient73();
-    const submissionData = await prisma71.treeBranchLeafSubmissionData.findMany({
+    const prisma51 = db;
+    const submissionData = await prisma51.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: "condition"
@@ -43781,7 +43831,7 @@ router58.post("/update-database-results", async (req2, res) => {
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           method: "CapacityCalculator"
         };
-        await prisma71.treeBranchLeafSubmissionData.update({
+        await prisma51.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: newOperationResult
@@ -43798,7 +43848,6 @@ router58.post("/update-database-results", async (req2, res) => {
         console.error(`\u274C [TBL UPDATE] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma71.$disconnect();
     return res.json({
       success: true,
       updated,
@@ -43819,9 +43868,8 @@ router58.post("/check-submission-data", async (req2, res) => {
   logRouteHit("POST /api/tbl/check-submission-data");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
-    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-    const prisma71 = new PrismaClient73();
-    const allData = await prisma71.treeBranchLeafSubmissionData.findMany({
+    const prisma51 = db;
+    const allData = await prisma51.treeBranchLeafSubmissionData.findMany({
       where: { submissionId }
     });
     const grouped = allData.reduce((acc, item) => {
@@ -43834,7 +43882,6 @@ router58.post("/check-submission-data", async (req2, res) => {
       });
       return acc;
     }, {});
-    await prisma71.$disconnect();
     return res.json({
       success: true,
       submissionId,
@@ -43856,8 +43903,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.body || {};
     console.log("\u{1F9E0} [TBL INTELLIGENT UPDATE] D\xE9but mise \xE0 jour avec traductions intelligentes");
-    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-    const prisma71 = new PrismaClient73();
+    const prisma51 = db;
     let TBLIntelligentTranslator;
     try {
       const translatorModule = await import("../../../../../../tbl-intelligent-translator.cjs");
@@ -43869,8 +43915,8 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         error: "TBLIntelligentTranslator non disponible"
       });
     }
-    const translator = new TBLIntelligentTranslator(prisma71);
-    const submissionData = await prisma71.treeBranchLeafSubmissionData.findMany({
+    const translator = new TBLIntelligentTranslator(prisma51);
+    const submissionData = await prisma51.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -43897,7 +43943,7 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
           data.submissionId
         );
         console.log(`\u2705 [TBL INTELLIGENT] Traduction g\xE9n\xE9r\xE9e: ${intelligentResult.substring(0, 100)}...`);
-        await prisma71.treeBranchLeafSubmissionData.update({
+        await prisma51.treeBranchLeafSubmissionData.update({
           where: { id: data.id },
           data: {
             operationResult: intelligentResult,
@@ -43915,7 +43961,6 @@ router58.post("/update-database-with-intelligent-translations", async (req2, res
         console.error(`\u274C [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
       }
     }
-    await prisma71.$disconnect();
     return res.json({
       success: true,
       message: "Traductions intelligentes appliqu\xE9es",
@@ -43937,9 +43982,8 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
   logRouteHit("GET /api/tbl/check-intelligent-translations");
   try {
     const { submissionId = "df833cac-0b44-4b2b-bb1c-de3878f00182" } = req2.query;
-    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-    const prisma71 = new PrismaClient73();
-    const recentData = await prisma71.treeBranchLeafSubmissionData.findMany({
+    const prisma51 = db;
+    const recentData = await prisma51.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         operationSource: {
@@ -43957,7 +44001,6 @@ router58.get("/check-intelligent-translations", async (req2, res) => {
       },
       take: 10
     });
-    await prisma71.$disconnect();
     const translations = recentData.map((data) => ({
       id: data.id,
       nodeLabel: data.TreeBranchLeafNode?.label,
@@ -43991,12 +44034,10 @@ router58.get("/nodes/:nodeId", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log("\u{1F504} [TBL NODES] R\xE9cup\xE9ration node via TBL:", nodeId);
-    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-    const prisma71 = new PrismaClient73();
-    const node = await prisma71.treeBranchLeafNode.findUnique({
+    const prisma51 = db;
+    const node = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: nodeId }
     });
-    await prisma71.$disconnect();
     if (!node) {
       return res.status(404).json({ success: false, error: "Node non trouv\xE9" });
     }
@@ -44014,14 +44055,12 @@ router58.get("/reusables/conditions", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/conditions");
   try {
     console.log("\u{1F504} [TBL CONDITIONS] R\xE9cup\xE9ration conditions via TBL");
-    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-    const prisma71 = new PrismaClient73();
-    const conditions = await prisma71.treeBranchLeafNodeCondition.findMany({
+    const prisma51 = db;
+    const conditions = await prisma51.treeBranchLeafNodeCondition.findMany({
       include: {
         node: true
       }
     });
-    await prisma71.$disconnect();
     return res.json({
       success: true,
       conditions,
@@ -44040,14 +44079,12 @@ router58.get("/reusables/formulas", async (req2, res) => {
   logRouteHit("GET /api/tbl/reusables/formulas");
   try {
     console.log("\u{1F504} [TBL FORMULAS] R\xE9cup\xE9ration formules via TBL");
-    const { PrismaClient: PrismaClient73 } = await import("@prisma/client");
-    const prisma71 = new PrismaClient73();
-    const formulas = await prisma71.treeBranchLeafNodeFormula.findMany({
+    const prisma51 = db;
+    const formulas = await prisma51.treeBranchLeafNodeFormula.findMany({
       include: {
         node: true
       }
     });
-    await prisma71.$disconnect();
     return res.json({
       success: true,
       formulas,
@@ -44066,8 +44103,8 @@ var tbl_intelligence_routes_default = router58;
 
 // src/routes/tbl-capabilities.ts
 var import_express60 = __toESM(require("express"), 1);
-var import_client51 = require("@prisma/client");
-var prisma49 = new import_client51.PrismaClient();
+init_database();
+var prisma32 = db;
 var router59 = import_express60.default.Router();
 function extractFormulaDependencies(tokens2) {
   const deps = [];
@@ -44103,7 +44140,7 @@ function extractConditionDependencies(conditionSet) {
 }
 async function resolveCapabilities(treeId, opts = {}) {
   const [variables, formulas, conditions, tables] = await Promise.all([
-    prisma49.treeBranchLeafNodeVariable.findMany({
+    prisma32.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: {
         id: true,
@@ -44116,15 +44153,15 @@ async function resolveCapabilities(treeId, opts = {}) {
         selectedNodeId: true
       }
     }),
-    prisma49.treeBranchLeafNodeFormula.findMany({
+    prisma32.treeBranchLeafNodeFormula.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, tokens: true, name: true }
     }),
-    prisma49.treeBranchLeafNodeCondition.findMany({
+    prisma32.treeBranchLeafNodeCondition.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, conditionSet: true, name: true }
     }),
-    prisma49.treeBranchLeafNodeTable.findMany({
+    prisma32.treeBranchLeafNodeTable.findMany({
       where: { TreeBranchLeafNode: { treeId } },
       select: { id: true, nodeId: true, type: true, name: true, meta: true }
     })
@@ -44209,10 +44246,10 @@ var tbl_capabilities_default = router59;
 
 // src/routes/leadGeneration.ts
 var import_express61 = require("express");
-var import_client52 = require("@prisma/client");
+init_database();
 var import_express_rate_limit6 = __toESM(require("express-rate-limit"), 1);
 var router60 = (0, import_express61.Router)();
-var prisma50 = new import_client52.PrismaClient();
+var prisma33 = db;
 var leadGenRateLimit = (0, import_express_rate_limit6.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -44245,7 +44282,7 @@ router60.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: "Organization ID manquant" });
     }
-    const sources = await prisma50.leadSource.findMany({
+    const sources = await prisma33.leadSource.findMany({
       where: { organizationId },
       include: {
         _count: { select: { Lead: true } }
@@ -44254,7 +44291,7 @@ router60.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, 
     });
     const campaigns = await Promise.all(
       sources.map(async (s) => {
-        const completedLeads = await prisma50.lead.count({
+        const completedLeads = await prisma33.lead.count({
           where: { organizationId, sourceId: s.id, status: "completed" }
         });
         const leadsGenerated = s._count?.Lead ?? 0;
@@ -44297,7 +44334,7 @@ router60.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2,
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { name, description, isActive = true } = req2.body;
     if (!name) return res.status(400).json({ success: false, message: "Nom de campagne requis" });
-    const created = await prisma50.leadSource.create({
+    const created = await prisma33.leadSource.create({
       data: { organizationId, name, description, isActive: Boolean(isActive) }
     });
     res.json({ success: true, data: created, message: "Campagne cr\xE9\xE9e avec succ\xE8s" });
@@ -44316,10 +44353,10 @@ router60.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
     const originParam = getQueryString(req2.query.origin) ?? "d1m";
     const originWhere = buildOriginFilter(originParam);
     const [totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads] = await Promise.all([
-      prisma50.leadSource.count({ where: { organizationId } }),
-      prisma50.leadSource.count({ where: { organizationId, isActive: true } }),
-      prisma50.lead.count({ where: { organizationId, ...originWhere ?? {} } }),
-      prisma50.lead.count({ where: { organizationId, createdAt: { gte: monthStart }, ...originWhere ?? {} } })
+      prisma33.leadSource.count({ where: { organizationId } }),
+      prisma33.leadSource.count({ where: { organizationId, isActive: true } }),
+      prisma33.lead.count({ where: { organizationId, ...originWhere ?? {} } }),
+      prisma33.lead.count({ where: { organizationId, createdAt: { gte: monthStart }, ...originWhere ?? {} } })
     ]);
     res.json({ success: true, data: { totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads } });
   } catch (error) {
@@ -44332,10 +44369,10 @@ router60.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (re
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const existing = await prisma50.leadSource.findFirst({ where: { id, organizationId } });
+    const existing = await prisma33.leadSource.findFirst({ where: { id, organizationId } });
     if (!existing) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
     const { name, description, isActive } = req2.body;
-    const updated = await prisma50.leadSource.update({ where: { id }, data: { name, description, isActive } });
+    const updated = await prisma33.leadSource.update({ where: { id }, data: { name, description, isActive } });
     res.json({ success: true, data: updated, message: "Campagne modifi\xE9e avec succ\xE8s" });
   } catch (error) {
     console.error("\u274C [LEAD-GEN] Erreur modification campagne (LeadSource):", error);
@@ -44347,7 +44384,7 @@ router60.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async 
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const deleted = await prisma50.leadSource.deleteMany({ where: { id, organizationId } });
+    const deleted = await prisma33.leadSource.deleteMany({ where: { id, organizationId } });
     if (deleted.count === 0) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
     res.json({ success: true, message: "Campagne supprim\xE9e avec succ\xE8s" });
   } catch (error) {
@@ -44362,9 +44399,9 @@ router60.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), 
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     if (!status) return res.status(400).json({ success: false, message: "Statut requis" });
-    const target = await prisma50.leadSource.findFirst({ where: { id, organizationId } });
+    const target = await prisma33.leadSource.findFirst({ where: { id, organizationId } });
     if (!target) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
-    const updated = await prisma50.leadSource.update({ where: { id }, data: { isActive: status === "active" } });
+    const updated = await prisma33.leadSource.update({ where: { id }, data: { isActive: status === "active" } });
     res.json({ success: true, data: updated, message: "Statut mis \xE0 jour" });
   } catch (error) {
     console.error("\u274C [LEAD-GEN] Erreur MAJ statut (LeadSource):", error);
@@ -44376,9 +44413,9 @@ router60.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"])
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const source = await prisma50.leadSource.findFirst({ where: { id, organizationId } });
+    const source = await prisma33.leadSource.findFirst({ where: { id, organizationId } });
     if (!source) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
-    const copy = await prisma50.leadSource.create({
+    const copy = await prisma33.leadSource.create({
       data: {
         organizationId,
         name: `${source.name} (Copie)`,
@@ -44406,7 +44443,7 @@ router60.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async 
     start.setHours(0, 0, 0, 0);
     const originParam = getQueryString(req2.query.origin) ?? "d1m";
     const originWhere = buildOriginFilter(originParam);
-    const leads = await prisma50.lead.findMany({
+    const leads = await prisma33.lead.findMany({
       where: { organizationId, createdAt: { gte: start }, ...originWhere ?? {} },
       select: { createdAt: true, status: true }
     });
@@ -44436,10 +44473,9 @@ var leadGeneration_default = router60;
 
 // src/routes/marketplace-fixed.ts
 var import_express62 = require("express");
-var import_client53 = require("@prisma/client");
+init_prisma();
 var import_express_rate_limit7 = __toESM(require("express-rate-limit"), 1);
 var router61 = (0, import_express62.Router)();
-var prisma51 = new import_client53.PrismaClient();
 var marketplaceRateLimit = (0, import_express_rate_limit7.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -44485,7 +44521,7 @@ router61.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       where.targetRegions = { hasSome: [targetRegions] };
     }
     console.log("\u{1F50D} [MARKETPLACE] Requ\xEAte leads avec filtres:", where);
-    const leads = await prisma51.leadMarketplace.findMany({
+    const leads = await db.leadMarketplace.findMany({
       where,
       include: {
         Lead: {
@@ -44517,7 +44553,7 @@ router61.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       take: parseInt(limit),
       skip: parseInt(offset)
     });
-    const total = await prisma51.leadMarketplace.count({ where });
+    const total = await db.leadMarketplace.count({ where });
     const transformedLeads = leads.map((marketplace) => ({
       id: marketplace.id,
       leadId: marketplace.leadId,
@@ -44584,15 +44620,15 @@ router61.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
       totalPurchases,
       myPublishedLeads
     ] = await Promise.all([
-      prisma51.leadMarketplace.count({
+      db.leadMarketplace.count({
         where: { status: "AVAILABLE" }
       }),
-      prisma51.leadMarketplace.count({
+      db.leadMarketplace.count({
         where: { status: "PURCHASED" }
       }),
-      prisma51.leadPurchase.count().catch(() => 0),
+      db.leadPurchase.count().catch(() => 0),
       // En cas d'erreur
-      prisma51.leadMarketplace.count({
+      db.leadMarketplace.count({
         where: {
           Lead: {
             organizationId
@@ -44663,7 +44699,7 @@ router61.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async
         message: "Organization ID ou User ID manquant"
       });
     }
-    const leadMarketplace = await prisma51.leadMarketplace.findUnique({
+    const leadMarketplace = await db.leadMarketplace.findUnique({
       where: { leadId },
       include: { Lead: true }
     });
@@ -44695,10 +44731,10 @@ var marketplace_fixed_default = router61;
 
 // src/routes/partner.ts
 var import_express63 = require("express");
-var import_client54 = require("@prisma/client");
+init_database();
 var import_express_rate_limit8 = __toESM(require("express-rate-limit"), 1);
 var router62 = (0, import_express63.Router)();
-var prisma52 = new import_client54.PrismaClient();
+var prisma34 = db;
 var partnerRateLimit = (0, import_express_rate_limit8.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -44717,7 +44753,7 @@ router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         message: "Organization ID manquant"
       });
     }
-    const partnerOrg = await prisma52.partnerOrganization.findUnique({
+    const partnerOrg = await prisma34.partnerOrganization.findUnique({
       where: { organizationId },
       include: {
         organization: {
@@ -44742,23 +44778,23 @@ router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       monthlyRevenue,
       activeCampaigns
     ] = await Promise.all([
-      prisma52.lead.count({
+      prisma34.lead.count({
         where: { organizationId }
       }),
-      prisma52.lead.count({
+      prisma34.lead.count({
         where: {
           organizationId,
           createdAt: { gte: startOfMonth }
         }
       }),
-      prisma52.creditTransaction.aggregate({
+      prisma34.creditTransaction.aggregate({
         where: {
           organizationId,
           type: "SALE"
         },
         _sum: { amount: true }
       }),
-      prisma52.creditTransaction.aggregate({
+      prisma34.creditTransaction.aggregate({
         where: {
           organizationId,
           type: "SALE",
@@ -44766,7 +44802,7 @@ router62.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         },
         _sum: { amount: true }
       }),
-      prisma52.campaign.count({
+      prisma34.campaign.count({
         where: {
           organizationId,
           status: "ACTIVE"
@@ -44807,7 +44843,7 @@ router62.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, r
     const { period = "30", offset = 0, limit = 50 } = req2.query;
     const startDate = /* @__PURE__ */ new Date();
     startDate.setDate(startDate.getDate() - parseInt(period));
-    const earnings = await prisma52.creditTransaction.findMany({
+    const earnings = await prisma34.creditTransaction.findMany({
       where: {
         organizationId,
         type: "SALE",
@@ -44829,7 +44865,7 @@ router62.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, r
       take: parseInt(limit),
       skip: parseInt(offset)
     });
-    const totalEarnings = await prisma52.creditTransaction.aggregate({
+    const totalEarnings = await prisma34.creditTransaction.aggregate({
       where: {
         organizationId,
         type: "SALE",
@@ -44881,7 +44917,7 @@ router62.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
         isNot: null
       };
     }
-    const leads = await prisma52.lead.findMany({
+    const leads = await prisma34.lead.findMany({
       where,
       include: {
         campaign: {
@@ -44915,7 +44951,7 @@ router62.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       take: parseInt(limit),
       skip: parseInt(offset)
     });
-    const total = await prisma52.lead.count({ where });
+    const total = await prisma34.lead.count({ where });
     res.json({
       success: true,
       data: {
@@ -44960,7 +44996,7 @@ router62.post("/register", requireRole2(["admin", "super_admin"]), async (req2, 
         message: "Personne de contact et email requis"
       });
     }
-    const existingPartner = await prisma52.partnerOrganization.findUnique({
+    const existingPartner = await prisma34.partnerOrganization.findUnique({
       where: { organizationId }
     });
     if (existingPartner) {
@@ -44969,7 +45005,7 @@ router62.post("/register", requireRole2(["admin", "super_admin"]), async (req2, 
         message: "Organisation d\xE9j\xE0 enregistr\xE9e comme partenaire"
       });
     }
-    const partnerOrg = await prisma52.partnerOrganization.create({
+    const partnerOrg = await prisma34.partnerOrganization.create({
       data: {
         organizationId,
         partnerType: "LEAD_GENERATOR",
@@ -45009,7 +45045,8 @@ var partner_default = router62;
 var import_express64 = require("express");
 var import_express_rate_limit9 = __toESM(require("express-rate-limit"), 1);
 var import_zod8 = require("zod");
-console.log("[PUBLIC-FORMS-DEBUG] prisma import\xE9:", typeof prisma, prisma ? "\u2705 OK" : "\u274C UNDEFINED");
+init_prisma();
+console.log("[PUBLIC-FORMS-DEBUG] prisma import\xE9:", typeof db, db ? "\u2705 OK" : "\u274C UNDEFINED");
 var router63 = (0, import_express64.Router)();
 var submissionRateLimit = (0, import_express_rate_limit9.default)({
   windowMs: 5 * 60 * 1e3,
@@ -45032,7 +45069,7 @@ var ensureUniqueSlug = async (organizationId, base, excludeFormId) => {
   let counter = 1;
   const maxAttempts = 100;
   while (counter <= maxAttempts) {
-    const allWithSlug = await prisma.publicForm.findMany({
+    const allWithSlug = await db.publicForm.findMany({
       where: {
         organizationId,
         slug,
@@ -45048,7 +45085,7 @@ var ensureUniqueSlug = async (organizationId, base, excludeFormId) => {
     const deletedOnes = allWithSlug.filter((f) => f.deletedAt !== null);
     if (activeOnes.length === 0 && deletedOnes.length > 0) {
       console.log(`[ensureUniqueSlug] \u{1F5D1}\uFE0F Suppression d\xE9finitive de ${deletedOnes.length} formulaire(s) supprim\xE9(s) avec le slug "${slug}"`);
-      await prisma.publicForm.deleteMany({
+      await db.publicForm.deleteMany({
         where: {
           id: { in: deletedOnes.map((f) => f.id) }
         }
@@ -45184,7 +45221,7 @@ var listFormsHandler = async (req2, res) => {
     return;
   }
   try {
-    const forms = await prisma.publicForm.findMany({
+    const forms = await db.publicForm.findMany({
       where: { organizationId, deletedAt: null },
       orderBy: { createdAt: "desc" }
     });
@@ -45202,13 +45239,13 @@ var statsHandler = async (req2, res) => {
   try {
     const startOfDay = /* @__PURE__ */ new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    const [forms, totalSubmissions, todaySubmissions] = await prisma.$transaction([
-      prisma.publicForm.findMany({
+    const [forms, totalSubmissions, todaySubmissions] = await db.$transaction([
+      db.publicForm.findMany({
         where: { organizationId, deletedAt: null },
         select: { id: true, name: true, submissionCount: true, conversionRate: true, isActive: true }
       }),
-      prisma.publicFormSubmission.count({ where: { organizationId } }),
-      prisma.publicFormSubmission.count({
+      db.publicFormSubmission.count({ where: { organizationId } }),
+      db.publicFormSubmission.count({
         where: { organizationId, createdAt: { gte: startOfDay } }
       })
     ]);
@@ -45243,14 +45280,14 @@ var submissionsHandler = async (req2, res) => {
   }
   const { formId } = req2.params;
   try {
-    const form = await prisma.publicForm.findFirst({
+    const form = await db.publicForm.findFirst({
       where: { id: formId, organizationId, deletedAt: null }
     });
     if (!form) {
       res.status(404).json({ success: false, message: "Formulaire introuvable" });
       return;
     }
-    const submissions = await prisma.publicFormSubmission.findMany({
+    const submissions = await db.publicFormSubmission.findMany({
       where: { formId: form.id, organizationId },
       orderBy: { createdAt: "desc" },
       take: 100
@@ -45276,7 +45313,7 @@ var createFormHandler = async (req2, res) => {
     const payload = parsed.data;
     const baseSlug = slugify(payload.slug ?? payload.name);
     const slug = await ensureUniqueSlug(organizationId, baseSlug);
-    const created = await prisma.publicForm.create({
+    const created = await db.publicForm.create({
       data: {
         organizationId,
         name: payload.name.trim(),
@@ -45323,7 +45360,7 @@ var updateFormHandler = async (req2, res) => {
     return;
   }
   try {
-    const form = await prisma.publicForm.findFirst({
+    const form = await db.publicForm.findFirst({
       where: { id: formId, organizationId, deletedAt: null }
     });
     if (!form) {
@@ -45350,7 +45387,7 @@ var updateFormHandler = async (req2, res) => {
     if (payload.campaigns !== void 0) data.campaigns = payload.campaigns;
     if (payload.isActive !== void 0) data.isActive = payload.isActive;
     if (nextSlug !== form.slug) data.slug = nextSlug;
-    const updated = await prisma.publicForm.update({
+    const updated = await db.publicForm.update({
       where: { id: form.id },
       data
     });
@@ -45379,14 +45416,14 @@ var toggleFormHandler = async (req2, res) => {
     return;
   }
   try {
-    const form = await prisma.publicForm.findFirst({
+    const form = await db.publicForm.findFirst({
       where: { id: formId, organizationId, deletedAt: null }
     });
     if (!form) {
       res.status(404).json({ success: false, message: "Formulaire introuvable" });
       return;
     }
-    const updated = await prisma.publicForm.update({
+    const updated = await db.publicForm.update({
       where: { id: form.id },
       data: { isActive: parsed.data.isActive }
     });
@@ -45403,7 +45440,7 @@ var deleteFormHandler = async (req2, res) => {
   }
   const { formId } = req2.params;
   try {
-    const form = await prisma.publicForm.findFirst({
+    const form = await db.publicForm.findFirst({
       where: { id: formId, organizationId, deletedAt: null }
     });
     if (!form) {
@@ -45411,7 +45448,7 @@ var deleteFormHandler = async (req2, res) => {
       return;
     }
     const deletedSlug = `${form.slug}-deleted-${Date.now()}`;
-    await prisma.publicForm.update({
+    await db.publicForm.update({
       where: { id: form.id },
       data: {
         deletedAt: /* @__PURE__ */ new Date(),
@@ -45456,7 +45493,7 @@ router63.get(
     try {
       const { formId } = req2.params;
       const user = req2.user;
-      const form = await prisma.publicForm.findFirst({
+      const form = await db.publicForm.findFirst({
         where: {
           id: formId,
           deletedAt: null,
@@ -45520,7 +45557,7 @@ router63.use(
 router63.get("/public/:identifier/config", async (req2, res) => {
   try {
     const { identifier } = req2.params;
-    const form = await prisma.publicForm.findFirst({
+    const form = await db.publicForm.findFirst({
       where: {
         deletedAt: null,
         isActive: true,
@@ -45566,7 +45603,7 @@ router63.post("/submit", submissionRateLimit, async (req2, res) => {
     return;
   }
   try {
-    const form = await prisma.publicForm.findFirst({
+    const form = await db.publicForm.findFirst({
       where: {
         deletedAt: null,
         isActive: true,
@@ -45581,7 +45618,7 @@ router63.post("/submit", submissionRateLimit, async (req2, res) => {
     if (form.maxSubmissionsPerDay) {
       const startOfDay = /* @__PURE__ */ new Date();
       startOfDay.setHours(0, 0, 0, 0);
-      const submissionsToday = await prisma.publicFormSubmission.count({
+      const submissionsToday = await db.publicFormSubmission.count({
         where: {
           formId: form.id,
           createdAt: { gte: startOfDay }
@@ -45594,7 +45631,7 @@ router63.post("/submit", submissionRateLimit, async (req2, res) => {
     }
     const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || "unknown";
     const userAgent = req2.headers["user-agent"] ?? "unknown";
-    const submission = await prisma.publicFormSubmission.create({
+    const submission = await db.publicFormSubmission.create({
       data: {
         formId: form.id,
         organizationId: form.organizationId,
@@ -45606,7 +45643,7 @@ router63.post("/submit", submissionRateLimit, async (req2, res) => {
         marketingConsent
       }
     });
-    await prisma.publicForm.update({
+    await db.publicForm.update({
       where: { id: form.id },
       data: {
         submissionCount: { increment: 1 },
@@ -45630,10 +45667,9 @@ var publicForms_default = router63;
 
 // src/routes/landingPages.ts
 var import_express65 = require("express");
-var import_client55 = require("@prisma/client");
 var import_express_rate_limit10 = __toESM(require("express-rate-limit"), 1);
+init_prisma();
 var router64 = (0, import_express65.Router)();
-var prisma53 = new import_client55.PrismaClient();
 var publicLandingRateLimit = (0, import_express_rate_limit10.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -45676,7 +45712,7 @@ var toSnapshots = (value) => {
 router64.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
   try {
     const { slug } = req2.params;
-    const landingPage = await prisma53.treeBranchLeafTree.findFirst({
+    const landingPage = await db.treeBranchLeafTree.findFirst({
       where: {
         category: "landing",
         isPublic: true,
@@ -45693,7 +45729,7 @@ router64.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
         message: "Landing page non trouv\xE9e"
       });
     }
-    await prisma53.treeBranchLeafSubmission.create({
+    await db.treeBranchLeafSubmission.create({
       data: {
         treeId: landingPage.id,
         status: "view",
@@ -45750,7 +45786,7 @@ router64.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) =
         message: "Type d'\xE9v\xE9nement requis"
       });
     }
-    const landingPage = await prisma53.treeBranchLeafTree.findFirst({
+    const landingPage = await db.treeBranchLeafTree.findFirst({
       where: {
         category: "landing",
         OR: [{ id: slug }, { name: slug }]
@@ -45763,7 +45799,7 @@ router64.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) =
         message: "Landing page non trouv\xE9e"
       });
     }
-    await prisma53.treeBranchLeafSubmission.create({
+    await db.treeBranchLeafSubmission.create({
       data: {
         treeId: landingPage.id,
         status: event,
@@ -45798,15 +45834,15 @@ router64.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2,
         message: "Organization ID manquant"
       });
     }
-    const trees = await prisma53.treeBranchLeafTree.findMany({
+    const trees = await db.treeBranchLeafTree.findMany({
       where: { organizationId, category: "landing" },
       orderBy: { createdAt: "desc" }
     });
     const data = await Promise.all(
       trees.map(async (t) => {
         const [views, conversions] = await Promise.all([
-          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
-          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
+          db.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
+          db.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
         ]);
         const conversionRate = views > 0 ? Math.round(conversions / views * 100) : 0;
         const content = toJsonObject(t.metadata);
@@ -45843,12 +45879,12 @@ router64.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", 
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const trees = await prisma53.treeBranchLeafTree.findMany({ where: { organizationId, category: "landing" }, orderBy: { createdAt: "desc" } });
+    const trees = await db.treeBranchLeafTree.findMany({ where: { organizationId, category: "landing" }, orderBy: { createdAt: "desc" } });
     const data = await Promise.all(
       trees.map(async (t) => {
         const [views, conversions] = await Promise.all([
-          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
-          prisma53.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
+          db.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "view" } }),
+          db.treeBranchLeafSubmission.count({ where: { treeId: t.id, status: "form_submit" } })
         ]);
         const conversionRate = views > 0 ? Math.round(conversions / views * 100) : 0;
         const content = toJsonObject(t.metadata);
@@ -45885,12 +45921,12 @@ router64.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["adm
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const totalPages = await prisma53.treeBranchLeafTree.count({ where: { organizationId, category: "landing" } });
-    const publishedPages = await prisma53.treeBranchLeafTree.count({ where: { organizationId, category: "landing", status: "published" } });
+    const totalPages = await db.treeBranchLeafTree.count({ where: { organizationId, category: "landing" } });
+    const publishedPages = await db.treeBranchLeafTree.count({ where: { organizationId, category: "landing", status: "published" } });
     const draftPages = totalPages - publishedPages;
     const [totalViews, totalConversions] = await Promise.all([
-      prisma53.treeBranchLeafSubmission.count({ where: { status: "view", TreeBranchLeafTree: { organizationId, category: "landing" } } }),
-      prisma53.treeBranchLeafSubmission.count({ where: { status: "form_submit", TreeBranchLeafTree: { organizationId, category: "landing" } } })
+      db.treeBranchLeafSubmission.count({ where: { status: "view", TreeBranchLeafTree: { organizationId, category: "landing" } } }),
+      db.treeBranchLeafSubmission.count({ where: { status: "form_submit", TreeBranchLeafTree: { organizationId, category: "landing" } } })
     ]);
     const avgConversionRate = totalViews > 0 ? Math.round(totalConversions / totalViews * 100) : 0;
     res.json({ success: true, data: { totalPages, publishedPages, draftPages, totalViews, totalConversions, avgConversionRate } });
@@ -45910,7 +45946,7 @@ router64.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, require
     const start = /* @__PURE__ */ new Date();
     start.setDate(start.getDate() - (days - 1));
     start.setHours(0, 0, 0, 0);
-    const submissions = await prisma53.treeBranchLeafSubmission.findMany({
+    const submissions = await db.treeBranchLeafSubmission.findMany({
       where: { createdAt: { gte: start }, TreeBranchLeafTree: { organizationId, category: "landing" } },
       select: { createdAt: true, status: true }
     });
@@ -45940,7 +45976,7 @@ router64.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin",
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { title, description, content, status, settings } = req2.body;
     if (!title) return res.status(400).json({ success: false, message: "Titre requis" });
-    const created = await prisma53.treeBranchLeafTree.create({
+    const created = await db.treeBranchLeafTree.create({
       data: {
         organizationId,
         name: title,
@@ -45962,10 +45998,10 @@ router64.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await db.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const { title, description, content, status, settings } = req2.body;
-    const updated = await prisma53.treeBranchLeafTree.update({
+    const updated = await db.treeBranchLeafTree.update({
       where: { id },
       data: {
         name: title ?? tree.name,
@@ -45986,7 +46022,7 @@ router64.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["ad
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const deleted = await prisma53.treeBranchLeafTree.deleteMany({ where: { id, organizationId, category: "landing" } });
+    const deleted = await db.treeBranchLeafTree.deleteMany({ where: { id, organizationId, category: "landing" } });
     if (deleted.count === 0) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     res.json({ success: true });
   } catch (error) {
@@ -46001,9 +46037,9 @@ router64.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRol
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     if (publish === void 0) return res.status(400).json({ success: false, message: "Param\xE8tre publish manquant" });
-    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await db.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
-    const updated = await prisma53.treeBranchLeafTree.update({ where: { id }, data: { status: publish ? "published" : "draft", isPublic: !!publish } });
+    const updated = await db.treeBranchLeafTree.update({ where: { id }, data: { status: publish ? "published" : "draft", isPublic: !!publish } });
     res.json({ success: true, data: { id: updated.id, status: updated.status } });
   } catch (error) {
     console.error("\u274C [LANDING] Erreur publish:", error);
@@ -46015,7 +46051,7 @@ router64.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await db.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const content = toJsonObject(tree.metadata);
     const styling = toJsonObject(tree.settings);
@@ -46055,10 +46091,10 @@ router64.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRo
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await db.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const suffix = Math.random().toString(36).slice(2, 6);
-    const copy = await prisma53.treeBranchLeafTree.create({
+    const copy = await db.treeBranchLeafTree.create({
       data: {
         organizationId,
         name: `${tree.name} (copie ${suffix})`,
@@ -46082,7 +46118,7 @@ router64.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRol
     const { label } = req2.body;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await db.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const settings = toJsonObject(tree.settings);
     const versions = toSnapshots(settings._versions);
@@ -46098,7 +46134,7 @@ router64.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRol
       ...settings,
       _versions: [snapshot, ...versions]
     };
-    const updated = await prisma53.treeBranchLeafTree.update({ where: { id }, data: { settings: updatedSettings } });
+    const updated = await db.treeBranchLeafTree.update({ where: { id }, data: { settings: updatedSettings } });
     res.json({ success: true, data: { id: updated.id, snapshotId } });
   } catch (error) {
     console.error("\u274C [LANDING] Erreur snapshot:", error);
@@ -46110,7 +46146,7 @@ router64.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await db.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const settings = toJsonObject(tree.settings);
     const versions = toSnapshots(settings._versions);
@@ -46134,13 +46170,13 @@ router64.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     if (!snapshotId) return res.status(400).json({ success: false, message: "snapshotId requis" });
-    const tree = await prisma53.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
+    const tree = await db.treeBranchLeafTree.findFirst({ where: { id, organizationId, category: "landing" } });
     if (!tree) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     const settings = toJsonObject(tree.settings);
     const versions = toSnapshots(settings._versions);
     const snap = versions.find((version) => version.id === snapshotId);
     if (!snap) return res.status(404).json({ success: false, message: "Snapshot non trouv\xE9" });
-    const updated = await prisma53.treeBranchLeafTree.update({
+    const updated = await db.treeBranchLeafTree.update({
       where: { id },
       data: {
         metadata: snap.content,
@@ -46157,10 +46193,10 @@ var landingPages_default = router64;
 
 // src/routes/campaignAnalytics.ts
 var import_express66 = require("express");
-var import_client56 = require("@prisma/client");
+init_database();
 var import_express_rate_limit11 = __toESM(require("express-rate-limit"), 1);
 var router65 = (0, import_express66.Router)();
-var prisma54 = new import_client56.PrismaClient();
+var prisma35 = db;
 var campaignAnalyticsRateLimit = (0, import_express_rate_limit11.default)({
   windowMs: 60 * 1e3,
   // 1 minute
@@ -46191,25 +46227,25 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       conversionFunnel
     ] = await Promise.all([
       // Total des leads
-      prisma54.lead.count({
+      prisma35.lead.count({
         where: { organizationId }
       }),
       // Leads de la période
-      prisma54.lead.count({
+      prisma35.lead.count({
         where: {
           organizationId,
           createdAt: { gte: startDate }
         }
       }),
       // Campagnes actives
-      prisma54.campaign.count({
+      prisma35.campaign.count({
         where: {
           organizationId,
           status: "ACTIVE"
         }
       }),
       // Revenus totaux
-      prisma54.creditTransaction.aggregate({
+      prisma35.creditTransaction.aggregate({
         where: {
           organizationId,
           type: "SALE"
@@ -46217,7 +46253,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         _sum: { amount: true }
       }),
       // Score IA moyen
-      prisma54.lead.aggregate({
+      prisma35.lead.aggregate({
         where: {
           organizationId,
           aiScore: { not: null }
@@ -46225,13 +46261,13 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
         _avg: { aiScore: true }
       }),
       // Funnel de conversion
-      prisma54.lead.groupBy({
+      prisma35.lead.groupBy({
         by: ["status"],
         where: { organizationId },
         _count: true
       })
     ]);
-    const dailyLeads = await prisma54.$queryRaw`
+    const dailyLeads = await prisma35.$queryRaw`
       SELECT 
         DATE(created_at) as date,
         COUNT(*) as count
@@ -46241,7 +46277,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       GROUP BY DATE(created_at)
       ORDER BY date ASC
     `;
-    const topCampaigns = await prisma54.campaign.findMany({
+    const topCampaigns = await prisma35.campaign.findMany({
       where: { organizationId },
       select: {
         id: true,
@@ -46256,7 +46292,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       },
       take: 5
     });
-    const leadsSources = await prisma54.lead.groupBy({
+    const leadsSources = await prisma35.lead.groupBy({
       by: ["source"],
       where: {
         organizationId,
@@ -46311,7 +46347,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
     const { period = "30" } = req2.query;
     const startDate = /* @__PURE__ */ new Date();
     startDate.setDate(startDate.getDate() - parseInt(period));
-    const campaign = await prisma54.campaign.findFirst({
+    const campaign = await prisma35.campaign.findFirst({
       where: {
         id,
         organizationId
@@ -46341,14 +46377,14 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
       regionBreakdown
     ] = await Promise.all([
       // Leads de la période
-      prisma54.lead.count({
+      prisma35.lead.count({
         where: {
           campaignId: id,
           createdAt: { gte: startDate }
         }
       }),
       // Revenus générés par les leads de cette campagne
-      prisma54.leadMarketplace.aggregate({
+      prisma35.leadMarketplace.aggregate({
         where: {
           campaignId: id,
           status: "SOLD"
@@ -46356,7 +46392,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         _sum: { marketplacePrice: true }
       }),
       // Score IA moyen
-      prisma54.lead.aggregate({
+      prisma35.lead.aggregate({
         where: {
           campaignId: id,
           aiScore: { not: null }
@@ -46364,19 +46400,19 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         _avg: { aiScore: true }
       }),
       // Répartition par statut
-      prisma54.lead.groupBy({
+      prisma35.lead.groupBy({
         by: ["status"],
         where: { campaignId: id },
         _count: true
       }),
       // Répartition par source
-      prisma54.lead.groupBy({
+      prisma35.lead.groupBy({
         by: ["source"],
         where: { campaignId: id },
         _count: true
       }),
       // Répartition par région
-      prisma54.lead.groupBy({
+      prisma35.lead.groupBy({
         by: ["region"],
         where: {
           campaignId: id,
@@ -46385,7 +46421,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         _count: true
       })
     ]);
-    const dailyLeadsEvolution = await prisma54.$queryRaw`
+    const dailyLeadsEvolution = await prisma35.$queryRaw`
       SELECT 
         DATE(created_at) as date,
         COUNT(*) as count,
@@ -46396,7 +46432,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
       GROUP BY DATE(created_at)
       ORDER BY date ASC
     `;
-    const formsPerformance = await prisma54.publicForm.findMany({
+    const formsPerformance = await prisma35.publicForm.findMany({
       where: { campaignId: id },
       select: {
         id: true,
@@ -46408,7 +46444,7 @@ router65.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
         }
       }
     });
-    const landingPagesPerformance = await prisma54.landingPage.findMany({
+    const landingPagesPerformance = await prisma35.landingPage.findMany({
       where: { campaignId: id },
       select: {
         id: true,
@@ -46479,7 +46515,7 @@ router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
         message: "Organization ID manquant"
       });
     }
-    const aiRecommendations = await prisma54.aiRecommendation.findMany({
+    const aiRecommendations = await prisma35.aiRecommendation.findMany({
       where: {
         lead: {
           organizationId
@@ -46500,7 +46536,7 @@ router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
       },
       take: 20
     });
-    const scoreDistribution = await prisma54.$queryRaw`
+    const scoreDistribution = await prisma35.$queryRaw`
       SELECT 
         CASE 
           WHEN ai_score >= 90 THEN 'Excellent (90-100)'
@@ -46516,7 +46552,7 @@ router65.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
       GROUP BY score_range
       ORDER BY MIN(ai_score) DESC
     `;
-    const campaignScores = await prisma54.campaign.findMany({
+    const campaignScores = await prisma35.campaign.findMany({
       where: { organizationId },
       select: {
         id: true,
@@ -46599,7 +46635,7 @@ router65.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
       if (startDate) where.createdAt.gte = new Date(startDate);
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
-    const leads = await prisma54.lead.findMany({
+    const leads = await prisma35.lead.findMany({
       where,
       include: {
         campaign: {
@@ -46659,9 +46695,9 @@ var campaignAnalytics_default = router65;
 // src/routes/dispatch.ts
 var import_express67 = require("express");
 var import_express_rate_limit12 = __toESM(require("express-rate-limit"), 1);
-var import_client57 = require("@prisma/client");
+init_database();
 var router66 = (0, import_express67.Router)();
-var prisma55 = new import_client57.PrismaClient();
+var prisma36 = db;
 var dispatchRateLimit = (0, import_express_rate_limit12.default)({
   windowMs: 60 * 1e3,
   max: 60,
@@ -46673,7 +46709,7 @@ router66.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res)
   try {
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const rules = await prisma55.automationRule.findMany({
+    const rules = await prisma36.automationRule.findMany({
       where: { organizationId },
       orderBy: { createdAt: "desc" }
     });
@@ -46689,7 +46725,7 @@ router66.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { event, action: action2, params, active = true } = req2.body;
     if (!event || !action2) return res.status(400).json({ success: false, message: "event et action sont requis" });
-    const created = await prisma55.automationRule.create({ data: { organizationId, event, action: action2, params: params ?? {}, active: !!active } });
+    const created = await prisma36.automationRule.create({ data: { organizationId, event, action: action2, params: params ?? {}, active: !!active } });
     res.json({ success: true, data: created, message: "R\xE8gle cr\xE9\xE9e" });
   } catch (error) {
     console.error("\u274C [DISPATCH] Erreur cr\xE9ation:", error);
@@ -46701,10 +46737,10 @@ router66.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const existing = await prisma55.automationRule.findFirst({ where: { id, organizationId } });
+    const existing = await prisma36.automationRule.findFirst({ where: { id, organizationId } });
     if (!existing) return res.status(404).json({ success: false, message: "R\xE8gle non trouv\xE9e" });
     const { event, action: action2, params, active } = req2.body;
-    const updated = await prisma55.automationRule.update({ where: { id }, data: { event, action: action2, params, active } });
+    const updated = await prisma36.automationRule.update({ where: { id }, data: { event, action: action2, params, active } });
     res.json({ success: true, data: updated, message: "R\xE8gle mise \xE0 jour" });
   } catch (error) {
     console.error("\u274C [DISPATCH] Erreur mise \xE0 jour:", error);
@@ -46716,7 +46752,7 @@ router66.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req
     const { id } = req2.params;
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
-    const deleted = await prisma55.automationRule.deleteMany({ where: { id, organizationId } });
+    const deleted = await prisma36.automationRule.deleteMany({ where: { id, organizationId } });
     if (!deleted.count) return res.status(404).json({ success: false, message: "R\xE8gle non trouv\xE9e" });
     res.json({ success: true, message: "R\xE8gle supprim\xE9e" });
   } catch (error) {
@@ -46730,7 +46766,7 @@ router66.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, 
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { lead } = req2.body;
     if (!lead) return res.status(400).json({ success: false, message: "lead requis" });
-    const rules = await prisma55.automationRule.findMany({ where: { organizationId, active: true }, orderBy: { createdAt: "asc" } });
+    const rules = await prisma36.automationRule.findMany({ where: { organizationId, active: true }, orderBy: { createdAt: "asc" } });
     const matches = [];
     for (const r of rules) {
       const params = r.params || {};
@@ -46758,9 +46794,9 @@ var dispatch_default = router66;
 var import_express68 = require("express");
 var import_crypto11 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
-var import_client58 = require("@prisma/client");
+init_database();
 var router67 = (0, import_express68.Router)();
-var prisma56 = new import_client58.PrismaClient();
+var prisma37 = db;
 var rl = (0, import_express_rate_limit13.default)({ windowMs: 60 * 1e3, max: 60 });
 router67.use(authMiddleware);
 router67.use(rl);
@@ -46769,9 +46805,9 @@ router67.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
     const organizationId = req2.user?.organizationId;
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const [google9, telnyx, adPlatforms] = await Promise.all([
-      prisma56.googleWorkspaceConfig.findUnique({ where: { organizationId } }),
-      prisma56.telnyxConnection.findMany({ where: { organizationId } }),
-      prisma56.adPlatformIntegration.findMany({ where: { organizationId } })
+      prisma37.googleWorkspaceConfig.findUnique({ where: { organizationId } }),
+      prisma37.telnyxConnection.findMany({ where: { organizationId } }),
+      prisma37.adPlatformIntegration.findMany({ where: { organizationId } })
     ]);
     const status = {
       google: {
@@ -46802,29 +46838,29 @@ router67.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { platform, name, credentials, config } = req2.body;
     if (!platform) return res.status(400).json({ success: false, message: "Param\xE8tre platform requis" });
-    const existing = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const existing = await prisma37.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     let rec;
     if (existing) {
-      rec = await prisma56.adPlatformIntegration.update({
+      rec = await prisma37.adPlatformIntegration.update({
         where: { id: existing.id },
         data: {
           name: name ?? existing.name,
-          credentials: credentials ?? existing.credentials ?? Prisma.JsonNull,
-          config: config ?? existing.config ?? Prisma.JsonNull,
+          credentials: credentials ?? existing.credentials ?? import_client.Prisma.JsonNull,
+          config: config ?? existing.config ?? import_client.Prisma.JsonNull,
           status: "connected",
           active: true,
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
     } else {
-      rec = await prisma56.adPlatformIntegration.create({
+      rec = await prisma37.adPlatformIntegration.create({
         data: {
           id: (0, import_crypto11.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
-          credentials: credentials ?? Prisma.JsonNull,
-          config: config ?? Prisma.JsonNull,
+          credentials: credentials ?? import_client.Prisma.JsonNull,
+          config: config ?? import_client.Prisma.JsonNull,
           status: "connected",
           active: true,
           updatedAt: /* @__PURE__ */ new Date()
@@ -46843,9 +46879,9 @@ router67.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]),
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { platform } = req2.body;
     if (!platform) return res.status(400).json({ success: false, message: "Param\xE8tre platform requis" });
-    const existing = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const existing = await prisma37.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!existing) return res.status(404).json({ success: false, message: "Int\xE9gration non trouv\xE9e" });
-    await prisma56.adPlatformIntegration.update({
+    await prisma37.adPlatformIntegration.update({
       where: { id: existing.id },
       data: { status: "disconnected", active: false, updatedAt: /* @__PURE__ */ new Date() }
     });
@@ -46861,9 +46897,9 @@ router67.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async
     if (!organizationId) return res.status(400).json({ success: false, message: "Organization ID manquant" });
     const { platform } = req2.body;
     if (!platform) return res.status(400).json({ success: false, message: "Param\xE8tre platform requis" });
-    const existing = await prisma56.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const existing = await prisma37.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!existing) return res.status(404).json({ success: false, message: "Int\xE9gration non trouv\xE9e" });
-    const rec = await prisma56.adPlatformIntegration.update({ where: { id: existing.id }, data: { lastSync: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() } });
+    const rec = await prisma37.adPlatformIntegration.update({ where: { id: existing.id }, data: { lastSync: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() } });
     res.json({ success: true, data: { id: rec.id, lastSync: rec.lastSync } });
   } catch (error) {
     console.error("\u274C [INTEGRATIONS] Erreur sync:", error);
@@ -46874,12 +46910,13 @@ var integrationsStatus_default = router67;
 
 // src/routes/integrations.ts
 var import_express69 = require("express");
-var import_client59 = require("@prisma/client");
+init_database();
 var import_axios2 = __toESM(require("axios"), 1);
 var import_googleapis8 = require("googleapis");
 var import_crypto12 = require("crypto");
 
 // src/services/adPlatformService.ts
+init_prisma();
 var import_meta2 = {};
 var AD_PLATFORMS = {
   google_ads: {
@@ -46988,7 +47025,7 @@ var AdPlatformService = class {
    * Récupère toutes les intégrations publicitaires d'une organisation
    */
   static async getIntegrations(organizationId) {
-    return prisma.adPlatformIntegration.findMany({
+    return db.adPlatformIntegration.findMany({
       where: {
         organizationId,
         active: true
@@ -47012,7 +47049,7 @@ var AdPlatformService = class {
    * Crée une nouvelle intégration publicitaire
    */
   static async createIntegration(organizationId, platform, name, config, credentials) {
-    return prisma.adPlatformIntegration.create({
+    return db.adPlatformIntegration.create({
       data: {
         organizationId,
         platform,
@@ -47027,7 +47064,7 @@ var AdPlatformService = class {
    * Met à jour le statut d'une intégration
    */
   static async updateIntegrationStatus(integrationId, status) {
-    return prisma.adPlatformIntegration.update({
+    return db.adPlatformIntegration.update({
       where: { id: integrationId },
       data: {
         status,
@@ -47039,7 +47076,7 @@ var AdPlatformService = class {
    * Crée une nouvelle campagne publicitaire
    */
   static async createCampaign(organizationId, platformIntegrationId, campaignData) {
-    return prisma.adCampaign.create({
+    return db.adCampaign.create({
       data: {
         organizationId,
         platformIntegrationId,
@@ -47051,7 +47088,7 @@ var AdPlatformService = class {
    * Met à jour les métriques d'une campagne
    */
   static async updateCampaignMetrics(campaignId, date, metrics) {
-    return prisma.adMetrics.upsert({
+    return db.adMetrics.upsert({
       where: {
         campaignId_date: {
           campaignId,
@@ -47072,7 +47109,7 @@ var AdPlatformService = class {
    * Récupère les métriques d'une campagne sur une période
    */
   static async getCampaignMetrics(campaignId, startDate, endDate) {
-    return prisma.adMetrics.findMany({
+    return db.adMetrics.findMany({
       where: {
         campaignId,
         date: {
@@ -47089,7 +47126,7 @@ var AdPlatformService = class {
    * Calcule le ROI global d'une organisation
    */
   static async calculateOrganizationROI(organizationId) {
-    const campaigns = await prisma.adCampaign.findMany({
+    const campaigns = await db.adCampaign.findMany({
       where: {
         organizationId
       },
@@ -47121,7 +47158,7 @@ var AdPlatformService = class {
    * Synchronise les données depuis les APIs externes
    */
   static async syncPlatformData(integrationId) {
-    const integration = await prisma.adPlatformIntegration.findUnique({
+    const integration = await db.adPlatformIntegration.findUnique({
       where: { id: integrationId },
       include: {
         AdCampaign: true
@@ -47145,7 +47182,7 @@ var AdPlatformService = class {
           await this.syncTikTokAds(integration);
           break;
       }
-      await prisma.analyticsEvent.create({
+      await db.analyticsEvent.create({
         data: {
           organizationId: integration.organizationId,
           eventType: "platform_sync_completed",
@@ -47190,6 +47227,7 @@ var AdPlatformService = class {
 };
 
 // src/services/ecommerceService.ts
+init_prisma();
 var ECOMMERCE_PLATFORMS = {
   shopify: {
     id: "shopify",
@@ -47330,7 +47368,7 @@ var EcommerceService = class {
    * Récupère toutes les intégrations e-commerce d'une organisation
    */
   static async getIntegrations(organizationId) {
-    return prisma.ecommerceIntegration.findMany({
+    return db.ecommerceIntegration.findMany({
       where: {
         organizationId,
         active: true
@@ -47355,7 +47393,7 @@ var EcommerceService = class {
    * Crée une nouvelle intégration e-commerce
    */
   static async createIntegration(organizationId, platform, name, url, config, credentials) {
-    return prisma.ecommerceIntegration.create({
+    return db.ecommerceIntegration.create({
       data: {
         organizationId,
         platform,
@@ -47371,7 +47409,7 @@ var EcommerceService = class {
    * Test de connexion à une intégration
    */
   static async testConnection(integrationId) {
-    const integration = await prisma.ecommerceIntegration.findUnique({
+    const integration = await db.ecommerceIntegration.findUnique({
       where: { id: integrationId }
     });
     if (!integration) {
@@ -47397,7 +47435,7 @@ var EcommerceService = class {
           break;
       }
       const status = isConnected ? "connected" : "error";
-      await prisma.ecommerceIntegration.update({
+      await db.ecommerceIntegration.update({
         where: { id: integrationId },
         data: {
           status,
@@ -47406,7 +47444,7 @@ var EcommerceService = class {
       });
       return { connected: isConnected, status };
     } catch (error) {
-      await prisma.ecommerceIntegration.update({
+      await db.ecommerceIntegration.update({
         where: { id: integrationId },
         data: {
           status: "error",
@@ -47420,7 +47458,7 @@ var EcommerceService = class {
    * Synchronise les produits depuis la plateforme e-commerce
    */
   static async syncProducts(integrationId) {
-    const integration = await prisma.ecommerceIntegration.findUnique({
+    const integration = await db.ecommerceIntegration.findUnique({
       where: { id: integrationId }
     });
     if (!integration) {
@@ -47445,7 +47483,7 @@ var EcommerceService = class {
         break;
     }
     for (const productData of products) {
-      await prisma.product.upsert({
+      await db.product.upsert({
         where: {
           organizationId_externalId: {
             organizationId: integration.organizationId,
@@ -47466,7 +47504,7 @@ var EcommerceService = class {
         }
       });
     }
-    await prisma.analyticsEvent.create({
+    await db.analyticsEvent.create({
       data: {
         organizationId: integration.organizationId,
         eventType: "products_synced",
@@ -47484,7 +47522,7 @@ var EcommerceService = class {
    * Synchronise les commandes depuis la plateforme e-commerce
    */
   static async syncOrders(integrationId, fromDate) {
-    const integration = await prisma.ecommerceIntegration.findUnique({
+    const integration = await db.ecommerceIntegration.findUnique({
       where: { id: integrationId }
     });
     if (!integration) {
@@ -47509,7 +47547,7 @@ var EcommerceService = class {
         break;
     }
     for (const orderData of orders) {
-      await prisma.order.upsert({
+      await db.order.upsert({
         where: {
           organizationId_externalId: {
             organizationId: integration.organizationId,
@@ -47533,7 +47571,7 @@ var EcommerceService = class {
           metadata: JSON.stringify(orderData.metadata || {})
         }
       });
-      await prisma.analyticsEvent.create({
+      await db.analyticsEvent.create({
         data: {
           organizationId: integration.organizationId,
           eventType: "order_placed",
@@ -47641,7 +47679,7 @@ var EcommerceService = class {
 };
 
 // src/routes/integrations.ts
-var prisma57 = new import_client59.PrismaClient();
+var prisma38 = db;
 var router68 = (0, import_express69.Router)();
 var memCache = /* @__PURE__ */ new Map();
 function cacheGet(key2) {
@@ -47786,12 +47824,12 @@ router68.get("/advertising/oauth/:platform/callback", async (req2, res) => {
     const organizationId = parsed.organizationId;
     const userId = parsed.userId;
     const upsertIntegration = async (data) => {
-      const existing = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+      const existing = await prisma38.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
       if (existing) {
-        await prisma57.adPlatformIntegration.update({ where: { id: existing.id }, data: { ...data, status: "connected", active: true, updatedAt: /* @__PURE__ */ new Date() } });
+        await prisma38.adPlatformIntegration.update({ where: { id: existing.id }, data: { ...data, status: "connected", active: true, updatedAt: /* @__PURE__ */ new Date() } });
         return existing.id;
       }
-      const created = await prisma57.adPlatformIntegration.create({
+      const created = await prisma38.adPlatformIntegration.create({
         data: {
           id: (0, import_crypto12.randomUUID)(),
           organizationId,
@@ -47918,7 +47956,7 @@ router68.get("/", async (req2, res) => {
     return;
   }
   try {
-    const integrationsSettings = await prisma57.integrationsSettings.findMany({
+    const integrationsSettings = await prisma38.integrationsSettings.findMany({
       where: { organizationId },
       include: {
         user: { select: { id: true, email: true, firstName: true, lastName: true } }
@@ -47947,7 +47985,7 @@ router68.post("/", async (req2, res) => {
     return;
   }
   try {
-    const upsertedIntegration = await prisma57.integrationsSettings.upsert({
+    const upsertedIntegration = await prisma38.integrationsSettings.upsert({
       where: {
         organizationId_type: {
           organizationId,
@@ -47986,7 +48024,7 @@ router68.delete("/:type", async (req2, res) => {
     return;
   }
   try {
-    await prisma57.integrationsSettings.delete({
+    await prisma38.integrationsSettings.delete({
       where: {
         organizationId_type: {
           organizationId,
@@ -48328,7 +48366,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
     const platform = req2.params.platform;
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
-    let integration = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    let integration = await prisma38.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!integration) {
       return res.json({ success: true, platform, integration: null, accounts: [], note: "Aucune int\xE9gration configur\xE9e" });
     }
@@ -48406,7 +48444,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
           const credsWithError = credentialsForError(userError);
           if (credsWithError) data.credentials = credsWithError;
         }
-        const updated = await prisma57.adPlatformIntegration.update({
+        const updated = await prisma38.adPlatformIntegration.update({
           where: { id: integration.id },
           data
         });
@@ -48877,7 +48915,7 @@ router68.get("/advertising/:platform/accounts", async (req2, res) => {
           const credsWithError = credentialsForError(userError, errorCode);
           if (credsWithError) data.credentials = credsWithError;
         }
-        const updated = await prisma57.adPlatformIntegration.update({
+        const updated = await prisma38.adPlatformIntegration.update({
           where: { id: integration.id },
           data
         });
@@ -48996,7 +49034,7 @@ router68.get("/advertising/google_ads/test/customers-get", async (req2, res) => 
   try {
     const organizationId = getEffectiveOrgId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
-    const integ = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform: "google_ads" } });
+    const integ = await prisma38.adPlatformIntegration.findFirst({ where: { organizationId, platform: "google_ads" } });
     if (!integ) return res.status(404).json({ success: false, message: "Int\xE9gration Google Ads manquante" });
     const devTokenSan = sanitizeClientValue(process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "");
     const devToken = devTokenSan.value || "";
@@ -49126,7 +49164,7 @@ router68.delete("/advertising/:platform", async (req2, res) => {
     return;
   }
   try {
-    const deleted = await prisma57.adPlatformIntegration.deleteMany({
+    const deleted = await prisma38.adPlatformIntegration.deleteMany({
       where: {
         organizationId,
         platform
@@ -49151,7 +49189,7 @@ router68.post("/advertising/:platform/select-account", async (req2, res) => {
     if (!account || !account.id) {
       return res.status(400).json({ success: false, message: "Compte invalide" });
     }
-    const integ = await prisma57.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
+    const integ = await prisma38.adPlatformIntegration.findFirst({ where: { organizationId, platform } });
     if (!integ) return res.status(404).json({ success: false, message: "Int\xE9gration non trouv\xE9e" });
     const currentConfig = integ.config;
     const newConfig = { ...currentConfig || {}, selectedAccount: { id: account.id, name: account.name, currency: account.currency } };
@@ -49160,7 +49198,7 @@ router68.post("/advertising/:platform/select-account", async (req2, res) => {
     if (!newName || genericNames.has(newName)) {
       newName = `${platform} - ${account.name || account.id}`;
     }
-    await prisma57.adPlatformIntegration.update({
+    await prisma38.adPlatformIntegration.update({
       where: { id: integ.id },
       data: { config: newConfig, name: newName, updatedAt: /* @__PURE__ */ new Date() }
     });
@@ -49265,9 +49303,9 @@ var integrations_default = router68;
 var import_express70 = require("express");
 var import_express_rate_limit14 = require("express-rate-limit");
 var import_express_validator = require("express-validator");
-var import_client60 = require("@prisma/client");
+init_database();
 var router69 = (0, import_express70.Router)();
-var prisma58 = new import_client60.PrismaClient();
+var prisma39 = db;
 var geminiService2 = new GoogleGeminiService();
 var publicRateLimit = (0, import_express_rate_limit14.rateLimit)({
   windowMs: 15 * 60 * 1e3,
@@ -49359,7 +49397,7 @@ router69.get("/health", (req2, res) => {
 });
 router69.get("/stats", publicRateLimit, async (req2, res) => {
   try {
-    const stats = await prisma58.$transaction(async (tx) => {
+    const stats = await prisma39.$transaction(async (tx) => {
       const totalLeads = await tx.lead.count();
       const recentLeads = await tx.lead.count({
         where: {
@@ -49460,7 +49498,7 @@ router69.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
     const clientIp = req2.ip || req2.connection.remoteAddress;
     console.log(`[PUBLIC-LEAD] Nouvelle demande depuis ${clientIp}`);
     console.log(`[PUBLIC-LEAD] Projet: ${leadData.projectType} - Budget: ${leadData.budget}\u20AC`);
-    const existingLead = await prisma58.lead.findFirst({
+    const existingLead = await prisma39.lead.findFirst({
       where: {
         email: leadData.email,
         createdAt: {
@@ -49476,7 +49514,7 @@ router69.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
       });
     }
     const qualityScore = await calculateLeadScore(leadData);
-    const lead = await prisma58.lead.create({
+    const lead = await prisma39.lead.create({
       data: {
         // Informations projet
         projectType: leadData.projectType,
@@ -49539,7 +49577,7 @@ router69.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
         error: "ID de demande invalide"
       });
     }
-    const lead = await prisma58.lead.findUnique({
+    const lead = await prisma39.lead.findUnique({
       where: { id },
       select: {
         id: true,
@@ -49583,7 +49621,7 @@ var publicLeads_default = router69;
 
 // src/routes/documents.ts
 var import_express71 = require("express");
-var import_client61 = require("@prisma/client");
+init_database();
 var import_nanoid = require("nanoid");
 
 // src/services/documentPdfRenderer.ts
@@ -51365,7 +51403,7 @@ async function renderDocumentPdf(context) {
 
 // src/routes/documents.ts
 var router70 = (0, import_express71.Router)();
-var prisma59 = new import_client61.PrismaClient();
+var prisma40 = db;
 function extractAddressComponents(lead) {
   const data = lead?.data || {};
   const result = {
@@ -51451,7 +51489,7 @@ router70.get("/templates", async (req2, res) => {
     if (type) {
       where.type = type;
     }
-    const templates = await prisma59.documentTemplate.findMany({
+    const templates = await prisma40.documentTemplate.findMany({
       where,
       include: {
         sections: {
@@ -51488,7 +51526,7 @@ router70.get("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma59.documentTemplate.findFirst({
+    const template = await prisma40.documentTemplate.findFirst({
       where: {
         id,
         organizationId
@@ -51525,7 +51563,7 @@ router70.post("/templates", async (req2, res) => {
     if (!name || !type) {
       return res.status(400).json({ error: "Nom et type requis" });
     }
-    const template = await prisma59.documentTemplate.create({
+    const template = await prisma40.documentTemplate.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         name,
@@ -51576,18 +51614,18 @@ router70.put("/templates/:id", async (req2, res) => {
       sections
     } = req2.body;
     console.log("\u{1F4DD} [TEMPLATE UPDATE] Mise \xE0 jour template:", { id, name, treeId, type });
-    const existing = await prisma59.documentTemplate.findFirst({
+    const existing = await prisma40.documentTemplate.findFirst({
       where: { id, organizationId }
     });
     if (!existing) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
     if (sections) {
-      await prisma59.documentSection.deleteMany({
+      await prisma40.documentSection.deleteMany({
         where: { templateId: id }
       });
     }
-    const template = await prisma59.documentTemplate.update({
+    const template = await prisma40.documentTemplate.update({
       where: { id },
       data: {
         name,
@@ -51632,13 +51670,13 @@ router70.delete("/templates/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma59.documentTemplate.findFirst({
+    const template = await prisma40.documentTemplate.findFirst({
       where: { id, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const documentsCount = await prisma59.generatedDocument.count({
+    const documentsCount = await prisma40.generatedDocument.count({
       where: { templateId: id }
     });
     if (documentsCount > 0) {
@@ -51647,7 +51685,7 @@ router70.delete("/templates/:id", async (req2, res) => {
         documentsCount
       });
     }
-    await prisma59.documentTemplate.delete({
+    await prisma40.documentTemplate.delete({
       where: { id }
     });
     res.json({ success: true, message: "Template supprim\xE9" });
@@ -51659,7 +51697,7 @@ router70.delete("/templates/:id", async (req2, res) => {
 router70.get("/themes", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
-    const themes = await prisma59.documentTheme.findMany({
+    const themes = await prisma40.documentTheme.findMany({
       where: { organizationId },
       orderBy: [
         { isDefault: "desc" },
@@ -51677,12 +51715,12 @@ router70.post("/themes", async (req2, res) => {
     const organizationId = req2.headers["x-organization-id"];
     const themeData = req2.body;
     if (themeData.isDefault) {
-      await prisma59.documentTheme.updateMany({
+      await prisma40.documentTheme.updateMany({
         where: { organizationId, isDefault: true },
         data: { isDefault: false }
       });
     }
-    const theme = await prisma59.documentTheme.create({
+    const theme = await prisma40.documentTheme.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         ...themeData,
@@ -51701,7 +51739,7 @@ router70.put("/themes/:id", async (req2, res) => {
     const organizationId = req2.headers["x-organization-id"];
     const themeData = req2.body;
     if (themeData.isDefault) {
-      await prisma59.documentTheme.updateMany({
+      await prisma40.documentTheme.updateMany({
         where: {
           organizationId,
           isDefault: true,
@@ -51710,7 +51748,7 @@ router70.put("/themes/:id", async (req2, res) => {
         data: { isDefault: false }
       });
     }
-    const theme = await prisma59.documentTheme.update({
+    const theme = await prisma40.documentTheme.update({
       where: { id },
       data: themeData
     });
@@ -51723,7 +51761,7 @@ router70.put("/themes/:id", async (req2, res) => {
 router70.delete("/themes/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const templatesCount = await prisma59.documentTemplate.count({
+    const templatesCount = await prisma40.documentTemplate.count({
       where: { themeId: id }
     });
     if (templatesCount > 0) {
@@ -51732,7 +51770,7 @@ router70.delete("/themes/:id", async (req2, res) => {
         templatesCount
       });
     }
-    await prisma59.documentTheme.delete({
+    await prisma40.documentTheme.delete({
       where: { id }
     });
     res.json({ success: true });
@@ -51745,13 +51783,13 @@ router70.get("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma59.documentTemplate.findFirst({
+    const template = await prisma40.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const sections = await prisma59.documentSection.findMany({
+    const sections = await prisma40.documentSection.findMany({
       where: { templateId },
       orderBy: { order: "asc" }
     });
@@ -51766,13 +51804,13 @@ router70.post("/templates/:templateId/sections", async (req2, res) => {
     const { templateId } = req2.params;
     const { type, order, config } = req2.body;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma59.documentTemplate.findFirst({
+    const template = await prisma40.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const section = await prisma59.documentSection.create({
+    const section = await prisma40.documentSection.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         templateId,
@@ -51793,13 +51831,13 @@ router70.put("/templates/:templateId/sections/:sectionId", async (req2, res) => 
     const { templateId, sectionId } = req2.params;
     const { order, config } = req2.body;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma59.documentTemplate.findFirst({
+    const template = await prisma40.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const section = await prisma59.documentSection.update({
+    const section = await prisma40.documentSection.update({
       where: { id: sectionId },
       data: {
         ...order !== void 0 && { order },
@@ -51816,13 +51854,13 @@ router70.delete("/templates/:templateId/sections/:sectionId", async (req2, res) 
   try {
     const { templateId, sectionId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const template = await prisma59.documentTemplate.findFirst({
+    const template = await prisma40.documentTemplate.findFirst({
       where: { id: templateId, organizationId }
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    await prisma59.documentSection.delete({
+    await prisma40.documentSection.delete({
       where: { id: sectionId }
     });
     res.json({ success: true });
@@ -51850,7 +51888,7 @@ router70.get("/generated", async (req2, res) => {
     if (templateId) {
       where.templateId = templateId;
     }
-    const documents = await prisma59.generatedDocument.findMany({
+    const documents = await prisma40.generatedDocument.findMany({
       where,
       include: {
         template: {
@@ -51889,7 +51927,7 @@ router70.get("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const document = await prisma59.generatedDocument.findFirst({
+    const document = await prisma40.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -51934,7 +51972,7 @@ router70.post("/generated/generate", async (req2, res) => {
       return res.status(400).json({ error: "Template ID requis" });
     }
     console.log("\u{1F4C4} [GENERATE DOC] Recherche du template...");
-    const template = await prisma59.documentTemplate.findFirst({
+    const template = await prisma40.documentTemplate.findFirst({
       where: {
         id: templateId,
         organizationId
@@ -51950,11 +51988,11 @@ router70.post("/generated/generate", async (req2, res) => {
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
-    const documentCount = await prisma59.generatedDocument.count({
+    const documentCount = await prisma40.generatedDocument.count({
       where: { templateId }
     });
     const documentNumber = `${template.type}-${String(documentCount + 1).padStart(6, "0")}`;
-    const generatedDocument = await prisma59.generatedDocument.create({
+    const generatedDocument = await prisma40.generatedDocument.create({
       data: {
         id: (0, import_nanoid.nanoid)(),
         templateId,
@@ -51987,7 +52025,7 @@ router70.post("/generated/generate", async (req2, res) => {
     });
     console.log("\u{1F4C4} [GENERATE DOC] Document cr\xE9\xE9:", generatedDocument.id);
     console.log("\u{1F4C4} [GENERATE DOC] Mise \xE0 jour du document avec statut SENT...");
-    const updatedDocument = await prisma59.generatedDocument.update({
+    const updatedDocument = await prisma40.generatedDocument.update({
       where: { id: generatedDocument.id },
       data: {
         status: "SENT",
@@ -52035,7 +52073,7 @@ router70.delete("/generated/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
-    const document = await prisma59.generatedDocument.findFirst({
+    const document = await prisma40.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -52044,7 +52082,7 @@ router70.delete("/generated/:id", async (req2, res) => {
     if (!document) {
       return res.status(404).json({ error: "Document non trouv\xE9" });
     }
-    await prisma59.generatedDocument.delete({
+    await prisma40.generatedDocument.delete({
       where: { id }
     });
     res.json({ success: true, message: "Document supprim\xE9" });
@@ -52058,7 +52096,7 @@ router70.get("/generated/:id/download", async (req2, res) => {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
     console.log("\u{1F4E5} [DOWNLOAD] Demande de t\xE9l\xE9chargement:", { id, organizationId });
-    const document = await prisma59.generatedDocument.findFirst({
+    const document = await prisma40.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -52080,13 +52118,13 @@ router70.get("/generated/:id/download", async (req2, res) => {
       return res.status(404).json({ error: "Document non trouv\xE9" });
     }
     console.log("\u{1F4E5} [DOWNLOAD] Document trouv\xE9:", document.documentNumber);
-    const defaultTheme = await prisma59.documentTheme.findFirst({
+    const defaultTheme = await prisma40.documentTheme.findFirst({
       where: {
         organizationId,
         isDefault: true
       }
     });
-    const organization = await prisma59.organization.findFirst({
+    const organization = await prisma40.organization.findFirst({
       where: { id: organizationId }
     });
     const dataSnapshot = document.dataSnapshot || {};
@@ -52239,7 +52277,7 @@ router70.get("/generated/:id/preview", async (req2, res) => {
     const { id } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
     console.log("\u{1F441}\uFE0F [PREVIEW] Demande d'aper\xE7u:", { id, organizationId });
-    const document = await prisma59.generatedDocument.findFirst({
+    const document = await prisma40.generatedDocument.findFirst({
       where: {
         id,
         organizationId
@@ -52291,9 +52329,9 @@ var documents_default = router70;
 
 // src/routes/sync-temp.ts
 var import_express72 = require("express");
-var import_client62 = require("@prisma/client");
+init_database();
 var router71 = (0, import_express72.Router)();
-var prisma60 = new import_client62.PrismaClient();
+var prisma41 = db;
 router71.post("/sync-documents", async (req2, res) => {
   const { secret } = req2.body;
   if (secret !== "SYNC_2THIER_2024") {
@@ -52326,21 +52364,21 @@ router71.post("/sync-documents", async (req2, res) => {
       { id: "q9v4OwgdrazlRQFdPBJs0", templateId: "G7YU14mfKT9rEj7wD38lD", type: "MODULAR_PAGE", order: 3 }
     ];
     for (const theme of themes) {
-      await prisma60.documentTheme.upsert({
+      await prisma41.documentTheme.upsert({
         where: { id: theme.id },
         update: theme,
         create: theme
       });
     }
     for (const template of templates) {
-      await prisma60.documentTemplate.upsert({
+      await prisma41.documentTemplate.upsert({
         where: { id: template.id },
         update: template,
         create: template
       });
     }
     for (const section of sections) {
-      await prisma60.documentSection.upsert({
+      await prisma41.documentSection.upsert({
         where: { id: section.id },
         update: section,
         create: section
@@ -52440,12 +52478,16 @@ apiRouter.get("/health", (_req, res) => {
 });
 var routes_default = apiRouter;
 
+// src/api-server-clean.ts
+init_prisma();
+
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var import_express74 = require("express");
-var import_client63 = require("@prisma/client");
+init_database();
 init_operation_interpreter();
 
 // src/services/calculatedValuesService.ts
+init_prisma();
 async function storeCalculatedValues(values, submissionId) {
   const result = {
     success: true,
@@ -52461,7 +52503,7 @@ async function storeCalculatedValues(values, submissionId) {
         result.failed++;
         continue;
       }
-      const node = await prisma.treeBranchLeafNode.findUnique({
+      const node = await db.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { id: true, label: true }
       });
@@ -52473,7 +52515,7 @@ async function storeCalculatedValues(values, submissionId) {
         result.failed++;
         continue;
       }
-      await prisma.treeBranchLeafNode.update({
+      await db.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: {
           calculatedValue: String(calculatedValue),
@@ -52501,7 +52543,7 @@ async function storeCalculatedValues(values, submissionId) {
 
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var router72 = (0, import_express74.Router)();
-var prisma61 = new import_client63.PrismaClient();
+var prisma42 = db;
 var stagingStore = /* @__PURE__ */ new Map();
 var STAGE_TTL_MS = 1e3 * 60 * 60;
 function pruneStages() {
@@ -52549,7 +52591,7 @@ async function resolveSharedReferenceAliases(sharedRefs, treeId) {
   if (treeId) {
     where.treeId = treeId;
   }
-  const aliases = await prisma61.treeBranchLeafNode.findMany({
+  const aliases = await prisma42.treeBranchLeafNode.findMany({
     where,
     select: { id: true, sharedReferenceId: true }
   });
@@ -52580,7 +52622,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   if (!formData || typeof formData !== "object") return 0;
   let saved = 0;
   const entries = /* @__PURE__ */ new Map();
-  const displayNodes = treeId ? await prisma61.treeBranchLeafNode.findMany({
+  const displayNodes = treeId ? await prisma42.treeBranchLeafNode.findMany({
     where: {
       treeId,
       calculatedBy: { contains: "preview-unknown-user" }
@@ -52629,7 +52671,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
   }
   for (const entry of entries.values()) {
     const key2 = { submissionId_nodeId: { submissionId: entry.submissionId, nodeId: entry.nodeId } };
-    const existing = await prisma61.treeBranchLeafSubmissionData.findUnique({ where: key2 });
+    const existing = await prisma42.treeBranchLeafSubmissionData.findUnique({ where: key2 });
     const normalize2 = (v) => {
       if (v === null || v === void 0) return null;
       if (typeof v === "string") return v;
@@ -52642,7 +52684,7 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
     if (existing) {
       const changed = normalize2(existing.value) !== normalize2(entry.value) || (existing.operationSource || null) !== (entry.operationSource || null);
       if (changed) {
-        await prisma61.treeBranchLeafSubmissionData.update({
+        await prisma42.treeBranchLeafSubmissionData.update({
           where: key2,
           data: {
             value: entry.value,
@@ -52653,14 +52695,14 @@ async function saveUserEntriesNeutral(submissionId, formData, treeId) {
         saved++;
       }
     } else {
-      await prisma61.treeBranchLeafSubmissionData.create({ data: entry });
+      await prisma42.treeBranchLeafSubmissionData.create({ data: entry });
       saved++;
     }
   }
   return saved;
 }
 async function evaluateCapacitiesForSubmission(submissionId, organizationId, userId, treeId) {
-  const capacities = await prisma61.treeBranchLeafNodeVariable.findMany({
+  const capacities = await prisma42.treeBranchLeafNodeVariable.findMany({
     where: { TreeBranchLeafNode: { treeId }, sourceRef: { not: null } },
     include: { TreeBranchLeafNode: { select: { id: true, label: true, fieldType: true, type: true } } }
   });
@@ -52685,7 +52727,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       const capacityResult = await evaluateVariableOperation(
         capacity.nodeId,
         submissionId,
-        prisma61
+        prisma42
       );
       const normalizedOperationSource = typeof capacityResult.operationSource === "string" ? capacityResult.operationSource.toLowerCase() : "neutral";
       let parsedDetail = null;
@@ -52695,7 +52737,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         parsedDetail = capacityResult.operationDetail;
       }
       const key2 = { submissionId_nodeId: { submissionId, nodeId: capacity.nodeId } };
-      const existing = await prisma61.treeBranchLeafSubmissionData.findUnique({ where: key2 });
+      const existing = await prisma42.treeBranchLeafSubmissionData.findUnique({ where: key2 });
       const normalize2 = (v) => {
         if (v === null || v === void 0) return null;
         if (typeof v === "string") return v;
@@ -52708,7 +52750,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       if (existing) {
         const changed = (existing.sourceRef || null) !== (sourceRef || null) || (existing.operationSource || null) !== (normalizedOperationSource || null) || (existing.fieldLabel || null) !== (capacity.TreeBranchLeafNode?.label || null) || normalize2(existing.operationDetail) !== normalize2(parsedDetail);
         if (changed) {
-          await prisma61.treeBranchLeafSubmissionData.update({
+          await prisma42.treeBranchLeafSubmissionData.update({
             where: key2,
             data: {
               value: null,
@@ -52722,7 +52764,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           results.updated++;
         }
       } else {
-        await prisma61.treeBranchLeafSubmissionData.create({
+        await prisma42.treeBranchLeafSubmissionData.create({
           data: {
             id: `${submissionId}-${capacity.nodeId}-cap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             submissionId,
@@ -52759,7 +52801,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
   if (calculatedValuesToStore.length > 0) {
     try {
       const nodeIds = calculatedValuesToStore.map((v) => v.nodeId);
-      const nodesInfo = await prisma61.treeBranchLeafNode.findMany({
+      const nodesInfo = await prisma42.treeBranchLeafNode.findMany({
         where: { id: { in: nodeIds } },
         select: { id: true, fieldType: true, type: true }
       });
@@ -52801,7 +52843,7 @@ router72.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
     }
     console.log("\u{1F525} [TBL EVALUATE ALL] D\xE9but \xE9valuation compl\xE8te:", submissionId);
     console.log(`\u{1F3E2} [TBL EVALUATE ALL] Organisation: ${organizationId}, Utilisateur: ${userId}`);
-    const submissionData = await prisma61.treeBranchLeafSubmissionData.findMany({
+    const submissionData = await prisma42.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId,
         sourceRef: { not: null }
@@ -52843,7 +52885,7 @@ router72.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
         const calculationResult = await evaluateVariableOperation(
           data.nodeId,
           submissionId,
-          prisma61
+          prisma42
         );
         console.log(`\u2705 [TBL EVALUATE ALL] R\xE9sultat pour ${data.sourceRef}:`, calculationResult.operationResult);
         const normalize2 = (v) => {
@@ -52865,7 +52907,7 @@ router72.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
         })();
         const changed = (data.operationSource || null) !== (normalizedSource || null) || normalize2(data.operationDetail) !== normalize2(nextDetail);
         if (changed) {
-          await prisma61.treeBranchLeafSubmissionData.update({
+          await prisma42.treeBranchLeafSubmissionData.update({
             where: { id: data.id },
             data: {
               operationDetail: nextDetail,
@@ -52919,7 +52961,7 @@ router72.get("/submissions/:submissionId/verification", async (req2, res) => {
   try {
     const { submissionId } = req2.params;
     console.log("\u{1F50D} [TBL VERIFICATION] V\xE9rification soumission:", submissionId);
-    const rows = await prisma61.treeBranchLeafSubmissionData.findMany({
+    const rows = await prisma42.treeBranchLeafSubmissionData.findMany({
       where: { submissionId, sourceRef: { not: null } },
       select: { operationResult: true }
     });
@@ -52989,7 +53031,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
     let effectiveTreeId = treeId;
     if (!effectiveTreeId) {
       console.log("\u26A0\uFE0F [TBL CREATE-AND-EVALUATE] Aucun treeId fourni, recherche du premier arbre disponible...");
-      const firstTree = await prisma61.treeBranchLeafTree.findFirst({
+      const firstTree = await prisma42.treeBranchLeafTree.findFirst({
         select: { id: true, name: true }
       });
       if (!firstTree) {
@@ -52998,13 +53040,13 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
       effectiveTreeId = firstTree.id;
       console.log(`\u{1F333} [TBL CREATE-AND-EVALUATE] Arbre par d\xE9faut s\xE9lectionn\xE9: ${effectiveTreeId} (${firstTree.name})`);
     } else {
-      const treeExists = await prisma61.treeBranchLeafTree.findUnique({
+      const treeExists = await prisma42.treeBranchLeafTree.findUnique({
         where: { id: effectiveTreeId },
         select: { id: true, name: true }
       });
       if (!treeExists) {
         console.log(`\u274C [TBL CREATE-AND-EVALUATE] Arbre ${effectiveTreeId} introuvable, recherche d'un arbre alternatif...`);
-        const firstTree = await prisma61.treeBranchLeafTree.findFirst({
+        const firstTree = await prisma42.treeBranchLeafTree.findFirst({
           select: { id: true, name: true }
         });
         if (!firstTree) {
@@ -53025,7 +53067,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
       });
     }
     let effectiveLeadId = clientId;
-    const leadExists = await prisma61.lead.findUnique({
+    const leadExists = await prisma42.lead.findUnique({
       where: { id: effectiveLeadId },
       select: { id: true, firstName: true, lastName: true, email: true, organizationId: true }
     });
@@ -53049,7 +53091,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
     effectiveLeadId = leadExists.id;
     let effectiveUserId = userId;
     if (effectiveUserId) {
-      const userExists = await prisma61.user.findUnique({
+      const userExists = await prisma42.user.findUnique({
         where: { id: effectiveUserId },
         select: { id: true, firstName: true, lastName: true }
       });
@@ -53062,11 +53104,11 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
     }
     let submissionId = reuseSubmissionId;
     if (submissionId) {
-      const existing = await prisma61.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
+      const existing = await prisma42.treeBranchLeafSubmission.findUnique({ where: { id: submissionId }, select: { id: true } });
       if (!existing) submissionId = void 0;
     }
     if (!submissionId) {
-      const existingDraft = await prisma61.treeBranchLeafSubmission.findFirst({
+      const existingDraft = await prisma42.treeBranchLeafSubmission.findFirst({
         where: {
           treeId: effectiveTreeId,
           leadId: effectiveLeadId,
@@ -53083,7 +53125,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
     }
     if (!submissionId) {
       submissionId = `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      await prisma61.treeBranchLeafSubmission.create({
+      await prisma42.treeBranchLeafSubmission.create({
         data: {
           id: submissionId,
           treeId: effectiveTreeId,
@@ -53100,7 +53142,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
       });
       console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Soumission cr\xE9\xE9e: ${submissionId} pour organization ${organizationId}`);
     } else {
-      await prisma61.treeBranchLeafSubmission.update({
+      await prisma42.treeBranchLeafSubmission.update({
         where: { id: submissionId },
         data: {
           status: status || "draft",
@@ -53115,7 +53157,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
     if (cleanFormData && typeof cleanFormData === "object") {
       const savedCount = await saveUserEntriesNeutral(submissionId, cleanFormData, effectiveTreeId);
       if (savedCount > 0) console.log(`\u2705 [TBL CREATE-AND-EVALUATE] ${savedCount} entr\xE9es utilisateur enregistr\xE9es`);
-      const capacities = await prisma61.treeBranchLeafNodeVariable.findMany({
+      const capacities = await prisma42.treeBranchLeafNodeVariable.findMany({
         where: {
           TreeBranchLeafNode: {
             treeId: effectiveTreeId
@@ -53132,7 +53174,7 @@ router72.post("/submissions/create-and-evaluate", async (req2, res) => {
       const evalStats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId || null, effectiveTreeId);
       console.log(`\u2705 [TBL CREATE-AND-EVALUATE] Capacit\xE9s: ${evalStats.updated} mises \xE0 jour, ${evalStats.created} cr\xE9\xE9es, ${evalStats.stored} valeurs stock\xE9es`);
     }
-    const finalSubmission = await prisma61.treeBranchLeafSubmission.findUnique({
+    const finalSubmission = await prisma42.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: {
         TreeBranchLeafSubmissionData: true
@@ -53161,7 +53203,7 @@ router72.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
     if (!organizationId) {
       return res.status(400).json({ success: false, error: "Organisation ID manquant - authentification requise" });
     }
-    const submission = await prisma61.treeBranchLeafSubmission.findUnique({
+    const submission = await prisma42.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       select: { id: true, treeId: true, status: true, exportData: true }
     });
@@ -53188,10 +53230,10 @@ router72.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
       }
     }
     if (Object.keys(updateData).length > 0) {
-      await prisma61.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
+      await prisma42.treeBranchLeafSubmission.update({ where: { id: submissionId }, data: updateData });
     }
     const stats = await evaluateCapacitiesForSubmission(submissionId, organizationId, userId, submission.treeId);
-    const finalSubmission = await prisma61.treeBranchLeafSubmission.findUnique({
+    const finalSubmission = await prisma42.treeBranchLeafSubmission.findUnique({
       where: { id: submissionId },
       include: { TreeBranchLeafSubmissionData: true }
     });
@@ -53215,23 +53257,23 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
     }
     let effectiveTreeId = treeId;
     if (!effectiveTreeId) {
-      const firstTree = await prisma61.treeBranchLeafTree.findFirst({ select: { id: true } });
+      const firstTree = await prisma42.treeBranchLeafTree.findFirst({ select: { id: true } });
       if (!firstTree) {
         return res.status(404).json({ success: false, error: "Aucun arbre TreeBranchLeaf trouv\xE9" });
       }
       effectiveTreeId = firstTree.id;
     } else {
-      const exists = await prisma61.treeBranchLeafTree.findUnique({ where: { id: effectiveTreeId }, select: { id: true } });
+      const exists = await prisma42.treeBranchLeafTree.findUnique({ where: { id: effectiveTreeId }, select: { id: true } });
       if (!exists) {
         return res.status(404).json({ success: false, error: `Arbre introuvable: ${effectiveTreeId}` });
       }
     }
-    const nodes = await prisma61.treeBranchLeafNode.findMany({ where: { treeId: effectiveTreeId }, select: { id: true, label: true } });
+    const nodes = await prisma42.treeBranchLeafNode.findMany({ where: { treeId: effectiveTreeId }, select: { id: true, label: true } });
     const labelMap = /* @__PURE__ */ new Map();
     for (const n of nodes) labelMap.set(n.id, n.label);
     const valueMap = /* @__PURE__ */ new Map();
     if (leadId) {
-      const lead = await prisma61.lead.findUnique({
+      const lead = await prisma42.lead.findUnique({
         where: { id: leadId },
         select: {
           id: true,
@@ -53284,7 +53326,7 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
       }
     }
     if (baseSubmissionId) {
-      const existingData = await prisma61.treeBranchLeafSubmissionData.findMany({
+      const existingData = await prisma42.treeBranchLeafSubmissionData.findMany({
         where: { submissionId: baseSubmissionId },
         select: { nodeId: true, value: true }
       });
@@ -53303,7 +53345,7 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
       };
       for (const [nodeId, value] of formEntries) {
         if (!nodeId.startsWith("__") && value !== null && value !== void 0 && value !== "") {
-          const nodeInfo = await prisma61.treeBranchLeafNode.findUnique({
+          const nodeInfo = await prisma42.treeBranchLeafNode.findUnique({
             where: { id: nodeId },
             select: {
               id: true,
@@ -53329,7 +53371,7 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
               }
               if (optionType) {
                 const referencesToClean = optionType === "plan" ? sharedReferenceMapping.inclinaison : sharedReferenceMapping.plan;
-                const nodesToClean = await prisma61.treeBranchLeafNode.findMany({
+                const nodesToClean = await prisma42.treeBranchLeafNode.findMany({
                   where: {
                     treeId: effectiveTreeId,
                     sharedReferenceIds: { hasSome: referencesToClean }
@@ -53347,7 +53389,7 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
         }
       }
     }
-    const capacitiesRaw = await prisma61.treeBranchLeafNodeVariable.findMany({
+    const capacitiesRaw = await prisma42.treeBranchLeafNodeVariable.findMany({
       where: { TreeBranchLeafNode: { treeId: effectiveTreeId }, sourceRef: { not: null } },
       include: { TreeBranchLeafNode: { select: { id: true, label: true } } }
     });
@@ -53374,7 +53416,7 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
           // variableNodeId
           context.submissionId,
           // submissionId
-          prisma61,
+          prisma42,
           // prismaClient
           context.valueMap
           // valueMap (données temporaires du formulaire)
@@ -53440,7 +53482,7 @@ router72.post("/submissions/preview-evaluate", async (req2, res) => {
     }
     try {
       const nodeIds = results.map((r) => r.nodeId);
-      const nodesInfo = await prisma61.treeBranchLeafNode.findMany({
+      const nodesInfo = await prisma42.treeBranchLeafNode.findMany({
         where: { id: { in: nodeIds } },
         select: { id: true, fieldType: true, type: true }
       });
@@ -53490,7 +53532,7 @@ router72.post("/submissions/stage", async (req2, res) => {
     if (!organizationId) return res.status(400).json({ success: false, error: "Organisation ID manquant" });
     let effectiveTreeId = treeId;
     if (!effectiveTreeId) {
-      const firstTree = await prisma61.treeBranchLeafTree.findFirst({ select: { id: true } });
+      const firstTree = await prisma42.treeBranchLeafTree.findFirst({ select: { id: true } });
       if (!firstTree) return res.status(404).json({ success: false, error: "Aucun arbre trouv\xE9" });
       effectiveTreeId = firstTree.id;
     }
@@ -53518,11 +53560,11 @@ router72.post("/submissions/stage/preview", async (req2, res) => {
     const { stageId } = req2.body || {};
     const stage = stageId ? stagingStore.get(stageId) : void 0;
     if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
-    const nodes = await prisma61.treeBranchLeafNode.findMany({ where: { treeId: stage.treeId }, select: { id: true, label: true } });
+    const nodes = await prisma42.treeBranchLeafNode.findMany({ where: { treeId: stage.treeId }, select: { id: true, label: true } });
     const labelMap = new Map(nodes.map((n) => [n.id, n.label]));
     const valueMap = /* @__PURE__ */ new Map();
     if (stage.submissionId) {
-      const existingData = await prisma61.treeBranchLeafSubmissionData.findMany({
+      const existingData = await prisma42.treeBranchLeafSubmissionData.findMany({
         where: { submissionId: stage.submissionId },
         select: { nodeId: true, value: true }
       });
@@ -53531,7 +53573,7 @@ router72.post("/submissions/stage/preview", async (req2, res) => {
     }
     const stageEntries = Object.entries(stage.formData);
     await applySharedReferenceValues(valueMap, stageEntries, stage.treeId);
-    const capacitiesRaw = await prisma61.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
+    const capacitiesRaw = await prisma42.treeBranchLeafNodeVariable.findMany({ where: { TreeBranchLeafNode: { treeId: stage.treeId }, sourceRef: { not: null } }, include: { TreeBranchLeafNode: { select: { id: true, label: true } } } });
     const capacities = capacitiesRaw.sort((a, b) => {
       const aIsSumFormula = a.sourceRef?.includes("sum-formula") || a.sourceRef?.includes("sum-total") ? 1 : 0;
       const bIsSumFormula = b.sourceRef?.includes("sum-formula") || b.sourceRef?.includes("sum-total") ? 1 : 0;
@@ -53544,7 +53586,7 @@ router72.post("/submissions/stage/preview", async (req2, res) => {
         const r = await evaluateVariableOperation(
           c.nodeId,
           context.submissionId,
-          prisma61,
+          prisma42,
           context.valueMap
         );
         if (r.value !== null && r.value !== void 0 && r.value !== "\u2205") {
@@ -53598,15 +53640,15 @@ router72.post("/submissions/stage/commit", async (req2, res) => {
     const stage = stageId ? stagingStore.get(stageId) : void 0;
     if (!stage) return res.status(404).json({ success: false, error: "Stage introuvable" });
     if (!asNew && stage.submissionId) {
-      const submission = await prisma61.treeBranchLeafSubmission.findUnique({ where: { id: stage.submissionId } });
+      const submission = await prisma42.treeBranchLeafSubmission.findUnique({ where: { id: stage.submissionId } });
       if (!submission) return res.status(404).json({ success: false, error: "Soumission introuvable" });
-      await prisma61.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData } });
+      await prisma42.treeBranchLeafSubmission.update({ where: { id: stage.submissionId }, data: { exportData: stage.formData } });
       const saved2 = await saveUserEntriesNeutral(stage.submissionId, stage.formData, stage.treeId);
       const stats2 = await evaluateCapacitiesForSubmission(stage.submissionId, stage.organizationId, stage.userId, stage.treeId);
       return res.json({ success: true, submissionId: stage.submissionId, saved: saved2, stats: stats2 });
     }
     const submissionId = `tbl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    await prisma61.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: "draft", summary: { name: `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` }, exportData: stage.formData, updatedAt: /* @__PURE__ */ new Date() } });
+    await prisma42.treeBranchLeafSubmission.create({ data: { id: submissionId, treeId: stage.treeId, userId: stage.userId, status: "draft", summary: { name: `Devis TBL ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` }, exportData: stage.formData, updatedAt: /* @__PURE__ */ new Date() } });
     const saved = await saveUserEntriesNeutral(submissionId, stage.formData, stage.treeId);
     const stats = await evaluateCapacitiesForSubmission(submissionId, stage.organizationId, stage.userId, stage.treeId);
     stage.submissionId = submissionId;
@@ -53628,7 +53670,7 @@ router72.get("/tables/:tableId", async (req2, res) => {
   try {
     const { tableId } = req2.params;
     console.log(`\u{1F4CA} [GET TABLE] R\xE9cup\xE9ration table: ${tableId}`);
-    const table = await prisma61.treeBranchLeafNodeTable.findUnique({
+    const table = await prisma42.treeBranchLeafNodeTable.findUnique({
       where: { id: tableId },
       select: {
         id: true,
@@ -53701,6 +53743,7 @@ var tbl_submission_evaluator_default = router72;
 // src/controllers/calculatedValueController.ts
 var import_express75 = require("express");
 var import_crypto13 = require("crypto");
+init_prisma();
 var router73 = (0, import_express75.Router)();
 var parseStoredStringValue = (raw) => {
   if (raw === null || raw === void 0) {
@@ -53784,7 +53827,7 @@ router73.get("/:nodeId/calculated-value", async (req2, res) => {
     if (!nodeId) {
       return res.status(400).json({ error: "nodeId requis" });
     }
-    const node = await prisma.treeBranchLeafNode.findUnique({
+    const node = await db.treeBranchLeafNode.findUnique({
       where: {
         id: nodeId
       },
@@ -53812,7 +53855,7 @@ router73.get("/:nodeId/calculated-value", async (req2, res) => {
     let submissionDataEntry = null;
     let submissionResolvedValue = null;
     if (preferSubmissionData && submissionId) {
-      submissionDataEntry = await prisma.treeBranchLeafSubmissionData.findUnique({
+      submissionDataEntry = await db.treeBranchLeafSubmissionData.findUnique({
         where: { submissionId_nodeId: { submissionId, nodeId } },
         select: {
           value: true,
@@ -53832,20 +53875,20 @@ router73.get("/:nodeId/calculated-value", async (req2, res) => {
       }
       const needsSubmissionRecompute = forceRecompute || !submissionDataEntry || !hasMeaningfulValue(submissionResolvedValue);
       if (needsSubmissionRecompute) {
-        const variableMeta = await prisma.treeBranchLeafNodeVariable.findUnique({
+        const variableMeta = await db.treeBranchLeafNodeVariable.findUnique({
           where: { nodeId },
           select: { nodeId: true, displayName: true, exposedKey: true, unit: true }
         });
         if (variableMeta) {
           try {
             const { evaluateVariableOperation: evaluateVariableOperation2 } = await Promise.resolve().then(() => (init_operation_interpreter(), operation_interpreter_exports));
-            const evaluation = await evaluateVariableOperation2(nodeId, submissionId, prisma);
+            const evaluation = await evaluateVariableOperation2(nodeId, submissionId, db);
             const recomputedValue = evaluation.value ?? evaluation.operationResult ?? null;
             const persistedValue = recomputedValue === null || recomputedValue === void 0 ? null : String(recomputedValue);
             const resolvedAt = /* @__PURE__ */ new Date();
             const isDisplayField = node.fieldType === "DISPLAY" || node.type === "DISPLAY";
             if (!isDisplayField) {
-              await prisma.treeBranchLeafSubmissionData.upsert({
+              await db.treeBranchLeafSubmissionData.upsert({
                 where: { submissionId_nodeId: { submissionId, nodeId } },
                 update: {
                   value: persistedValue,
@@ -53914,7 +53957,7 @@ router73.get("/:nodeId/calculated-value", async (req2, res) => {
     }
     const isTBLField = node.type === "field" && node.metadata && typeof node.metadata === "object";
     const hasTableLookup = isTBLField && node.metadata?.lookup?.enabled === true && node.metadata?.lookup?.tableReference;
-    const variableMeta2 = await prisma.treeBranchLeafNodeVariable.findUnique({
+    const variableMeta2 = await db.treeBranchLeafNodeVariable.findUnique({
       where: { nodeId },
       select: { sourceType: true, sourceRef: true }
     });
@@ -53949,13 +53992,13 @@ router73.get("/:nodeId/calculated-value", async (req2, res) => {
         const result = await evaluateVariableOperation2(
           nodeId,
           submissionId,
-          prisma
+          db
         );
         console.log("\u{1F3AF} [CalculatedValueController] R\xE9sultat operation-interpreter:", result);
         if (result && (result.value !== void 0 || result.operationResult !== void 0)) {
           const stringValue = String(result.value ?? result.operationResult);
           if (stringValue && stringValue !== "0" && stringValue !== "") {
-            await prisma.treeBranchLeafNode.update({
+            await db.treeBranchLeafNode.update({
               where: { id: nodeId },
               data: {
                 calculatedValue: stringValue,
@@ -54015,7 +54058,7 @@ router73.post("/:nodeId/store-calculated-value", async (req2, res) => {
         referer: req2.headers["referer"]
       }
     });
-    const updated = await prisma.treeBranchLeafNode.update({
+    const updated = await db.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
         calculatedValue: String(calculatedValue),
@@ -54058,7 +54101,7 @@ router73.post("/store-batch-calculated-values", async (req2, res) => {
     for (const { nodeId, calculatedValue, calculatedBy } of values) {
       if (!nodeId) continue;
       try {
-        const updated = await prisma.treeBranchLeafNode.update({
+        const updated = await db.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             calculatedValue: String(calculatedValue),
@@ -54099,9 +54142,9 @@ var calculatedValueController_default = router73;
 
 // src/api/websites.ts
 var import_express76 = require("express");
-var import_client64 = require("@prisma/client");
+init_database();
 var router74 = (0, import_express76.Router)();
-var prisma62 = new import_client64.PrismaClient();
+var prisma43 = db;
 router74.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
@@ -54115,7 +54158,7 @@ router74.get("/websites", authenticateToken, async (req2, res) => {
     if (!showAll && organizationId) {
       whereClause.organizationId = organizationId;
     }
-    const websites = await prisma62.webSite.findMany({
+    const websites = await prisma43.webSite.findMany({
       where: whereClause,
       include: {
         config: true
@@ -54138,7 +54181,7 @@ router74.get("/websites/:slug", async (req2, res) => {
     if (organizationId) {
       whereClause.organizationId = organizationId;
     }
-    const website = await prisma62.webSite.findFirst({
+    const website = await prisma43.webSite.findFirst({
       where: whereClause,
       include: {
         config: {
@@ -54204,14 +54247,14 @@ router74.get("/websites/:slug", async (req2, res) => {
 router74.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
-    const website = await prisma62.webSite.findFirst({
+    const website = await prisma43.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
     if (!website) {
       return res.status(404).json({ error: "Website not found" });
     }
-    const services = await prisma62.webSiteService.findMany({
+    const services = await prisma43.webSiteService.findMany({
       where: {
         websiteId: website.id,
         isActive: true
@@ -54228,7 +54271,7 @@ router74.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
-    const website = await prisma62.webSite.findFirst({
+    const website = await prisma43.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -54242,7 +54285,7 @@ router74.get("/websites/:slug/projects", async (req2, res) => {
     if (featured === "true") {
       whereClause.isFeatured = true;
     }
-    const projects = await prisma62.webSiteProject.findMany({
+    const projects = await prisma43.webSiteProject.findMany({
       where: whereClause,
       orderBy: { displayOrder: "asc" }
     });
@@ -54256,7 +54299,7 @@ router74.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
-    const website = await prisma62.webSite.findFirst({
+    const website = await prisma43.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -54270,7 +54313,7 @@ router74.get("/websites/:slug/testimonials", async (req2, res) => {
     if (featured === "true") {
       whereClause.isFeatured = true;
     }
-    const testimonials = await prisma62.webSiteTestimonial.findMany({
+    const testimonials = await prisma43.webSiteTestimonial.findMany({
       where: whereClause,
       orderBy: { displayOrder: "asc" }
     });
@@ -54284,7 +54327,7 @@ router74.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
-    const website = await prisma62.webSite.findFirst({
+    const website = await prisma43.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
@@ -54298,7 +54341,7 @@ router74.get("/websites/:slug/blog", async (req2, res) => {
     if (featured === "true") {
       whereClause.isFeatured = true;
     }
-    const blogPosts = await prisma62.webSiteBlogPost.findMany({
+    const blogPosts = await prisma43.webSiteBlogPost.findMany({
       where: whereClause,
       orderBy: { publishedAt: "desc" },
       take: parseInt(limit),
@@ -54322,14 +54365,14 @@ router74.get("/websites/:slug/blog", async (req2, res) => {
 router74.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
-    const website = await prisma62.webSite.findFirst({
+    const website = await prisma43.webSite.findFirst({
       where: { slug, isActive: true },
       select: { id: true }
     });
     if (!website) {
       return res.status(404).json({ error: "Website not found" });
     }
-    const blogPost = await prisma62.webSiteBlogPost.findFirst({
+    const blogPost = await prisma43.webSiteBlogPost.findFirst({
       where: {
         websiteId: website.id,
         slug: postSlug,
@@ -54364,7 +54407,7 @@ router74.put("/websites/:id", authenticateToken, async (req2, res) => {
     if (!organizationId) {
       return res.status(400).json({ error: "Organization ID is required" });
     }
-    const existingWebsite = await prisma62.webSite.findFirst({
+    const existingWebsite = await prisma43.webSite.findFirst({
       where: {
         id: websiteId,
         organizationId
@@ -54373,7 +54416,7 @@ router74.put("/websites/:id", authenticateToken, async (req2, res) => {
     if (!existingWebsite) {
       return res.status(404).json({ error: "Website not found" });
     }
-    const updatedWebsite = await prisma62.webSite.update({
+    const updatedWebsite = await prisma43.webSite.update({
       where: { id: websiteId },
       data: {
         name: data.name,
@@ -54407,7 +54450,7 @@ router74.post("/websites", authenticateToken, async (req2, res) => {
     if (!organizationId) {
       return res.status(400).json({ error: "Organization ID is required" });
     }
-    const newWebsite = await prisma62.webSite.create({
+    const newWebsite = await prisma43.webSite.create({
       data: {
         name: data.name,
         slug: data.slug,
@@ -54446,13 +54489,13 @@ router74.delete("/websites/:id", authenticateToken, async (req2, res) => {
     if (!user?.isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
-    const existingWebsite = await prisma62.webSite.findFirst({
+    const existingWebsite = await prisma43.webSite.findFirst({
       where: whereClause
     });
     if (!existingWebsite) {
       return res.status(404).json({ error: "Website not found" });
     }
-    await prisma62.webSite.delete({
+    await prisma43.webSite.delete({
       where: { id: websiteId }
     });
     console.log(`\u2705 Site web ${websiteId} (${existingWebsite.name}) supprim\xE9 par ${user?.email || "unknown"}`);
@@ -54469,13 +54512,13 @@ var websites_default = router74;
 
 // src/api/website-services.ts
 var import_express77 = require("express");
-var import_client65 = require("@prisma/client");
+init_database();
 var router75 = (0, import_express77.Router)();
-var prisma63 = new import_client65.PrismaClient();
+var prisma44 = db;
 router75.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const services = await prisma63.webSiteService.findMany({
+    const services = await prisma44.webSiteService.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -54495,11 +54538,11 @@ router75.post("/website-services", async (req2, res) => {
     if (!websiteId || !key2 || !title) {
       return res.status(400).json({ error: "websiteId, key, and title are required" });
     }
-    const maxOrder = await prisma63.webSiteService.aggregate({
+    const maxOrder = await prisma44.webSiteService.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const service = await prisma63.webSiteService.create({
+    const service = await prisma44.webSiteService.create({
       data: {
         websiteId: parseInt(websiteId),
         key: key2,
@@ -54523,7 +54566,7 @@ router75.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
-    const service = await prisma63.webSiteService.update({
+    const service = await prisma44.webSiteService.update({
       where: { id: parseInt(id) },
       data: {
         ...key2 && { key: key2 },
@@ -54545,7 +54588,7 @@ router75.put("/website-services/:id", async (req2, res) => {
 router75.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    await prisma63.webSiteService.delete({
+    await prisma44.webSiteService.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -54562,7 +54605,7 @@ router75.post("/website-services/reorder", async (req2, res) => {
     }
     await Promise.all(
       services.map(
-        (service) => prisma63.webSiteService.update({
+        (service) => prisma44.webSiteService.update({
           where: { id: service.id },
           data: { displayOrder: service.displayOrder }
         })
@@ -54578,13 +54621,13 @@ var website_services_default = router75;
 
 // src/api/website-projects.ts
 var import_express78 = require("express");
-var import_client66 = require("@prisma/client");
+init_database();
 var router76 = (0, import_express78.Router)();
-var prisma64 = new import_client66.PrismaClient();
+var prisma45 = db;
 router76.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const projects = await prisma64.webSiteProject.findMany({
+    const projects = await prisma45.webSiteProject.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -54604,11 +54647,11 @@ router76.post("/website-projects", async (req2, res) => {
     if (!websiteId || !title) {
       return res.status(400).json({ error: "websiteId and title are required" });
     }
-    const maxOrder = await prisma64.webSiteProject.aggregate({
+    const maxOrder = await prisma45.webSiteProject.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const project = await prisma64.webSiteProject.create({
+    const project = await prisma45.webSiteProject.create({
       data: {
         websiteId: parseInt(websiteId),
         title,
@@ -54631,7 +54674,7 @@ router76.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
-    const project = await prisma64.webSiteProject.update({
+    const project = await prisma45.webSiteProject.update({
       where: { id: parseInt(id) },
       data: {
         ...title && { title },
@@ -54652,7 +54695,7 @@ router76.put("/website-projects/:id", async (req2, res) => {
 router76.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    await prisma64.webSiteProject.delete({
+    await prisma45.webSiteProject.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -54669,7 +54712,7 @@ router76.post("/website-projects/reorder", async (req2, res) => {
     }
     await Promise.all(
       projects.map(
-        (project) => prisma64.webSiteProject.update({
+        (project) => prisma45.webSiteProject.update({
           where: { id: project.id },
           data: { displayOrder: project.displayOrder }
         })
@@ -54685,13 +54728,13 @@ var website_projects_default = router76;
 
 // src/api/website-testimonials.ts
 var import_express79 = require("express");
-var import_client67 = require("@prisma/client");
+init_database();
 var router77 = (0, import_express79.Router)();
-var prisma65 = new import_client67.PrismaClient();
+var prisma46 = db;
 router77.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const testimonials = await prisma65.webSiteTestimonial.findMany({
+    const testimonials = await prisma46.webSiteTestimonial.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -54711,11 +54754,11 @@ router77.post("/website-testimonials", async (req2, res) => {
     if (!websiteId || !customerName || !text) {
       return res.status(400).json({ error: "websiteId, customerName, and text are required" });
     }
-    const maxOrder = await prisma65.webSiteTestimonial.aggregate({
+    const maxOrder = await prisma46.webSiteTestimonial.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const testimonial = await prisma65.webSiteTestimonial.create({
+    const testimonial = await prisma46.webSiteTestimonial.create({
       data: {
         websiteId: parseInt(websiteId),
         customerName,
@@ -54739,7 +54782,7 @@ router77.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
-    const testimonial = await prisma65.webSiteTestimonial.update({
+    const testimonial = await prisma46.webSiteTestimonial.update({
       where: { id: parseInt(id) },
       data: {
         ...customerName && { customerName },
@@ -54761,7 +54804,7 @@ router77.put("/website-testimonials/:id", async (req2, res) => {
 router77.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    await prisma65.webSiteTestimonial.delete({
+    await prisma46.webSiteTestimonial.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -54778,7 +54821,7 @@ router77.post("/website-testimonials/reorder", async (req2, res) => {
     }
     await Promise.all(
       testimonials.map(
-        (testimonial) => prisma65.webSiteTestimonial.update({
+        (testimonial) => prisma46.webSiteTestimonial.update({
           where: { id: testimonial.id },
           data: { displayOrder: testimonial.displayOrder }
         })
@@ -54794,13 +54837,13 @@ var website_testimonials_default = router77;
 
 // src/api/website-sections.ts
 var import_express80 = __toESM(require("express"), 1);
-var import_client68 = require("@prisma/client");
+init_database();
 var router78 = import_express80.default.Router();
-var prisma66 = new import_client68.PrismaClient();
+var prisma47 = db;
 router78.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
-    const sections = await prisma66.webSiteSection.findMany({
+    const sections = await prisma47.webSiteSection.findMany({
       where: {
         websiteId: parseInt(websiteId)
       },
@@ -54817,11 +54860,11 @@ router78.get("/website-sections/:websiteId", async (req2, res) => {
 router78.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
-    const maxOrder = await prisma66.webSiteSection.aggregate({
+    const maxOrder = await prisma47.webSiteSection.aggregate({
       where: { websiteId: parseInt(websiteId) },
       _max: { displayOrder: true }
     });
-    const section = await prisma66.webSiteSection.create({
+    const section = await prisma47.webSiteSection.create({
       data: {
         websiteId: parseInt(websiteId),
         key: key2,
@@ -54850,7 +54893,7 @@ router78.put("/website-sections/:id", async (req2, res) => {
     console.log("  ID:", id);
     console.log("  Body keys:", Object.keys(req2.body));
     console.log("  Content keys:", content ? Object.keys(content) : "undefined");
-    const existing = await prisma66.webSiteSection.findUnique({
+    const existing = await prisma47.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (!existing) {
@@ -54875,7 +54918,7 @@ router78.put("/website-sections/:id", async (req2, res) => {
     const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
     console.log("  \u{1F50D} Existing content keys:", existing.content ? Object.keys(existing.content) : "none");
     console.log("  \u{1F50D} Merged content keys:", mergedContent ? Object.keys(mergedContent) : "none");
-    const section = await prisma66.webSiteSection.update({
+    const section = await prisma47.webSiteSection.update({
       where: { id: parseInt(id) },
       data: {
         ...name !== void 0 && { name },
@@ -54900,7 +54943,7 @@ router78.patch("/website-sections/:id", async (req2, res) => {
     console.log("\u{1F527} PATCH /api/website-sections/:id");
     console.log("  ID:", id);
     console.log("  Body keys:", Object.keys(req2.body));
-    const existing = await prisma66.webSiteSection.findUnique({
+    const existing = await prisma47.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (!existing) {
@@ -54923,7 +54966,7 @@ router78.patch("/website-sections/:id", async (req2, res) => {
       return result;
     };
     const mergedContent = content !== void 0 ? deepMerge(existing.content, content) : existing.content;
-    const section = await prisma66.webSiteSection.update({
+    const section = await prisma47.webSiteSection.update({
       where: { id: parseInt(id) },
       data: {
         ...name !== void 0 && { name },
@@ -54944,13 +54987,13 @@ router78.patch("/website-sections/:id", async (req2, res) => {
 router78.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const section = await prisma66.webSiteSection.findUnique({
+    const section = await prisma47.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (section?.isLocked) {
       return res.status(403).json({ error: "Cette section est verrouill\xE9e et ne peut pas \xEAtre supprim\xE9e" });
     }
-    await prisma66.webSiteSection.delete({
+    await prisma47.webSiteSection.delete({
       where: { id: parseInt(id) }
     });
     res.json({ success: true });
@@ -54962,9 +55005,9 @@ router78.delete("/website-sections/:id", async (req2, res) => {
 router78.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
-    await prisma66.$transaction(
+    await prisma47.$transaction(
       sections.map(
-        (section) => prisma66.webSiteSection.update({
+        (section) => prisma47.webSiteSection.update({
           where: { id: section.id },
           data: { displayOrder: section.displayOrder }
         })
@@ -54979,14 +55022,14 @@ router78.post("/website-sections/reorder", async (req2, res) => {
 router78.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
-    const original = await prisma66.webSiteSection.findUnique({
+    const original = await prisma47.webSiteSection.findUnique({
       where: { id: parseInt(id) }
     });
     if (!original) {
       return res.status(404).json({ error: "Section introuvable" });
     }
     const newKey = `${original.key}-copy-${Date.now()}`;
-    const duplicate = await prisma66.webSiteSection.create({
+    const duplicate = await prisma47.webSiteSection.create({
       data: {
         websiteId: original.websiteId,
         key: newKey,
@@ -55011,12 +55054,13 @@ var website_sections_default = router78;
 
 // src/api/website-themes.ts
 var import_express81 = require("express");
+init_prisma();
 var router79 = (0, import_express81.Router)();
 router79.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
-    const theme = await prisma.webSiteTheme.findUnique({
+    const theme = await db.webSiteTheme.findUnique({
       where: { websiteId: parseInt(websiteId) }
     });
     if (!theme) {
@@ -55032,7 +55076,7 @@ router79.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
-    const theme = await prisma.webSiteTheme.create({
+    const theme = await db.webSiteTheme.create({
       data: themeData
     });
     res.status(201).json(theme);
@@ -55046,7 +55090,7 @@ router79.put("/:id", async (req2, res) => {
     const { id } = req2.params;
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] PUT theme:", id, themeData);
-    const theme = await prisma.webSiteTheme.update({
+    const theme = await db.webSiteTheme.update({
       where: { id: parseInt(id) },
       data: themeData
     });
@@ -55060,7 +55104,7 @@ router79.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
-    await prisma.webSiteTheme.delete({
+    await db.webSiteTheme.delete({
       where: { id: parseInt(id) }
     });
     res.json({ message: "Th\xE8me supprim\xE9 avec succ\xE8s" });
@@ -55073,9 +55117,9 @@ var website_themes_default = router79;
 
 // src/api/contact-form.ts
 var import_express82 = require("express");
-var import_client69 = require("@prisma/client");
+init_database();
 var router80 = (0, import_express82.Router)();
-var prisma67 = new import_client69.PrismaClient();
+var prisma48 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
@@ -55113,7 +55157,7 @@ router80.post("/contact-form", async (req2, res) => {
         message: "Website ID manquant"
       });
     }
-    const website = await prisma67.webSite.findUnique({
+    const website = await prisma48.webSite.findUnique({
       where: { id: data.websiteId },
       select: { id: true, organizationId: true }
     });
@@ -55126,7 +55170,7 @@ router80.post("/contact-form", async (req2, res) => {
     const spam = isSpam(data);
     const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || "unknown";
     const userAgent = req2.headers["user-agent"] || "unknown";
-    const submission = await prisma67.contactSubmission.create({
+    const submission = await prisma48.contactSubmission.create({
       data: {
         websiteId: data.websiteId,
         organizationId: website.organizationId,
@@ -55171,7 +55215,7 @@ router80.post("/contact-form", async (req2, res) => {
 router80.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
-    const submissions = await prisma67.contactSubmission.findMany({
+    const submissions = await prisma48.contactSubmission.findMany({
       where: { websiteId },
       orderBy: { submittedAt: "desc" },
       take: 100
@@ -55186,7 +55230,7 @@ router80.get("/contact-submissions/:websiteId", async (req2, res) => {
 router80.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
-    const submission = await prisma67.contactSubmission.update({
+    const submission = await prisma48.contactSubmission.update({
       where: { id },
       data: { isRead: true }
     });
@@ -55204,7 +55248,7 @@ router80.patch("/contact-submission/:id/status", async (req2, res) => {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: "Statut invalide" });
     }
-    const submission = await prisma67.contactSubmission.update({
+    const submission = await prisma48.contactSubmission.update({
       where: { id },
       data: {
         status,
@@ -55221,7 +55265,7 @@ router80.patch("/contact-submission/:id/status", async (req2, res) => {
 router80.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
-    await prisma67.contactSubmission.delete({
+    await prisma48.contactSubmission.delete({
       where: { id }
     });
     res.json({ success: true, message: "Soumission supprim\xE9e" });
@@ -55237,9 +55281,9 @@ var import_express83 = require("express");
 var import_multer2 = __toESM(require("multer"), 1);
 var import_path6 = __toESM(require("path"), 1);
 var import_promises = __toESM(require("fs/promises"), 1);
-var import_client70 = require("@prisma/client");
+init_database();
 var router81 = (0, import_express83.Router)();
-var prisma68 = new import_client70.PrismaClient();
+var prisma49 = db;
 var storage2 = import_multer2.default.diskStorage({
   destination: async (req2, file, cb) => {
     const uploadDir = import_path6.default.join(process.cwd(), "public", "uploads", "websites");
@@ -55326,7 +55370,7 @@ router81.post("/upload-image", upload2.single("image"), async (req2, res) => {
       });
     }
     const fileUrl = `/uploads/websites/${req2.file.filename}`;
-    const mediaFile = await prisma68.webSiteMediaFile.create({
+    const mediaFile = await prisma49.webSiteMediaFile.create({
       data: {
         websiteId: parseInt(websiteId),
         fileName: req2.file.originalname,
@@ -55375,7 +55419,7 @@ router81.get("/images/:websiteId", async (req2, res) => {
     if (category) {
       where.category = category;
     }
-    const images = await prisma68.webSiteMediaFile.findMany({
+    const images = await prisma49.webSiteMediaFile.findMany({
       where,
       orderBy: { uploadedAt: "desc" }
     });
@@ -55394,7 +55438,7 @@ router81.get("/images/:websiteId", async (req2, res) => {
 router81.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
-    const mediaFile = await prisma68.webSiteMediaFile.findUnique({
+    const mediaFile = await prisma49.webSiteMediaFile.findUnique({
       where: { id }
     });
     if (!mediaFile) {
@@ -55408,7 +55452,7 @@ router81.delete("/image/:id", async (req2, res) => {
     } catch (err) {
       console.warn("Fichier d\xE9j\xE0 supprim\xE9 ou inexistant");
     }
-    await prisma68.webSiteMediaFile.delete({
+    await prisma49.webSiteMediaFile.delete({
       where: { id }
     });
     res.json({
@@ -56884,20 +56928,20 @@ var parseJsonArray = (value) => {
     return [];
   }
 };
-async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
+async function buildBlueprintForRepeater(prisma51, repeaterNodeId) {
   if (!repeaterNodeId) {
     console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
     return null;
   }
   const cached = captureRepeatTemplate(repeaterNodeId);
   if (cached) {
-    const repeaterNodeForCache = await prisma71.treeBranchLeafNode.findUnique({
+    const repeaterNodeForCache = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: repeaterNodeId },
       select: { metadata: true, repeater_templateNodeIds: true }
     });
     const candidateTemplateIds = repeaterNodeForCache ? extractTemplateIds(repeaterNodeForCache) : [];
     const { validIds: cachedTemplateIds } = await filterExistingTemplateNodeIds(
-      prisma71,
+      prisma51,
       repeaterNodeId,
       candidateTemplateIds
     );
@@ -56917,7 +56961,7 @@ async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
       candidateTemplateIds
     });
   }
-  const repeaterNode = await prisma71.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: {
       id: true,
@@ -56933,7 +56977,7 @@ async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
   const extractedIds = extractTemplateIds(repeaterNode);
   const candidateTemplateNodeIds = extractedIds;
   const { validIds: templateNodeIds } = await filterExistingTemplateNodeIds(
-    prisma71,
+    prisma51,
     repeaterNodeId,
     candidateTemplateNodeIds
   );
@@ -56948,7 +56992,7 @@ async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
       lastUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
-  const directVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
+  const directVariables = await prisma51.treeBranchLeafNodeVariable.findMany({
     where: { nodeId: { in: templateNodeIds } },
     select: {
       id: true,
@@ -56958,7 +57002,7 @@ async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
     }
   });
   const linkedVarsByNode = /* @__PURE__ */ new Map();
-  const templateNodesWithLinks = await prisma71.treeBranchLeafNode.findMany({
+  const templateNodesWithLinks = await prisma51.treeBranchLeafNode.findMany({
     where: { id: { in: templateNodeIds } },
     select: {
       id: true,
@@ -56979,7 +57023,7 @@ async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
     (id) => !directVariables.some((v) => v.id === id)
     // Avoid duplicates
   );
-  const linkedVariables = linkedVariableIds.length > 0 ? await prisma71.treeBranchLeafNodeVariable.findMany({
+  const linkedVariables = linkedVariableIds.length > 0 ? await prisma51.treeBranchLeafNodeVariable.findMany({
     where: { id: { in: linkedVariableIds } },
     select: {
       id: true,
@@ -57012,15 +57056,15 @@ async function buildBlueprintForRepeater(prisma71, repeaterNodeId) {
   }
   const variables = expandedVariables;
   const [formulas, conditions, tables] = await Promise.all([
-    prisma71.treeBranchLeafNodeFormula.findMany({
+    prisma51.treeBranchLeafNodeFormula.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     }),
-    prisma71.treeBranchLeafNodeCondition.findMany({
+    prisma51.treeBranchLeafNodeCondition.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     }),
-    prisma71.treeBranchLeafNodeTable.findMany({
+    prisma51.treeBranchLeafNodeTable.findMany({
       where: { nodeId: { in: templateNodeIds } },
       select: { id: true, nodeId: true }
     })
@@ -57093,12 +57137,12 @@ function extractTotalFieldConfig(metadata) {
     metadata: typed.metadata ?? null
   };
 }
-async function filterExistingTemplateNodeIds(prisma71, repeaterNodeId, candidateIds) {
+async function filterExistingTemplateNodeIds(prisma51, repeaterNodeId, candidateIds) {
   const normalized = Array.from(new Set(candidateIds.filter((id) => typeof id === "string" && !!id)));
   if (!normalized.length) {
     return { validIds: [], missingIds: [] };
   }
-  const existing = await prisma71.treeBranchLeafNode.findMany({
+  const existing = await prisma51.treeBranchLeafNode.findMany({
     where: { id: { in: normalized } },
     select: { id: true }
   });
@@ -57177,21 +57221,21 @@ function extractSuffixFromId(id) {
   const parsed = Number(match[1]);
   return Number.isFinite(parsed) ? parsed : null;
 }
-async function computeTemplateCopySuffixMax(prisma71, treeId, templateNodeIds) {
+async function computeTemplateCopySuffixMax(prisma51, treeId, templateNodeIds) {
   if (!treeId || !templateNodeIds.length) {
     return /* @__PURE__ */ new Map();
   }
   const templateSet = new Set(templateNodeIds);
   const templateIds = Array.from(templateSet);
   const orStartsWith = templateIds.map((templateId) => ({ id: { startsWith: `${templateId}-` } }));
-  const copies = await prisma71.treeBranchLeafNode.findMany({
+  const copies = await prisma51.treeBranchLeafNode.findMany({
     where: {
       treeId,
       OR: orStartsWith
     },
     select: { id: true, metadata: true }
   });
-  const metaCopies = await prisma71.treeBranchLeafNode.findMany({
+  const metaCopies = await prisma51.treeBranchLeafNode.findMany({
     where: {
       treeId,
       OR: templateIds.map((templateId) => ({
@@ -57249,11 +57293,11 @@ var makeScopeId = (repeaterNodeId, suffix) => {
   const trimmedSuffix = typeof suffix === "string" ? suffix.trim() : String(suffix);
   return `${repeaterNodeId}:${trimmedSuffix}`;
 };
-async function planRepeatDuplication(prisma71, repeaterNodeId, options = {}) {
+async function planRepeatDuplication(prisma51, repeaterNodeId, options = {}) {
   if (!repeaterNodeId) {
     throw new RepeatOperationError("Missing repeaterNodeId in request path.", 400);
   }
-  const blueprint = await buildBlueprintForRepeater(prisma71, repeaterNodeId);
+  const blueprint = await buildBlueprintForRepeater(prisma51, repeaterNodeId);
   if (!blueprint) {
     throw new RepeatOperationError(`No blueprint available for repeater ${repeaterNodeId}.`, 404);
   }
@@ -57263,7 +57307,7 @@ async function planRepeatDuplication(prisma71, repeaterNodeId, options = {}) {
       422
     );
   }
-  const repeaterNode = await prisma71.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: { treeId: true }
   });
@@ -57292,7 +57336,7 @@ async function planRepeatDuplication(prisma71, repeaterNodeId, options = {}) {
     );
   } else {
     const existingMax = await computeTemplateCopySuffixMax(
-      prisma71,
+      prisma51,
       repeaterNode.treeId,
       cleanedTemplateIds
     );
@@ -57322,9 +57366,9 @@ async function planRepeatDuplication(prisma71, repeaterNodeId, options = {}) {
     plan
   };
 }
-async function executeRepeatDuplication(prisma71, repeaterNodeId, options = {}) {
+async function executeRepeatDuplication(prisma51, repeaterNodeId, options = {}) {
   try {
-    const planned = await planRepeatDuplication(prisma71, repeaterNodeId, options);
+    const planned = await planRepeatDuplication(prisma51, repeaterNodeId, options);
     const operations = [
       ...planned.plan.nodes.map((nodePlan) => ({
         type: "node-copy",
@@ -57349,7 +57393,7 @@ async function executeRepeatDuplication(prisma71, repeaterNodeId, options = {}) 
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-var import_client71 = require("@prisma/client");
+var import_client6 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
 function parseSourceRef3(sourceRef) {
@@ -57411,7 +57455,7 @@ function applySuffixToSourceRef2(sourceRef, suffix) {
   const newId = `${parsed.id}-${suffix}`;
   return `${parsed.prefix}${newId}`;
 }
-async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma71, options = {}) {
+async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma51, options = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionIdMap = /* @__PURE__ */ new Map(),
@@ -57428,7 +57472,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     let cachedVariable = null;
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey);
-      const cached = await prisma71.treeBranchLeafNodeVariable.findUnique({
+      const cached = await prisma51.treeBranchLeafNodeVariable.findUnique({
         where: { id: cachedId }
       });
       if (cached) {
@@ -57446,7 +57490,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
         }
       }
     }
-    const originalVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
+    const originalVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
       where: { id: originalVarId }
     });
     if (!originalVar) {
@@ -57488,7 +57532,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, formulaCopyCache: formulaIdMap }
               );
               if (formulaResult.success) {
@@ -57512,7 +57556,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, formulaIdMap, conditionCopyCache: conditionIdMap }
               );
               if (conditionResult.success) {
@@ -57536,7 +57580,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 parsed.id,
                 newNodeId,
                 suffix,
-                prisma71,
+                prisma51,
                 { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
               );
               if (tableResult.success) {
@@ -57564,7 +57608,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       finalNodeId2 = nodeIdMap.get(originalVar.nodeId);
     } else if (autoCreateDisplayNode) {
       try {
-        const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: {
             id: true,
@@ -57677,16 +57721,16 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
             fieldSubType: null,
             field_label: originalVar.displayName
           };
-          const maybeExisting = await prisma71.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
+          const maybeExisting = await prisma51.treeBranchLeafNode.findUnique({ where: { id: displayNodeId2 } });
           if (maybeExisting) {
-            await prisma71.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
+            await prisma51.treeBranchLeafNode.update({ where: { id: displayNodeId2 }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
           } else {
-            await prisma71.treeBranchLeafNode.create({ data: displayNodeData });
+            await prisma51.treeBranchLeafNode.create({ data: displayNodeData });
           }
           if (originalOwnerNode.hasTable && Array.isArray(originalOwnerNode.linkedTableIds) && originalOwnerNode.linkedTableIds.length > 0) {
             for (const originalTableId of originalOwnerNode.linkedTableIds) {
               const newTableId = `${originalTableId}-${suffix}`;
-              const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+              const existingTable = await prisma51.treeBranchLeafNodeTable.findUnique({
                 where: { id: newTableId }
               });
               if (existingTable) {
@@ -57699,7 +57743,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                   displayNodeId2,
                   // La nouvelle table appartient au display node copiÃ©
                   Number(suffix),
-                  prisma71,
+                  prisma51,
                   { nodeIdMap, tableCopyCache: tableIdMap2, tableIdMap: tableIdMap2 }
                 );
                 if (tableResult.success) {
@@ -57711,7 +57755,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 console.error(`\xE2\x9D\u0152 [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
               }
             }
-            await prisma71.treeBranchLeafNode.update({
+            await prisma51.treeBranchLeafNode.update({
               where: { id: displayNodeId2 },
               data: { hasTable: true }
             });
@@ -57725,7 +57769,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     } else {
     }
     try {
-      const existingById = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
+      const existingById = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { id: newVarId } });
       if (existingById) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjusted = `${originalVarId}-${suffix}-${tail}`;
@@ -57735,7 +57779,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     try {
-      const existingByKey = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
+      const existingByKey = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
       if (existingByKey) {
         const tail = (finalNodeId2 || newNodeId || "").slice(-6) || `${Date.now()}`;
         const adjustedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
@@ -57747,12 +57791,12 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
     try {
-      const existingForNode = await prisma71.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
+      const existingForNode = await prisma51.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId2 } });
       if (existingForNode) {
         _reusingExistingVariable = true;
         _existingVariableForReuse = existingForNode;
         try {
-          await prisma71.treeBranchLeafNode.update({
+          await prisma51.treeBranchLeafNode.update({
             where: { id: finalNodeId2 },
             data: {
               hasData: true,
@@ -57766,7 +57810,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
               field_label: existingForNode.displayName || void 0
             }
           });
-          await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
+          await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedVariableIds", [existingForNode.id]);
         } catch (e) {
           console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
         }
@@ -57781,7 +57825,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     } else if (_reusingExistingVariable && _existingVariableForReuse) {
       newVariable = _existingVariableForReuse;
     } else {
-      newVariable = await prisma71.treeBranchLeafNodeVariable.create({
+      newVariable = await prisma51.treeBranchLeafNodeVariable.create({
         data: {
           id: newVarId,
           nodeId: finalNodeId2,
@@ -57803,7 +57847,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
         }
       });
     }
-    const verification = await prisma71.treeBranchLeafNodeVariable.findUnique({
+    const verification = await prisma51.treeBranchLeafNodeVariable.findUnique({
       where: { id: newVariable.id }
     });
     if (verification) {
@@ -57811,7 +57855,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
     }
     try {
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: finalNodeId2 },
         data: {
           hasData: true,
@@ -57831,12 +57875,12 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     }
     if (linkToDisplaySection) {
       try {
-        const originalOwnerNode = await prisma71.treeBranchLeafNode.findUnique({
+        const originalOwnerNode = await prisma51.treeBranchLeafNode.findUnique({
           where: { id: originalVar.nodeId },
           select: { parentId: true, treeId: true }
         });
         if (originalOwnerNode?.parentId) {
-          const displaySection = await prisma71.treeBranchLeafNode.findFirst({
+          const displaySection = await prisma51.treeBranchLeafNode.findFirst({
             where: {
               treeId: originalOwnerNode.treeId,
               parentId: originalOwnerNode.parentId,
@@ -57846,7 +57890,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
             select: { id: true }
           });
           if (displaySection) {
-            await addToNodeLinkedField8(prisma71, displaySection.id, "linkedVariableIds", [newVariable.id]);
+            await addToNodeLinkedField8(prisma51, displaySection.id, "linkedVariableIds", [newVariable.id]);
           } else {
           }
         }
@@ -57855,7 +57899,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       }
     } else if (autoCreateDisplayNode) {
       try {
-        await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedVariableIds", [newVariable.id]);
+        await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedVariableIds", [newVariable.id]);
       } catch (e) {
         console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
       }
@@ -57865,17 +57909,17 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           const capId = parsedCap?.id;
           if (parsedCap && capId) {
             if (parsedCap.type === "condition") {
-              await prisma71.treeBranchLeafNode.update({
+              await prisma51.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasCondition: true,
                   condition_activeId: capId
                 }
               });
-              await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedConditionIds", [capId]);
+              await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedConditionIds", [capId]);
             } else if (parsedCap.type === "formula") {
-              const frm = await prisma71.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true } });
-              await prisma71.treeBranchLeafNode.update({
+              const frm = await prisma51.treeBranchLeafNodeFormula.findUnique({ where: { id: capId }, select: { name: true } });
+              await prisma51.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasFormula: true,
@@ -57883,10 +57927,10 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                   formula_name: frm?.name || null
                 }
               });
-              await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedFormulaIds", [capId]);
+              await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedFormulaIds", [capId]);
             } else if (parsedCap.type === "table") {
-              const tbl = await prisma71.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
-              await prisma71.treeBranchLeafNode.update({
+              const tbl = await prisma51.treeBranchLeafNodeTable.findUnique({ where: { id: capId }, select: { name: true, type: true } });
+              await prisma51.treeBranchLeafNode.update({
                 where: { id: finalNodeId2 },
                 data: {
                   hasTable: true,
@@ -57895,7 +57939,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                   table_type: tbl?.type || null
                 }
               });
-              await addToNodeLinkedField8(prisma71, finalNodeId2, "linkedTableIds", [capId]);
+              await addToNodeLinkedField8(prisma51, finalNodeId2, "linkedTableIds", [capId]);
             }
           }
         }
@@ -57909,28 +57953,28 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       if (parsed && parsed.id) {
         try {
           if (capacityType === "formula") {
-            const formula = await prisma71.treeBranchLeafNodeFormula.findUnique({
+            const formula = await prisma51.treeBranchLeafNodeFormula.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (formula) {
-              await addToNodeLinkedField8(prisma71, formula.nodeId, "linkedFormulaIds", [parsed.id]);
+              await addToNodeLinkedField8(prisma51, formula.nodeId, "linkedFormulaIds", [parsed.id]);
             }
           } else if (capacityType === "condition") {
-            const condition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+            const condition = await prisma51.treeBranchLeafNodeCondition.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (condition) {
-              await addToNodeLinkedField8(prisma71, condition.nodeId, "linkedConditionIds", [parsed.id]);
+              await addToNodeLinkedField8(prisma51, condition.nodeId, "linkedConditionIds", [parsed.id]);
             }
           } else if (capacityType === "table") {
-            const table = await prisma71.treeBranchLeafNodeTable.findUnique({
+            const table = await prisma51.treeBranchLeafNodeTable.findUnique({
               where: { id: parsed.id },
               select: { nodeId: true }
             });
             if (table) {
-              await addToNodeLinkedField8(prisma71, table.nodeId, "linkedTableIds", [parsed.id]);
+              await addToNodeLinkedField8(prisma51, table.nodeId, "linkedTableIds", [parsed.id]);
             }
           }
         } catch (e) {
@@ -57961,9 +58005,9 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     };
   }
 }
-async function addToNodeLinkedField8(prisma71, nodeId, field, idsToAdd) {
+async function addToNodeLinkedField8(prisma51, nodeId, field, idsToAdd) {
   if (!idsToAdd || idsToAdd.length === 0) return;
-  const node = await prisma71.treeBranchLeafNode.findUnique({
+  const node = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: nodeId },
     select: { [field]: true }
   });
@@ -57973,7 +58017,7 @@ async function addToNodeLinkedField8(prisma71, nodeId, field, idsToAdd) {
   }
   const current = node[field] || [];
   const newIds = [.../* @__PURE__ */ new Set([...current, ...idsToAdd])];
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: nodeId },
     data: { [field]: { set: newIds } }
   });
@@ -57981,9 +58025,9 @@ async function addToNodeLinkedField8(prisma71, nodeId, field, idsToAdd) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/shared/shared-reference-helpers.ts
 async function applySharedReferencesFromOriginalInternal2(params) {
-  const { prisma: prisma71, nodeId, authCtx } = params;
+  const { prisma: prisma51, nodeId, authCtx } = params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
-  const copyRoot = await prisma71.treeBranchLeafNode.findFirst({
+  const copyRoot = await prisma51.treeBranchLeafNode.findFirst({
     where: { id: nodeId },
     include: { TreeBranchLeafTree: { select: { id: true, organizationId: true } } }
   });
@@ -57991,10 +58035,10 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   if (!isSuperAdmin2 && organizationId && copyRoot.TreeBranchLeafTree?.organizationId && copyRoot.TreeBranchLeafTree.organizationId !== organizationId) {
     throw new Error("Acc\xE8s non autoris\xE9");
   }
-  const all = await prisma71.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
+  const all = await prisma51.treeBranchLeafNode.findMany({ where: { treeId: copyRoot.treeId } });
   const nodeVariableIdByNodeId = /* @__PURE__ */ new Map();
   if (all.length > 0) {
-    const nodeVariables = await prisma71.treeBranchLeafNodeVariable.findMany({
+    const nodeVariables = await prisma51.treeBranchLeafNodeVariable.findMany({
       where: { nodeId: { in: all.map((n) => n.id) } },
       select: { nodeId: true, id: true }
     });
@@ -58030,7 +58074,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
   }
   if (originalToCopy.size === 0) return { success: true, applied: 0, suffix: 0 };
   const originalIds = Array.from(originalToCopy.keys());
-  const originals = await prisma71.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
+  const originals = await prisma51.treeBranchLeafNode.findMany({ where: { id: { in: originalIds } } });
   const allRefIds = /* @__PURE__ */ new Set();
   for (const orig of originals) {
     if (orig.sharedReferenceId) allRefIds.add(orig.sharedReferenceId);
@@ -58049,11 +58093,11 @@ async function applySharedReferencesFromOriginalInternal2(params) {
       }
     }
     chosenSuffix = maxSuffix + 1 || 1;
-    await prisma71.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
+    await prisma51.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } } });
   }
   const refCopyIdByOriginal = /* @__PURE__ */ new Map();
   const desiredIds = Array.from(allRefIds).map((id) => `${id}-${chosenSuffix}`);
-  const existingRefCopies = desiredIds.length > 0 ? await prisma71.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
+  const existingRefCopies = desiredIds.length > 0 ? await prisma51.treeBranchLeafNode.findMany({ where: { id: { in: desiredIds } } }) : [];
   const existingSet = new Set(existingRefCopies.map((n) => n.id));
   const ensureRefCopy = async (origRefId) => {
     const desiredRootId = `${origRefId}-${chosenSuffix}`;
@@ -58075,7 +58119,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     const origSubtree = subtreeIds.map((id) => byId.get(id)).filter(Boolean);
     const desired = new Set(subtreeIds.map((id) => `${id}-${chosenSuffix}`));
     if (desired.size > 0) {
-      const already = await prisma71.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
+      const already = await prisma51.treeBranchLeafNode.findMany({ where: { id: { in: Array.from(desired) } } });
       for (const n of already) desired.delete(n.id);
     }
     const idMap = /* @__PURE__ */ new Map();
@@ -58117,7 +58161,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
         metadata: { ...orig.metadata || {}, copiedFromNodeId: orig.id },
         updatedAt: /* @__PURE__ */ new Date()
       };
-      await prisma71.treeBranchLeafNode.create({ data: toCreate });
+      await prisma51.treeBranchLeafNode.create({ data: toCreate });
       const sourceVariableIds = /* @__PURE__ */ new Set();
       if (Array.isArray(orig.linkedVariableIds)) {
         for (const rawId of orig.linkedVariableIds) {
@@ -58145,7 +58189,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
               originalVarId,
               chosenSuffix,
               newId,
-              prisma71,
+              prisma51,
               {
                 formulaIdMap,
                 conditionIdMap,
@@ -58178,7 +58222,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     const mappedSingle = origSingle ? refCopyIdByOriginal.get(origSingle) || `${origSingle}-${chosenSuffix}` : null;
     const finalArray = mappedMultiple.length > 0 ? mappedMultiple : mappedSingle ? [mappedSingle] : [];
     const finalSingle = finalArray.length > 0 ? finalArray[0] : null;
-    updates.push(prisma71.treeBranchLeafNode.update({
+    updates.push(prisma51.treeBranchLeafNode.update({
       where: { id: copyId },
       data: {
         sharedReferenceId: finalSingle,
@@ -58192,13 +58236,13 @@ async function applySharedReferencesFromOriginalInternal2(params) {
     }));
     applied++;
   }
-  await prisma71.$transaction(updates);
+  await prisma51.$transaction(updates);
   return { success: true, applied, suffix: chosenSuffix };
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-values-service.ts
-async function resetCalculatedValuesAfterCopy(prisma71, copiedNodeIds) {
-  const nodesWithCapacities = await prisma71.treeBranchLeafNode.findMany({
+async function resetCalculatedValuesAfterCopy(prisma51, copiedNodeIds) {
+  const nodesWithCapacities = await prisma51.treeBranchLeafNode.findMany({
     where: {
       id: { in: copiedNodeIds },
       OR: [
@@ -58218,7 +58262,7 @@ async function resetCalculatedValuesAfterCopy(prisma71, copiedNodeIds) {
   });
   for (const node of nodesWithCapacities) {
   }
-  const result = await prisma71.treeBranchLeafNode.updateMany({
+  const result = await prisma51.treeBranchLeafNode.updateMany({
     where: {
       id: { in: copiedNodeIds },
       OR: [
@@ -58235,7 +58279,7 @@ async function resetCalculatedValuesAfterCopy(prisma71, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/strict-isolation-service.ts
-async function enforceStrictIsolation(prisma71, copiedNodeIds) {
+async function enforceStrictIsolation(prisma51, copiedNodeIds) {
   const result = {
     isolatedNodes: [],
     errors: []
@@ -58243,7 +58287,7 @@ async function enforceStrictIsolation(prisma71, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
     try {
       const changes = [];
-      const node = await prisma71.treeBranchLeafNode.findUnique({
+      const node = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
           TreeBranchLeafNodeFormula: true,
@@ -58258,7 +58302,7 @@ async function enforceStrictIsolation(prisma71, copiedNodeIds) {
       }
       if (node.hasFormula || node.hasCondition || node.hasTable) {
         if (node.calculatedValue !== null) {
-          await prisma71.treeBranchLeafNode.update({
+          await prisma51.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
@@ -58266,21 +58310,21 @@ async function enforceStrictIsolation(prisma71, copiedNodeIds) {
         }
       }
       if (node.hasFormula && node.TreeBranchLeafNodeFormula.length === 0) {
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasFormula: false }
         });
         changes.push("hasFormula: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune formule trouv\xC3\u0192\xC2\xA9e)");
       }
       if (node.hasCondition && node.TreeBranchLeafNodeCondition.length === 0) {
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasCondition: false }
         });
         changes.push("hasCondition: true \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 false (aucune condition trouv\xC3\u0192\xC2\xA9e)");
       }
       if (node.hasTable && node.TreeBranchLeafNodeTable.length === 0) {
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: { hasTable: false }
         });
@@ -58294,7 +58338,7 @@ async function enforceStrictIsolation(prisma71, copiedNodeIds) {
         calculatedValueReset: true,
         independentCalculation: true
       };
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
@@ -58312,9 +58356,9 @@ async function enforceStrictIsolation(prisma71, copiedNodeIds) {
   }
   return result;
 }
-async function verifyIsolation(prisma71, copiedNodeIds) {
+async function verifyIsolation(prisma51, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
-    const node = await prisma71.treeBranchLeafNode.findUnique({
+    const node = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -58338,10 +58382,10 @@ async function verifyIsolation(prisma71, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-independent-calculation.ts
-async function forceIndependentCalculation(prisma71, copiedNodeIds) {
+async function forceIndependentCalculation(prisma51, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
     try {
-      const node = await prisma71.treeBranchLeafNode.findUnique({
+      const node = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         include: {
           TreeBranchLeafNodeFormula: true,
@@ -58361,7 +58405,7 @@ async function forceIndependentCalculation(prisma71, copiedNodeIds) {
           requiresFreshCalculation: true,
           calculationInvalidated: Date.now()
         };
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             calculatedValue: null,
@@ -58370,7 +58414,7 @@ async function forceIndependentCalculation(prisma71, copiedNodeIds) {
         });
       } else if (!node.hasFormula && !node.hasCondition && !node.hasTable) {
         if (node.calculatedValue !== null) {
-          await prisma71.treeBranchLeafNode.update({
+          await prisma51.treeBranchLeafNode.update({
             where: { id: nodeId },
             data: { calculatedValue: null }
           });
@@ -58381,11 +58425,11 @@ async function forceIndependentCalculation(prisma71, copiedNodeIds) {
     }
   }
 }
-async function createRecalculationTriggers(prisma71, copiedNodeIds) {
+async function createRecalculationTriggers(prisma51, copiedNodeIds) {
   const triggerTimestamp = Date.now();
   for (const nodeId of copiedNodeIds) {
     try {
-      const currentMetadata = await prisma71.treeBranchLeafNode.findUnique({
+      const currentMetadata = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
         select: { metadata: true, label: true }
       });
@@ -58399,7 +58443,7 @@ async function createRecalculationTriggers(prisma71, copiedNodeIds) {
         independentNode: true,
         noFallbackToOriginal: true
       };
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: { metadata: updatedMetadata }
       });
@@ -58410,7 +58454,7 @@ async function createRecalculationTriggers(prisma71, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/complete-duplication-fix.ts
-async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, suffix = "-1") {
+async function fixCompleteDuplication(prisma51, originalNodeId, copiedNodeId, suffix = "-1") {
   const result = {
     nodeId: copiedNodeId,
     nodeLabel: null,
@@ -58424,7 +58468,7 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
     calculatedValueReset: false
   };
   const [originalNode, copiedNode] = await Promise.all([
-    prisma71.treeBranchLeafNode.findUnique({
+    prisma51.treeBranchLeafNode.findUnique({
       where: { id: originalNodeId },
       include: {
         TreeBranchLeafNodeFormula: true,
@@ -58437,7 +58481,7 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
         }
       }
     }),
-    prisma71.treeBranchLeafNode.findUnique({
+    prisma51.treeBranchLeafNode.findUnique({
       where: { id: copiedNodeId }
     })
   ]);
@@ -58453,7 +58497,7 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
   const nodeIdMap = /* @__PURE__ */ new Map();
   const treeId = copiedNode.treeId;
   if (treeId) {
-    const allNodesInTree = await prisma71.treeBranchLeafNode.findMany({
+    const allNodesInTree = await prisma51.treeBranchLeafNode.findMany({
       where: { treeId },
       select: { id: true }
     });
@@ -58472,7 +58516,7 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
         formula.id,
         copiedNodeId,
         suffixNum,
-        prisma71,
+        prisma51,
         { formulaIdMap, nodeIdMap }
       );
       if (formulaResult.success) {
@@ -58487,12 +58531,12 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
   }
   for (const condition of originalNode.TreeBranchLeafNodeCondition) {
     const newConditionId = `${condition.id}${suffix}`;
-    const existingCondition = await prisma71.treeBranchLeafNodeCondition.findUnique({
+    const existingCondition = await prisma51.treeBranchLeafNodeCondition.findUnique({
       where: { id: newConditionId }
     });
     if (!existingCondition) {
       const adaptedConditionSet = adaptReferencesForCopiedNode(condition.conditionSet, suffix);
-      await prisma71.treeBranchLeafNodeCondition.create({
+      await prisma51.treeBranchLeafNodeCondition.create({
         data: {
           id: newConditionId,
           nodeId: copiedNodeId,
@@ -58509,11 +58553,11 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
   }
   for (const table of originalNode.TreeBranchLeafNodeTable) {
     const newTableId = `${table.id}${suffix}`;
-    const existingTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+    const existingTable = await prisma51.treeBranchLeafNodeTable.findUnique({
       where: { id: newTableId }
     });
     if (!existingTable) {
-      await prisma71.treeBranchLeafNodeTable.create({
+      await prisma51.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
           nodeId: copiedNodeId,
@@ -58566,7 +58610,7 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
       });
       await Promise.all([
         ...table.tableColumns.map(
-          (col) => prisma71.treeBranchLeafNodeTableColumn.create({
+          (col) => prisma51.treeBranchLeafNodeTableColumn.create({
             data: {
               id: `${col.id}${suffix}`,
               tableId: newTableId,
@@ -58581,7 +58625,7 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
           })
         ),
         ...table.tableRows.map(
-          (row) => prisma71.treeBranchLeafNodeTableRow.create({
+          (row) => prisma51.treeBranchLeafNodeTableRow.create({
             data: {
               id: `${row.id}${suffix}`,
               tableId: newTableId,
@@ -58594,19 +58638,19 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
       result.capacitiesFixed.tables++;
     }
   }
-  await fixAssociatedLookups(prisma71, originalNode, copiedNode, suffix);
+  await fixAssociatedLookups(prisma51, originalNode, copiedNode, suffix);
   result.capacitiesFixed.lookups = 1;
   if (copiedNode.fieldConfig) {
     const newFieldConfig = updateFieldConfigReferences(copiedNode.fieldConfig, suffix);
     if (newFieldConfig !== copiedNode.fieldConfig) {
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: copiedNodeId },
         data: { fieldConfig: newFieldConfig }
       });
       result.fieldConfigUpdated = true;
     }
   }
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       hasFormula: originalNode.TreeBranchLeafNodeFormula.length > 0,
@@ -58620,8 +58664,8 @@ async function fixCompleteDuplication(prisma71, originalNodeId, copiedNodeId, su
   result.calculatedValueReset = true;
   return result;
 }
-async function fixAssociatedLookups(prisma71, originalNode, copiedNode, suffix) {
-  const measureNodes = await prisma71.treeBranchLeafNode.findMany({
+async function fixAssociatedLookups(prisma51, originalNode, copiedNode, suffix) {
+  const measureNodes = await prisma51.treeBranchLeafNode.findMany({
     where: {
       AND: [
         { label: { contains: "Mesure" } },
@@ -58646,16 +58690,16 @@ async function fixAssociatedLookups(prisma71, originalNode, copiedNode, suffix) 
       );
       if (lookupTable && lookupTable.tableRows.length === 0) {
         await Promise.all([
-          prisma71.treeBranchLeafNodeTableColumn.deleteMany({
+          prisma51.treeBranchLeafNodeTableColumn.deleteMany({
             where: { tableId: lookupTable.id }
           }),
-          prisma71.treeBranchLeafNodeTableRow.deleteMany({
+          prisma51.treeBranchLeafNodeTableRow.deleteMany({
             where: { tableId: lookupTable.id }
           })
         ]);
         await Promise.all([
           ...originalTable.tableColumns.map(
-            (col) => prisma71.treeBranchLeafNodeTableColumn.create({
+            (col) => prisma51.treeBranchLeafNodeTableColumn.create({
               data: {
                 id: `${col.id}-lookup${suffix}`,
                 tableId: lookupTable.id,
@@ -58669,7 +58713,7 @@ async function fixAssociatedLookups(prisma71, originalNode, copiedNode, suffix) 
             })
           ),
           ...originalTable.tableRows.map(
-            (row) => prisma71.treeBranchLeafNodeTableRow.create({
+            (row) => prisma51.treeBranchLeafNodeTableRow.create({
               data: {
                 id: `${row.id}-lookup${suffix}`,
                 tableId: lookupTable.id,
@@ -58679,7 +58723,7 @@ async function fixAssociatedLookups(prisma71, originalNode, copiedNode, suffix) 
             })
           )
         ]);
-        await prisma71.treeBranchLeafNodeTable.update({
+        await prisma51.treeBranchLeafNodeTable.update({
           where: { id: lookupTable.id },
           data: {
             rowCount: originalTable.rowCount,
@@ -58731,7 +58775,7 @@ function updateFieldConfigReferences(fieldConfig, suffix) {
   }
   return config;
 }
-async function fixAllCompleteDuplications(prisma71, repeaterNodeId) {
+async function fixAllCompleteDuplications(prisma51, repeaterNodeId) {
   const report = {
     totalNodesProcessed: 0,
     nodesFixed: [],
@@ -58751,7 +58795,7 @@ async function fixAllCompleteDuplications(prisma71, repeaterNodeId) {
         }
       });
     }
-    const copiedNodes = await prisma71.treeBranchLeafNode.findMany({
+    const copiedNodes = await prisma51.treeBranchLeafNode.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -58769,7 +58813,7 @@ async function fixAllCompleteDuplications(prisma71, repeaterNodeId) {
         }
         if (!originalNodeId && node.label) {
           const originalLabel = node.label.replace("-1", "");
-          const originalNode = await prisma71.treeBranchLeafNode.findFirst({
+          const originalNode = await prisma51.treeBranchLeafNode.findFirst({
             where: {
               label: originalLabel,
               id: { not: node.id }
@@ -58787,7 +58831,7 @@ async function fixAllCompleteDuplications(prisma71, repeaterNodeId) {
           });
           continue;
         }
-        const result = await fixCompleteDuplication(prisma71, originalNodeId, node.id, "-1");
+        const result = await fixCompleteDuplication(prisma51, originalNodeId, node.id, "-1");
         report.nodesFixed.push(result);
       } catch (error) {
         report.errors.push({
@@ -58803,7 +58847,7 @@ async function fixAllCompleteDuplications(prisma71, repeaterNodeId) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/force-recalculation-service.ts
-async function forceNodeRecalculationWithOwnData(prisma71, copiedNodeId) {
+async function forceNodeRecalculationWithOwnData(prisma51, copiedNodeId) {
   const result = {
     nodeId: copiedNodeId,
     nodeLabel: null,
@@ -58812,7 +58856,7 @@ async function forceNodeRecalculationWithOwnData(prisma71, copiedNodeId) {
     recalculationForced: false,
     referencesUpdated: []
   };
-  const copiedNode = await prisma71.treeBranchLeafNode.findUnique({
+  const copiedNode = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: copiedNodeId },
     include: {
       TreeBranchLeafNodeFormula: true,
@@ -58847,7 +58891,7 @@ async function forceNodeRecalculationWithOwnData(prisma71, copiedNodeId) {
       );
       if (updated) {
         const newTokens = JSON.parse(updatedTokensStr);
-        await prisma71.treeBranchLeafNodeFormula.update({
+        await prisma51.treeBranchLeafNodeFormula.update({
           where: { id: formula.id },
           data: { tokens: newTokens }
         });
@@ -58871,7 +58915,7 @@ async function forceNodeRecalculationWithOwnData(prisma71, copiedNodeId) {
       );
       if (updated) {
         const newConditionSet = JSON.parse(updatedConditionStr);
-        await prisma71.treeBranchLeafNodeCondition.update({
+        await prisma51.treeBranchLeafNodeCondition.update({
           where: { id: condition.id },
           data: { conditionSet: newConditionSet }
         });
@@ -58886,7 +58930,7 @@ async function forceNodeRecalculationWithOwnData(prisma71, copiedNodeId) {
     noFallbackToOriginal: true,
     recalculationReason: "Duplication independence enforcement"
   };
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: copiedNodeId },
     data: {
       calculatedValue: null,
@@ -58899,7 +58943,7 @@ async function forceNodeRecalculationWithOwnData(prisma71, copiedNodeId) {
   result.newCalculatedValue = null;
   return result;
 }
-async function forceAllNodesRecalculationWithOwnData(prisma71, repeaterNodeId) {
+async function forceAllNodesRecalculationWithOwnData(prisma51, repeaterNodeId) {
   const report = {
     totalNodesProcessed: 0,
     nodesRecalculated: [],
@@ -58919,7 +58963,7 @@ async function forceAllNodesRecalculationWithOwnData(prisma71, repeaterNodeId) {
         }
       });
     }
-    const copiedNodes = await prisma71.treeBranchLeafNode.findMany({
+    const copiedNodes = await prisma51.treeBranchLeafNode.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -58931,7 +58975,7 @@ async function forceAllNodesRecalculationWithOwnData(prisma71, repeaterNodeId) {
       report.totalNodesProcessed++;
       try {
         if (node.calculatedValue !== null) {
-          const result = await forceNodeRecalculationWithOwnData(prisma71, node.id);
+          const result = await forceNodeRecalculationWithOwnData(prisma51, node.id);
           report.nodesRecalculated.push(result);
         } else {
         }
@@ -58947,9 +58991,9 @@ async function forceAllNodesRecalculationWithOwnData(prisma71, repeaterNodeId) {
   }
   return report;
 }
-async function blockFallbackToOriginalValues(prisma71, copiedNodeIds) {
+async function blockFallbackToOriginalValues(prisma51, copiedNodeIds) {
   for (const nodeId of copiedNodeIds) {
-    const node = await prisma71.treeBranchLeafNode.findUnique({
+    const node = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { metadata: true }
     });
@@ -58961,7 +59005,7 @@ async function blockFallbackToOriginalValues(prisma71, copiedNodeIds) {
         lastAntiFactbackUpdate: (/* @__PURE__ */ new Date()).toISOString(),
         calculationIsolationLevel: "STRICT"
       };
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: nodeId },
         data: {
           metadata: antiFactbackMetadata,
@@ -58980,7 +59024,7 @@ var TableLookupDuplicationService = class {
    * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
    * Assure l'indÃƒÂ©pendance totale des lookups pour les nÃ…â€œuds copiÃƒÂ©s
    */
-  async duplicateTableLookupSystem(prisma71, originalNodeId, arg) {
+  async duplicateTableLookupSystem(prisma51, originalNodeId, arg) {
     let suffixToken = typeof arg === "string" ? arg : arg?.suffixToken ?? "-1";
     if (!suffixToken) suffixToken = "-1";
     if (!suffixToken.startsWith("-")) {
@@ -58989,14 +59033,14 @@ var TableLookupDuplicationService = class {
     const normalizedOriginalId = normalizeNodeBase(originalNodeId);
     const copiedNodeId = typeof arg === "object" && arg?.copiedNodeId ? arg.copiedNodeId : `${normalizedOriginalId}${suffixToken}`;
     try {
-      const originalSelectConfigs = await prisma71.treeBranchLeafSelectConfig.findMany({
+      const originalSelectConfigs = await prisma51.treeBranchLeafSelectConfig.findMany({
         where: { nodeId: originalNodeId }
       });
       if (originalSelectConfigs.length === 0) {
         return;
       }
       for (const selectConfig of originalSelectConfigs) {
-        await this.duplicateTableAndSelectConfig(prisma71, selectConfig, copiedNodeId, suffixToken);
+        await this.duplicateTableAndSelectConfig(prisma51, selectConfig, copiedNodeId, suffixToken);
       }
     } catch (error) {
       console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur pour ${originalNodeId}:`, error);
@@ -59006,11 +59050,11 @@ var TableLookupDuplicationService = class {
   /**
    * Duplique une table TBL et sa configuration SELECT associÃƒÂ©e
    */
-  async duplicateTableAndSelectConfig(prisma71, originalSelectConfig, copiedNodeId, suffix) {
+  async duplicateTableAndSelectConfig(prisma51, originalSelectConfig, copiedNodeId, suffix) {
     const originalTableId = originalSelectConfig.tableReference;
     const copiedTableId = `${originalTableId}${suffix}`;
     try {
-      const originalTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+      const originalTable = await prisma51.treeBranchLeafNodeTable.findUnique({
         where: { id: originalTableId },
         include: {
           tableColumns: true,
@@ -59020,11 +59064,11 @@ var TableLookupDuplicationService = class {
       if (!originalTable) {
         return;
       }
-      const existingCopiedTable = await prisma71.treeBranchLeafNodeTable.findUnique({
+      const existingCopiedTable = await prisma51.treeBranchLeafNodeTable.findUnique({
         where: { id: copiedTableId }
       });
       if (!existingCopiedTable) {
-        await prisma71.treeBranchLeafNodeTable.create({
+        await prisma51.treeBranchLeafNodeTable.create({
           data: {
             id: copiedTableId,
             nodeId: copiedNodeId,
@@ -59124,14 +59168,14 @@ var TableLookupDuplicationService = class {
         });
       } else {
       }
-      const existingSelectConfig = await prisma71.treeBranchLeafSelectConfig.findFirst({
+      const existingSelectConfig = await prisma51.treeBranchLeafSelectConfig.findFirst({
         where: {
           nodeId: copiedNodeId,
           tableReference: copiedTableId
         }
       });
       if (!existingSelectConfig) {
-        await prisma71.treeBranchLeafSelectConfig.create({
+        await prisma51.treeBranchLeafSelectConfig.create({
           data: {
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
@@ -59146,7 +59190,7 @@ var TableLookupDuplicationService = class {
           }
         });
         try {
-          const node = await prisma71.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
+          const node = await prisma51.treeBranchLeafNode.findUnique({ where: { id: copiedNodeId }, select: { capabilities: true, linkedTableIds: true } });
           const currentCapabilities = node?.capabilities && typeof node.capabilities === "object" ? node.capabilities : {};
           currentCapabilities.table = currentCapabilities.table || {};
           currentCapabilities.table.enabled = true;
@@ -59155,7 +59199,7 @@ var TableLookupDuplicationService = class {
           currentCapabilities.table.instances[copiedTableId] = currentCapabilities.table.instances[copiedTableId] || {};
           const currentLinked = node?.linkedTableIds || [];
           const newLinked = Array.from(/* @__PURE__ */ new Set([...currentLinked, copiedTableId]));
-          await prisma71.treeBranchLeafNode.update({
+          await prisma51.treeBranchLeafNode.update({
             where: { id: copiedNodeId },
             data: {
               hasTable: true,
@@ -59180,9 +59224,9 @@ var TableLookupDuplicationService = class {
   /**
    * RÃƒÂ©pare les configurations SELECT manquantes pour les nÃ…â€œuds copiÃƒÂ©s existants
    */
-  async repairMissingSelectConfigs(prisma71) {
+  async repairMissingSelectConfigs(prisma51) {
     try {
-      const copiedNodes = await prisma71.treeBranchLeafNode.findMany({
+      const copiedNodes = await prisma51.treeBranchLeafNode.findMany({
         where: {
           id: {
             endsWith: "-1"
@@ -59191,11 +59235,11 @@ var TableLookupDuplicationService = class {
       });
       for (const copiedNode of copiedNodes) {
         const originalNodeId = copiedNode.id.replace("-1", "");
-        const copiedSelectConfigs = await prisma71.treeBranchLeafSelectConfig.findMany({
+        const copiedSelectConfigs = await prisma51.treeBranchLeafSelectConfig.findMany({
           where: { nodeId: copiedNode.id }
         });
         if (copiedSelectConfigs.length === 0) {
-          await this.duplicateTableLookupSystem(prisma71, originalNodeId, {
+          await this.duplicateTableLookupSystem(prisma51, originalNodeId, {
             copiedNodeId: copiedNode.id,
             suffixToken: "-1"
           });
@@ -59214,7 +59258,7 @@ function normalizeNodeBase(value) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
 init_operation_interpreter();
-async function recalculateNodeWithOperationInterpreter(prisma71, nodeId, submissionId) {
+async function recalculateNodeWithOperationInterpreter(prisma51, nodeId, submissionId) {
   const result = {
     nodeId,
     label: null,
@@ -59225,7 +59269,7 @@ async function recalculateNodeWithOperationInterpreter(prisma71, nodeId, submiss
     recalculationSuccess: false
   };
   try {
-    const node = await prisma71.treeBranchLeafNode.findUnique({
+    const node = await prisma51.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: {
         id: true,
@@ -59278,7 +59322,7 @@ async function recalculateNodeWithOperationInterpreter(prisma71, nodeId, submiss
       const interpretResult = await interpretReference(
         sourceRef,
         submissionId || "",
-        prisma71,
+        prisma51,
         valuesCache,
         0,
         /* @__PURE__ */ new Map(),
@@ -59287,7 +59331,7 @@ async function recalculateNodeWithOperationInterpreter(prisma71, nodeId, submiss
       result.newValue = interpretResult.result;
       result.recalculationSuccess = true;
       if (result.newValue && result.newValue !== "null" && result.newValue !== "\xC3\xA2\xCB\u2020\xE2\u20AC\xA6") {
-        await prisma71.treeBranchLeafNode.update({
+        await prisma51.treeBranchLeafNode.update({
           where: { id: nodeId },
           data: {
             calculatedValue: result.newValue,
@@ -59306,14 +59350,14 @@ async function recalculateNodeWithOperationInterpreter(prisma71, nodeId, submiss
   }
   return result;
 }
-async function recalculateAllCopiedNodesWithOperationInterpreter(prisma71, repeaterNodeId, suffixMarker = "-1") {
+async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repeaterNodeId, suffixMarker = "-1") {
   const report = {
     totalNodes: 0,
     recalculated: [],
     errors: []
   };
   try {
-    const repeaterChildren = await prisma71.treeBranchLeafNode.findMany({
+    const repeaterChildren = await prisma51.treeBranchLeafNode.findMany({
       where: {
         parentId: repeaterNodeId
       },
@@ -59328,7 +59372,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma71, repea
       const current = queue.shift();
       if (!current) continue;
       allDescendants.push(current);
-      const children = await prisma71.treeBranchLeafNode.findMany({
+      const children = await prisma51.treeBranchLeafNode.findMany({
         where: {
           parentId: current.id
         },
@@ -59344,7 +59388,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma71, repea
     for (const node of copiedNodes) {
       try {
         const recalcResult = await recalculateNodeWithOperationInterpreter(
-          prisma71,
+          prisma51,
           node.id
         );
         report.recalculated.push(recalcResult);
@@ -59394,11 +59438,11 @@ var buildMetadataPayload = (metadata, templateNodeIds) => {
   base.repeater = repeaterMeta;
   return base;
 };
-async function syncRepeaterTemplateIds(prisma71, repeaterNodeId, templateNodeIds) {
+async function syncRepeaterTemplateIds(prisma51, repeaterNodeId, templateNodeIds) {
   if (!repeaterNodeId || !templateNodeIds.length) {
     return;
   }
-  const repeater = await prisma71.treeBranchLeafNode.findUnique({
+  const repeater = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     select: { repeater_templateNodeIds: true, metadata: true }
   });
@@ -59415,7 +59459,7 @@ async function syncRepeaterTemplateIds(prisma71, repeaterNodeId, templateNodeIds
   if (!columnChanged && !metadataChanged) {
     return;
   }
-  await prisma71.treeBranchLeafNode.update({
+  await prisma51.treeBranchLeafNode.update({
     where: { id: repeaterNodeId },
     data: {
       repeater_templateNodeIds: JSON.stringify(nextIds),
@@ -59425,10 +59469,10 @@ async function syncRepeaterTemplateIds(prisma71, repeaterNodeId, templateNodeIds
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-async function runRepeatExecution(prisma71, req2, execution) {
+async function runRepeatExecution(prisma51, req2, execution) {
   const { repeaterNodeId, scopeId, plan, blueprint } = execution;
   const authCtx = getAuthCtx(req2);
-  const repeaterNode = await prisma71.treeBranchLeafNode.findUnique({
+  const repeaterNode = await prisma51.treeBranchLeafNode.findUnique({
     where: { id: repeaterNodeId },
     include: { TreeBranchLeafTree: true }
   });
@@ -59454,7 +59498,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
     throw new RepeatOperationError(`Repeater ${repeaterNodeId} does not declare template nodes to duplicate.`, 422);
   }
   const templateNodes = await loadTemplateNodesWithFallback(
-    prisma71,
+    prisma51,
     templateNodeIds,
     repeaterNode.treeId,
     authCtx.organizationId,
@@ -59466,7 +59510,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
   const templateById = new Map(nodesToDuplicate.map((node) => [node.id, node]));
   const templateIdsForSuffix = Array.from(templateById.keys());
   const existingMax = await computeTemplateCopySuffixMax(
-    prisma71,
+    prisma51,
     repeaterNode.treeId,
     templateIdsForSuffix
   );
@@ -59514,7 +59558,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
           options.suffixNum = forcedSuffix;
         }
         try {
-          const result = await deepCopyNodeInternal(prisma71, req2, template.id, options);
+          const result = await deepCopyNodeInternal(prisma51, req2, template.id, options);
           return { result, appliedSuffix: forcedSuffix };
         } catch (error) {
           if (forcedSuffix !== void 0 && isUniqueConstraintError(error)) {
@@ -59529,7 +59573,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
       };
       const { result: copyResult, appliedSuffix } = await attemptCopy(plannedSuffix);
       const newRootId = copyResult.root.newId;
-      const created = await prisma71.treeBranchLeafNode.findUnique({
+      const created = await prisma51.treeBranchLeafNode.findUnique({
         where: { id: newRootId }
       });
       if (!created) {
@@ -59547,7 +59591,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
         copySuffix: effectiveSuffix,
         repeatScopeId: scopeId
       };
-      await prisma71.treeBranchLeafNode.update({
+      await prisma51.treeBranchLeafNode.update({
         where: { id: newRootId },
         data: {
           metadata: updatedMetadata
@@ -59598,7 +59642,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
       }
       try {
         await applySharedReferencesFromOriginalInternal2({
-          prisma: prisma71,
+          prisma: prisma51,
           nodeId: newRootId,
           authCtx
         });
@@ -59612,7 +59656,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
           tableIdMap: new Map(Object.entries(copyResult.tableIdMap || {}))
         };
         await copySelectorTablesAfterNodeCopy(
-          prisma71,
+          prisma51,
           newRootId,
           template.id,
           selectorOptions,
@@ -59629,7 +59673,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
   for (const variablePlan of plan.variables) {
     try {
       let { templateVariableId, targetNodeId, plannedVariableId, plannedSuffix } = variablePlan;
-      const templateVar = await prisma71.treeBranchLeafNodeVariable.findUnique({
+      const templateVar = await prisma51.treeBranchLeafNodeVariable.findUnique({
         where: { id: templateVariableId },
         select: { displayName: true }
       });
@@ -59647,7 +59691,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
         templateVariableId,
         plannedSuffix,
         targetNodeId,
-        prisma71,
+        prisma51,
         {
           autoCreateDisplayNode: true,
           isFromRepeaterDuplication: true,
@@ -59692,39 +59736,39 @@ async function runRepeatExecution(prisma71, req2, execution) {
     }
   }
   try {
-    await syncRepeaterTemplateIds(prisma71, repeaterNodeId, templateNodeIds);
+    await syncRepeaterTemplateIds(prisma51, repeaterNodeId, templateNodeIds);
   } catch (syncErr) {
     console.warn("[repeat-executor] Unable to sync repeater template IDs", syncErr);
   }
   if (duplicatedNodeIds.size > 0) {
     try {
-      const completeDuplicationReport = await fixAllCompleteDuplications(prisma71, repeaterNodeId);
+      const completeDuplicationReport = await fixAllCompleteDuplications(prisma51, repeaterNodeId);
       for (const nodeId of duplicatedNodeIds) {
         const originalNodeId = originalNodeIdByCopyId.get(nodeId);
         if (!originalNodeId) continue;
         const suffixToken = deriveCopySuffixToken(originalNodeId, nodeId);
         if (!suffixToken) continue;
-        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma71, originalNodeId, {
+        await tableLookupDuplicationService.duplicateTableLookupSystem(prisma51, originalNodeId, {
           copiedNodeId: nodeId,
           suffixToken
         });
       }
-      await reassignCopiedNodesToDuplicatedParents(prisma71, duplicatedNodeIds, originalNodeIdByCopyId);
+      await reassignCopiedNodesToDuplicatedParents(prisma51, duplicatedNodeIds, originalNodeIdByCopyId);
       const isolationResult = await enforceStrictIsolation(
-        prisma71,
+        prisma51,
         Array.from(duplicatedNodeIds)
       );
-      await verifyIsolation(prisma71, Array.from(duplicatedNodeIds));
+      await verifyIsolation(prisma51, Array.from(duplicatedNodeIds));
       const resetCount = await resetCalculatedValuesAfterCopy(
-        prisma71,
+        prisma51,
         Array.from(duplicatedNodeIds)
       );
-      await forceIndependentCalculation(prisma71, Array.from(duplicatedNodeIds));
-      await createRecalculationTriggers(prisma71, Array.from(duplicatedNodeIds));
-      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma71, repeaterNodeId);
-      await blockFallbackToOriginalValues(prisma71, Array.from(duplicatedNodeIds));
+      await forceIndependentCalculation(prisma51, Array.from(duplicatedNodeIds));
+      await createRecalculationTriggers(prisma51, Array.from(duplicatedNodeIds));
+      const forceRecalcReport = await forceAllNodesRecalculationWithOwnData(prisma51, repeaterNodeId);
+      await blockFallbackToOriginalValues(prisma51, Array.from(duplicatedNodeIds));
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
-        prisma71,
+        prisma51,
         repeaterNodeId,
         "-1"
       );
@@ -59738,7 +59782,7 @@ async function runRepeatExecution(prisma71, req2, execution) {
   }
   let nodesPayload = [];
   if (duplicatedNodeIds.size > 0) {
-    const nodes = await prisma71.treeBranchLeafNode.findMany({
+    const nodes = await prisma51.treeBranchLeafNode.findMany({
       where: {
         treeId: repeaterNode.treeId,
         id: { in: Array.from(duplicatedNodeIds) }
@@ -59760,11 +59804,11 @@ async function runRepeatExecution(prisma71, req2, execution) {
     }
   };
 }
-async function loadTemplateNodesWithFallback(prisma71, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
+async function loadTemplateNodesWithFallback(prisma51, templateNodeIds, repeaterTreeId, organizationId, isSuperAdmin2) {
   if (!templateNodeIds.length) {
     throw new RepeatOperationError("Repeater does not declare template nodes to duplicate.", 422);
   }
-  const scoped = await prisma71.treeBranchLeafNode.findMany({
+  const scoped = await prisma51.treeBranchLeafNode.findMany({
     where: {
       id: { in: templateNodeIds },
       treeId: repeaterTreeId
@@ -59774,7 +59818,7 @@ async function loadTemplateNodesWithFallback(prisma71, templateNodeIds, repeater
   const missingIds = templateNodeIds.filter((id) => !foundIds.has(id));
   let crossTree = [];
   if (missingIds.length) {
-    crossTree = await prisma71.treeBranchLeafNode.findMany({
+    crossTree = await prisma51.treeBranchLeafNode.findMany({
       where: { id: { in: missingIds } },
       include: {
         TreeBranchLeafTree: { select: { organizationId: true } }
@@ -59837,14 +59881,14 @@ function normalizeNodeBase2(value) {
   return value.replace(/-\d+(?:-\d+)*$/, "");
 }
 function isUniqueConstraintError(error) {
-  return error instanceof import_client71.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return error instanceof import_client6.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
-async function reassignCopiedNodesToDuplicatedParents(prisma71, copiedNodeIds, originalNodeIdByCopyId) {
+async function reassignCopiedNodesToDuplicatedParents(prisma51, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {
     return;
   }
   const copyIds = Array.from(copiedNodeIds);
-  const copies = await prisma71.treeBranchLeafNode.findMany({
+  const copies = await prisma51.treeBranchLeafNode.findMany({
     where: { id: { in: copyIds } },
     select: {
       id: true,
@@ -59863,7 +59907,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma71, copiedNodeIds, o
   if (!originalIds.length) {
     return;
   }
-  const originalNodes = await prisma71.treeBranchLeafNode.findMany({
+  const originalNodes = await prisma51.treeBranchLeafNode.findMany({
     where: { id: { in: originalIds } },
     select: { id: true, parentId: true }
   });
@@ -59901,7 +59945,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma71, copiedNodeIds, o
   if (!reassignmentTargets.length) {
     return;
   }
-  const existingParents = await prisma71.treeBranchLeafNode.findMany({
+  const existingParents = await prisma51.treeBranchLeafNode.findMany({
     where: { id: { in: Array.from(parentIdsToCheck) } },
     select: { id: true }
   });
@@ -59912,7 +59956,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma71, copiedNodeIds, o
       continue;
     }
     updates.push(
-      prisma71.treeBranchLeafNode.update({
+      prisma51.treeBranchLeafNode.update({
         where: { id: target.nodeId },
         data: { parentId: target.targetParentId }
       })
@@ -59921,7 +59965,7 @@ async function reassignCopiedNodesToDuplicatedParents(prisma71, copiedNodeIds, o
   if (!updates.length) {
     return;
   }
-  await prisma71.$transaction(updates);
+  await prisma51.$transaction(updates);
 }
 function getCopySuffixToken(nodeId, metadata) {
   const normalizedMetadata = normalizeMetadata(metadata);
@@ -59960,7 +60004,7 @@ function normalizeMetadata(metadata) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-function createRepeatRouter(prisma71) {
+function createRepeatRouter(prisma51) {
   const router85 = (0, import_express87.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
   router85.use(authenticateToken);
@@ -59968,7 +60012,7 @@ function createRepeatRouter(prisma71) {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
-      const result = await planRepeatDuplication(prisma71, repeaterNodeId, {
+      const result = await planRepeatDuplication(prisma51, repeaterNodeId, {
         suffix: body2.suffix,
         includeTotals: body2.includeTotals,
         targetParentId: body2.targetParentId,
@@ -60007,14 +60051,14 @@ function createRepeatRouter(prisma71) {
     }
     inFlightExecuteByRepeater.add(repeaterNodeId);
     try {
-      const executionPlan = await executeRepeatDuplication(prisma71, repeaterNodeId, {
+      const executionPlan = await executeRepeatDuplication(prisma51, repeaterNodeId, {
         suffix: body2.suffix,
         includeTotals: body2.includeTotals,
         targetParentId: body2.targetParentId,
         scopeId: body2.scopeId
       });
       const executionSummary = await runRepeatExecution(
-        prisma71,
+        prisma51,
         req2,
         executionPlan
       );
@@ -60052,7 +60096,7 @@ function createRepeatRouter(prisma71) {
 }
 
 // src/middleware/websiteDetection.ts
-var import_client72 = require("@prisma/client");
+init_prisma();
 
 // src/middleware/websiteRenderer.ts
 function renderSection(section) {
@@ -60285,12 +60329,18 @@ async function renderWebsite(req2, res) {
 }
 
 // src/middleware/websiteDetection.ts
-var prisma69 = new import_client72.PrismaClient();
+var websiteCache = /* @__PURE__ */ new Map();
+var CACHE_TTL = 6e4;
+var isProduction2 = process.env.NODE_ENV === "production";
 var CRM_DOMAINS = [
   "app.2thier.be",
   "api.2thier.be",
   "crm.2thier.be",
-  "localhost"
+  "localhost",
+  "railway.app",
+  // Railway deployments
+  "up.railway.app"
+  // Railway preview URLs
 ];
 async function detectWebsite(req2, res, next) {
   try {
@@ -60298,16 +60348,33 @@ async function detectWebsite(req2, res, next) {
     const hostHeader = req2.headers.host;
     let hostname = forwardedHost || hostHeader || req2.hostname || "";
     hostname = hostname.split(":")[0];
-    console.log(`\u{1F50D} [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req2.hostname}`);
-    console.log(`\u{1F50D} [WEBSITE-DETECTION] Domaine d\xE9tect\xE9: ${hostname}`);
+    if (!isProduction2) {
+      console.log(`\u{1F50D} [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req2.hostname}`);
+      console.log(`\u{1F50D} [WEBSITE-DETECTION] Domaine d\xE9tect\xE9: ${hostname}`);
+    }
     if (CRM_DOMAINS.some((crm) => hostname.includes(crm))) {
-      console.log(`\u{1F4F1} [WEBSITE-DETECTION] Domaine CRM d\xE9tect\xE9: ${hostname}`);
+      if (!isProduction2) {
+        console.log(`\u{1F4F1} [WEBSITE-DETECTION] Domaine CRM d\xE9tect\xE9: ${hostname}`);
+      }
       req2.isWebsiteRoute = false;
       return next();
     }
     const cleanDomain = hostname.replace(/^www\./, "");
-    console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
-    const website = await prisma69.webSite.findFirst({
+    const cacheKey = cleanDomain;
+    const cached = websiteCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      if (cached.data) {
+        req2.websiteData = cached.data;
+        req2.isWebsiteRoute = true;
+      } else {
+        req2.isWebsiteRoute = false;
+      }
+      return next();
+    }
+    if (!isProduction2) {
+      console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
+    }
+    const website = await db.webSite.findFirst({
       where: {
         OR: [
           { domain: cleanDomain },
@@ -60325,8 +60392,10 @@ async function detectWebsite(req2, res, next) {
       }
     });
     if (website) {
-      console.log(`\u2705 [WEBSITE-DETECTION] Site trouv\xE9: ${website.siteName} (${website.slug})`);
-      req2.websiteData = {
+      if (!isProduction2) {
+        console.log(`\u2705 [WEBSITE-DETECTION] Site trouv\xE9: ${website.siteName} (${website.slug})`);
+      }
+      const websiteData = {
         id: website.id,
         slug: website.slug,
         domain: website.domain || cleanDomain,
@@ -60335,9 +60404,14 @@ async function detectWebsite(req2, res, next) {
         config: website.config,
         sections: website.sections
       };
+      websiteCache.set(cacheKey, { data: websiteData, timestamp: Date.now() });
+      req2.websiteData = websiteData;
       req2.isWebsiteRoute = true;
     } else {
-      console.log(`\u26A0\uFE0F [WEBSITE-DETECTION] Aucun site trouv\xE9 pour: ${cleanDomain}`);
+      if (!isProduction2) {
+        console.log(`\u26A0\uFE0F [WEBSITE-DETECTION] Aucun site trouv\xE9 pour: ${cleanDomain}`);
+      }
+      websiteCache.set(cacheKey, { data: null, timestamp: Date.now() });
       req2.isWebsiteRoute = false;
     }
     next();
@@ -60524,11 +60598,11 @@ var inputSanitization = (req2, res, next) => {
 };
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts
-var import_client73 = require("@prisma/client");
-var prisma70 = new import_client73.PrismaClient();
+init_database();
+var prisma50 = db;
 async function syncVariableSourceRefs() {
   try {
-    const nodes = await prisma70.treeBranchLeafNode.findMany({
+    const nodes = await prisma50.treeBranchLeafNode.findMany({
       where: {
         data_instances: { not: null }
       },
@@ -60559,7 +60633,7 @@ async function syncVariableSourceRefs() {
       if (jsonSourceRef === dbSourceRef) {
         continue;
       }
-      await prisma70.treeBranchLeafNodeVariable.update({
+      await prisma50.treeBranchLeafNodeVariable.update({
         where: { id: node.TreeBranchLeafNodeVariable.id },
         data: { sourceRef: jsonSourceRef }
       });
@@ -60581,7 +60655,7 @@ async function initializeTreeBranchLeafSync() {
   } catch (error) {
     console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [INIT SYNC] Erreur:", error);
   } finally {
-    await prisma70.$disconnect();
+    await prisma50.$disconnect();
   }
 }
 
@@ -60639,15 +60713,16 @@ app.use((0, import_helmet.default)({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      fontSrc: ["'self'", "fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https:"],
-      frameSrc: ["'none'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "https:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "maps.googleapis.com", "*.googleapis.com"],
+      fontSrc: ["'self'", "fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "https:", "blob:", "maps.gstatic.com", "*.googleapis.com", "*.ggpht.com"],
+      connectSrc: ["'self'", "https:", "wss:", "maps.googleapis.com", "*.googleapis.com"],
+      frameSrc: ["'self'", "maps.google.com", "*.google.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      manifestSrc: ["'self'"]
+      manifestSrc: ["'self'"],
+      workerSrc: ["'self'", "blob:"]
     }
   },
   hsts: {
@@ -60670,7 +60745,11 @@ var FRONTEND_URL = process.env.FRONTEND_URL;
 var prodOrigins = [
   FRONTEND_URL || "https://app.2thier.be",
   "https://www.2thier.be",
-  "https://crm.2thier.be"
+  "https://crm.2thier.be",
+  /\.railway\.app$/,
+  // Railway preview URLs
+  /\.up\.railway\.app$/
+  // Railway deployments
 ];
 var devOrigins = [FRONTEND_URL || "http://localhost:5173", "http://localhost:3000"];
 app.use((0, import_cors.default)({
@@ -60750,7 +60829,7 @@ app.use("/api/documents", documents_default);
 app.use("/api/tbl", tbl_submission_evaluator_default);
 app.use("/api/tree-nodes", calculatedValueController_default);
 app.use("/api/treebranchleaf", treebranchleaf_routes_default);
-var repeatRouter = createRepeatRouter(prisma);
+var repeatRouter = createRepeatRouter(db);
 app.use("/api/treebranchleaf/repeat", repeatRouter);
 app.use("/api/repeat", repeatRouter);
 console.log("\u2705 [API-SERVER-CLEAN] Routes configur\xE9es");
@@ -60762,7 +60841,7 @@ app.get("/health", (_req, res) => {
 });
 app.get("/api/health/db", async (_req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await db.$queryRaw`SELECT 1`;
     res.json({ db: "OK", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   } catch (e) {
     const message = e?.message || "Unknown error";
@@ -60896,10 +60975,14 @@ app.listen(port, () => {
   }, "info");
   console.log(`\u{1F389} [API-SERVER-CLEAN] Serveur CRM d\xE9marr\xE9 avec succ\xE8s sur http://localhost:${port}`);
   console.log(`\u{1F6E1}\uFE0F [ENTERPRISE-SECURITY] S\xE9curit\xE9 niveau 100% activ\xE9e`);
-  console.log("\u{1F504} [TREEBRANCHLEAF] Synchronisation des sourceRef...");
-  initializeTreeBranchLeafSync().catch((err) => {
-    console.error("\u26A0\uFE0F  [TREEBRANCHLEAF] Erreur lors de la synchronisation:", err);
-  });
+  if (process.env.NODE_ENV !== "production") {
+    console.log("\u{1F504} [TREEBRANCHLEAF] Synchronisation des sourceRef...");
+    initializeTreeBranchLeafSync().catch((err) => {
+      console.error("\u26A0\uFE0F  [TREEBRANCHLEAF] Erreur lors de la synchronisation:", err);
+    });
+  } else {
+    console.log("\u23ED\uFE0F [TREEBRANCHLEAF] Synchronisation d\xE9sactiv\xE9e en production (optimisation m\xE9moire)");
+  }
   console.log(`\u{1F4CB} [API-SERVER-CLEAN] Endpoints disponibles:`);
   console.log(`   - Health: http://localhost:${port}/api/health`);
   console.log(`   - Auth Me: http://localhost:${port}/api/auth/me`);
