@@ -102,11 +102,10 @@ export class GoogleGmailService {
    */
   private async loadOrganizationInfo(): Promise<void> {
     try {
-      // Utilisation directe de Prisma pour récupérer l'email admin
-      const { PrismaClient } = await import('@prisma/client');
-      const prisma = new PrismaClient();
+      // Utilisation du singleton centralisé
+      const { db } = await import('../../lib/database');
       
-      const organization = await prisma.organization.findUnique({
+      const organization = await db.organization.findUnique({
         where: { id: this.organizationId },
         include: {
           GoogleWorkspaceConfig: true,
@@ -119,8 +118,6 @@ export class GoogleGmailService {
       } else {
         console.warn(`[GoogleGmailService] ⚠️ Email admin non trouvé pour l'organisation ${this.organizationId}`);
       }
-      
-      await prisma.$disconnect();
     } catch (error) {
       console.error('[GoogleGmailService] Erreur lors du chargement des infos organisation:', error);
     }

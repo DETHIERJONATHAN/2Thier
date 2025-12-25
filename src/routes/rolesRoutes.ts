@@ -1,12 +1,12 @@
 import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth.js';
 import type { AuthenticatedRequest } from '../middlewares/auth.js';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // 🧹 SANITISATION SIMPLE ET EFFICACE
 const sanitizeString = (input: string): string => {

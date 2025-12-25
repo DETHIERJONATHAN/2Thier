@@ -13,9 +13,9 @@
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import NotificationMasterOrchestrator from './NotificationMasterOrchestrator';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 export class NotificationSystemIntegration {
   private orchestrator: NotificationMasterOrchestrator;

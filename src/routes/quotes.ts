@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { db, Prisma } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 
 // Enum temporaire pour les devis
@@ -13,7 +13,7 @@ enum QuoteStatus {
 }
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Appliquer l'auth à toutes les routes
 router.use(authMiddleware);

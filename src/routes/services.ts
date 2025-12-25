@@ -1,10 +1,10 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { PrismaClient, UserService as PrismaUserService } from '@prisma/client';
+import { UserService as PrismaUserService } from '@prisma/client';
 import { authMiddleware as authenticateToken } from '../middlewares/auth.js';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
 // Rate limiting pour les services

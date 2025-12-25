@@ -1,14 +1,14 @@
 import { Router, Response, Request, RequestHandler } from "express";
-import { PrismaClient, Prisma, UserOrganizationStatus } from "@prisma/client";
+import { Prisma, UserOrganizationStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { authMiddleware } from "../middlewares/auth";
 import { impersonationMiddleware } from "../middlewares/impersonation"; // Importer le middleware
 import type { AuthenticatedRequest } from "../middlewares/auth";
 import { JWT_SECRET } from "../config";
+import { prisma } from '../lib/prisma';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const userWithOrgsArgs = {
     include: {

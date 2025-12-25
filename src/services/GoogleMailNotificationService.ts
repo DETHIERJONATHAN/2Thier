@@ -13,13 +13,11 @@
  */
 
 import { google } from 'googleapis';
-import { PrismaClient } from '@prisma/client';
 import { UniversalNotificationService } from './UniversalNotificationService';
 import { EventEmitter } from 'events';
+import { prisma } from '../lib/prisma';
 
 import { googleOAuthConfig } from '../auth/googleConfig';
-
-const prisma = new PrismaClient();
 
 // 🧠 INTERFACE ANALYSE IA EMAIL
 interface EmailAIAnalysis {

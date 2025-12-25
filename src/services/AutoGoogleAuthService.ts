@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { googleOAuthService } from '../google-auth/core/GoogleOAuthCore.js';
-
-const prisma = new PrismaClient();
 
 /**
  * Service pour la connexion automatique à Google Workspace lors de la connexion au CRM

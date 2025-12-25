@@ -16,7 +16,7 @@ import {
   clearRpnCache
 } from './formulaEngine.js';
 import { evaluateFormulaOrchestrated } from './evaluation/orchestrator.js';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';\nimport { db } from '../../../../lib/database';
 import { linkVariableToAllCapacityNodes } from './universal-linking-system.js';
 // import { authenticateToken } from '../../../../middleware/auth'; // Temporairement dÃƒÆ’Ã‚Â©sactivÃƒÆ’Ã‚Â©
 import { 
@@ -56,7 +56,7 @@ router.use('/', tableRoutesNew);
 // ?? Enregistrer les routes pour les champs Total (somme des copies)
 registerSumDisplayFieldRoutes(router);
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 
 type InlineRolesInput = Record<string, unknown> | undefined;

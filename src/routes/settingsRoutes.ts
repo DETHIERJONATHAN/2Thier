@@ -1,9 +1,8 @@
 import { Router } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Appliquer l'authentification à toutes les routes
 router.use(authMiddleware);

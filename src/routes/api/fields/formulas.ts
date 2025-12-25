@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../../lib/database';
 import { authMiddleware } from '../../../middlewares/auth.js';
 import { requireRole } from '../../../middlewares/requireRole.js';
 import * as mockFormulas from '../../../global-mock-formulas.js';
@@ -14,7 +14,7 @@ interface MergedParamsRequest extends Request {
 }
 
 const router = express.Router({ mergeParams: true });
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Contournement du problème de mock
 const mockEnabled = process.env.NODE_ENV === 'development';

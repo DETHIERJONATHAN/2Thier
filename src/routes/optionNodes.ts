@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Fallback SQL supprimés: on s’appuie désormais sur Prisma Client uniquement.
 

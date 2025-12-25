@@ -12,6 +12,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { db } from '../../../lib/database';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CapacityDetector, TreeBranchLeafNode } from './capacities/CapacityDetector';
@@ -60,7 +61,7 @@ export class TBLMigration {
   private startTime: Date;
   
   constructor(config: Partial<MigrationConfig> = {}) {
-    this.prisma = new PrismaClient();
+    this.prisma = db;
     this.startTime = new Date();
     
     this.config = {

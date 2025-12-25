@@ -9,10 +9,10 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Configuration Multer pour l'upload
 const storage = multer.diskStorage({

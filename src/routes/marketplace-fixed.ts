@@ -2,11 +2,10 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // 🔒 RATE LIMITING
 const marketplaceRateLimit = rateLimit({

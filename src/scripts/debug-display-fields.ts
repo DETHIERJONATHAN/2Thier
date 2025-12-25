@@ -11,9 +11,9 @@
  * Usage: npx tsx src/scripts/debug-display-fields.ts
  */
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 interface DisplayFieldDiagnostic {
   nodeId: string;

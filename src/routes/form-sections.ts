@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // 📝 SECTIONS DE FORMULAIRES - Gestion des sections Block→Section→Field
 // ⚠️  Ne pas confondre avec la navigation des modules (module.category)

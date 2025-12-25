@@ -1,5 +1,17 @@
-import { PrismaClient } from '@prisma/client';
+/**
+ * 🔄 REDIRECTION VERS LA COUCHE D'ABSTRACTION DATABASE
+ * =====================================================
+ * 
+ * Ce fichier redirige vers l'instance centralisée dans src/lib/database.ts
+ * 
+ * ⚠️ POUR LE NOUVEAU CODE, UTILISER:
+ * ```typescript
+ * import { db } from '@/lib/database';
+ * // ou
+ * import { db } from './lib/database';
+ * ```
+ */
 
-const prisma = new PrismaClient();
+import { db } from './lib/database';
 
-export default prisma;
+export default db;

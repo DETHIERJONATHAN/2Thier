@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, Block, Section, Field, FieldOption } from '@prisma/client';
+import { Block, Section, Field, FieldOption } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middlewares/auth';
 import { requireRole } from '../middlewares/requireRole';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { adaptBlockStructure } from '../helpers/adaptBlockStructure';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authMiddleware as unknown as (req: Request, res: Response, next: () => void) => void, impersonationMiddleware as unknown as (req: Request, res: Response, next: () => void) => void);
 

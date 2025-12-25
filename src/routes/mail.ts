@@ -1,12 +1,11 @@
 import { Router, type Response } from "express";
 import { authMiddleware, type AuthenticatedRequest } from "../middlewares/auth.js";
 import { impersonationMiddleware } from "../middlewares/impersonation.js";
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { decrypt, encrypt } from '../utils/crypto.js';
 import nodemailer from 'nodemailer';
 import imapSimple from 'imap-simple';
 
-const prisma = new PrismaClient();
 const router = Router();
 
 // Cache global pour les connexions IMAP persistantes

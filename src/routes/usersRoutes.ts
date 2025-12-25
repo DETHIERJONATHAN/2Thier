@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 import invitationRoutes from './invitations.js';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 
@@ -17,7 +17,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // 🧹 SANITISATION SIMPLE (sans DOMPurify)
 const sanitizeString = (input: string): string => {

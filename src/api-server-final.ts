@@ -8,7 +8,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { PrismaClient } from '@prisma/client';
+import { db } from './lib/database';
 import { createServer } from 'http';
 
 /**
@@ -16,7 +16,7 @@ import { createServer } from 'http';
  */
 const app = express();
 const PORT = process.env.PORT || 4000;
-const prisma = new PrismaClient();
+const prisma = db;
 const server = createServer(app);
 
 /**

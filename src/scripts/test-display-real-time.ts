@@ -9,10 +9,10 @@
  * Usage: npx tsx src/scripts/test-display-real-time.ts
  */
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import fetch from 'node-fetch';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const API_BASE = 'http://localhost:4000/api';
 
 async function testDisplayField(nodeId: string, treeId: string) {

@@ -54,8 +54,7 @@ router.post('/test', authMiddleware, async (req: AuthenticatedRequest, res) => {
     ];
 
     // Importer prisma pour créer les emails de test
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    const { prisma } = await import('../lib/prisma');
 
     for (const emailData of testEmails) {
       await prisma.email.create({

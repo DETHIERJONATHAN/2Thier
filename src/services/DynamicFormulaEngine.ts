@@ -21,7 +21,7 @@
   }> {el
  */
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { getFieldMapping } from '../config/fieldMapping';
 
 // Types pour le système dynamique
@@ -92,13 +92,13 @@ interface CalculationContext {
 }
 
 export class DynamicFormulaEngine {
-  private prisma: PrismaClient;
+  private prisma: typeof db;
   private configCache: Map<string, FieldConfiguration> = new Map();
   private formulaCache: Map<string, ConditionalLogic[]> = new Map();
   private fieldMapping = getFieldMapping(); // Mapping des champs centralisé
 
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = db;
   }
 
   /**

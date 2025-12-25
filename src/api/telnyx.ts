@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { z } from 'zod';
 import axios from 'axios';
 import { AuthenticatedRequest } from '../middlewares/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Configuration Telnyx
 const TELNYX_API_URL = 'https://api.telnyx.com/v2';

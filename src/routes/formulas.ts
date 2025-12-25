@@ -2,10 +2,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { requireRole } from '../middlewares/requireRole';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { v4 as uuidv4 } from 'uuid';
 
-const prisma = new PrismaClient();
+const prisma = db;
 // Le routeur est créé avec mergeParams pour accéder aux paramètres de la route parente (ex: :fieldId)
 const router = Router({ mergeParams: true });
 

@@ -13,10 +13,8 @@
  * - 🧠 Enrichissement IA de toutes les notifications
  */
 
-import { PrismaClient } from '@prisma/client';
 import { EventEmitter } from 'events';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // 🎯 TYPES DE NOTIFICATIONS SUPPORTÉS
 export type NotificationType = 

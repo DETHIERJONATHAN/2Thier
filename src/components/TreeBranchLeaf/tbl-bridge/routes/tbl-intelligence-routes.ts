@@ -15,6 +15,8 @@
 import express from 'express';
 import TBLEvaluationEngine from '../intelligence/TBLEvaluationEngine';
 import { evaluateVariableOperation, interpretFormula, interpretCondition } from '../../treebranchleaf-new/api/operation-interpreter';
+// 🎯 Import centralisé de la base de données - NE JAMAIS créer new PrismaClient() !
+import { db } from '../../../../lib/database';
 
 const router = express.Router();
 console.log('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)');
@@ -32,8 +34,8 @@ function logRouteHit(route: string) {
  */
 router.post('/evaluate', async (req, res) => {
   logRouteHit('POST /api/tbl/evaluate');
-  const { PrismaClient } = await import('@prisma/client');
-  const prisma = new PrismaClient();
+  // 🎯 Utilisation du singleton db centralisé (plus de new PrismaClient !)
+  const prisma = db;
   try {
     const { elementId, elementIds, contextData = {}, evalType } = req.body || {};
 
@@ -109,8 +111,8 @@ router.post('/evaluate', async (req, res) => {
         
         // 🔥 ÉVALUATION DIRECTE DE LA FORMULE via operation-interpreter
         try {
-          const { PrismaClient } = await import('@prisma/client');
-          const prismaInstance = new PrismaClient();
+          // 🎯 Utilisation du singleton db centralisé
+          const prismaInstance = db;
           
           const submissionId = (contextData.submissionId as string) || 'temp-evaluation';
           
@@ -138,7 +140,7 @@ router.post('/evaluate', async (req, res) => {
             labelMap
           );
           
-          await prismaInstance.$disconnect();
+          // Note: Plus de $disconnect() car on utilise le singleton db
           
           trace.push({ step: 'formula_direct_eval', info: `Résultat: ${result.result}`, success: true });
           
@@ -244,9 +246,8 @@ router.post('/evaluate', async (req, res) => {
   } catch (e) {
     console.error('💥 [TBL INTELLIGENCE] Erreur /evaluate:', e);
     return res.status(500).json({ success: false, error: 'Erreur interne /evaluate', details: e instanceof Error ? e.message : 'unknown' });
-  } finally {
-    await prisma.$disconnect();
   }
+  // Note: Plus de finally/$disconnect car on utilise le singleton db
 });
 
 // ================== FONCTION INTERNE (factorisation batch) ==================
@@ -299,8 +300,8 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
       
       // 🔥 ÉVALUATION DIRECTE DE LA FORMULE via operation-interpreter
       try {
-        const { PrismaClient } = await import('@prisma/client');
-        const prismaInstance = new PrismaClient();
+        // 🎯 Utilisation du singleton db centralisé
+        const prismaInstance = db;
         
         const submissionId = (contextData.submissionId as string) || 'temp-evaluation';
         
@@ -328,7 +329,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
           labelMap
         );
         
-        await prismaInstance.$disconnect();
+        // Note: Plus de $disconnect car on utilise le singleton db
         
         trace.push({ step: 'formula_direct_eval', info: `Résultat: ${result.result}`, success: true });
         
@@ -404,8 +405,8 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
     // 🔥 NOUVEAU: Utiliser operation-interpreter.ts au lieu de TBLEvaluationEngine
     // pour supporter les tokens @table.xxx dans les formules
     try {
-      const { PrismaClient } = await import('@prisma/client');
-      const prismaInstance = new PrismaClient();
+      // 🎯 Utilisation du singleton db centralisé
+      const prismaInstance = db;
       
       // Extraire l'ID de la formule depuis sourceRef (format: "formula:xxx" ou "node-formula:xxx")
       const formulaId = sr.replace(/^(formula:|node-formula:)/, '');
@@ -456,7 +457,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         labelMap
       );
       
-      await prismaInstance.$disconnect();
+      // Note: Plus de $disconnect car on utilise le singleton db
       
       trace.push({ step: 'formula_interpret', info: `Résultat: ${result.result}`, success: true });
       
@@ -492,8 +493,8 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
   if (capacity === '3') {
     // 🔥 NOUVEAU: Utiliser operation-interpreter.ts pour les conditions
     try {
-      const { PrismaClient } = await import('@prisma/client');
-      const prismaInstance = new PrismaClient();
+      // 🎯 Utilisation du singleton db centralisé
+      const prismaInstance = db;
       
       // Extraire l'ID de la condition depuis sourceRef (format: "condition:xxx")
       const conditionId = sr.replace(/^condition:/, '');
@@ -548,7 +549,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         labelMap
       );
       
-      await prismaInstance.$disconnect();
+      // Note: Plus de $disconnect car on utilise le singleton db
       
       trace.push({ step: 'condition_interpret', info: `Résultat: ${result.result}`, success: true });
       
@@ -671,8 +672,8 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
   console.log('🔧 [TBL EVALUATE CONDITION] Évaluation avec operation-interpreter:', tblCode);
   
   // ✨ Utiliser le système unifié operation-interpreter
-  const { PrismaClient } = await import('@prisma/client');
-  const prisma = new PrismaClient();
+  // 🎯 Utilisation du singleton db centralisé
+  const prisma = db;
   
   try {
     // Trouver le nodeId de la condition
@@ -713,9 +714,8 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
       error: 'Erreur interne', 
       details: error instanceof Error ? error.message : 'unknown' 
     });
-  } finally {
-    await prisma.$disconnect();
   }
+  // Note: Plus de finally/$disconnect car on utilise le singleton db
 });
 
 /**
@@ -754,8 +754,8 @@ router.post('/update-database-results', async (req, res) => {
     
     console.log('🔄 [TBL UPDATE] Début mise à jour base de données avec CapacityCalculator');
     
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // 🎯 Utilisation du singleton db centralisé
+    const prisma = db;
     
     // Récupérer toutes les données de submission pour les conditions
     const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
@@ -827,7 +827,7 @@ router.post('/update-database-results', async (req, res) => {
       }
     }
     
-    await prisma.$disconnect();
+    // Note: Plus de $disconnect car on utilise le singleton db
     
     return res.json({
       success: true,
@@ -857,8 +857,8 @@ router.post('/check-submission-data', async (req, res) => {
   try {
     const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.body || {};
     
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // 🎯 Utilisation du singleton db centralisé
+    const prisma = db;
     
     // Récupérer toutes les données de cette submission
     const allData = await prisma.treeBranchLeafSubmissionData.findMany({
@@ -877,7 +877,7 @@ router.post('/check-submission-data', async (req, res) => {
       return acc;
     }, {} as Record<string, any[]>);
     
-    await prisma.$disconnect();
+    // Note: Plus de $disconnect car on utilise le singleton db
     
     return res.json({
       success: true,
@@ -909,8 +909,8 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
     
     console.log('🧠 [TBL INTELLIGENT UPDATE] Début mise à jour avec traductions intelligentes');
     
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // 🎯 Utilisation du singleton db centralisé
+    const prisma = db;
     
     // Import dynamique du traducteur
     let TBLIntelligentTranslator;
@@ -984,7 +984,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
       }
     }
     
-    await prisma.$disconnect();
+    // Note: Plus de $disconnect car on utilise le singleton db
     
     return res.json({
       success: true,
@@ -1015,8 +1015,8 @@ router.get('/check-intelligent-translations', async (req, res) => {
   try {
     const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.query;
     
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // 🎯 Utilisation du singleton db centralisé
+    const prisma = db;
     
     // Récupérer les données avec traductions récentes
     const recentData = await prisma.treeBranchLeafSubmissionData.findMany({
@@ -1038,7 +1038,7 @@ router.get('/check-intelligent-translations', async (req, res) => {
       take: 10
     });
     
-    await prisma.$disconnect();
+    // Note: Plus de $disconnect car on utilise le singleton db
     
     const translations = recentData.map(data => ({
       id: data.id,
@@ -1082,14 +1082,14 @@ router.get('/nodes/:nodeId', async (req, res) => {
     
     console.log('🔄 [TBL NODES] Récupération node via TBL:', nodeId);
     
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // 🎯 Utilisation du singleton db centralisé
+    const prisma = db;
     
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId }
     });
     
-    await prisma.$disconnect();
+    // Note: Plus de $disconnect car on utilise le singleton
     
     if (!node) {
       return res.status(404).json({ success: false, error: 'Node non trouvé' });
@@ -1117,8 +1117,8 @@ router.get('/reusables/conditions', async (req, res) => {
   try {
     console.log('🔄 [TBL CONDITIONS] Récupération conditions via TBL');
     
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // 🎯 Utilisation du singleton db centralisé
+    const prisma = db;
     
     const conditions = await prisma.treeBranchLeafNodeCondition.findMany({
       include: {
@@ -1126,7 +1126,7 @@ router.get('/reusables/conditions', async (req, res) => {
       }
     });
     
-    await prisma.$disconnect();
+    // Note: Plus de $disconnect car on utilise le singleton
     
     return res.json({
       success: true,
@@ -1154,8 +1154,8 @@ router.get('/reusables/formulas', async (req, res) => {
   try {
     console.log('🔄 [TBL FORMULAS] Récupération formules via TBL');
     
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // 🎯 Utilisation du singleton db centralisé
+    const prisma = db;
     
     const formulas = await prisma.treeBranchLeafNodeFormula.findMany({
       include: {
@@ -1163,7 +1163,7 @@ router.get('/reusables/formulas', async (req, res) => {
       }
     });
     
-    await prisma.$disconnect();
+    // Note: Plus de $disconnect car on utilise le singleton
     
     return res.json({
       success: true,

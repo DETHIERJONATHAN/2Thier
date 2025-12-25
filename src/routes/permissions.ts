@@ -1,9 +1,10 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
-import { PrismaClient, User } from '@prisma/client';
+import { db } from '../lib/database';
+import { User } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = Router();
 
 // Type minimal attendu en entrée côté API

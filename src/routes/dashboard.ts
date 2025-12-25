@@ -1,9 +1,9 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // 📊 GET /api/dashboard/stats - Récupérer les statistiques du dashboard
 router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res) => {

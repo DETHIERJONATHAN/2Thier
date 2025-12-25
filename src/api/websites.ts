@@ -5,11 +5,11 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // ⚠️ IMPORTANT: Les routes GET sont publiques (affichage site vitrine)
 // Les routes POST/PUT/PATCH/DELETE sont protégées par authenticateToken

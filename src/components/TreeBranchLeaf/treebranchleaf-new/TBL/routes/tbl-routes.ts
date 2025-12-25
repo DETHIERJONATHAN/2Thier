@@ -1,6 +1,6 @@
 import express from 'express';
 import { authMiddleware, requireRole, type AuthenticatedRequest } from '../../../../../middlewares/auth';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../../../../lib/database';
 
 const router = express.Router();
 
@@ -24,7 +24,7 @@ const router = express.Router();
  * - Sinon → restreint aux nodes dont l'arbre appartient à l'organisation de l'utilisateur
  */
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 interface AuthCtx { isSuperAdmin: boolean; organizationId: string | null }
 function getAuthCtx(req: AuthenticatedRequest): AuthCtx {

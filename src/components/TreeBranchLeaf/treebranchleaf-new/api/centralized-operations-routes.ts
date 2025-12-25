@@ -6,13 +6,13 @@
  */
 
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../../../lib/database';
 import { authenticateToken } from '../../../../middleware/auth';
 import { getResolver } from '../../../services/TreeBranchLeafResolver';
 import { getBackgroundJobService } from '../../../services/TreeBranchLeafBackgroundJobService';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 const resolver = getResolver(prisma);
 const backgroundJobService = getBackgroundJobService(prisma);
 

@@ -1,10 +1,10 @@
 // Route API spéciale pour ajouter directement un lead, en contournant l'architecture normale
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database.js';
 import bodyParser from 'body-parser';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Middleware pour analyser les requêtes JSON
 router.use(bodyParser.json());

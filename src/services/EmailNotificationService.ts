@@ -5,9 +5,9 @@
  * Il s'intègre avec le système de synchronisation automatique des emails.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 interface EmailNotificationData {
   emailId: string;

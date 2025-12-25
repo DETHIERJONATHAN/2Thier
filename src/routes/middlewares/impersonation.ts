@@ -1,8 +1,8 @@
 import type { Request as ExpressRequest, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database';
 import type { AuthenticatedRequest } from './auth';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 export async function impersonationMiddleware(
   req: ExpressRequest,

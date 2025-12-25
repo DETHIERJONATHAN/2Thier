@@ -1,11 +1,11 @@
 import type { Request as ExpressRequest, Response, NextFunction } from 'express';
 import type { UploadedFile } from 'express-fileupload';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import bcrypt from 'bcryptjs';
 import { JWT_SECRET } from '../config';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Étendre le type Request pour inclure user et les fichiers uploadés
 export interface AuthenticatedRequest extends ExpressRequest {

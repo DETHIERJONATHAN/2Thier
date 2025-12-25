@@ -7,11 +7,11 @@
  * 3. 💡 Notifications intelligentes et instantanées
  */
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { EventEmitter } from 'events';
 import UniversalNotificationService from './UniversalNotificationService.js';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 interface EmailNotificationData {
   emailId: string;

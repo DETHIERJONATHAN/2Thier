@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database.js';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 /**
  * Middleware pour vérifier l'authentification de l'utilisateur

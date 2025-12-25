@@ -1,12 +1,12 @@
 // 🎯 DEVIS1MINUTE - Routes Dispatch (règles d'orientation)
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // 🔒 RATE LIMITING
 const dispatchRateLimit = rateLimit({

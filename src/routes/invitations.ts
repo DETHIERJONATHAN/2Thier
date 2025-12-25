@@ -4,11 +4,11 @@ import { impersonationMiddleware } from "../middlewares/impersonation";
 import { requireRole } from "../middlewares/requireRole";
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { emailService } from "../services/EmailService";
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
 const router = Router();
 
 router.use(authMiddleware, impersonationMiddleware);

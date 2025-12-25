@@ -1,10 +1,10 @@
 import { Router, type Request, type Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { nanoid } from 'nanoid';
 import { renderDocumentPdf } from '../services/documentPdfRenderer';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 /**
  * Extrait les composants d'adresse (street, box, postalCode, city) depuis un lead.

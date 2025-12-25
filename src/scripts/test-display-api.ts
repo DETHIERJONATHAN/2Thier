@@ -12,9 +12,9 @@
  */
 
 import fetch from 'node-fetch';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const API_BASE = 'http://localhost:4000/api';
 
 interface ApiTestResult {

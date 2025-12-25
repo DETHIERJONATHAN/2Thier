@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth';
 import type { Response } from 'express';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Interface pour les participants
 interface ParticipantInput {

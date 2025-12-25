@@ -1,9 +1,9 @@
 import express from 'express';
 import type { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Route spécifique pour mettre à jour une formule associée à un champ
 // Cette route gère explicitement l'URL /api/fields/:fieldId/formulas/:formulaId

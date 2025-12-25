@@ -1,9 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { JwtPayload } from './auth';
-import pkg from '@prisma/client';
+import { db } from '../lib/database';
 
-const PrismaClient = (pkg as any).PrismaClient;
-const prisma = new PrismaClient();
+const prisma = db;
 
 export function requirePermission(action: string, resource: string) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {

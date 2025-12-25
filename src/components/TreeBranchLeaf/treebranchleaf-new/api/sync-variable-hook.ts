@@ -7,9 +7,9 @@
  * Corrige les dÃƒÂ©synchronisations sans casser ce qui fonctionne dÃƒÂ©jÃƒÂ 
  */
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../../../lib/database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 interface DataInstanceMetadata {
   sourceRef?: string;

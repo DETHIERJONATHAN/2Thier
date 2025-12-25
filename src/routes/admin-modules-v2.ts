@@ -1,10 +1,10 @@
 import { Router, Request, Response, type RequestHandler } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { requireRole } from '../middlewares/requireRole';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = Router();
 
 router.use(authMiddleware as unknown as RequestHandler, impersonationMiddleware as unknown as RequestHandler);

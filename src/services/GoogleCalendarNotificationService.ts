@@ -13,11 +13,9 @@
  */
 
 import { google } from 'googleapis';
-import { PrismaClient } from '@prisma/client';
 import { UniversalNotificationService } from './UniversalNotificationService';
 import { EventEmitter } from 'events';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // 🧠 INTERFACE ANALYSE IA RENDEZ-VOUS
 interface MeetingAIAnalysis {

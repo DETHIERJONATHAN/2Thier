@@ -12,10 +12,10 @@
  * Usage: npx tsx src/scripts/create-test-display-data.ts
  */
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { randomUUID } from 'crypto';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 async function createTestData() {
   console.log('🏗️ === CRÉATION DONNÉES DE TEST ===\n');

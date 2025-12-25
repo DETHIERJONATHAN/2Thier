@@ -10,9 +10,10 @@
  */
 
 import { Router, Request } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { db } from '../../../../lib/database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Helper pour obtenir l'organizationId de maniÃƒÂ¨re robuste
 type MinimalReqUser = { organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };

@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { PrismaClient, Module as PrismaModule } from '@prisma/client';
+import { db } from '../lib/database';
+import { Module as PrismaModule } from '@prisma/client';
 
 // Implémentation MINIMALE restaurée pour éviter les 404 côté frontend
 // et rétablir l'affichage des modules. Conçue pour être sûre et simple.
 // TODO: Affiner la logique d'activation par organisation si nécessaire.
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = Router();
 
 // Utilitaire: dériver une route cohérente à partir d'une clé si route absente.

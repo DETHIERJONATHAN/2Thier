@@ -2,11 +2,11 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { PrismaClient, type Prisma } from '@prisma/client';
+import { db, Prisma } from '../lib/database';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // 🔒 RATE LIMITING
 const leadGenRateLimit = rateLimit({

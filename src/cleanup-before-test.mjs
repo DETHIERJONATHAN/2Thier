@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { db } from './lib/database.js';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 async function main() {
   console.log('🧹 NETTOYAGE COMPLET DES COPIES\n');

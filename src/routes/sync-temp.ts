@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Route temporaire pour sync les documents
 // À SUPPRIMER après usage !

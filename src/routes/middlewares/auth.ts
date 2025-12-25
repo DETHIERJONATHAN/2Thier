@@ -1,10 +1,10 @@
 import type { Request as ExpressRequest, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database';
 import bcrypt from 'bcryptjs';
 import { JWT_SECRET } from '../../config';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Étendre le type Request pour inclure user et le fichier de multer
 export interface AuthenticatedRequest extends ExpressRequest {

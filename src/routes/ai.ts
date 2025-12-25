@@ -8,12 +8,11 @@ import fs from 'fs';
 import path from 'path';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth';
 import GoogleGeminiService from '../services/GoogleGeminiService';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { randomUUID } from 'crypto';
 
 // Instance unique réutilisable (évite recréations coûteuses)
 const geminiSingleton = new GoogleGeminiService();
-const prisma = new PrismaClient();
 
 const router = express.Router();
 

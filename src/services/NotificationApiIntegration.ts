@@ -15,6 +15,7 @@
 import express from 'express';
 import { NotificationSystemInitializer } from './NotificationSystemInitializer';
 import NotificationOrchestrator from './NotificationOrchestrator';
+import { db } from '../lib/database';
 
 export class NotificationApiIntegration {
   private static instance: NotificationApiIntegration;
@@ -259,89 +260,65 @@ export class NotificationApiIntegration {
    * 🔧 MÉTHODES UTILITAIRES
    */
   private async getNotifications(userId: string, page: number, limit: number, unreadOnly: boolean) {
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-
-    try {
-      const where: any = { userId };
-      if (unreadOnly) {
-        where.status = 'PENDING';
-      }
-
-      const notifications = await prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit
-      });
-
-      const total = await prisma.notification.count({ where });
-
-      return {
-        notifications,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      };
-
-    } finally {
-      await prisma.$disconnect();
+    const where: any = { userId };
+    if (unreadOnly) {
+      where.status = 'PENDING';
     }
+
+    const notifications = await db.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit
+    });
+
+    const total = await db.notification.count({ where });
+
+    return {
+      notifications,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    };
   }
 
   private async markAsRead(notificationId: string) {
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-
-    try {
-      await prisma.notification.update({
-        where: { id: notificationId },
-        data: { 
-          status: 'READ',
-          readAt: new Date()
-        }
-      });
-
-    } finally {
-      await prisma.$disconnect();
-    }
+    await db.notification.update({
+      where: { id: notificationId },
+      data: { 
+        status: 'READ',
+        readAt: new Date()
+      }
+    });
   }
 
   private async getNotificationStats(organizationId: string) {
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    try {
-      const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const stats = await db.notification.groupBy({
+      by: ['type', 'status'],
+      where: {
+        organizationId,
+        createdAt: { gte: last24h }
+      },
+      _count: true
+    });
 
-      const stats = await prisma.notification.groupBy({
-        by: ['type', 'status'],
-        where: {
-          organizationId,
-          createdAt: { gte: last24h }
-        },
-        _count: true
-      });
-
-      return {
-        total: stats.reduce((sum, s) => sum + s._count, 0),
-        byType: stats.reduce((acc, s) => {
-          acc[s.type] = (acc[s.type] || 0) + s._count;
-          return acc;
-        }, {} as Record<string, number>),
-        byStatus: stats.reduce((acc, s) => {
-          acc[s.status] = (acc[s.status] || 0) + s._count;
-          return acc;
-        }, {} as Record<string, number>),
-        period: '24h'
-      };
-
-    } finally {
-      await prisma.$disconnect();
-    }
+    return {
+      total: stats.reduce((sum, s) => sum + s._count, 0),
+      byType: stats.reduce((acc, s) => {
+        acc[s.type] = (acc[s.type] || 0) + s._count;
+        return acc;
+      }, {} as Record<string, number>),
+      byStatus: stats.reduce((acc, s) => {
+        acc[s.status] = (acc[s.status] || 0) + s._count;
+        return acc;
+      }, {} as Record<string, number>),
+      period: '24h'
+    };
   }
 
   private async sendTestNotification(userId: string, organizationId: string, type: string) {

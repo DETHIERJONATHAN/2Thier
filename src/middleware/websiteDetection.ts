@@ -13,10 +13,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { renderWebsite } from './websiteRenderer';
-
-const prisma = new PrismaClient();
 
 // 🚀 CACHE MÉMOIRE pour éviter les requêtes Prisma répétées
 const websiteCache = new Map<string, { data: any; timestamp: number }>();

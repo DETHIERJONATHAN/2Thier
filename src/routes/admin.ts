@@ -1,11 +1,11 @@
 import express, { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { encrypt } from '../utils/crypto';
 import { requireRole } from '../middlewares/requireRole';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = express.Router();
 
 router.use(authMiddleware, impersonationMiddleware);

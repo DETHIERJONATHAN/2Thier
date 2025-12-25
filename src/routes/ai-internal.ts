@@ -1,13 +1,13 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware, requireSuperAdmin } from '../middlewares/auth';
 import type { AuthenticatedRequest } from '../middlewares/auth';
 import { randomUUID } from 'crypto';
 
 // NOTE: On utilise authMiddleware + requireSuperAdmin pour protéger strictement.
-const prisma = new PrismaClient();
+const prisma = db;
 const router = express.Router();
 
 router.use(authMiddleware);

@@ -8,9 +8,9 @@
  */
 
 import cron from 'node-cron';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 /**
  * 🗑️ Nettoie les brouillons TBL expirés (>24h)

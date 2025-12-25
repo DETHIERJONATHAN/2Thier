@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database';
 
 const router = express.Router({ mergeParams: true });
-const prisma = new PrismaClient();
+const prisma = db;
 
 // PUT /api/dependencies/:dependencyId - Mettre à jour une dépendance et retourner la liste du champ
 router.put('/:dependencyId', async (req: Request, res: Response) => {

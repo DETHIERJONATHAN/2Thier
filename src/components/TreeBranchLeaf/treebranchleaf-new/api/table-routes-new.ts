@@ -10,12 +10,13 @@
  */
 
 import { Router } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { db } from '../../../../lib/database';
 import { randomUUID } from 'crypto';
 import { addToNodeLinkedField } from './repeat/services/shared-helpers';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 type MinimalReqUser = { organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };
 type MinimalReq = { user?: MinimalReqUser; headers?: Record<string, unknown> };

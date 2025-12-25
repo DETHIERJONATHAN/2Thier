@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { OAuth2Client, Credentials } from 'google-auth-library';
-import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { prisma } from '../../lib/prisma';
 
 import {
   googleOAuthConfig,
@@ -9,8 +9,6 @@ import {
   describeGoogleOAuthConfig,
   isGoogleOAuthConfigured,
 } from '../../auth/googleConfig';
-
-const prisma = new PrismaClient();
 
 const { clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI } = googleOAuthConfig;
 

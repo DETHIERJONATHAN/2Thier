@@ -1,10 +1,10 @@
 import express from 'express';
 import { authMiddleware } from '../../middlewares/auth.js';
 import formulasRouter from './formulas.js';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Appliquer le middleware d'authentification à toutes les routes
 router.use(authMiddleware as any);

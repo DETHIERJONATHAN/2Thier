@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
 
 // Interface pour les requêtes authentifiées (copiée du middleware auth)
 interface AuthenticatedRequest extends Request {
@@ -11,8 +11,6 @@ interface AuthenticatedRequest extends Request {
     role?: string;
   };
 }
-
-const prisma = new PrismaClient();
 
 // Récupérer tous les utilisateurs
 export const getAllUsers = async (req: AuthenticatedRequest, res: Response) => {

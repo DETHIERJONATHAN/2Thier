@@ -15,10 +15,8 @@
 import { UniversalNotificationService } from './UniversalNotificationService';
 import GoogleMailNotificationService from './GoogleMailNotificationService';
 import GoogleCalendarNotificationService from './GoogleCalendarNotificationService';
-import { PrismaClient } from '@prisma/client';
 import { EventEmitter } from 'events';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 interface NotificationSettings {
   userId: string;

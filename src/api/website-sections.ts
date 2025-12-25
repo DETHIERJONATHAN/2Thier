@@ -4,10 +4,10 @@
  */
 
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // GET /api/website-sections/:websiteId - Liste des sections d'un site
 router.get('/website-sections/:websiteId', async (req, res) => {

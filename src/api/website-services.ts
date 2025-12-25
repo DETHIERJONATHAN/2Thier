@@ -4,10 +4,10 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 /**
  * GET /api/website-services/:websiteId

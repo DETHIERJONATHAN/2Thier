@@ -1,14 +1,15 @@
 import { Router, Request, Response } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth";
 import { impersonationMiddleware } from "../middlewares/impersonation";
-import { PrismaClient, AdPlatformIntegration, Prisma } from '@prisma/client';
+import { db, Prisma } from '../lib/database';
+import { AdPlatformIntegration } from '@prisma/client';
 import axios from 'axios';
 import { google } from 'googleapis';
 import { randomUUID, createHash } from 'crypto';
 
 import { googleOAuthConfig } from '../auth/googleConfig';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = Router();
 
 // Cache en mémoire (léger) pour éviter des rafales d'appels côté UI et vers Google Ads

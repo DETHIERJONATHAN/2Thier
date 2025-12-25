@@ -1,8 +1,6 @@
 // Service pour gérer les notifications et emails liés à l'agenda
-import { PrismaClient } from '@prisma/client';
 import { emailService } from './EmailService';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export interface CalendarNotificationData {
   eventId: string;

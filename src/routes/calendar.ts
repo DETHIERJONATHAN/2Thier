@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { impersonationMiddleware } from '../middlewares/impersonation.js';
 import { googleCalendarService } from '../google-auth/services/GoogleCalendarService.js';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 // Logging global minimal pour diagnostiquer les requêtes qui n'atteignent pas les handlers spécifiques
@@ -15,7 +15,6 @@ router.use((req, _res, next) => {
   }
   next();
 });
-const prisma = new PrismaClient();
 
 // --- SSE (Server Sent Events) simple pour push temps réel ---
 interface SSEClient { id: string; res: NodeJS.WritableStream & { write: (chunk: string) => boolean }; organizationId: string }

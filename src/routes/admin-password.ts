@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { encrypt } from '../utils/crypto';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Middleware d'authentification et d'impersonation appliqué à toutes les routes
 router.use(authMiddleware, impersonationMiddleware);

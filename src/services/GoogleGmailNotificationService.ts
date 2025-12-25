@@ -10,12 +10,10 @@
  */
 
 import { google } from 'googleapis';
-import { PrismaClient } from '@prisma/client';
 import UniversalNotificationService from './UniversalNotificationService';
+import { prisma } from '../lib/prisma';
 
 import { googleOAuthConfig, isGoogleOAuthConfigured } from '../auth/googleConfig';
-
-const prisma = new PrismaClient();
 
 interface EmailAnalysis {
   priority: 'low' | 'medium' | 'high' | 'urgent';

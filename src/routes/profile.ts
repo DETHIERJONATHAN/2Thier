@@ -1,12 +1,12 @@
 import { Router, Response } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth";
 import { impersonationMiddleware } from "../middlewares/impersonation";
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = Router();
 
 const buildAvatarUrl = (req: AuthenticatedRequest, avatarPath?: string | null) => {

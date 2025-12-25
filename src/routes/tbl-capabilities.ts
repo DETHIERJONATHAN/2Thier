@@ -1,11 +1,11 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 
 // NOTE: requireRole peut être importé si restriction fine nécessaire
 // import { requireRole } from '../middleware/auth';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = express.Router();
 
 /**

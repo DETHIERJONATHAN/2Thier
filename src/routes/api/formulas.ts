@@ -1,5 +1,5 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database';
 import type { Request, Response } from 'express';
 import * as mockFormulas from '../../global-mock-formulas.js';
 import { evaluateFormula } from '../../utils/formulaEvaluator';
@@ -14,7 +14,7 @@ interface MergedParamsRequest extends Request {
 }
 
 const router = express.Router({ mergeParams: true }); // Activer mergeParams pour accéder aux paramètres de route parent
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Déterminer si on utilise le mode développement avec mock (utilisé seulement dans le bloc catch)
 // const useMockMode = process.env.NODE_ENV === 'development';

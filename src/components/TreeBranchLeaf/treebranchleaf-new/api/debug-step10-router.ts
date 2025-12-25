@@ -4,10 +4,10 @@
  */
 
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../../../lib/database';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 /**
  * Endpoint de debug: Teste Ãƒâ€°TAPE 10 manuellement

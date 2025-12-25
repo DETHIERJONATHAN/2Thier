@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Schéma de validation pour créer/modifier un statut
 const leadStatusSchema = z.object({

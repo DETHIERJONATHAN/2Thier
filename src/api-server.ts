@@ -16,6 +16,8 @@ import cookieParser from 'cookie-parser';
 console.log('✅ [DEBUG] CookieParser importé');
 import passport from 'passport';
 console.log('✅ [DEBUG] Passport importé');
+import { prisma } from './lib/prisma'; // 🎯 INSTANCE PRISMA CENTRALISÉE
+console.log('✅ [DEBUG] Prisma centralisé importé');
 import mainApiRouter from './routes/index'; // ✅ Router principal complet
 import aiInternalRouter from './routes/ai-internal';
 import aiFieldGeneratorRouter from './routes/ai-field-generator'; // 🤖 IA GÉNÉRATION DE CONTENU
@@ -208,9 +210,6 @@ app.get('/force-clean', (_req, res) => {
 app.post('/update-services-temp', async (req, res) => {
     try {
         console.log('🔄 Mise à jour du contenu de la section Services...');
-        
-        const { PrismaClient } = await import('@prisma/client');
-        const prisma = new PrismaClient();
 
         // Trouver la section Services
         const section = await prisma.websiteSection.findFirst({
@@ -401,8 +400,6 @@ app.post('/update-services-temp', async (req, res) => {
 
         console.log('✅ Contenu mis à jour avec succès !');
         console.log(`📝 ${newContent.items.length} services ont été ajoutés`);
-
-        await prisma.$disconnect();
 
         res.json({ 
             success: true, 

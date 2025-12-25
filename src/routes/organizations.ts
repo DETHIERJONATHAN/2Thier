@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { db, Prisma } from '../lib/database';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto';
 // ✅ PLUS BESOIN D'INTERFACE LOCALE - UTILISATION DE L'INTERFACE CENTRALISÉE
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // 🧹 SANITISATION SIMPLE ET EFFICACE (sans DOMPurify)
 const sanitizeString = (input: string): string => {

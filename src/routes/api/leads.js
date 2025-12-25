@@ -1,8 +1,8 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../../lib/database.js';
 import { verifyUser } from '../../middlewares/auth.js';
 
-const prisma = new PrismaClient();
+const prisma = db;
 const router = express.Router();
 
 // Middleware pour vérifier l'authentification sur toutes les routes

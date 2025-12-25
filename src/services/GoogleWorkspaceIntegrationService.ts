@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { GoogleWorkspaceService } from './GoogleWorkspaceService.js';
 import { decrypt } from '../utils/crypto.js';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /**
  * Service d'intégration automatique pour Google Workspace

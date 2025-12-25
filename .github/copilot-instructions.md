@@ -7,11 +7,32 @@ Ce guide contient les conventions et l'architecture essentielles pour développe
 L'application est un monorepo qui contient :
 - Un **frontend React** (Vite, TypeScript, Ant Design, Tailwind CSS) dans `src/`.
 - Un **serveur API Node.js** (probablement Express) défini dans `src/api-server.ts`.
-- Une **base de données gérée par Prisma ORM** dans `prisma/`.
+- Une **base de données PostgreSQL sur Railway**, accédée via une couche d'abstraction dans `src/lib/database.ts`.
 
-Le flux de données typique est : Composant React -> Hook `useAuthenticatedApi` -> Serveur API -> Service Prisma -> Base de données.
+Le flux de données typique est : Composant React -> Hook `useAuthenticatedApi` -> Serveur API -> Database Layer (`db`) -> Base de données.
 
 ## 2. Conventions Critiques
+
+### 🎯 Accès à la Base de Données (CRITIQUE)
+**NE JAMAIS** créer `new PrismaClient()` directement. **TOUJOURS** utiliser le singleton `db` depuis la couche d'abstraction.
+
+```typescript
+// ✅ BONNE PRATIQUE
+import { db } from '@/lib/database';
+// ou
+import { db } from '../lib/database';
+
+const users = await db.user.findMany();
+const user = await db.user.findUnique({ where: { id } });
+
+// ❌ INTERDIT - Provoque des fuites mémoire et des crashs SIGSEGV !
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient(); // NE JAMAIS FAIRE ÇA !
+```
+
+**Fichier clé :** `src/lib/database.ts` - Point d'entrée unique pour tous les accès DB.
+
+**Pourquoi ?** Chaque `new PrismaClient()` ouvre de nouvelles connexions. En production avec beaucoup de requêtes concurrentes, cela épuise le pool de connexions et provoque des crashs SIGSEGV.
 
 ### Appels API Authentifiés
 **NE PAS** utiliser `fetch` ou `axios` directement. **TOUJOURS** utiliser le hook `useAuthenticatedApi` pour toutes les communications avec le backend. Il gère l'authentification et la configuration de l'organisation automatiquement.

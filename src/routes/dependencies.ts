@@ -2,10 +2,9 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { requireRole } from '../middlewares/requireRole';
 import { impersonationMiddleware } from '../middlewares/impersonation';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
-const prisma = new PrismaClient();
 const router = Router({ mergeParams: true });
 
 router.use(authMiddleware, impersonationMiddleware);

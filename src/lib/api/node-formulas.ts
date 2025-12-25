@@ -1,8 +1,8 @@
 // API pour gérer les formules de nœuds dans la table dédiée TreeBranchLeafNodeFormula
 
-import { PrismaClient } from '@prisma/client';
+import { db } from '../database';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 export interface NodeFormula {
   id: string;

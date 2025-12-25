@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Appliquer l'authentification à toutes les routes
 router.use(authenticateToken);

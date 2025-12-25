@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { googleOAuthService } from '../google-auth/core/GoogleOAuthCore.js';
 import { OAuth2Client } from 'google-auth-library';
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 /**
  * Service pour gérer l'accès Google au niveau organisation

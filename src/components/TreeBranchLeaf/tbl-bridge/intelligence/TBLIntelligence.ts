@@ -10,6 +10,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { db } from '../../../../lib/database';
 
 interface TBLElement {
   id: string;
@@ -71,7 +72,7 @@ export class TBLIntelligence {
   private dataCache: Map<string, any> = new Map();
 
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = db;
   }
 
   /**

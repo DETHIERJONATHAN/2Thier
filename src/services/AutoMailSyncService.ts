@@ -1,10 +1,8 @@
-import { PrismaClient } from '@prisma/client';
 import { EventEmitter } from 'events';
 import imapSimple from 'imap-simple';
 import { decrypt } from '../utils/crypto.js';
 import RealTimeEmailNotificationService from './RealTimeEmailNotificationService.js';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 interface SyncResult {
   userId: string;

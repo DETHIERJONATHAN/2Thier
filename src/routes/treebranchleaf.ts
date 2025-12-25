@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { authMiddleware, requireSuperAdmin } from '../middlewares/auth';
 import { randomUUID } from 'crypto';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Types pour les données de soumission
 interface SubmissionDataItem {

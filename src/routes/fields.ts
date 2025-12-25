@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from 'uuid';
-import { PrismaClient, Field } from '@prisma/client';
+import { db } from '../lib/database';
+import { Field } from '@prisma/client';
 import { adaptBlockStructure } from '../helpers/adaptBlockStructure';
 import { authMiddleware } from '../middlewares/auth';
 // Import du middleware d'impersonation supprimé car non utilisé pour le moment
@@ -11,7 +12,7 @@ import validationsRouter from './validations';
 import type { AuthenticatedRequest } from "../middlewares/auth";
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Appliquer le middleware d'authentification à toutes les routes
 router.use(authMiddleware as unknown as (req: Request, res: Response, next: () => void) => void);

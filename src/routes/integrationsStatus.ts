@@ -2,12 +2,12 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient, type Prisma } from '@prisma/client';
+import { db, Prisma } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 const rl = rateLimit({ windowMs: 60 * 1000, max: 60 });
 

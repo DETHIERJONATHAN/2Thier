@@ -1,9 +1,8 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
+import { prisma } from '../../lib/prisma';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Rate limiting pour les API publiques (plus restrictif)
 const publicLeadLimiter = rateLimit({

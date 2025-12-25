@@ -1,13 +1,13 @@
 import { Router, type RequestHandler } from 'express';
 import { type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../lib/database';
 import { z } from 'zod';
 import { decrypt } from '../utils/crypto.js';
 import { authMiddleware } from '../middlewares/auth.js';
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Auth obligatoire avant vérification de rôles
 router.use(authMiddleware as unknown as RequestHandler);

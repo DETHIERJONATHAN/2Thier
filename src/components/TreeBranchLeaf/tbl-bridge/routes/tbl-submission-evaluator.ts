@@ -7,7 +7,8 @@
  */
 
 import { Router, Request } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { db } from '../../../../lib/database';
 
 type OperationSourceType = 'condition' | 'formula' | 'table' | 'neutral';
 
@@ -34,7 +35,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 const router = Router();
-const prisma = new PrismaClient();
+const prisma = db;
 
 // Mémoire: staging des modifications (par session) pour ne pas écrire en base tant que non validé
 type StageRecord = {
