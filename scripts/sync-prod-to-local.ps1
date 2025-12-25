@@ -15,7 +15,7 @@ Write-Host ""
 
 # Configuration
 $PROJECT_ID = "thiernew"
-$INSTANCE_NAME = "crm-db"
+$INSTANCE_NAME = "crm-postgres-prod"
 $DATABASE_NAME = "2thier"
 $BUCKET_NAME = "crm-backups-sync"  # À créer sur Google Cloud Storage
 $TIMESTAMP = Get-Date -Format "yyyyMMdd_HHmmss"

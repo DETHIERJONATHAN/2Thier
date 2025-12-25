@@ -41,7 +41,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 	CMD wget -qO- http://127.0.0.1:8080/health || exit 1
 
 # Start API server using the start script from package.json
-ENV PGHOST=/cloudsql/thiernew:europe-west1:crm-db
+ENV PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod
 ENV PGDATABASE=2thier
 ENV PGUSER=postgres
 CMD ["npm", "run", "start"]

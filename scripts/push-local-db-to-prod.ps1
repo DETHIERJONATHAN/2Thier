@@ -22,7 +22,7 @@ $localDb = "2thier"
 $localUser = "postgres"
 $localPassword = "Jlsl2022@"
 $dumpFile = "C:\Users\dethi\OneDrive\Desktop\CRM SAVE\crm\backup-local-to-prod.sql"
-$cloudInstance = "thiernew:europe-west1:crm-db"
+$cloudInstance = "thiernew:europe-west1:crm-postgres-prod"
 $cloudDb = "2thier"
 
 # Export de la base locale

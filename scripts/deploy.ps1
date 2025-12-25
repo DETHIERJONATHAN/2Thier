@@ -36,9 +36,9 @@ if (-not $SkipMigrations) {
     $jobName = 'crm-prisma-migrate'
     $describe = & gcloud run jobs describe $jobName --region $Region 2>$null; $exists=$? 
     if (-not $exists) {
-        Exec "gcloud run jobs create $jobName --image $fullImagePath --region $Region --set-secrets DATABASE_URL=DATABASE_URL:latest --add-cloudsql-instances thiernew:europe-west1:crm-db --service-account github-cloud-run@thiernew.iam.gserviceaccount.com --command npx --args prisma,migrate,deploy"
+        Exec "gcloud run jobs create $jobName --image $fullImagePath --region $Region --set-secrets DATABASE_URL=DATABASE_URL:latest --add-cloudsql-instances thiernew:europe-west1:crm-postgres-prod --service-account github-cloud-run@thiernew.iam.gserviceaccount.com --command npx --args prisma,migrate,deploy"
     } else {
-        Exec "gcloud run jobs update $jobName --image $fullImagePath --region $Region --set-secrets DATABASE_URL=DATABASE_URL:latest --add-cloudsql-instances thiernew:europe-west1:crm-db"
+        Exec "gcloud run jobs update $jobName --image $fullImagePath --region $Region --set-secrets DATABASE_URL=DATABASE_URL:latest --add-cloudsql-instances thiernew:europe-west1:crm-postgres-prod"
     }
     Exec "gcloud run jobs execute $jobName --region $Region --wait"
 } else {

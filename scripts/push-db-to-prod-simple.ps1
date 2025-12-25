@@ -23,7 +23,7 @@ $localUser = "postgres"
 $localPassword = "Jlsl2022@"
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $dumpFile = "backup-local-to-prod-$timestamp.sql"
-$cloudInstance = "crm-db"
+$cloudInstance = "crm-postgres-prod"
 $cloudDb = "2thier"
 $bucketName = "crm-database-backups-thiernew"
 

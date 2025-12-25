@@ -51469,11 +51469,12 @@ function parseAddress(address) {
 router70.get("/templates", async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
     const { treeId, isActive, type } = req2.query;
-    if (!organizationId) {
+    if (!organizationId && !isSuperAdmin2) {
       return res.status(400).json({ error: "Organization ID requis" });
     }
-    const where = { organizationId };
+    const where = isSuperAdmin2 ? {} : { organizationId };
     if (treeId) {
       where.OR = [
         { treeId },

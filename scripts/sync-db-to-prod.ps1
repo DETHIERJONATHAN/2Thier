@@ -49,7 +49,7 @@ Write-Host ""
 Write-Host "Etape 3/4: Import dans Cloud SQL..." -ForegroundColor Cyan
 Write-Host "(Ceci peut prendre 2-5 minutes)" -ForegroundColor Gray
 
-gcloud sql import sql crm-db "gs://crm-database-backups-thiernew/$gcsFile" --database=2thier --user=postgres --project=thiernew --quiet
+gcloud sql import sql crm-postgres-prod "gs://crm-database-backups-thiernew/$gcsFile" --database=2thier --user=postgres --project=thiernew --quiet
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERREUR lors de l'import" -ForegroundColor Red

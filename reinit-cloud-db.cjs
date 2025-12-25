@@ -8,7 +8,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 
-const CLOUD_INSTANCE = 'crm-db';
+const CLOUD_INSTANCE = 'crm-postgres-prod';
 const CLOUD_PROJECT = 'thiernew';
 const CLOUD_DB = '2thier';
 const CLOUD_USER = 'postgres';

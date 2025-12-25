@@ -10,7 +10,7 @@ env:
   GAR_LOCATION: europe-west1
   API_SERVICE: crm-api
   API_IMAGE_NAME: crm-api # Nom de l'image dans Artifact Registry
-  DB_INSTANCE_NAME: thiernew:europe-west1:crm-db
+  DB_INSTANCE_NAME: thiernew:europe-west1:crm-postgres-prod
 
 jobs:
   deploy-backend:
