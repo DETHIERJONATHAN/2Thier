@@ -3,11 +3,15 @@
  * 
  * Ce hook charge les formules depuis la table TreeBranchLeafNodeFormula
  * pour avoir accès au targetProperty (qui n'est pas dans formula_instances JSONB)
+ * 
+ * 🚀 OPTIMISATION BATCH : Ce hook utilise d'abord le cache batch (TBLBatchContext)
+ * et fait un fallback vers l'API individuelle uniquement si nécessaire.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
+import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
 
 export interface NodeFormula {
   id: string;
@@ -32,6 +36,8 @@ interface UseNodeFormulasResult {
 
 /**
  * Hook pour charger les formules d'un nœud depuis la table dédiée
+ * 
+ * 🚀 OPTIMISATION : Utilise le cache batch si disponible, sinon fallback API
  */
 export const useNodeFormulas = ({
   nodeId,
@@ -44,34 +50,78 @@ export const useNodeFormulas = ({
   const [refreshKey, setRefreshKey] = useState(0);
   const mountedRef = useRef(true);
   
+  // 🚀 BATCH : Essayer d'utiliser le cache batch d'abord
+  const batchContext = useTBLBatchOptional();
+  
   // Cache pour éviter de recharger si le nodeId n'a pas changé
   const lastLoadedNodeId = useRef<string | null>(null);
   const cachedFormulas = useRef<NodeFormula[]>([]);
+  const usedBatch = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
+  // 🚀 BATCH MODE : Si le contexte batch est disponible et prêt, utiliser ses données
+  const batchFormulas = useMemo(() => {
+    if (!nodeId || !batchContext?.isReady) return null;
+    
+    const formulas = batchContext.getFormulasForNode(nodeId);
+    if (formulas.length > 0) {
+      return formulas.map(f => ({
+        id: f.id,
+        name: f.name,
+        tokens: f.tokens as unknown[],
+        targetProperty: f.targetProperty,
+        constraintMessage: f.constraintMessage,
+        enabled: f.enabled
+      }));
+    }
+    return null;
+  }, [nodeId, batchContext]);
+
   useEffect(() => {
-    if (!enabled || !nodeId || !api) {
-      // Log supprimé - trop fréquent
+    if (!enabled || !nodeId) {
       return;
     }
 
-    // Si déjà chargé pour ce nodeId (et pas de refresh), utiliser le cache
-    if (lastLoadedNodeId.current === nodeId && refreshKey === 0) {
-      // Log supprimé - utilisation du cache silencieuse
+    // 🚀 BATCH MODE : Si on a des données batch, les utiliser directement
+    if (batchFormulas !== null) {
+      if (!usedBatch.current && isTBLDebugEnabled()) {
+        tblLog(`🚀 [useNodeFormulas] Mode BATCH - ${batchFormulas.length} formules pour ${nodeId}`);
+      }
+      usedBatch.current = true;
+      setFormulas(batchFormulas);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    // Si batch pas prêt mais en chargement, attendre
+    if (batchContext && batchContext.loading) {
+      setLoading(true);
+      return;
+    }
+
+    // Si batch n'a pas cette donnée, fallback vers API individuelle
+    if (!api) {
+      return;
+    }
+
+    // Si déjà chargé pour ce nodeId (et pas de refresh), utiliser le cache local
+    if (lastLoadedNodeId.current === nodeId && refreshKey === 0 && cachedFormulas.current.length > 0) {
       setFormulas(cachedFormulas.current);
       return;
     }
 
+    // 🔄 FALLBACK : Appel API individuel
     const loadFormulas = async () => {
       setLoading(true);
       setError(null);
       
       if (isTBLDebugEnabled()) {
-        tblLog(`🔄 [useNodeFormulas] Chargement formules pour node: ${nodeId}...`);
+        tblLog(`🔄 [useNodeFormulas] FALLBACK API pour node: ${nodeId}...`);
       }
 
       try {
@@ -106,10 +156,15 @@ export const useNodeFormulas = ({
     };
 
     loadFormulas();
-  }, [enabled, nodeId, api, refreshKey]);
+  }, [enabled, nodeId, api, refreshKey, batchFormulas, batchContext]);
 
   const refresh = () => {
+    usedBatch.current = false;
+    lastLoadedNodeId.current = null;
+    cachedFormulas.current = [];
     setRefreshKey(k => k + 1);
+    // Aussi rafraîchir le batch si disponible
+    batchContext?.refresh();
   };
 
   return {

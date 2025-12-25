@@ -1,6 +1,6 @@
 import React from "react";
-import { TreeBranchLeafUserRenderer } from "../../components/TreeBranchLeaf/treebranchleaf-new";
+import TBL from "../../components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL";
 
 export default function ModuleTBLPage() {
-  return <TreeBranchLeafUserRenderer />;
+  return <TBL />;
 }

@@ -177,13 +177,27 @@ export const anomalyDetection = (req: Request, res: Response, next: NextFunction
   }
   
   // Anomalie 2: Scanning de endpoints (beaucoup d'endpoints différents)
-  if (uniqueEndpoints > 20 && totalRequests > 50) {
-    logSecurityEvent('ANOMALY_ENDPOINT_SCANNING', {
-      ip: clientIP,
-      uniqueEndpoints,
-      totalRequests,
-      endpoints: Array.from(new Set(recentHistory.map(r => r.endpoint)))
-    }, 'warn');
+  // ⚠️ Seuils augmentés car TBL fait légitimement ~100+ requêtes au chargement
+  // (formulas, calculated-value, select-config, etc. pour chaque noeud)
+  if (uniqueEndpoints > 150 && totalRequests > 300) {
+    // Filtrer les endpoints TBL légitimes pour détecter les vrais scans
+    const nonTblEndpoints = Array.from(new Set(recentHistory.map(r => r.endpoint)))
+      .filter(ep => !ep.includes('/treebranchleaf/') && 
+                    !ep.includes('/tree-nodes/') && 
+                    !ep.includes('/tbl/') &&
+                    !ep.includes('/api/modules') &&
+                    !ep.includes('/api/auth/') &&
+                    !ep.includes('/assets/'));
+    
+    // Ne logger que si beaucoup d'endpoints NON-TBL sont scannés
+    if (nonTblEndpoints.length > 50) {
+      logSecurityEvent('ANOMALY_ENDPOINT_SCANNING', {
+        ip: clientIP,
+        uniqueEndpoints,
+        totalRequests,
+        suspiciousEndpoints: nonTblEndpoints.slice(0, 20) // Limiter la taille du log
+      }, 'warn');
+    }
   }
   
   next();

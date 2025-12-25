@@ -42,6 +42,7 @@ import { useTBLDataPrismaComplete, type TBLField, type TBLSection } from './hook
 import { useTBLDataHierarchicalFixed } from './hooks/useTBLData-hierarchical-fixed';
 import { useTBLValidation } from './hooks/useTBLValidation';
 import { TBLValidationProvider, useTBLValidationContext } from './contexts/TBLValidationContext';
+import { TBLBatchProvider } from './contexts/TBLBatchContext'; // 🚀 BATCH LOADING
 import { useTBLCapabilitiesPreload } from './hooks/useTBLCapabilitiesPreload';
 import TBLDevCapabilitiesPanel from './components/Dev/TBLDevCapabilitiesPanel';
 import { dlog, isVerbose } from '../../../../utils/debug';
@@ -1894,6 +1895,7 @@ const TBL: React.FC<TBLProps> = ({
 
   return (
     <TBLValidationProvider>
+    <TBLBatchProvider treeId={tree?.id || treeId} leadId={leadId}>
       <Layout className={`h-full bg-gray-50 ${isValidation ? 'tbl-validation-mode' : ''}`}>
         <Content className={contentPaddingClass}>
         <Row gutter={mainRowGutter} className="h-full">
@@ -2759,6 +2761,7 @@ const TBL: React.FC<TBLProps> = ({
         </div>
       </Modal>
     </Layout>
+    </TBLBatchProvider>
     </TBLValidationProvider>
   );
 };

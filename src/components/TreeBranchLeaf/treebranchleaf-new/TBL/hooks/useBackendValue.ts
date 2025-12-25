@@ -1,11 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
 
 /**
  * 🎯 SYSTÈME ULTRA-SIMPLE : Récupère la valeur calculée par le backend
  * 
  * Le backend fait TOUT le travail (formules, tables, conditions)
  * Ce hook va juste chercher la réponse et la renvoie TELLE QUELLE
+ * 
+ * 🚀 OPTIMISATION BATCH : Ce hook utilise d'abord le cache batch (TBLBatchContext)
+ * et fait un fallback vers l'API individuelle uniquement si nécessaire.
  * 
  * @param nodeId - ID du champ à récupérer
  * @param treeId - ID de l'arbre
@@ -21,11 +25,27 @@ export const useBackendValue = (
   const [value, setValue] = useState<unknown>(undefined);
   const [loading, setLoading] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const usedBatch = useRef(false);
+
+  // 🚀 BATCH : Essayer d'utiliser le cache batch d'abord
+  const batchContext = useTBLBatchOptional();
 
   // 🎯 STABILISER formData : Créer un hash stable pour éviter les re-rendus infinis
   const formDataHash = useMemo(() => {
     return JSON.stringify(formData);
   }, [formData]);
+
+  // 🚀 BATCH MODE : Récupérer la valeur depuis le cache batch si disponible
+  const batchValue = useMemo(() => {
+    if (!nodeId || !batchContext?.isReady) return undefined;
+    
+    const cachedValue = batchContext.getCalculatedValueForNode(nodeId);
+    if (cachedValue) {
+      // Prendre submissionValue en priorité, sinon calculatedValue
+      return cachedValue.submissionValue ?? cachedValue.calculatedValue;
+    }
+    return undefined;
+  }, [nodeId, batchContext]);
 
   useEffect(() => {
     if (!nodeId) {
@@ -51,6 +71,7 @@ export const useBackendValue = (
       const detail = custom.detail;
       const candidates: Array<string | string[] | undefined> = [detail?.node?.id, detail?.nodeId, detail?.targetNodeIds];
       if (candidates.some(id => shouldRefresh(id))) {
+        usedBatch.current = false;
         setRefreshToken(token => token + 1);
       }
     };
@@ -64,6 +85,7 @@ export const useBackendValue = (
       const detail = custom.detail;
       const candidates: Array<string | string[] | undefined> = [detail?.nodeId, detail?.node?.id, detail?.targetNodeIds];
       if (candidates.some(id => shouldRefresh(id))) {
+        usedBatch.current = false;
         setRefreshToken(token => token + 1);
       }
     };
@@ -78,7 +100,30 @@ export const useBackendValue = (
   }, [nodeId]);
 
   useEffect(() => {
-    if (!nodeId || !treeId || !api) {
+    if (!nodeId || !treeId) {
+      setValue(undefined);
+      return;
+    }
+
+    // 🚀 BATCH MODE : Si on a une valeur batch et pas de refresh forcé, l'utiliser directement
+    if (batchValue !== undefined && refreshToken === 0) {
+      if (!usedBatch.current) {
+        // console.log(`🚀 [useBackendValue] Mode BATCH - valeur pour ${nodeId}:`, batchValue);
+      }
+      usedBatch.current = true;
+      setValue(batchValue);
+      setLoading(false);
+      return;
+    }
+
+    // Si batch en chargement, attendre
+    if (batchContext && batchContext.loading && refreshToken === 0) {
+      setLoading(true);
+      return;
+    }
+
+    // 🔄 FALLBACK : Appel API individuel
+    if (!api) {
       setValue(undefined);
       return;
     }
@@ -184,7 +229,7 @@ export const useBackendValue = (
     };
 
     fetchBackendValue();
-  }, [nodeId, treeId, formDataHash, api, refreshToken]); // ✅ Utiliser formDataHash au lieu de formData
+  }, [nodeId, treeId, formDataHash, api, refreshToken, batchValue, batchContext]); // ✅ Utiliser formDataHash au lieu de formData
 
   return { value, loading };
 };

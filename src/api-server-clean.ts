@@ -18,6 +18,8 @@ import { prisma } from './lib/prisma';
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
 import tableRoutesNewRouter from './components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes';
 import calculatedValueController from './controllers/calculatedValueController'; // 🎯 VALEURS CALCULÉES STOCKÉES
+import tblBatchRoutes from './routes/tbl-batch-routes'; // 🚀 BATCH LOADING TBL
+import batchRoutes from './routes/batch-routes'; // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)
 
 // 🌐 ROUTES GESTION SITES WEB
 // 🔄 FORCE RELOAD - Timestamp: 2025-10-09 20:05
@@ -258,6 +260,8 @@ app.use('/api', contactFormRouter); // 📧 FORMULAIRE DE CONTACT SITE VITRINE
 app.use('/api/image-upload', imageUploadRouter); // 📸 UPLOAD D'IMAGES (LOGOS, PHOTOS)
 app.use('/api/documents', documentsRouter); // 📄 TEMPLATES DE DOCUMENTS (ADMIN + GÉNÉRATION)
 app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
+app.use('/api/tbl/batch', tblBatchRoutes); // 🚀 BATCH LOADING TBL (réduit ~100 requêtes à 1)
+app.use('/api/batch', batchRoutes); // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
 app.use('/api/treebranchleaf', tableRoutesNewRouter); // 📊 ROUTES TABLES NORMALISÉES
 const repeatRouter = createRepeatRouter(prisma);

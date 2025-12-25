@@ -351,7 +351,7 @@ const GoogleGmailPageV2: React.FC = () => {
     }
   }, [stableApi, currentMailbox]);
 
-  // ============ ACTIONS GROUPÉES ============
+  // ============ ACTIONS GROUPÉES (OPTIMISÉ BATCH) ============
 
   const handleBulkAction = useCallback(async (action: 'read' | 'unread' | 'star' | 'unstar' | 'trash' | 'archive') => {
     if (selectedMessages.length === 0) return;
@@ -359,37 +359,75 @@ const GoogleGmailPageV2: React.FC = () => {
     try {
       setLoading(true);
       
-      for (const messageId of selectedMessages) {
-        switch (action) {
-          case 'read':
-            await markAsRead(messageId, true);
-            break;
-          case 'unread':
-            await markAsRead(messageId, false);
-            break;
-          case 'star':
-            await toggleStar(messageId, true);
-            break;
-          case 'unstar':
-            await toggleStar(messageId, false);
-            break;
-          case 'trash':
-            await moveToTrash(messageId);
-            break;
-          case 'archive':
-            await archiveMessage(messageId);
-            break;
-        }
+      // 🚀 BATCH: Une seule requête au lieu de N requêtes individuelles
+      switch (action) {
+        case 'read':
+          await stableApi.post('/api/batch/gmail/modify', {
+            messageIds: selectedMessages,
+            removeLabelIds: ['UNREAD']
+          });
+          setMessages(prev => prev.map(m => 
+            selectedMessages.includes(m.id) ? { ...m, isRead: true } : m
+          ));
+          break;
+          
+        case 'unread':
+          await stableApi.post('/api/batch/gmail/modify', {
+            messageIds: selectedMessages,
+            addLabelIds: ['UNREAD']
+          });
+          setMessages(prev => prev.map(m => 
+            selectedMessages.includes(m.id) ? { ...m, isRead: false } : m
+          ));
+          break;
+          
+        case 'star':
+          await stableApi.post('/api/batch/gmail/modify', {
+            messageIds: selectedMessages,
+            addLabelIds: ['STARRED']
+          });
+          setMessages(prev => prev.map(m => 
+            selectedMessages.includes(m.id) ? { ...m, isStarred: true } : m
+          ));
+          break;
+          
+        case 'unstar':
+          await stableApi.post('/api/batch/gmail/modify', {
+            messageIds: selectedMessages,
+            removeLabelIds: ['STARRED']
+          });
+          setMessages(prev => prev.map(m => 
+            selectedMessages.includes(m.id) ? { ...m, isStarred: false } : m
+          ));
+          break;
+          
+        case 'trash':
+          await stableApi.post('/api/batch/gmail/trash', {
+            messageIds: selectedMessages
+          });
+          setMessages(prev => prev.filter(m => !selectedMessages.includes(m.id)));
+          break;
+          
+        case 'archive':
+          await stableApi.post('/api/batch/gmail/modify', {
+            messageIds: selectedMessages,
+            removeLabelIds: ['INBOX']
+          });
+          if (currentMailbox === 'inbox') {
+            setMessages(prev => prev.filter(m => !selectedMessages.includes(m.id)));
+          }
+          break;
       }
       
       setSelectedMessages([]);
       message.success(`${selectedMessages.length} message(s) traité(s)`);
     } catch (error) {
       console.error('[Gmail] ❌ Erreur action groupée:', error);
+      message.error('Erreur lors de l\'action groupée');
     } finally {
       setLoading(false);
     }
-  }, [selectedMessages, markAsRead, toggleStar, moveToTrash, archiveMessage]);
+  }, [selectedMessages, stableApi, currentMailbox]);
 
   // ============ COMPOSER / ENVOYER EMAIL ============
 
