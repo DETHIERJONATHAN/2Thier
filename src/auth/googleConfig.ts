@@ -10,7 +10,7 @@ type EnvSource = Record<string, unknown> | undefined;
 
 const envCache = new Map<string, string | undefined>();
 
-const DEFAULT_PROD_API_BASE = 'https://api.2thier.com';
+const DEFAULT_PROD_API_BASE = 'https://app.2thier.be';
 const DEFAULT_DEV_API_BASE = 'http://localhost:4000';
 
 function readEnvFromImportMeta(key: string): string | undefined {
