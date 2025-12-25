@@ -4386,7 +4386,7 @@ init_prisma();
 // src/auth/googleConfig.ts
 var import_meta = {};
 var envCache = /* @__PURE__ */ new Map();
-var DEFAULT_PROD_API_BASE = "https://api.2thier.com";
+var DEFAULT_PROD_API_BASE = "https://app.2thier.be";
 var DEFAULT_DEV_API_BASE = "http://localhost:4000";
 function readEnvFromImportMeta(key2) {
   try {
@@ -11877,18 +11877,23 @@ var import_express16 = require("express");
 init_database();
 var import_zod3 = require("zod");
 init_crypto();
+var import_nanoid = require("nanoid");
 var router15 = (0, import_express16.Router)();
 var prisma8 = db;
 router15.use(authMiddleware);
 var googleWorkspaceConfigSchema = import_zod3.z.object({
-  clientId: import_zod3.z.string().min(1, "Client ID requis"),
+  clientId: import_zod3.z.string().optional().default(""),
+  // Optionnel pour l'activation simple
   clientSecret: import_zod3.z.string().optional(),
   // Optionnel pour la mise à jour
-  redirectUri: import_zod3.z.string().url("URL de redirection invalide").optional(),
-  domain: import_zod3.z.string().min(1, "Domaine requis"),
-  adminEmail: import_zod3.z.string().email("Email admin invalide"),
+  redirectUri: import_zod3.z.string().optional(),
+  // URL optionnelle
+  domain: import_zod3.z.string().optional().default(""),
+  // Optionnel pour l'activation simple
+  adminEmail: import_zod3.z.string().optional().default(""),
+  // Optionnel pour l'activation simple
   // Champs compte de service
-  serviceAccountEmail: import_zod3.z.string().email("Email du compte de service invalide").optional(),
+  serviceAccountEmail: import_zod3.z.string().optional(),
   privateKey: import_zod3.z.string().optional(),
   // État de la configuration
   isActive: import_zod3.z.boolean().default(false),
@@ -12032,6 +12037,8 @@ router15.post("/:id/google-workspace/config", requireRole2(["super_admin"]), asy
       where: { organizationId: id },
       update: configData,
       create: {
+        id: (0, import_nanoid.nanoid)(),
+        // Génération d'un ID unique pour le nouveau record
         organizationId: id,
         ...configData
       }
@@ -12047,9 +12054,12 @@ router15.post("/:id/google-workspace/config", requireRole2(["super_admin"]), asy
     });
   } catch (error) {
     console.error("[GOOGLE-WORKSPACE] Erreur POST config:", error);
+    console.error("[GOOGLE-WORKSPACE] D\xE9tails erreur:", error instanceof Error ? error.message : String(error));
+    console.error("[GOOGLE-WORKSPACE] Stack:", error instanceof Error ? error.stack : "N/A");
     res.status(500).json({
       success: false,
-      message: "Erreur serveur lors de la sauvegarde de la configuration"
+      message: "Erreur serveur lors de la sauvegarde de la configuration",
+      error: error instanceof Error ? error.message : String(error)
     });
   }
 });
@@ -49622,7 +49632,7 @@ var publicLeads_default = router69;
 // src/routes/documents.ts
 var import_express71 = require("express");
 init_database();
-var import_nanoid = require("nanoid");
+var import_nanoid2 = require("nanoid");
 
 // src/services/documentPdfRenderer.ts
 var import_pdfkit = __toESM(require("pdfkit"), 1);
@@ -51566,7 +51576,7 @@ router70.post("/templates", async (req2, res) => {
     }
     const template = await prisma40.documentTemplate.create({
       data: {
-        id: (0, import_nanoid.nanoid)(),
+        id: (0, import_nanoid2.nanoid)(),
         name,
         type,
         description,
@@ -51577,7 +51587,7 @@ router70.post("/templates", async (req2, res) => {
         createdBy: userId,
         sections: {
           create: (sections || []).map((section, index) => ({
-            id: (0, import_nanoid.nanoid)(),
+            id: (0, import_nanoid2.nanoid)(),
             order: section.order || index,
             type: section.type,
             config: section.config || {},
@@ -51641,7 +51651,7 @@ router70.put("/templates/:id", async (req2, res) => {
         ...sections && {
           sections: {
             create: sections.map((section, index) => ({
-              id: (0, import_nanoid.nanoid)(),
+              id: (0, import_nanoid2.nanoid)(),
               order: section.order || index,
               type: section.type,
               config: section.config || {},
@@ -51723,7 +51733,7 @@ router70.post("/themes", async (req2, res) => {
     }
     const theme = await prisma40.documentTheme.create({
       data: {
-        id: (0, import_nanoid.nanoid)(),
+        id: (0, import_nanoid2.nanoid)(),
         ...themeData,
         organizationId
       }
@@ -51784,10 +51794,16 @@ router70.get("/templates/:templateId/sections", async (req2, res) => {
   try {
     const { templateId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
+    const whereClause = { id: templateId };
+    if (!isSuperAdmin2 && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
     const template = await prisma40.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
     if (!template) {
+      console.log(`[DOCUMENTS] Template ${templateId} non trouv\xE9 (orgId: ${organizationId}, isSuperAdmin: ${isSuperAdmin2})`);
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
     const sections = await prisma40.documentSection.findMany({
@@ -51805,15 +51821,20 @@ router70.post("/templates/:templateId/sections", async (req2, res) => {
     const { templateId } = req2.params;
     const { type, order, config } = req2.body;
     const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
+    const whereClause = { id: templateId };
+    if (!isSuperAdmin2 && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
     const template = await prisma40.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
     }
     const section = await prisma40.documentSection.create({
       data: {
-        id: (0, import_nanoid.nanoid)(),
+        id: (0, import_nanoid2.nanoid)(),
         templateId,
         type,
         order: order ?? 0,
@@ -51832,8 +51853,13 @@ router70.put("/templates/:templateId/sections/:sectionId", async (req2, res) => 
     const { templateId, sectionId } = req2.params;
     const { order, config } = req2.body;
     const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
+    const whereClause = { id: templateId };
+    if (!isSuperAdmin2 && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
     const template = await prisma40.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
@@ -51855,8 +51881,13 @@ router70.delete("/templates/:templateId/sections/:sectionId", async (req2, res) 
   try {
     const { templateId, sectionId } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
+    const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
+    const whereClause = { id: templateId };
+    if (!isSuperAdmin2 && organizationId) {
+      whereClause.organizationId = organizationId;
+    }
     const template = await prisma40.documentTemplate.findFirst({
-      where: { id: templateId, organizationId }
+      where: whereClause
     });
     if (!template) {
       return res.status(404).json({ error: "Template non trouv\xE9" });
@@ -51995,7 +52026,7 @@ router70.post("/generated/generate", async (req2, res) => {
     const documentNumber = `${template.type}-${String(documentCount + 1).padStart(6, "0")}`;
     const generatedDocument = await prisma40.generatedDocument.create({
       data: {
-        id: (0, import_nanoid.nanoid)(),
+        id: (0, import_nanoid2.nanoid)(),
         templateId,
         organizationId,
         leadId: leadId || null,
