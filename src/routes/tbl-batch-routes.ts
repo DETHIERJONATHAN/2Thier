@@ -5,7 +5,7 @@
  * Cela réduit drastiquement le nombre de requêtes HTTP et accélère le chargement de ~80%
  */
 
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 
 const router = Router();
@@ -16,11 +16,12 @@ interface AuthContext {
   isSuperAdmin?: boolean;
 }
 
-// Helper pour extraire le contexte d'auth
-function getAuthCtx(req: { user?: { organizationId?: string; isSuperAdmin?: boolean } }): AuthContext {
+// Helper pour extraire le contexte d'auth de façon robuste
+function getAuthCtx(req: Request): AuthContext {
+  const user = (req as any).user;
   return {
-    organizationId: req.user?.organizationId || null,
-    isSuperAdmin: req.user?.isSuperAdmin || false
+    organizationId: user?.organizationId || null,
+    isSuperAdmin: user?.isSuperAdmin || false
   };
 }
 
@@ -250,11 +251,14 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
  * - Valeurs calculées  
  * - Configs de select
  */
-router.get('/trees/:treeId/all', async (req, res) => {
+router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
+  const { treeId } = req.params;
+  console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
+  
   try {
-    const { treeId } = req.params;
     const { leadId } = req.query;
-    const { organizationId, isSuperAdmin } = getAuthCtx(req as any);
+    const { organizationId, isSuperAdmin } = getAuthCtx(req);
+    console.log(`[TBL Batch API] Auth context: org=${organizationId}, superAdmin=${isSuperAdmin}`);
 
     // Vérifier l'accès au tree
     const treeWhereFilter = isSuperAdmin || !organizationId 
@@ -277,11 +281,17 @@ router.get('/trees/:treeId/all', async (req, res) => {
         calculatedAt: true,
         calculatedBy: true,
         select_options: true,
-        select_sourceType: true,
-        select_sourceTableId: true,
-        select_sourceColumn: true,
-        select_displayColumn: true,
-        table_lookupConfig: true
+        table_lookupConfig: true,
+        // Inclure la config select si elle existe
+        TreeBranchLeafSelectConfig: {
+          select: {
+            optionsSource: true,
+            tableReference: true,
+            displayColumn: true,
+            keyColumn: true,
+            valueColumn: true
+          }
+        }
       }
     });
 
@@ -351,13 +361,14 @@ router.get('/trees/:treeId/all', async (req, res) => {
         || (node.fieldType || '').includes('select');
       
       if (isSelectType) {
+        const selectConfig = node.TreeBranchLeafSelectConfig;
         configsByNode[node.id] = {
           fieldType: node.fieldType,
           options: node.select_options,
-          sourceType: node.select_sourceType,
-          sourceTableId: node.select_sourceTableId,
-          sourceColumn: node.select_sourceColumn,
-          displayColumn: node.select_displayColumn,
+          sourceType: selectConfig?.optionsSource || null,
+          sourceTableId: selectConfig?.tableReference || null,
+          sourceColumn: selectConfig?.keyColumn || null,
+          displayColumn: selectConfig?.displayColumn || null,
           lookupConfig: node.table_lookupConfig
         };
       }
@@ -379,8 +390,16 @@ router.get('/trees/:treeId/all', async (req, res) => {
       configsByNode
     });
   } catch (error) {
-    console.error('[TBL Batch API] Error super batch fetching:', error);
-    res.status(500).json({ error: 'Erreur lors de la récupération batch complète' });
+    const errorDetails = {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : 'Unknown',
+      stack: error instanceof Error ? error.stack : undefined
+    };
+    console.error('[TBL Batch API] Error super batch fetching:', JSON.stringify(errorDetails, null, 2));
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération batch complète',
+      details: errorDetails.message 
+    });
   }
 });
 
