@@ -44,4 +44,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 ENV PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod
 ENV PGDATABASE=2thier
 ENV PGUSER=postgres
+
+# Variables d'environnement pour la production
+ENV FRONTEND_URL=https://app.2thier.be
+ENV BACKEND_URL=https://app.2thier.be
+ENV GOOGLE_REDIRECT_URI=https://app.2thier.be/api/google-auth/callback
+
 CMD ["npm", "run", "start"]
