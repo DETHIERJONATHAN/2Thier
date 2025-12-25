@@ -117,7 +117,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
     // Si un leadId est fourni, récupérer aussi les valeurs de la submission
     let submissionValues: Record<string, unknown> = {};
     if (leadId && typeof leadId === 'string') {
-      const submission = await db.tBLSubmission.findFirst({
+      const submission = await db.treeBranchLeafSubmission.findFirst({
         where: { 
           treeId,
           leadId 
@@ -298,7 +298,7 @@ router.get('/trees/:treeId/all', async (req, res) => {
       }),
       // Submission si leadId
       leadId && typeof leadId === 'string'
-        ? db.tBLSubmission.findFirst({
+        ? db.treeBranchLeafSubmission.findFirst({
             where: { treeId, leadId },
             orderBy: { updatedAt: 'desc' }
           })
