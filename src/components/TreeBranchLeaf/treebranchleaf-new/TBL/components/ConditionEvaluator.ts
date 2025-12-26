@@ -1,6 +1,8 @@
 /**
  * Évaluateur dynamique pour les conditions TreeBranchLeaf
  * Évalue les conditionSet sans appels API en utilisant des données statiques
+ * 
+ * 🚀 OPTIMISATION: Cache avec TTL pour éviter les appels API répétés
  */
 
 import { FormulaEvaluator } from './FormulaEvaluator';
@@ -43,7 +45,9 @@ interface ConditionSet {
 }
 
 // Cache des conditions pour éviter les appels API répétés
-const conditionCache = new Map<string, ConditionSet>();
+// 🚀 OPTIMISATION: Cache avec TTL
+const conditionCache = new Map<string, { condition: ConditionSet; timestamp: number }>();
+const CACHE_TTL_MS = 60_000; // 60 secondes
 
 export class ConditionEvaluator {
   private api: { get: (url: string) => Promise<{ data: ConditionSet }> };
@@ -54,25 +58,47 @@ export class ConditionEvaluator {
 
   /**
    * Récupère une condition depuis l'API ou le cache
+   * 🚀 OPTIMISATION: Cache avec TTL
    */
   private async fetchCondition(conditionId: string): Promise<ConditionSet> {
-    // Vérifier le cache d'abord
-    if (conditionCache.has(conditionId)) {
-      return conditionCache.get(conditionId)!;
+    // Vérifier le cache d'abord avec TTL
+    const cached = conditionCache.get(conditionId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      console.log(`🚀 [ConditionEvaluator] Cache hit pour condition ${conditionId}`);
+      return cached.condition;
     }
 
     try {
+      console.log(`⚠️ [ConditionEvaluator] Appel API pour condition ${conditionId}`);
       // Appel API pour récupérer la condition
       const response = await this.api.get(`/treebranchleaf/conditions/${conditionId}`);
       const conditionSet = response.data;
       
-      // Mettre en cache
-      conditionCache.set(conditionId, conditionSet);
+      // Mettre en cache avec timestamp
+      conditionCache.set(conditionId, { condition: conditionSet, timestamp: Date.now() });
       
       return conditionSet;
     } catch (error) {
       throw new Error(`Impossible de récupérer la condition ${conditionId}: ${error}`);
     }
+  }
+
+  /**
+   * 🚀 NOUVEAU: Injecter une condition dans le cache (utilisé par le batch)
+   */
+  static injectCondition(conditionId: string, condition: ConditionSet): void {
+    conditionCache.set(conditionId, { condition, timestamp: Date.now() });
+  }
+
+  /**
+   * 🚀 NOUVEAU: Injecter plusieurs conditions dans le cache
+   */
+  static injectConditions(conditions: Record<string, ConditionSet>): void {
+    const now = Date.now();
+    for (const [id, condition] of Object.entries(conditions)) {
+      conditionCache.set(id, { condition, timestamp: now });
+    }
+    console.log(`🚀 [ConditionEvaluator] ${Object.keys(conditions).length} conditions injectées dans le cache`);
   }
 
   /**

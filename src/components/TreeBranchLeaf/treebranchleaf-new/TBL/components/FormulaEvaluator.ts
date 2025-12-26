@@ -1,6 +1,8 @@
 /**
  * Évaluateur dynamique pour les formules TreeBranchLeaf
  * Évalue les formules sans code en dur en récupérant depuis l'API
+ * 
+ * 🚀 OPTIMISATION: Utilise un cache local avec TTL pour éviter les appels API répétés
  */
 
 interface FormulaStructure {
@@ -14,7 +16,9 @@ interface FormulaStructure {
 }
 
 // Cache des formules pour éviter les appels API répétés
-const formulaCache = new Map<string, FormulaStructure>();
+// 🚀 OPTIMISATION: Cache avec TTL pour expiration automatique
+const formulaCache = new Map<string, { formula: FormulaStructure; timestamp: number }>();
+const CACHE_TTL_MS = 60_000; // 60 secondes
 
 export class FormulaEvaluator {
   private api: { get: (url: string) => Promise<{ data: FormulaStructure }> };
@@ -25,25 +29,47 @@ export class FormulaEvaluator {
 
   /**
    * Récupère une formule depuis l'API ou le cache
+   * 🚀 OPTIMISATION: Cache avec TTL
    */
   private async fetchFormula(formulaId: string): Promise<FormulaStructure> {
-    // Vérifier le cache d'abord
-    if (formulaCache.has(formulaId)) {
-      return formulaCache.get(formulaId)!;
+    // Vérifier le cache d'abord avec TTL
+    const cached = formulaCache.get(formulaId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      console.log(`🚀 [FormulaEvaluator] Cache hit pour formule ${formulaId}`);
+      return cached.formula;
     }
 
     try {
+      console.log(`⚠️ [FormulaEvaluator] Appel API pour formule ${formulaId}`);
       // Appel API pour récupérer la formule
       const response = await this.api.get(`/treebranchleaf/formulas/${formulaId}`);
       const formula = response.data;
       
-      // Mettre en cache
-      formulaCache.set(formulaId, formula);
+      // Mettre en cache avec timestamp
+      formulaCache.set(formulaId, { formula, timestamp: Date.now() });
       
       return formula;
     } catch (error) {
       throw new Error(`Impossible de récupérer la formule ${formulaId}: ${error}`);
     }
+  }
+
+  /**
+   * 🚀 NOUVEAU: Injecter une formule dans le cache (utilisé par le batch)
+   */
+  static injectFormula(formulaId: string, formula: FormulaStructure): void {
+    formulaCache.set(formulaId, { formula, timestamp: Date.now() });
+  }
+
+  /**
+   * 🚀 NOUVEAU: Injecter plusieurs formules dans le cache
+   */
+  static injectFormulas(formulas: Record<string, FormulaStructure>): void {
+    const now = Date.now();
+    for (const [id, formula] of Object.entries(formulas)) {
+      formulaCache.set(id, { formula, timestamp: now });
+    }
+    console.log(`🚀 [FormulaEvaluator] ${Object.keys(formulas).length} formules injectées dans le cache`);
   }
 
   /**
