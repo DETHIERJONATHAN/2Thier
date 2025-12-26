@@ -92,24 +92,21 @@ function buildDatabaseUrl(): string {
   const host = process.env.PGHOST || 'localhost';
   const port = process.env.PGPORT || '5432';
 
-  // Si on est sur Cloud SQL (socket Unix)
-  const instance = process.env.CLOUDSQL_INSTANCE;
-  if (instance) {
-    const pgHost = process.env.PGHOST;
-    const socketHost = pgHost && pgHost.startsWith('/cloudsql/') ? pgHost : `/cloudsql/${instance}`;
+  // Si PGHOST est un socket Unix (Cloud SQL)
+  if (host.startsWith('/cloudsql/')) {
     const encodedPwd = encodeURIComponent(password);
-    const url = `postgresql://${user}:${encodedPwd}@localhost:5432/${db}?host=${encodeURIComponent(socketHost)}`;
+    const url = `postgresql://${user}:${encodedPwd}@localhost/${db}?host=${encodeURIComponent(host)}`;
     
-    console.warn('[Database] URL reconstruite depuis Cloud SQL:', {
+    console.warn('[Database] Connexion via Unix socket Cloud SQL:', {
       PGUSER: user,
       PGDATABASE: db,
-      CLOUDSQL_INSTANCE: instance,
+      PGHOST: host,
     });
     
     return url;
   }
 
-  // Connexion standard (local, Cloud SQL avec DATABASE_URL, etc.)
+  // Connexion standard (local, TCP)
   const encodedPwd = encodeURIComponent(password);
   return `postgresql://${user}:${encodedPwd}@${host}:${port}/${db}`;
 }
