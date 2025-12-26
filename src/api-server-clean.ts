@@ -263,7 +263,7 @@ app.use('/api/tbl', tblSubmissionEvaluatorRouter); // 🔥 TBL PRISMA EVALUATOR
 app.use('/api/tbl/batch', tblBatchRoutes); // 🚀 BATCH LOADING TBL (réduit ~100 requêtes à 1)
 app.use('/api/batch', batchRoutes); // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
-app.use('/api/treebranchleaf', tableRoutesNewRouter); // 📊 ROUTES TABLES NORMALISÉES
+// ⚠️ SUPPRIMÉ - Déjà monté via apiRouter ligne 249: app.use('/api/treebranchleaf', tableRoutesNewRouter);
 const repeatRouter = createRepeatRouter(prisma);
 app.use('/api/treebranchleaf/repeat', repeatRouter); // 🔁 Compatibilité historique
 app.use('/api/repeat', repeatRouter); // 🔁 Nouveau point d'entrée stabilisé pour le frontend
@@ -337,6 +337,17 @@ if (process.env.NODE_ENV === 'production') {
       if (fs.existsSync(swPath)) {
         res.setHeader('Content-Type', 'application/javascript');
         res.sendFile(swPath);
+      } else {
+        res.status(404).end();
+      }
+    });
+
+    // 🔧 Workbox (workbox-*.js) - CRITIQUE pour le Service Worker
+    app.get(/^\/workbox-.*\.js$/, (req, res) => {
+      const filePath = path.join(distDir, req.path);
+      if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(filePath);
       } else {
         res.status(404).end();
       }
