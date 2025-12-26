@@ -47,7 +47,6 @@ export interface BatchSelectConfig {
   sourceTableId: string | null;
   sourceColumn: string | null;
   displayColumn: string | null;
-  lookupConfig: unknown;
 }
 
 export interface BatchNodeData {

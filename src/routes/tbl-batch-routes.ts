@@ -118,15 +118,28 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
     // Si un leadId est fourni, récupérer aussi les valeurs de la submission
     let submissionValues: Record<string, unknown> = {};
     if (leadId && typeof leadId === 'string') {
+      // D'abord trouver la submission
       const submission = await db.treeBranchLeafSubmission.findFirst({
         where: { 
           treeId,
           leadId 
         },
-        orderBy: { updatedAt: 'desc' }
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true }
       });
-      if (submission?.formData && typeof submission.formData === 'object') {
-        submissionValues = submission.formData as Record<string, unknown>;
+      
+      // Puis récupérer toutes les valeurs via TreeBranchLeafSubmissionData
+      if (submission?.id) {
+        const submissionData = await db.treeBranchLeafSubmissionData.findMany({
+          where: { submissionId: submission.id },
+          select: { nodeId: true, value: true }
+        });
+        
+        for (const data of submissionData) {
+          if (data.value !== null) {
+            submissionValues[data.nodeId] = data.value;
+          }
+        }
       }
     }
 
@@ -312,10 +325,25 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
       leadId && typeof leadId === 'string'
         ? db.treeBranchLeafSubmission.findFirst({
             where: { treeId, leadId },
-            orderBy: { updatedAt: 'desc' }
+            orderBy: { updatedAt: 'desc' },
+            select: { id: true }
           })
         : Promise.resolve(null)
     ]);
+
+    // Récupérer les valeurs de submission si on a une submission
+    let submissionValues: Record<string, unknown> = {};
+    if (submission?.id) {
+      const submissionData = await db.treeBranchLeafSubmissionData.findMany({
+        where: { submissionId: submission.id },
+        select: { nodeId: true, value: true }
+      });
+      for (const data of submissionData) {
+        if (data.value !== null) {
+          submissionValues[data.nodeId] = data.value;
+        }
+      }
+    }
 
     // Construire les maps de résultats
     const formulasByNode: Record<string, typeof allFormulas> = {};
@@ -325,10 +353,6 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
       }
       formulasByNode[formula.nodeId].push(formula);
     }
-
-    const submissionValues = (submission?.formData && typeof submission.formData === 'object')
-      ? submission.formData as Record<string, unknown>
-      : {};
 
     const valuesByNode: Record<string, {
       calculatedValue: unknown;
@@ -344,7 +368,6 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
       sourceTableId: string | null;
       sourceColumn: string | null;
       displayColumn: string | null;
-      lookupConfig: unknown;
     }> = {};
 
     for (const node of nodes) {
