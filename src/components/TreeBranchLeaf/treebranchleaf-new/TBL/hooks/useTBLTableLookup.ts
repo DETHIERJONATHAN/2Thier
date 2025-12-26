@@ -269,6 +269,7 @@ export function useTBLTableLookup(
                       console.log(`[DEBUG][Test - liste] ✅ Valeur calculée injectée (${shouldOverride ? 'override' : 'set'}) pour ${node.id}: ${node.calculatedValue}`);
                     }
                   }
+                }
               }
             }
           } catch (err) {

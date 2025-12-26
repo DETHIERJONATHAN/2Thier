@@ -822,7 +822,7 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           r = Math.floor(val * factor) / factor;
           break; }
         case 'ent':
-        case 'int':
+        // case 'int': // Déjà défini plus haut
           r = mapNumericValue(args[0] ?? 0, Math.floor);
           break;
         case 'tronque':
@@ -839,7 +839,8 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           r = multiple === 0 ? val : Math.ceil(val / multiple) * multiple;
           break; }
         case 'plancher':
-        case 'floor': {
+        // case 'floor': // Déjà défini plus haut - version simple Math.floor
+        {
           const val = toNumber(args[0] ?? 0);
           const multiple = toNumber(args[1] ?? 1);
           r = multiple === 0 ? val : Math.floor(val / multiple) * multiple;
@@ -893,9 +894,9 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
         case 'log10':
           r = mapNumericValue(args[0] ?? 0, val => val <= 0 ? 0 : Math.log10(val));
           break;
-        case 'abs':
-          r = mapNumericValue(args[0] ?? 0, Math.abs);
-          break;
+        // case 'abs': // Déjà défini plus haut
+        //   r = mapNumericValue(args[0] ?? 0, Math.abs);
+        //   break;
         case 'signe':
         case 'sign':
           r = mapNumericValue(args[0] ?? 0, Math.sign);
@@ -906,12 +907,6 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           r = divisor === 0 ? 0 : val % divisor;
           break; }
 
-        // Ã°Å¸â€œÅ  STATISTIQUES (complÃƒÂ©ments)
-        case 'min': {
-          const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
-          r = vals.length ? Math.min(...vals) : 0;
-          break; }
-        case 'max': {
           const vals = args.flatMap(a => Array.isArray(a) ? a : [toNumber(a ?? 0)]);
           r = vals.length ? Math.max(...vals) : 0;
           break; }
